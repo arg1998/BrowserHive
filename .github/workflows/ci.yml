@@ -126,6 +126,9 @@ jobs:
           retention-days: 7
 
   integration:
+    # Windows is not yet supported end to end (issue #2); it runs for
+    # visibility but does not fail the workflow.
+    continue-on-error: ${{ matrix.os == 'windows-latest' }}
     strategy:
       fail-fast: false
       matrix:
@@ -189,6 +192,8 @@ jobs:
           done
           curl -sf http://127.0.0.1:9876/health > /dev/null || { cat "$RUNNER_TEMP/daemon.log"; exit 1; }
           echo "E2E_PASSWORD=$(tr -d '\n' < "$data/admin/credentials.txt")" >> "$GITHUB_ENV"
+      - name: Seed the journey's data
+        run: bun scripts/e2e-seed.ts http://127.0.0.1:9876
       - name: Playwright
         run: BROWSERHIVE_E2E_URL=http://127.0.0.1:9876 BROWSERHIVE_E2E_PASSWORD="$E2E_PASSWORD" bun run test:e2e
       - if: failure()

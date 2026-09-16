@@ -5,14 +5,29 @@ const baseUrl = process.env['BROWSERHIVE_E2E_URL'];
 const seedPassword = process.env['BROWSERHIVE_E2E_PASSWORD'];
 const rotatedPassword = `${seedPassword ?? ''}-rotated-e2e`;
 
-/** Signs in with the seed or, when an earlier spec rotated it, the rotated password. */
+/**
+ * Signs in over REST with the seed or, when an earlier spec rotated it, the rotated password. A seed
+ * session must change its password before any page renders, so the seed is rotated here too.
+ */
 async function signIn(page: Page): Promise<void> {
+  const headers = { origin: baseUrl ?? '' };
   for (const password of [seedPassword ?? '', rotatedPassword]) {
-    const response = await page.request.post('/api/v1/auth/login', {
-      data: { password },
-      headers: { origin: baseUrl ?? '' },
-    });
-    if (response.ok()) return;
+    const response = await page.request.post('/api/v1/auth/login', { data: { password }, headers });
+    if (!response.ok()) continue;
+    const body = (await response.json()) as { must_change_password?: boolean };
+    if (body.must_change_password === true) {
+      const changed = await page.request.post('/api/v1/auth/change-password', {
+        data: { current_password: password, new_password: rotatedPassword },
+        headers,
+      });
+      if (!changed.ok()) throw new Error(`seed rotation failed: ${changed.status()}`);
+      const again = await page.request.post('/api/v1/auth/login', {
+        data: { password: rotatedPassword },
+        headers,
+      });
+      if (!again.ok()) throw new Error(`sign-in after rotation failed: ${again.status()}`);
+    }
+    return;
   }
   throw new Error('sign-in failed with both the seed and the rotated password');
 }

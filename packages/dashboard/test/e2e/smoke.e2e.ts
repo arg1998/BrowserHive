@@ -1,4 +1,4 @@
-/** @module dashboard/test/e2e/smoke.e2e — operator journey against a running daemon (`BROWSERHIVE_E2E_URL`); skips cleanly when unset */
+/** @module dashboard/test/e2e/smoke.e2e — operator journey against a running daemon (`BROWSERHIVE_E2E_URL`) seeded with `bun scripts/e2e-seed.ts`; skips cleanly when unset */
 import { expect, type Page, test } from '@playwright/test';
 
 const baseUrl = process.env['BROWSERHIVE_E2E_URL'];
@@ -6,24 +6,27 @@ const seedPassword = process.env['BROWSERHIVE_E2E_PASSWORD'];
 /** The password the journey rotates the seed to (spec 03 §3.4: first login forces a change). */
 const rotatedPassword = `${seedPassword ?? ''}-rotated-e2e`;
 
-/** Signs in, rotating the seed password on the first run; later runs use the rotated password. */
+/**
+ * Signs in, rotating the seed password on the first run; later runs use the rotated password.
+ * Labels match exactly: each password field has a "Show password" toggle whose name contains "password".
+ */
 async function signIn(page: Page): Promise<void> {
   await page.goto('/login');
   await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
-  await page.getByLabel('Password').fill(seedPassword ?? '');
+  await page.getByLabel('Password', { exact: true }).fill(seedPassword ?? '');
   await page.getByRole('button', { name: 'Sign in' }).click();
   // Leaves /login on success; stays there (with an error) when the seed was already rotated.
   await page
     .waitForURL((url) => !url.pathname.endsWith('/login'), { timeout: 10_000 })
     .catch(() => undefined);
   if (page.url().endsWith('/change-password')) {
-    await page.getByLabel('Current (seed) password').fill(seedPassword ?? '');
+    await page.getByLabel('Current (seed) password', { exact: true }).fill(seedPassword ?? '');
     await page.getByLabel('New password', { exact: true }).fill(rotatedPassword);
-    await page.getByLabel('Confirm new password').fill(rotatedPassword);
+    await page.getByLabel('Confirm new password', { exact: true }).fill(rotatedPassword);
     await page.getByRole('button', { name: 'Change password' }).click();
   } else if (page.url().endsWith('/login')) {
     // The seed was already rotated by an earlier project in this run.
-    await page.getByLabel('Password').fill(rotatedPassword);
+    await page.getByLabel('Password', { exact: true }).fill(rotatedPassword);
     await page.getByRole('button', { name: 'Sign in' }).click();
   }
   await expect(page).toHaveURL(/\/overview$/);
