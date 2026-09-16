@@ -1,6 +1,6 @@
 {
   "$schema": "https://unpkg.com/@changesets/config@3.0.3/schema.json",
-  "changelog": ["@changesets/changelog-github", { "repo": "browserhive/BrowserHive" }],
+  "changelog": ["@changesets/changelog-github", { "repo": "arg1998/BrowserHive" }],
   "commit": false,
   "fixed": [
     ["browserhive", "@browserhive/contracts", "@browserhive/core", "@browserhive/dashboard"]

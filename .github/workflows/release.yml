@@ -17,12 +17,19 @@ jobs:
     environment: release
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { fetch-depth: 0 }
+        with:
+          fetch-depth: 0
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with: { bun-version-file: .bun-version }
+        with:
+          bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
-      # npm >= 11.5 performs OIDC trusted publishing with provenance; no NPM_TOKEN exists.
-      - run: bun add -g npm@latest && npm --version
+      # `changeset publish` runs `npm publish`. npm >= 11.5 publishes through OIDC trusted publishing
+      # (with provenance), so no NPM_TOKEN exists. Node 24 ships npm 11; no registry-url, because the
+      # .npmrc it writes expects a token.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - run: npm --version
       - id: changesets
         uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
         with:
