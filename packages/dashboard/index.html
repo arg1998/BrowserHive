@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#f9fafb" />
+    <meta name="referrer" content="same-origin" />
+    <title>BrowserHive</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      crossorigin
+      href="../../node_modules/@fontsource-variable/geist/files/geist-latin-wght-normal.woff2"
+    />
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      crossorigin
+      href="../../node_modules/@fontsource/geist-mono/files/geist-mono-latin-400-normal.woff2"
+    />
+    <script>
+      // Theme bootstrap (spec 04 §2): resolve `localStorage['bh.theme']` (system|light|dark) before
+      // first paint so there is no flash. Mirrors `src/theme/bootstrap.ts#resolveTheme`; the meta
+      // theme-color values mirror `THEME_COLORS` in the same file.
+      (() => {
+        try {
+          const stored = localStorage.getItem('bh.theme');
+          const dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          const theme = stored === 'light' || stored === 'dark' ? stored : dark ? 'dark' : 'light';
+          const root = document.documentElement;
+          root.setAttribute('data-theme', theme);
+          root.style.colorScheme = theme;
+          const meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', theme === 'dark' ? '#0b0c0e' : '#f9fafb');
+        } catch (_error) {
+          /* storage or matchMedia unavailable: the light default stays */
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>
+      <p>BrowserHive needs JavaScript. Enable it and reload this page.</p>
+    </noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["bun-types"],
+    "rootDir": ".",
+    "outDir": "../dist/scripts-types",
+    "tsBuildInfoFile": "../dist/.scripts.tsbuildinfo"
+  },
+  "include": ["**/*.ts"],
+  "references": [{ "path": "../packages/contracts" }, { "path": "../packages/core" }]
+}

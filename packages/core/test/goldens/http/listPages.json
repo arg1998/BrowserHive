@@ -1,0 +1,37 @@
+{
+  "data": [
+    {
+      "event_id": "e-00000000000000000000000003",
+      "session_id": "shop-0000000a",
+      "tab_id": "t-000001",
+      "url": "https://example.com/",
+      "title": "Example",
+      "domain": "example.com",
+      "category": "public",
+      "ts": 1699999971000,
+      "session_slug": "shop"
+    }
+  ],
+  "page": {
+    "next_cursor": null,
+    "limit": 50
+  },
+  "facets": {
+    "category": [
+      {
+        "value": "public",
+        "count": 1
+      }
+    ]
+  },
+  "applied": {
+    "filters": {},
+    "sort": {
+      "key": "ts",
+      "dir": "desc"
+    }
+  },
+  "meta": {
+    "now": 1700000000000
+  }
+}

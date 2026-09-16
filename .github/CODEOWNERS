@@ -1,0 +1,5 @@
+*                                 @argosta
+packages/contracts/**             @argosta
+packages/core/src/app/auth/**     @argosta
+packages/core/src/domain/vault/** @argosta
+specs/**                          @argosta

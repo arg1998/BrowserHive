@@ -1,0 +1,68 @@
+{
+  "name": "vault_fill",
+  "title": "Vault: fill",
+  "description": "Atomically inject a vault credential into a login form: origin re-check, fetch from the backend, fill username + password, optional submit, then redact. `entry_name` is the stable handle from vault_list_available. The filled values are LEFT in the form by default — pass `clear_after_fill: true` only if you want the inputs wiped after the fill (done after `after_submit_wait_ms`, so an async/AJAX submit still reads them). Returns { status: \"success\" | \"origin_mismatch\" | \"auth_failed\" | \"blocked\", redacted: true, reason? }. The credential never appears in the response, logs, events, or screenshots. The origin is checked against the entry allow-list by registrable domain.",
+  "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      },
+      "entry_name": {
+        "type": "string",
+        "minLength": 1
+      },
+      "username_selector": {
+        "type": "string",
+        "minLength": 1
+      },
+      "password_selector": {
+        "type": "string",
+        "minLength": 1
+      },
+      "submit_selector": {
+        "type": "string",
+        "minLength": 1
+      },
+      "after_submit_wait_ms": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 9007199254740991
+      },
+      "clear_after_fill": {
+        "type": "boolean"
+      },
+      "tab_id": {
+        "type": "string"
+      }
+    },
+    "required": ["session_id", "entry_name", "username_selector", "password_selector"]
+  },
+  "outputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": ["success", "origin_mismatch", "auth_failed", "blocked"]
+      },
+      "redacted": {
+        "type": "boolean",
+        "const": true
+      },
+      "reason": {
+        "type": "string"
+      }
+    },
+    "required": ["status", "redacted"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": true
+  },
+  "since": "0.1.0"
+}

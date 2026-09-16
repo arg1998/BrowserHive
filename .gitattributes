@@ -1,0 +1,12 @@
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.zip binary
+*.db binary
+packages/dashboard/src/routeTree.gen.ts linguist-generated=true
+packages/core/src/version.ts linguist-generated=true
+packages/contracts/generated/** linguist-generated=true
+packages/core/src/infra/persistence/generated/** linguist-generated=true
+docs/reference/** linguist-generated=true
+bun.lock linguist-generated=true
+CHANGELOG.md linguist-generated=true

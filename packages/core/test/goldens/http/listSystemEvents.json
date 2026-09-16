@@ -1,0 +1,31 @@
+{
+  "data": [
+    {
+      "event_id": "e-00000000000000000000000009",
+      "code": "BLOCKLIST_RELOAD_FAILED",
+      "severity": "warn",
+      "message": "reload failed",
+      "details": null,
+      "first_seen_at": 1699999999000,
+      "last_seen_at": 1699999999000,
+      "count": 1,
+      "resolved_at": null
+    }
+  ],
+  "page": {
+    "next_cursor": null,
+    "limit": 50
+  },
+  "applied": {
+    "filters": {
+      "resolved": "open"
+    },
+    "sort": {
+      "key": "last_seen_at",
+      "dir": "desc"
+    }
+  },
+  "meta": {
+    "now": 1700000000000
+  }
+}

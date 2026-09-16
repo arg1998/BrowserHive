@@ -1,0 +1,7 @@
+[install]
+exact = false
+linker = "hoisted"
+
+[test]
+preload = ["./test/preload.ts"]
+coverageSkipTestFiles = true

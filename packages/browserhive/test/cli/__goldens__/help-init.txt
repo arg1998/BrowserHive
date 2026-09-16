@@ -1,0 +1,29 @@
+browserhive init — Install browsers and prepare the data directory
+
+USAGE
+  browserhive init [flags]
+
+Creates the data directory (0700), installs Chromium for Playwright (and Patchright when
+stealthDriver is auto or patchright), creates and migrates the database, then prints the next steps.
+Safe to re-run.
+
+FLAGS
+  --browsers <chromium>             Browsers to install. chrome and edge are branded channels
+                                    installed by the OS. default: chromium
+  --force                           Re-download browsers even when installed.
+  --skipBrowsers                    Skip the browser download (data directory and database only).
+  --writeSchema                     Write browserhive.schema.json next to the config file in use.
+  --dataDir <path>                  Data directory (database, sessions, auth states, uploads,
+                                    backups). Defaults to the OS data dir. default: OS data
+                                    directory
+  --config <path>                   Config file path. CLI and environment only: a config file cannot
+                                    point at another.
+  --stealthDriver <auto|patchright|playwright>
+                                    Chromium driver for stealth sessions. auto uses Patchright when
+                                    installed, else Playwright. default: auto
+  --color <auto|always|never>       Colour for logs and CLI output. auto honours NO_COLOR,
+                                    FORCE_COLOR, TERM=dumb and TTY. default: auto
+
+GLOBAL FLAGS
+  -h, --help     Show help.
+  -v, --version  Print the version.

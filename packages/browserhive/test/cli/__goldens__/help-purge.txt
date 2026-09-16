@@ -1,0 +1,23 @@
+browserhive purge — Delete local state after an inventory and confirmation
+
+USAGE
+  browserhive purge [flags]
+
+Prints an inventory of the data directory and asks you to type YES. Deletes the database and session
+directories; --all also deletes saved auth states, uploads, backups and admin credentials (asks
+twice). Only the data directory is resolved, so purge works with an otherwise invalid configuration.
+
+FLAGS
+  --all                        Also delete auth states, uploads, backups and admin credentials.
+  --dryRun                     Print the inventory and delete nothing.
+  --yes                        Skip the confirmation prompts (required without a terminal).
+  --dataDir <path>             Data directory (database, sessions, auth states, uploads, backups).
+                               Defaults to the OS data dir. default: OS data directory
+  --config <path>              Config file path. CLI and environment only: a config file cannot
+                               point at another.
+  --color <auto|always|never>  Colour for logs and CLI output. auto honours NO_COLOR, FORCE_COLOR,
+                               TERM=dumb and TTY. default: auto
+
+GLOBAL FLAGS
+  -h, --help     Show help.
+  -v, --version  Print the version.

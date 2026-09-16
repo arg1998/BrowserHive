@@ -1,0 +1,42 @@
+{
+  "name": "save_full_profile",
+  "title": "Save full profile",
+  "description": "Save the session's full on-disk Chromium profile as a heavy \"profile\" snapshot (zipped user-data-dir) for later restore via launch_session({ persistence_mode: \"persistent\", restore_profile: name }). Only valid when the source session is in persistent mode.",
+  "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      }
+    },
+    "required": ["session_id", "name"]
+  },
+  "outputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string"
+      },
+      "path": {
+        "type": "string"
+      },
+      "size": {
+        "type": "number"
+      }
+    },
+    "required": ["name", "path", "size"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "since": "0.1.0"
+}

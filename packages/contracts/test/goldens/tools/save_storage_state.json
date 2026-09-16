@@ -1,0 +1,42 @@
+{
+  "name": "save_storage_state",
+  "title": "Save storage state",
+  "description": "Save the session's cookies + localStorage as a light \"storage-state\" snapshot for later restore via launch_session({ context_options: { storageState: name } }) in a non-persistent mode. Valid in any persistence mode.",
+  "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      }
+    },
+    "required": ["session_id", "name"]
+  },
+  "outputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string"
+      },
+      "path": {
+        "type": "string"
+      },
+      "size": {
+        "type": "number"
+      }
+    },
+    "required": ["name", "path", "size"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "since": "0.1.0"
+}

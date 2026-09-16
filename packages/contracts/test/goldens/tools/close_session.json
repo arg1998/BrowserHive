@@ -1,0 +1,36 @@
+{
+  "name": "close_session",
+  "title": "Close session",
+  "description": "Close an existing browser session and release all its resources.",
+  "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      }
+    },
+    "required": ["session_id"]
+  },
+  "outputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      },
+      "closed": {
+        "type": "boolean"
+      }
+    },
+    "required": ["session_id", "closed"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": true,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "since": "0.1.0"
+}

@@ -1,0 +1,46 @@
+{
+  "name": "get_attention_result",
+  "title": "Get attention result",
+  "description": "Retrieve the outcome of a prior request_attention by its request_id. Returns immediately if the request is already resolved/rejected/timed-out; otherwise BLOCKS like request_attention until it settles. Use to recover a decision after a dropped connection. http transport only.",
+  "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "request_id": {
+        "type": "string"
+      }
+    },
+    "required": ["request_id"]
+  },
+  "outputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string",
+        "enum": ["resolved", "rejected", "timeout", "cancelled"]
+      },
+      "message": {
+        "type": "string"
+      },
+      "resolved_by": {
+        "type": "string"
+      },
+      "resolved_at": {
+        "type": ["number", "null"]
+      },
+      "request_id": {
+        "type": "string"
+      }
+    },
+    "required": ["status", "resolved_at", "request_id"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "since": "0.1.0"
+}

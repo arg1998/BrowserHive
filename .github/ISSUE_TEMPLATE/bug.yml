@@ -1,0 +1,29 @@
+name: Bug report
+description: Something does not work as documented
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes: { label: Version, description: "`browserhive --version`" }
+    validations: { required: true }
+  - type: input
+    id: env
+    attributes: { label: OS and Bun version, description: "e.g. macOS 15 / bun 1.4.2" }
+    validations: { required: true }
+  - type: textarea
+    id: config
+    attributes: { label: Configuration, description: "`browserhive config --json` (secrets are redacted automatically)", render: json }
+  - type: textarea
+    id: steps
+    attributes: { label: Steps to reproduce }
+    validations: { required: true }
+  - type: textarea
+    id: expected
+    attributes: { label: Expected vs actual }
+    validations: { required: true }
+  - type: textarea
+    id: logs
+    attributes: { label: Logs, description: "run with `--logLevel debug`", render: text }
+  - type: dropdown
+    id: surface
+    attributes: { label: Surface, options: [MCP tool, Dashboard page, CLI, Vault, Stealth, Other] }

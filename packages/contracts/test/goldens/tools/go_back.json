@@ -1,0 +1,50 @@
+{
+  "name": "go_back",
+  "title": "Go back",
+  "description": "Navigate back in a tab's history (defaults to the active tab).",
+  "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      },
+      "wait_until": {
+        "default": "load",
+        "type": "string",
+        "enum": ["load", "domcontentloaded", "networkidle", "commit"]
+      },
+      "timeout": {
+        "default": 30000,
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 9007199254740991
+      },
+      "tab_id": {
+        "type": "string"
+      }
+    },
+    "required": ["session_id"]
+  },
+  "outputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      },
+      "url": {
+        "type": "string"
+      }
+    },
+    "required": ["session_id", "url"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": true
+  },
+  "since": "0.1.0"
+}

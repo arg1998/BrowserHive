@@ -1,0 +1,420 @@
+/*
+ * @module styles/tokens — design tokens for both themes. This is the ONLY file
+ * allowed to contain raw colours, px values and durations; components use Tailwind utilities over
+ * these tokens. Light theme is the `:root` default, dark is `[data-theme="dark"]` (set by the theme
+ * bootstrap in index.html and by ThemeProvider). The `/theme` page verifies the contrast pairs.
+ *
+ * Root font size is the browser default (16px): never set a font-size on `html`.
+ */
+
+@theme inline {
+  /* Fonts (self-hosted, latin only). Mono is for ids, URLs, code, JSON and log lines only. */
+  --font-sans: "Geist Variable", system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
+  --font-heading: var(--font-sans);
+
+  /* Spacing: 4px base, 8px rhythm. */
+  --spacing: 0.25rem;
+
+  /* Type scale (size / line-height / tracking). 12px is the minimum anywhere. */
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 0.875rem;
+  --text-base--line-height: 1.375rem;
+  --text-md: 1rem;
+  --text-md--line-height: 1.5rem;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.75rem;
+  --text-lg--letter-spacing: -0.005em;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.75rem;
+  --text-xl--letter-spacing: -0.01em;
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: 2rem;
+  --text-2xl--letter-spacing: -0.02em;
+  --text-3xl: 1.875rem;
+  --text-3xl--line-height: 2.25rem;
+  --text-3xl--letter-spacing: -0.02em;
+
+  /* Radius: controls md (8px), cards xl (12px), dialogs 2xl (16px), pills full. */
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+
+  /* Elevation. Light uses soft shadows; dark uses lighter surfaces + a white/8% ring + real shadows. */
+  --shadow-xs: var(--elevation-xs);
+  --shadow-sm: var(--elevation-sm);
+  --shadow-md: var(--elevation-md);
+  --shadow-lg: var(--elevation-lg);
+  --shadow-popover: var(--elevation-popover);
+  --shadow-dialog: var(--elevation-dialog);
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --animate-pulse-soft: pulse-soft 2s var(--ease-in-out) infinite;
+  --animate-spin: spin 1s linear infinite;
+
+  /* Breakpoints: Tailwind defaults (sm 640, md 768, lg 1024, xl 1280, 2xl 1536) plus the wide band (1800) */
+  --breakpoint-wide: 112.5rem;
+
+  /* Colour spine (shadcn names) */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-subtle-foreground: var(--subtle-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-link: var(--link);
+  --color-tooltip: var(--tooltip);
+  --color-tooltip-foreground: var(--tooltip-foreground);
+  --color-scrollbar: var(--scrollbar);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Charts */
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+  --color-chart-grid: var(--chart-grid);
+  --color-chart-axis: var(--chart-axis);
+
+  /* Semantic hues, five steps each + on-solid. Classes: bg-success-bg, text-warn-text… */
+  --color-success-bg: var(--success-bg);
+  --color-success-bg-hover: var(--success-bg-hover);
+  --color-success-border: var(--success-border);
+  --color-success-solid: var(--success-solid);
+  --color-success-text: var(--success-text);
+  --color-success-on-solid: var(--success-on-solid);
+  --color-warn-bg: var(--warn-bg);
+  --color-warn-bg-hover: var(--warn-bg-hover);
+  --color-warn-border: var(--warn-border);
+  --color-warn-solid: var(--warn-solid);
+  --color-warn-text: var(--warn-text);
+  --color-warn-on-solid: var(--warn-on-solid);
+  --color-danger-bg: var(--danger-bg);
+  --color-danger-bg-hover: var(--danger-bg-hover);
+  --color-danger-border: var(--danger-border);
+  --color-danger-solid: var(--danger-solid);
+  --color-danger-text: var(--danger-text);
+  --color-danger-on-solid: var(--danger-on-solid);
+  --color-vault-bg: var(--vault-bg);
+  --color-vault-bg-hover: var(--vault-bg-hover);
+  --color-vault-border: var(--vault-border);
+  --color-vault-solid: var(--vault-solid);
+  --color-vault-text: var(--vault-text);
+  --color-vault-on-solid: var(--vault-on-solid);
+  --color-info-bg: var(--info-bg);
+  --color-info-bg-hover: var(--info-bg-hover);
+  --color-info-border: var(--info-border);
+  --color-info-solid: var(--info-solid);
+  --color-info-text: var(--info-text);
+  --color-info-on-solid: var(--info-on-solid);
+  --color-neutral-bg: var(--neutral-bg);
+  --color-neutral-bg-hover: var(--neutral-bg-hover);
+  --color-neutral-border: var(--neutral-border);
+  --color-neutral-solid: var(--neutral-solid);
+  --color-neutral-text: var(--neutral-text);
+  --color-neutral-on-solid: var(--neutral-on-solid);
+  /* accent hue = primary */
+  --color-accent-bg: var(--accent-bg);
+  --color-accent-bg-hover: var(--accent-bg-hover);
+  --color-accent-border: var(--accent-border);
+  --color-accent-solid: var(--primary);
+  --color-accent-text: var(--accent-text);
+  --color-accent-on-solid: var(--primary-foreground);
+}
+
+/* Keyframes referenced by the --animate-* theme keys */
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+:root {
+  /* Layout */
+  --sidebar-width: 15rem;
+  --sidebar-width-icon: 3.5rem;
+  --topbar-height: 3.5rem;
+  /*
+   * One width policy: every page, header and tabs included, spans the content column, so
+   * sibling pages and inner tabs share one right edge with the topbar. There is no page cap; cap
+   * prose, not pages.
+   */
+  --gutter: 1rem;
+  /* Height of a fixed-height workspace page (everything below the sticky topbar). */
+  --workspace-height: calc(100dvh - var(--topbar-height));
+
+  /*
+   * Z-index ladder. Toasts sit above the page, rail and drawer but below popovers and modal dialogs
+   *: a toast never covers a confirm dialog; it is dimmed behind the backdrop instead.
+   */
+  --z-sticky: 10;
+  --z-topbar: 20;
+  --z-rail: 30;
+  --z-drawer: 40;
+  --z-toast: 45;
+  --z-popover: 50;
+  --z-dialog: 50;
+  --z-tooltip: 70;
+
+  /* Motion */
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+  --duration-slow: 260ms;
+
+  /* Brand mark gradient (same in both themes) */
+  --brand-from: oklch(0.66 0.15 258);
+  --brand-to: oklch(0.5 0.17 262);
+
+  /* Focus */
+  --ring-width: 2px;
+  --ring-width-capture: 3px;
+  --ring-offset: 2px;
+
+  /* Icon sizes: 16px in controls and rows, 20px in nav */
+  --icon-sm: 0.875rem;
+  --icon-md: 1rem;
+  --icon-lg: 1.25rem;
+
+  /* ---------- Light ---------- */
+  --elevation-xs: 0 1px 2px oklch(0.2 0.02 250 / 0.05);
+  --elevation-sm: 0 1px 3px oklch(0.2 0.02 250 / 0.07), 0 1px 2px oklch(0.2 0.02 250 / 0.04);
+  --elevation-md: 0 4px 12px oklch(0.2 0.02 250 / 0.08), 0 1px 3px oklch(0.2 0.02 250 / 0.06);
+  --elevation-lg: 0 16px 40px oklch(0.2 0.02 250 / 0.14), 0 2px 8px oklch(0.2 0.02 250 / 0.06);
+  --elevation-popover:
+    0 0 0 1px oklch(0.2 0.02 250 / 0.08), 0 8px 24px oklch(0.2 0.02 250 / 0.12),
+    0 2px 6px oklch(0.2 0.02 250 / 0.06);
+  --elevation-dialog:
+    0 0 0 1px oklch(0.2 0.02 250 / 0.08), 0 24px 64px oklch(0.2 0.02 250 / 0.2),
+    0 4px 12px oklch(0.2 0.02 250 / 0.08);
+
+  --background: oklch(0.985 0.002 250);
+  --foreground: oklch(0.2 0.012 250);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.2 0.012 250);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.2 0.012 250);
+  --primary: oklch(0.55 0.17 258);
+  --primary-hover: oklch(0.5 0.17 258);
+  --primary-foreground: oklch(0.99 0.004 258);
+  --secondary: oklch(0.955 0.004 250);
+  --secondary-foreground: oklch(0.24 0.012 250);
+  --muted: oklch(0.965 0.003 250);
+  --muted-foreground: oklch(0.5 0.012 250);
+  /* ≥ 4.5:1 on background, sidebar and card: subtle text is still real text. */
+  --subtle-foreground: oklch(0.54 0.01 250);
+  --accent: oklch(0.955 0.004 250);
+  --accent-foreground: oklch(0.2 0.012 250);
+  --destructive: oklch(0.55 0.2 27);
+  --destructive-foreground: oklch(0.99 0.005 27);
+  --border: oklch(0.92 0.004 250);
+  --border-strong: oklch(0.87 0.006 250);
+  --input: oklch(0.88 0.006 250);
+  --ring: oklch(0.58 0.16 258);
+  --link: oklch(0.5 0.16 258);
+  --tooltip: oklch(0.22 0.012 250);
+  --tooltip-foreground: oklch(0.97 0.003 250);
+  --scrollbar: oklch(0.2 0.012 250 / 0.2);
+  --sidebar: oklch(0.975 0.003 250);
+  --sidebar-foreground: oklch(0.3 0.012 250);
+  --sidebar-primary: oklch(0.55 0.17 258);
+  --sidebar-primary-foreground: oklch(0.99 0.004 258);
+  --sidebar-accent: oklch(0.935 0.005 250);
+  --sidebar-accent-foreground: oklch(0.18 0.012 250);
+  --sidebar-border: oklch(0.92 0.004 250);
+  --sidebar-ring: oklch(0.58 0.16 258);
+
+  --chart-1: oklch(0.58 0.16 258);
+  --chart-2: oklch(0.6 0.15 155);
+  --chart-3: oklch(0.7 0.15 75);
+  --chart-4: oklch(0.58 0.17 300);
+  --chart-5: oklch(0.6 0.2 27);
+  --chart-6: oklch(0.62 0.12 195);
+  --chart-grid: oklch(0.92 0.004 250);
+  --chart-axis: oklch(0.5 0.012 250);
+
+  --success-bg: oklch(0.96 0.035 155);
+  --success-bg-hover: oklch(0.93 0.05 155);
+  --success-border: oklch(0.8 0.08 155);
+  --success-solid: oklch(0.6 0.15 155);
+  --success-text: oklch(0.42 0.11 155);
+  --success-on-solid: oklch(0.99 0.01 155);
+  --warn-bg: oklch(0.965 0.045 80);
+  --warn-bg-hover: oklch(0.935 0.07 80);
+  --warn-border: oklch(0.82 0.1 80);
+  --warn-solid: oklch(0.72 0.16 70);
+  --warn-text: oklch(0.45 0.11 65);
+  --warn-on-solid: oklch(0.2 0.03 70);
+  --danger-bg: oklch(0.965 0.025 27);
+  --danger-bg-hover: oklch(0.935 0.045 27);
+  --danger-border: oklch(0.82 0.08 27);
+  --danger-solid: oklch(0.56 0.21 27);
+  --danger-text: oklch(0.47 0.18 27);
+  --danger-on-solid: oklch(0.99 0.01 27);
+  --vault-bg: oklch(0.965 0.025 300);
+  --vault-bg-hover: oklch(0.935 0.045 300);
+  --vault-border: oklch(0.82 0.08 300);
+  --vault-solid: oklch(0.56 0.18 300);
+  --vault-text: oklch(0.45 0.16 300);
+  --vault-on-solid: oklch(0.99 0.01 300);
+  --info-bg: oklch(0.965 0.025 245);
+  --info-bg-hover: oklch(0.935 0.045 245);
+  --info-border: oklch(0.82 0.07 245);
+  --info-solid: oklch(0.58 0.15 245);
+  --info-text: oklch(0.45 0.13 245);
+  --info-on-solid: oklch(0.99 0.01 245);
+  --neutral-bg: oklch(0.955 0.004 250);
+  --neutral-bg-hover: oklch(0.925 0.006 250);
+  --neutral-border: oklch(0.87 0.006 250);
+  --neutral-solid: oklch(0.55 0.012 250);
+  --neutral-text: oklch(0.38 0.012 250);
+  --neutral-on-solid: oklch(0.99 0.002 250);
+  --accent-bg: oklch(0.96 0.03 258);
+  --accent-bg-hover: oklch(0.93 0.05 258);
+  --accent-border: oklch(0.8 0.08 258);
+  --accent-text: oklch(0.46 0.15 258);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* ---------- Dark: surface ladder background < sidebar < card < popover, plus real shadows ---------- */
+  --elevation-xs: 0 1px 2px oklch(0 0 0 / 0.3);
+  --elevation-sm: 0 1px 3px oklch(0 0 0 / 0.35);
+  --elevation-md: 0 0 0 1px oklch(1 0 0 / 0.06), 0 6px 16px oklch(0 0 0 / 0.4);
+  --elevation-lg: 0 0 0 1px oklch(1 0 0 / 0.08), 0 16px 40px oklch(0 0 0 / 0.5);
+  --elevation-popover:
+    0 0 0 1px oklch(1 0 0 / 0.08), 0 8px 24px oklch(0 0 0 / 0.45), 0 2px 6px oklch(0 0 0 / 0.3);
+  --elevation-dialog:
+    0 0 0 1px oklch(1 0 0 / 0.09), 0 24px 64px oklch(0 0 0 / 0.6), 0 4px 12px oklch(0 0 0 / 0.35);
+
+  --background: oklch(0.155 0.004 250);
+  --foreground: oklch(0.95 0.003 250);
+  --card: oklch(0.195 0.005 250);
+  --card-foreground: oklch(0.95 0.003 250);
+  --popover: oklch(0.23 0.006 250);
+  --popover-foreground: oklch(0.95 0.003 250);
+  /* White labels on primary stay ≥ 4.5:1 at rest and on hover. */
+  --primary: oklch(0.53 0.16 258);
+  --primary-hover: oklch(0.56 0.16 258);
+  --primary-foreground: oklch(0.99 0.004 258);
+  --secondary: oklch(1 0 0 / 0.07);
+  --secondary-foreground: oklch(0.93 0.003 250);
+  --muted: oklch(1 0 0 / 0.05);
+  --muted-foreground: oklch(0.7 0.008 250);
+  /* ≥ 4.5:1 on background, sidebar, card and popover. */
+  --subtle-foreground: oklch(0.62 0.008 250);
+  --accent: oklch(1 0 0 / 0.07);
+  --accent-foreground: oklch(0.97 0.003 250);
+  --destructive: oklch(0.68 0.19 27);
+  --destructive-foreground: oklch(0.99 0.005 27);
+  --border: oklch(1 0 0 / 0.08);
+  --border-strong: oklch(1 0 0 / 0.14);
+  --input: oklch(1 0 0 / 0.12);
+  --ring: oklch(0.68 0.14 258);
+  --link: oklch(0.76 0.12 258);
+  --tooltip: oklch(0.3 0.008 250);
+  --tooltip-foreground: oklch(0.97 0.003 250);
+  --scrollbar: oklch(1 0 0 / 0.18);
+  --sidebar: oklch(0.17 0.005 250);
+  --sidebar-foreground: oklch(0.8 0.006 250);
+  --sidebar-primary: oklch(0.53 0.16 258);
+  --sidebar-primary-foreground: oklch(0.99 0.004 258);
+  --sidebar-accent: oklch(1 0 0 / 0.07);
+  --sidebar-accent-foreground: oklch(0.97 0.003 250);
+  --sidebar-border: oklch(1 0 0 / 0.07);
+  --sidebar-ring: oklch(0.68 0.14 258);
+
+  --chart-1: oklch(0.68 0.14 258);
+  --chart-2: oklch(0.72 0.14 155);
+  --chart-3: oklch(0.78 0.14 75);
+  --chart-4: oklch(0.7 0.15 300);
+  --chart-5: oklch(0.68 0.19 27);
+  --chart-6: oklch(0.74 0.11 195);
+  --chart-grid: oklch(0.26 0.005 250);
+  --chart-axis: oklch(0.66 0.008 250);
+
+  --success-bg: oklch(0.72 0.14 155 / 0.13);
+  --success-bg-hover: oklch(0.72 0.14 155 / 0.2);
+  --success-border: oklch(0.72 0.14 155 / 0.3);
+  --success-solid: oklch(0.72 0.15 155);
+  --success-text: oklch(0.8 0.13 155);
+  --success-on-solid: oklch(0.15 0.03 155);
+  --warn-bg: oklch(0.8 0.15 75 / 0.13);
+  --warn-bg-hover: oklch(0.8 0.15 75 / 0.2);
+  --warn-border: oklch(0.8 0.15 75 / 0.3);
+  --warn-solid: oklch(0.79 0.15 75);
+  --warn-text: oklch(0.84 0.13 80);
+  --warn-on-solid: oklch(0.18 0.03 75);
+  --danger-bg: oklch(0.68 0.19 27 / 0.14);
+  --danger-bg-hover: oklch(0.68 0.19 27 / 0.22);
+  --danger-border: oklch(0.68 0.19 27 / 0.35);
+  /* White count badges on the solid stay ≥ 4.5:1. */
+  --danger-solid: oklch(0.57 0.2 27);
+  --danger-text: oklch(0.8 0.12 27);
+  --danger-on-solid: oklch(0.99 0.01 27);
+  --vault-bg: oklch(0.7 0.15 300 / 0.14);
+  --vault-bg-hover: oklch(0.7 0.15 300 / 0.22);
+  --vault-border: oklch(0.7 0.15 300 / 0.35);
+  --vault-solid: oklch(0.7 0.16 300);
+  --vault-text: oklch(0.82 0.11 300);
+  --vault-on-solid: oklch(0.15 0.03 300);
+  --info-bg: oklch(0.7 0.14 245 / 0.14);
+  --info-bg-hover: oklch(0.7 0.14 245 / 0.22);
+  --info-border: oklch(0.7 0.14 245 / 0.35);
+  --info-solid: oklch(0.7 0.15 245);
+  --info-text: oklch(0.82 0.1 245);
+  --info-on-solid: oklch(0.15 0.03 245);
+  --neutral-bg: oklch(1 0 0 / 0.07);
+  --neutral-bg-hover: oklch(1 0 0 / 0.11);
+  --neutral-border: oklch(1 0 0 / 0.14);
+  --neutral-solid: oklch(0.66 0.008 250);
+  --neutral-text: oklch(0.82 0.006 250);
+  --neutral-on-solid: oklch(0.15 0.01 250);
+  --accent-bg: oklch(0.68 0.14 258 / 0.15);
+  --accent-bg-hover: oklch(0.68 0.14 258 / 0.23);
+  --accent-border: oklch(0.68 0.14 258 / 0.4);
+  --accent-text: oklch(0.8 0.1 258);
+}
+
+@media (min-width: 40rem) {
+  :root {
+    --gutter: 1.5rem;
+  }
+}

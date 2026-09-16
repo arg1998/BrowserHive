@@ -1,0 +1,107 @@
+{
+  "data": [
+    {
+      "session_id": "shop-0000000a",
+      "slug": "shop",
+      "owner": "agent-1",
+      "tenant_id": null,
+      "channel": "chromium",
+      "engine": "chromium",
+      "headless": true,
+      "incognito": false,
+      "persistence_mode": "memory",
+      "current_url": "https://example.com/",
+      "created_at": 1699999950000,
+      "last_activity_at": 1699999990000,
+      "closed_at": 1699999995000,
+      "closed_reason": "user",
+      "archived_at": null,
+      "lease_expires_at": 1700007200000,
+      "lease_paused_at": null,
+      "lease_remaining_ms": 0,
+      "state": "closed",
+      "live": false,
+      "disable_evaluate": false,
+      "vault_enabled": true,
+      "stealth": false,
+      "fingerprint": false,
+      "humanize": false,
+      "stealth_recorded": false,
+      "identity": null,
+      "proxy_label": null,
+      "counts": {
+        "tool_calls": 2,
+        "errors": 1,
+        "pages": 1,
+        "blocked": 1,
+        "attention_open": 0,
+        "vault_access": 0
+      },
+      "has_live_viewers": false,
+      "client": null
+    },
+    {
+      "session_id": "docs-0000000b",
+      "slug": "docs",
+      "owner": "agent-1",
+      "tenant_id": null,
+      "channel": "chromium",
+      "engine": "chromium",
+      "headless": true,
+      "incognito": false,
+      "persistence_mode": "memory",
+      "current_url": "https://example.com/",
+      "created_at": 1699999910000,
+      "last_activity_at": 1699999990000,
+      "closed_at": 1699999995000,
+      "closed_reason": "user",
+      "archived_at": 1699999999000,
+      "lease_expires_at": 1700007200000,
+      "lease_paused_at": null,
+      "lease_remaining_ms": 0,
+      "state": "closed",
+      "live": false,
+      "disable_evaluate": false,
+      "vault_enabled": true,
+      "stealth": false,
+      "fingerprint": false,
+      "humanize": false,
+      "stealth_recorded": false,
+      "identity": null,
+      "proxy_label": null,
+      "counts": {
+        "tool_calls": 0,
+        "errors": 0,
+        "pages": 0,
+        "blocked": 0,
+        "attention_open": 0,
+        "vault_access": 0
+      },
+      "has_live_viewers": false,
+      "client": null
+    }
+  ],
+  "page": {
+    "next_cursor": null,
+    "limit": 50
+  },
+  "facets": {
+    "owners": [],
+    "channels": [],
+    "persistence_modes": [],
+    "states": []
+  },
+  "applied": {
+    "filters": {
+      "view": "all",
+      "archived": "include"
+    },
+    "sort": {
+      "key": "created_at",
+      "dir": "desc"
+    }
+  },
+  "meta": {
+    "now": 1700000000000
+  }
+}

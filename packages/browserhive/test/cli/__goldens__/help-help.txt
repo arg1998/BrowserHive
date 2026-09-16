@@ -1,0 +1,13 @@
+browserhive help — Show help for a command
+
+USAGE
+  browserhive help [command] [flags]
+
+'browserhive help config' also lists the environment variable of every key.
+
+ARGUMENTS
+  <command>  Command to describe.
+
+GLOBAL FLAGS
+  -h, --help     Show help.
+  -v, --version  Print the version.

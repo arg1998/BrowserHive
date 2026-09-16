@@ -1,0 +1,67 @@
+browserhive config validate — Resolve the configuration and exit 64 on any problem, like serve
+
+USAGE
+  browserhive config validate [flags]
+
+Every key exists as an environment variable (BROWSERHIVE_<SCREAMING_SNAKE>), a flag (--camelCase)
+and a JSON key (camelCase) in browserhive.config.json.
+
+FLAGS
+  <server flags>  Every flag of 'browserhive serve' (see 'browserhive serve --help').
+
+GLOBAL FLAGS
+  -h, --help     Show help.
+  -v, --version  Print the version.
+
+NAMES
+  Every key has one flag, one environment variable and one JSON key (the flag without --).
+  --config                BROWSERHIVE_CONFIG
+  --transport             BROWSERHIVE_TRANSPORT
+  --host                  BROWSERHIVE_HOST
+  --port                  BROWSERHIVE_PORT
+  --auth                  BROWSERHIVE_AUTH
+  --authTokens            BROWSERHIVE_AUTH_TOKENS
+  --allowInsecureBind     BROWSERHIVE_ALLOW_INSECURE_BIND
+  --trustedProxies        BROWSERHIVE_TRUSTED_PROXIES
+  --admin                 BROWSERHIVE_ADMIN
+  --dataDir               BROWSERHIVE_DATA_DIR
+  --shutdownTimeout       BROWSERHIVE_SHUTDOWN_TIMEOUT
+  --sessionCloseTimeout   BROWSERHIVE_SESSION_CLOSE_TIMEOUT
+  --persistence           BROWSERHIVE_PERSISTENCE
+  --defaultHeadless       BROWSERHIVE_DEFAULT_HEADLESS
+  --defaultChannel        BROWSERHIVE_DEFAULT_CHANNEL
+  --maxSessions           BROWSERHIVE_MAX_SESSIONS
+  --sessionLease          BROWSERHIVE_SESSION_LEASE
+  --attentionTimeout      BROWSERHIVE_ATTENTION_TIMEOUT
+  --minAttentionWait      BROWSERHIVE_MIN_ATTENTION_WAIT
+  --allowEvaluate         BROWSERHIVE_ALLOW_EVALUATE
+  --blocklist             BROWSERHIVE_BLOCKLIST
+  --blocklistWatch        BROWSERHIVE_BLOCKLIST_WATCH
+  --vault                 BROWSERHIVE_VAULT
+  --stealth               BROWSERHIVE_STEALTH
+  --stealthDriver         BROWSERHIVE_STEALTH_DRIVER
+  --fingerprint           BROWSERHIVE_FINGERPRINT
+  --humanize              BROWSERHIVE_HUMANIZE
+  --captcha               BROWSERHIVE_CAPTCHA
+  --logLevel              BROWSERHIVE_LOG_LEVEL
+  --logFormat             BROWSERHIVE_LOG_FORMAT
+  --color                 BROWSERHIVE_COLOR
+  --logRingSize           BROWSERHIVE_LOG_RING_SIZE
+  --logPersist            BROWSERHIVE_LOG_PERSIST
+  --trace                 BROWSERHIVE_TRACE
+  --screenshotTrace       BROWSERHIVE_SCREENSHOT_TRACE
+  --screencastQuality     BROWSERHIVE_SCREENCAST_QUALITY
+  --recordToolResults     BROWSERHIVE_RECORD_TOOL_RESULTS
+  --retentionDays         BROWSERHIVE_RETENTION_DAYS
+  --retentionBytes        BROWSERHIVE_RETENTION_BYTES
+  --backupsKeep           BROWSERHIVE_BACKUPS_KEEP
+  --urlQueryAllowlist     BROWSERHIVE_URL_QUERY_ALLOWLIST
+  --otel                  BROWSERHIVE_OTEL
+  --otelEndpoint          BROWSERHIVE_OTEL_ENDPOINT
+  --otelProtocol          BROWSERHIVE_OTEL_PROTOCOL
+  --otelHeaders           BROWSERHIVE_OTEL_HEADERS
+  --otelServiceName       BROWSERHIVE_OTEL_SERVICE_NAME
+  --otelSampleRatio       BROWSERHIVE_OTEL_SAMPLE_RATIO
+  --otelSignals           BROWSERHIVE_OTEL_SIGNALS
+  --otelVerbose           BROWSERHIVE_OTEL_VERBOSE
+  --otelTraceUrlTemplate  BROWSERHIVE_OTEL_TRACE_URL_TEMPLATE

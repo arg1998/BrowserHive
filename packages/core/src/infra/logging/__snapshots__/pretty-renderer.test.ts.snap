@@ -1,0 +1,17 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`renderPretty (colours off) matches the snapshot for a wrapped warn line 1`] = `
+"14:23:07.412 WARN  tool call failed           tool=vault_fill session_id=shop-a1b2
+                                              error_code=VAULT_FILL_AUTH_FAILED result=auth_failed
+                                              entry_name=github module=mcp reported=true"
+`;
+
+exports[`renderPretty (colours off) wraps prose at spaces and puts detail/stack/err.stack last 1`] = `
+"14:23:07.412 ERROR tool call failed           tool=evaluate err="Error: boom"
+                                              err.cause="TypeError: inner" module=mcp zeta=1
+                                              detail="the quick brown fox jumps over the lazy dog
+                                              the quick brown fox jumps over the lazy dog the quick
+                                              brown fox jumps over the lazy dog the quick brown fox
+                                              jumps over the lazy dog"
+                                              err.stack="Error: boom\\n    at x.ts:1:1""
+`;

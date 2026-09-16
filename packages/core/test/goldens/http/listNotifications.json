@@ -1,0 +1,37 @@
+{
+  "data": [
+    {
+      "notification_id": "n-000000000001",
+      "principal_id": null,
+      "type": "error",
+      "title": "closed-run · 1 tool error",
+      "body": "click · ELEMENT_NOT_FOUND (10 ms)",
+      "session_id": "shop-0000000a",
+      "session_slug": "shop",
+      "target": "/sessions/shop-0000000a?kinds=tool&errors_only=1",
+      "source_event_id": "e-00000000000000000000000002",
+      "created_at": 1699999980000,
+      "updated_at": 1699999980000,
+      "count": 1,
+      "read_at": null,
+      "dismissed_at": null
+    }
+  ],
+  "page": {
+    "next_cursor": null,
+    "limit": 50
+  },
+  "applied": {
+    "filters": {
+      "read": "all"
+    },
+    "sort": {
+      "key": "updated_at",
+      "dir": "desc"
+    }
+  },
+  "meta": {
+    "now": 1700000000000
+  },
+  "unread_count": 1
+}

@@ -1,0 +1,18 @@
+/** @module components/ui/spinner — shadcn (base-nova) copy on Base UI; variation via tokens only */
+
+import { Loader2Icon } from 'lucide-react';
+import { cn } from '@/lib/utils.ts';
+
+function Spinner({ className, ...props }: React.ComponentProps<'svg'>) {
+  return (
+    <Loader2Icon
+      data-slot="spinner"
+      role="status"
+      aria-label="Loading"
+      className={cn('size-4 animate-spin', className)}
+      {...props}
+    />
+  );
+}
+
+export { Spinner };

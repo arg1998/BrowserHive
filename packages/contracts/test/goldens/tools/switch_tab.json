@@ -1,0 +1,42 @@
+{
+  "name": "switch_tab",
+  "title": "Switch tab",
+  "description": "Make the given tab the active tab for subsequent tab_id-less tool calls.",
+  "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      },
+      "tab_id": {
+        "type": "string"
+      }
+    },
+    "required": ["session_id", "tab_id"]
+  },
+  "outputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      },
+      "tab_id": {
+        "type": "string"
+      },
+      "url": {
+        "type": "string"
+      }
+    },
+    "required": ["session_id", "tab_id", "url"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "since": "0.1.0"
+}

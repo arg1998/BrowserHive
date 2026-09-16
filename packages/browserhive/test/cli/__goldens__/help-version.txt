@@ -1,0 +1,13 @@
+browserhive version — Print version information
+
+USAGE
+  browserhive version [flags]
+
+Prints the BrowserHive, Bun, SQLite, Playwright and Patchright versions.
+
+FLAGS
+  --json  Print machine-readable JSON instead of text.
+
+GLOBAL FLAGS
+  -h, --help     Show help.
+  -v, --version  Print the version.

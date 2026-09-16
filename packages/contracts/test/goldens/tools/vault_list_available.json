@@ -1,0 +1,82 @@
+{
+  "name": "vault_list_available",
+  "title": "Vault: list available",
+  "description": "List the vault entries you may fill on the page this session is currently on. Returns { entries: [{ entry_name, allowed_origins, redact_username, require_no_evaluate }], scope, scoped_to, note? }. Results are SCOPED to the session's current page — navigate to the login page first, then call this. Pass `url` = the domain of that login page (e.g. \"github.com\"); if it does not match the page the session is actually on, the request is denied and reported. An entry only appears after an operator authorizes this session for it. Never returns secrets.",
+  "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      },
+      "url": {
+        "description": "The domain (or URL) of the login page you have navigated to, e.g. \"github.com\". Results are scoped to this site. Pass only the domain — not the full URL with its path/query — the session already holds the exact page. If it does not match the page the session is actually on, the request is denied and reported.",
+        "type": "string"
+      }
+    },
+    "required": ["session_id"]
+  },
+  "outputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "entries": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "entry_name": {
+              "type": "string"
+            },
+            "allowed_origins": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "redact_username": {
+              "type": "boolean"
+            },
+            "require_no_evaluate": {
+              "type": "boolean"
+            }
+          },
+          "required": ["entry_name", "allowed_origins", "redact_username", "require_no_evaluate"],
+          "additionalProperties": false
+        }
+      },
+      "scope": {
+        "type": "string",
+        "enum": ["unscoped", "page", "no_page", "rejected"]
+      },
+      "scoped_to": {
+        "type": ["string", "null"]
+      },
+      "mismatch": {
+        "type": "object",
+        "properties": {
+          "declared": {
+            "type": "string"
+          },
+          "actual": {
+            "type": ["string", "null"]
+          }
+        },
+        "required": ["declared", "actual"],
+        "additionalProperties": false
+      },
+      "note": {
+        "type": "string"
+      }
+    },
+    "required": ["entries", "scope", "scoped_to"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "since": "0.1.0"
+}

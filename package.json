@@ -1,0 +1,61 @@
+{
+  "name": "browserhive-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "BrowserHive monorepo root. The published artifact is packages/browserhive.",
+  "workspaces": [
+    "packages/contracts",
+    "packages/core",
+    "packages/dashboard",
+    "packages/browserhive"
+  ],
+  "packageManager": "bun@1.4.2",
+  "engines": {
+    "bun": ">=1.4.0"
+  },
+  "scripts": {
+    "dev": "bun scripts/dev.ts",
+    "build": "bun run --filter @browserhive/contracts build && bun run --filter @browserhive/core build && bun run --filter @browserhive/dashboard build && bun run --filter browserhive build",
+    "typecheck": "node_modules/typescript7/bin/tsc -b --pretty",
+    "lint": "biome ci --error-on-warnings .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "depcruise": "depcruise --config .dependency-cruiser.cjs packages",
+    "test": "bun run test:server && bun run test:dashboard",
+    "test:watch": "bun test --watch",
+    "test:integration": "bun test --preload ./test/integration/preload.ts --max-concurrency=1 packages/core/test/integration packages/browserhive/test/integration",
+    "test:e2e": "bunx playwright test -c packages/dashboard/playwright.config.ts",
+    "test:goldens": "bun test packages/contracts/test/goldens",
+    "check": "bun run lint && bun run typecheck && bun run depcruise && bun run test && bun run gen:openapi --check && bun run gen:docs --check && bun run gen:db-types --check",
+    "ci:local": "bun run check && bun run build && bun run test:integration && bun run package:check",
+    "gen:openapi": "bun scripts/gen-openapi.ts",
+    "gen:docs": "bun scripts/gen-docs.ts",
+    "gen:db-types": "bun scripts/gen-db-types.ts",
+    "package:check": "bun scripts/package-check.ts",
+    "license:check": "bun scripts/license-check.ts",
+    "init:browsers": "bun scripts/init-browsers.ts",
+    "doctor": "bun packages/browserhive/src/bin.ts doctor",
+    "browserhive": "bun scripts/run-from-source.ts",
+    "release:version": "changeset version && bun run sync:version && bun install --lockfile-only",
+    "release:publish": "bun run build && bun run package:check && changeset publish",
+    "sync:version": "bun scripts/sync-version.ts",
+    "typecheck:tsc": "tsc -b --pretty",
+    "test:server": "bun test packages/contracts packages/core/src packages/core/test/persistence packages/core/test/lint packages/browserhive/src packages/browserhive/test/cli packages/browserhive/test/composition test/lint test/docs",
+    "test:dashboard": "bun test packages/dashboard/src"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.5",
+    "@biomejs/biome": "2.5.13",
+    "@changesets/changelog-github": "^1.0.1",
+    "@changesets/cli": "^3.0.3",
+    "@types/bun": "1.4.2",
+    "bun-types": "1.4.2",
+    "dependency-cruiser": "^18.3.1",
+    "picocolors": "^1.1.1",
+    "publint": "^0.3.24",
+    "tsdown": "0.23.0",
+    "typescript": "5.9.3",
+    "typescript7": "npm:typescript@7.0.2"
+  }
+}

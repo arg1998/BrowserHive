@@ -1,0 +1,62 @@
+{
+  "name": "select_option",
+  "title": "Select option",
+  "description": "Select one or more options in a <select> element by value.",
+  "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      },
+      "selector": {
+        "type": "string",
+        "minLength": 1
+      },
+      "values": {
+        "minItems": 1,
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "timeout": {
+        "default": 30000,
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 9007199254740991
+      },
+      "tab_id": {
+        "type": "string"
+      }
+    },
+    "required": ["session_id", "selector", "values"]
+  },
+  "outputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      },
+      "selector": {
+        "type": "string"
+      },
+      "selected": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": ["session_id", "selector", "selected"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": true
+  },
+  "since": "0.1.0"
+}

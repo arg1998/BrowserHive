@@ -1,0 +1,536 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "description": "JSON Schema reference for editor support.",
+      "type": "string"
+    },
+    "transport": {
+      "type": "string",
+      "description": "Transport to serve. stdio is the single-client fallback without dashboard or attention.",
+      "x-browserhive-env": "BROWSERHIVE_TRANSPORT",
+      "x-browserhive-cli": "--transport"
+    },
+    "host": {
+      "type": "string",
+      "description": "Bind address. A non-loopback host requires auth=token or allowInsecureBind=true.",
+      "x-browserhive-env": "BROWSERHIVE_HOST",
+      "x-browserhive-cli": "--host"
+    },
+    "port": {
+      "description": "Bind port for MCP, REST, WebSocket and the dashboard.",
+      "x-browserhive-env": "BROWSERHIVE_PORT",
+      "x-browserhive-cli": "--port",
+      "type": [
+        "number",
+        "string"
+      ]
+    },
+    "auth": {
+      "default": "off",
+      "type": "string",
+      "enum": [
+        "off",
+        "token"
+      ],
+      "description": "MCP authentication. token requires a bearer on /mcp and enforces session ownership.",
+      "x-browserhive-env": "BROWSERHIVE_AUTH",
+      "x-browserhive-cli": "--auth"
+    },
+    "authTokens": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "description": "Agent bearer tokens as name:token pairs (env preferred). Merged with stored tokens, never persisted.",
+      "x-browserhive-env": "BROWSERHIVE_AUTH_TOKENS",
+      "x-browserhive-cli": "--authTokens",
+      "x-browserhive-secret": true
+    },
+    "allowInsecureBind": {
+      "description": "Acknowledge binding a non-loopback host without authentication.",
+      "x-browserhive-env": "BROWSERHIVE_ALLOW_INSECURE_BIND",
+      "x-browserhive-cli": "--allowInsecureBind",
+      "type": [
+        "boolean",
+        "string"
+      ]
+    },
+    "trustedProxies": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "description": "Peers whose X-Forwarded-For is honoured (IPs or CIDR ranges). Never used on a loopback bind.",
+      "x-browserhive-env": "BROWSERHIVE_TRUSTED_PROXIES",
+      "x-browserhive-cli": "--trustedProxies"
+    },
+    "admin": {
+      "description": "Enable the dashboard, REST API, WebSocket and trace viewer (http only).",
+      "x-browserhive-env": "BROWSERHIVE_ADMIN",
+      "x-browserhive-cli": "--admin",
+      "type": [
+        "boolean",
+        "string"
+      ]
+    },
+    "dataDir": {
+      "type": "string",
+      "description": "Data directory (database, sessions, auth states, uploads, backups). Defaults to the OS data dir. Derived from platform when unset.",
+      "x-browserhive-env": "BROWSERHIVE_DATA_DIR",
+      "x-browserhive-cli": "--dataDir"
+    },
+    "shutdownTimeout": {
+      "description": "Total budget for a graceful stop (listeners, then sessions, then storage).",
+      "default": "20s",
+      "x-browserhive-env": "BROWSERHIVE_SHUTDOWN_TIMEOUT",
+      "x-browserhive-cli": "--shutdownTimeout",
+      "type": [
+        "number",
+        "string"
+      ]
+    },
+    "sessionCloseTimeout": {
+      "description": "Per-session close and trace-finalize cap.",
+      "default": "10s",
+      "x-browserhive-env": "BROWSERHIVE_SESSION_CLOSE_TIMEOUT",
+      "x-browserhive-cli": "--sessionCloseTimeout",
+      "type": [
+        "number",
+        "string"
+      ]
+    },
+    "persistence": {
+      "type": "string",
+      "description": "Default persistence mode; launch_session persistence_mode overrides per session.",
+      "x-browserhive-env": "BROWSERHIVE_PERSISTENCE",
+      "x-browserhive-cli": "--persistence"
+    },
+    "defaultHeadless": {
+      "description": "Default headless mode; launch_session headless overrides per session.",
+      "x-browserhive-env": "BROWSERHIVE_DEFAULT_HEADLESS",
+      "x-browserhive-cli": "--defaultHeadless",
+      "type": [
+        "boolean",
+        "string"
+      ]
+    },
+    "defaultChannel": {
+      "default": "chromium",
+      "type": "string",
+      "enum": [
+        "chromium",
+        "chrome",
+        "edge"
+      ],
+      "description": "Default browser channel; launch_session channel overrides per session.",
+      "x-browserhive-env": "BROWSERHIVE_DEFAULT_CHANNEL",
+      "x-browserhive-cli": "--defaultChannel"
+    },
+    "maxSessions": {
+      "description": "Maximum concurrent browser sessions, or unbounded. Derived from host RAM when unset (min(floor(GiB / 1.5), 20)).",
+      "x-browserhive-env": "BROWSERHIVE_MAX_SESSIONS",
+      "x-browserhive-cli": "--maxSessions",
+      "type": [
+        "number",
+        "string"
+      ]
+    },
+    "sessionLease": {
+      "description": "Sliding inactivity lease after which an idle session is reaped.",
+      "default": "2h",
+      "x-browserhive-env": "BROWSERHIVE_SESSION_LEASE",
+      "x-browserhive-cli": "--sessionLease",
+      "type": [
+        "number",
+        "string"
+      ]
+    },
+    "attentionTimeout": {
+      "description": "Server cap on how long request_attention may block.",
+      "default": "6h",
+      "x-browserhive-env": "BROWSERHIVE_ATTENTION_TIMEOUT",
+      "x-browserhive-cli": "--attentionTimeout",
+      "type": [
+        "number",
+        "string"
+      ]
+    },
+    "minAttentionWait": {
+      "description": "Floor for request_attention max_wait; 0 disables it. Must be less than attentionTimeout.",
+      "default": "30m",
+      "x-browserhive-env": "BROWSERHIVE_MIN_ATTENTION_WAIT",
+      "x-browserhive-cli": "--minAttentionWait",
+      "type": [
+        "number",
+        "string"
+      ]
+    },
+    "allowEvaluate": {
+      "description": "Allow the evaluate tool. false makes every evaluate return EVALUATE_DISABLED.",
+      "x-browserhive-env": "BROWSERHIVE_ALLOW_EVALUATE",
+      "x-browserhive-cli": "--allowEvaluate",
+      "type": [
+        "boolean",
+        "string"
+      ]
+    },
+    "blocklist": {
+      "type": "string",
+      "description": "URL blocklist file (one glob per line). Unreadable at startup is fatal.",
+      "x-browserhive-env": "BROWSERHIVE_BLOCKLIST",
+      "x-browserhive-cli": "--blocklist"
+    },
+    "blocklistWatch": {
+      "description": "Reload the blocklist when the file changes (debounced). Requires blocklist.",
+      "x-browserhive-env": "BROWSERHIVE_BLOCKLIST_WATCH",
+      "x-browserhive-cli": "--blocklistWatch",
+      "type": [
+        "boolean",
+        "string"
+      ]
+    },
+    "vault": {
+      "type": "string",
+      "description": "Credential vault backend.",
+      "x-browserhive-env": "BROWSERHIVE_VAULT",
+      "x-browserhive-cli": "--vault"
+    },
+    "stealth": {
+      "default": "standard",
+      "type": "string",
+      "enum": [
+        "off",
+        "standard",
+        "max"
+      ],
+      "description": "Stealth level. max also defaults fingerprint to true.",
+      "x-browserhive-env": "BROWSERHIVE_STEALTH",
+      "x-browserhive-cli": "--stealth"
+    },
+    "stealthDriver": {
+      "default": "auto",
+      "type": "string",
+      "enum": [
+        "auto",
+        "patchright",
+        "playwright"
+      ],
+      "description": "Chromium driver for stealth sessions. auto uses Patchright when installed, else Playwright.",
+      "x-browserhive-env": "BROWSERHIVE_STEALTH_DRIVER",
+      "x-browserhive-cli": "--stealthDriver"
+    },
+    "fingerprint": {
+      "description": "Coherent fingerprint identity per session. Defaults to true only when stealth=max. Derived from stealth when unset.",
+      "x-browserhive-env": "BROWSERHIVE_FINGERPRINT",
+      "x-browserhive-cli": "--fingerprint",
+      "type": [
+        "boolean",
+        "string"
+      ]
+    },
+    "humanize": {
+      "description": "Human-like cursor movement and typing cadence. Requires stealth standard or max.",
+      "x-browserhive-env": "BROWSERHIVE_HUMANIZE",
+      "x-browserhive-cli": "--humanize",
+      "type": [
+        "boolean",
+        "string"
+      ]
+    },
+    "captcha": {
+      "type": "string",
+      "description": "CAPTCHA policy. attention hands the page to an operator (needs admin and http).",
+      "x-browserhive-env": "BROWSERHIVE_CAPTCHA",
+      "x-browserhive-cli": "--captcha"
+    },
+    "logLevel": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "root": {
+              "type": "string",
+              "enum": [
+                "error",
+                "warn",
+                "info",
+                "debug",
+                "trace"
+              ]
+            },
+            "modules": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "type": "string",
+                "enum": [
+                  "error",
+                  "warn",
+                  "info",
+                  "debug",
+                  "trace"
+                ]
+              }
+            }
+          },
+          "required": [
+            "root",
+            "modules"
+          ]
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "description": "Log level, optionally per module: info,sessions=debug,http=warn. Levels: error, warn, info, debug, trace.",
+      "default": "info",
+      "x-browserhive-env": "BROWSERHIVE_LOG_LEVEL",
+      "x-browserhive-cli": "--logLevel",
+      "x-browserhive-runtime": true
+    },
+    "logFormat": {
+      "default": "auto",
+      "type": "string",
+      "enum": [
+        "auto",
+        "json",
+        "pretty"
+      ],
+      "description": "Log renderer. auto is pretty on a TTY (http only), otherwise JSON lines.",
+      "x-browserhive-env": "BROWSERHIVE_LOG_FORMAT",
+      "x-browserhive-cli": "--logFormat",
+      "x-browserhive-runtime": true
+    },
+    "color": {
+      "default": "auto",
+      "type": "string",
+      "enum": [
+        "auto",
+        "always",
+        "never"
+      ],
+      "description": "Colour for logs and CLI output. auto honours NO_COLOR, FORCE_COLOR, TERM=dumb and TTY.",
+      "x-browserhive-env": "BROWSERHIVE_COLOR",
+      "x-browserhive-cli": "--color"
+    },
+    "logRingSize": {
+      "description": "Records kept in the in-process log ring buffer served to the dashboard.",
+      "x-browserhive-env": "BROWSERHIVE_LOG_RING_SIZE",
+      "x-browserhive-cli": "--logRingSize",
+      "type": [
+        "number",
+        "string"
+      ]
+    },
+    "logPersist": {
+      "default": "off",
+      "type": "string",
+      "enum": [
+        "info",
+        "warn",
+        "off"
+      ],
+      "description": "Durable logs table threshold (retention 3 days). off disables the sink.",
+      "x-browserhive-env": "BROWSERHIVE_LOG_PERSIST",
+      "x-browserhive-cli": "--logPersist"
+    },
+    "trace": {
+      "description": "Record a Playwright trace per session. Defaults to the value of admin. Derived from admin when unset.",
+      "x-browserhive-env": "BROWSERHIVE_TRACE",
+      "x-browserhive-cli": "--trace",
+      "type": [
+        "boolean",
+        "string"
+      ]
+    },
+    "screenshotTrace": {
+      "description": "Store a JPEG after each tool call. Requires trace=true.",
+      "x-browserhive-env": "BROWSERHIVE_SCREENSHOT_TRACE",
+      "x-browserhive-cli": "--screenshotTrace",
+      "type": [
+        "boolean",
+        "string"
+      ]
+    },
+    "screencastQuality": {
+      "description": "JPEG quality of the live view screencast (1-100).",
+      "x-browserhive-env": "BROWSERHIVE_SCREENCAST_QUALITY",
+      "x-browserhive-cli": "--screencastQuality",
+      "type": [
+        "number",
+        "string"
+      ]
+    },
+    "recordToolResults": {
+      "default": "full",
+      "type": "string",
+      "enum": [
+        "full",
+        "shape",
+        "none"
+      ],
+      "description": "What of a tool result is persisted: full text (capped), shape (keys and sizes) or none.",
+      "x-browserhive-env": "BROWSERHIVE_RECORD_TOOL_RESULTS",
+      "x-browserhive-cli": "--recordToolResults"
+    },
+    "retentionDays": {
+      "description": "Days to keep events and artifacts. Must be at least 1; use a large number to keep longer.",
+      "x-browserhive-env": "BROWSERHIVE_RETENTION_DAYS",
+      "x-browserhive-cli": "--retentionDays",
+      "type": [
+        "number",
+        "string"
+      ]
+    },
+    "retentionBytes": {
+      "description": "Disk budget for the database and artifacts before the oldest rows are pruned.",
+      "default": "1GiB",
+      "x-browserhive-env": "BROWSERHIVE_RETENTION_BYTES",
+      "x-browserhive-cli": "--retentionBytes",
+      "type": [
+        "number",
+        "string"
+      ]
+    },
+    "backupsKeep": {
+      "description": "Pre-migration database backups to retain.",
+      "x-browserhive-env": "BROWSERHIVE_BACKUPS_KEEP",
+      "x-browserhive-cli": "--backupsKeep",
+      "type": [
+        "number",
+        "string"
+      ]
+    },
+    "urlQueryAllowlist": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "description": "Query parameter names kept when URLs are sanitized for storage; all others are stripped.",
+      "x-browserhive-env": "BROWSERHIVE_URL_QUERY_ALLOWLIST",
+      "x-browserhive-cli": "--urlQueryAllowlist"
+    },
+    "otel": {
+      "description": "Export traces, metrics and logs over OTLP/HTTP.",
+      "x-browserhive-env": "BROWSERHIVE_OTEL",
+      "x-browserhive-cli": "--otel",
+      "type": [
+        "boolean",
+        "string"
+      ]
+    },
+    "otelEndpoint": {
+      "type": "string",
+      "description": "OTLP/HTTP base URL; /v1/traces, /v1/metrics and /v1/logs are appended.",
+      "x-browserhive-env": "BROWSERHIVE_OTEL_ENDPOINT",
+      "x-browserhive-cli": "--otelEndpoint"
+    },
+    "otelProtocol": {
+      "default": "http/protobuf",
+      "type": "string",
+      "enum": [
+        "http/protobuf",
+        "http/json"
+      ],
+      "description": "OTLP/HTTP encoding.",
+      "x-browserhive-env": "BROWSERHIVE_OTEL_PROTOCOL",
+      "x-browserhive-cli": "--otelProtocol"
+    },
+    "otelHeaders": {
+      "anyOf": [
+        {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "description": "Headers sent with every OTLP request, e.g. Authorization=Bearer …",
+      "x-browserhive-env": "BROWSERHIVE_OTEL_HEADERS",
+      "x-browserhive-cli": "--otelHeaders",
+      "x-browserhive-secret": true
+    },
+    "otelServiceName": {
+      "type": "string",
+      "description": "service.name resource attribute.",
+      "x-browserhive-env": "BROWSERHIVE_OTEL_SERVICE_NAME",
+      "x-browserhive-cli": "--otelServiceName"
+    },
+    "otelSampleRatio": {
+      "description": "Parent-based ratio sampler for traces (0-1).",
+      "x-browserhive-env": "BROWSERHIVE_OTEL_SAMPLE_RATIO",
+      "x-browserhive-cli": "--otelSampleRatio",
+      "type": [
+        "number",
+        "string"
+      ]
+    },
+    "otelSignals": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "description": "Signals to export.",
+      "x-browserhive-env": "BROWSERHIVE_OTEL_SIGNALS",
+      "x-browserhive-cli": "--otelSignals"
+    },
+    "otelVerbose": {
+      "description": "Also export db.query and cdp.command spans.",
+      "x-browserhive-env": "BROWSERHIVE_OTEL_VERBOSE",
+      "x-browserhive-cli": "--otelVerbose",
+      "type": [
+        "boolean",
+        "string"
+      ]
+    },
+    "otelTraceUrlTemplate": {
+      "type": "string",
+      "description": "Dashboard deep-link template for a trace; {trace_id} is substituted. Used only by the dashboard.",
+      "x-browserhive-env": "BROWSERHIVE_OTEL_TRACE_URL_TEMPLATE",
+      "x-browserhive-cli": "--otelTraceUrlTemplate",
+      "x-browserhive-runtime": true
+    }
+  },
+  "additionalProperties": false,
+  "$id": "https://browserhive.ai/schemas/browserhive.config.json",
+  "title": "BrowserHive configuration file",
+  "description": "browserhive.config.json. Precedence: defaults < environment < this file < CLI flags (rightmost wins)."
+}

@@ -1,0 +1,125 @@
+browserhive serve — Start the MCP server (default)
+
+USAGE
+  browserhive [serve] [flags]
+
+Resolves the configuration (defaults < environment < browserhive.config.json < flags), starts the
+server and waits for a signal. Every configuration key is a flag.
+
+GLOBAL FLAGS
+  -h, --help     Show help.
+  -v, --version  Print the version.
+
+FLAGS — server
+  --config <path>                   Config file path. CLI and environment only: a config file cannot
+                                    point at another.
+  --transport <http|stdio>          Transport to serve. stdio is the single-client fallback without
+                                    dashboard or attention. default: http
+  --host <address>                  Bind address. A non-loopback host requires auth=token or
+                                    allowInsecureBind=true. default: 127.0.0.1
+  --port <1-65535>                  Bind port for MCP, REST, WebSocket and the dashboard.
+                                    default: 9876
+  --auth <off|token>                MCP authentication. token requires a bearer on /mcp and enforces
+                                    session ownership. default: off
+  --authTokens <a,b,...>            Agent bearer tokens as name:token pairs (env preferred). Merged
+                                    with stored tokens, never persisted. default: none [secret]
+  --allowInsecureBind               Acknowledge binding a non-loopback host without authentication.
+                                    default: false
+  --trustedProxies <a,b,...>        Peers whose X-Forwarded-For is honoured (IPs or CIDR ranges).
+                                    Never used on a loopback bind. default: none
+  --admin                           Enable the dashboard, REST API, WebSocket and trace viewer (http
+                                    only). default: false
+  --dataDir <path>                  Data directory (database, sessions, auth states, uploads,
+                                    backups). Defaults to the OS data dir. default: OS data
+                                    directory
+  --shutdownTimeout <duration>      Total budget for a graceful stop (listeners, then sessions, then
+                                    storage). default: 20s
+  --sessionCloseTimeout <duration>  Per-session close and trace-finalize cap. default: 10s
+
+FLAGS — sessions
+  --persistence <memory|persistent|storage-state>
+                                    Default persistence mode; launch_session persistence_mode
+                                    overrides per session. default: memory
+  --defaultHeadless                 Default headless mode; launch_session headless overrides per
+                                    session. default: true
+  --defaultChannel <chromium|chrome|edge>
+                                    Default browser channel; launch_session channel overrides per
+                                    session. default: chromium
+  --maxSessions <n|unbounded>       Maximum concurrent browser sessions, or unbounded. Derived from
+                                    host RAM when unset (min(floor(GiB / 1.5), 20)).
+                                    default: derived from host RAM
+  --sessionLease <duration>         Sliding inactivity lease after which an idle session is reaped.
+                                    default: 2h
+  --attentionTimeout <duration>     Server cap on how long request_attention may block. default: 6h
+  --minAttentionWait <duration>     Floor for request_attention max_wait; 0 disables it. Must be
+                                    less than attentionTimeout. default: 30m
+  --allowEvaluate                   Allow the evaluate tool. false makes every evaluate return
+                                    EVALUATE_DISABLED. default: true
+  --blocklist <path>                URL blocklist file (one glob per line). Unreadable at startup is
+                                    fatal.
+  --blocklistWatch                  Reload the blocklist when the file changes (debounced). Requires
+                                    blocklist. default: false
+  --vault <off|bitwarden>           Credential vault backend. default: off
+
+FLAGS — stealth
+  --stealth <off|standard|max>      Stealth level. max also defaults fingerprint to true.
+                                    default: standard
+  --stealthDriver <auto|patchright|playwright>
+                                    Chromium driver for stealth sessions. auto uses Patchright when
+                                    installed, else Playwright. default: auto
+  --fingerprint                     Coherent fingerprint identity per session. Defaults to true only
+                                    when stealth=max. default: true when stealth=max
+  --humanize                        Human-like cursor movement and typing cadence. Requires stealth
+                                    standard or max. default: false
+  --captcha <attention|off>         CAPTCHA policy. attention hands the page to an operator (needs
+                                    admin and http). default: attention
+
+FLAGS — logging
+  --logLevel <level[,module=level]>
+                                    Log level, optionally per module: info,sessions=debug,http=warn.
+                                    Levels: error, warn, info, debug, trace. default: info
+  --logFormat <auto|json|pretty>    Log renderer. auto is pretty on a TTY (http only), otherwise
+                                    JSON lines. default: auto
+  --color <auto|always|never>       Colour for logs and CLI output. auto honours NO_COLOR,
+                                    FORCE_COLOR, TERM=dumb and TTY. default: auto
+  --logRingSize <n>                 Records kept in the in-process log ring buffer served to the
+                                    dashboard. default: 5000
+  --logPersist <info|warn|off>      Durable logs table threshold (retention 3 days). off disables
+                                    the sink. default: off
+
+FLAGS — recording
+  --trace                           Record a Playwright trace per session. Defaults to the value of
+                                    admin. default: same as admin
+  --screenshotTrace                 Store a JPEG after each tool call. Requires trace=true.
+                                    default: false
+  --screencastQuality <n>           JPEG quality of the live view screencast (1-100). default: 60
+  --recordToolResults <full|shape|none>
+                                    What of a tool result is persisted: full text (capped), shape
+                                    (keys and sizes) or none. default: full
+  --retentionDays <n>               Days to keep events and artifacts. Must be at least 1; use a
+                                    large number to keep longer. default: 7
+  --retentionBytes <bytes>          Disk budget for the database and artifacts before the oldest
+                                    rows are pruned. default: 1GiB
+  --backupsKeep <n>                 Pre-migration database backups to retain. default: 5
+  --urlQueryAllowlist <a,b,...>     Query parameter names kept when URLs are sanitized for storage;
+                                    all others are stripped. default: none
+
+FLAGS — telemetry
+  --otel                            Export traces, metrics and logs over OTLP/HTTP. default: false
+  --otelEndpoint <url>              OTLP/HTTP base URL; /v1/traces, /v1/metrics and /v1/logs are
+                                    appended. default: http://127.0.0.1:4318
+  --otelProtocol <http/protobuf|http/json>
+                                    OTLP/HTTP encoding. default: http/protobuf
+  --otelHeaders <k=v,...>           Headers sent with every OTLP request, e.g. Authorization=Bearer
+                                    … default: none [secret]
+  --otelServiceName <text>          service.name resource attribute. default: browserhive
+  --otelSampleRatio <0-1>           Parent-based ratio sampler for traces (0-1). default: 1
+  --otelSignals <traces,metrics,logs>
+                                    Signals to export. default: traces,metrics,logs
+  --otelVerbose                     Also export db.query and cdp.command spans. default: false
+  --otelTraceUrlTemplate <text>     Dashboard deep-link template for a trace; {trace_id} is
+                                    substituted. Used only by the dashboard.
+
+Precedence: defaults < environment < browserhive.config.json < flags (rightmost wins).
+Environment variables and JSON keys: browserhive help config.
+Docs: https://browserhive.ai/docs/configuration

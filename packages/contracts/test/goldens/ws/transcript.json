@@ -1,0 +1,573 @@
+{
+  "protocol": "browserhive.v1",
+  "frames": [
+    {
+      "dir": "out",
+      "frame": {
+        "v": 1,
+        "kind": "reply",
+        "seq": 0,
+        "ts": 1735689600000,
+        "payload": {
+          "type": "hello",
+          "protocol": "browserhive.v1",
+          "protocol_version": 1,
+          "epoch": "01J8XW3N5Q4R6T8V0Y2Z4A6C8E",
+          "cursor": 41,
+          "server_version": "1.0.0",
+          "now": 1735689600000
+        }
+      }
+    },
+    {
+      "dir": "in",
+      "frame": {
+        "type": "subscribe",
+        "topic": "sessions",
+        "cursor": 40,
+        "corr": "c1"
+      }
+    },
+    {
+      "dir": "out",
+      "frame": {
+        "v": 1,
+        "kind": "event",
+        "seq": 41,
+        "ts": 1735689600041,
+        "topic": "sessions",
+        "payload": {
+          "type": "session.opened",
+          "session": {
+            "session_id": "shop-a1b2c3d4",
+            "slug": "shop",
+            "owner": "p-k3j4h5g6f7d8",
+            "tenant_id": null,
+            "channel": "chromium",
+            "engine": "chromium",
+            "headless": true,
+            "incognito": false,
+            "persistence_mode": "memory",
+            "current_url": "https://example.com/",
+            "created_at": 1735689540000,
+            "last_activity_at": 1735689599000,
+            "closed_at": null,
+            "closed_reason": null,
+            "archived_at": null,
+            "lease_expires_at": 1735690200000,
+            "lease_paused_at": null,
+            "lease_remaining_ms": 600000,
+            "state": "live",
+            "live": true,
+            "disable_evaluate": false,
+            "vault_enabled": true,
+            "stealth": true,
+            "fingerprint": true,
+            "humanize": true,
+            "stealth_recorded": true,
+            "identity": {
+              "platform": "Linux"
+            },
+            "proxy_label": null,
+            "counts": {
+              "tool_calls": 3,
+              "errors": 1,
+              "pages": 2,
+              "blocked": 0,
+              "attention_open": 0,
+              "vault_access": 0
+            },
+            "has_live_viewers": false,
+            "client": {
+              "name": "claude-code",
+              "version": "1.0.0",
+              "agent_name": "agent"
+            }
+          }
+        }
+      }
+    },
+    {
+      "dir": "out",
+      "frame": {
+        "v": 1,
+        "kind": "reply",
+        "seq": 42,
+        "ts": 1735689600042,
+        "corr": "c1",
+        "payload": {
+          "type": "subscribed",
+          "topic": "sessions",
+          "from": 41,
+          "to": 41,
+          "complete": true
+        }
+      }
+    },
+    {
+      "dir": "in",
+      "frame": {
+        "type": "subscribe",
+        "topic": "session:shop-a1b2c3d4",
+        "cursor": 3,
+        "corr": "c2"
+      }
+    },
+    {
+      "dir": "out",
+      "frame": {
+        "v": 1,
+        "kind": "reply",
+        "seq": 43,
+        "ts": 1735689600043,
+        "corr": "c2",
+        "payload": {
+          "type": "resync_required",
+          "topic": "session:shop-a1b2c3d4",
+          "reason": "cursor_expired"
+        }
+      }
+    },
+    {
+      "dir": "out",
+      "frame": {
+        "v": 1,
+        "kind": "event",
+        "seq": 44,
+        "ts": 1735689600044,
+        "topic": "session:shop-a1b2c3d4",
+        "payload": {
+          "type": "tool.called",
+          "row": {
+            "event_id": "e-01J8XW3N5Q4R6T8V0Y2Z4A6C8E",
+            "session_id": "shop-a1b2c3d4",
+            "tool": "navigate",
+            "tab_id": "t-x7k2m9",
+            "ok": true,
+            "error_code": null,
+            "error_message": null,
+            "duration_ms": 420,
+            "result_size_bytes": 128,
+            "ts": 1735689595000,
+            "trace_id": "abcdef0123456789abcdef0123456789",
+            "has_screenshot": false
+          },
+          "has_detail": true
+        }
+      }
+    },
+    {
+      "dir": "out",
+      "frame": {
+        "v": 1,
+        "kind": "event",
+        "seq": 45,
+        "ts": 1735689600045,
+        "topic": "session:shop-a1b2c3d4",
+        "payload": {
+          "type": "page.visited",
+          "row": {
+            "event_id": "e-01J8XW3N5Q4R6T8V0Y2Z4A6C8E",
+            "session_id": "shop-a1b2c3d4",
+            "tab_id": "t-x7k2m9",
+            "url": "https://example.com/",
+            "title": "Example",
+            "domain": "example.com",
+            "category": "public",
+            "ts": 1735689595000
+          }
+        }
+      }
+    },
+    {
+      "dir": "out",
+      "frame": {
+        "v": 1,
+        "kind": "event",
+        "seq": 46,
+        "ts": 1735689600046,
+        "topic": "attention",
+        "payload": {
+          "type": "attention.created",
+          "request": {
+            "request_id": "a-k3j4h5g6f7d8",
+            "kind": "attention",
+            "session_id": "shop-a1b2c3d4",
+            "session_slug": "shop",
+            "owner": "p-k3j4h5g6f7d8",
+            "reason": "captcha",
+            "mode": "takeover",
+            "options": {
+              "hint": "solve the puzzle"
+            },
+            "status": "pending",
+            "message": null,
+            "resolved_by": null,
+            "resolution_reason": null,
+            "created_at": 1735689597000,
+            "resolved_at": null,
+            "deadline_at": 1735689897000,
+            "waited_ms": null,
+            "page_url": "https://example.com/login",
+            "tool": "request_attention",
+            "event_id": "e-01J8XW3N5Q4R6T8V0Y2Z4A6C8E",
+            "entry_name": null
+          }
+        }
+      }
+    },
+    {
+      "dir": "out",
+      "frame": {
+        "v": 1,
+        "kind": "event",
+        "seq": 47,
+        "ts": 1735689600047,
+        "topic": "notifications",
+        "payload": {
+          "type": "notification.created",
+          "notification": {
+            "notification_id": "n-k3j4h5g6f7d8",
+            "principal_id": "p-k3j4h5g6f7d8",
+            "type": "attention",
+            "title": "Attention requested",
+            "body": "captcha · takeover — agent blocked, lease frozen",
+            "session_id": "shop-a1b2c3d4",
+            "session_slug": "shop",
+            "target": "/sessions/shop-a1b2c3d4?tab=live",
+            "source_event_id": "a-k3j4h5g6f7d8",
+            "created_at": 1735689597000,
+            "updated_at": 1735689597000,
+            "count": 1,
+            "read_at": null,
+            "dismissed_at": null
+          }
+        }
+      }
+    },
+    {
+      "dir": "in",
+      "frame": {
+        "type": "screencast.start",
+        "session_id": "shop-a1b2c3d4",
+        "max_width": 1280,
+        "max_height": 720,
+        "quality": 70,
+        "corr": "c3"
+      }
+    },
+    {
+      "dir": "out",
+      "frame": {
+        "v": 1,
+        "kind": "reply",
+        "seq": 48,
+        "ts": 1735689600048,
+        "corr": "c3",
+        "payload": {
+          "type": "screencast.started",
+          "topic": "screencast:shop-a1b2c3d4",
+          "ordinal": 1
+        }
+      }
+    },
+    {
+      "dir": "out",
+      "frame": {
+        "v": 1,
+        "kind": "stream",
+        "seq": 49,
+        "ts": 1735689600049,
+        "topic": "screencast:shop-a1b2c3d4",
+        "payload": {
+          "type": "started",
+          "session_id": "shop-a1b2c3d4",
+          "ordinal": 1
+        }
+      }
+    },
+    {
+      "dir": "out",
+      "frame": {
+        "v": 1,
+        "kind": "stream",
+        "seq": 50,
+        "ts": 1735689600050,
+        "topic": "screencast:shop-a1b2c3d4",
+        "payload": {
+          "type": "meta",
+          "session_id": "shop-a1b2c3d4",
+          "ordinal": 1,
+          "device_width": 1280,
+          "device_height": 720,
+          "page_scale": 1,
+          "offset_top": 0
+        }
+      }
+    },
+    {
+      "dir": "in",
+      "frame": {
+        "type": "input",
+        "session_id": "shop-a1b2c3d4",
+        "input": {
+          "type": "mouse",
+          "action": "mousePressed",
+          "x": 10,
+          "y": 20,
+          "button": "left",
+          "clickCount": 1
+        },
+        "corr": "c4"
+      }
+    },
+    {
+      "dir": "out",
+      "frame": {
+        "v": 1,
+        "kind": "reply",
+        "seq": 51,
+        "ts": 1735689600051,
+        "corr": "c4",
+        "payload": {
+          "type": "ok"
+        }
+      }
+    },
+    {
+      "dir": "in",
+      "frame": {
+        "type": "input",
+        "session_id": "shop-a1b2c3d4",
+        "input": {
+          "type": "key",
+          "action": "keyDown",
+          "key": "Enter",
+          "code": "Enter"
+        },
+        "corr": "c5"
+      }
+    },
+    {
+      "dir": "out",
+      "frame": {
+        "v": 1,
+        "kind": "error",
+        "seq": 52,
+        "ts": 1735689600052,
+        "corr": "c5",
+        "payload": {
+          "code": "INPUT_NOT_PERMITTED",
+          "title": "Input not permitted",
+          "details": {
+            "session_id": "shop-a1b2c3d4"
+          }
+        }
+      }
+    },
+    {
+      "dir": "in",
+      "frame": {
+        "type": "session.set_viewport",
+        "session_id": "shop-a1b2c3d4",
+        "width": 1366,
+        "height": 768,
+        "corr": "c6"
+      }
+    },
+    {
+      "dir": "out",
+      "frame": {
+        "v": 1,
+        "kind": "reply",
+        "seq": 53,
+        "ts": 1735689600053,
+        "corr": "c6",
+        "payload": {
+          "type": "ok",
+          "result": {
+            "width": 1366,
+            "height": 768
+          }
+        }
+      }
+    },
+    {
+      "dir": "in",
+      "frame": {
+        "type": "screencast.set_size",
+        "session_id": "shop-a1b2c3d4",
+        "max_width": 1920,
+        "max_height": 1080
+      }
+    },
+    {
+      "dir": "in",
+      "frame": {
+        "type": "screencast.stop",
+        "session_id": "shop-a1b2c3d4"
+      }
+    },
+    {
+      "dir": "out",
+      "frame": {
+        "v": 1,
+        "kind": "stream",
+        "seq": 54,
+        "ts": 1735689600054,
+        "topic": "screencast:shop-a1b2c3d4",
+        "payload": {
+          "type": "stopped",
+          "session_id": "shop-a1b2c3d4",
+          "reason": "stopped"
+        }
+      }
+    },
+    {
+      "dir": "in",
+      "frame": {
+        "type": "logs.tail",
+        "level": "debug",
+        "module": "sessions",
+        "corr": "c7"
+      }
+    },
+    {
+      "dir": "out",
+      "frame": {
+        "v": 1,
+        "kind": "reply",
+        "seq": 55,
+        "ts": 1735689600055,
+        "corr": "c7",
+        "payload": {
+          "type": "subscribed",
+          "topic": "logs",
+          "from": 56,
+          "to": 56,
+          "complete": true
+        }
+      }
+    },
+    {
+      "dir": "out",
+      "frame": {
+        "v": 1,
+        "kind": "event",
+        "seq": 56,
+        "ts": 1735689600056,
+        "topic": "logs",
+        "payload": {
+          "type": "log.record",
+          "record": {
+            "seq": 42,
+            "ts": 1735689599500,
+            "level": "info",
+            "msg": "session opened",
+            "module": "sessions",
+            "session_id": "shop-a1b2c3d4",
+            "slug": "shop"
+          }
+        }
+      }
+    },
+    {
+      "dir": "out",
+      "frame": {
+        "v": 1,
+        "kind": "event",
+        "seq": 57,
+        "ts": 1735689600057,
+        "topic": "system",
+        "payload": {
+          "type": "system.tick",
+          "now": 1735689600057
+        }
+      }
+    },
+    {
+      "dir": "out",
+      "frame": {
+        "v": 1,
+        "kind": "event",
+        "seq": 58,
+        "ts": 1735689600058,
+        "topic": "system",
+        "payload": {
+          "type": "system.degraded",
+          "event": {
+            "event_id": "e-01J8XW3N5Q4R6T8V0Y2Z4A6C8E",
+            "code": "RETENTION_FAILED",
+            "severity": "error",
+            "message": "retention sweep failed",
+            "details": {
+              "table": "events"
+            },
+            "first_seen_at": 1735689500000,
+            "last_seen_at": 1735689599000,
+            "count": 2,
+            "resolved_at": null
+          }
+        }
+      }
+    },
+    {
+      "dir": "out",
+      "frame": {
+        "v": 1,
+        "kind": "event",
+        "seq": 59,
+        "ts": 1735689600059,
+        "topic": "sessions",
+        "payload": {
+          "type": "session.closed",
+          "session_id": "shop-a1b2c3d4",
+          "closed_at": 1735689600059,
+          "reason": "user"
+        }
+      }
+    },
+    {
+      "dir": "in",
+      "frame": {
+        "type": "ping"
+      }
+    },
+    {
+      "dir": "out",
+      "frame": {
+        "v": 1,
+        "kind": "reply",
+        "seq": 60,
+        "ts": 1735689600060,
+        "payload": {
+          "type": "pong",
+          "ts": 1735689600060
+        }
+      }
+    },
+    {
+      "dir": "in",
+      "frame": {
+        "type": "unsubscribe",
+        "topic": "sessions",
+        "corr": "c8"
+      }
+    },
+    {
+      "dir": "out",
+      "frame": {
+        "v": 1,
+        "kind": "reply",
+        "seq": 61,
+        "ts": 1735689600061,
+        "corr": "c8",
+        "payload": {
+          "type": "unsubscribed",
+          "topic": "sessions",
+          "ok": true
+        }
+      }
+    }
+  ]
+}

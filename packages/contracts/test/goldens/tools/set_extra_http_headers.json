@@ -1,0 +1,51 @@
+{
+  "name": "set_extra_http_headers",
+  "title": "Set extra HTTP headers",
+  "description": "Set extra HTTP headers sent with every request from the session context (applies to all tabs). Replaces any previously-set extra headers. On a stealth session, headers owned by the presented identity (User-Agent, Accept-Language, Sec-CH-UA*) are refused and listed in the `rejected` field, since overriding them would desync the wire from what the page sees in JavaScript.",
+  "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      },
+      "headers": {
+        "type": "object",
+        "propertyNames": {
+          "type": "string"
+        },
+        "additionalProperties": {
+          "type": "string"
+        }
+      }
+    },
+    "required": ["session_id", "headers"]
+  },
+  "outputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      },
+      "applied": {
+        "type": "number"
+      },
+      "rejected": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": ["session_id", "applied", "rejected"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "since": "0.1.0"
+}

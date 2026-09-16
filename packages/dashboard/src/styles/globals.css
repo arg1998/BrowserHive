@@ -1,0 +1,273 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "./shadcn.css";
+@import "@fontsource-variable/geist";
+@import "@fontsource/geist-mono";
+@import "./tokens.css";
+
+/* @module styles/globals — Tailwind entry: dark variant, base layer (type, affordances, focus, scrollbars), shared utilities */
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  /* Root stays at the browser's 16px: 1rem = 16px everywhere. Never put a font-size on html. */
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    scrollbar-gutter: auto;
+    background-color: var(--background);
+  }
+
+  body {
+    @apply bg-background font-sans text-base text-foreground;
+    min-height: 100dvh;
+    font-feature-settings: "cv11", "ss01";
+  }
+
+  #root {
+    min-height: 100dvh;
+    isolation: isolate;
+  }
+
+  code,
+  kbd,
+  pre,
+  samp {
+    @apply font-mono;
+  }
+
+  /* Numbers line up in tables, tiles and timestamps. */
+  table,
+  time,
+  [data-numeric] {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Everything clickable looks clickable. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  a[href],
+  label[for],
+  select:not(:disabled),
+  summary,
+  [role="tab"]:not([aria-disabled="true"]),
+  [role="menuitem"]:not([data-disabled]),
+  [role="menuitemcheckbox"]:not([data-disabled]),
+  [role="menuitemradio"]:not([data-disabled]),
+  [role="option"]:not([aria-disabled="true"]),
+  [role="checkbox"]:not([aria-disabled="true"]):not([data-disabled]),
+  [role="switch"]:not([aria-disabled="true"]):not([data-disabled]),
+  [role="radio"]:not([aria-disabled="true"]):not([data-disabled]),
+  label:has(> [role="checkbox"], > [role="switch"], > [role="radio"], > input) {
+    cursor: pointer;
+  }
+
+  /*
+   * A timestamp with its absolute time in a tooltip is hover-for-detail, not an action: `help`, not
+   * `pointer` (a pointer would promise a click that does nothing). Inside a clickable parent it
+   * keeps the parent's cursor.
+   */
+  time[data-absolute] {
+    cursor: help;
+  }
+  :is(button, a[href], [role="button"], [role="row"][aria-expanded], label) time[data-absolute] {
+    cursor: inherit;
+  }
+
+  /* Focus: never removed, one 2px accent ring with offset everywhere. */
+  :focus-visible {
+    outline: var(--ring-width) solid var(--ring);
+    outline-offset: var(--ring-offset);
+  }
+
+  [data-capture="true"] :focus-visible,
+  [data-capture="true"]:focus-visible {
+    outline-width: var(--ring-width-capture);
+  }
+
+  ::selection {
+    @apply bg-primary/25;
+  }
+
+  /* Thin, quiet scrollbars in both themes; no reserved gutters on generic scroll regions. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar) transparent;
+  }
+}
+
+@layer components {
+  /*
+   * Hover/focus reveal: put `data-reveal-scope` on a row, card or value wrapper and `reveal` on the
+   * secondary controls inside it (copy, open, row actions). They show on hover or keyboard focus
+   * within the scope, stay visible while their menu is open, and are always visible on touch.
+   * Outside any scope a `.reveal` element is simply visible.
+   */
+  [data-reveal-scope] .reveal {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--duration-fast) var(--ease-out);
+  }
+  [data-reveal-scope]:hover .reveal,
+  [data-reveal-scope]:focus-within .reveal,
+  [data-reveal-scope] .reveal:focus-visible,
+  [data-reveal-scope] .reveal:has(:focus-visible),
+  [data-reveal-scope] .reveal:has([aria-expanded="true"]),
+  [data-reveal-scope] .reveal[data-popup-open],
+  [data-reveal-scope] .reveal:has([data-popup-open]) {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  @media (hover: none) {
+    [data-reveal-scope] .reveal {
+      opacity: 1;
+      pointer-events: auto;
+    }
+  }
+  /*
+   * In-flow variant: the slot takes no width until revealed, so neighbouring text re-truncates to
+   * make room instead of being covered. Width is toggled, never animated. Focusable
+   * controls inside a zero-width slot still take focus, which opens it through :focus-within.
+   */
+  [data-reveal-scope] .reveal-slot {
+    max-width: 0;
+    overflow: hidden;
+    opacity: 0;
+  }
+  [data-reveal-scope]:hover .reveal-slot,
+  [data-reveal-scope]:focus-within .reveal-slot,
+  [data-reveal-scope] .reveal-slot:has([aria-expanded="true"]),
+  [data-reveal-scope] .reveal-slot:has([data-popup-open]) {
+    max-width: none;
+    overflow: visible;
+    opacity: 1;
+  }
+  @media (hover: none) {
+    [data-reveal-scope] .reveal-slot {
+      max-width: none;
+      overflow: visible;
+      opacity: 1;
+    }
+  }
+
+  /*
+   * Stretched row links. A row/card with `data-row-link-scope` holds one absolutely
+   * positioned `<a data-row-link>` covering it. The stacking contract is explicit:
+   *   z-index 1  the row link, above all static and positioned text (URLs, ids, times), so a click
+   *              anywhere that is not a control opens the row;
+   *   z-index 2  real inline controls (links to other entities, buttons, checkboxes, inputs) and
+   *              anything marked `data-interactive`.
+   * Text must never be lifted: a tooltip on display text inside a linked row is unreachable by
+   * design, so put the full value on an explicit control (the URL's open button, a copy button).
+   * A lifted control inside a transformed or filtered wrapper is trapped below the link; give that
+   * wrapper `data-interactive` (or avoid the transform).
+   */
+  [data-row-link-scope] {
+    position: relative;
+  }
+  [data-row-link-scope] [data-row-link] {
+    z-index: 1;
+  }
+  [data-row-link-scope]
+    :is(
+      a,
+      button,
+      input,
+      select,
+      textarea,
+      [role="button"],
+      [role="checkbox"],
+      [role="switch"],
+      [role="combobox"],
+      [data-interactive]
+    ):not([data-row-link]) {
+    position: relative;
+    z-index: 2;
+  }
+}
+
+/*
+ * Keyboard focus ring for components that reset the UA outline (buttons, toggles, tabs, switches,
+ * checkboxes). Use this instead of `outline-none focus-visible:outline-2 …`: in Tailwind v4
+ * `outline-none`/`outline-hidden` store `none` in `--tw-outline-style`, which `outline-2` reads
+ * back, so that pairing never paints a ring.
+ */
+@utility focus-ring {
+  outline-style: none;
+  /* biome-ignore lint/style/noDescendingSpecificity: utilities are layered; source order across layers is irrelevant */
+  &:focus-visible {
+    outline: var(--ring-width) solid var(--ring);
+    outline-offset: var(--ring-offset);
+  }
+}
+
+/* Same ring drawn inside the box, for elements whose parent clips (rows, list items, scrolling tab lists). */
+@utility focus-ring-inset {
+  outline-style: none;
+  /* biome-ignore lint/style/noDescendingSpecificity: utilities are layered; source order across layers is irrelevant */
+  &:focus-visible {
+    outline: var(--ring-width) solid var(--ring);
+    outline-offset: calc(var(--ring-width) * -1);
+  }
+}
+
+@layer utilities {
+  /* Page gutter that follows the responsive --gutter token (16px, 24px from 640px). */
+  .px-gutter {
+    padding-inline: var(--gutter);
+  }
+
+  /* Section / tile / field label: sentence case, 13px, muted, medium. */
+  .section-label {
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
+    font-weight: 500;
+    color: var(--muted-foreground);
+  }
+
+  /* Small-caps eyebrow, only where a category marker is truly needed. */
+  .eyebrow {
+    font-size: var(--text-xs);
+    line-height: var(--text-xs--line-height);
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--subtle-foreground);
+  }
+
+  /* Height of a fixed-height workspace page (below the sticky topbar). */
+  .h-workspace {
+    height: var(--workspace-height);
+  }
+}
+
+/*
+ * Safety net for the visible focus ring, deliberately unlayered so it beats the utility layer: any element that
+ * pairs `outline-none` with `focus-visible:outline-<width>` still gets a solid ring. Elements that
+ * really hide their outline set `outline-style: none` directly and are unaffected.
+ */
+/* biome-ignore lint/style/noDescendingSpecificity: unlayered on purpose; it only sets a variable the utilities read */
+:focus-visible {
+  --tw-outline-style: solid;
+}
+
+/* Motion is decoration: reduce everything, keep meaning-preserving statics. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: spec 04 §9 mandates the global reduced-motion override */
+    animation-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: spec 04 §9 */
+    animation-iteration-count: 1 !important;
+    /* biome-ignore lint/complexity/noImportantStyles: spec 04 §9 */
+    transition-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: spec 04 §9 */
+    scroll-behavior: auto !important;
+  }
+}

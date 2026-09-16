@@ -1,0 +1,83 @@
+{
+  "name": "click",
+  "title": "Click",
+  "description": "Click an element matching the selector.",
+  "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      },
+      "selector": {
+        "type": "string",
+        "minLength": 1
+      },
+      "button": {
+        "default": "left",
+        "type": "string",
+        "enum": ["left", "right", "middle"]
+      },
+      "click_count": {
+        "default": 1,
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 3
+      },
+      "modifiers": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": ["Alt", "Control", "ControlOrMeta", "Meta", "Shift"]
+        }
+      },
+      "position": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          }
+        },
+        "required": ["x", "y"]
+      },
+      "timeout": {
+        "default": 30000,
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 9007199254740991
+      },
+      "tab_id": {
+        "type": "string"
+      }
+    },
+    "required": ["session_id", "selector"]
+  },
+  "outputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      },
+      "selector": {
+        "type": "string"
+      },
+      "ok": {
+        "type": "boolean",
+        "const": true
+      }
+    },
+    "required": ["session_id", "selector", "ok"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": true
+  },
+  "since": "0.1.0"
+}

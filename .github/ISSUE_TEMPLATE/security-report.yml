@@ -1,0 +1,13 @@
+name: Security report
+description: Do not use this form for vulnerabilities
+labels: [security]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Vulnerabilities must be reported privately through GitHub Security Advisories (see `SECURITY.md`).
+        Use this form only for non-sensitive hardening suggestions.
+  - type: textarea
+    id: suggestion
+    attributes: { label: Hardening suggestion }
+    validations: { required: true }

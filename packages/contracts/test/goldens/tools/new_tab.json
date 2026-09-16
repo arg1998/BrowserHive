@@ -1,0 +1,53 @@
+{
+  "name": "new_tab",
+  "title": "New tab",
+  "description": "Open a new tab in the session and make it active. Optionally navigate it to a URL. Returns the stable tab_id other tools accept via their optional tab_id argument.",
+  "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      },
+      "url": {
+        "type": "string"
+      },
+      "wait_until": {
+        "default": "load",
+        "type": "string",
+        "enum": ["load", "domcontentloaded", "networkidle", "commit"]
+      },
+      "timeout": {
+        "default": 30000,
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 9007199254740991
+      }
+    },
+    "required": ["session_id"]
+  },
+  "outputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      },
+      "tab_id": {
+        "type": "string"
+      },
+      "url": {
+        "type": "string"
+      }
+    },
+    "required": ["session_id", "tab_id", "url"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": true
+  },
+  "since": "0.1.0"
+}

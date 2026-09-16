@@ -1,0 +1,51 @@
+{
+  "name": "wait_for_load_state",
+  "title": "Wait for load state",
+  "description": "Wait for the page to reach a load state (load/domcontentloaded/networkidle).",
+  "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      },
+      "state": {
+        "default": "load",
+        "type": "string",
+        "enum": ["load", "domcontentloaded", "networkidle"]
+      },
+      "timeout": {
+        "default": 30000,
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 9007199254740991
+      },
+      "tab_id": {
+        "type": "string"
+      }
+    },
+    "required": ["session_id"]
+  },
+  "outputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      },
+      "state": {
+        "type": "string",
+        "enum": ["load", "domcontentloaded", "networkidle"]
+      }
+    },
+    "required": ["session_id", "state"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "since": "0.1.0"
+}

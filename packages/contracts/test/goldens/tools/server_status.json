@@ -1,0 +1,67 @@
+{
+  "name": "server_status",
+  "title": "Server status",
+  "description": "Report server-wide status: uptime, version, transport, live/allowed session counts, vault state, and the global default persistence mode.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {}
+  },
+  "outputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "uptime_ms": {
+        "type": "number"
+      },
+      "version": {
+        "type": "string"
+      },
+      "transport": {
+        "type": "string",
+        "enum": ["stdio", "http"]
+      },
+      "sessions": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "number"
+          },
+          "limit": {
+            "type": ["number", "null"]
+          }
+        },
+        "required": ["count", "limit"],
+        "additionalProperties": false
+      },
+      "vault": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "backend": {
+            "type": ["string", "null"]
+          },
+          "evaluate_warning": {
+            "type": "boolean"
+          }
+        },
+        "required": ["enabled", "backend", "evaluate_warning"],
+        "additionalProperties": false
+      },
+      "persistence_mode": {
+        "type": "string",
+        "enum": ["memory", "persistent", "storage-state"]
+      }
+    },
+    "required": ["uptime_ms", "version", "transport", "sessions", "vault", "persistence_mode"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "since": "0.1.0"
+}

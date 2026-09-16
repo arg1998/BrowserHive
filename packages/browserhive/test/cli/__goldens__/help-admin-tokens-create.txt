@@ -1,0 +1,28 @@
+browserhive admin tokens create — Issue a bearer token for a principal (plaintext shown once)
+
+USAGE
+  browserhive admin tokens create <principal> [flags]
+
+Works on the database directly and refuses while a server is running on the data directory; tokens
+subcommands can instead talk to a running server with --url.
+
+ARGUMENTS
+  <principal>  Agent principal, e.g. agent-2.
+
+FLAGS
+  --json                       Print machine-readable JSON instead of text.
+  --expiresIn <duration>       Token lifetime, e.g. 30d. Never expires when omitted.
+  --url <url>                  Talk to a running server over its REST API instead of opening the
+                               database (http://127.0.0.1:9876).
+  --token <bearer>             Operator bearer token for --url (bh_operator_…).
+  --cookie <value>             Dashboard session cookie value for --url (browserhive_session).
+  --dataDir <path>             Data directory (database, sessions, auth states, uploads, backups).
+                               Defaults to the OS data dir. default: OS data directory
+  --config <path>              Config file path. CLI and environment only: a config file cannot
+                               point at another.
+  --color <auto|always|never>  Colour for logs and CLI output. auto honours NO_COLOR, FORCE_COLOR,
+                               TERM=dumb and TTY. default: auto
+
+GLOBAL FLAGS
+  -h, --help     Show help.
+  -v, --version  Print the version.

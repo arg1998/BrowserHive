@@ -1,0 +1,225 @@
+{
+  "name": "list_sessions",
+  "title": "List sessions",
+  "description": "Return metadata for every live session.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {}
+  },
+  "outputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "array",
+    "items": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string"
+        },
+        "slug": {
+          "type": "string"
+        },
+        "channel": {
+          "type": "string",
+          "enum": ["chromium", "chrome", "edge"]
+        },
+        "incognito": {
+          "type": "boolean"
+        },
+        "headless": {
+          "type": "boolean"
+        },
+        "persistence_mode": {
+          "type": "string",
+          "enum": ["memory", "persistent", "storage-state"]
+        },
+        "current_url": {
+          "type": ["string", "null"]
+        },
+        "created_at": {
+          "type": "number"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "lease_expires_at": {
+          "type": "number"
+        },
+        "lease_paused_at": {
+          "type": ["number", "null"]
+        },
+        "disable_evaluate": {
+          "type": "boolean"
+        },
+        "vault_enabled": {
+          "type": "boolean"
+        },
+        "stealth": {
+          "type": "boolean"
+        },
+        "fingerprint": {
+          "type": "boolean"
+        },
+        "humanize": {
+          "type": "boolean"
+        },
+        "identity": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "userAgent": {
+                  "type": "string"
+                },
+                "brands": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "brand": {
+                        "type": "string"
+                      },
+                      "version": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["brand", "version"],
+                    "additionalProperties": false
+                  }
+                },
+                "platform": {
+                  "type": "string"
+                },
+                "deviceMemory": {
+                  "type": "number"
+                },
+                "chromeMajor": {
+                  "type": "string"
+                },
+                "geo": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "locale": {
+                          "type": "string"
+                        },
+                        "languages": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "countryCode": {
+                          "type": ["string", "null"]
+                        },
+                        "timezoneId": {
+                          "type": "string"
+                        },
+                        "source": {
+                          "type": "string",
+                          "enum": ["host", "proxy"]
+                        }
+                      },
+                      "required": ["locale", "languages", "countryCode", "timezoneId", "source"],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "display": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "screen": {
+                          "type": "object",
+                          "properties": {
+                            "width": {
+                              "type": "number"
+                            },
+                            "height": {
+                              "type": "number"
+                            }
+                          },
+                          "required": ["width", "height"],
+                          "additionalProperties": false
+                        },
+                        "viewport": {
+                          "type": "object",
+                          "properties": {
+                            "width": {
+                              "type": "number"
+                            },
+                            "height": {
+                              "type": "number"
+                            }
+                          },
+                          "required": ["width", "height"],
+                          "additionalProperties": false
+                        },
+                        "deviceScaleFactor": {
+                          "type": "number"
+                        }
+                      },
+                      "required": ["screen", "viewport", "deviceScaleFactor"],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "userAgent",
+                "brands",
+                "platform",
+                "deviceMemory",
+                "chromeMajor",
+                "geo",
+                "display"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "proxy_label": {
+          "type": ["string", "null"]
+        }
+      },
+      "required": [
+        "session_id",
+        "slug",
+        "channel",
+        "incognito",
+        "headless",
+        "persistence_mode",
+        "current_url",
+        "created_at",
+        "owner",
+        "lease_expires_at",
+        "lease_paused_at",
+        "disable_evaluate",
+        "vault_enabled",
+        "stealth",
+        "fingerprint",
+        "humanize",
+        "identity",
+        "proxy_label"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "since": "0.1.0"
+}

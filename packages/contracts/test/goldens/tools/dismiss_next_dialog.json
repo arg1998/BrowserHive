@@ -1,0 +1,40 @@
+{
+  "name": "dismiss_next_dialog",
+  "title": "Dismiss next dialog",
+  "description": "Arm a one-shot handler that dismisses (cancels) the next JavaScript dialog on the tab. Auto-disarms after one dialog or 60s.",
+  "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      },
+      "tab_id": {
+        "type": "string"
+      }
+    },
+    "required": ["session_id"]
+  },
+  "outputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      },
+      "armed": {
+        "type": "boolean",
+        "const": true
+      }
+    },
+    "required": ["session_id", "armed"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "since": "0.1.0"
+}

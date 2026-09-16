@@ -1,0 +1,75 @@
+{
+  "name": "scroll",
+  "title": "Scroll",
+  "description": "Scroll a tab: mode=\"by\" scrolls by (dx,dy); mode=\"to\" scrolls to (x,y); mode=\"selector\" brings an element into view. Returns the resulting scroll offset.",
+  "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      },
+      "mode": {
+        "type": "string",
+        "enum": ["by", "to", "selector"]
+      },
+      "dx": {
+        "default": 0,
+        "type": "number"
+      },
+      "dy": {
+        "default": 0,
+        "type": "number"
+      },
+      "x": {
+        "type": "number"
+      },
+      "y": {
+        "type": "number"
+      },
+      "selector": {
+        "type": "string",
+        "minLength": 1
+      },
+      "behavior": {
+        "default": "auto",
+        "type": "string",
+        "enum": ["auto", "smooth"]
+      },
+      "timeout": {
+        "default": 30000,
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 9007199254740991
+      },
+      "tab_id": {
+        "type": "string"
+      }
+    },
+    "required": ["session_id", "mode"]
+  },
+  "outputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      },
+      "x": {
+        "type": "number"
+      },
+      "y": {
+        "type": "number"
+      }
+    },
+    "required": ["session_id", "x", "y"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": true
+  },
+  "since": "0.1.0"
+}

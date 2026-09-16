@@ -1,0 +1,40 @@
+{
+  "data": [
+    {
+      "handle": "work.github",
+      "title": "GitHub",
+      "item_name": "GitHub",
+      "item_id": "i1",
+      "group_id": null,
+      "allowed_origins": [
+        "https://github.com"
+      ],
+      "authorized_principals": [],
+      "authorized_session_slugs": [
+        "shop"
+      ],
+      "allow_all_sessions": false,
+      "redact_username": false,
+      "require_no_evaluate": false,
+      "dashboard_confirm": false,
+      "created_at": 1700000000000,
+      "updated_at": 1700000000000,
+      "version": 1
+    }
+  ],
+  "page": {
+    "next_cursor": null,
+    "limit": 50,
+    "total": 1
+  },
+  "applied": {
+    "filters": {},
+    "sort": {
+      "key": "handle",
+      "dir": "desc"
+    }
+  },
+  "meta": {
+    "now": 1700000000000
+  }
+}

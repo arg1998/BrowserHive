@@ -1,0 +1,33 @@
+{
+  "data": [
+    {
+      "seq": 2,
+      "ts": 1700000000001,
+      "level": "warn",
+      "msg": "login failed",
+      "module": "auth"
+    },
+    {
+      "seq": 1,
+      "ts": 1700000000000,
+      "level": "info",
+      "msg": "server started",
+      "module": "system"
+    }
+  ],
+  "page": {
+    "next_cursor": null,
+    "limit": 200
+  },
+  "applied": {
+    "filters": {},
+    "sort": {
+      "key": "seq",
+      "dir": "desc"
+    }
+  },
+  "meta": {
+    "now": 1700000000000
+  },
+  "latest_seq": 2
+}

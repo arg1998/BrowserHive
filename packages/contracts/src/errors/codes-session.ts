@@ -1,0 +1,223 @@
+/** @module contracts/errors/codes-session — session lifecycle, launch-config and tab error codes (message texts are part of the public contract) */
+import { z } from 'zod';
+import { defineError } from './spec.ts';
+
+const sessionId = z.object({ session_id: z.string() });
+
+/** Session lifecycle, launch configuration and tab codes. */
+export const SESSION_ERRORS = {
+  SESSION_NOT_FOUND: defineError({
+    code: 'SESSION_NOT_FOUND',
+    httpStatus: 404,
+    category: 'domain',
+    retryable: 'different_args',
+    title: 'Session not found',
+    message: "No browser session with id '{session_id}'",
+    hint: 'Use list_sessions to see live sessions.',
+    details: sessionId,
+    docs: true,
+    cause: 'The session id is unknown, mistyped, or the session was already closed and removed.',
+    resolution: 'Call list_sessions and use one of the returned ids, or launch a new session.',
+  }),
+  SESSION_ALREADY_EXISTS: defineError({
+    code: 'SESSION_ALREADY_EXISTS',
+    httpStatus: 409,
+    category: 'domain',
+    retryable: 'immediate',
+    title: 'Session id collision',
+    message:
+      "Session '{session_id}' already exists. Slug+nanoid collision is exceptionally rare; the caller should retry.",
+    hint: 'Retry launch_session; a fresh id is generated on every call.',
+    details: sessionId,
+    docs: true,
+    cause: 'The generated `<slug>-<nanoid8>` id collided with a live session (36^8 space).',
+    resolution: 'Retry immediately; a collision twice in a row indicates a broken id generator.',
+  }),
+  SESSION_DEAD: defineError({
+    code: 'SESSION_DEAD',
+    httpStatus: 410,
+    category: 'domain',
+    retryable: 'different_args',
+    title: 'Session is dead',
+    message: "Session '{session_id}' is dead — its underlying browser process crashed.",
+    hint: 'Close the session and launch a new one.',
+    details: sessionId,
+    docs: true,
+    cause: 'The browser context or process disconnected; the session is awaiting reaping.',
+    resolution: 'Launch a replacement session; the crashed one is closed with reason `crash`.',
+  }),
+  SESSION_LIMIT_REACHED: defineError({
+    code: 'SESSION_LIMIT_REACHED',
+    httpStatus: 429,
+    category: 'domain',
+    retryable: 'backoff',
+    title: 'Session limit reached',
+    message: 'Concurrent session limit reached (max={limit}). Close a session and retry.',
+    hint: 'Close an idle session or wait for a lease to expire, then retry.',
+    details: z.object({ limit: z.number().int(), live: z.number().int() }),
+    docs: true,
+    cause: 'The number of live sessions equals `maxSessions` (derived from host RAM by default).',
+    resolution:
+      'Close sessions you no longer need, or raise `maxSessions` on a host with more memory.',
+  }),
+  SESSION_ACCESS_DENIED: defineError({
+    code: 'SESSION_ACCESS_DENIED',
+    httpStatus: 404,
+    category: 'domain',
+    retryable: 'never',
+    title: 'Session not found',
+    // Deliberately identical to SESSION_NOT_FOUND so a cross-principal probe cannot tell "not yours"
+    // from "does not exist".
+    message: "No browser session with id '{session_id}'",
+    hint: 'Use list_sessions to see the sessions you own.',
+    details: sessionId,
+    docs: true,
+    cause:
+      'The session belongs to a different principal and ownership enforcement is on (`auth=token`).',
+    resolution: 'Only the owning principal may use a session; launch your own.',
+  }),
+  SESSION_NOT_AVAILABLE: defineError({
+    code: 'SESSION_NOT_AVAILABLE',
+    httpStatus: 409,
+    category: 'domain',
+    retryable: 'after_operator',
+    title: 'Session not available',
+    message: "Session '{session_id}' is not available (state: {state}).",
+    hint: 'Wait until the session is live, or pick another session.',
+    details: z.object({ session_id: z.string(), state: z.string() }),
+    docs: true,
+    cause: 'The session is launching, draining, paused for an operator, closed or crashed.',
+    resolution: 'Retry once the session state returns to `live`.',
+  }),
+  SESSION_NOT_LIVE: defineError({
+    code: 'SESSION_NOT_LIVE',
+    httpStatus: 409,
+    category: 'domain',
+    retryable: 'never',
+    title: 'Session is not live',
+    message: "Session '{session_id}' is not live.",
+    hint: 'This action needs a live session; the session has ended.',
+    details: sessionId,
+    docs: true,
+    cause:
+      'An operator action that needs a running browser (live view, input, terminate) targeted a closed session.',
+    resolution: 'Open the trace or history views instead.',
+  }),
+  SESSION_LIVE: defineError({
+    code: 'SESSION_LIVE',
+    httpStatus: 409,
+    category: 'domain',
+    retryable: 'never',
+    title: 'Session is still live',
+    message: "Session '{session_id}' is still live.",
+    hint: 'Terminate or close the session first.',
+    details: sessionId,
+    docs: true,
+    cause:
+      'An action that needs a finished session (archive, delete, trace download) targeted a live one.',
+    resolution: 'Close the session, then retry.',
+  }),
+  UNKNOWN_CHANNEL: defineError({
+    code: 'UNKNOWN_CHANNEL',
+    httpStatus: 400,
+    category: 'domain',
+    retryable: 'different_args',
+    title: 'Unknown browser channel',
+    message: "Unknown browser channel '{channel}'. Expected one of: chromium, chrome, edge.",
+    hint: 'Pass channel as one of chromium, chrome or edge.',
+    details: z.object({ channel: z.string(), supported: z.array(z.string()) }),
+    docs: true,
+    cause: 'The `channel` argument is not a supported Chromium-family channel.',
+    resolution:
+      'Use `chromium` (bundled), or `chrome`/`edge` when that browser is installed on the host.',
+  }),
+  INVALID_SLUG: defineError({
+    code: 'INVALID_SLUG',
+    httpStatus: 400,
+    category: 'domain',
+    retryable: 'different_args',
+    title: 'Invalid slug',
+    message:
+      "Invalid slug '{slug}'. Slugs must match /^[a-z][a-z0-9-]{1,31}$/ (start with a lowercase letter, 2–32 chars, lowercase alphanumerics and dashes).",
+    hint: 'Use a short lowercase name such as "shop" or "docs-crawl".',
+    details: z.object({ slug: z.string(), pattern: z.string() }),
+    docs: true,
+    cause: 'The slug does not match the filesystem-safe grammar.',
+    resolution: 'Lowercase letters, digits and dashes only; start with a letter; 2–32 characters.',
+  }),
+  UNSAFE_LAUNCH_ARG: defineError({
+    code: 'UNSAFE_LAUNCH_ARG',
+    httpStatus: 400,
+    category: 'domain',
+    retryable: 'different_args',
+    title: 'Launch argument denied',
+    message: "Launch arg '{arg}' is on the deny-list and would break session isolation.",
+    hint: 'Remove the argument from launch_options.args.',
+    details: z.object({ arg: z.string() }),
+    docs: true,
+    cause:
+      'A Chromium flag that changes the profile directory, sandbox or debugging surface was passed.',
+    resolution:
+      'Use the persistence modes and channel options instead of raw isolation-breaking flags.',
+  }),
+  INVALID_PERSISTENCE_CONFIG: defineError({
+    code: 'INVALID_PERSISTENCE_CONFIG',
+    httpStatus: 400,
+    category: 'domain',
+    retryable: 'different_args',
+    title: 'Invalid persistence config',
+    message: 'Invalid persistence config: {reason}',
+    hint: 'Check the persistence_mode / restore_profile / storage_state / incognito combination.',
+    details: z.object({ reason: z.string() }),
+    docs: true,
+    cause: 'The requested combination of persistence mode and launch options is contradictory.',
+    resolution:
+      'See the persistence matrix in the tool reference and pick a consistent combination.',
+  }),
+  TAB_NOT_FOUND: defineError({
+    code: 'TAB_NOT_FOUND',
+    httpStatus: 404,
+    category: 'domain',
+    retryable: 'different_args',
+    title: 'Tab not found',
+    message: "Tab '{tab_id}' not found in session '{session_id}'.",
+    hint: 'Use list_tabs to see open tabs.',
+    details: z.object({ session_id: z.string(), tab_id: z.string() }),
+    docs: true,
+    cause:
+      'The tab id is unknown or the tab was closed; `<active>` means the session has no open tab.',
+    resolution: 'Call list_tabs, or open a tab with new_tab.',
+  }),
+  PATH_NOT_ALLOWED: defineError({
+    code: 'PATH_NOT_ALLOWED',
+    httpStatus: 400,
+    category: 'domain',
+    retryable: 'different_args',
+    title: 'Path outside the sandbox',
+    // Core appends " Allowed roots: '…'. Pass an absolute path under one of these[, or a relative
+    // path (…)]." only for local audiences (spec 10 §1.3).
+    message: "Path '{path}' is outside the allowed sandbox roots.",
+    hint: 'Use a relative path or an absolute path under an allowed root.',
+    details: z.object({ path: z.string(), roots: z.array(z.string()) }),
+    docs: true,
+    cause:
+      'The resolved path (symlinks followed) escapes the session directory and the uploads directory.',
+    resolution:
+      'Write inside the session directory (relative paths resolve there) or the uploads directory.',
+  }),
+  AUTH_STATE_NOT_FOUND: defineError({
+    code: 'AUTH_STATE_NOT_FOUND',
+    httpStatus: 404,
+    category: 'domain',
+    retryable: 'different_args',
+    title: 'Saved auth state not found',
+    // `{kind_label}` is 'full-profile' for kind=profile and 'storage-state' for kind=storage.
+    message:
+      "No saved {kind_label} snapshot named '{name}'. Use list_saved_auths to see what is available.",
+    hint: 'Call list_saved_auths and use one of the returned names.',
+    details: z.object({ name: z.string(), kind: z.enum(['storage', 'profile']) }),
+    docs: true,
+    cause: 'No snapshot of the requested kind exists under that name in the auth-states directory.',
+    resolution: 'Save one with save_storage_state or save_full_profile first.',
+  }),
+} as const;

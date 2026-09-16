@@ -1,0 +1,41 @@
+{
+  "name": "evaluate",
+  "title": "Evaluate",
+  "description": "Evaluate a JavaScript expression in the tab context and return the result. Function-shaped strings are auto-wrapped as IIFEs. A session launched with disable_evaluate: true rejects this call with EVALUATE_DISABLED.",
+  "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      },
+      "expression": {
+        "type": "string",
+        "minLength": 1
+      },
+      "tab_id": {
+        "type": "string"
+      }
+    },
+    "required": ["session_id", "expression"]
+  },
+  "outputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      },
+      "result": {}
+    },
+    "required": ["session_id", "result"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": true
+  },
+  "since": "0.1.0"
+}

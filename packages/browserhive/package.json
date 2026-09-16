@@ -1,0 +1,85 @@
+{
+  "name": "browserhive",
+  "version": "0.1.0",
+  "description": "Local-first stealth browser MCP server: isolated Chromium sessions for LLM agents, vault-backed logins, human takeover, audit trail and an operator dashboard.",
+  "type": "module",
+  "license": "MIT",
+  "sideEffects": false,
+  "bin": {
+    "browserhive": "./dist/bin.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "!dist/types",
+    "!dist/.tsbuildinfo",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "bun": ">=1.4.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "keywords": [
+    "mcp",
+    "browser",
+    "playwright",
+    "stealth",
+    "automation",
+    "bun",
+    "model-context-protocol"
+  ],
+  "scripts": {
+    "build": "tsdown && bun scripts/bundle-dashboard.ts",
+    "typecheck": "tsc -b --pretty",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "@hono/zod-openapi": "1.6.3",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/api-logs": "^0.222.0",
+    "@opentelemetry/context-async-hooks": "^2.11.0",
+    "@opentelemetry/exporter-logs-otlp-http": "^0.222.0",
+    "@opentelemetry/exporter-logs-otlp-proto": "^0.222.0",
+    "@opentelemetry/exporter-metrics-otlp-http": "^0.222.0",
+    "@opentelemetry/exporter-metrics-otlp-proto": "^0.222.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.222.0",
+    "@opentelemetry/exporter-trace-otlp-proto": "^0.222.0",
+    "@opentelemetry/resources": "^2.11.0",
+    "@opentelemetry/sdk-logs": "^0.222.0",
+    "@opentelemetry/sdk-metrics": "^2.11.0",
+    "@opentelemetry/sdk-trace-base": "^2.11.0",
+    "@opentelemetry/semantic-conventions": "^1.43.0",
+    "@scalar/hono-api-reference": "^0.12.1",
+    "fflate": "^0.8.3",
+    "hono": "4.13.8",
+    "kysely": "0.29.6",
+    "nanoid": "^6.0.1",
+    "picocolors": "^1.1.1",
+    "playwright": "1.63.0",
+    "playwright-core": "1.63.0",
+    "tldts": "^7.4.13",
+    "zod": "4.6.5"
+  },
+  "optionalDependencies": {
+    "patchright": "1.63.0"
+  },
+  "devDependencies": {
+    "@browserhive/contracts": "workspace:*",
+    "@browserhive/core": "workspace:*",
+    "@browserhive/dashboard": "workspace:*"
+  }
+}

@@ -1,0 +1,26 @@
+# dependencies
+node_modules/
+# build output
+dist/
+*.tsbuildinfo
+coverage/
+playwright-report/
+test-results/
+# local state
+.env
+.env.*
+!.env.example
+scratchpad/
+.browserhive/
+.bh-data/
+*.log
+# editor / os
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+# temporary artifacts
+*.tgz
+tmp/

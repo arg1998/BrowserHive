@@ -1,0 +1,75 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.13/schema.json",
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "files": {
+    "includes": [
+      "**",
+      "!**/dist",
+      "!**/coverage",
+      "!**/*.gen.ts",
+      "!**/routeTree.gen.ts",
+      "!packages/core/src/version.ts",
+      "!packages/contracts/generated",
+      "!packages/core/src/infra/persistence/generated",
+      "!scratchpad",
+      "!specs",
+      "!docs",
+      "!**/test/goldens/**/*.json",
+      "!**/test/fixtures/**/*.json",
+      "!packages/core/test/persistence/fixtures/*.json"
+    ]
+  },
+  "formatter": { "indentStyle": "space", "indentWidth": 2, "lineWidth": 100, "lineEnding": "lf" },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "jsxQuoteStyle": "double",
+      "semicolons": "always",
+      "trailingCommas": "all",
+      "arrowParentheses": "always"
+    }
+  },
+  "css": { "parser": { "tailwindDirectives": true } },
+  "assist": { "actions": { "source": { "organizeImports": "on" } } },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "suspicious": {
+        "noExplicitAny": "error",
+        "noConsole": "error",
+        "noEmptyBlockStatements": "error"
+      },
+      "style": {
+        "useImportType": "error",
+        "useExportType": "error",
+        "noNonNullAssertion": "error",
+        "useNamingConvention": "off",
+        "noParameterAssign": "error"
+      },
+      "performance": { "noReExportAll": "error" },
+      "complexity": { "useLiteralKeys": "off" },
+      "correctness": {
+        "noUnusedImports": "error",
+        "noUnusedVariables": "error",
+        "useExhaustiveDependencies": "error"
+      },
+      "nursery": { "noFloatingPromises": "error" },
+      "a11y": { "recommended": true }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["packages/browserhive/src/cli/output/**", "scripts/**", "packages/*/scripts/**"],
+      "linter": { "rules": { "suspicious": { "noConsole": "off" } } }
+    },
+    {
+      "includes": ["packages/dashboard/**"],
+      "linter": {
+        "rules": {
+          "a11y": { "useKeyWithClickEvents": "error", "noStaticElementInteractions": "error" }
+        }
+      }
+    }
+  ]
+}

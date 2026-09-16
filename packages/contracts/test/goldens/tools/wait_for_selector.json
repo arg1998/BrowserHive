@@ -1,0 +1,58 @@
+{
+  "name": "wait_for_selector",
+  "title": "Wait for selector",
+  "description": "Wait for an element to reach the given state (attached/detached/visible/hidden).",
+  "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      },
+      "selector": {
+        "type": "string",
+        "minLength": 1
+      },
+      "state": {
+        "default": "visible",
+        "type": "string",
+        "enum": ["attached", "detached", "visible", "hidden"]
+      },
+      "timeout": {
+        "default": 30000,
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 9007199254740991
+      },
+      "tab_id": {
+        "type": "string"
+      }
+    },
+    "required": ["session_id", "selector"]
+  },
+  "outputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      },
+      "selector": {
+        "type": "string"
+      },
+      "state": {
+        "type": "string",
+        "enum": ["attached", "detached", "visible", "hidden"]
+      }
+    },
+    "required": ["session_id", "selector", "state"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "since": "0.1.0"
+}

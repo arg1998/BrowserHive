@@ -1,0 +1,10 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["bun-types"],
+    "rootDir": ".",
+    "outDir": "../dist/test-types",
+    "tsBuildInfoFile": "../dist/.test.tsbuildinfo"
+  },
+  "include": ["**/*.ts"]
+}

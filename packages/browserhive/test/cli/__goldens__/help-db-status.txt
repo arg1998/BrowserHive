@@ -1,0 +1,20 @@
+browserhive db status — Schema versions, application id, pending migrations, size, last backup, integrity
+
+USAGE
+  browserhive db status [flags]
+
+Operates on <dataDir>/browserhive.db. restore refuses while a server is running on the data
+directory.
+
+FLAGS
+  --json                       Print machine-readable JSON instead of text.
+  --dataDir <path>             Data directory (database, sessions, auth states, uploads, backups).
+                               Defaults to the OS data dir. default: OS data directory
+  --config <path>              Config file path. CLI and environment only: a config file cannot
+                               point at another.
+  --color <auto|always|never>  Colour for logs and CLI output. auto honours NO_COLOR, FORCE_COLOR,
+                               TERM=dumb and TTY. default: auto
+
+GLOBAL FLAGS
+  -h, --help     Show help.
+  -v, --version  Print the version.

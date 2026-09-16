@@ -1,0 +1,23 @@
+{
+  "data": [],
+  "page": {
+    "next_cursor": null,
+    "limit": 50,
+    "total": 0
+  },
+  "facets": {
+    "status": [],
+    "mode": []
+  },
+  "applied": {
+    "filters": {},
+    "sort": {
+      "key": "created_at",
+      "dir": "desc"
+    }
+  },
+  "meta": {
+    "now": 1700000000000
+  },
+  "open_count": 0
+}

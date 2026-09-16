@@ -1,0 +1,114 @@
+{
+  "name": "session_info",
+  "title": "Session info",
+  "description": "Report a single session's configuration and live state: channel, headless/incognito, persistence mode, per-session evaluate/vault flags, open tab (page) count, current URL, created_at, last_tool_at, and navigation count.",
+  "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      }
+    },
+    "required": ["session_id"]
+  },
+  "outputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      },
+      "config": {
+        "type": "object",
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "channel": {
+            "type": "string",
+            "enum": ["chromium", "chrome", "edge"]
+          },
+          "headless": {
+            "type": "boolean"
+          },
+          "incognito": {
+            "type": "boolean"
+          },
+          "persistence_mode": {
+            "type": "string",
+            "enum": ["memory", "persistent", "storage-state"]
+          },
+          "disable_evaluate": {
+            "type": "boolean"
+          },
+          "vault_enabled": {
+            "type": "boolean"
+          },
+          "stealth": {
+            "type": "boolean"
+          },
+          "fingerprint": {
+            "type": "boolean"
+          },
+          "humanize": {
+            "type": "boolean"
+          },
+          "owner": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "channel",
+          "headless",
+          "incognito",
+          "persistence_mode",
+          "disable_evaluate",
+          "vault_enabled",
+          "stealth",
+          "fingerprint",
+          "humanize",
+          "owner"
+        ],
+        "additionalProperties": false
+      },
+      "page_count": {
+        "type": "number"
+      },
+      "current_url": {
+        "type": ["string", "null"]
+      },
+      "created_at": {
+        "type": "number"
+      },
+      "last_tool_at": {
+        "type": "number"
+      },
+      "lease_expires_at": {
+        "type": "number"
+      },
+      "navigation_count": {
+        "type": "number"
+      }
+    },
+    "required": [
+      "session_id",
+      "config",
+      "page_count",
+      "current_url",
+      "created_at",
+      "last_tool_at",
+      "lease_expires_at",
+      "navigation_count"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "since": "0.1.0"
+}

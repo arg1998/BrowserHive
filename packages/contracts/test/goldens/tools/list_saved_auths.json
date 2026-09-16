@@ -1,0 +1,40 @@
+{
+  "name": "list_saved_auths",
+  "title": "List saved auths",
+  "description": "List every saved auth snapshot (storage-state and full-profile) with kind, size, and when it was saved, most recent first.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {}
+  },
+  "outputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "array",
+    "items": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["storage", "profile"]
+        },
+        "saved_at": {
+          "type": "number"
+        },
+        "size": {
+          "type": "number"
+        }
+      },
+      "required": ["name", "kind", "saved_at", "size"],
+      "additionalProperties": false
+    }
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "since": "0.1.0"
+}

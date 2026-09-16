@@ -1,0 +1,49 @@
+{
+  "data": [
+    {
+      "event_id": "e-00000000000000000000000002",
+      "session_id": "shop-0000000a",
+      "tool": "click",
+      "tab_id": "t-000001",
+      "ok": false,
+      "error_code": "ELEMENT_NOT_FOUND",
+      "error_message": "no element",
+      "duration_ms": 10,
+      "result_size_bytes": 2,
+      "ts": 1699999980000,
+      "trace_id": null,
+      "has_screenshot": false,
+      "session_slug": "shop"
+    },
+    {
+      "event_id": "e-00000000000000000000000001",
+      "session_id": "shop-0000000a",
+      "tool": "navigate",
+      "tab_id": "t-000001",
+      "ok": true,
+      "error_code": null,
+      "error_message": null,
+      "duration_ms": 10,
+      "result_size_bytes": 2,
+      "ts": 1699999970000,
+      "trace_id": null,
+      "has_screenshot": true,
+      "session_slug": "shop"
+    }
+  ],
+  "page": {
+    "next_cursor": null,
+    "limit": 50,
+    "total": 2
+  },
+  "applied": {
+    "filters": {},
+    "sort": {
+      "key": "ts",
+      "dir": "desc"
+    }
+  },
+  "meta": {
+    "now": 1700000000000
+  }
+}

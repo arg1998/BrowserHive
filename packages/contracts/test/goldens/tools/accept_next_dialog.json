@@ -1,0 +1,43 @@
+{
+  "name": "accept_next_dialog",
+  "title": "Accept next dialog",
+  "description": "Arm a one-shot handler that accepts the next JavaScript dialog (alert/confirm/prompt) on the tab. For a prompt, prompt_text is entered first. Auto-disarms after one dialog or 60s.",
+  "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      },
+      "prompt_text": {
+        "type": "string"
+      },
+      "tab_id": {
+        "type": "string"
+      }
+    },
+    "required": ["session_id"]
+  },
+  "outputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      },
+      "armed": {
+        "type": "boolean",
+        "const": true
+      }
+    },
+    "required": ["session_id", "armed"],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "since": "0.1.0"
+}

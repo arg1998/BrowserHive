@@ -1,0 +1,25 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
+  "schedule": ["before 6am on monday"],
+  "timezone": "UTC",
+  "rangeStrategy": "pin",
+  "automerge": false,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on the first day of the month"]
+  },
+  "packageRules": [
+    { "groupName": "tanstack", "matchPackageNames": ["/^@tanstack\\//"] },
+    { "groupName": "hono", "matchPackageNames": ["hono", "/^@hono\\//"] },
+    { "groupName": "opentelemetry", "matchPackageNames": ["/^@opentelemetry\\//"] },
+    {
+      "groupName": "biome+typescript",
+      "matchPackageNames": ["@biomejs/biome", "typescript", "typescript7"]
+    },
+    {
+      "groupName": "playwright+patchright",
+      "matchPackageNames": ["playwright", "playwright-core", "patchright", "@playwright/test"]
+    }
+  ]
+}
