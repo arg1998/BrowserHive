@@ -12,33 +12,38 @@ concurrency:
 permissions:
   contents: read
 
-env:
-  BROWSERHIVE_CI: '1'
-
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { fetch-depth: 0 }
+        with:
+          fetch-depth: 0
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with: { bun-version-file: .bun-version }
+        with:
+          bun-version-file: .bun-version
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with: { path: ~/.bun/install/cache, key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }} }
+        with:
+          path: ~/.bun/install/cache
+          key: 'bun-${{ runner.os }}-${{ hashFiles(''bun.lock'') }}'
       - run: bun install --frozen-lockfile
       - run: bun run lint
       - run: bun test test/lint packages/core/test/lint
       - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
-        env: { GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
+        env:
+          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
 
   typecheck:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with: { bun-version-file: .bun-version }
+        with:
+          bun-version-file: .bun-version
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with: { path: ~/.bun/install/cache, key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }} }
+        with:
+          path: ~/.bun/install/cache
+          key: 'bun-${{ runner.os }}-${{ hashFiles(''bun.lock'') }}'
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
 
@@ -47,36 +52,48 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with: { bun-version-file: .bun-version }
+        with:
+          bun-version-file: .bun-version
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with: { path: ~/.bun/install/cache, key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }} }
+        with:
+          path: ~/.bun/install/cache
+          key: 'bun-${{ runner.os }}-${{ hashFiles(''bun.lock'') }}'
       - run: bun install --frozen-lockfile
       - run: bun run depcruise
 
   unit:
     runs-on: ubuntu-latest
+    env:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with: { bun-version-file: .bun-version }
+        with:
+          bun-version-file: .bun-version
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with: { path: ~/.bun/install/cache, key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }} }
+        with:
+          path: ~/.bun/install/cache
+          key: 'bun-${{ runner.os }}-${{ hashFiles(''bun.lock'') }}'
       - run: bun install --frozen-lockfile
       - run: bun run test:server -- --coverage --coverage-reporter=lcov
       - run: bun run test:dashboard
       - uses: codecov/codecov-action@0b35c9ecc4f0529d0eb674914510c22f85b196b4 # v7.1.0
-        if: ${{ env.CODECOV_TOKEN != '' }}
-        env: { CODECOV_TOKEN: '${{ secrets.CODECOV_TOKEN }}' }
-        with: { files: coverage/lcov.info, fail_ci_if_error: false }
+        if: env.CODECOV_TOKEN != ''
+        with:
+          files: coverage/lcov.info
+          fail_ci_if_error: false
 
   goldens:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with: { bun-version-file: .bun-version }
+        with:
+          bun-version-file: .bun-version
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with: { path: ~/.bun/install/cache, key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }} }
+        with:
+          path: ~/.bun/install/cache
+          key: 'bun-${{ runner.os }}-${{ hashFiles(''bun.lock'') }}'
       - run: bun install --frozen-lockfile
       - run: bun run test:goldens
       - run: bun run gen:openapi --check
@@ -88,16 +105,25 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with: { bun-version-file: .bun-version }
+        with:
+          bun-version-file: .bun-version
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with: { path: ~/.bun/install/cache, key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }} }
+        with:
+          path: ~/.bun/install/cache
+          key: 'bun-${{ runner.os }}-${{ hashFiles(''bun.lock'') }}'
       - run: bun install --frozen-lockfile
       - run: bun run build
       - run: cd packages/browserhive && bun pm pack --destination ../../dist-pack
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with: { name: browserhive-dist, path: packages/browserhive/dist, retention-days: 7 }
+        with:
+          name: browserhive-dist
+          path: packages/browserhive/dist
+          retention-days: 7
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with: { name: browserhive-tarball, path: dist-pack/*.tgz, retention-days: 7 }
+        with:
+          name: browserhive-tarball
+          path: dist-pack/*.tgz
+          retention-days: 7
 
   integration:
     strategy:
@@ -108,9 +134,12 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with: { bun-version-file: .bun-version }
+        with:
+          bun-version-file: .bun-version
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with: { path: ~/.bun/install/cache, key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }} }
+        with:
+          path: ~/.bun/install/cache
+          key: 'bun-${{ runner.os }}-${{ hashFiles(''bun.lock'') }}'
       - run: bun install --frozen-lockfile
       - id: pw
         shell: bash
@@ -127,7 +156,7 @@ jobs:
         run: bunx playwright install chromium --with-deps
       - shell: bash
         run: |
-          if [ "$RUNNER_OS" = "Windows" ]; then echo "BROWSERHIVE_DATA_DIR=$RUNNER_TEMP\\bh" >> "$GITHUB_ENV"; fi
+          if [ "$RUNNER_OS" = "Windows" ]; then printf 'BROWSERHIVE_DATA_DIR=%s\\bh\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"; fi
       - run: bun run test:integration
 
   e2e:
@@ -136,17 +165,40 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with: { bun-version-file: .bun-version }
+        with:
+          bun-version-file: .bun-version
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with: { path: ~/.bun/install/cache, key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }} }
+        with:
+          path: ~/.bun/install/cache
+          key: 'bun-${{ runner.os }}-${{ hashFiles(''bun.lock'') }}'
       - run: bun install --frozen-lockfile
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with: { name: browserhive-dist, path: packages/browserhive/dist }
+        with:
+          name: browserhive-dist
+          path: packages/browserhive/dist
       - run: bunx playwright install chromium --with-deps
-      - run: bun run test:e2e
+      # A real daemon from the built package, on a throwaway data dir. The E2E variables are set only
+      # for Playwright: the CLI rejects unknown BROWSERHIVE_* variables in its own environment.
+      - name: Start daemon
+        run: |
+          data="$RUNNER_TEMP/bh-e2e"
+          nohup bun packages/browserhive/dist/bin.js --admin --port 9876 --dataDir "$data" > "$RUNNER_TEMP/daemon.log" 2>&1 &
+          for _ in $(seq 1 60); do
+            if curl -sf http://127.0.0.1:9876/health > /dev/null; then break; fi
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:9876/health > /dev/null || { cat "$RUNNER_TEMP/daemon.log"; exit 1; }
+          echo "E2E_PASSWORD=$(tr -d '\n' < "$data/admin/credentials.txt")" >> "$GITHUB_ENV"
+      - name: Playwright
+        run: BROWSERHIVE_E2E_URL=http://127.0.0.1:9876 BROWSERHIVE_E2E_PASSWORD="$E2E_PASSWORD" bun run test:e2e
+      - if: failure()
+        run: cat "$RUNNER_TEMP/daemon.log" || true
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
-        with: { name: e2e-traces, path: packages/dashboard/test-results, retention-days: 7 }
+        with:
+          name: e2e-traces
+          path: packages/dashboard/test-results
+          retention-days: 7
 
   package:
     runs-on: ubuntu-latest
@@ -154,12 +206,17 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with: { bun-version-file: .bun-version }
+        with:
+          bun-version-file: .bun-version
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with: { path: ~/.bun/install/cache, key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }} }
+        with:
+          path: ~/.bun/install/cache
+          key: 'bun-${{ runner.os }}-${{ hashFiles(''bun.lock'') }}'
       - run: bun install --frozen-lockfile
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with: { name: browserhive-dist, path: packages/browserhive/dist }
+        with:
+          name: browserhive-dist
+          path: packages/browserhive/dist
       - run: bun run package:check
 
   licenses:
@@ -167,7 +224,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with: { bun-version-file: .bun-version }
+        with:
+          bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
       - run: bun run license:check
 
@@ -177,17 +235,20 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with: { bun-version-file: .bun-version }
+        with:
+          bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
       - run: bun audit --audit-level high
 
   commitlint:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    permissions: { pull-requests: read }
+    permissions:
+      pull-requests: read
     steps:
       - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
-        env: { GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
+        env:
+          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
         with:
           types: |
             feat
@@ -231,9 +292,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { fetch-depth: 0 }
+        with:
+          fetch-depth: 0
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with: { bun-version-file: .bun-version }
+        with:
+          bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
       - run: bun scripts/changeset-status.ts
-        env: { PR_LABELS: '${{ join(github.event.pull_request.labels.*.name, ",") }}' }
+        env:
+          PR_LABELS: "${{ join(github.event.pull_request.labels.*.name, ',') }}"
