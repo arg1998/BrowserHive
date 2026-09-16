@@ -4,6 +4,16 @@
   "description": "Local-first stealth browser MCP server: isolated Chromium sessions for LLM agents, vault-backed logins, human takeover, audit trail and an operator dashboard.",
   "type": "module",
   "license": "MIT",
+  "author": "Amir Ghorbani",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/arg1998/BrowserHive.git",
+    "directory": "packages/browserhive"
+  },
+  "homepage": "https://github.com/arg1998/BrowserHive#readme",
+  "bugs": {
+    "url": "https://github.com/arg1998/BrowserHive/issues"
+  },
   "sideEffects": false,
   "bin": {
     "browserhive": "./dist/bin.js"
