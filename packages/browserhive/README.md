@@ -64,17 +64,17 @@ await server.stop();
 
 ## Documentation
 
-- [Installation](https://github.com/browserhive/BrowserHive/blob/main/docs/guide/installation.md)
-- [Quick start](https://github.com/browserhive/BrowserHive/blob/main/docs/guide/quick-start.md)
-- [Connecting MCP clients](https://github.com/browserhive/BrowserHive/blob/main/docs/guide/mcp-clients.md)
-- [Security model](https://github.com/browserhive/BrowserHive/blob/main/docs/guide/security.md)
-- [Vault](https://github.com/browserhive/BrowserHive/blob/main/docs/guide/vault.md)
-- [Configuration](https://github.com/browserhive/BrowserHive/blob/main/docs/guide/configuration.md)
-- [CLI](https://github.com/browserhive/BrowserHive/blob/main/docs/guide/cli.md)
-- [Tool reference](https://github.com/browserhive/BrowserHive/blob/main/docs/reference/tools.md)
-- [All documentation](https://github.com/browserhive/BrowserHive/blob/main/docs/README.md)
+- [Installation](https://github.com/arg1998/BrowserHive/blob/main/docs/guide/installation.md)
+- [Quick start](https://github.com/arg1998/BrowserHive/blob/main/docs/guide/quick-start.md)
+- [Connecting MCP clients](https://github.com/arg1998/BrowserHive/blob/main/docs/guide/mcp-clients.md)
+- [Security model](https://github.com/arg1998/BrowserHive/blob/main/docs/guide/security.md)
+- [Vault](https://github.com/arg1998/BrowserHive/blob/main/docs/guide/vault.md)
+- [Configuration](https://github.com/arg1998/BrowserHive/blob/main/docs/guide/configuration.md)
+- [CLI](https://github.com/arg1998/BrowserHive/blob/main/docs/guide/cli.md)
+- [Tool reference](https://github.com/arg1998/BrowserHive/blob/main/docs/reference/tools.md)
+- [All documentation](https://github.com/arg1998/BrowserHive/blob/main/docs/README.md)
 
-Changelog: [CHANGELOG.md](https://github.com/browserhive/BrowserHive/blob/main/packages/browserhive/CHANGELOG.md)
+Changelog: [CHANGELOG.md](https://github.com/arg1998/BrowserHive/blob/main/packages/browserhive/CHANGELOG.md)
 
 ## License
 

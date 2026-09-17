@@ -4,7 +4,8 @@ import { buttonVariants } from '@/components/ui/button.tsx';
 import { hasSessionFilters, type SessionsSearch } from '../search.ts';
 
 /** Docs link for the zero-data CTA. */
-export const CONNECT_DOCS_URL = 'https://github.com/browserhive/browserhive#connect-an-mcp-client';
+export const CONNECT_DOCS_URL =
+  'https://github.com/arg1998/BrowserHive/blob/main/docs/guide/mcp-clients.md';
 
 /** Empty state for the current search. */
 export function SessionsEmpty({
