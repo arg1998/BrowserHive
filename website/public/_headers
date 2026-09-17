@@ -7,3 +7,6 @@
 
 /llms*.txt
   Access-Control-Allow-Origin: *
+
+/og/*
+  Cache-Control: public, max-age=86400

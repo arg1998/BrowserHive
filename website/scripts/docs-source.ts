@@ -135,7 +135,7 @@ function describe(body: string): string | undefined {
   if (!para) return undefined;
   const text = para
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/[`*_]/g, '')
+    .replace(/`|\*\*|(?<!\w)[*_]|[*_](?!\w)/g, '')
     .replace(/\s+/g, ' ')
     .trim();
   if (!text) return undefined;

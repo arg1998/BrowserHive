@@ -78,6 +78,14 @@ describe('pages', () => {
     expect(page.body.startsWith('The **43**')).toBe(true);
     expect(page.description).toBe('The 43 tools, see errors.');
   });
+
+  it('keeps underscores inside identifiers in the description', () => {
+    const page = splitPage(
+      '# A\n\nThe `request_attention` tool is **blocking** and _slow_.\n',
+      'a',
+    );
+    expect(page.description).toBe('The request_attention tool is blocking and slow.');
+  });
 });
 
 describe('links', () => {
