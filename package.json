@@ -37,7 +37,7 @@
     "init:browsers": "bun scripts/init-browsers.ts",
     "doctor": "bun packages/browserhive/src/bin.ts doctor",
     "browserhive": "bun scripts/run-from-source.ts",
-    "release:version": "changeset version && bun run sync:version && bun install --lockfile-only",
+    "release:version": "changeset version && bun run sync:version && bun run gen:openapi && bun install --lockfile-only",
     "release:publish": "bun run build && bun run package:check && changeset publish",
     "sync:version": "bun scripts/sync-version.ts",
     "typecheck:tsc": "tsc -b --pretty",
