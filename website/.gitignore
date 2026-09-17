@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.astro/
+.wrangler/
+# written by scripts/sync-docs.ts from ../docs
+src/content/docs/docs/
+src/generated/
+public/docs/
+public/_redirects

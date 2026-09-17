@@ -1,0 +1,36 @@
+---
+// The BrowserHive hexagon mark, inline so it can glow and scale crisply.
+interface Props {
+  size?: number;
+  class?: string;
+}
+const { size = 28, class: className } = Astro.props;
+const id = 'hive-mark-gradient';
+---
+
+<svg
+  class:list={['logo-mark', className]}
+  width={size}
+  height={size}
+  viewBox="0 0 32 32"
+  aria-hidden="true"
+  focusable="false"
+>
+  <defs>
+    <linearGradient id={id} x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5b95f5"></stop>
+      <stop offset="1" stop-color="#2459c9"></stop>
+    </linearGradient>
+  </defs>
+  <path
+    d="M16 3L27.26 9.5L27.26 22.5L16 29L4.74 22.5L4.74 9.5Z"
+    fill={`url(#${id})`}
+    stroke={`url(#${id})`}
+    stroke-width="3"
+    stroke-linejoin="round"></path>
+  <g fill="#fff" transform="translate(0 1.1)">
+    <path d="M16 7.71L19.38 9.66L19.38 13.56L16 15.51L12.62 13.56L12.62 9.66Z" fill="#ffc34d"></path>
+    <path d="M12.2 14.29L15.58 16.24L15.58 20.14L12.2 22.09L8.82 20.14L8.82 16.24Z" fill-opacity=".78"></path>
+    <path d="M19.8 14.29L23.18 16.24L23.18 20.14L19.8 22.09L16.42 20.14L16.42 16.24Z" fill-opacity=".78"></path>
+  </g>
+</svg>

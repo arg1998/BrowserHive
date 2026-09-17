@@ -18,6 +18,11 @@
       "matchPackageNames": ["@biomejs/biome", "typescript", "typescript7"]
     },
     {
+      "groupName": "website",
+      "matchFileNames": ["website/package.json"],
+      "matchPackageNames": ["astro", "@astrojs/*", "wrangler", "@fontsource-variable/*"]
+    },
+    {
       "groupName": "playwright+patchright",
       "matchPackageNames": ["playwright", "playwright-core", "patchright", "@playwright/test"]
     }

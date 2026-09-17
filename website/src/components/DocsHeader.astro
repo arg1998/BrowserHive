@@ -1,0 +1,123 @@
+---
+// Docs header: brand and version, search, section links, theme and GitHub. Layout grid follows Starlight's.
+import Search from '@astrojs/starlight/components/Search.astro';
+import SocialIcons from '@astrojs/starlight/components/SocialIcons.astro';
+import ThemeSelect from '@astrojs/starlight/components/ThemeSelect.astro';
+import { versionOf } from '../lib/versions.ts';
+import SiteTitle from './SiteTitle.astro';
+
+const { entry } = Astro.locals.starlightRoute;
+const base = versionOf(entry.id).base;
+const path = Astro.url.pathname;
+const links = [
+  { label: 'Guides', href: `${base}guide/quick-start/`, match: `${base}guide/` },
+  { label: 'Tools', href: `${base}reference/tools/`, match: `${base}reference/` },
+];
+---
+
+<div class="header">
+  <div class="title-wrapper sl-flex">
+    <SiteTitle />
+  </div>
+  <div class="sl-flex print:hidden search-wrap">
+    <Search />
+  </div>
+  <div class="sl-hidden md:sl-flex print:hidden right-group">
+    <nav class="top-links" aria-label="Docs sections">
+      {
+        links.map((l) => (
+          <a href={l.href} aria-current={path.startsWith(l.match) ? 'true' : undefined}>
+            {l.label}
+          </a>
+        ))
+      }
+    </nav>
+    <span class="sep" aria-hidden="true"></span>
+    <ThemeSelect />
+    <div class="sl-flex social-icons">
+      <SocialIcons />
+    </div>
+  </div>
+</div>
+
+<style>
+  .header {
+    display: flex;
+    gap: var(--sl-nav-gap);
+    justify-content: space-between;
+    align-items: center;
+    height: 100%;
+  }
+  .title-wrapper {
+    overflow: visible;
+    min-width: 0;
+  }
+  .right-group {
+    gap: 0.875rem;
+    align-items: center;
+  }
+  .social-icons {
+    align-items: center;
+  }
+  .top-links {
+    display: flex;
+    gap: 0.25rem;
+  }
+  .top-links a {
+    position: relative;
+    padding: 0.375rem 0.625rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--sl-color-gray-2);
+    text-decoration: none;
+    transition: color 0.15s, background-color 0.15s;
+  }
+  .top-links a:hover {
+    color: var(--sl-color-white);
+    background: var(--hive-bg-3);
+  }
+  .top-links a[aria-current] {
+    color: var(--sl-color-white);
+  }
+  .top-links a[aria-current]::after {
+    content: '';
+    position: absolute;
+    left: 0.625rem;
+    right: 0.625rem;
+    bottom: -0.7rem;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--hive-honey);
+    box-shadow: 0 0 10px var(--hive-honey);
+  }
+  .sep {
+    width: 1px;
+    height: 1.25rem;
+    background: var(--hive-line-strong);
+  }
+  @media (min-width: 50rem) {
+    :global(:root[data-has-sidebar]) {
+      --__sidebar-pad: calc(2 * var(--sl-nav-pad-x));
+    }
+    :global(:root:not([data-has-toc])) {
+      --__toc-width: 0rem;
+    }
+    .header {
+      --__sidebar-width: max(0rem, var(--sl-content-inline-start, 0rem) - var(--sl-nav-pad-x));
+      --__main-column-fr: calc(
+        (
+            100% + var(--__sidebar-pad, 0rem) - var(--__toc-width, var(--sl-sidebar-width)) -
+              (2 * var(--__toc-width, var(--sl-nav-pad-x))) - var(--sl-content-inline-start, 0rem) -
+              var(--sl-content-width)
+          ) / 2
+      );
+      display: grid;
+      grid-template-columns:
+        minmax(calc(var(--__sidebar-width) + max(0rem, var(--__main-column-fr) - var(--sl-nav-gap))), auto)
+        1fr
+        auto;
+      align-content: center;
+    }
+  }
+</style>
