@@ -108,8 +108,15 @@ jobs:
         env:
           ALIAS: pr-${{ github.event.pull_request.number }}
         run: |
-          bunx wrangler versions upload --preview-alias "$ALIAS" --message "PR #${{ github.event.pull_request.number }}" | tee upload.log
-          url="$(grep -oE 'https://'"$ALIAS"'-[^ ]+\.workers\.dev' upload.log | head -1)"
+          set -o pipefail
+          if ! bunx wrangler versions upload --preview-alias "$ALIAS" --message "PR #${{ github.event.pull_request.number }}" 2>&1 | tee upload.log; then
+            if grep -q 'does not yet exist' upload.log; then
+              echo "::notice::The Worker is created by the first production deploy from main; previews start after that."
+              exit 0
+            fi
+            exit 1
+          fi
+          url="$(grep -oE 'https://'"$ALIAS"'-[^ ]+\.workers\.dev' upload.log | head -1 || true)"
           if [ -n "$url" ]; then
             echo "### Website preview: $url" >> "$GITHUB_STEP_SUMMARY"
           fi
