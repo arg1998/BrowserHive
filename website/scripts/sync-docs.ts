@@ -154,6 +154,23 @@ function syncVersion(
   return { sidebar: sidebarFromReadme(readme, { version, published }), pages };
 }
 
+/**
+ * Cloudflare `_redirects`. Short URLs printed by the CLI and used as problem+json `type` identifiers
+ * (`/docs/errors#CODE`, `/docs/configuration`) land on the references; browsers keep the `#anchor`.
+ * Versioned links to the latest major keep working: `/docs/v1/x` → `/docs/x` while v1 is latest.
+ */
+export function redirects(latestLabel: string): string {
+  return [
+    '/docs/errors  /docs/reference/errors/  301',
+    '/docs/errors/  /docs/reference/errors/  301',
+    '/docs/configuration  /docs/reference/configuration/  301',
+    '/docs/configuration/  /docs/reference/configuration/  301',
+    `/docs/${latestLabel}  /docs/  302`,
+    `/docs/${latestLabel}/*  /docs/:splat  302`,
+    '',
+  ].join('\n');
+}
+
 export function syncDocs(): DocsManifest {
   const pkg = JSON.parse(readFileSync(join(REPO, 'packages/browserhive/package.json'), 'utf8'));
   let tags: string[] = [];
@@ -175,12 +192,7 @@ export function syncDocs(): DocsManifest {
   removeStale(CONTENT_OUT, written);
   removeStale(PUBLIC_OUT, written);
   writeIfChanged(MANIFEST_OUT, `${JSON.stringify(manifest, null, 2)}\n`, written);
-  // Versioned links to the latest major keep working: /docs/v1/x → /docs/x while v1 is latest.
-  writeIfChanged(
-    REDIRECTS_OUT,
-    `/docs/${latest.label}  /docs/  302\n/docs/${latest.label}/*  /docs/:splat  302\n`,
-    written,
-  );
+  writeIfChanged(REDIRECTS_OUT, redirects(latest.label), written);
   return manifest;
 }
 

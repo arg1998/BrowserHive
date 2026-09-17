@@ -63,6 +63,17 @@ export function OverviewPage() {
       <PageHeader
         title="Overview"
         description="Fleet health at a glance: live sessions, tool calls and errors."
+        learnMore={
+          <>
+            <p>
+              Tiles and the chart cover the window picked on the right; the sub line of each tile
+              gives the all-time total. Click a bar in the activity chart to open the sessions of
+              that time slice.
+            </p>
+            <p>An error is a tool call that failed or reported a failure in its result.</p>
+          </>
+        }
+        learnMoreDocs="dashboardOverview"
         actions={
           <TimeRangeControl
             value={search.range}

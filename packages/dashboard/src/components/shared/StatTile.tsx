@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { ICONS } from '@/lib/icons.ts';
 import type { Tone } from '@/lib/status-registry.ts';
 import { cn } from '@/lib/utils.ts';
-import { InfoDot } from './InfoDot.tsx';
+import { type InfoDocs, InfoDot } from './InfoDot.tsx';
 import { Sparkline } from './Sparkline.tsx';
 import { TONE_CLASSES } from './tones.ts';
 
@@ -19,6 +19,8 @@ export interface StatTileProps {
   readonly spark?: readonly number[];
   /** Explainer behind an info button next to the label (static tiles only). */
   readonly info?: ReactNode;
+  /** "Read the docs" link under `info`. */
+  readonly infoDocs?: InfoDocs;
   /** Makes the whole tile a link (hover lift + arrow + pointer). */
   readonly to?: string;
   /** Search params for `to`. */
@@ -34,6 +36,7 @@ export function StatTile({
   tone,
   spark,
   info,
+  infoDocs,
   to,
   search,
   className,
@@ -50,7 +53,13 @@ export function StatTile({
             className="size-4 shrink-0 text-subtle-foreground transition-[color,transform] duration-(--duration-fast) group-hover/tile:translate-x-0.5 group-hover/tile:-translate-y-0.5 group-hover/tile:text-foreground"
           />
         ) : info !== undefined ? (
-          <InfoDot label={`About ${label}`}>{info}</InfoDot>
+          <InfoDot
+            label={`About ${label}`}
+            align="end"
+            {...(infoDocs !== undefined && { docs: infoDocs })}
+          >
+            {info}
+          </InfoDot>
         ) : null}
       </div>
       <div

@@ -1,7 +1,9 @@
 /** @module features/vault/status/VaultDisabled — the one "vault is off" panel for `/vault` and `/vault/log`: what the vault does, three steps to enable it */
+
 import { Link } from '@tanstack/react-router';
 import { buttonVariants } from '@/components/ui/button.tsx';
 import { ICONS } from '@/lib/icons.ts';
+import { docsUrl } from '@/lib/links.ts';
 
 const STEPS = [
   {
@@ -40,6 +42,7 @@ const STEPS = [
 /** Disabled panel. `page` tailors the opening sentence. */
 export function VaultDisabled({ page = 'vault' }: { readonly page?: 'vault' | 'log' }) {
   const Lock = ICONS.lock;
+  const External = ICONS.external;
   return (
     <section
       aria-labelledby="vault-off-title"
@@ -74,13 +77,22 @@ export function VaultDisabled({ page = 'vault' }: { readonly page?: 'vault' | 'l
           </li>
         ))}
       </ol>
-      {page === 'log' ? (
-        <div className="flex flex-wrap gap-2 sm:pl-14">
+      <div className="flex flex-wrap gap-2 sm:pl-14">
+        {page === 'log' ? (
           <Link to="/vault" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
             Go to Vault
           </Link>
-        </div>
-      ) : null}
+        ) : null}
+        <a
+          href={docsUrl('vault')}
+          target="_blank"
+          rel="noreferrer"
+          className={buttonVariants({ variant: page === 'log' ? 'ghost' : 'outline', size: 'sm' })}
+        >
+          Read the vault guide
+          <External aria-hidden="true" />
+        </a>
+      </div>
     </section>
   );
 }

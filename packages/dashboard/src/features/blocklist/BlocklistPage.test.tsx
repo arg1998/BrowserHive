@@ -94,10 +94,12 @@ describe('BlocklistPage', () => {
     expect(view.reloads()).toBe(1);
   });
 
-  it('shows one compact not-configured state, no external links, and a disabled reload', async () => {
+  it('shows one compact not-configured state with a website docs link, and a disabled reload', async () => {
     const view = mount({ configured: false });
     await screen.findByText('No blocklist is configured');
-    expect(screen.queryByRole('link', { name: /docs/i })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Read the docs' }).getAttribute('href')).toBe(
+      'https://browserhive.ai/docs/guide/quick-start/#blocklist-file-format',
+    );
     expect(screen.queryByText('Patterns loaded')).toBeNull();
     expect(screen.queryByRole('region', { name: 'Blocked attempts' })).toBeNull();
     expect(screen.queryByRole('group', { name: 'Time range' })).toBeNull();

@@ -8,6 +8,7 @@ import { Hint } from '@/components/ui/tooltip.tsx';
 import { ICONS } from '@/lib/icons.ts';
 import { formatCombo } from '@/lib/keyboard.ts';
 import { HealthPill } from './HealthPill.tsx';
+import { HelpMenu } from './HelpMenu.tsx';
 import { NotificationBell } from './NotificationBell.tsx';
 import { PrincipalMenu } from './PrincipalMenu.tsx';
 import { isMacLike } from './platform.ts';
@@ -121,6 +122,7 @@ export function Topbar({
         )}
         <HealthPill compact={band === 'sm' || band === 'md'} />
         <NotificationBell />
+        <HelpMenu onOpenKeyboardMap={onOpenKeyboardMap} />
         <ThemeMenu />
         <PrincipalMenu
           compact={band !== 'wide' && band !== 'lg'}

@@ -170,10 +170,8 @@ export function OverviewTiles({ activity, system, rangeLabel, vaultFills }: Over
         <>
           Tool calls in the selected window that failed, counted over <b>{rangeLabel}</b> (the same
           window as the chart). Includes calls that <em>reported</em> a failure in an otherwise
-          successful result: a <span className="font-mono">vault_fill</span> that came back{' '}
-          <span className="font-mono">auth_failed</span>, a{' '}
-          <span className="font-mono">navigate</span> that returned HTTP 404, an attention request
-          that timed out.
+          successful result: a <code>vault_fill</code> that came back <code>auth_failed</code>, a{' '}
+          <code>navigate</code> that returned HTTP 404, an attention request that timed out.
         </>
       }
     />,

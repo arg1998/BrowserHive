@@ -43,6 +43,24 @@ const TAB_LABEL: Record<VaultTab, string> = {
 const TITLE = 'Vault';
 const DESCRIPTION = 'Which agents may fill which credentials, where. Policy only, never secrets.';
 
+/** Header explainer shared by every state of the page. */
+const VAULT_LEARN_MORE = {
+  learnMore: (
+    <>
+      <p>
+        An agent calls <code>vault_fill</code> with an entry name and the form fields. BrowserHive
+        checks the page origin, the session and the policy, types the credential into the page and
+        returns only a status. The secret never reaches the model or this dashboard.
+      </p>
+      <p>
+        Folder policies decide what agents may use by default; bindings allow single entries on
+        specific origins and sessions.
+      </p>
+    </>
+  ),
+  learnMoreDocs: 'vault',
+} as const;
+
 /** Vault page. */
 export function VaultPage() {
   const { search, set } = useSearchState<VaultSearch>();
@@ -60,7 +78,7 @@ export function VaultPage() {
   if (enabled === false || isVaultOff(overview.error)) {
     return (
       <div className="flex flex-col gap-6">
-        <PageHeader title={TITLE} description={DESCRIPTION} />
+        <PageHeader title={TITLE} description={DESCRIPTION} {...VAULT_LEARN_MORE} />
         <VaultDisabled />
       </div>
     );
@@ -68,7 +86,7 @@ export function VaultPage() {
   if (overview.isError) {
     return (
       <div className="flex flex-col gap-6">
-        <PageHeader title={TITLE} description={DESCRIPTION} />
+        <PageHeader title={TITLE} description={DESCRIPTION} {...VAULT_LEARN_MORE} />
         <ErrorState
           tier="region"
           variant="panel"
@@ -81,7 +99,7 @@ export function VaultPage() {
   if (overview.data === undefined) {
     return (
       <div className="flex flex-col gap-6">
-        <PageHeader title={TITLE} description={DESCRIPTION} />
+        <PageHeader title={TITLE} description={DESCRIPTION} {...VAULT_LEARN_MORE} />
         <SkeletonKv count={2} />
         <SkeletonCard />
       </div>
@@ -109,6 +127,7 @@ export function VaultPage() {
         title={TITLE}
         badge={<VaultStateBadge overview={data} status={status} />}
         description={DESCRIPTION}
+        {...VAULT_LEARN_MORE}
         meta={<VaultMeta overview={data} status={status} />}
         actions={
           <VaultActions

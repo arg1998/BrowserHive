@@ -102,11 +102,18 @@ export function SessionsPage() {
         description={count ?? 'Every browser an agent launched.'}
         learnMore={
           <>
-            Sessions are started by MCP clients with the <code>launch_session</code> tool. The
-            dashboard observes them and takes over when an agent asks; it never launches browsers
-            itself.
+            <p>
+              Sessions are started by MCP clients with the <code>launch_session</code> tool. Each
+              one is its own Chromium process with separate cookies and storage. The dashboard
+              observes them and takes over when an agent asks; it never launches browsers itself.
+            </p>
+            <p>
+              Archive hides finished sessions from this list. Delete erases their events, trace,
+              screenshots, profile and downloads.
+            </p>
           </>
         }
+        learnMoreDocs="dashboardSessions"
       />
       {search.since !== undefined || search.until !== undefined ? (
         <Callout

@@ -1,10 +1,26 @@
 /** @module features/system/components/SettingsList — a readable settings list: label (with an optional explainer), value (mono for identifiers, toned when it needs attention), a fix hint under problem values, copy on hover; wraps instead of overflowing at any width, paths between segments */
+import type { ReactNode } from 'react';
 import { CopyButton } from '@/components/shared/CopyButton.tsx';
 import { InfoDot } from '@/components/shared/InfoDot.tsx';
 import { TONE_CLASSES } from '@/components/shared/tones.ts';
 import { ICONS } from '@/lib/icons.ts';
+import { configKeyDocsUrl } from '@/lib/links.ts';
 import { cn } from '@/lib/utils.ts';
 import type { SettingRow } from '../model.ts';
+
+/** Flags (`--maxSessions`), MCP tool names (`vault_fill`) and paths (`/mcp`) in a hint render as code. */
+export function codeSpans(text: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  let offset = 0;
+  for (const [i, part] of text
+    .split(/(--[A-Za-z][\w-]*|\b[a-z]+_[a-z_]+\b|(?<![\w/])\/[a-z][\w/-]*)/)
+    .entries()) {
+    // Odd split parts are the captured matches; the character offset keys them stably.
+    nodes.push(i % 2 === 1 ? <code key={`code@${offset}`}>{part}</code> : part);
+    offset += part.length;
+  }
+  return nodes;
+}
 
 /** A path with a line-break opportunity after every separator, so it wraps between segments. */
 export function PathText({ value }: { readonly value: string }) {
@@ -53,7 +69,18 @@ export function SettingsList({
           <dt className="flex min-h-6 items-center gap-1 text-sm text-muted-foreground">
             <span>{row.label}</span>
             {row.hint !== undefined ? (
-              <InfoDot label={`About ${row.label}`}>{row.hint}</InfoDot>
+              <InfoDot
+                label={`About ${row.label}`}
+                align="start"
+                {...(row.configKey !== undefined && {
+                  docs: {
+                    href: configKeyDocsUrl(row.configKey),
+                    label: `Reference: --${row.configKey}`,
+                  },
+                })}
+              >
+                {codeSpans(row.hint)}
+              </InfoDot>
             ) : null}
           </dt>
           <dd className="flex min-w-0 flex-col gap-1">

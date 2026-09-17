@@ -4,12 +4,13 @@ import { useRouterState } from '@tanstack/react-router';
 import { useEffect } from 'react';
 import { useShortcut } from '@/app/providers/KeyboardProvider.tsx';
 import { BrandMark } from '@/components/shared/brand-mark.tsx';
-import { Button } from '@/components/ui/button.tsx';
+import { Button, buttonVariants } from '@/components/ui/button.tsx';
 import { Kbd } from '@/components/ui/kbd.tsx';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet.tsx';
 import { Hint } from '@/components/ui/tooltip.tsx';
 import { ICONS } from '@/lib/icons.ts';
 import { formatCombo } from '@/lib/keyboard.ts';
+import { DOCS_URL, RELEASES_URL, REPO_URL, releaseUrl, WEBSITE_URL } from '@/lib/links.ts';
 import { cn } from '@/lib/utils.ts';
 import { isMacLike } from './platform.ts';
 import { SidebarNav, useNavSignals } from './SidebarNav.tsx';
@@ -88,9 +89,33 @@ function Footer({
 }) {
   const { version } = useNavSignals();
   const Keyboard = ICONS.keyboard;
+  const Book = ICONS.book;
+  const GitHub = ICONS.github;
   if (collapsed) {
     return (
-      <div className="flex shrink-0 flex-col items-center gap-1 border-t border-sidebar-border py-3 pointer-coarse:hidden">
+      <div className="flex shrink-0 flex-col items-center gap-1 border-t border-sidebar-border py-3">
+        <Hint side="right" label="Documentation">
+          <a
+            href={DOCS_URL}
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Documentation (opens browserhive.ai)"
+            className={buttonVariants({ variant: 'ghost', size: 'icon' })}
+          >
+            <Book aria-hidden="true" className="size-5" />
+          </a>
+        </Hint>
+        <Hint side="right" label="GitHub repository">
+          <a
+            href={REPO_URL}
+            target="_blank"
+            rel="noreferrer"
+            aria-label="GitHub repository"
+            className={buttonVariants({ variant: 'ghost', size: 'icon' })}
+          >
+            <GitHub aria-hidden="true" className="size-5" />
+          </a>
+        </Hint>
         <Hint side="right" label="Keyboard shortcuts" shortcut="?">
           <Button
             type="button"
@@ -106,23 +131,68 @@ function Footer({
     );
   }
   return (
-    <div className="flex shrink-0 items-center justify-between gap-2 border-t border-sidebar-border px-3 py-3">
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        // Keyboard shortcuts are noise on touch screens.
-        className="text-muted-foreground pointer-coarse:hidden"
-        onClick={onOpenKeyboardMap}
-      >
-        <Keyboard aria-hidden="true" />
-        Shortcuts
-        <Kbd className="ml-1">?</Kbd>
-      </Button>
-      {version !== null ? (
-        <span className="ml-auto px-1 font-mono text-xs text-muted-foreground">v{version}</span>
-      ) : null}
+    <div className="flex shrink-0 flex-col gap-1 border-t border-sidebar-border px-3 pt-2 pb-3">
+      <nav aria-label="Resources" className="grid grid-cols-3 gap-1">
+        <FooterLink href={DOCS_URL} icon={<Book aria-hidden="true" />}>
+          Docs
+        </FooterLink>
+        <FooterLink href={REPO_URL} icon={<GitHub aria-hidden="true" />}>
+          GitHub
+        </FooterLink>
+        <FooterLink href={WEBSITE_URL} icon={<ICONS.globe aria-hidden="true" />}>
+          Website
+        </FooterLink>
+      </nav>
+      <div className="flex items-center justify-between gap-2">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          // Keyboard shortcuts are noise on touch screens.
+          className="text-muted-foreground pointer-coarse:hidden"
+          onClick={onOpenKeyboardMap}
+        >
+          <Keyboard aria-hidden="true" />
+          Shortcuts
+          <Kbd className="ml-1">?</Kbd>
+        </Button>
+        {version !== null ? (
+          <Hint side="top" label={`Release notes for v${version}`}>
+            <a
+              href={version.length > 0 ? releaseUrl(version) : RELEASES_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="ml-auto rounded-sm px-1 font-mono text-xs text-muted-foreground underline-offset-4 transition-colors focus-ring hover:text-foreground hover:underline"
+            >
+              v{version}
+            </a>
+          </Hint>
+        ) : null}
+      </div>
     </div>
+  );
+}
+
+/** A small outbound link in the sidebar footer (opens in a new tab). */
+function FooterLink({
+  href,
+  icon,
+  children,
+}: {
+  readonly href: string;
+  readonly icon: React.ReactNode;
+  readonly children: React.ReactNode;
+}) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="flex h-8 items-center justify-center gap-1.5 rounded-md px-1 text-xs font-medium whitespace-nowrap text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-ring [&_svg]:size-3.5 [&_svg]:shrink-0"
+    >
+      {icon}
+      {children}
+    </a>
   );
 }
 

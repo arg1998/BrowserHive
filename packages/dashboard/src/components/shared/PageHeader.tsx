@@ -1,7 +1,7 @@
 /** @module components/shared/PageHeader — page title (20px semibold), one-line description with an optional "Learn more" popover, right-aligned actions, meta line and tabs underneath */
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils.ts';
-import { InfoDot } from './InfoDot.tsx';
+import { type InfoDocs, InfoDot } from './InfoDot.tsx';
 
 /** Breadcrumb segment (the topbar renders the trail). */
 export interface Crumb {
@@ -23,6 +23,8 @@ export interface PageHeaderProps {
   readonly description?: ReactNode;
   /** Explainer shown in a popover behind an info button at the end of the description. */
   readonly learnMore?: ReactNode;
+  /** "Read the docs" link at the bottom of the `learnMore` popover. */
+  readonly learnMoreDocs?: InfoDocs;
   /** Primary + secondary actions, right-aligned (wrap under the title on narrow screens). */
   readonly actions?: ReactNode;
   /**
@@ -45,6 +47,7 @@ export function PageHeader({
   badge,
   description,
   learnMore,
+  learnMoreDocs,
   actions,
   actionsInline = false,
   meta,
@@ -80,7 +83,13 @@ export function PageHeader({
                 <p className="min-w-0 sm:truncate">{description}</p>
               ) : null}
               {learnMore !== undefined ? (
-                <InfoDot label={`Learn more about ${titleText}`}>{learnMore}</InfoDot>
+                <InfoDot
+                  label={`Learn more about ${titleText}`}
+                  align="start"
+                  {...(learnMoreDocs !== undefined && { docs: learnMoreDocs })}
+                >
+                  {learnMore}
+                </InfoDot>
               ) : null}
             </div>
           ) : null}

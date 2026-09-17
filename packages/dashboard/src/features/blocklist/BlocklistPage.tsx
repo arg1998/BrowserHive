@@ -1,4 +1,5 @@
 /** @module features/blocklist/BlocklistPage — `/blocklist`: short header (explainer in Learn more, Reload with a tooltip reason when disabled); not configured and never used → one compact empty state with a docs link; otherwise tiles, patterns + refused hosts as capped bar lists, and the attempts filter bar + table; live via the `blocklist` topic (spec 04 §12.6) */
+
 import type { BlockedRequestRow } from '@browserhive/contracts/http';
 import { useRef } from 'react';
 import { useTopic } from '@/app/providers/SocketProvider.tsx';
@@ -21,6 +22,7 @@ import { BarList } from '@/features/websites/components/BarList.tsx';
 import { toAppError } from '@/lib/api/errors.ts';
 import { formatNumber } from '@/lib/format/bytes.ts';
 import { ICONS } from '@/lib/icons.ts';
+import { docsUrl } from '@/lib/links.ts';
 import { useSearchState } from '@/lib/search/use-search-state.ts';
 import { cn } from '@/lib/utils.ts';
 import { useBlocklist, useReloadBlocklist } from './api.ts';
@@ -99,13 +101,19 @@ export function BlocklistPage() {
         description="URLs agents are refused, at the tool call and in the page."
         learnMore={
           <>
-            The navigation tools reject a blocked target outright, and in-page navigations to one
-            are aborted at the network layer, so a link or a redirect cannot get around the tool
-            check. A bare host such as <code className="font-mono">ads.example.com</code> blocks
-            that site and everything under it; <code className="font-mono">*.example.com</code>{' '}
-            covers subdomains.
+            <p>
+              The navigation tools reject a blocked target outright, and in-page navigations to one
+              are aborted at the network layer, so a link or a redirect cannot get around the tool
+              check.
+            </p>
+            <p>
+              A bare host such as <code>ads.example.com</code> blocks that site and everything under
+              it; <code>*.example.com</code> covers subdomains. It is a guardrail for agents, not an
+              egress firewall.
+            </p>
           </>
         }
+        learnMoreDocs="blocklistFile"
         actions={
           state.isPending ? undefined : (
             <div className="flex max-w-[calc(100vw-2rem)] flex-wrap items-center gap-2">
@@ -151,6 +159,7 @@ export function BlocklistPage() {
           variant="panel"
           icon="blocklist"
           title="No blocklist is configured"
+          docsHref={docsUrl('blocklistFile')}
           className="max-w-2xl"
           description={
             <>
@@ -263,6 +272,20 @@ export function BlocklistPage() {
 
           <Section
             title="Attempts"
+            info={
+              <>
+                <p>
+                  Each refused navigation, with where it was caught: at the tool call (the agent
+                  asked for a blocked URL) or in the page (a link, redirect or script tried to load
+                  one).
+                </p>
+                <p>
+                  The blocklist keeps agents away from destinations; it is not an egress firewall
+                  for everything the browser loads.
+                </p>
+              </>
+            }
+            infoDocs="securityBlocklist"
             description={
               window.since === undefined && window.until === undefined
                 ? 'Every refused navigation'
