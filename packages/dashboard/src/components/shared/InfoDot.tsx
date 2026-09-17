@@ -90,7 +90,7 @@ export function InfoDot({
             href={link.href}
             target="_blank"
             rel="noreferrer"
-            className="group/docs flex items-center justify-between gap-2 rounded-b-xl border-t px-4 py-2.5 text-sm font-medium text-accent-text transition-colors hover:bg-accent/60 focus-visible:bg-accent/60 focus-visible:outline-none"
+            className="group/docs flex items-center justify-between gap-2 rounded-b-xl border-t px-4 py-2.5 text-sm font-medium text-accent-text transition-colors hover:bg-accent/60 focus-ring-inset focus-visible:bg-accent/60"
           >
             {link.label}
             <External

@@ -148,7 +148,7 @@ export function TokensSection({ origin, authMode, daemon }: TokensSectionProps) 
                       href={docsUrl('agentTokens')}
                       target="_blank"
                       rel="noreferrer"
-                      className="font-medium text-accent-text underline-offset-4 hover:underline"
+                      className="rounded-sm font-medium text-accent-text underline-offset-4 focus-ring hover:underline"
                     >
                       MCP clients guide
                     </a>{' '}

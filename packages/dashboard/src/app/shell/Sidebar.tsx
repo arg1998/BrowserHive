@@ -162,7 +162,7 @@ function Footer({
               href={version.length > 0 ? releaseUrl(version) : RELEASES_URL}
               target="_blank"
               rel="noreferrer"
-              className="ml-auto rounded-sm px-1 font-mono text-xs text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
+              className="ml-auto rounded-sm px-1 font-mono text-xs text-muted-foreground underline-offset-4 transition-colors focus-ring hover:text-foreground hover:underline"
             >
               v{version}
             </a>
@@ -188,7 +188,7 @@ function FooterLink({
       href={href}
       target="_blank"
       rel="noreferrer"
-      className="flex h-8 items-center justify-center gap-1.5 rounded-md px-1 text-xs font-medium whitespace-nowrap text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none [&_svg]:size-3.5 [&_svg]:shrink-0"
+      className="flex h-8 items-center justify-center gap-1.5 rounded-md px-1 text-xs font-medium whitespace-nowrap text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-ring [&_svg]:size-3.5 [&_svg]:shrink-0"
     >
       {icon}
       {children}
