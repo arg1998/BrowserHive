@@ -88,7 +88,16 @@ try {
   });
   const call = (await waitFor(3)) as { result?: { isError?: boolean } };
   if (call.result?.isError) fail(`list_sessions errored: ${JSON.stringify(call)}`);
+  // Wait for the stdio server to exit: it holds the data-dir lock, and the http server below reuses the dir.
+  const stdioExited = new Promise<number | null>((resolve) =>
+    stdio.on('exit', (code) => resolve(code)),
+  );
   stdio.kill('SIGTERM');
+  const stdioCode = await Promise.race([
+    stdioExited,
+    new Promise<number>((r) => setTimeout(() => r(-1), 20_000)),
+  ]);
+  if (stdioCode === -1) fail('stdio server did not exit within 20 s of SIGTERM');
 
   // http: serve on a random port → /health ready → SIGTERM exits 0
   // `--port 0` is programmatic-only (spec 08 §2.1): ask the OS for a free port and pass it to the CLI.
