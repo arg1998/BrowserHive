@@ -1,5 +1,11 @@
 # browserhive
 
+## 0.1.2
+
+### Patch Changes
+
+- [#9](https://github.com/arg1998/BrowserHive/pull/9) [`52929f9`](https://github.com/arg1998/BrowserHive/commit/52929f9974cffee31a5213f8708ed8d6568e42d1) Thanks [@arg1998](https://github.com/arg1998)! - The npm package homepage now points at https://browserhive.ai.
+
 ## 0.1.1
 
 ### Patch Changes
