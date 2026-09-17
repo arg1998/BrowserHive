@@ -95,7 +95,6 @@ const features = [
 ];
 
 const extras = [
-  { title: 'One port', body: 'MCP, REST, WebSocket and dashboard share 127.0.0.1:9876.' },
   { title: 'OpenTelemetry', body: 'Opt-in OTLP traces, metrics and logs to any collector.' },
   {
     title: 'Guardrails',
@@ -805,7 +804,7 @@ function highlight(code: string, lang: string): string {
     position: absolute;
     left: 0.75rem;
     right: 0.75rem;
-    bottom: -1px;
+    bottom: 0;
     height: 2px;
     background: var(--hive-honey);
     box-shadow: 0 0 10px var(--hive-honey);
@@ -1498,7 +1497,7 @@ function highlight(code: string, lang: string): string {
   /* extras */
   .extras {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 1rem;
     margin: 1rem 0 0;
     padding: 0;
@@ -1594,8 +1593,14 @@ function highlight(code: string, lang: string): string {
     overflow: hidden;
     box-shadow: 0 30px 80px -40px rgb(0 0 0 / 0.7);
   }
+  /* Scrolls sideways on narrow screens without showing a scrollbar. */
   .code-tabs {
     overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+  .code-tabs::-webkit-scrollbar {
+    display: none;
   }
   .code-tabs button {
     white-space: nowrap;
@@ -1654,6 +1659,7 @@ function highlight(code: string, lang: string): string {
     color: var(--hive-text);
   }
   .ok-dot {
+    flex: none;
     width: 0.4rem;
     height: 0.4rem;
     border-radius: 50%;
@@ -1754,9 +1760,6 @@ function highlight(code: string, lang: string): string {
     .card-full .card-copy {
       flex: none;
       padding: 1.25rem 1.5rem 1.5rem;
-    }
-    .extras {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
     .code-card {
       position: relative;
