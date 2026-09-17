@@ -1,0 +1,5 @@
+# Humans, search engines and AI agents are all welcome.
+User-agent: *
+Allow: /
+
+Sitemap: https://browserhive.ai/sitemap-index.xml

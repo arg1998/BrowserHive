@@ -42,7 +42,16 @@
     "sync:version": "bun scripts/sync-version.ts",
     "typecheck:tsc": "tsc -b --pretty",
     "test:server": "bun test packages/contracts packages/core/src packages/core/test/persistence packages/core/test/lint packages/browserhive/src packages/browserhive/test/cli packages/browserhive/test/composition test/lint test/docs",
-    "test:dashboard": "bun test packages/dashboard/src"
+    "test:dashboard": "bun test packages/dashboard/src",
+    "website:install": "bun install --cwd website --frozen-lockfile",
+    "website:dev": "bun run --cwd website dev",
+    "website:sync": "bun run --cwd website sync",
+    "website:build": "bun run --cwd website build",
+    "website:preview": "bun run --cwd website preview",
+    "website:check": "bun run --cwd website check",
+    "website:test": "bun run --cwd website test",
+    "website:format": "bun run --cwd website format",
+    "website:deploy": "bun run --cwd website build && bun run --cwd website deploy"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",

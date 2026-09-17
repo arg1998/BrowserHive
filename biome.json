@@ -14,6 +14,7 @@
       "!scratchpad",
       "!specs",
       "!docs",
+      "!website",
       "!**/test/goldens/**/*.json",
       "!**/test/fixtures/**/*.json",
       "!packages/core/test/persistence/fixtures/*.json"

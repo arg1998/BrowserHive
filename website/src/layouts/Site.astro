@@ -1,0 +1,425 @@
+---
+// Shell for non-docs pages: head, theme bootstrap (shared with the docs), header and footer.
+import '@fontsource-variable/geist';
+import '@fontsource-variable/jetbrains-mono';
+import '../styles/theme.css';
+import LogoMark from '../components/LogoMark.astro';
+import { latest } from '../lib/versions.ts';
+
+interface Props {
+  title: string;
+  description: string;
+}
+const { title, description } = Astro.props;
+const canonical = new URL(Astro.url.pathname, Astro.site);
+const nav = [
+  { label: 'Docs', href: latest.base },
+  { label: 'Quick start', href: `${latest.base}guide/quick-start/` },
+  { label: 'Tools', href: `${latest.base}reference/tools/` },
+  { label: 'Security', href: `${latest.base}guide/security/` },
+];
+---
+
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="sitemap" href="/sitemap-index.xml" />
+    <link rel="alternate" type="text/plain" href="/llms.txt" title="llms.txt" />
+    <meta name="theme-color" content="#07090d" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="BrowserHive" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta name="twitter:card" content="summary" />
+    <script is:inline>
+      // Same storage key as the docs theme picker, so both halves of the site agree.
+      (() => {
+        let stored = '';
+        try {
+          stored = localStorage.getItem('starlight-theme') || '';
+        } catch {}
+        const theme =
+          stored === 'light' || stored === 'dark'
+            ? stored
+            : matchMedia('(prefers-color-scheme: light)').matches
+              ? 'light'
+              : 'dark';
+        document.documentElement.dataset.theme = theme;
+      })();
+    </script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="site-header" data-site-header>
+      <div class="wrap bar">
+        <a href="/" class="brand" aria-label="BrowserHive home">
+          <LogoMark size={28} />
+          <span translate="no">BrowserHive</span>
+        </a>
+        <nav class="links" aria-label="Main">
+          {nav.map((l) => <a href={l.href}>{l.label}</a>)}
+        </nav>
+        <div class="actions">
+          <button type="button" class="icon-btn" data-theme-toggle aria-label="Toggle color theme">
+            <svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>
+            <svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z"></path></svg>
+          </button>
+          <a class="icon-btn" href="https://github.com/arg1998/BrowserHive" aria-label="BrowserHive on GitHub">
+            <svg viewBox="0 0 24 24" aria-hidden="true" class="fill"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.08-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.82 1.19 3.08 0 4.41-2.69 5.39-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"></path></svg>
+          </a>
+          <a class="btn btn-primary btn-sm" href={`${latest.base}guide/quick-start/`}>Get started</a>
+        </div>
+      </div>
+    </header>
+
+    <main id="main">
+      <slot />
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap footer-grid">
+        <div class="footer-brand">
+          <a href="/" class="brand">
+            <LogoMark size={24} />
+            <span>BrowserHive</span>
+          </a>
+          <p>Local-first browser sessions for AI agents. MIT licensed.</p>
+        </div>
+        <div>
+          <p class="footer-h">Docs</p>
+          <a href={`${latest.base}guide/installation/`}>Installation</a>
+          <a href={`${latest.base}guide/quick-start/`}>Quick start</a>
+          <a href={`${latest.base}guide/mcp-clients/`}>MCP clients</a>
+          <a href={`${latest.base}reference/tools/`}>Tool reference</a>
+        </div>
+        <div>
+          <p class="footer-h">Project</p>
+          <a href="https://github.com/arg1998/BrowserHive">GitHub</a>
+          <a href="https://www.npmjs.com/package/browserhive">npm</a>
+          <a href="https://github.com/arg1998/BrowserHive/releases">Releases</a>
+          <a href="https://github.com/arg1998/BrowserHive/blob/main/SECURITY.md">Security policy</a>
+        </div>
+        <div>
+          <p class="footer-h">For agents</p>
+          <a href="/llms.txt">llms.txt</a>
+          <a href="/llms-full.txt">llms-full.txt</a>
+          <a href={`${latest.base}index.md`}>Docs as Markdown</a>
+        </div>
+      </div>
+      <div class="wrap footer-base">
+        <span>© {new Date().getFullYear()} BrowserHive contributors</span>
+        <span class="mono">v{latest.version}</span>
+      </div>
+    </footer>
+
+    <script>
+      const toggle = document.querySelector<HTMLButtonElement>('[data-theme-toggle]');
+      toggle?.addEventListener('click', () => {
+        const next = document.documentElement.dataset['theme'] === 'light' ? 'dark' : 'light';
+        document.documentElement.dataset['theme'] = next;
+        try {
+          localStorage.setItem('starlight-theme', next);
+        } catch {
+          // Storage can be unavailable; the toggle still works for this page view.
+        }
+      });
+      const header = document.querySelector<HTMLElement>('[data-site-header]');
+      const onScroll = () => header?.toggleAttribute('data-scrolled', window.scrollY > 8);
+      window.addEventListener('scroll', onScroll, { passive: true });
+      onScroll();
+    </script>
+  </body>
+</html>
+
+<style is:global>
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+  html {
+    color-scheme: dark;
+    scroll-behavior: smooth;
+  }
+  html[data-theme='light'] {
+    color-scheme: light;
+  }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--hive-bg);
+    color: var(--hive-text);
+    font-family: var(--sl-font);
+    font-size: 1rem;
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+  a {
+    color: inherit;
+  }
+  img,
+  svg {
+    display: block;
+  }
+  .wrap {
+    width: min(100% - 2rem, 76rem);
+    margin-inline: auto;
+  }
+  .mono {
+    font-family: var(--sl-font-mono);
+  }
+  .skip {
+    position: absolute;
+    left: -9999px;
+  }
+  .skip:focus {
+    left: 1rem;
+    top: 1rem;
+    z-index: 100;
+    padding: 0.5rem 1rem;
+    background: var(--hive-bg-3);
+    border-radius: 0.5rem;
+  }
+  :focus-visible {
+    outline: 2px solid var(--hive-honey);
+    outline-offset: 2px;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: 2.875rem;
+    padding: 0 1.25rem;
+    border-radius: 0.75rem;
+    border: 1px solid transparent;
+    font: inherit;
+    font-size: 0.9375rem;
+    font-weight: 560;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1),
+      box-shadow 0.2s,
+      background-color 0.2s,
+      border-color 0.2s;
+  }
+  .btn:hover {
+    transform: translateY(-1px);
+  }
+  .btn:active {
+    transform: translateY(0);
+  }
+  .btn-sm {
+    height: 2.25rem;
+    padding: 0 0.875rem;
+    border-radius: 0.625rem;
+    font-size: 0.875rem;
+  }
+  .btn-primary {
+    color: #fff;
+    background: linear-gradient(180deg, #5b95f5, #2f6fe6);
+    border-color: rgb(255 255 255 / 0.12);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.25),
+      0 6px 24px -6px rgb(59 122 240 / 0.6);
+  }
+  .btn-primary:hover {
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.25),
+      0 10px 34px -6px rgb(59 122 240 / 0.8);
+  }
+  .btn-ghost {
+    color: var(--hive-text);
+    background: var(--hive-bg-2);
+    border-color: var(--hive-line-strong);
+  }
+  .btn-ghost:hover {
+    border-color: var(--hive-honey);
+    box-shadow: 0 0 0 3px var(--hive-honey-soft);
+  }
+
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    border-bottom: 1px solid transparent;
+    transition:
+      background-color 0.25s,
+      border-color 0.25s;
+  }
+  .site-header[data-scrolled] {
+    background: color-mix(in srgb, var(--hive-bg) 78%, transparent);
+    backdrop-filter: saturate(160%) blur(14px);
+    -webkit-backdrop-filter: saturate(160%) blur(14px);
+    border-bottom-color: var(--hive-line);
+  }
+  .bar {
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    height: 4rem;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-weight: 660;
+    font-size: 1.0625rem;
+    letter-spacing: -0.02em;
+    text-decoration: none;
+    color: var(--hive-text);
+  }
+  .brand .logo-mark {
+    filter: drop-shadow(0 0 12px rgb(59 122 240 / 0.5));
+    transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .brand:hover .logo-mark {
+    transform: rotate(60deg);
+  }
+  .links {
+    display: flex;
+    gap: 0.25rem;
+  }
+  .links a {
+    padding: 0.4rem 0.75rem;
+    border-radius: 0.5rem;
+    font-size: 0.9rem;
+    color: var(--hive-muted);
+    text-decoration: none;
+    transition:
+      color 0.15s,
+      background-color 0.15s;
+  }
+  .links a:hover {
+    color: var(--hive-text);
+    background: var(--hive-bg-3);
+  }
+  .actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+  }
+  .icon-btn {
+    display: grid;
+    place-items: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 0.625rem;
+    border: 0;
+    background: none;
+    color: var(--hive-muted);
+    cursor: pointer;
+    transition:
+      color 0.15s,
+      background-color 0.15s;
+  }
+  .icon-btn:hover {
+    color: var(--hive-text);
+    background: var(--hive-bg-3);
+  }
+  .icon-btn svg {
+    width: 1.125rem;
+    height: 1.125rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .icon-btn svg.fill {
+    fill: currentColor;
+    stroke: none;
+  }
+  html[data-theme='dark'] .icon-btn .moon,
+  html[data-theme='light'] .icon-btn .sun {
+    display: none;
+  }
+  .actions .btn {
+    margin-left: 0.5rem;
+  }
+
+  .site-footer {
+    margin-top: 2rem;
+    border-top: 1px solid var(--hive-line);
+    background: linear-gradient(180deg, var(--hive-bg-2), var(--hive-bg));
+  }
+  .footer-grid {
+    display: grid;
+    grid-template-columns: 2fr repeat(3, 1fr);
+    gap: 2rem;
+    padding-block: 3.5rem 2.5rem;
+  }
+  .footer-brand p {
+    margin: 0.875rem 0 0;
+    max-width: 18rem;
+    color: var(--hive-muted);
+    font-size: 0.9rem;
+  }
+  .footer-h {
+    margin: 0 0 0.75rem;
+    font-family: var(--sl-font-mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--hive-dim);
+  }
+  .footer-grid a:not(.brand) {
+    display: block;
+    width: fit-content;
+    padding: 0.2rem 0;
+    font-size: 0.9rem;
+    color: var(--hive-muted);
+    text-decoration: none;
+  }
+  .footer-grid a:not(.brand):hover {
+    color: var(--hive-text);
+  }
+  .footer-base {
+    display: flex;
+    justify-content: space-between;
+    padding-block: 1.25rem 2rem;
+    border-top: 1px solid var(--hive-line);
+    font-size: 0.8125rem;
+    color: var(--hive-dim);
+  }
+
+  @media (max-width: 56rem) {
+    .links {
+      display: none;
+    }
+    .footer-grid {
+      grid-template-columns: 1fr 1fr;
+    }
+    .footer-brand {
+      grid-column: 1 / -1;
+    }
+  }
+  @media (max-width: 30rem) {
+    .actions .btn {
+      display: none;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+</style>

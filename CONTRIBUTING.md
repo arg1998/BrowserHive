@@ -32,6 +32,29 @@ Bun ≥ 1.4 is the only runtime. No Node.js, no native toolchain.
 - Contract changes (tool schemas, REST, WS, config keys, DB schema) re-bless goldens with an explanation.
 - The definition of done is `specs/05-coding-standards.md` §14.
 
+## Website and docs site
+
+`website/` is browserhive.ai: the landing page and the docs, built with Astro and Starlight and served by
+Cloudflare Workers static assets. It is a separate Bun project with its own lockfile and lint config, outside the
+workspace.
+
+```bash
+bun run website:install
+bun run website:dev      # http://localhost:4321, re-syncs when docs/ changes
+bun run website:check    # astro check, biome, unit tests
+bun run website:build    # static output in website/dist
+bun run website:preview  # build, then serve it with wrangler as Cloudflare would
+```
+
+`docs/` stays the only source of the docs: `website/scripts/sync-docs.ts` copies it into the site at build time,
+takes page titles from the H1, turns relative `.md` links into site routes and builds the sidebar from
+`docs/README.md`. Write docs as plain Markdown that reads well on GitHub. The current major is served at `/docs/`
+from the working tree; each older major is served at `/docs/vN/` from its newest `browserhive@N.x.y` release tag.
+
+CI keeps the two apart. `website.yml` builds on changes to `website/`, `docs/` or the package version, deploys
+previews for PRs and production from `main`. In `ci.yml`, a PR that only touches `website/` skips the library jobs,
+and one that only touches `docs/` or root Markdown runs just the docs gates.
+
 ## Reporting security issues
 
 See `SECURITY.md`.

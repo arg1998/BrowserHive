@@ -1,0 +1,148 @@
+name: website
+
+# browserhive.ai: landing page and docs, built from website/ and docs/ and served by Cloudflare
+# Workers static assets. Independent of the library pipeline in ci.yml.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: website-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  # The site depends on website/, docs/, the package version (which picks the docs major) and
+  # this workflow. Skipped jobs report success, so this workflow can be a required check.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      site: ${{ steps.filter.outputs.site }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - id: filter
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ] || [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "site=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff --name-only "$BASE...$HEAD")"
+          if printf '%s\n' "$changed" | grep -qE '^(website/|docs/|packages/browserhive/package\.json$|\.github/workflows/website\.yml$)'; then
+            site=true
+          else
+            site=false
+          fi
+          echo "site=$site" >> "$GITHUB_OUTPUT"
+          echo "site=$site"
+
+  build:
+    needs: changes
+    if: needs.changes.outputs.site == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      # Full history and tags: older docs majors are read from release tags.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: 'bun-website-${{ runner.os }}-${{ hashFiles(''website/bun.lock'') }}'
+      - run: bun install --frozen-lockfile
+      - run: bun run check
+      - run: bunx astro build
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: website-dist
+          path: website/dist
+          include-hidden-files: true
+          retention-days: 7
+
+  # Preview on a workers.dev URL for PRs from this repository (forks get no secrets).
+  preview:
+    needs: build
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - if: env.CLOUDFLARE_API_TOKEN == ''
+        working-directory: .
+        run: echo "::notice::CLOUDFLARE_API_TOKEN is not set; skipping the preview deploy."
+      - if: env.CLOUDFLARE_API_TOKEN != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - if: env.CLOUDFLARE_API_TOKEN != ''
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - if: env.CLOUDFLARE_API_TOKEN != ''
+        run: bun install --frozen-lockfile
+      - if: env.CLOUDFLARE_API_TOKEN != ''
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: website-dist
+          path: website/dist
+      - if: env.CLOUDFLARE_API_TOKEN != ''
+        name: Upload preview version
+        env:
+          ALIAS: pr-${{ github.event.pull_request.number }}
+        run: |
+          bunx wrangler versions upload --preview-alias "$ALIAS" --message "PR #${{ github.event.pull_request.number }}" | tee upload.log
+          url="$(grep -oE 'https://'"$ALIAS"'-[^ ]+\.workers\.dev' upload.log | head -1)"
+          if [ -n "$url" ]; then
+            echo "### Website preview: $url" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment:
+      name: website
+      url: https://browserhive.ai
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - if: env.CLOUDFLARE_API_TOKEN == ''
+        working-directory: .
+        run: echo "::warning::CLOUDFLARE_API_TOKEN is not set; the site was built but not deployed."
+      - if: env.CLOUDFLARE_API_TOKEN != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - if: env.CLOUDFLARE_API_TOKEN != ''
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - if: env.CLOUDFLARE_API_TOKEN != ''
+        run: bun install --frozen-lockfile
+      - if: env.CLOUDFLARE_API_TOKEN != ''
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: website-dist
+          path: website/dist
+      - if: env.CLOUDFLARE_API_TOKEN != ''
+        run: bunx wrangler deploy --message "${{ github.sha }}"

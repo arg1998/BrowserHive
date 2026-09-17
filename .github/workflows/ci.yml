@@ -13,7 +13,41 @@ permissions:
   contents: read
 
 jobs:
+  # Decides which jobs a change needs, so a website-only PR does not run the library pipeline.
+  # Jobs skipped through `if` report success and keep the required checks satisfied; a
+  # workflow-level `paths` filter would leave them pending forever instead.
+  #   code: something outside website/, docs/ and root Markdown changed → everything runs
+  #   docs: docs/ or root Markdown changed → the generated-docs and link gates run
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+      docs: ${{ steps.filter.outputs.docs }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - id: filter
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "No usable base commit; running everything."
+            { echo "code=true"; echo "docs=true"; } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff --name-only "$BASE...$HEAD")"
+          printf 'Changed files:\n%s\n' "$changed"
+          light='^(website/|\.github/workflows/website\.yml$|docs/|[A-Z]+\.md$)'
+          if [ -z "$changed" ] || printf '%s\n' "$changed" | grep -qvE "$light"; then code=true; else code=false; fi
+          if printf '%s\n' "$changed" | grep -qE '^(docs/|[A-Z]+\.md$)'; then docs=true; else docs=false; fi
+          { echo "code=$code"; echo "docs=$docs"; } >> "$GITHUB_OUTPUT"
+          echo "code=$code docs=$docs"
+
   lint:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -34,6 +68,8 @@ jobs:
           GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
 
   typecheck:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -48,6 +84,8 @@ jobs:
       - run: bun run typecheck
 
   depcruise:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -62,6 +100,8 @@ jobs:
       - run: bun run depcruise
 
   unit:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     env:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
@@ -84,6 +124,8 @@ jobs:
           fail_ci_if_error: false
 
   goldens:
+    needs: changes
+    if: needs.changes.outputs.code == 'true' || needs.changes.outputs.docs == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -99,8 +141,12 @@ jobs:
       - run: bun run gen:openapi --check
       - run: bun run gen:docs --check
       - run: bun run gen:db-types --check
+      # Docs link and spelling gates; also part of `unit`, repeated here for docs-only changes.
+      - run: bun test test/docs
 
   build:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -128,26 +174,40 @@ jobs:
   integration:
     # Windows is not yet supported end to end (issue #2); it runs for
     # visibility but does not fail the workflow.
+    # Gated per step rather than per job: a matrix job skipped through a job-level `if` reports as
+    # `integration` instead of `integration (ubuntu-latest)`, which would leave that required check
+    # pending.
+    needs: changes
     continue-on-error: ${{ matrix.os == 'windows-latest' }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    env:
+      RUN: ${{ needs.changes.outputs.code }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - if: env.RUN != 'true'
+        run: echo "No library changes; integration tests not needed."
+      - if: env.RUN == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - if: env.RUN == 'true'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: .bun-version
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - if: env.RUN == 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.bun/install/cache
           key: 'bun-${{ runner.os }}-${{ hashFiles(''bun.lock'') }}'
-      - run: bun install --frozen-lockfile
-      - id: pw
+      - if: env.RUN == 'true'
+        run: bun install --frozen-lockfile
+      - if: env.RUN == 'true'
+        id: pw
         shell: bash
         run: echo "version=$(bun -e "console.log(require('playwright-core/package.json').version)")" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - if: env.RUN == 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         id: pw-cache
         with:
           path: |
@@ -155,12 +215,14 @@ jobs:
             ~/Library/Caches/ms-playwright
             ~\AppData\Local\ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
-      - if: steps.pw-cache.outputs.cache-hit != 'true'
+      - if: env.RUN == 'true' && steps.pw-cache.outputs.cache-hit != 'true'
         run: bunx playwright install chromium --with-deps
-      - shell: bash
+      - if: env.RUN == 'true'
+        shell: bash
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then printf 'BROWSERHIVE_DATA_DIR=%s\\bh\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"; fi
-      - run: bun run test:integration
+      - if: env.RUN == 'true'
+        run: bun run test:integration
 
   e2e:
     runs-on: ubuntu-latest
@@ -225,6 +287,8 @@ jobs:
       - run: bun run package:check
 
   licenses:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -235,6 +299,8 @@ jobs:
       - run: bun run license:check
 
   audit:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     continue-on-error: ${{ github.event_name == 'pull_request' }}
     steps:
@@ -290,6 +356,7 @@ jobs:
             deps
             release
             security
+            website
           requireScope: false
 
   changeset:

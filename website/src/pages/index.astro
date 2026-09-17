@@ -1,0 +1,1822 @@
+---
+// Landing page. Every claim here comes from the README and docs; keep them in step.
+import LogoMark from '../components/LogoMark.astro';
+import Site from '../layouts/Site.astro';
+import { latest } from '../lib/versions.ts';
+
+const docs = latest.base;
+
+const installs = [
+  { id: 'bun', label: 'bun', cmd: 'bun add -g browserhive' },
+  { id: 'npm', label: 'npm', cmd: 'npm i -g browserhive' },
+  { id: 'pnpm', label: 'pnpm', cmd: 'pnpm add -g browserhive' },
+];
+
+const console_ = [
+  {
+    t: '14:02:11',
+    tool: 'launch_session',
+    arg: '{ slug: "research" }',
+    res: 'research-a1b2c3d4',
+    kind: 'ok',
+  },
+  {
+    t: '14:02:12',
+    tool: 'navigate',
+    arg: '"https://app.example.com/login"',
+    res: 'ok',
+    kind: 'ok',
+  },
+  {
+    t: '14:02:13',
+    tool: 'vault_fill',
+    arg: '{ entry_name: "Example" }',
+    res: 'success · redacted',
+    kind: 'vault',
+  },
+  { t: '14:02:15', tool: 'snapshot', arg: '{ session_id }', res: 'ok', kind: 'ok' },
+  {
+    t: '14:02:16',
+    tool: 'request_attention',
+    arg: '{ reason: "2FA code" }',
+    res: 'waiting for you',
+    kind: 'attn',
+  },
+  { t: '14:02:41', tool: 'click', arg: '{ selector: "#export" }', res: 'ok', kind: 'ok' },
+];
+
+const cells = [
+  { name: 'research', state: 'live' },
+  { name: 'billing', state: 'attn' },
+  { name: 'crm-sync', state: 'live' },
+  { name: 'qa-login', state: 'idle' },
+  { name: 'scrape-02', state: 'live' },
+];
+
+const features = [
+  {
+    tag: '01',
+    title: 'Isolated sessions',
+    body: 'One Chromium process and context per session: separate cookies, storage, IndexedDB and service workers. In memory by default, persistent profiles on request.',
+    href: `${docs}guide/quick-start/`,
+    size: 'wide',
+    art: 'cells',
+  },
+  {
+    tag: '02',
+    title: 'Logins the model never sees',
+    body: 'The agent names a Bitwarden entry. BrowserHive checks origin, session and principal, types the credential and returns only a status.',
+    href: `${docs}guide/vault/`,
+    size: 'tall',
+    art: 'vault',
+  },
+  {
+    tag: '03',
+    title: 'Human takeover',
+    body: '`request_attention` blocks the agent while you drive its browser live, then resolves with a message back.',
+    href: `${docs}guide/attention/`,
+    art: 'attn',
+  },
+  {
+    tag: '04',
+    title: 'Stealth, honestly scoped',
+    body: 'Full Chromium in new-headless mode with Patchright, automation flags removed and a user agent derived from your real host. The limits are documented.',
+    href: `${docs}guide/stealth/`,
+    art: 'stealth',
+  },
+  {
+    tag: '05',
+    title: 'Audit trail and trace replay',
+    body: 'Every tool call, navigation, vault access and blocked URL lands in SQLite. Replay any session in the built-in Trace Viewer.',
+    href: `${docs}guide/dashboard/`,
+    size: 'full',
+    art: 'audit',
+  },
+];
+
+const extras = [
+  { title: 'One port', body: 'MCP, REST, WebSocket and dashboard share 127.0.0.1:9876.' },
+  { title: 'OpenTelemetry', body: 'Opt-in OTLP traces, metrics and logs to any collector.' },
+  {
+    title: 'Guardrails',
+    body: 'URL blocklist with hot reload, launch-argument deny-list, per-session ownership.',
+  },
+  {
+    title: 'Operator dashboard',
+    body: 'Sessions with live view, attention queue, vault log, logs and effective config.',
+  },
+];
+
+const clients = [
+  {
+    id: 'claude-code',
+    label: 'Claude Code',
+    lang: 'bash',
+    code: 'claude mcp add --transport http browserhive http://127.0.0.1:9876/mcp',
+  },
+  {
+    id: 'json',
+    label: 'Cursor · VS Code · any client',
+    lang: 'json',
+    code: `{
+  "mcpServers": {
+    "browserhive": {
+      "type": "http",
+      "url": "http://127.0.0.1:9876/mcp"
+    }
+  }
+}`,
+  },
+  {
+    id: 'stdio',
+    label: 'stdio',
+    lang: 'json',
+    code: `{
+  "mcpServers": {
+    "browserhive": {
+      "command": "browserhive",
+      "args": ["--transport", "stdio"]
+    }
+  }
+}`,
+  },
+];
+
+/** Minimal JSON/shell highlighting without shipping a highlighter. */
+function highlight(code: string, lang: string): string {
+  const esc = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  if (lang === 'json') {
+    return esc
+      .replace(/("[^"]*")(\s*:)/g, '<span class="k">$1</span>$2')
+      .replace(/(:\s*|\[|,\s*)("[^"]*")/g, '$1<span class="s">$2</span>');
+  }
+  return esc
+    .replace(/^(\w+)/, '<span class="c">$1</span>')
+    .replace(/(--[\w-]+)/g, '<span class="f">$1</span>')
+    .replace(/(https?:\/\/\S+)/g, '<span class="s">$1</span>');
+}
+---
+
+<Site
+  title="BrowserHive · Browser sessions for AI agents"
+  description="BrowserHive is a local MCP server that gives any agent isolated, stealthy Chromium sessions, logins through your password manager, human takeover and a replayable audit trail."
+>
+  <!-- ============ HERO ============ -->
+  <section class="hero">
+    <div class="hero-bg" aria-hidden="true">
+      <div class="hex-field"></div>
+      <div class="glow g1"></div>
+      <div class="glow g2"></div>
+    </div>
+    <div class="wrap hero-grid">
+      <div class="hero-copy">
+        <a class="pill" href="https://github.com/arg1998/BrowserHive/releases">
+          <span class="pill-tag">v{latest.version}</span>
+          <span>Open source MCP server · MIT</span>
+          <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 2.5 8 6l-3.5 3.5"></path></svg>
+        </a>
+        <h1>
+          A browser hive<br />for your <span class="hl">agents</span>.
+        </h1>
+        <p class="sub">
+          Isolated, stealthy Chromium sessions for any MCP client, with password logins the model never
+          sees, human takeover when it gets stuck and a replayable audit trail. Everything runs on your
+          machine.
+        </p>
+
+        <div class="install" data-tabs>
+          <div class="install-tabs" role="tablist" aria-label="Package manager">
+            {
+              installs.map((i, n) => (
+                <button
+                  type="button"
+                  role="tab"
+                  id={`install-tab-${i.id}`}
+                  aria-controls={`install-panel-${i.id}`}
+                  aria-selected={n === 0 ? 'true' : 'false'}
+                  tabindex={n === 0 ? 0 : -1}
+                >
+                  {i.label}
+                </button>
+              ))
+            }
+          </div>
+          {
+            installs.map((i, n) => (
+              <div
+                class="install-cmd"
+                role="tabpanel"
+                id={`install-panel-${i.id}`}
+                aria-labelledby={`install-tab-${i.id}`}
+                hidden={n !== 0}
+              >
+                <span class="prompt" aria-hidden="true">
+                  $
+                </span>
+                <code>{i.cmd}</code>
+                <button type="button" class="copy" data-copy={i.cmd} aria-label={`Copy: ${i.cmd}`}>
+                  <svg class="i-copy" viewBox="0 0 16 16" aria-hidden="true">
+                    <rect x="5" y="5" width="8.5" height="8.5" rx="1.5" />
+                    <path d="M3.5 10.5h-.5A1.5 1.5 0 0 1 1.5 9V3A1.5 1.5 0 0 1 3 1.5h6A1.5 1.5 0 0 1 10.5 3v.5" />
+                  </svg>
+                  <svg class="i-done" viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="m3 8.5 3 3 7-7" />
+                  </svg>
+                </button>
+              </div>
+            ))
+          }
+        </div>
+
+        <div class="cta">
+          <a class="btn btn-primary" href={`${docs}guide/quick-start/`}>
+            Read the quick start
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" class="arrow"><path d="M3 8h10M9 4l4 4-4 4"></path></svg>
+          </a>
+          <a class="btn btn-ghost" href="https://github.com/arg1998/BrowserHive">
+            <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" class="gh"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.08-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.82 1.19 3.08 0 4.41-2.69 5.39-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"></path></svg>
+            Star on GitHub
+          </a>
+        </div>
+      </div>
+
+      <!-- Console mock -->
+      <div class="console-wrap" aria-label="Illustration: an agent driving BrowserHive sessions" role="img">
+        <div class="console" data-console>
+          <div class="console-bar">
+            <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span class="console-title mono">agent ⇄ browserhive · /mcp</span>
+            <span class="live mono"><span class="live-dot"></span>live</span>
+          </div>
+          <div class="console-body">
+            <ol class="calls mono">
+              {
+                console_.map((c, i) => (
+                  <li class:list={['call', `k-${c.kind}`]} style={`--i:${i}`}>
+                    <span class="t">{c.t}</span>
+                    <span class="tool">{c.tool}</span>
+                    <span class="arg">{c.arg}</span>
+                    <span class="res">{c.res}</span>
+                  </li>
+                ))
+              }
+              <li class="call cursor" style={`--i:${console_.length}`}>
+                <span class="t">14:02:42</span>
+                <span class="caret" aria-hidden="true"></span>
+              </li>
+            </ol>
+            <div class="sessions">
+              <p class="sessions-h mono">
+                <span>sessions</span>
+                <span>{cells.length} running</span>
+              </p>
+              <ul class="cells">
+                {
+                  cells.map((c, i) => (
+                    <li class:list={['cell', `s-${c.state}`]} style={`--i:${i}`}>
+                      <span class="cell-hex" aria-hidden="true" />
+                      <span class="cell-name mono">{c.name}</span>
+                      <span class="cell-state mono">{c.state === 'attn' ? 'needs you' : c.state}</span>
+                    </li>
+                  ))
+                }
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="wrap clients">
+      <span class="clients-label mono">Works with any MCP client</span>
+      <ul>
+        <li>Claude Code</li>
+        <li>Claude Desktop</li>
+        <li>Cursor</li>
+        <li>VS Code</li>
+        <li>Streamable HTTP</li>
+        <li>stdio</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ============ PROBLEM ============ -->
+  <section class="section why">
+    <div class="wrap why-grid">
+      <div>
+        <p class="eyebrow"><span class="hexdot"></span>Why BrowserHive</p>
+        <h2>Agents that browse need more than a headless browser.</h2>
+      </div>
+      <ul class="why-list">
+        <li><span><b>They run in parallel</b> and must not leak cookies or logins into each other.</span></li>
+        <li><span><b>Websites push back.</b> A bare automation browser announces itself.</span></li>
+        <li><span><b>They need to log in</b>, and a password in the prompt is a password in the transcript.</span></li>
+        <li><span><b>They get stuck</b> on CAPTCHAs, 2FA prompts and judgment calls.</span></li>
+        <li><span><b>You need to see what they did</b>, after the fact and live.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ============ FEATURES ============ -->
+  <section class="section" id="features">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow"><span class="hexdot"></span>What you get</p>
+        <h2>43 MCP tools. One local server.<br /><span class="muted">Every hard part handled.</span></h2>
+      </div>
+      <div class="bento">
+        {
+          features.map((f) => (
+            <a href={f.href} class:list={['card', f.size && `card-${f.size}`]}>
+              <div class:list={['art', `art-${f.art}`]} aria-hidden="true">
+                {f.art === 'cells' && (
+                  <div class="mini-cells">
+                    {['research', 'billing', 'crm', 'qa', 'scrape', 'docs', 'ops'].map((n, i) => (
+                      <span class="mini-cell" style={`--i:${i}`}>
+                        <em class="mono">{n}</em>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {f.art === 'vault' && (
+                  <div class="vault-flow mono">
+                    <div class="vf-row">
+                      <span class="vf-k">agent</span>
+                      <span class="vf-v">{'vault_fill({ entry_name: "Example" })'}</span>
+                    </div>
+                    <div class="vf-check">
+                      <span>origin ✓</span>
+                      <span>session ✓</span>
+                      <span>principal ✓</span>
+                    </div>
+                    <div class="vf-row vf-secret">
+                      <span class="vf-k">browser</span>
+                      <span class="vf-v">
+                        password <span class="dots-anim">••••••••••</span>
+                      </span>
+                    </div>
+                    <div class="vf-row vf-result">
+                      <span class="vf-k">model sees</span>
+                      <span class="vf-v">{'{ "status": "success", "redacted": true }'}</span>
+                    </div>
+                  </div>
+                )}
+                {f.art === 'attn' && (
+                  <div class="attn-art">
+                    <span class="ring" />
+                    <span class="ring r2" />
+                    <span class="attn-core mono">2FA</span>
+                  </div>
+                )}
+                {f.art === 'stealth' && (
+                  <div class="stealth-art mono">
+                    <span>navigator.webdriver</span>
+                    <b>false</b>
+                    <span>user agent</span>
+                    <b>from your host</b>
+                    <span>client hints</span>
+                    <b>coherent</b>
+                  </div>
+                )}
+                {f.art === 'audit' && (
+                  <div class="timeline">
+                    {['launch', 'navigate', 'vault', 'blocked', 'snapshot', 'attention', 'click', 'close'].map((n, i) => (
+                      <span class:list={['tl', (n === 'blocked' || n === 'attention') && 'tl-hot']} style={`--i:${i}`}>
+                        <em class="mono">{n}</em>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div class="card-copy">
+                <span class="card-tag mono">{f.tag}</span>
+                <h3>{f.title}</h3>
+                <p set:html={f.body.replace(/`([^`]+)`/g, '<code>$1</code>')} />
+                <span class="more mono">
+                  Read more <span aria-hidden="true">→</span>
+                </span>
+              </div>
+            </a>
+          ))
+        }
+      </div>
+      <ul class="extras">
+        {
+          extras.map((e) => (
+            <li>
+              <h3>{e.title}</h3>
+              <p>{e.body}</p>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </section>
+
+  <!-- ============ QUICK START ============ -->
+  <section class="section" id="start">
+    <div class="wrap start-grid">
+      <div class="start-copy">
+        <p class="eyebrow"><span class="hexdot"></span>Quick start</p>
+        <h2>From zero to a browsing agent in three commands.</h2>
+        <ol class="steps">
+          <li>
+            <span class="step-n mono">1</span>
+            <div>
+              <h3>Install</h3>
+              <p>Requires Bun 1.4 or newer. Installing with npm or pnpm works too.</p>
+              <code class="inline mono">bun add -g browserhive</code>
+            </div>
+          </li>
+          <li>
+            <span class="step-n mono">2</span>
+            <div>
+              <h3>Initialize</h3>
+              <p>Downloads Chromium, creates the data directory and checks the host.</p>
+              <code class="inline mono">browserhive init</code>
+            </div>
+          </li>
+          <li>
+            <span class="step-n mono">3</span>
+            <div>
+              <h3>Run and connect</h3>
+              <p>MCP and the dashboard share one port. The first start prints a one-time dashboard password.</p>
+              <code class="inline mono">browserhive --admin</code>
+            </div>
+          </li>
+        </ol>
+        <a class="btn btn-ghost" href={`${docs}guide/mcp-clients/`}>
+          All client setups
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" class="arrow"><path d="M3 8h10M9 4l4 4-4 4"></path></svg>
+        </a>
+      </div>
+      <div class="code-card" data-tabs>
+        <div class="code-tabs" role="tablist" aria-label="MCP client">
+          {
+            clients.map((c, n) => (
+              <button
+                type="button"
+                role="tab"
+                id={`client-tab-${c.id}`}
+                aria-controls={`client-panel-${c.id}`}
+                aria-selected={n === 0 ? 'true' : 'false'}
+                tabindex={n === 0 ? 0 : -1}
+              >
+                {c.label}
+              </button>
+            ))
+          }
+        </div>
+        {
+          clients.map((c, n) => (
+            <div class="code-panel" role="tabpanel" id={`client-panel-${c.id}`} aria-labelledby={`client-tab-${c.id}`} hidden={n !== 0}>
+              <button type="button" class="copy" data-copy={c.code} aria-label="Copy code">
+                <svg class="i-copy" viewBox="0 0 16 16" aria-hidden="true">
+                  <rect x="5" y="5" width="8.5" height="8.5" rx="1.5" />
+                  <path d="M3.5 10.5h-.5A1.5 1.5 0 0 1 1.5 9V3A1.5 1.5 0 0 1 3 1.5h6A1.5 1.5 0 0 1 10.5 3v.5" />
+                </svg>
+                <svg class="i-done" viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="m3 8.5 3 3 7-7" />
+                </svg>
+              </button>
+              <pre class="mono"><code set:html={highlight(c.code, c.lang)} /></pre>
+            </div>
+          ))
+        }
+        <div class="code-foot mono">
+          <span class="ok-dot"></span>
+          then ask your agent: <b>“launch a session and open example.com”</b>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ STATS ============ -->
+  <section class="section stats-sec">
+    <div class="wrap">
+      <ul class="stats">
+        <li><b>43</b><span>MCP tools with a frozen contract</span></li>
+        <li><b>1</b><span>port for MCP, API, WebSocket and dashboard</span></li>
+        <li><b>0</b><span>bytes leave your machine unless you turn telemetry on</span></li>
+        <li><b>MIT</b><span>licensed, specified before it is coded</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ============ CTA ============ -->
+  <section class="section final">
+    <div class="wrap">
+      <div class="final-card">
+        <div class="final-hex" aria-hidden="true"><LogoMark size={64} /></div>
+        <h2>Give your agents a browser you can trust.</h2>
+        <p>Install in a minute. Read the security model before you expose anything beyond localhost.</p>
+        <div class="cta center">
+          <a class="btn btn-primary" href={`${docs}guide/installation/`}>Install BrowserHive</a>
+          <a class="btn btn-ghost" href={`${docs}guide/security/`}>Security model</a>
+        </div>
+      </div>
+    </div>
+  </section>
+</Site>
+
+<script>
+  // Tabs (install command and client snippets), keyboard accessible.
+  for (const group of document.querySelectorAll<HTMLElement>('[data-tabs]')) {
+    const tabs = [...group.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+    const select = (tab: HTMLButtonElement) => {
+      for (const t of tabs) {
+        const on = t === tab;
+        t.setAttribute('aria-selected', String(on));
+        t.tabIndex = on ? 0 : -1;
+        const panel = document.getElementById(t.getAttribute('aria-controls') ?? '');
+        if (panel) panel.hidden = !on;
+      }
+    };
+    tabs.forEach((tab, i) => {
+      tab.addEventListener('click', () => select(tab));
+      tab.addEventListener('keydown', (e) => {
+        const d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+        if (!d) return;
+        const next = tabs[(i + d + tabs.length) % tabs.length];
+        if (next) {
+          select(next);
+          next.focus();
+        }
+      });
+    });
+  }
+
+  // Copy buttons.
+  for (const btn of document.querySelectorAll<HTMLButtonElement>('[data-copy]')) {
+    btn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(btn.dataset['copy'] ?? '');
+        btn.dataset['done'] = '';
+        setTimeout(() => delete btn.dataset['done'], 1600);
+      } catch {
+        // Clipboard can be blocked; the command stays selectable.
+      }
+    });
+  }
+
+  // Replay the console animation when it scrolls back into view.
+  const consoleEl = document.querySelector<HTMLElement>('[data-console]');
+  if (consoleEl && 'IntersectionObserver' in window) {
+    let seen = false;
+    new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (e.isIntersecting && seen) {
+          consoleEl.classList.remove('play');
+          void consoleEl.offsetWidth;
+        }
+        if (e.isIntersecting) {
+          consoleEl.classList.add('play');
+          seen = true;
+        }
+      }
+    }).observe(consoleEl);
+  } else {
+    consoleEl?.classList.add('play');
+  }
+</script>
+
+<style>
+  /* ---------- shared ---------- */
+  .section {
+    position: relative;
+    padding-block: 5.5rem;
+  }
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    margin: 0 0 1rem;
+    font-family: var(--sl-font-mono);
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--hive-honey-text);
+  }
+  .hexdot {
+    width: 0.6rem;
+    height: 0.68rem;
+    background: var(--hive-honey);
+    clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+    filter: drop-shadow(0 0 6px var(--hive-honey));
+  }
+  h1,
+  h2,
+  h3 {
+    margin: 0;
+    color: var(--hive-text);
+    text-wrap: balance;
+  }
+  h2 {
+    font-size: clamp(1.9rem, 1.3rem + 2.2vw, 3rem);
+    line-height: 1.06;
+    font-weight: 680;
+    letter-spacing: -0.04em;
+  }
+  .muted {
+    color: var(--hive-dim);
+  }
+  .section-head {
+    max-width: 44rem;
+    margin-bottom: 3rem;
+  }
+  .cta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+  .cta.center {
+    justify-content: center;
+  }
+  .arrow {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: transform 0.2s;
+  }
+  .btn:hover .arrow {
+    transform: translateX(3px);
+  }
+  .gh {
+    fill: currentColor;
+  }
+
+  /* ---------- hero ---------- */
+  .hero {
+    position: relative;
+    margin-top: -4rem;
+    padding-top: 9rem;
+    padding-bottom: 3rem;
+    overflow: hidden;
+  }
+  .hero-bg {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .hex-field {
+    position: absolute;
+    inset: -2rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='97' viewBox='0 0 56 97'%3E%3Cpath d='M28 0 56 16.2v32.3L28 64.7 0 48.5V16.2zM28 64.7v32.3M0 97V80.8M56 97V80.8' fill='none' stroke='%2394aad2' stroke-opacity='.09' stroke-width='1'/%3E%3C/svg%3E");
+    background-size: 56px 97px;
+    mask-image: radial-gradient(70% 60% at 60% 30%, #000 20%, transparent 75%);
+    -webkit-mask-image: radial-gradient(70% 60% at 60% 30%, #000 20%, transparent 75%);
+  }
+  :global(html[data-theme='light']) .hex-field {
+    opacity: 1.6;
+    filter: invert(0.6);
+  }
+  .glow {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+  }
+  .g1 {
+    width: 46rem;
+    height: 30rem;
+    right: -8rem;
+    top: -6rem;
+    background: radial-gradient(closest-side, rgb(59 122 240 / 0.32), transparent);
+  }
+  .g2 {
+    width: 26rem;
+    height: 20rem;
+    right: 18rem;
+    top: 14rem;
+    background: radial-gradient(closest-side, rgb(255 178 36 / 0.13), transparent);
+  }
+  :global(html[data-theme='light']) .g1 {
+    background: radial-gradient(closest-side, rgb(31 99 219 / 0.16), transparent);
+  }
+  .hero-grid {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1.02fr) minmax(0, 1fr);
+    gap: 3.5rem;
+    align-items: center;
+  }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.25rem 0.75rem 0.25rem 0.25rem;
+    border-radius: 999px;
+    border: 1px solid var(--hive-line-strong);
+    background: color-mix(in srgb, var(--hive-bg-2) 80%, transparent);
+    font-size: 0.8125rem;
+    color: var(--hive-muted);
+    text-decoration: none;
+    transition: border-color 0.2s;
+  }
+  .pill:hover {
+    border-color: var(--hive-honey);
+    color: var(--hive-text);
+  }
+  .pill-tag {
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    background: var(--hive-honey-soft);
+    color: var(--hive-honey-text);
+    font-family: var(--sl-font-mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  .pill svg {
+    width: 0.75rem;
+    height: 0.75rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+  }
+  h1 {
+    margin-top: 1.5rem;
+    font-size: clamp(2.75rem, 1.6rem + 4.6vw, 5.25rem);
+    line-height: 0.98;
+    font-weight: 720;
+    letter-spacing: -0.055em;
+  }
+  .hl {
+    position: relative;
+    white-space: nowrap;
+    background: linear-gradient(100deg, #ffc55c 0%, #ffb224 40%, #ff8f3d 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  :global(html[data-theme='light']) .hl {
+    background: linear-gradient(100deg, #d98a00, #c05f00);
+    -webkit-background-clip: text;
+    background-clip: text;
+  }
+  .sub {
+    margin: 1.5rem 0 2rem;
+    max-width: 34rem;
+    font-size: 1.1875rem;
+    line-height: 1.6;
+    color: var(--hive-muted);
+    text-wrap: pretty;
+  }
+
+  .install {
+    max-width: 30rem;
+    margin-bottom: 1.25rem;
+    border-radius: 0.875rem;
+    border: 1px solid var(--hive-line-strong);
+    background: color-mix(in srgb, var(--hive-bg-2) 85%, transparent);
+    overflow: hidden;
+  }
+  .install-tabs,
+  .code-tabs {
+    display: flex;
+    gap: 0.125rem;
+    padding: 0.375rem 0.375rem 0;
+    border-bottom: 1px solid var(--hive-line);
+  }
+  .install-tabs button,
+  .code-tabs button {
+    position: relative;
+    padding: 0.4rem 0.75rem 0.55rem;
+    border: 0;
+    background: none;
+    font-family: var(--sl-font-mono);
+    font-size: 0.75rem;
+    color: var(--hive-dim);
+    cursor: pointer;
+    transition: color 0.15s;
+  }
+  .install-tabs button:hover,
+  .code-tabs button:hover {
+    color: var(--hive-text);
+  }
+  .install-tabs button[aria-selected='true'],
+  .code-tabs button[aria-selected='true'] {
+    color: var(--hive-text);
+  }
+  .install-tabs button[aria-selected='true']::after,
+  .code-tabs button[aria-selected='true']::after {
+    content: '';
+    position: absolute;
+    left: 0.75rem;
+    right: 0.75rem;
+    bottom: -1px;
+    height: 2px;
+    background: var(--hive-honey);
+    box-shadow: 0 0 10px var(--hive-honey);
+  }
+  .install-cmd {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.875rem 0.5rem 0.875rem 1rem;
+    font-family: var(--sl-font-mono);
+    font-size: 0.9375rem;
+  }
+  .install-cmd[hidden] {
+    display: none;
+  }
+  .prompt {
+    color: var(--hive-honey);
+    user-select: none;
+  }
+  .install-cmd code {
+    flex: 1;
+    color: var(--hive-text);
+    white-space: nowrap;
+    overflow-x: auto;
+  }
+  .copy {
+    position: relative;
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.5rem;
+    border: 1px solid transparent;
+    background: none;
+    color: var(--hive-dim);
+    cursor: pointer;
+    transition:
+      color 0.15s,
+      background-color 0.15s,
+      border-color 0.15s;
+  }
+  .copy:hover {
+    color: var(--hive-text);
+    background: var(--hive-bg-3);
+    border-color: var(--hive-line);
+  }
+  .copy svg {
+    width: 1rem;
+    height: 1rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .copy .i-done,
+  .copy[data-done] .i-copy {
+    display: none;
+  }
+  .copy[data-done] .i-done {
+    display: block;
+    color: var(--hive-green);
+  }
+
+  /* console */
+  .console-wrap {
+    position: relative;
+    perspective: 1600px;
+  }
+  .console {
+    position: relative;
+    border-radius: 1.125rem;
+    border: 1px solid var(--hive-line-strong);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--hive-bg-3) 92%, transparent), color-mix(in srgb, var(--hive-bg-2) 96%, transparent));
+    box-shadow:
+      0 0 0 1px rgb(0 0 0 / 0.2),
+      0 40px 100px -30px rgb(0 0 0 / 0.75),
+      0 0 80px -20px rgb(59 122 240 / 0.35);
+    transform: rotateY(-7deg) rotateX(3deg);
+    transform-style: preserve-3d;
+    transition: transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
+    overflow: hidden;
+  }
+  :global(html[data-theme='light']) .console {
+    box-shadow:
+      0 30px 80px -30px rgb(20 30 60 / 0.35),
+      0 0 60px -20px rgb(31 99 219 / 0.25);
+  }
+  .console-wrap:hover .console {
+    transform: rotateY(-2deg) rotateX(1deg);
+  }
+  .console::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(140deg, rgb(91 149 245 / 0.6), transparent 35%, transparent 65%, rgb(255 178 36 / 0.5));
+    mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    -webkit-mask-composite: xor;
+    pointer-events: none;
+  }
+  .console-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.875rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--hive-line);
+  }
+  .dots {
+    display: flex;
+    gap: 0.375rem;
+  }
+  .dots i {
+    width: 0.625rem;
+    height: 0.625rem;
+    border-radius: 50%;
+    background: var(--hive-line-strong);
+  }
+  .console-title {
+    font-size: 0.75rem;
+    color: var(--hive-dim);
+  }
+  .live {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--hive-green);
+  }
+  .live-dot {
+    width: 0.4rem;
+    height: 0.4rem;
+    border-radius: 50%;
+    background: var(--hive-green);
+    box-shadow: 0 0 10px var(--hive-green);
+    animation: blink 1.6s infinite;
+  }
+  @keyframes blink {
+    50% {
+      opacity: 0.3;
+    }
+  }
+  .console-body {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .calls {
+    margin: 0;
+    padding: 0.875rem 0.5rem 0.75rem;
+    list-style: none;
+    font-size: 0.78125rem;
+    min-height: 15.5rem;
+  }
+  .call {
+    display: grid;
+    grid-template-columns: 4.25rem 8.75rem minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.4rem 0.5rem;
+    border-radius: 0.5rem;
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  .play .call {
+    animation: rise 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+    animation-delay: calc(var(--i) * 0.55s + 0.2s);
+  }
+  @keyframes rise {
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  .t {
+    color: var(--hive-dim);
+  }
+  .tool {
+    color: #8fb6ff;
+    font-weight: 600;
+  }
+  :global(html[data-theme='light']) .tool {
+    color: var(--hive-blue);
+  }
+  .arg {
+    color: var(--hive-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .res {
+    justify-self: end;
+    padding: 0.1rem 0.45rem;
+    border-radius: 0.375rem;
+    background: var(--hive-bg-4);
+    color: var(--hive-muted);
+    white-space: nowrap;
+  }
+  .k-vault .res {
+    background: rgb(61 220 151 / 0.12);
+    color: var(--hive-green);
+  }
+  .k-attn {
+    background: var(--hive-honey-soft);
+  }
+  .k-attn .tool {
+    color: var(--hive-honey-text);
+  }
+  .k-attn .res {
+    background: var(--hive-honey);
+    color: #1a1204;
+    font-weight: 600;
+  }
+  .play .k-attn .res {
+    animation: pulse 1.8s ease-in-out infinite;
+    animation-delay: 3s;
+  }
+  @keyframes pulse {
+    50% {
+      box-shadow: 0 0 0 4px var(--hive-honey-soft);
+    }
+  }
+  .cursor {
+    grid-template-columns: 4.25rem auto;
+  }
+  .caret {
+    width: 0.5rem;
+    height: 0.95rem;
+    background: var(--hive-honey);
+    animation: blink 1s steps(1) infinite;
+  }
+
+  .sessions {
+    padding: 0.875rem 1rem 1rem;
+    border-top: 1px solid var(--hive-line);
+    background: color-mix(in srgb, var(--hive-bg) 35%, transparent);
+  }
+  .sessions-h {
+    display: flex;
+    justify-content: space-between;
+    margin: 0 0 0.75rem;
+    font-size: 0.6875rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--hive-dim);
+  }
+  .cells {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .cell {
+    display: grid;
+    justify-items: start;
+    gap: 0.2rem;
+    padding: 0.55rem 0.6rem;
+    border-radius: 0.625rem;
+    border: 1px solid var(--hive-line);
+    background: var(--hive-bg-2);
+    min-width: 0;
+  }
+  .cell-hex {
+    width: 0.75rem;
+    height: 0.85rem;
+    margin-bottom: 0.2rem;
+    clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+    background: var(--hive-dim);
+  }
+  .s-live .cell-hex {
+    background: var(--hive-green);
+  }
+  .s-attn {
+    border-color: color-mix(in srgb, var(--hive-honey) 55%, transparent);
+    background: var(--hive-honey-soft);
+  }
+  .s-attn .cell-hex {
+    background: var(--hive-honey);
+    animation: blink 1.2s infinite;
+  }
+  .cell-name {
+    max-width: 100%;
+    font-size: 0.6875rem;
+    color: var(--hive-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .cell-state {
+    font-size: 0.625rem;
+    color: var(--hive-dim);
+  }
+  .s-attn .cell-state {
+    color: var(--hive-honey-text);
+  }
+
+  .clients {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem 2rem;
+    margin-top: 5rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--hive-line);
+  }
+  .clients-label {
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--hive-dim);
+  }
+  .clients ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 2.25rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .clients li {
+    font-size: 1.0625rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--hive-muted);
+  }
+
+  /* ---------- why ---------- */
+  .why-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.1fr;
+    gap: 4rem;
+    align-items: start;
+  }
+  .why-list {
+    display: grid;
+    gap: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: why;
+  }
+  .why-list li {
+    counter-increment: why;
+    display: grid;
+    grid-template-columns: 2.5rem 1fr;
+    padding: 1.1rem 0;
+    border-bottom: 1px solid var(--hive-line);
+    font-size: 1.0625rem;
+    color: var(--hive-muted);
+  }
+  .why-list li:first-child {
+    border-top: 1px solid var(--hive-line);
+  }
+  .why-list li::before {
+    content: counter(why, decimal-leading-zero);
+    font-family: var(--sl-font-mono);
+    font-size: 0.75rem;
+    padding-top: 0.3rem;
+    color: var(--hive-honey-text);
+  }
+  .why-list b {
+    color: var(--hive-text);
+    font-weight: 600;
+  }
+
+  /* ---------- bento ---------- */
+  .bento {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-auto-rows: minmax(19rem, auto);
+    gap: 1rem;
+  }
+  .card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    border-radius: 1.25rem;
+    border: 1px solid var(--hive-line);
+    background: linear-gradient(180deg, var(--hive-bg-2), color-mix(in srgb, var(--hive-bg-2) 60%, var(--hive-bg)));
+    text-decoration: none;
+    overflow: hidden;
+    isolation: isolate;
+    transition:
+      border-color 0.25s,
+      transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1),
+      box-shadow 0.25s;
+  }
+  .card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: radial-gradient(30rem 16rem at 100% 0%, rgb(59 122 240 / 0.1), transparent 60%);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .card:hover {
+    border-color: var(--hive-line-strong);
+    transform: translateY(-3px);
+    box-shadow: 0 24px 60px -30px rgb(0 0 0 / 0.6);
+  }
+  .card:hover::after {
+    opacity: 1;
+  }
+  .card-wide {
+    grid-column: span 2;
+  }
+  .card-tall {
+    grid-row: span 2;
+  }
+  .card-full {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    align-items: center;
+  }
+  .card-full .art {
+    order: 2;
+    padding: 1.5rem 2rem;
+  }
+  .card-full .card-copy {
+    flex: 0 0 24rem;
+    padding: 2rem;
+  }
+  .art {
+    position: relative;
+    flex: 1;
+    min-height: 9rem;
+    display: grid;
+    place-items: center;
+    padding: 1.5rem 1.5rem 0;
+    overflow: hidden;
+  }
+  .card-copy {
+    padding: 1.25rem 1.5rem 1.5rem;
+  }
+  .card-tag {
+    font-size: 0.6875rem;
+    color: var(--hive-honey-text);
+  }
+  .card h3 {
+    margin-top: 0.375rem;
+    font-size: 1.3125rem;
+    font-weight: 640;
+    letter-spacing: -0.025em;
+  }
+  .card p {
+    margin: 0.5rem 0 0;
+    max-width: 34rem;
+    font-size: 0.9375rem;
+    line-height: 1.55;
+    color: var(--hive-muted);
+  }
+  .card p :global(code) {
+    font-family: var(--sl-font-mono);
+    font-size: 0.85em;
+    padding: 0.05rem 0.35rem;
+    border-radius: 0.3rem;
+    background: var(--hive-bg-4);
+    color: var(--hive-text);
+  }
+  .more {
+    display: inline-block;
+    margin-top: 0.875rem;
+    font-size: 0.75rem;
+    color: var(--hive-dim);
+    transition: color 0.2s;
+  }
+  .card:hover .more {
+    color: var(--hive-honey-text);
+  }
+  .more span {
+    display: inline-block;
+    transition: transform 0.2s;
+  }
+  .card:hover .more span {
+    transform: translateX(4px);
+  }
+
+  /* art: cells */
+  .mini-cells {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem 0.4rem;
+    max-width: 30rem;
+  }
+  .mini-cell {
+    display: grid;
+    place-items: center;
+    width: 5.75rem;
+    height: 6.5rem;
+    clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+    background: linear-gradient(160deg, var(--hive-bg-4), var(--hive-bg-3));
+    transition:
+      transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1),
+      background 0.3s;
+    transition-delay: calc(var(--i) * 40ms);
+  }
+  .mini-cell:nth-child(n + 5) {
+    margin-top: -1.6rem;
+  }
+  .mini-cell em {
+    font-style: normal;
+    font-size: 0.6875rem;
+    color: var(--hive-muted);
+  }
+  .mini-cell:nth-child(2),
+  .mini-cell:nth-child(6) {
+    background: linear-gradient(160deg, rgb(59 122 240 / 0.45), rgb(59 122 240 / 0.15));
+  }
+  .mini-cell:nth-child(2) em,
+  .mini-cell:nth-child(6) em {
+    color: var(--hive-text);
+  }
+  .card:hover .mini-cell {
+    transform: translateY(-4px);
+  }
+
+  /* art: vault */
+  .vault-flow {
+    display: grid;
+    gap: 0.625rem;
+    width: 100%;
+    max-width: 22rem;
+    font-size: 0.75rem;
+  }
+  .vf-row {
+    display: grid;
+    gap: 0.25rem;
+    padding: 0.75rem 0.875rem;
+    border-radius: 0.75rem;
+    border: 1px solid var(--hive-line);
+    background: var(--hive-bg-3);
+  }
+  .vf-k {
+    font-size: 0.625rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--hive-dim);
+  }
+  .vf-v {
+    color: var(--hive-text);
+  }
+  .vf-check {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.25rem;
+    padding: 0 0.25rem;
+    color: var(--hive-green);
+    font-size: 0.6875rem;
+  }
+  .vf-secret {
+    border-style: dashed;
+    border-color: color-mix(in srgb, var(--hive-honey) 45%, transparent);
+  }
+  .dots-anim {
+    color: var(--hive-honey);
+    letter-spacing: 0.08em;
+  }
+  .vf-result {
+    border-color: color-mix(in srgb, var(--hive-green) 40%, transparent);
+    background: rgb(61 220 151 / 0.07);
+  }
+  .vf-result .vf-v {
+    color: var(--hive-green);
+  }
+
+  /* art: attention */
+  .attn-art {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 9rem;
+    height: 9rem;
+  }
+  .ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 1px solid color-mix(in srgb, var(--hive-honey) 50%, transparent);
+    animation: ripple 2.8s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+  }
+  .r2 {
+    animation-delay: 1.4s;
+  }
+  @keyframes ripple {
+    from {
+      transform: scale(0.45);
+      opacity: 1;
+    }
+    to {
+      transform: scale(1.15);
+      opacity: 0;
+    }
+  }
+  .attn-core {
+    display: grid;
+    place-items: center;
+    width: 4.25rem;
+    height: 4.8rem;
+    clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+    background: linear-gradient(160deg, #ffc55c, #ff9d1a);
+    color: #1a1204;
+    font-size: 0.8125rem;
+    font-weight: 700;
+  }
+
+  /* art: stealth */
+  .stealth-art {
+    display: grid;
+    grid-template-columns: auto auto;
+    gap: 0.5rem 1.25rem;
+    padding: 1rem 1.25rem;
+    border-radius: 0.875rem;
+    border: 1px solid var(--hive-line);
+    background: var(--hive-bg-3);
+    font-size: 0.75rem;
+  }
+  .stealth-art span {
+    color: var(--hive-dim);
+  }
+  .stealth-art b {
+    font-weight: 500;
+    color: var(--hive-green);
+    text-align: right;
+  }
+
+  /* art: audit timeline */
+  .timeline {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    max-width: 40rem;
+    padding: 2.5rem 0.5rem;
+  }
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 0.5rem;
+    right: 0.5rem;
+    top: 50%;
+    height: 1px;
+    background: linear-gradient(90deg, var(--hive-blue), var(--hive-line-strong) 70%, var(--hive-honey));
+  }
+  .tl {
+    position: relative;
+    width: 0.75rem;
+    height: 0.85rem;
+    clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+    background: var(--hive-blue);
+  }
+  .tl em {
+    position: absolute;
+    left: 50%;
+    top: 1.5rem;
+    transform: translateX(-50%);
+    font-style: normal;
+    font-size: 0.625rem;
+    color: var(--hive-dim);
+  }
+  .tl:nth-child(even) em {
+    top: auto;
+    bottom: 1.5rem;
+  }
+  .tl-hot {
+    background: var(--hive-honey);
+  }
+  .timeline .tl {
+    clip-path: none;
+    border-radius: 2px;
+    transform: rotate(45deg);
+  }
+  .timeline .tl em {
+    transform: rotate(-45deg) translate(-50%, 0);
+    transform-origin: 0 0;
+  }
+
+  /* extras */
+  .extras {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1rem;
+    margin: 1rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .extras li {
+    padding: 1.25rem 1.25rem 1.375rem;
+    border-radius: 1rem;
+    border: 1px solid var(--hive-line);
+    background: color-mix(in srgb, var(--hive-bg-2) 70%, transparent);
+  }
+  .extras h3 {
+    font-size: 1rem;
+    font-weight: 620;
+    letter-spacing: -0.015em;
+  }
+  .extras p {
+    margin: 0.375rem 0 0;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: var(--hive-muted);
+  }
+
+  /* ---------- quick start ---------- */
+  .start-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr);
+    gap: 4rem;
+    align-items: start;
+  }
+  .steps {
+    display: grid;
+    gap: 0;
+    margin: 2.25rem 0 2rem;
+    padding: 0;
+    list-style: none;
+  }
+  .steps li {
+    position: relative;
+    display: grid;
+    grid-template-columns: 2.25rem 1fr;
+    gap: 1rem;
+    padding-bottom: 1.75rem;
+  }
+  .steps li:not(:last-child)::before {
+    content: '';
+    position: absolute;
+    left: 1.125rem;
+    top: 2.5rem;
+    bottom: 0.25rem;
+    width: 1px;
+    background: linear-gradient(var(--hive-line-strong), transparent);
+  }
+  .step-n {
+    display: grid;
+    place-items: center;
+    width: 2.25rem;
+    height: 2.5rem;
+    clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+    background: var(--hive-bg-4);
+    color: var(--hive-honey-text);
+    font-size: 0.8125rem;
+    font-weight: 600;
+  }
+  .steps h3 {
+    font-size: 1.0625rem;
+    font-weight: 620;
+  }
+  .steps p {
+    margin: 0.25rem 0 0.625rem;
+    font-size: 0.9375rem;
+    color: var(--hive-muted);
+  }
+  .inline {
+    display: inline-block;
+    padding: 0.3rem 0.625rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--hive-line);
+    background: var(--hive-bg-2);
+    font-size: 0.8125rem;
+    color: var(--hive-text);
+  }
+  .inline::before {
+    content: '$ ';
+    color: var(--hive-honey);
+  }
+  .code-card {
+    position: sticky;
+    top: 6rem;
+    border-radius: 1.125rem;
+    border: 1px solid var(--hive-line-strong);
+    background: var(--hive-bg-2);
+    overflow: hidden;
+    box-shadow: 0 30px 80px -40px rgb(0 0 0 / 0.7);
+  }
+  .code-tabs {
+    overflow-x: auto;
+  }
+  .code-tabs button {
+    white-space: nowrap;
+  }
+  .code-panel {
+    position: relative;
+  }
+  .code-panel[hidden] {
+    display: none;
+  }
+  .code-panel .copy {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+  }
+  pre {
+    margin: 0;
+    padding: 1.25rem 3.5rem 1.25rem 1.5rem;
+    min-height: 12.5rem;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-size: 0.875rem;
+    line-height: 1.7;
+    color: var(--hive-text);
+    overflow-x: auto;
+  }
+  pre :global(.k) {
+    color: #8fb6ff;
+  }
+  pre :global(.s) {
+    color: var(--hive-honey-text);
+  }
+  pre :global(.f) {
+    color: var(--hive-green);
+  }
+  pre :global(.c) {
+    color: #c7a2ff;
+  }
+  :global(html[data-theme='light']) pre :global(.k) {
+    color: var(--hive-blue);
+  }
+  :global(html[data-theme='light']) pre :global(.c) {
+    color: #7a3fd1;
+  }
+  .code-foot {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.875rem 1.5rem;
+    border-top: 1px solid var(--hive-line);
+    font-size: 0.75rem;
+    color: var(--hive-dim);
+  }
+  .code-foot b {
+    font-weight: 500;
+    color: var(--hive-text);
+  }
+  .ok-dot {
+    width: 0.4rem;
+    height: 0.4rem;
+    border-radius: 50%;
+    background: var(--hive-green);
+    box-shadow: 0 0 8px var(--hive-green);
+  }
+
+  /* ---------- stats ---------- */
+  .stats-sec {
+    padding-block: 2rem;
+  }
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border-block: 1px solid var(--hive-line);
+  }
+  .stats li {
+    display: grid;
+    gap: 0.375rem;
+    padding: 2rem 1.5rem;
+  }
+  .stats li + li {
+    border-left: 1px solid var(--hive-line);
+  }
+  .stats b {
+    font-size: 3rem;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.05em;
+    background: linear-gradient(180deg, var(--hive-text), color-mix(in srgb, var(--hive-text) 45%, transparent));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .stats span {
+    font-size: 0.875rem;
+    color: var(--hive-muted);
+  }
+
+  /* ---------- final ---------- */
+  .final-card {
+    position: relative;
+    display: grid;
+    justify-items: center;
+    padding: 4.5rem 2rem;
+    border-radius: 1.75rem;
+    border: 1px solid var(--hive-line-strong);
+    background:
+      radial-gradient(36rem 18rem at 50% 0%, rgb(59 122 240 / 0.2), transparent 70%),
+      radial-gradient(24rem 12rem at 50% 100%, rgb(255 178 36 / 0.1), transparent 70%),
+      var(--hive-bg-2);
+    text-align: center;
+    overflow: hidden;
+  }
+  .final-hex {
+    margin-bottom: 1.5rem;
+    filter: drop-shadow(0 0 30px rgb(59 122 240 / 0.6));
+    animation: float 6s ease-in-out infinite;
+  }
+  @keyframes float {
+    50% {
+      transform: translateY(-6px) rotate(8deg);
+    }
+  }
+  .final-card h2 {
+    max-width: 36rem;
+  }
+  .final-card p {
+    margin: 1rem 0 2rem;
+    max-width: 32rem;
+    color: var(--hive-muted);
+  }
+
+  /* ---------- responsive ---------- */
+  @media (max-width: 64rem) {
+    .hero-grid,
+    .why-grid,
+    .start-grid {
+      grid-template-columns: 1fr;
+      gap: 3rem;
+    }
+    .console {
+      transform: none;
+    }
+    .bento {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .card-tall {
+      grid-row: span 1;
+    }
+    .card-full {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .card-full .card-copy {
+      flex: none;
+      padding: 1.25rem 1.5rem 1.5rem;
+    }
+    .extras {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .code-card {
+      position: relative;
+      top: 0;
+    }
+  }
+  @media (max-width: 44rem) {
+    .section {
+      padding-block: 4rem;
+    }
+    .hero {
+      padding-top: 7rem;
+    }
+    .bento,
+    .extras {
+      grid-template-columns: 1fr;
+    }
+    .card-wide,
+    .card-full {
+      grid-column: span 1;
+    }
+    .call {
+      grid-template-columns: 7rem minmax(0, 1fr) auto;
+    }
+    .call .t {
+      display: none;
+    }
+    .cursor {
+      grid-template-columns: auto;
+    }
+    .cells {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .cells li:nth-child(n + 4) {
+      display: none;
+    }
+    .stats {
+      grid-template-columns: 1fr 1fr;
+    }
+    .stats li:nth-child(3) {
+      border-left: 0;
+    }
+    .stats li:nth-child(n + 3) {
+      border-top: 1px solid var(--hive-line);
+    }
+    .mini-cell {
+      width: 4.5rem;
+      height: 5.1rem;
+    }
+    .timeline .tl em {
+      display: none;
+    }
+    .clients {
+      margin-top: 3rem;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .call {
+      opacity: 1;
+      transform: none;
+    }
+  }
+</style>

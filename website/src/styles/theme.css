@@ -1,0 +1,141 @@
+/*
+ * BrowserHive site theme: shared tokens for the landing page and the docs.
+ * Graphite surfaces, brand blue for interaction, honey for "you are here" and highlights.
+ * Dark is the default look; light is a warm paper variant.
+ */
+
+:root,
+::backdrop {
+  --hive-bg: #07090d;
+  --hive-bg-2: #0b0f16;
+  --hive-bg-3: #111724;
+  --hive-bg-4: #182032;
+  --hive-line: rgb(148 170 210 / 0.11);
+  --hive-line-strong: rgb(148 170 210 / 0.2);
+  --hive-text: #e7ecf5;
+  --hive-muted: #97a1b4;
+  --hive-dim: #626c7e;
+  --hive-blue: #5b95f5;
+  --hive-blue-strong: #3b7af0;
+  --hive-blue-soft: rgb(91 149 245 / 0.14);
+  --hive-honey: #ffb224;
+  --hive-honey-soft: rgb(255 178 36 / 0.13);
+  --hive-honey-text: #ffc55c;
+  --hive-green: #3ddc97;
+  --hive-red: #ff6b7d;
+  --hive-glow: 0 0 0 1px rgb(91 149 245 / 0.35), 0 8px 40px -8px rgb(59 122 240 / 0.45);
+  --hive-radius: 0.875rem;
+  --hive-grid: rgb(148 170 210 / 0.05);
+
+  --sl-font: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --sl-font-mono: "JetBrains Mono Variable", ui-monospace, "SFMono-Regular", monospace;
+
+  --sl-color-white: #f4f7fc;
+  --sl-color-gray-1: #dfe5ef;
+  --sl-color-gray-2: #b6bfcd;
+  --sl-color-gray-3: #8e98aa;
+  --sl-color-gray-4: #5f697b;
+  --sl-color-gray-5: #262e3c;
+  --sl-color-gray-6: #121824;
+  --sl-color-black: #07090d;
+
+  --sl-color-accent-low: #0e1f45;
+  --sl-color-accent: #3b7af0;
+  --sl-color-accent-high: #b8d0ff;
+
+  --sl-hue-orange: 39;
+  --sl-color-orange-low: #3a2806;
+  --sl-color-orange: #ffb224;
+  --sl-color-orange-high: #ffd48a;
+
+  --sl-color-bg: var(--hive-bg);
+  --sl-color-bg-nav: rgb(7 9 13 / 0.72);
+  --sl-color-bg-sidebar: var(--hive-bg);
+  --sl-color-bg-inline-code: var(--hive-bg-4);
+  --sl-color-hairline: var(--hive-line);
+  --sl-color-hairline-light: var(--hive-line-strong);
+  --sl-color-hairline-shade: var(--hive-bg);
+  --sl-color-text: #c3cad7;
+  --sl-color-text-accent: #8fb6ff;
+  --sl-color-backdrop-overlay: rgb(3 5 9 / 0.72);
+
+  --sl-nav-height: 3.75rem;
+  --sl-content-width: 48rem;
+  --sl-sidebar-width: 17.5rem;
+  --sl-line-height: 1.72;
+  --sl-text-h1: 2.5rem;
+  --sl-text-h2: 1.75rem;
+  --sl-text-h3: 1.3125rem;
+  --sl-text-h4: 1.0625rem;
+}
+
+:root[data-theme="light"],
+[data-theme="light"] ::backdrop {
+  --hive-bg: #fbfaf7;
+  --hive-bg-2: #ffffff;
+  --hive-bg-3: #f3f1ec;
+  --hive-bg-4: #ebe8e1;
+  --hive-line: rgb(24 32 50 / 0.09);
+  --hive-line-strong: rgb(24 32 50 / 0.17);
+  --hive-text: #0c1220;
+  --hive-muted: #515b6d;
+  --hive-dim: #7d8595;
+  --hive-blue: #1f63db;
+  --hive-blue-strong: #174fb5;
+  --hive-blue-soft: rgb(31 99 219 / 0.1);
+  --hive-honey: #e89a00;
+  --hive-honey-soft: rgb(232 154 0 / 0.14);
+  --hive-honey-text: #9a5d00;
+  --hive-green: #0f9d63;
+  --hive-red: #d6334a;
+  --hive-glow: 0 0 0 1px rgb(31 99 219 / 0.25), 0 8px 30px -10px rgb(31 99 219 / 0.35);
+  --hive-grid: rgb(24 32 50 / 0.045);
+
+  --sl-color-white: #0c1220;
+  --sl-color-gray-1: #1b2233;
+  --sl-color-gray-2: #333c4e;
+  --sl-color-gray-3: #535d6f;
+  --sl-color-gray-4: #8a92a1;
+  --sl-color-gray-5: #d9d6ce;
+  --sl-color-gray-6: #f0eee8;
+  --sl-color-gray-7: #f6f5f1;
+  --sl-color-black: #fbfaf7;
+
+  --sl-color-accent-low: #dce7fb;
+  --sl-color-accent: #1f63db;
+  --sl-color-accent-high: #123f94;
+
+  --sl-color-orange-low: #fdeccc;
+  --sl-color-orange: #e89a00;
+  --sl-color-orange-high: #7a4a00;
+
+  --sl-color-bg: var(--hive-bg);
+  --sl-color-bg-nav: rgb(251 250 247 / 0.78);
+  --sl-color-bg-sidebar: var(--hive-bg);
+  --sl-color-bg-inline-code: var(--hive-bg-4);
+  --sl-color-text: #2c3445;
+  --sl-color-text-accent: #1a56c4;
+  --sl-color-backdrop-overlay: rgb(240 238 232 / 0.72);
+}
+
+::selection {
+  background: var(--hive-honey-soft);
+  color: var(--sl-color-white);
+}
+
+html {
+  scrollbar-color: var(--hive-line-strong) transparent;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-color: var(--hive-bg);
+  font-feature-settings: "ss01", "cv11";
+}
+
+code,
+kbd,
+pre {
+  font-variant-ligatures: none;
+}
