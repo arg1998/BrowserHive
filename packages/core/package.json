@@ -1,6 +1,6 @@
 {
   "name": "@browserhive/core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "BrowserHive core: domain, infrastructure, application services, MCP/HTTP/WS interfaces.",
   "type": "module",

@@ -1,5 +1,11 @@
 # browserhive
 
+## 0.1.1
+
+### Patch Changes
+
+- [#5](https://github.com/arg1998/BrowserHive/pull/5) [`1bd3de0`](https://github.com/arg1998/BrowserHive/commit/1bd3de0ca905a990c84b18fd07496382326fbd97) Thanks [@arg1998](https://github.com/arg1998)! - Point README, changelog, and dashboard documentation links at the real repository, github.com/arg1998/BrowserHive.
+
 ## 0.1.0
 
 ### Minor Changes
