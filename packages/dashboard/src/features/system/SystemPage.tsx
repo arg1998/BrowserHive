@@ -43,6 +43,20 @@ export function SystemPage() {
     <PageHeader
       title="System"
       description="Daemon health, agent access and the configuration in effect."
+      learnMore={
+        <>
+          <p>
+            <b>Status</b> shows health checks, capacity, storage and the defaults new sessions get.
+            <b> Agent tokens</b> are the bearer tokens MCP clients use when agent authentication is
+            on. <b>Configuration</b> lists every effective setting with where it came from.
+          </p>
+          <p>
+            Settings are read at startup, from flags, <code>browserhive.config.json</code> and
+            environment variables; change them there and restart.
+          </p>
+        </>
+      }
+      learnMoreDocs="configuration"
       {...(!forbidden && {
         tabs: (
           <TabsList aria-label="System sections">

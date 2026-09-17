@@ -175,7 +175,20 @@ export function DetailsPanel({ detail }: { readonly detail: SessionDetail }) {
       <CountsStrip detail={detail} vaultEnabled={vaultEnabled} />
       <div className="grid min-w-0 gap-5 xl:grid-cols-2">
         <SessionRecord detail={detail} />
-        <Panel title="Identity & coherence">
+        <Panel
+          title="Identity & coherence"
+          info={
+            <>
+              <p>
+                What this browser presents to websites. With stealth on, the user agent, client
+                hints, locale and timezone are derived from this machine so they agree with each
+                other.
+              </p>
+              <p>Stealth is scoped honestly: the guide lists what it does not hide.</p>
+            </>
+          }
+          infoDocs="stealth"
+        >
           <IdentityCard session={session} />
         </Panel>
       </div>

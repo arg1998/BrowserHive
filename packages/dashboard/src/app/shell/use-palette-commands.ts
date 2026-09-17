@@ -7,6 +7,7 @@ import { useCallback, useMemo } from 'react';
 import { useApi, useAuth } from '@/app/providers/AuthProvider.tsx';
 import { keys } from '@/lib/api/keys.ts';
 import type { IconName } from '@/lib/icons.ts';
+import { docsUrl, ISSUES_URL, REPO_URL, WEBSITE_URL } from '@/lib/links.ts';
 import { SESSION_STATE, type StatusEntry, sessionDisplayState } from '@/lib/status-registry.ts';
 import { readStorageJson, writeStorageJson } from '@/lib/storage.ts';
 import { useTheme } from '@/theme/ThemeProvider.tsx';
@@ -48,6 +49,74 @@ export const PALETTE_GROUPS: readonly PaletteGroup[] = [
 
 const RECENT_KEY = 'bh.palette.recent';
 const RECENT_LIMIT = 5;
+
+/** Opens an outbound link in a new tab. */
+function openExternal(href: string): () => void {
+  return () => {
+    window.open(href, '_blank', 'noopener,noreferrer');
+  };
+}
+
+/** Outbound links to the docs and the project. */
+const DOCS_COMMANDS: readonly PaletteCommand[] = [
+  {
+    id: 'action:docs',
+    group: 'Actions',
+    label: 'Open documentation',
+    hint: 'browserhive.ai/docs',
+    icon: 'book',
+    keywords: ['docs', 'help', 'guide', 'manual'],
+    run: openExternal(docsUrl('home')),
+  },
+  {
+    id: 'action:docs:dashboard',
+    group: 'Actions',
+    label: 'Open the dashboard guide',
+    icon: 'book',
+    keywords: ['docs', 'help', 'dashboard'],
+    run: openExternal(docsUrl('dashboard')),
+  },
+  {
+    id: 'action:docs:mcp-clients',
+    group: 'Actions',
+    label: 'How to connect an MCP client',
+    icon: 'book',
+    keywords: ['docs', 'claude', 'cursor', 'vs code', 'setup', 'connect'],
+    run: openExternal(docsUrl('mcpClients')),
+  },
+  {
+    id: 'action:docs:tools',
+    group: 'Actions',
+    label: 'Open the MCP tool reference',
+    icon: 'book',
+    keywords: ['docs', 'tools', 'reference', 'api'],
+    run: openExternal(docsUrl('tools')),
+  },
+  {
+    id: 'action:website',
+    group: 'Actions',
+    label: 'Open browserhive.ai',
+    icon: 'globe',
+    keywords: ['website', 'home'],
+    run: openExternal(WEBSITE_URL),
+  },
+  {
+    id: 'action:github',
+    group: 'Actions',
+    label: 'Open the GitHub repository',
+    icon: 'github',
+    keywords: ['github', 'source', 'code', 'repo'],
+    run: openExternal(REPO_URL),
+  },
+  {
+    id: 'action:issue',
+    group: 'Actions',
+    label: 'Report an issue',
+    icon: 'bug',
+    keywords: ['bug', 'github', 'feedback'],
+    run: openExternal(ISSUES_URL),
+  },
+];
 
 /** Substring match over label, hint and keywords. */
 export function matchesQuery(
@@ -213,6 +282,7 @@ export function usePaletteCommands(
         keywords: ['account', 'security'],
         run: () => void navigate({ to: '/change-password', search: { voluntary: true } }),
       },
+      ...DOCS_COMMANDS,
       {
         id: 'action:logout',
         group: 'Actions',

@@ -1,11 +1,12 @@
 /** @module features/sessions/list/session-empty — the three `/sessions` empty states (spec 04 §12.2, §11) */
+
 import { EmptyState } from '@/components/shared/EmptyState.tsx';
 import { buttonVariants } from '@/components/ui/button.tsx';
+import { docsUrl } from '@/lib/links.ts';
 import { hasSessionFilters, type SessionsSearch } from '../search.ts';
 
 /** Docs link for the zero-data CTA. */
-export const CONNECT_DOCS_URL =
-  'https://github.com/arg1998/BrowserHive/blob/main/docs/guide/mcp-clients.md';
+export const CONNECT_DOCS_URL = docsUrl('mcpClients');
 
 /** Empty state for the current search. */
 export function SessionsEmpty({

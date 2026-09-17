@@ -46,6 +46,17 @@ export function ConfigSection({ system, config, filter, onFilterChange }: Config
       </div>
       <Panel
         title="All configuration keys"
+        info={
+          <>
+            <p>
+              Every key can be set as a flag, in <code>browserhive.config.json</code> or as a{' '}
+              <code>BROWSERHIVE_*</code> environment variable; the rightmost source wins. Values
+              another source overrode are listed as shadowed.
+            </p>
+            <p>Unknown keys fail startup instead of being ignored.</p>
+          </>
+        }
+        infoDocs="configurationPrecedence"
         description="The effective value of every key and where it came from: cli › file › env › default. Secrets are never shown."
         padding="none"
       >

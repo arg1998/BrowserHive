@@ -213,6 +213,20 @@ export function WebsitesPage() {
       <PageHeader
         title="Websites"
         description="Every page agents navigated to, across all sessions."
+        learnMore={
+          <>
+            <p>
+              One row per navigation, from any tab of any session. Destinations that are not public
+              web pages get a category tag: raw IP addresses, local hosts (<code>localhost</code>,
+              <code>file://</code>), FTP and other schemes.
+            </p>
+            <p>
+              Query strings and fragments are stripped before a URL is stored, except parameters
+              listed in <code>urlQueryAllowlist</code>.
+            </p>
+          </>
+        }
+        learnMoreDocs="dashboardWebsites"
         actions={
           <TimeRangeControl
             value={search.range}

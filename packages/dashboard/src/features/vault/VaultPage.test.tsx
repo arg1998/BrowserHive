@@ -25,8 +25,9 @@ describe('VaultPage', () => {
     });
     expect(await screen.findByText('Vault backend is off')).toBeTruthy();
     expect(screen.getByRole('list', { name: 'Enable the vault' })).toBeTruthy();
-    // No external docs links until the documentation site exists.
-    expect(screen.queryByRole('link', { name: /guide|docs/i })).toBeNull();
+    // The guide link goes to the website, never to GitHub.
+    const guide = screen.getByRole('link', { name: /Read the vault guide/ });
+    expect(guide.getAttribute('href')).toBe('https://browserhive.ai/docs/guide/vault/');
   });
 
   it('shows the disabled panel from /system without calling the vault endpoints', async () => {

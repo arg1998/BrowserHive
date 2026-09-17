@@ -1,4 +1,5 @@
 /** @module features/system/status/StatusSection — System › Status: notices shown once, live KPI tiles, health (including the degraded 503 body), runtime with fix hints, degradations, storage and retention, realtime connections, migrations */
+
 import type {
   HealthResponse,
   MigrationRow,
@@ -28,6 +29,7 @@ import {
 import { formatBytes, formatNumber, formatPercent } from '@/lib/format/bytes.ts';
 import { formatAbsoluteShort, formatDuration, formatMs } from '@/lib/format/time.ts';
 import { ICONS } from '@/lib/icons.ts';
+import { configKeyDocsUrl } from '@/lib/links.ts';
 import { useServerNow } from '@/lib/server-now.ts';
 import { diskTone, type Tone } from '@/lib/status-registry.ts';
 import { SettingsList } from '../components/SettingsList.tsx';
@@ -154,6 +156,13 @@ function DegradationsPanel({ events }: { readonly events: readonly SystemEvent[]
   return (
     <Panel
       title="Degradations"
+      info={
+        <>
+          Problems the daemon detected and worked around, such as a browser that failed to launch or
+          low disk space. Recurring problems are grouped by code.
+        </>
+      }
+      infoDocs="troubleshooting"
       description={
         open > 0
           ? `${formatNumber(open)} open. Recurring problems are grouped by code.`
@@ -209,7 +218,16 @@ function StoragePanel({ system }: { readonly system: SystemInfo }) {
   const ratio = dbRatio(system);
   const never = <span className="text-muted-foreground">Never</span>;
   return (
-    <Panel title="Storage and retention">
+    <Panel
+      title="Storage and retention"
+      info={
+        <>
+          Events older than the retention window are pruned, oldest first, and so is anything past
+          the byte cap. Traces, screenshots and profiles of deleted sessions go with them.
+        </>
+      }
+      infoDocs={{ href: configKeyDocsUrl('retentionDays'), label: 'Retention settings' }}
+    >
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm">
@@ -360,6 +378,13 @@ function MigrationsPanel({
   return (
     <Panel
       title="Schema migrations"
+      info={
+        <>
+          The database schema this daemon runs and the oldest BrowserHive version that can still
+          read it. Upgrades back up the database before migrating.
+        </>
+      }
+      infoDocs="upgrading"
       description={`Schema v${schema} · readable by v${minReader} and later`}
       padding="none"
     >

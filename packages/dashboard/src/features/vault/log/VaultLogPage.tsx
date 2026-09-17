@@ -50,6 +50,17 @@ export function VaultLogPage() {
     <PageHeader
       title="Vault log"
       description="One secret-free audit row per vault_fill: entry, outcome, origin check and page."
+      learnMore={
+        <>
+          <p>
+            Every <code>vault_fill</code> and every denied listing is recorded: the entry name, the
+            result, whether the page origin matched the entry, whether <code>evaluate</code> was
+            enabled, the session and the page URL.
+          </p>
+          <p>Credentials, usernames and form values are never written here.</p>
+        </>
+      }
+      learnMoreDocs="vaultAudit"
       {...(total !== undefined && {
         meta: <span className="text-muted-foreground">{formatNumber(total)} events</span>,
       })}

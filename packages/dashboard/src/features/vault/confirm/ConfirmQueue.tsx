@@ -50,6 +50,14 @@ export function ConfirmQueue({
     <Section
       title={title}
       count={items.length}
+      info={
+        <>
+          Entries with <code>dashboard_confirm</code> hold every fill until you approve it here. The
+          agent's <code>vault_fill</code> call waits; a denial is recorded in the vault log with
+          your reason.
+        </>
+      }
+      infoDocs="vaultConfirmations"
       actions={
         <>
           <TonePill

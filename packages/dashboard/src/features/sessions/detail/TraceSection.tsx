@@ -30,6 +30,17 @@ export function TraceSection({ detail }: { readonly detail: SessionDetail }) {
     <Panel
       title="Playwright trace"
       description="Every action, network request and DOM snapshot, replayable step by step."
+      info={
+        <>
+          <p>
+            The trace is written when the session closes. <b>Open trace viewer</b> replays it here
+            with DOM snapshots, network and console; <code>trace.zip</code> also opens in a local
+            Playwright install.
+          </p>
+          <p>Vault keystrokes are excluded from traces.</p>
+        </>
+      }
+      infoDocs="dashboardSessionDetail"
     >
       <div className="flex flex-col gap-4">
         {!secure ? (

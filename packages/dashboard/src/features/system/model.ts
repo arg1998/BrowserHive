@@ -16,8 +16,10 @@ export interface SettingRow {
   readonly muted?: boolean;
   /** Colours the value when it needs attention. */
   readonly tone?: Tone;
-  /** One-line explanation behind an info button. */
+  /** One-line explanation behind an info button; `--flags` and tool names render as code. */
   readonly hint?: string;
+  /** Configuration key whose reference entry the info button links to (`maxSessions`). */
+  readonly configKey?: string;
   /** What to do about a problem value (shown under it). */
   readonly fix?: string;
   /** Value to copy (paths, addresses). */
@@ -54,22 +56,33 @@ export function settingsGroups(s: SystemInfo): readonly SettingGroup[] {
         {
           label: 'Transport',
           value: s.transport,
-          hint: 'How MCP clients reach the server: http (HTTP + WebSocket endpoint) or stdio. Set with --transport.',
+          hint: 'How MCP clients reach the server: http (Streamable HTTP, with the dashboard and API on the same port) or stdio. Set with --transport.',
+          configKey: 'transport',
         },
         {
           label: 'Bind address',
           value: `${s.host}:${s.port}`,
           mono: true,
           copy: `${s.host}:${s.port}`,
-          hint: 'Where MCP clients and this dashboard connect. A non-loopback host requires --auth token or --allow-insecure-bind.',
+          hint: 'Where MCP clients and this dashboard connect. A non-loopback host requires --auth token or --allowInsecureBind.',
+          configKey: 'host',
         },
         {
           label: 'Agent authentication',
           value: s.auth_mode === 'token' ? 'Bearer token required' : 'Off (local principal)',
           ...(s.auth_mode === 'off' && { tone: 'warn' as const }),
-          hint: 'With --auth token every /mcp request needs Authorization: Bearer <token>.',
+          hint: 'With --auth token every /mcp request needs Authorization: Bearer <token>. Create agent tokens on the Agent tokens tab.',
+          configKey: 'auth',
         },
-        { label: 'Data directory', value: s.data_dir, mono: true, path: true, copy: s.data_dir },
+        {
+          label: 'Data directory',
+          value: s.data_dir,
+          mono: true,
+          path: true,
+          copy: s.data_dir,
+          hint: 'Database, saved logins, persistent profiles, traces and backups live here. Set with --dataDir.',
+          configKey: 'dataDir',
+        },
       ],
     },
     {
@@ -79,29 +92,34 @@ export function settingsGroups(s: SystemInfo): readonly SettingGroup[] {
         {
           label: 'Max sessions',
           value: s.capacity.max === null ? 'Unbounded' : formatNumber(s.capacity.max),
-          hint: `Sessions requested past the cap are refused. Source: ${s.capacity.max_source}. Set with --max-sessions.`,
+          hint: `Sessions requested past the cap are refused. Source: ${s.capacity.max_source}. Set with --maxSessions.`,
+          configKey: 'maxSessions',
         },
         {
           label: 'Persistence',
           value: s.persistence_mode,
           hint: 'Default for new sessions: memory (nothing kept), persistent (reused profile) or storage-state (cookies snapshot). Set with --persistence.',
+          configKey: 'persistence',
         },
         {
           label: 'Evaluate tool',
           value: s.allow_evaluate ? 'Enabled' : 'Disabled',
           ...(evaluateRisky(s) && { tone: 'danger' as const }),
-          hint: 'Arbitrary page scripting. It can read a vault credential after vault_fill, so it is a risk only while the vault is in use. Set with --allow-evaluate.',
+          hint: 'Arbitrary page scripting. It can read a vault credential after vault_fill, so it is a risk only while the vault is in use. Set with --allowEvaluate.',
+          configKey: 'allowEvaluate',
         },
         {
           label: 'URL blocklist',
           value: s.blocklist.configured ? `${formatNumber(s.blocklist.patterns)} patterns` : 'Off',
           ...(s.blocklist.path !== null && { copy: s.blocklist.path }),
           hint: 'Destinations agents may never open. Set with --blocklist <file>.',
+          configKey: 'blocklist',
         },
         {
           label: 'Retention',
           value: `${formatNumber(s.retention.days)} days${s.retention.bytes > 0 ? ` · ${formatBytes(s.retention.bytes)} cap` : ''}`,
-          hint: 'Events older than this, or past the byte cap, are pruned. Set with --retention-days and --retention-bytes.',
+          hint: 'Events older than this, or past the byte cap, are pruned. Set with --retentionDays and --retentionBytes.',
+          configKey: 'retentionDays',
         },
       ],
     },
@@ -112,20 +130,33 @@ export function settingsGroups(s: SystemInfo): readonly SettingGroup[] {
         {
           label: 'Profile',
           value: s.stealth.profile,
-          hint: 'off (raw Playwright), standard (patched driver and hardened launch) or max (adds fingerprint injection). Set with --stealth.',
+          hint: 'off (raw Playwright), standard (patched driver and hardened launch) or max (adds a display fingerprint). Set with --stealth.',
+          configKey: 'stealth',
         },
         {
           label: 'Driver',
           value: s.stealth.driver,
-          hint: 'patchright hides the CDP Runtime.enable leak; playwright is used when Patchright is absent.',
+          hint: 'patchright hides the CDP Runtime.enable leak; playwright is used when Patchright is absent. Set with --stealthDriver.',
+          configKey: 'stealthDriver',
         },
-        { label: 'Fingerprint by default', value: onOff(s.stealth.fingerprint) },
-        { label: 'Humanize by default', value: onOff(s.stealth.humanize) },
+        {
+          label: 'Fingerprint by default',
+          value: onOff(s.stealth.fingerprint),
+          hint: 'Coherent screen and window geometry per session. On by default with --stealth max. Set with --fingerprint.',
+          configKey: 'fingerprint',
+        },
+        {
+          label: 'Humanize by default',
+          value: onOff(s.stealth.humanize),
+          hint: 'Human-like mouse paths and typing rhythm for input tools. Slower, and needs stealth on. Set with --humanize.',
+          configKey: 'humanize',
+        },
         {
           label: 'CAPTCHA handling',
           value: s.stealth.captcha,
           ...(s.stealth.captcha === 'solver' && { tone: 'warn' as const }),
-          hint: 'attention hands the browser to a human, solver uses an external service, off does nothing. Set with --captcha.',
+          hint: 'attention hands the browser to a human when a CAPTCHA appears; off does nothing. Set with --captcha.',
+          configKey: 'captcha',
         },
       ],
     },
@@ -136,14 +167,16 @@ export function settingsGroups(s: SystemInfo): readonly SettingGroup[] {
         {
           label: 'Vault',
           value: s.vault.enabled ? (s.vault.backend ?? 'On') : 'Off',
-          hint: 'Credential injection for vault_fill. Set with --vault.',
+          hint: 'Credential injection for vault_fill: the agent names an entry, the password never reaches the model. Set with --vault.',
+          configKey: 'vault',
         },
         {
           label: 'Telemetry',
           value: s.otel.enabled
             ? `OTLP${s.otel.endpoint !== null ? ` → ${s.otel.endpoint}` : ''}${s.otel.protocol !== null ? ` (${s.otel.protocol})` : ''}`
             : 'Off',
-          hint: 'OpenTelemetry export of traces, metrics and logs. Set with --otel.',
+          hint: 'OpenTelemetry export of traces, metrics and logs. Off by default; nothing leaves this machine unless it is on. Set with --otel.',
+          configKey: 'otel',
         },
       ],
     },
@@ -282,7 +315,7 @@ export function systemNotices(
       id: 'evaluate',
       tone: 'danger',
       title: 'Evaluate is enabled while the vault is in use',
-      body: 'A credential filled by vault_fill is readable by page scripts unless a session opts out. Disable --allow-evaluate unless you need arbitrary scripting.',
+      body: 'A credential filled by vault_fill is readable by page scripts unless a session opts out. Disable --allowEvaluate unless you need arbitrary scripting.',
     });
   if (health !== undefined && health.status === 'degraded')
     out.push({

@@ -64,6 +64,7 @@ export function AttentionPage() {
         }
         description="Agents that called request_attention wait here, their lease frozen, until you decide."
         learnMore={<ModeExplainer mode={null} />}
+        learnMoreDocs="attention"
         actions={<SoundToggle enabled={sound} onChange={setSound} />}
       />
       <DataPanel query={pending} skeleton={<SkeletonCard />} isEmpty={() => false} empty={null}>

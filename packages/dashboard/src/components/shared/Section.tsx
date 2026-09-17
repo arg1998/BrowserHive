@@ -2,19 +2,56 @@
 import { type ReactNode, useId } from 'react';
 import { formatNumber } from '@/lib/format/bytes.ts';
 import { cn } from '@/lib/utils.ts';
+import { type InfoDocs, InfoDot } from './InfoDot.tsx';
 
 /** Props. */
 export interface SectionProps {
   readonly title: ReactNode;
   readonly description?: ReactNode;
+  /** Explainer behind an info button after the title. */
+  readonly info?: ReactNode;
+  /** "Read the docs" link under `info`. */
+  readonly infoDocs?: InfoDocs;
   readonly count?: number;
   readonly actions?: ReactNode;
   readonly children: ReactNode;
   readonly className?: string;
 }
 
+/** Info button beside a heading; named after the heading when it is plain text. */
+function TitleInfo({
+  title,
+  info,
+  docs,
+}: {
+  readonly title: ReactNode;
+  readonly info: ReactNode;
+  readonly docs: InfoDocs | undefined;
+}) {
+  return (
+    <span className="inline-flex font-normal">
+      <InfoDot
+        label={typeof title === 'string' ? `About ${title}` : 'About this section'}
+        align="start"
+        {...(docs !== undefined && { docs })}
+      >
+        {info}
+      </InfoDot>
+    </span>
+  );
+}
+
 /** Labelled section: heading row, then content. No surface of its own. */
-export function Section({ title, description, count, actions, children, className }: SectionProps) {
+export function Section({
+  title,
+  description,
+  info,
+  infoDocs,
+  count,
+  actions,
+  children,
+  className,
+}: SectionProps) {
   const id = useId();
   return (
     <section aria-labelledby={id} className={cn('flex min-w-0 flex-col gap-3', className)}>
@@ -27,6 +64,7 @@ export function Section({ title, description, count, actions, children, classNam
                 {formatNumber(count)}
               </span>
             ) : null}
+            {info !== undefined ? <TitleInfo title={title} info={info} docs={infoDocs} /> : null}
           </h2>
           {description !== undefined ? (
             <p className="text-sm text-muted-foreground">{description}</p>
@@ -43,6 +81,10 @@ export function Section({ title, description, count, actions, children, classNam
 export interface PanelProps {
   readonly title?: ReactNode;
   readonly description?: ReactNode;
+  /** Explainer behind an info button after the title. */
+  readonly info?: ReactNode;
+  /** "Read the docs" link under `info`. */
+  readonly infoDocs?: InfoDocs;
   readonly actions?: ReactNode;
   readonly children: ReactNode;
   /** `default` 20px padding; `none` for flush content (tables, lists with their own row padding). */
@@ -55,6 +97,8 @@ export interface PanelProps {
 export function Panel({
   title,
   description,
+  info,
+  infoDocs,
   actions,
   children,
   padding = 'default',
@@ -80,8 +124,11 @@ export function Panel({
         >
           <div className="flex min-w-0 flex-col">
             {title !== undefined ? (
-              <h2 id={id} className="text-base font-semibold">
+              <h2 id={id} className="flex items-center gap-1 text-base font-semibold">
                 {title}
+                {info !== undefined ? (
+                  <TitleInfo title={title} info={info} docs={infoDocs} />
+                ) : null}
               </h2>
             ) : null}
             {description !== undefined ? (

@@ -10,6 +10,7 @@ import { Panel } from '@/components/shared/Section.tsx';
 import { SkeletonKv } from '@/components/shared/Skeletons.tsx';
 import { formatNumber } from '@/lib/format/bytes.ts';
 import { ICONS } from '@/lib/icons.ts';
+import { docsUrl } from '@/lib/links.ts';
 import { isForbidden, useCreateToken, useRevokeToken, useTokens } from './api.ts';
 import { CreateTokenForm } from './CreateTokenForm.tsx';
 import { type CreatedToken, TokenCreatedDialog } from './TokenCreatedDialog.tsx';
@@ -100,6 +101,17 @@ export function TokensSection({ origin, authMode, daemon }: TokensSectionProps) 
             Create one token per agent and revoke it when the agent is retired.
           </>
         }
+        info={
+          <>
+            <p>
+              Tokens only matter when the daemon runs with <code>--auth token</code>, which a
+              non-loopback bind requires. Each token is shown once when it is created; store it in
+              the agent's MCP client configuration.
+            </p>
+            <p>Revoking a token rejects the agent's next request.</p>
+          </>
+        }
+        infoDocs="agentTokens"
         padding="none"
       >
         {forbidden ? (
@@ -131,9 +143,16 @@ export function TokensSection({ origin, authMode, daemon }: TokensSectionProps) 
                 <p className="flex items-start gap-2 border-t px-5 py-3.5 text-base text-muted-foreground">
                   <ICONS.lock aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
                   <span>
-                    No agent tokens yet. The MCP clients guide{' '}
-                    <span className="whitespace-nowrap">(docs/guide/mcp-clients.md)</span> shows
-                    where an agent puts one.
+                    No agent tokens yet. The{' '}
+                    <a
+                      href={docsUrl('agentTokens')}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-medium text-accent-text underline-offset-4 hover:underline"
+                    >
+                      MCP clients guide
+                    </a>{' '}
+                    shows where an agent puts one.
                   </span>
                 </p>
               }

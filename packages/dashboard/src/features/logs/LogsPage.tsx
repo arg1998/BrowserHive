@@ -291,13 +291,19 @@ export function LogsPage() {
         description="The daemon's log ring, newest first, tailed live."
         learnMore={
           <>
-            The ring holds the most recent 5,000 records. New records stream in at the top while
-            Live is on; scroll down to read and the tail pauses, holding new records until you
-            return. Dashboard traffic (API reads and socket connects from open dashboards) is hidden
-            unless you turn it on. Export downloads every matching record as NDJSON, dashboard
-            traffic included.
+            <p>
+              The ring holds the most recent 5,000 records. New records stream in at the top while
+              Live is on; scroll down to read and the tail pauses, holding new records until you
+              return.
+            </p>
+            <p>
+              Dashboard traffic (API reads and socket connects from open dashboards) is hidden
+              unless you turn it on. Export downloads every matching record as NDJSON, dashboard
+              traffic included.
+            </p>
           </>
         }
+        learnMoreDocs="dashboardLogs"
         // On phones the header actions join the toolbar row instead of taking a row of their own.
         {...(!phone && {
           actions: (

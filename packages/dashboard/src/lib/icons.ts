@@ -12,6 +12,7 @@ import {
   ArrowUpRight,
   Bell,
   BellOff,
+  BookOpen,
   Braces,
   Bug,
   Camera,
@@ -34,6 +35,7 @@ import {
   Cookie,
   Copy,
   CornerDownLeft,
+  createLucideIcon,
   Download,
   Ellipsis,
   ExternalLink,
@@ -117,6 +119,18 @@ import {
   ZoomOut,
 } from 'lucide-react';
 
+/** The GitHub mark in lucide's stroke style (lucide no longer ships brand icons). */
+const GitHub = createLucideIcon('github', [
+  [
+    'path',
+    {
+      d: 'M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4',
+      key: 'github-body',
+    },
+  ],
+  ['path', { d: 'M9 18c-4.51 2-5-2-7-2', key: 'github-tail' }],
+]);
+
 /** Icon sizes (px): 14 inline in dense text, 16 in controls and rows, 20 in nav. */
 export const ICON_SIZE = { sm: 14, md: 16, lg: 20 } as const;
 /** Icon size name. */
@@ -164,6 +178,9 @@ export const ICONS = {
   info: Info,
   error: CircleAlert,
   help: CircleQuestionMark,
+  book: BookOpen,
+  github: GitHub,
+  rocket: Rocket,
   lock: Lock,
   logout: LogOut,
   user: UserRound,
