@@ -516,7 +516,7 @@ Details in `04-admin-frontend.md`.
   browserhive.config.json        optional (also discovered in cwd or via --config)
 ```
 
-OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA%\BrowserHive` (Windows), `$XDG_DATA_HOME/browserhive` (Linux). Directories are 0700 and secret files 0600. Full-profile snapshots are zipped with `fflate` (synchronous API, regular files only, zip-slip guard on extract). The lock file prevents a daemon and a maintenance command (or two daemons) from writing the same directory.
+OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA%\BrowserHive` (Windows), `$XDG_DATA_HOME/browserhive` (Linux). Directories are 0700 and secret files 0600. Narrowing a directory's mode is best effort, as it already is for the database file: a filesystem that rejects `chmod` (CIFS/SMB shares, some container bind mounts, Windows) logs `data dir permissions not applied` at `warn` instead of failing boot, and `browserhive doctor` flags the mode. Failing to *create* a directory is still `DATA_DIR_UNWRITABLE`. Full-profile snapshots are zipped with `fflate` (synchronous API, regular files only, zip-slip guard on extract). The lock file prevents a daemon and a maintenance command (or two daemons) from writing the same directory.
 
 **Consequences.** `browserhive purge` and `browserhive doctor` work from this layout; `doctor` reports files in the data directory that are not part of it.
 

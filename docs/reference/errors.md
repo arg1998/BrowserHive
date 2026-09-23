@@ -1438,7 +1438,7 @@ Message: `The data directory {path} is not writable.`
 
 Hint: Fix permissions or choose another dataDir.
 
-Cause: The data directory could not be created with mode 0700 or is owned by another user.
+Cause: The data directory could not be created, or is owned by another user. A filesystem that only refuses the 0700 mode is not fatal: boot logs a warning instead.
 
 Resolution: Point `dataDir` at a directory the server user owns.
 
