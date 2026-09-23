@@ -1107,7 +1107,7 @@ Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](err
 
 **Save storage state** · capability `mutate` · since 0.1.0
 
-> Save the session's cookies + localStorage as a light "storage-state" snapshot for later restore via launch_session({ context_options: { storageState: name } }) in a non-persistent mode. Valid in any persistence mode.
+> Save the session's cookies, localStorage and IndexedDB as a light "storage-state" snapshot for later restore via launch_session({ context_options: { storageState: name } }) in a non-persistent mode. Valid in any persistence mode.
 
 Annotations: readOnly no · destructive no · idempotent yes · openWorld no
 

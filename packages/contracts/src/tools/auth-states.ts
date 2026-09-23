@@ -18,12 +18,12 @@ export const SavedAuthEntry = z.object({
   size: z.number(),
 });
 
-/** `save_storage_state`: light cookies + localStorage snapshot; valid in any persistence mode. */
+/** `save_storage_state`: light cookies, localStorage and IndexedDB snapshot; valid in any persistence mode. */
 export const SAVE_STORAGE_STATE = defineTool({
   name: 'save_storage_state',
   title: 'Save storage state',
   description:
-    'Save the session\'s cookies + localStorage as a light "storage-state" snapshot for later ' +
+    'Save the session\'s cookies, localStorage and IndexedDB as a light "storage-state" snapshot for later ' +
     'restore via launch_session({ context_options: { storageState: name } }) in a non-persistent ' +
     'mode. Valid in any persistence mode.',
   input: z.object({ session_id: z.string(), name: z.string() }),

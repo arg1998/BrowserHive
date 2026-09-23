@@ -1,7 +1,7 @@
 {
   "name": "save_storage_state",
   "title": "Save storage state",
-  "description": "Save the session's cookies + localStorage as a light \"storage-state\" snapshot for later restore via launch_session({ context_options: { storageState: name } }) in a non-persistent mode. Valid in any persistence mode.",
+  "description": "Save the session's cookies, localStorage and IndexedDB as a light \"storage-state\" snapshot for later restore via launch_session({ context_options: { storageState: name } }) in a non-persistent mode. Valid in any persistence mode.",
   "inputSchema": {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "type": "object",
