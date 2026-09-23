@@ -89,7 +89,7 @@ Display catalogue per host family (`darwin → macos`, `win32 → windows`, else
 
 Derivation, outside-in so the inequality chain holds by construction: display → `availHeight = height − bar` → 70 % maximised else inset window (`marginX` 40..12 % width, `marginY` 20..10 % height, random `screenX/Y` within margin) → viewport = outer minus chrome, height ≥ 400. Guarantee: `innerHeight < outerHeight ≤ availHeight ≤ height`.
 
-Host-coherent, not foreign: `hardwareConcurrency`, WebGL vendor/renderer, canvas/audio/font entropy stay native on purpose (cross-checkable against the real GPU). Only per-user-arbitrary values vary.
+Host-coherent, not foreign: `hardwareConcurrency`, WebGL vendor/renderer, canvas/audio/font entropy stay native on purpose (cross-checkable against the real GPU). Only per-user-arbitrary values vary. Under headless, "native" WebGL is Chromium's software renderer, not the host GPU (§14).
 
 `contextOptionsFor(fp, geo, assertDisplay)`: `assertDisplay` ⇒ `{ viewport, deviceScaleFactor }`; else `{ viewport: null }` (track the real window — omitting the key would give 1280×720). Adds `locale`, `timezoneId`, and `geolocation` (only if the seed has coordinates) when `geo !== null`. Never emits `userAgent`, `extraHTTPHeaders`, `colorScheme`.
 
@@ -246,9 +246,13 @@ Deferred (seam only, not built): stealth self-test page on the dashboard System 
 - **Canvas/audio/font entropy**: host-coherent by design; a stable host-linked identity, not a rotating one.
 - **GREASE brand / `platformVersion`**: plausible values, not byte-exact live-Chrome values.
 - **Blocklist is not egress control**: subresources pass; an `evaluate`-enabled agent can `fetch()` a blocked URL.
+- **Headless WebGL is software-rendered.** Measured through BrowserHive (headless, `stealth=standard`, Patchright, Chrome for Testing 153), with and without `fingerprint`: `UNMASKED_RENDERER_WEBGL` is `ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)` on a host that has a GPU. A headless session therefore presents as a GPU-less machine; headed sessions use the real GPU.
+- **Headless permission contradiction.** `navigator.permissions.query({ name: 'notifications' })` answers `prompt` while `Notification.permission` is `denied`, and `Notification.requestPermission()` resolves `denied` after about 2 s without showing anything. Same with and without `fingerprint`; not masked.
+- **Default geometry is Playwright's.** With `fingerprint: false` — the default under `stealth=standard` — a headless session reports a 1280×720 screen and viewport, the size the display catalogue deliberately excludes (§2.4). `fingerprint: true` (default under `stealth=max`) replaces it with a catalogue display, e.g. 2560×1440 on Linux.
 
 ## Design notes
 
 - `captcha=solver` is a reserved enum member: accepting a value with no implementation would tell the operator CAPTCHAs are handled when they are not. When a solver tier ships, making it a real member is additive.
 - `BROWSERHIVE_STEALTH_DRIVER` is the env spelling of `stealthDriver`; `BROWSERHIVE_DISABLE_PATCHRIGHT` is an unsupported spelling answered with a hint naming it (08 §5.5).
 - Refusing `chromiumSandbox: false`, `env`, `downloadsPath` and `recordVideo` in pass-through launch options closes a high-severity bypass of the deny-list's intent (sandbox off, injected environment, writes outside the managed data dir); the error code reuses `UNSAFE_LAUNCH_ARG` with the field name in details.
+- **The Chromium sandbox is off today.** Playwright adds `--no-sandbox` unless `chromiumSandbox` is `true`, and BrowserHive never sets it, so every session runs unsandboxed (confirmed on the live process list): a compromised renderer has the server process's privileges. Turning it on is not a one-line fix: on hosts that restrict unprivileged user namespaces — Ubuntu 23.10+ with AppArmor's default `kernel.apparmor_restrict_unprivileged_userns=1`, default Docker — Chromium then fails to launch ("Chromium sandboxing failed!"). Enabling it needs a fallback and is an open decision. The refusals above stay, so the posture cannot silently get worse once it is enabled.

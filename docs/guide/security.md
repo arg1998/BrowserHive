@@ -107,6 +107,7 @@ During an open attention request, an operator's mouse and keyboard input goes st
 
 ## Other limits
 
+- Browser processes run without Chromium's sandbox (`--no-sandbox`, Playwright's default). A page that exploits a Chromium bug gets the privileges of the user running BrowserHive, so run it as a user with access only to what it needs, and keep BrowserHive updated: each version pins its Chromium build.
 - WebAuthn and passkeys cannot be replayed from saved state.
 - Telemetry is off by default. Nothing leaves the host unless you set `--otel`, and then only to the endpoint you configure.
 
