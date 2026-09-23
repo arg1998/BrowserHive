@@ -22,8 +22,62 @@ describe('SessionRepository', () => {
     expect(got).toEqual({
       ...record,
       counts: { toolCalls: 0, errors: 0, pages: 0, blocked: 0, attentionOpen: 0, vaultAccess: 0 },
+      client: null,
     });
     expect(await t.repos.sessions.get('missing')).toBeNull();
+  });
+
+  it('joins the launching connection as the session client (spec 03 §4.2)', async () => {
+    const connection = (connectionId: string, fields: Record<string, string | null>) =>
+      t.repos.mcpConnections.insert({
+        connectionId,
+        principalId: 'local',
+        transport: 'http',
+        mcpSessionId: null,
+        clientName: null,
+        clientVersion: null,
+        protocolVersion: null,
+        capabilities: null,
+        agentName: null,
+        model: null,
+        harness: 'claude-code',
+        ip: null,
+        userAgent: null,
+        connectedAt: 1,
+        lastSeenAt: 1,
+        closedAt: null,
+        ...fields,
+      });
+    await connection('c-full', {
+      clientName: 'claude-code',
+      clientVersion: '2.1.0',
+      agentName: 'checkout-bot',
+      model: 'claude-opus-5',
+    });
+    await connection('c-silent', {});
+    await t.repos.sessions.insert(
+      sessionRecord({ sessionId: 'full-0000001', connectionId: 'c-full' }),
+    );
+    await t.repos.sessions.insert(
+      sessionRecord({ sessionId: 'slnt-0000001', connectionId: 'c-silent' }),
+    );
+    await t.repos.sessions.insert(sessionRecord({ sessionId: 'none-0000001', connectionId: null }));
+    expect((await t.repos.sessions.get('full-0000001'))?.client).toEqual({
+      name: 'claude-code',
+      version: '2.1.0',
+      agentName: 'checkout-bot',
+      model: 'claude-opus-5',
+    });
+    // A connection that declared nothing, and a session without one, are both "unknown".
+    expect((await t.repos.sessions.get('slnt-0000001'))?.client).toBeNull();
+    expect((await t.repos.sessions.get('none-0000001'))?.client).toBeNull();
+    const listed = await t.repos.sessions.list({ limit: 10 });
+    expect(listed.items.find((row) => row.sessionId === 'full-0000001')?.client?.model).toBe(
+      'claude-opus-5',
+    );
+    // The foreign key is ON DELETE SET NULL, so a pruned connection leaves an unknown client.
+    t.handle.raw.exec("DELETE FROM mcp_connections WHERE connection_id = 'c-full'");
+    expect((await t.repos.sessions.get('full-0000001'))?.client).toBeNull();
   });
 
   it('updates, closes once, archives and reconciles', async () => {

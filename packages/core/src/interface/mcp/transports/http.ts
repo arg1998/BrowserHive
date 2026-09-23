@@ -9,6 +9,7 @@ import type { Clock } from '../../../ports/clock.ts';
 import type { IdGenerator } from '../../../ports/id-generator.ts';
 import type { Logger } from '../../../ports/logger.ts';
 import type { McpConnectionRepository } from '../../../ports/persistence/operations.ts';
+import { declaredClientOf } from '../client-info.ts';
 import type { RuntimeFacts } from '../context.ts';
 import type { ToolDispatcher } from '../dispatcher.ts';
 import { authInfoFor } from '../principal.ts';
@@ -148,6 +149,7 @@ export function createMcpHttpHandler(options: McpHttpOptions): McpHttpHandler {
   ): Promise<Response> => {
     const connectionId = `c-${options.ids.opaque(10)}`;
     const params = initializeParams(body);
+    const declared = declaredClientOf(request.headers);
     let entry: Entry | undefined;
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: () => `m-${options.ids.opaque(16)}`,
@@ -171,9 +173,9 @@ export function createMcpHttpHandler(options: McpHttpOptions): McpHttpHandler {
             clientVersion: params.clientInfo?.version ?? null,
             protocolVersion: params.protocolVersion ?? null,
             capabilities: params.capabilities ?? null,
-            agentName: request.headers.get('x-bh-agent-harness'),
-            model: request.headers.get('x-bh-agent-model'),
-            harness: request.headers.get('x-bh-agent-harness'),
+            agentName: declared.agentName,
+            model: declared.model,
+            harness: declared.harness,
             ip: null,
             userAgent: request.headers.get('user-agent'),
             connectedAt: now,
@@ -191,6 +193,7 @@ export function createMcpHttpHandler(options: McpHttpOptions): McpHttpHandler {
       runtime: options.runtime,
       dispatcher: options.dispatcher,
       connectionIdOf: () => connectionId,
+      declaredClient: declared,
     });
     await server.connect(transport);
     return transport.handleRequest(request, { parsedBody: body, authInfo: authInfoFor(principal) });

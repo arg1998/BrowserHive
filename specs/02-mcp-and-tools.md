@@ -69,7 +69,13 @@ The MCP route runs the same `AuthenticationProvider` chain as the admin API (D-0
 
 Ownership is keyed on the **principal**, never on `Mcp-Session-Id`: a reconnecting client (new MCP session, same token) keeps its browser sessions. Under `auth=off` everything is owned by `local`.
 
-Each MCP session gets a row in `connections` (`connection_id`, `principal_id`, `transport`, `client_name`, `client_version`, `client_title`, `protocol_version`, `capabilities_json`, `remote_ip`, `user_agent`, `meta_json`, `connected_at`, `last_seen_at`, `closed_at`). Sources, most-trusted wins on conflict: the transport (IP, `User-Agent`, `X-BH-Agent-Model`, `X-BH-Agent-Harness`, `X-BH-Workspace` headers) → `initialize` (`clientInfo`, `protocolVersion`, `capabilities`, `_meta['browserhive.ai/*']`) → per-call `_meta` (`model`, `turn`, `traceId`). Browser sessions record `connection_id` at creation. All of it is **self-reported, dashboard-only, never used for access control**; the `_meta['browserhive.ai/traceId']` (or standard `traceparent` in `_meta`) is adopted as the parent of the tool span (D-08).
+Each MCP session gets a row in `mcp_connections` (DDL in 03 §7: `connection_id`, `principal_id`, `transport`, `mcp_session_id`, `client_name`, `client_version`, `protocol_version`, `capabilities_json`, `agent_name`, `model`, `harness`, `ip`, `user_agent`, `connected_at`, `last_seen_at`, `closed_at`). What fills it:
+
+- `initialize`, both transports: `clientInfo.name`/`version` and `capabilities` (the SDK's record of the handshake). HTTP also stores `protocolVersion`; stdio writes the row at startup and fills these in when `initialize` arrives.
+- HTTP only: `User-Agent`, and three optional headers, one column each — `X-BH-Agent-Harness` → `harness`, `X-BH-Agent-Model` → `model`, `X-BH-Workspace` → `agent_name`. A blank header counts as absent.
+- `ip` is reserved and always `null` today; `clientInfo.title` and other `initialize` `_meta` are not read.
+
+Browser sessions record `connection_id` at creation and carry that connection's client (`name`, `version`, `agent_name`, `model`) as `SessionSummary.client` (03 §4.2), fixed at launch; `harness` is recorded but not surfaced yet. All of it is **self-reported, dashboard-only, never used for access control**. Per-call `_meta` contributes only tracing: a W3C `traceparent` (or a bare 32-hex id under `browserhive.ai/traceId` or `traceId`) is adopted as the parent of the tool span (D-08); other keys are ignored.
 
 ## 2. Tool definitions
 

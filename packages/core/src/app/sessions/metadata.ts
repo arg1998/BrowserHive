@@ -7,6 +7,7 @@ import type {
   SessionMetadata,
   AppliedIdentity as WireIdentity,
 } from '@browserhive/contracts/tools';
+import type { SessionClientInfo } from '../../domain/session/client-info.ts';
 import type { Session } from '../../domain/session/session.ts';
 import { isOpen } from '../../domain/session/state.ts';
 import { redactKeys } from '../../kernel/redact.ts';
@@ -92,7 +93,18 @@ export function toSessionMetadata(session: Session): SessionMetadataWithDriver {
   };
 }
 
-/** The one HTTP/WS shape (spec 03 §4.2). `client`/`has_live_viewers` are enriched by the interface layer. */
+/** `SessionSummary.client`: the self-reported client that launched the session, or `null`. */
+export function toWireClient(client: SessionClientInfo | null): SessionSummary['client'] {
+  if (client === null) return null;
+  return {
+    name: client.name,
+    version: client.version,
+    ...(client.agentName !== null && { agent_name: client.agentName }),
+    ...(client.model !== null && { model: client.model }),
+  };
+}
+
+/** The one HTTP/WS shape (spec 03 §4.2). `has_live_viewers` is enriched by the interface layer. */
 export function toSessionSummary(session: Session, now: number): SessionSummary {
   const request = session.request;
   return {
@@ -133,7 +145,7 @@ export function toSessionSummary(session: Session, now: number): SessionSummary 
       vault_access: session.counts.vaultAccess,
     },
     has_live_viewers: false,
-    client: null,
+    client: toWireClient(request.client),
   };
 }
 

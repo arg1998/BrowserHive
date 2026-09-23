@@ -1,6 +1,8 @@
 /** @module test/integration/stdio-handshake.test — under `transport=stdio` stdout carries only JSON-RPC frames even when something calls `globalConsole.log`; logs and banner go to stderr (spec 09 §3.4). */
 
+import { Database } from 'bun:sqlite';
 import { afterAll, describe, expect, it } from 'bun:test';
+import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { ALL_TOOL_NAMES } from '@browserhive/contracts/tools';
 import { bootServer } from '../../src/composition/index.ts';
@@ -78,5 +80,16 @@ describe('stdio handshake', () => {
 
     stdin.end();
     expect(await server.done).toBe(0);
+
+    // The stdio connection row records what `initialize` revealed, like the http one does.
+    const db = new Database(join(dir.path, 'browserhive.db'), { readonly: true });
+    try {
+      const rows = db
+        .query("SELECT client_name, client_version FROM mcp_connections WHERE transport = 'stdio'")
+        .all();
+      expect(rows).toEqual([{ client_name: 'stdio-test', client_version: '1.0.0' }]);
+    } finally {
+      db.close();
+    }
   });
 });

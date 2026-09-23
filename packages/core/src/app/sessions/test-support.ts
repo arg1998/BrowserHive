@@ -25,6 +25,7 @@ export function testRequest(overrides: Partial<CreateSessionRequest> = {}): Crea
     owner: 'local',
     tenantId: null,
     connectionId: null,
+    client: null,
     ...overrides,
   };
 }

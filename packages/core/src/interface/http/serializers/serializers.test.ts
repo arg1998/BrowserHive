@@ -57,7 +57,7 @@ const call = {
 
 describe('serializers', () => {
   it('session rows', () => {
-    const wire = sessionRowToSummary({ ...sessionRecord(), counts }, NOW, true);
+    const wire = sessionRowToSummary({ ...sessionRecord(), counts, client: null }, NOW, true);
     const parsed = SessionSummary.parse(wire);
     expect(parsed).toMatchObject({
       session_id: 'shop-0000000a',
@@ -65,6 +65,7 @@ describe('serializers', () => {
       lease_remaining_ms: 0,
       has_live_viewers: true,
       counts: { tool_calls: 2, errors: 1, vault_access: 1 },
+      client: null,
     });
     const open = sessionRowToSummary(
       {
@@ -75,12 +76,19 @@ describe('serializers', () => {
           leaseExpiresAt: NOW + 500,
         }),
         counts,
+        client: { name: 'claude-code', version: '2.1.0', agentName: null, model: 'claude-opus-5' },
       },
       NOW,
       false,
     );
     expect(open.live).toBe(true);
     expect(open.lease_remaining_ms).toBe(500);
+    // Header fields the client did not send are omitted, never `null` (the contract has them optional).
+    expect(SessionSummary.parse(open).client).toEqual({
+      name: 'claude-code',
+      version: '2.1.0',
+      model: 'claude-opus-5',
+    });
   });
 
   it('session query mapping keeps only supplied filters', () => {

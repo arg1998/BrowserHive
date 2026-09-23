@@ -157,6 +157,67 @@ describe('MCP Streamable HTTP transport', () => {
     expect(after.status).toBe(404);
   });
 
+  it('stores each X-BH-* header in its own column and carries the client into launched sessions', async () => {
+    const { handler, connections } = await setup();
+    const init = await handler.handleMcpRequest(
+      post(initialize, {
+        'x-bh-agent-harness': 'claude-code',
+        'x-bh-agent-model': 'claude-opus-5',
+        'x-bh-workspace': 'checkout-bot',
+      }),
+      LOCAL_PRINCIPAL,
+    );
+    const mcpSessionId = init.headers.get('mcp-session-id') ?? '';
+    expect([...connections.rows.values()][0]).toMatchObject({
+      harness: 'claude-code',
+      model: 'claude-opus-5',
+      agentName: 'checkout-bot',
+    });
+    const session = {
+      'mcp-session-id': mcpSessionId,
+      'mcp-protocol-version': LATEST_PROTOCOL_VERSION,
+    };
+    await handler.handleMcpRequest(
+      post({ jsonrpc: '2.0', method: 'notifications/initialized' }, session),
+      LOCAL_PRINCIPAL,
+    );
+    const launched = await sseJson(
+      await handler.handleMcpRequest(
+        post(
+          {
+            jsonrpc: '2.0',
+            id: 2,
+            method: 'tools/call',
+            params: { name: 'launch_session', arguments: { slug: 'probe' } },
+          },
+          session,
+        ),
+        LOCAL_PRINCIPAL,
+      ),
+    );
+    const sessionId = (launched.result as { structuredContent?: { session_id?: string } })
+      .structuredContent?.session_id;
+    const live = h?.services.sessions.peek(sessionId ?? '');
+    expect(live).toBeDefined();
+    if (live === undefined || h === undefined) return;
+    expect(h.services.sessions.summary(live).client).toEqual({
+      name: 'probe',
+      version: '9.9',
+      agent_name: 'checkout-bot',
+      model: 'claude-opus-5',
+    });
+  });
+
+  it('a client that sends no X-BH-* headers stores nulls, not empty strings', async () => {
+    const { handler, connections } = await setup();
+    await handler.handleMcpRequest(post(initialize, { 'x-bh-agent-model': '  ' }), LOCAL_PRINCIPAL);
+    expect([...connections.rows.values()][0]).toMatchObject({
+      harness: null,
+      model: null,
+      agentName: null,
+    });
+  });
+
   it('refuses requests without a session that are not initialize, and malformed JSON', async () => {
     const { handler } = await setup();
     expect(

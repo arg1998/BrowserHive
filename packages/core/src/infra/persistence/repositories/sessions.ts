@@ -1,6 +1,7 @@
 /** @module infra/persistence/repositories/sessions — SQLite `SessionRepository` with the aggregated list view. */
 
 import { type Kysely, sql } from 'kysely';
+import { clientInfoOrNull } from '../../../domain/session/client-info.ts';
 import type { ClosedReason } from '../../../ports/persistence/enums.ts';
 import type {
   FacetCount,
@@ -50,12 +51,17 @@ function count(table: string, extra = ''): ReturnType<typeof sql<number>> {
   return sql<number>`(SELECT COUNT(*) FROM ${sql.table(table)} c WHERE c.session_id = s.session_id${sql.raw(extra)})`;
 }
 
-/** Sessions with their aggregates as an inline view aliased `v`. */
+/** Sessions with their aggregates and launching client as an inline view aliased `v`. */
 function view(db: Kysely<DB>) {
   return db
     .selectFrom('sessions as s')
+    .leftJoin('mcp_connections as m', 'm.connection_id', 's.connection_id')
     .selectAll('s')
     .select([
+      'm.client_name as client_name',
+      'm.client_version as client_version',
+      'm.agent_name as client_agent_name',
+      'm.model as client_model',
       count('tool_calls').as('tool_calls'),
       count('tool_calls', ' AND c.error_code IS NOT NULL').as('errors'),
       count('pages').as('pages'),
@@ -106,8 +112,15 @@ function applyFilters(qb: ViewQuery, q: SessionListQuery): ViewQuery {
 }
 
 function toListRow(row: ViewRow): SessionListRow {
+  const { client_name, client_version, client_agent_name, client_model, ...session } = row;
   return {
-    ...sessionFromRow(row),
+    ...sessionFromRow(session),
+    client: clientInfoOrNull({
+      name: client_name,
+      version: client_version,
+      agentName: client_agent_name,
+      model: client_model,
+    }),
     counts: {
       toolCalls: asNumber(row.tool_calls),
       errors: asNumber(row.errors),

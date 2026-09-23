@@ -7,6 +7,7 @@ import {
   ErrorCode,
   McpError,
 } from '@modelcontextprotocol/sdk/types.js';
+import { type DeclaredClient, sessionClientOf } from './client-info.ts';
 import type { RuntimeFacts } from './context.ts';
 import type { DispatchCall, ToolDispatcher } from './dispatcher.ts';
 import { principalFromAuthInfo } from './principal.ts';
@@ -22,6 +23,8 @@ export interface CreateMcpServerOptions {
   readonly name?: string;
   /** Maps the transport's MCP session id to its `connections` record id (http); `null` otherwise. */
   readonly connectionIdOf?: (mcpSessionId: string | undefined) => string | null;
+  /** The `X-BH-*` headers of the `initialize` request (http); merged with `clientInfo` per call. */
+  readonly declaredClient?: DeclaredClient;
 }
 
 /** The additive server-level instructions (spec 02 §1.1). */
@@ -88,6 +91,8 @@ export function createMcpServer(options: CreateMcpServerOptions): McpServer {
     const call: DispatchCall = {
       principal: principalFromAuthInfo(extra.authInfo),
       connectionId: options.connectionIdOf?.(extra.sessionId) ?? null,
+      // `clientInfo` as the SDK recorded it at `initialize`, the same for both transports.
+      client: sessionClientOf(server.server.getClientVersion(), options.declaredClient),
       signal: extra.signal,
       ...(meta !== undefined && { meta }),
       ...(progressToken !== undefined && {
