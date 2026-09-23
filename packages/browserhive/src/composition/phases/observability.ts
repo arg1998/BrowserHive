@@ -11,6 +11,7 @@ import {
   redirectConsoleToLogger,
   resolveColor,
   SecretRegistry,
+  secretConfigLiterals,
 } from '@browserhive/core/runtime';
 import type { BootContext } from '../context.ts';
 import type { OutputSinks } from '../types.ts';
@@ -56,6 +57,9 @@ export async function observabilityPhase(ctx: BootContext): Promise<PhaseHandle>
     routing.stream === 'stdout' ? input.output.isTty.stdout : input.output.isTty.stderr;
   const color = routing.format === 'pretty' && resolveColor(config.color, input.env, streamIsTty);
   const secrets = new SecretRegistry({ now: () => ctx.clock.now() });
+  // Operator-supplied secrets (agent tokens, OTLP headers) are registered at birth, before the
+  // first log line, exactly like the ones the server mints (spec 10 §9).
+  for (const literal of secretConfigLiterals(config)) secrets.add(literal);
   const redactor = createRedactor(secrets);
   const ring = createRingBuffer(config.logRingSize);
 

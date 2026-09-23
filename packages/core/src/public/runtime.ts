@@ -6,6 +6,7 @@ export { type Authenticator, createAuthenticator } from '../app/auth/authenticat
 export type { AuthEvents } from '../app/auth/events.ts';
 export { adminProviderChain, mcpProviderChain } from '../app/auth/providers/index.ts';
 export { type AuthConfig, type AuthDeps, resolveAuthConfig } from '../app/auth/types.ts';
+export { secretConfigLiterals } from '../app/config/secret-literals.ts';
 export type { DomainEventName, DomainEvents } from '../app/events/catalog.ts';
 export { ArtifactOutboxSweeper } from '../app/maintenance/artifact-outbox-sweeper.ts';
 export { BackupScheduler } from '../app/maintenance/backup-scheduler.ts';
