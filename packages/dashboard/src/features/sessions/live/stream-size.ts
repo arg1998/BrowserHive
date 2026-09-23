@@ -1,4 +1,4 @@
-/** @module features/sessions/live/stream-size — per-viewer screencast size: presets (`fit | 720p | 1080p | native`), DPR cap 2×, bounds 64–7680, quality 80/85, last-used preset in localStorage (spec 04 §12.3.1, §13) */
+/** @module features/sessions/live/stream-size — per-viewer screencast size: presets (`fit | 720p | 1080p | native`), DPR cap 2×, bounds 64–7680, last-used preset in localStorage (spec 04 §12.3.1, §13) */
 import { SCREENCAST_MAX_DIMENSION } from '@browserhive/contracts/ws';
 import { readStorage, writeStorage } from '@/lib/storage.ts';
 import { STREAM_SIZES, type StreamSize } from '../detail-search.ts';
@@ -7,8 +7,6 @@ import { STREAM_SIZES, type StreamSize } from '../detail-search.ts';
 export const STREAM_SIZE_STORAGE_KEY = 'bh.liveView.size';
 /** Debounce for `screencast.set_size` on pane resize. */
 export const SET_SIZE_DEBOUNCE_MS = 250;
-/** JPEG quality in the panel / when fullscreen (80: small UI text stays legible at pane size). */
-export const QUALITY = { panel: 80, fullscreen: 85 } as const;
 
 const MIN = 64;
 const clamp = (n: number) => Math.max(MIN, Math.min(SCREENCAST_MAX_DIMENSION, Math.round(n)));

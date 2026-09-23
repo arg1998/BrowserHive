@@ -26,7 +26,7 @@ import { STREAM_SIZES, type StreamSize } from '../detail-search.ts';
 import { closedReasonText, sessionEnded } from '../session-format.ts';
 import type { Size } from './input-mapping.ts';
 import { LIVE_PILL, livePillState, streamStats } from './live-status.ts';
-import { QUALITY, readStoredSize, storeSize, streamDims } from './stream-size.ts';
+import { readStoredSize, storeSize, streamDims } from './stream-size.ts';
 import { useContainerSize } from './use-container-size.ts';
 import { useScreencast } from './use-screencast.ts';
 import { useTakeover } from './use-takeover.ts';
@@ -145,7 +145,6 @@ export function LivePane({
     ready: box !== null,
     canvasRef,
     dims: streamDims(size, box ?? { width: 1280, height: 720 }, dpr),
-    quality: fullscreen ? QUALITY.fullscreen : QUALITY.panel,
   });
   const canTakeover = request !== null && !ended;
   const takeover = useTakeover({

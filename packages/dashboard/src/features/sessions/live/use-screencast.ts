@@ -27,7 +27,6 @@ export interface UseScreencastOptions {
   readonly live: boolean;
   readonly canvasRef: RefObject<HTMLCanvasElement | null>;
   readonly dims: { readonly max_width: number; readonly max_height: number };
-  readonly quality: number;
   /** Start as soon as the page mounts (default `true`). */
   readonly autoStart?: boolean;
   /**
@@ -93,7 +92,6 @@ export function useScreencast({
   live,
   canvasRef,
   dims,
-  quality,
   autoStart = true,
   ready = true,
   clock = () => performance.now(),
@@ -225,7 +223,7 @@ export function useScreencast({
     let cancelled = false;
     const start = (retried: boolean): void => {
       socket
-        .command('screencast.start', { session_id: id, max_width, max_height, quality })
+        .command('screencast.start', { session_id: id, max_width, max_height })
         .then(() => {
           if (!cancelled) setStatus((s) => (s === 'starting' ? 'waiting' : s));
         })
@@ -247,7 +245,7 @@ export function useScreencast({
       unsubscribe();
       void socket.command('screencast.stop', { session_id: id }).catch(() => undefined);
     };
-  }, [active, socket, sessionKey, quality, onFrame, attempt]);
+  }, [active, socket, sessionKey, onFrame, attempt]);
 
   // Debounced set_size when the requested dims change while running.
   useEffect(() => {
