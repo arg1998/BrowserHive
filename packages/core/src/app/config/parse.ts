@@ -3,7 +3,7 @@ import { isAbsolute, resolve } from 'node:path';
 import { CONFIG_SHAPE, type ConfigKey, keyMeta } from '@browserhive/contracts/config';
 import { err, ok, type Result } from '../../kernel/result.ts';
 import type { ConfigProblem } from './failure.ts';
-import { keyKind, quoteRaw } from './kinds.ts';
+import { keyKind, quoteRaw, REDACTED_TEXT } from './kinds.ts';
 import type { RawEntry } from './layers.ts';
 
 /** A parsed entry: the canonical value plus where it came from. */
@@ -41,13 +41,21 @@ export function expectedClause(key: ConfigKey, issueMessage: string): string {
   return text.endsWith('.') ? text : `${text}.`;
 }
 
+/**
+ * The rejected value as it appears in the message. A secret key's value is never echoed, even when
+ * it failed to parse: a malformed `BROWSERHIVE_AUTH_TOKENS` still carries a real token (spec 08 §1).
+ */
+function shownRaw(entry: RawEntry): string {
+  return keyMeta(entry.key).secret ? REDACTED_TEXT : quoteRaw(entry.raw);
+}
+
 function invalid(entry: RawEntry, expected: string): ConfigProblem {
   return {
     code: 'CONFIG_INVALID',
     key: entry.key,
     source: entry.source,
     location: entry.location,
-    message: `invalid value for ${entry.display}: ${quoteRaw(entry.raw)}. ${expected}`,
+    message: `invalid value for ${entry.display}: ${shownRaw(entry)}. ${expected}`,
   };
 }
 
