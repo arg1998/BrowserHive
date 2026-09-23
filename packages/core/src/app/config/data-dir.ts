@@ -4,7 +4,7 @@ import type { HostEnvironment } from '../../ports/host-environment.ts';
 
 /** Bytes per GiB. */
 const GIB = 1024 ** 3;
-/** GiB of host RAM budgeted per concurrent session (D-21). */
+/** GiB of available RAM budgeted per concurrent session (D-21). */
 export const RAM_GIB_PER_SESSION = 1.5;
 /** Upper bound of the derived `maxSessions` (D-21). */
 export const MAX_DERIVED_SESSIONS = 20;
@@ -49,7 +49,7 @@ export function deriveMaxSessions(totalMemoryBytes: number): number {
 }
 
 /**
- * Whole GiB of host RAM, for the banner (`cap 8 (derived from 12 GiB RAM)`).
+ * Whole GiB of available RAM, for the banner (`cap 8 (derived from 12 GiB RAM)`).
  *
  * @returns `totalMemoryBytes` rounded to the nearest GiB.
  */

@@ -41,7 +41,7 @@ export interface HelpOptions {
 }
 
 const DERIVED_TEXT: Readonly<Record<string, string>> = {
-  hostMemory: 'derived from host RAM',
+  hostMemory: 'derived from available RAM',
   platform: 'OS data directory',
   stealth: 'true when stealth=max',
   admin: 'same as admin',
@@ -84,7 +84,7 @@ function renderDefault(value: unknown): string {
 }
 
 /**
- * Human default of a key (`2h`, `derived from host RAM`), or `undefined` when it has none.
+ * Human default of a key (`2h`, `derived from available RAM`), or `undefined` when it has none.
  *
  * @returns The default text.
  */

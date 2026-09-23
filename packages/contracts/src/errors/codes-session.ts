@@ -56,7 +56,8 @@ export const SESSION_ERRORS = {
     hint: 'Close an idle session or wait for a lease to expire, then retry.',
     details: z.object({ limit: z.number().int(), live: z.number().int() }),
     docs: true,
-    cause: 'The number of live sessions equals `maxSessions` (derived from host RAM by default).',
+    cause:
+      'The number of live sessions equals `maxSessions` (derived from available RAM by default).',
     resolution:
       'Close sessions you no longer need, or raise `maxSessions` on a host with more memory.',
   }),

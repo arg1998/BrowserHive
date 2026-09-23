@@ -328,7 +328,7 @@ Default browser channel; launch_session channel overrides per session.
 <a id="maxSessions"></a>
 ### `maxSessions`
 
-Maximum concurrent browser sessions, or unbounded. Derived from host RAM when unset (min(floor(GiB / 1.5), 20)).
+Maximum concurrent browser sessions, or unbounded. Derived from available RAM when unset (min(floor(GiB / 1.5), 20); on Linux, host RAM capped by the cgroup memory limit).
 
 | Property | Value |
 |---|---|
@@ -336,7 +336,7 @@ Maximum concurrent browser sessions, or unbounded. Derived from host RAM when un
 | Environment | `BROWSERHIVE_MAX_SESSIONS` |
 | Config file | `"maxSessions"` |
 | Type | an integer >= 1 or 'unbounded' |
-| Default | derived from host RAM: `min(floor(RAM_GiB / 1.5), 20)` |
+| Default | derived from available RAM: `min(floor(RAM_GiB / 1.5), 20)`, where RAM is host RAM capped by the cgroup memory limit on Linux |
 | Notes | restart required |
 
 <a id="sessionLease"></a>

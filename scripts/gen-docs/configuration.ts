@@ -24,7 +24,8 @@ const GROUP_TITLES: Readonly<Record<ConfigGroup, string>> = {
 };
 
 const DERIVED_TEXT: Readonly<Record<DerivedSource, string>> = {
-  hostMemory: 'derived from host RAM: `min(floor(RAM_GiB / 1.5), 20)`',
+  hostMemory:
+    'derived from available RAM: `min(floor(RAM_GiB / 1.5), 20)`, where RAM is host RAM capped by the cgroup memory limit on Linux',
   platform:
     'derived from the OS: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA%\\BrowserHive` (Windows), `$XDG_DATA_HOME/browserhive` or `~/.local/share/browserhive` (Linux)',
   stealth: 'derived from `stealth`: `true` when `stealth=max`, otherwise `false`',

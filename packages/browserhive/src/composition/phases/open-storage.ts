@@ -21,7 +21,7 @@ export async function openStoragePhase(ctx: BootContext): Promise<PhaseHandle> {
   const log = logger.child({ module: 'persistence' });
   const layout = ensureDataDir(ctx.config.dataDir, {
     onChmodFailed: (dir, err) =>
-      log.warn('data dir permissions not applied', {
+      log.warn('data dir chmod failed', {
         path: dir,
         mode: '0700',
         err: serializeError(err),

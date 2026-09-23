@@ -161,7 +161,7 @@ Message: `Concurrent session limit reached (max={limit}). Close a session and re
 
 Hint: Close an idle session or wait for a lease to expire, then retry.
 
-Cause: The number of live sessions equals `maxSessions` (derived from host RAM by default).
+Cause: The number of live sessions equals `maxSessions` (derived from available RAM by default).
 
 Resolution: Close sessions you no longer need, or raise `maxSessions` on a host with more memory.
 

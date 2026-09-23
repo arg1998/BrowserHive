@@ -25,7 +25,7 @@ export interface Derived {
 }
 
 /**
- * Mark a key's default as derived (`maxSessions` from host RAM, `trace` from `admin`, …).
+ * Mark a key's default as derived (`maxSessions` from available RAM, `trace` from `admin`, …).
  *
  * @returns The marker for `key()`.
  */

@@ -143,7 +143,7 @@
       "x-browserhive-cli": "--defaultChannel"
     },
     "maxSessions": {
-      "description": "Maximum concurrent browser sessions, or unbounded. Derived from host RAM when unset (min(floor(GiB / 1.5), 20)).",
+      "description": "Maximum concurrent browser sessions, or unbounded. Derived from available RAM when unset (min(floor(GiB / 1.5), 20); on Linux, host RAM capped by the cgroup memory limit).",
       "x-browserhive-env": "BROWSERHIVE_MAX_SESSIONS",
       "x-browserhive-cli": "--maxSessions",
       "type": [
