@@ -42,7 +42,7 @@ The stability contract of this spec: **an agent that works against a release of 
 | `sessionIdGenerator` | `() => 'm-' + nanoid(16)` | stateful sessions so a client can hold a standalone SSE stream and resume |
 | `onsessioninitialized(id)` | creates a `connections` record (§1.4) | client metadata, dashboard "connected clients" |
 | `onsessionclosed(id)` | marks the record closed; cancels open attention requests owned by that MCP session **only if** the principal has no other live MCP session (agents reconnect) | see §5 |
-| `enableDnsRebindingProtection` / `allowedHosts` | on; `[host, host:port, 'localhost', '127.0.0.1', '[::1]']` plus configured `allowedHosts` | loopback default posture |
+| `enableDnsRebindingProtection` | **off**; `handleMcpRequest` applies the dashboard's Host policy instead (`isHostAllowed`, 03 §2: loopback names and the bound host on any port, `allowedHosts`, and IP literals under a wildcard bind), answering a foreign Host with 403 `Invalid Host header` | the SDK's check matches `host:port` exactly, which rejected every request behind a port mapping or SSH tunnel while the dashboard kept working |
 | `allowedOrigins` | empty (non-browser clients); browser-origin MCP clients are out of scope | |
 | `keepAliveMs` | 25 000 | under the common 30 s idle proxies cut |
 | `enableJsonResponse` | `false` (SSE responses) | progress notifications for `request_attention` and `type_text` need a stream |

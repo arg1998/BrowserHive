@@ -2,7 +2,7 @@
 
 # Configuration reference
 
-Every configuration key of BrowserHive (50 keys), generated from the zod schema in `@browserhive/contracts/config`. For a guided introduction see [the configuration guide](../guide/configuration.md).
+Every configuration key of BrowserHive (51 keys), generated from the zod schema in `@browserhive/contracts/config`. For a guided introduction see [the configuration guide](../guide/configuration.md).
 
 ## Precedence
 
@@ -93,6 +93,7 @@ These names are reserved for future releases. Setting any of them fails fast wit
 | [`authTokens`](#authTokens) | `--authTokens` | `BROWSERHIVE_AUTH_TOKENS` | empty list |
 | [`allowInsecureBind`](#allowInsecureBind) | `--allowInsecureBind` | `BROWSERHIVE_ALLOW_INSECURE_BIND` | `false` |
 | [`trustedProxies`](#trustedProxies) | `--trustedProxies` | `BROWSERHIVE_TRUSTED_PROXIES` | empty list |
+| [`allowedHosts`](#allowedHosts) | `--allowedHosts` | `BROWSERHIVE_ALLOWED_HOSTS` | empty list |
 | [`admin`](#admin) | `--admin` | `BROWSERHIVE_ADMIN` | `false` |
 | [`dataDir`](#dataDir) | `--dataDir` | `BROWSERHIVE_DATA_DIR` | derived (platform) |
 | [`shutdownTimeout`](#shutdownTimeout) | `--shutdownTimeout` | `BROWSERHIVE_SHUTDOWN_TIMEOUT` | `20s` |
@@ -209,6 +210,21 @@ Peers whose X-Forwarded-For is honoured (IPs or CIDR ranges). Never used on a lo
 | Config file | `"trustedProxies"` |
 | Type | a comma-separated list of IP addresses or CIDR ranges |
 | Default | empty list |
+| Notes | restart required |
+
+<a id="allowedHosts"></a>
+### `allowedHosts`
+
+Extra Host names to accept besides loopback and the bound host, such as the name a reverse proxy forwards. Ports are ignored.
+
+| Property | Value |
+|---|---|
+| CLI flag | `--allowedHosts` |
+| Environment | `BROWSERHIVE_ALLOWED_HOSTS` |
+| Config file | `"allowedHosts"` |
+| Type | a comma-separated list of host names or IP addresses |
+| Default | empty list |
+| Examples | `browserhive.example.com` |
 | Notes | restart required |
 
 <a id="admin"></a>

@@ -171,6 +171,7 @@ Columns: key · type / grammar · default · validation · consumer · boot/runt
 | `authTokens` | list of `name:token` · **secret** | `[]` | env-preferred; each token ≥ 32 chars; merged with stored tokens, never persisted; rendered `<redacted>` | token provider | boot |
 | `allowInsecureBind` | boolean | `false` | acknowledges a non-loopback bind without auth | bind guard | boot |
 | `trustedProxies` | list of CIDR/IP | `[]` | `X-Forwarded-For` honored only from these peers | http middleware | boot |
+| `allowedHosts` | list of host names / IP literals (no port) | `[]` | extra names the `Host` check accepts besides loopback and `host` (03 §2); ports are ignored, so one entry covers a proxy on 443 and a port mapping alike; also valid on a loopback bind (a same-machine proxy that preserves `Host`) | host guard, `/mcp` | boot |
 | `admin` | boolean | `false` | enables dashboard, REST, WS, trace viewer; requires http | composition | boot |
 | `dataDir` | path | OS default (D-24) | absolute after resolution; created 0700 | DataDir | boot |
 | `shutdownTimeout` | duration | `20s` | total budget for graceful stop (listeners 2 s → sessions → storage) | composition | boot |

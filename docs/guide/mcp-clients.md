@@ -168,7 +168,7 @@ stdio:
 }
 ```
 
-Requests whose `Host` header is not the bind address, `localhost`, `127.0.0.1` or `[::1]` are rejected (DNS-rebinding protection).
+Requests whose `Host` header names something other than the bind address, `localhost`, `127.0.0.1`, `[::1]` or an entry of [`--allowedHosts`](../reference/configuration.md#allowedHosts) are rejected (DNS-rebinding protection). The port is not compared, so a port mapping or an SSH tunnel to another local port works.
 
 ## Optional client metadata
 

@@ -37,7 +37,7 @@ Not yet. Chromium, Chrome and Edge channels are supported.
 Pass Playwright's `proxy` in `launch_options` (or `context_options`) today. Loopback and private networks are always bypassed. A managed pool is planned.
 
 **Can I run it in Docker or on a server?**
-Yes. Bind with `--host 0.0.0.0 --auth token`, put a TLS reverse proxy in front, and configure it with environment variables; see [Configuration](configuration.md#environment-only-deployments).
+Yes. Bind with `--host 0.0.0.0 --auth token`, put a TLS reverse proxy in front, add the name it forwards to `--allowedHosts`, and configure it with environment variables; see [Configuration](configuration.md#environment-only-deployments).
 
 **How many sessions can I run?**
 By default `min(floor(RAM in GiB / 1.5), 20)`. Each Chromium session typically needs a few hundred MB. Set `--maxSessions` to override.

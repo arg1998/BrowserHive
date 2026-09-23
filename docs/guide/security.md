@@ -11,7 +11,7 @@ Binding a non-loopback address (for example `--host 0.0.0.0`) is **refused** unl
 - `--auth token` is set, or
 - `--allowInsecureBind` is set, which you should only do on a network you fully control. The startup banner then shows a red warning.
 
-The refusal is [`INSECURE_BIND_REFUSED`](../reference/errors.md#INSECURE_BIND_REFUSED) with exit code 3. BrowserHive does not terminate TLS; for remote access, put a reverse proxy with TLS in front and list it in `--trustedProxies` so client addresses and `X-Forwarded-Proto` are honoured. Requests whose `Host` header does not match the bind (DNS rebinding) are rejected.
+The refusal is [`INSECURE_BIND_REFUSED`](../reference/errors.md#INSECURE_BIND_REFUSED) with exit code 3. BrowserHive does not terminate TLS; for remote access, put a reverse proxy with TLS in front and list it in `--trustedProxies` so client addresses and `X-Forwarded-Proto` are honoured. Requests whose `Host` header names anything other than loopback, the bind address or an entry of `--allowedHosts` are rejected (DNS rebinding), so add the public name the proxy forwards, for example `--allowedHosts browserhive.example.com`. The port is never compared.
 
 ## Authentication
 

@@ -7,12 +7,7 @@ import { agentPrincipal, LOCAL_PRINCIPAL } from '../../../domain/auth/principal.
 import type { McpConnectionRepository } from '../../../ports/persistence/operations.ts';
 import type { McpConnectionRecord } from '../../../ports/persistence/records-identity.ts';
 import { InMemoryEventStore } from './event-store.ts';
-import {
-  allowedHostsFor,
-  createMcpHttpHandler,
-  type McpHttpHandler,
-  type McpHttpOptions,
-} from './http.ts';
+import { createMcpHttpHandler, type McpHttpHandler, type McpHttpOptions } from './http.ts';
 
 let h: ToolHarness | undefined;
 afterEach(async () => {
@@ -65,6 +60,7 @@ async function sseJson(
 
 async function setup(
   onSessionClosed?: McpHttpOptions['onSessionClosed'],
+  extra: Partial<McpHttpOptions> = {},
 ): Promise<{ handler: McpHttpHandler; connections: RecordingConnections }> {
   const harness = await createToolHarness();
   h = harness;
@@ -77,8 +73,8 @@ async function setup(
     logger: harness.logger,
     connections,
     host: '127.0.0.1',
-    port: 9876,
     ...(onSessionClosed !== undefined && { onSessionClosed }),
+    ...extra,
   });
   return { handler, connections };
 }
@@ -245,16 +241,27 @@ describe('MCP Streamable HTTP transport', () => {
     expect(response.status).toBe(403);
   });
 
-  it('allowedHostsFor covers the bound host and loopback with and without port', () => {
-    expect(allowedHostsFor('127.0.0.1', 80, ['mcp.example'])).toEqual(
-      expect.arrayContaining([
-        '127.0.0.1',
-        '127.0.0.1:80',
-        'localhost:80',
-        '[::1]:80',
-        'mcp.example',
-      ]),
+  it('accepts loopback on any port: a port mapping or an SSH tunnel must not 403 MCP', async () => {
+    const { handler } = await setup();
+    // `docker run -p 8080:9876`, `ssh -L 2222:localhost:9876`: the Host names another port.
+    for (const host of ['localhost:8080', '127.0.0.1:2222', '[::1]:9999', 'localhost']) {
+      const response = await handler.handleMcpRequest(post(initialize, { host }), LOCAL_PRINCIPAL);
+      expect({ host, status: response.status }).toEqual({ host, status: 200 });
+    }
+  });
+
+  it('accepts an allowedHosts name on any port, and still rejects everything else', async () => {
+    const { handler } = await setup(undefined, { allowedHosts: ['browserhive.example.com'] });
+    const proxied = await handler.handleMcpRequest(
+      post(initialize, { host: 'BrowserHive.Example.com:443' }),
+      LOCAL_PRINCIPAL,
     );
+    expect(proxied.status).toBe(200);
+    const foreign = await handler.handleMcpRequest(
+      post(initialize, { host: 'evil.example.com' }),
+      LOCAL_PRINCIPAL,
+    );
+    expect(foreign.status).toBe(403);
   });
 });
 

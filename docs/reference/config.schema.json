@@ -80,6 +80,22 @@
       "x-browserhive-env": "BROWSERHIVE_TRUSTED_PROXIES",
       "x-browserhive-cli": "--trustedProxies"
     },
+    "allowedHosts": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "description": "Extra Host names to accept besides loopback and the bound host, such as the name a reverse proxy forwards. Ports are ignored.",
+      "x-browserhive-env": "BROWSERHIVE_ALLOWED_HOSTS",
+      "x-browserhive-cli": "--allowedHosts"
+    },
     "admin": {
       "description": "Enable the dashboard, REST API, WebSocket and trace viewer (http only).",
       "x-browserhive-env": "BROWSERHIVE_ADMIN",

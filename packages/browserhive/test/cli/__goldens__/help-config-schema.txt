@@ -20,6 +20,7 @@ NAMES
   --authTokens            BROWSERHIVE_AUTH_TOKENS
   --allowInsecureBind     BROWSERHIVE_ALLOW_INSECURE_BIND
   --trustedProxies        BROWSERHIVE_TRUSTED_PROXIES
+  --allowedHosts          BROWSERHIVE_ALLOWED_HOSTS
   --admin                 BROWSERHIVE_ADMIN
   --dataDir               BROWSERHIVE_DATA_DIR
   --shutdownTimeout       BROWSERHIVE_SHUTDOWN_TIMEOUT
