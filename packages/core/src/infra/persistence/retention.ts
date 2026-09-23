@@ -175,6 +175,25 @@ class Sweep {
     );
   }
 
+  /**
+   * Closed MCP connection rows past the cutoff that no remaining session points at. A session keeps
+   * its connection row for as long as the session row lives (archived sessions included), so its
+   * client metadata never disappears before it does; open connections are never pruned.
+   */
+  async pruneConnections(cutoff: number): Promise<void> {
+    await this.step('mcp_connections', async () => {
+      const result = await this.ctx.db
+        .deleteFrom('mcp_connections')
+        .where('closed_at', 'is not', null)
+        .where('closed_at', '<', cutoff)
+        .where(
+          sql<boolean>`NOT EXISTS (SELECT 1 FROM sessions s WHERE s.connection_id = mcp_connections.connection_id)`,
+        )
+        .executeTakeFirst();
+      return Number(result.numDeletedRows);
+    });
+  }
+
   async pruneNotifications(seenCutoff: number, unseenCutoff: number): Promise<void> {
     await this.step('notifications', async () => {
       const result = await this.ctx.db
@@ -222,6 +241,7 @@ export async function sweepRetention(
     await sweep.pruneTelemetry(telemetryCutoff);
     await sweep.pruneAudit(auditCutoff);
     await sweep.pruneSessions(telemetryCutoff);
+    await sweep.pruneConnections(telemetryCutoff);
     await sweep.pruneNotifications(
       now - (policy.notificationSeenDays ?? 30) * DAY_MS,
       now - (policy.notificationDays ?? 90) * DAY_MS,

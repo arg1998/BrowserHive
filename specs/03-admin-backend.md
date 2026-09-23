@@ -518,6 +518,7 @@ CREATE TABLE resource_samples (ts INTEGER NOT NULL, session_id TEXT REFERENCES s
 | audit | `vault_access`, `blocked_requests`, `auth_events`, `operator_actions`, `operator_requests` (terminal) | `auditRetentionDays` (90); never byte-pruned |
 | sessions | `sessions` rows | deleted only when all children are gone and `closed_at < now - retentionDays`; **archived sessions exempt** |
 | artifacts | `trace.zip`, `sessions/<id>/`, downloads | follow their session; deletion via `artifact_outbox` (row delete and outbox insert in one transaction; sweeper unlinks with retries; orphan scan weekly) |
+| connections | `mcp_connections` | closed rows with `closed_at < now - retentionDays` that no remaining `sessions` row references (a session keeps its client metadata as long as it lives, archived ones included); open rows never |
 | notifications | `notifications` | 30 d after `dismissed_at`/`read_at`, 90 d otherwise |
 | backups | `backups/*.db` | keep last 5 |
 
