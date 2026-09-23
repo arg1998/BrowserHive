@@ -70,8 +70,9 @@ export function createBunProcessRunner(): ProcessRunner {
   };
 }
 
-async function finish(
-  proc: PipedSubprocess,
+/** Feeds stdin, drains both streams and waits for exit (the half of `run` after spawn; exported for tests). */
+export async function finish(
+  proc: Pick<PipedSubprocess, 'stdin' | 'stdout' | 'stderr' | 'exited' | 'signalCode' | 'kill'>,
   options: ProcessRunOptions,
 ): Promise<ProcessRunResult> {
   let timedOut = false;
@@ -90,9 +91,14 @@ async function finish(
   options.signal?.addEventListener('abort', onAbort, { once: true });
   if (options.signal?.aborted) kill();
 
-  // stdin: a child that exits before reading (EPIPE) must not fail the call.
+  // stdin: a child that exits before reading (EPIPE) must not fail the call. A write larger than
+  // the pipe buffer returns a pending promise, which rejects with EPIPE if the child is gone: it is
+  // handled here but not awaited, so stdout and stderr keep draining (awaiting it could deadlock
+  // against a child that is blocked writing its own output).
   try {
-    if (options.stdin !== undefined) proc.stdin.write(options.stdin);
+    if (options.stdin !== undefined) {
+      void Promise.resolve(proc.stdin.write(options.stdin)).catch(() => undefined);
+    }
     await Promise.resolve(proc.stdin.end()).catch(() => undefined);
   } catch {
     // EPIPE or closed sink — ignored by contract.

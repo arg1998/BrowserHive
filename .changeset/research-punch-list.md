@@ -14,3 +14,4 @@ Fixes found while researching the next features.
 - **A data directory on a filesystem that refuses `chmod`** (network shares, some bind mounts) no longer stops the server from starting; it logs a warning.
 - **Toggling fullscreen in the live view no longer restarts the stream.**
 - Old MCP connection records are now pruned by retention.
+- A helper process (such as the Bitwarden CLI) that exits before reading its input no longer raises a spurious `UNHANDLED` degradation.
