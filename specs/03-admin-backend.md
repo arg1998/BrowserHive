@@ -502,7 +502,8 @@ CREATE TABLE system_events (seq INTEGER PRIMARY KEY, event_id TEXT NOT NULL UNIQ
 CREATE INDEX idx_system_events_open ON system_events(code) WHERE resolved_at IS NULL;
 CREATE TABLE artifact_outbox (outbox_id INTEGER PRIMARY KEY, kind TEXT NOT NULL CHECK (kind IN ('trace','screenshot','session_dir','backup')), path TEXT NOT NULL, session_id TEXT, enqueued_at INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT);
 CREATE TABLE idempotency_keys (key TEXT PRIMARY KEY, principal_id TEXT NOT NULL, route TEXT NOT NULL, response_json TEXT NOT NULL, created_at INTEGER NOT NULL) WITHOUT ROWID;
--- reserved (created in v1, empty until features land): logs (optional durable sink), resource_samples, proxies, profiles, security_rules, extensions, notification_channels
+-- created in v1 ahead of use: logs (written only by the optional `--logPersist` durable sink), resource_samples (no writer yet; pruned by retention)
+-- reserved names, NOT created: proxies, profiles, security_rules, extensions, notification_channels — the migration of the feature that needs one creates it (and may pick another name)
 CREATE TABLE logs (seq INTEGER PRIMARY KEY, ts INTEGER NOT NULL, level TEXT NOT NULL, module TEXT NOT NULL, msg TEXT NOT NULL, trace_id TEXT, span_id TEXT, request_id TEXT, session_id TEXT, principal TEXT, fields_json TEXT);
 CREATE INDEX idx_logs_ts ON logs(ts); CREATE INDEX idx_logs_trace ON logs(trace_id) WHERE trace_id IS NOT NULL; CREATE INDEX idx_logs_session ON logs(session_id, ts) WHERE session_id IS NOT NULL;
 CREATE TABLE resource_samples (ts INTEGER NOT NULL, session_id TEXT REFERENCES sessions(session_id) ON DELETE CASCADE, cpu_pct REAL, rss_bytes INTEGER, host_free_bytes INTEGER, PRIMARY KEY (ts, session_id)) WITHOUT ROWID;
@@ -563,7 +564,7 @@ Writes are enqueued (FIFO, one transaction per drain, statements prepared once);
 
 ## 9. Notifications (D-16)
 
-Producer (`app/notifications`) subscribes to the bus and creates rows for the current operator principal(s):
+Producer (`app/notifications`) subscribes to the bus and writes every row to **one shared operator inbox** (`principal_id` NULL): v1 has a single operator, the list, unread count and read/dismiss routes are not filtered by principal, and per-operator inboxes wait for multi-user (D-25). `NotificationService`'s `recipients` hook (default `[null]`) is the seam they plug into; composition does not set it. Rows:
 
 | Bus event | Notification |
 |---|---|
