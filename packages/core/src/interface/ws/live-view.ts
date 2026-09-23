@@ -11,6 +11,7 @@ import type {
   CdpCapturedFrame,
   CdpScreencastFrame,
 } from './cdp-bridge.ts';
+import type { OperatorActor } from './input-audit.ts';
 import { keyParams, mouseParams, touchParams } from './live-input.ts';
 import {
   frameOf,
@@ -62,6 +63,12 @@ export interface LiveViewDeps {
   readonly onOperatorPointer?: (session: Session, x: number, y: number) => void;
   /** Humanize cursor invalidation after a viewport change. */
   readonly onViewportChanged?: (session: Session) => void;
+  /** Called once per input the browser accepted (the `operator.input` audit, spec 03 §6.3). */
+  readonly onOperatorInput?: (
+    sessionId: string,
+    actor: OperatorActor,
+    kind: z.output<typeof LiveInput>['type'],
+  ) => void;
 }
 
 interface ViewerEntry {
@@ -188,8 +195,16 @@ export class LiveView {
     });
   }
 
-  /** Dispatches one operator input (the caller checked the attention gate). */
-  async sendInput(sessionId: string, input: z.output<typeof LiveInput>): Promise<void> {
+  /**
+   * Dispatches one operator input (the caller checked the attention gate). Every input the browser
+   * accepts is reported to `onOperatorInput` with its actor, whichever door (WS or REST) it came
+   * through, so both share one audit path.
+   */
+  async sendInput(
+    sessionId: string,
+    input: z.output<typeof LiveInput>,
+    actor: OperatorActor,
+  ): Promise<void> {
     const session = this.requireLive(sessionId);
     const bridge = await this.queue.run(sessionId, async () => {
       const opened = await this.ensureBridge(sessionId);
@@ -204,13 +219,18 @@ export class LiveView {
         } catch (error) {
           this.log.debug('cursor resync failed', { session_id: sessionId, err: error });
         }
-        return;
+        break;
       case 'key':
         await bridge.cdp.dispatchKeyEvent(keyParams(input));
-        return;
+        break;
       case 'touch':
         await bridge.cdp.dispatchTouchEvent(touchParams(input));
-        return;
+        break;
+    }
+    try {
+      this.deps.onOperatorInput?.(sessionId, actor, input.type);
+    } catch (error) {
+      this.log.warn('input audit failed', { session_id: sessionId, err: error });
     }
   }
 

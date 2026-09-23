@@ -139,6 +139,10 @@ export async function openHttpListener(
     logs: ring,
     schedule: timers.schedule,
     every: timers.every,
+    inputAudit: {
+      actions: storage.uow.repos.operatorActions,
+      eventId: () => domain.ids.eventId(),
+    },
     quality: config.screencastQuality,
     onOperatorPointer: (session, x, y) => {
       try {

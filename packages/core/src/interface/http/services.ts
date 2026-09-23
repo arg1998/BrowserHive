@@ -26,6 +26,7 @@ import type { NotificationListQuery, Page } from '../../ports/persistence/querie
 import type { IdempotencyRecord, NotificationRecord } from '../../ports/persistence/records.ts';
 import type { Repositories } from '../../ports/persistence/unit-of-work.ts';
 import type { ArtifactFiles } from '../../ports/static-assets.ts';
+import type { OperatorActor } from '../ws/input-audit.ts';
 
 /** The live-session facts the routes read (a structural slice of `SessionService`). */
 export type SessionsPort = Pick<SessionService, 'peek' | 'listAll' | 'close' | 'summary'>;
@@ -206,8 +207,8 @@ export interface LiveControlPort {
     width: number,
     height: number,
   ): Promise<{ readonly width: number; readonly height: number }>;
-  /** Dispatches one input via CDP; the caller has already checked the attention gate. */
-  sendInput(sessionId: string, input: LiveInput): Promise<void>;
+  /** Dispatches one input via CDP and audits it; the caller has already checked the attention gate. */
+  sendInput(sessionId: string, input: LiveInput, actor: OperatorActor): Promise<void>;
 }
 
 /** Realtime introspection the REST layer surfaces (`/system/realtime`, `has_live_viewers`). */

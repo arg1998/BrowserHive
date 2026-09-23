@@ -42,8 +42,10 @@ export const SESSION_LIVE_ROUTES = [
     request: { params: SessionIdParams, body: SessionInputRequest },
     responses: { 200: SessionInputResponse },
     errors: ['SESSION_NOT_FOUND', 'INPUT_NOT_PERMITTED'],
-    async handler({ input, services }) {
+    async handler({ input, services, principal }) {
       const known = await requireSession(services, input.params.session_id);
+      // A takeover route is never public, so the principal is always present here.
+      const actor = { principalId: principal?.subject ?? 'unknown', via: 'rest' } as const;
       if (!services.attention.isInputPermitted(known.id, 'input')) {
         throw new AppError(
           'INPUT_NOT_PERMITTED',
@@ -64,7 +66,7 @@ export const SESSION_LIVE_ROUTES = [
           continue;
         }
         try {
-          await services.live.sendInput(known.id, item);
+          await services.live.sendInput(known.id, item, actor);
           accepted += 1;
         } catch (error) {
           const code =

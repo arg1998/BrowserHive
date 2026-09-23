@@ -24,7 +24,10 @@ export async function input(
       },
     );
   }
-  await host.liveView.sendInput(command.session_id, command.input);
+  await host.liveView.sendInput(command.session_id, command.input, {
+    principalId: conn.principal.subject,
+    via: 'ws',
+  });
   host.reply(conn, { type: 'ok' }, command.corr);
 }
 
