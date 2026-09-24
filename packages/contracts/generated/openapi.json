@@ -7692,6 +7692,41 @@
                     "derived"
                   ]
                 },
+                "refs": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "scheme": {
+                        "type": "string",
+                        "enum": [
+                          "env"
+                        ]
+                      },
+                      "ref": {
+                        "type": "string"
+                      },
+                      "from": {
+                        "type": "string",
+                        "enum": [
+                          "value",
+                          "default"
+                        ]
+                      },
+                      "at": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "scheme",
+                      "ref",
+                      "from"
+                    ]
+                  }
+                },
+                "template": {
+                  "type": "string"
+                },
                 "shadowed": {
                   "type": "array",
                   "items": {
@@ -7708,7 +7743,39 @@
                           "derived"
                         ]
                       },
-                      "value": {}
+                      "value": {},
+                      "refs": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "scheme": {
+                              "type": "string",
+                              "enum": [
+                                "env"
+                              ]
+                            },
+                            "ref": {
+                              "type": "string"
+                            },
+                            "from": {
+                              "type": "string",
+                              "enum": [
+                                "value",
+                                "default"
+                              ]
+                            },
+                            "at": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "scheme",
+                            "ref",
+                            "from"
+                          ]
+                        }
+                      }
                     },
                     "required": [
                       "source"

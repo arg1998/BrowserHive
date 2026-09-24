@@ -240,3 +240,81 @@ describe('configFileJsonSchema', () => {
     expect(() => JSON.stringify(schema)).not.toThrow();
   });
 });
+
+/** The subset of JSON Schema the generated config schema uses, enough to ask "does it accept this string?". */
+function acceptsString(node: unknown, value: string, defs: Record<string, unknown>): boolean {
+  if (typeof node !== 'object' || node === null) return true;
+  const schema = node as Record<string, unknown>;
+  const ref = schema['$ref'];
+  if (typeof ref === 'string') return acceptsString(defs[ref.replace('#/$defs/', '')], value, defs);
+  const anyOf = schema['anyOf'];
+  if (Array.isArray(anyOf)) return anyOf.some((branch) => acceptsString(branch, value, defs));
+  const type = schema['type'];
+  if (
+    type !== undefined &&
+    !(type === 'string' || (Array.isArray(type) && type.includes('string')))
+  ) {
+    return false;
+  }
+  const members = schema['enum'];
+  if (Array.isArray(members) && !members.includes(value)) return false;
+  const pattern = schema['pattern'];
+  if (typeof pattern === 'string' && !new RegExp(pattern, 'u').test(value)) return false;
+  return true;
+}
+
+describe('configFileJsonSchema and references (spec 08 §3.1, §6)', () => {
+  const schema = configFileJsonSchema();
+  const props = schema['properties'] as Record<string, Record<string, unknown>>;
+  const defs = schema['$defs'] as Record<string, unknown>;
+
+  it('defines $defs.configRef as a string holding an {env:NAME} reference', () => {
+    expect(defs['configRef']).toMatchObject({ type: 'string' });
+    const pattern = new RegExp(String((defs['configRef'] as { pattern: string }).pattern), 'u');
+    for (const good of ['{env:STEALTH}', '{env:X:-max}', '{env:_A1:-}', 'x{env:A}y']) {
+      expect(pattern.test(good)).toBe(true);
+    }
+    for (const bad of ['max', '{env:}', '{ENV:X}', '{file:/x}', '{env:X:-{y}}']) {
+      expect(pattern.test(bad)).toBe(false);
+    }
+  });
+
+  it('every property accepts a string holding a reference', () => {
+    for (const [key, property] of Object.entries(props)) {
+      if (key === '$schema') continue;
+      expect([key, acceptsString(property, '{env:X}', defs)]).toEqual([key, true]);
+    }
+  });
+
+  it('widens every enum with the reference branch and still rejects other strings', () => {
+    const widened: string[] = [];
+    for (const [key, property] of Object.entries(props)) {
+      if (!JSON.stringify(property).includes('"enum"')) continue;
+      widened.push(key);
+      expect(JSON.stringify(property)).toContain('"$ref":"#/$defs/configRef"');
+    }
+    expect(widened.sort()).toEqual(
+      [
+        'auth',
+        'color',
+        'defaultChannel',
+        'logFormat',
+        'logLevel',
+        'logPersist',
+        'otelProtocol',
+        'recordToolResults',
+        'sandbox',
+        'stealth',
+        'stealthDriver',
+      ].sort(),
+    );
+    expect(acceptsString(props['stealth'], 'max', defs)).toBe(true);
+    expect(acceptsString(props['stealth'], '{env:STEALTH:-max}', defs)).toBe(true);
+    expect(acceptsString(props['stealth'], 'banana', defs)).toBe(false);
+    expect(props['stealth']).toMatchObject({
+      default: 'standard',
+      'x-browserhive-env': 'BROWSERHIVE_STEALTH',
+      anyOf: [{ type: 'string', enum: ['off', 'standard', 'max'] }, { $ref: '#/$defs/configRef' }],
+    });
+  });
+});

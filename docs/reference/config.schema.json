@@ -29,10 +29,17 @@
     },
     "auth": {
       "default": "off",
-      "type": "string",
-      "enum": [
-        "off",
-        "token"
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "off",
+            "token"
+          ]
+        },
+        {
+          "$ref": "#/$defs/configRef"
+        }
       ],
       "description": "MCP authentication. token requires a bearer on /mcp and enforces session ownership.",
       "x-browserhive-env": "BROWSERHIVE_AUTH",
@@ -148,11 +155,18 @@
     },
     "defaultChannel": {
       "default": "chromium",
-      "type": "string",
-      "enum": [
-        "chromium",
-        "chrome",
-        "edge"
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "chromium",
+            "chrome",
+            "edge"
+          ]
+        },
+        {
+          "$ref": "#/$defs/configRef"
+        }
       ],
       "description": "Default browser channel; launch_session channel overrides per session.",
       "x-browserhive-env": "BROWSERHIVE_DEFAULT_CHANNEL",
@@ -160,11 +174,18 @@
     },
     "sandbox": {
       "default": "auto",
-      "type": "string",
-      "enum": [
-        "auto",
-        "on",
-        "off"
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "auto",
+            "on",
+            "off"
+          ]
+        },
+        {
+          "$ref": "#/$defs/configRef"
+        }
       ],
       "description": "Chromium's sandbox. auto runs each browser sandboxed where it can and falls back where it cannot (warned once); on requires it: the server refuses to start (exit 3) and a session fails with SANDBOX_UNAVAILABLE when a browser cannot provide it; off never uses it.",
       "x-browserhive-env": "BROWSERHIVE_SANDBOX",
@@ -241,11 +262,18 @@
     },
     "stealth": {
       "default": "standard",
-      "type": "string",
-      "enum": [
-        "off",
-        "standard",
-        "max"
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "off",
+            "standard",
+            "max"
+          ]
+        },
+        {
+          "$ref": "#/$defs/configRef"
+        }
       ],
       "description": "Stealth level. max also defaults fingerprint to true.",
       "x-browserhive-env": "BROWSERHIVE_STEALTH",
@@ -253,11 +281,18 @@
     },
     "stealthDriver": {
       "default": "auto",
-      "type": "string",
-      "enum": [
-        "auto",
-        "patchright",
-        "playwright"
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "auto",
+            "patchright",
+            "playwright"
+          ]
+        },
+        {
+          "$ref": "#/$defs/configRef"
+        }
       ],
       "description": "Chromium driver for stealth sessions. auto uses Patchright when installed, else Playwright.",
       "x-browserhive-env": "BROWSERHIVE_STEALTH_DRIVER",
@@ -293,13 +328,20 @@
           "type": "object",
           "properties": {
             "root": {
-              "type": "string",
-              "enum": [
-                "error",
-                "warn",
-                "info",
-                "debug",
-                "trace"
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "error",
+                    "warn",
+                    "info",
+                    "debug",
+                    "trace"
+                  ]
+                },
+                {
+                  "$ref": "#/$defs/configRef"
+                }
               ]
             },
             "modules": {
@@ -308,13 +350,20 @@
                 "type": "string"
               },
               "additionalProperties": {
-                "type": "string",
-                "enum": [
-                  "error",
-                  "warn",
-                  "info",
-                  "debug",
-                  "trace"
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "error",
+                      "warn",
+                      "info",
+                      "debug",
+                      "trace"
+                    ]
+                  },
+                  {
+                    "$ref": "#/$defs/configRef"
+                  }
                 ]
               }
             }
@@ -336,11 +385,18 @@
     },
     "logFormat": {
       "default": "auto",
-      "type": "string",
-      "enum": [
-        "auto",
-        "json",
-        "pretty"
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "auto",
+            "json",
+            "pretty"
+          ]
+        },
+        {
+          "$ref": "#/$defs/configRef"
+        }
       ],
       "description": "Log renderer. auto is pretty on a TTY (http only), otherwise JSON lines.",
       "x-browserhive-env": "BROWSERHIVE_LOG_FORMAT",
@@ -349,11 +405,18 @@
     },
     "color": {
       "default": "auto",
-      "type": "string",
-      "enum": [
-        "auto",
-        "always",
-        "never"
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "auto",
+            "always",
+            "never"
+          ]
+        },
+        {
+          "$ref": "#/$defs/configRef"
+        }
       ],
       "description": "Colour for logs and CLI output. auto honours NO_COLOR, FORCE_COLOR, TERM=dumb and TTY.",
       "x-browserhive-env": "BROWSERHIVE_COLOR",
@@ -370,11 +433,18 @@
     },
     "logPersist": {
       "default": "off",
-      "type": "string",
-      "enum": [
-        "info",
-        "warn",
-        "off"
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "info",
+            "warn",
+            "off"
+          ]
+        },
+        {
+          "$ref": "#/$defs/configRef"
+        }
       ],
       "description": "Durable logs table threshold (retention 3 days). off disables the sink.",
       "x-browserhive-env": "BROWSERHIVE_LOG_PERSIST",
@@ -409,11 +479,18 @@
     },
     "recordToolResults": {
       "default": "full",
-      "type": "string",
-      "enum": [
-        "full",
-        "shape",
-        "none"
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "full",
+            "shape",
+            "none"
+          ]
+        },
+        {
+          "$ref": "#/$defs/configRef"
+        }
       ],
       "description": "What of a tool result is persisted: full text (capped), shape (keys and sizes) or none.",
       "x-browserhive-env": "BROWSERHIVE_RECORD_TOOL_RESULTS",
@@ -480,10 +557,17 @@
     },
     "otelProtocol": {
       "default": "http/protobuf",
-      "type": "string",
-      "enum": [
-        "http/protobuf",
-        "http/json"
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "http/protobuf",
+            "http/json"
+          ]
+        },
+        {
+          "$ref": "#/$defs/configRef"
+        }
       ],
       "description": "OTLP/HTTP encoding.",
       "x-browserhive-env": "BROWSERHIVE_OTEL_PROTOCOL",
@@ -558,6 +642,13 @@
     }
   },
   "additionalProperties": false,
+  "$defs": {
+    "configRef": {
+      "type": "string",
+      "pattern": "\\{env:[A-Za-z_][A-Za-z0-9_]*(:-[^{}]*)?\\}",
+      "description": "A reference such as {env:NAME} or {env:NAME:-default}, expanded from the environment when BrowserHive reads this file."
+    }
+  },
   "$id": "https://browserhive.ai/schemas/browserhive.config.json",
   "title": "BrowserHive configuration file",
   "description": "browserhive.config.json. Precedence: defaults < environment < this file < CLI flags (rightmost wins)."

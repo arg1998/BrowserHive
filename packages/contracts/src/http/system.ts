@@ -1,5 +1,6 @@
 /** @module contracts/http/system — system info, config provenance, realtime, log level, degradations (spec 03 §4.7) */
 import { z } from 'zod';
+import { REF_SCHEMES } from '../config/refs.ts';
 import {
   AuthMode,
   Channel,
@@ -161,12 +162,40 @@ export type SystemInfo = z.infer<typeof SystemInfo>;
 /** Redaction marker used for secret config values. */
 export const REDACTED = '[REDACTED]';
 
-/** One resolved config key with provenance; `shadowed` lists lower-precedence values that lost. */
+/** One `{env:NAME}` reference a config-file value resolved (spec 08 §3.1): the variable name, never its value. */
+export const SystemConfigRef = z.object({
+  /** Reference scheme; today always `env`. */
+  scheme: z.enum(REF_SCHEMES),
+  /** The variable name as written (`OTLP_TOKEN`). */
+  ref: z.string(),
+  /** `value` when the variable supplied the text, `default` when the `:-` default did. */
+  from: z.enum(['value', 'default']),
+  /** Position inside an array or object value (`[0]`, `Authorization`); absent for a plain string. */
+  at: z.string().optional(),
+});
+/** One reference a config-file value resolved. */
+export type SystemConfigRef = z.infer<typeof SystemConfigRef>;
+
+/**
+ * One resolved config key with provenance; `shadowed` lists lower-precedence values that lost.
+ * `refs`/`template` are present only for values that came through config-file references;
+ * `template` (the value as written in the file) is never present when `secret` is true.
+ * `secret` is decided per run: keys flagged secret, plus keys whose value came through a
+ * reference with a credential-looking name (spec 08 §3.1).
+ */
 export const SystemConfigKey = z.object({
   key: z.string(),
   value: z.unknown(),
   source: ProvenanceSource,
-  shadowed: z.array(z.object({ source: ProvenanceSource, value: z.unknown() })),
+  refs: z.array(SystemConfigRef).optional(),
+  template: z.string().optional(),
+  shadowed: z.array(
+    z.object({
+      source: ProvenanceSource,
+      value: z.unknown(),
+      refs: z.array(SystemConfigRef).optional(),
+    }),
+  ),
   secret: z.boolean(),
 });
 /** One resolved config key with provenance. */
