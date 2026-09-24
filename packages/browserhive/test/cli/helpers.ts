@@ -113,9 +113,10 @@ export class MemoryFs implements FileSystem {
     return entry.data;
   }
 
-  async writeFile(path: string, data: string): Promise<void> {
+  async writeFile(path: string, data: string, options?: { readonly mode?: number }): Promise<void> {
     this.writes.push(`write ${path}`);
-    this.put(path, data);
+    // Like the node adapter: the mode applies to a new file only.
+    this.put(path, data, this.entries.get(path)?.mode ?? options?.mode ?? 0o644);
   }
 
   /** The synchronous `ConfigFs` view of the same tree. */

@@ -9,6 +9,7 @@ import {
   browserRows,
   collectBrowserFindings,
   type SandboxMode,
+  sandboxModeOf,
 } from './doctor-browsers.ts';
 import {
   type CheckResult,
@@ -48,12 +49,6 @@ function sandboxSetting(invocation: DoctorInvocation, mode: SandboxMode): string
     default:
       return `sandbox=${mode}`;
   }
-}
-
-/** The `sandbox` setting of a resolved config (`off` before the key existed). */
-export function sandboxModeOf(config: Readonly<Record<string, unknown>> | null): SandboxMode {
-  const value = config?.['sandbox'];
-  return value === 'auto' || value === 'on' || value === 'off' ? value : 'off';
 }
 
 /**

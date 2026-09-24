@@ -13,6 +13,12 @@ import type { CheckResult, CheckStatus } from './doctor-checks.ts';
 /** The `sandbox` setting as doctor judges it. */
 export type SandboxMode = 'auto' | 'on' | 'off';
 
+/** The `sandbox` setting of a resolved config (`off` before the key existed). */
+export function sandboxModeOf(config: Readonly<Record<string, unknown>> | null): SandboxMode {
+  const value = config?.['sandbox'];
+  return value === 'auto' || value === 'on' || value === 'off' ? value : 'off';
+}
+
 /** What the browser checks found, for the rows and the guidance block. */
 export interface BrowserFindings {
   readonly browsers: readonly DetectedBrowser[];

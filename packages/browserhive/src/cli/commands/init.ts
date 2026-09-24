@@ -1,10 +1,13 @@
-/** @module cli/commands/init — `browserhive init`: data dir (0700) and subdirectories, Chromium for Playwright (and Patchright), database creation and migration, optional schema file, next steps; idempotent, each step ✓/✗ (spec 08 §7.1, D-18) */
+/** @module cli/commands/init — `browserhive init`: data dir (0700) and subdirectories, Chromium for Playwright (and Patchright), the default-browser report and choice, database creation and migration, optional schema file, next steps; idempotent, each step ✓/✗ (spec 08 §7.1, D-18) */
 import { dirname, join } from 'node:path';
 import { configFileJsonSchema } from '@browserhive/contracts/config';
+import type { Channel } from '@browserhive/contracts/enums';
 import type { ResolvedConfigBundle } from '@browserhive/core/config';
 import type { CommandContext } from '../deps.ts';
 import { EXIT, type ExitCode } from '../invocation.ts';
 import { appErrorFacts, withStorage } from './common.ts';
+import { sandboxModeOf } from './doctor-browsers.ts';
+import { stepBrowserChoice } from './init-browser.ts';
 
 /** Subdirectories created under the data dir (D-24). */
 export const DATA_SUBDIRS: readonly string[] = [
@@ -25,6 +28,12 @@ export interface InitOptions {
   readonly force: boolean;
   readonly skipBrowsers: boolean;
   readonly writeSchema: boolean;
+  /** `--channel`: make this the default browser and save it (asks, or needs `--yes`). */
+  readonly channel: Channel | null;
+  /** `--installChrome`: install Google Chrome with Google's installer. */
+  readonly installChrome: boolean;
+  /** `--yes`: save the choice without asking. */
+  readonly yes: boolean;
 }
 
 /**
@@ -224,6 +233,15 @@ export async function runInit(context: CommandContext, options: InitOptions): Pr
       );
     }
   }
+  results.push(
+    await stepBrowserChoice(context, {
+      resolved: options.resolved,
+      channel: options.channel,
+      installChrome: options.installChrome,
+      yes: options.yes,
+      sandbox: sandboxModeOf(config),
+    }),
+  );
   if (results[0] === true) results.push(await stepDatabase(context, config.dataDir));
   if (options.writeSchema) results.push(await stepSchema(context, options.resolved));
 

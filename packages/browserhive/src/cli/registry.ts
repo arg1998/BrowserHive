@@ -136,7 +136,7 @@ export const COMMANDS: readonly CommandDescriptor[] = [
     name: 'init',
     summary: 'Install browsers and prepare the data directory',
     description:
-      'Creates the data directory (0700), installs Chromium for Playwright (and Patchright when stealthDriver is auto or patchright), creates and migrates the database, then prints the next steps. Safe to re-run.',
+      'Creates the data directory (0700), installs Chromium for Playwright (and Patchright when stealthDriver is auto or patchright), reports the browsers on this host and whether each can run sandboxed, lets you pick the default browser on a terminal (Enter keeps the current one), creates and migrates the database, then prints the next steps. Safe to re-run; never prompts without a terminal, in CI or in a container.',
     flags: [
       {
         name: 'browsers',
@@ -155,6 +155,24 @@ export const COMMANDS: readonly CommandDescriptor[] = [
         name: 'writeSchema',
         kind: 'boolean',
         describe: 'Write browserhive.schema.json next to the config file in use.',
+      },
+      {
+        name: 'channel',
+        kind: 'value',
+        placeholder: '<chromium|chrome|edge>',
+        describe:
+          'Make this the default browser (defaultChannel) and save it to the config file. Without a terminal it needs --yes.',
+      },
+      {
+        name: 'installChrome',
+        kind: 'boolean',
+        describe:
+          "Install Google Chrome with Google's installer (playwright install chrome; needs administrator rights).",
+      },
+      {
+        name: 'yes',
+        kind: 'boolean',
+        describe: 'Save the --channel choice without asking.',
       },
     ],
     configKeys: ['dataDir', 'config', 'stealthDriver', 'color'],
