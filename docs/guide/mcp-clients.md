@@ -170,15 +170,77 @@ stdio:
 
 Requests whose `Host` header names something other than the bind address, `localhost`, `127.0.0.1`, `[::1]` or an entry of [`--allowedHosts`](../reference/configuration.md#allowedHosts) are rejected (DNS-rebinding protection). The port is not compared, so a port mapping or an SSH tunnel to another local port works.
 
-## Optional client metadata
+## Harness identity
 
-A session's details in the dashboard show the client that launched it: the name and version the client sends in `initialize`, over either transport. Clients using HTTP may also send these headers on the `initialize` request (self-reported, display only, never used for access control):
+BrowserHive notes which agent is on the other end of each MCP connection (Claude Code, Codex, Cursor, OpenCode, Gemini CLI and others), plus a model and a workspace label when the client declares them. The dashboard shows it on each session, counts sessions and tool calls per harness on the Overview, lets you filter the sessions list by harness, and lists live and recent connections on the System page.
 
-| Header | Example | Shown as |
-|---|---|---|
-| `X-BH-Agent-Model` | `claude-opus-5` | the model, after the client name |
-| `X-BH-Workspace` | `checkout-bot` | a label for this agent, after the client name |
-| `X-BH-Agent-Harness` | `claude-code` | recorded, not shown yet |
+All of this is reported by the client or by your configuration. BrowserHive can't verify it, so it is shown for information and never used to allow or refuse anything.
+
+### With nothing configured
+
+Many agents are recognised on their own. Anything BrowserHive can't place is shown as **Unknown**, which is counted and filterable like any other harness.
+
+| Harness | stdio | Streamable HTTP | How we know |
+|---|---|---|---|
+| Claude Code | sets `CLAUDECODE` for the servers it starts | `clientInfo.name` `claude-code`; User-Agent `claude-code/<version>` | seen against BrowserHive with Claude Code 2.1.282 |
+| OpenCode | `clientInfo.name` `opencode` | the same, and User-Agent `opencode/<version>` | seen against BrowserHive with OpenCode 1.18.31 |
+| Gemini CLI | sets `GEMINI_CLI=1` for the servers it starts | `clientInfo.name` `gemini-cli-mcp-client` | source: `google-gemini/gemini-cli`, `packages/core/src/tools/mcp-client.ts` |
+| Codex | `clientInfo.name` `codex-mcp-client` | the same, and User-Agent `codex-mcp-client/<version>` | source: `openai/codex`, `codex-rs/codex-mcp/src/rmcp_client.rs` and `codex-rs/rmcp-client/src/utils.rs` |
+| VS Code | `clientInfo.name` `Visual Studio Code` | the same | source: `microsoft/vscode`, `src/vs/workbench/contrib/mcp/common/mcpServerRequestHandler.ts` |
+| Cline | `clientInfo.name` `Cline` | the same | source: `cline/cline`, `apps/vscode/src/services/mcp/McpHub.ts` |
+| Continue | `clientInfo.name` `continue-client` | the same | source: `continuedev/continue`, `core/context/mcp/MCPConnection.ts` |
+| Zed | `clientInfo.name` `Zed` | the same | source: `zed-industries/zed`, `crates/context_server/src/context_server.rs` |
+| Cursor | `clientInfo.name` `cursor-vscode` | the same, and User-Agent `Cursor/<version>` | captured by [apify/mcp-client-capabilities](https://github.com/apify/mcp-client-capabilities) |
+
+Checked on 2026-09-24; harnesses change their names now and then, so a new release may show up as its own name or as Unknown until this table catches up. A client that sends the SDK's default name (`mcp`, `mcp-client`, `example-client`) is Unknown. Version numbers are shown as sent; some clients always send `1.0.0`.
+
+### Naming your agent
+
+One setting names any agent, and wins over everything detected. Use a known name (`claude-code`, `codex`, `cursor`, `opencode`, `gemini-cli`, `vscode`, …) or any label of your own; labels are lower-cased to letters, digits and dashes.
+
+| Where | Harness | Model | Workspace |
+|---|---|---|---|
+| HTTP headers | `X-BH-Agent-Harness` (or `X-BH-Harness`) | `X-BH-Agent-Model` (or `X-BH-Model`) | `X-BH-Workspace` |
+| stdio `env` | `BROWSERHIVE_HARNESS` | `BROWSERHIVE_MODEL` | `BROWSERHIVE_WORKSPACE` |
+| URL, when a client only has a URL field | `http://127.0.0.1:9876/mcp?harness=<name>` | — | — |
+| `_meta` of a tool call or of `initialize` | `ai.browserhive/harness` | `ai.browserhive/model` | `ai.browserhive/workspace` |
+
+HTTP, for example Claude Code:
+
+```bash
+claude mcp add --transport http browserhive http://127.0.0.1:9876/mcp \
+  --header "X-BH-Workspace: checkout" --header "X-BH-Agent-Model: claude-opus-5"
+```
+
+stdio, any client that takes an `env` block:
+
+```json
+{
+  "mcpServers": {
+    "browserhive": {
+      "command": "browserhive",
+      "args": ["--transport", "stdio"],
+      "env": { "BROWSERHIVE_HARNESS": "nightly-scraper", "BROWSERHIVE_WORKSPACE": "shop" }
+    }
+  }
+}
+```
+
+The three `BROWSERHIVE_` identity variables describe the one client of a stdio process. They are not configuration: they don't appear in `config show` or `--help`, and an HTTP server ignores them (it logs one line saying so). A misspelled one still stops startup with a suggestion, like any unknown `BROWSERHIVE_` variable.
+
+When several signals disagree, the highest one wins, in this order: the variable or header you set, the variable a harness sets itself, `?harness=`, `_meta`, `clientInfo`, the User-Agent. The others are kept as "conflicting signals" on the connection in the System page. Identity is read on every tool call, so a header or `_meta` value that changes mid-session is picked up.
+
+### The model
+
+MCP gives a server no way to learn which model drives an agent. BrowserHive shows a model only when the client or your configuration declares one, and shows "not reported" otherwise. A declared model can go stale when you switch models in the agent.
+
+### Extra labels
+
+Any other `X-BH-Meta-<Name>` header or `ai.browserhive/<name>` `_meta` key is kept as a small key/value list on the connection and the session: at most 16 keys, 256 bytes per value and 4 KiB in all. Anything past that is dropped and logged once. These labels are only displayed, never counted or filtered.
+
+### What is stored
+
+Each connection's harness, model, workspace, client name and version, protocol version, User-Agent, IP address and labels are stored in the local database with the connection. A closed connection is deleted with the rest of the telemetry after `--retentionDays`, unless a stored session still refers to it. A session keeps its harness for as long as the session is kept. Nothing leaves the machine unless you turn [telemetry](telemetry.md) on; exported spans carry the harness and model, and metrics carry only the harness name.
 
 A W3C `traceparent` in a tool call's `_meta` becomes the parent of the tool span when [telemetry](telemetry.md) is on.
 

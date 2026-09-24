@@ -34,7 +34,7 @@ Resource attributes: `service.name`, `service.version`, `service.instance.id`, `
 
 ### Traces
 
-One trace per tool call, rooted at `mcp.tool_call` with `browserhive.tool`, `browserhive.session_id`, `browserhive.principal`, `browserhive.event_id`, `browserhive.ok` and `browserhive.error_code`. Children cover what the call did: `session.create` with one span per creation phase (validate, admit, reserve, prepare profile, resolve identity, launch, install policies, start tracing, apply identity, register), `browser.launch`, `page.navigate` (sanitized URL, status code), `vault.fill` and its steps, `attention.wait`, and with `--otelVerbose` also `db.query` and `cdp.command`. HTTP requests (`http.request`), WebSocket commands (`ws.command`), migrations (`db.migrate`) and background sweeps are traced too.
+One trace per tool call, rooted at `mcp.tool_call` with `browserhive.tool`, `browserhive.session_id`, `browserhive.principal`, `browserhive.event_id`, `browserhive.ok` and `browserhive.error_code`, plus the caller's [harness identity](mcp-clients.md#harness-identity): `browserhive.harness`, `browserhive.harness_source` and, when one was declared, `browserhive.model` (also on `session.create`). Children cover what the call did: `session.create` with one span per creation phase (validate, admit, reserve, prepare profile, resolve identity, launch, install policies, start tracing, apply identity, register), `browser.launch`, `page.navigate` (sanitized URL, status code), `vault.fill` and its steps, `attention.wait`, and with `--otelVerbose` also `db.query` and `cdp.command`. HTTP requests (`http.request`), WebSocket commands (`ws.command`), migrations (`db.migrate`) and background sweeps are traced too.
 
 If the MCP client sends a W3C `traceparent` in the tool call's `_meta`, the tool span joins the client's trace. HTTP requests adopt an inbound `traceparent` and return one.
 
@@ -42,9 +42,9 @@ If the MCP client sends a W3C `traceparent` in the tool call's `_meta`, the tool
 
 | Instrument | Type | Attributes |
 |---|---|---|
-| `browserhive.tool_calls` | counter | `tool`, `ok`, `error_code` |
+| `browserhive.tool_calls` | counter | `tool`, `ok`, `error_code`, `harness` |
 | `browserhive.tool_call.duration` | histogram (ms) | `tool` |
-| `browserhive.sessions.active` | up-down counter | `state` |
+| `browserhive.sessions.active` | up-down counter | `harness` |
 | `browserhive.session.launch.duration` | histogram (ms) | `channel`, `stealth` |
 | `browserhive.session.lifetime` | histogram (ms) | `closed_reason` |
 | `browserhive.ws.connections` | up-down counter | |
@@ -60,6 +60,8 @@ If the MCP client sends a W3C `traceparent` in the tool call's `_meta`, the tool
 | `browserhive.blocklist.hits` | counter | `source` |
 | `browserhive.retention.pruned_rows` | counter | `table` |
 | `browserhive.process.*` | gauges | rss, heap, event-loop lag |
+
+`harness` on metrics is one of the known harness names, `unknown` or `other` (every name BrowserHive doesn't know is folded into `other`), so it adds a bounded number of series. The model, workspace and extra labels are never metric attributes.
 
 Metrics are exported every 30 seconds.
 
