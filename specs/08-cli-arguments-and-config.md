@@ -17,7 +17,7 @@ related:
 > RFC 2119 when they appear in uppercase. `D-NN` identifiers refer to entries in the
 > [decision log](00-decisions.md). Terminology follows the [specification index](README.md#conventions).
 
-Governing decisions: D-06 (ladder and naming), D-02 (single port), D-08 (telemetry knobs), D-18 (`init`/`doctor`), D-19 (toolchain), D-24 (data dir), D-26 (browser choice), D-27 (sandbox), D-28 (`init` writes the config file), D-29 (references in config-file values).
+Governing decisions: D-06 (ladder and naming), D-02 (single port), D-08 (telemetry knobs), D-18 (`init`/`doctor`), D-19 (toolchain), D-24 (data dir), D-26 (browser choice), D-27 (sandbox), D-28 (`init` writes the config file), D-29 (references in config-file values), D-30 (identity environment variables).
 
 ---
 
@@ -82,6 +82,16 @@ One parser per grammar, defined once in `contracts/config/parsers.ts`, shared by
 | string | as-is | Secrets are strings with `secret: true`. |
 
 Every parser produces a **canonical value** (`number` of ms, `number` of bytes, resolved path) and keeps the original text for provenance rendering. In the config file, a string may contain references (`{env:NAME}`, §3.1) that are expanded before these grammars apply.
+
+### 2.2 Identity environment variables (not configuration)
+
+Three `BROWSERHIVE_*` names are **not** config keys: `BROWSERHIVE_HARNESS`, `BROWSERHIVE_MODEL` and `BROWSERHIVE_WORKSPACE`. They describe the one client of a stdio process (the harness that spawned it, the model it says it runs, a workspace label; 02 §1.4, D-30), not the server, so they have no canonical key, no CLI flag, no JSON key, no default and no provenance, and they appear in no config schema, `--help` key list, `config show`, `GET /system/config` or `docs/reference/configuration.md`. The names follow §2's mechanical shape so they read like the rest of the family in an MCP client's `env` block.
+
+- The env collector skips exactly these names (`IDENTITY_ENV_VARS` in `contracts/config/registry.ts`); every other unknown `BROWSERHIVE_*` name is still a usage error.
+- A misspelling is still caught: the "did you mean" candidates of an unknown env name include the identity names (`BROWSERHIVE_HARNES` → `Did you mean 'BROWSERHIVE_HARNESS'?`).
+- An empty value means "not declared" (it is not a usage error, because it is not configuration).
+- The stdio listener reads them from the process environment (the programmatic API's `env` option when given). Under `transport=http` they have no effect; when one is set, the HTTP listener logs one `info` line saying that HTTP clients declare identity with the `X-BH-*` headers.
+- They are distinct from `BHDEV_*` (dev tooling, never read by the daemon) and from the harness-injected `CLAUDECODE` and `GEMINI_CLI`, which the stdio listener also reads (02 §1.4).
 
 ## 3. The config file
 
@@ -171,7 +181,7 @@ All configuration failures are detected before any port is bound, any browser is
 | Situation | Exit | Message shape |
 |---|---|---|
 | Unknown CLI flag | 64 | `browserhive: unknown flag '--maxSession'. Did you mean '--maxSessions'? Run 'browserhive --help'.` (unsupported spellings such as `--max-sessions` get the same shape, §5.5) |
-| Unknown `BROWSERHIVE_*` env var | 64 | `browserhive: unknown environment variable 'BROWSERHIVE_MAX_SESSION'. Did you mean 'BROWSERHIVE_MAX_SESSIONS'?` |
+| Unknown `BROWSERHIVE_*` env var (other than the identity names of §2.2) | 64 | `browserhive: unknown environment variable 'BROWSERHIVE_MAX_SESSION'. Did you mean 'BROWSERHIVE_MAX_SESSIONS'?` (candidates include the identity names: `'BROWSERHIVE_HARNES'. Did you mean 'BROWSERHIVE_HARNESS'?`) |
 | Unknown key in config file | 64 | `browserhive: unknown key 'maxSession' in /path/browserhive.config.json. Did you mean 'maxSessions'?` |
 | Reserved key set (§5.4) | 64 | `browserhive: 'proxy' is reserved for a future release and cannot be set.` |
 | Invalid value | 64 | `browserhive: invalid value for --sessionLease: '2 hours'. Expected a duration like '2h', '30m', '90s', '500ms', or an integer of milliseconds.` |
@@ -328,7 +338,7 @@ Parsers (`contracts/config/parsers.ts`): `zBool`, `zDuration`, `zBytes`, `zPort`
 
 Resolver (`core/src/app/config/resolve.ts`, pure, injected `env`, `argv`, `cwd`, `fs`, `hostMemory`):
 
-1. **Collect** raw layers: `defaults` (from schema), `env` (all `BROWSERHIVE_*` plus the OTEL sub-source), `file` (discovered per §3), `cli` (parsed argv). Each layer is `Map<canonicalKey, { raw, source, location }>`.
+1. **Collect** raw layers: `defaults` (from schema), `env` (all `BROWSERHIVE_*` except the identity names of §2.2, plus the OTEL sub-source), `file` (discovered per §3), `cli` (parsed argv). Each layer is `Map<canonicalKey, { raw, source, location }>`.
 2. **Normalize keys**: env and CLI spellings are converted to canonical keys through the registry; anything not in the registry is collected as unknown (with suggestions) and reported together.
 2.5. **Expand references** in the file layer only (§3.1): every string leaf of each file value is scanned once against the injected `env`; problems are collected like any other; the entry keeps its `refs` and, when the key is not secret, its `template`. The empty-value rule for the file runs after this step. Env, CLI, `OTEL_*` and programmatic values are only checked for reference-shaped text, which becomes a warning. A user without a config file runs none of this.
 3. **Parse per source** with the key's parser; failures are collected with source and location (`--sessionLease`, `BROWSERHIVE_SESSION_LEASE`, `file:/path#sessionLease`).

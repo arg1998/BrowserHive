@@ -180,16 +180,16 @@ Conventions (§5) apply to every list. `Auth` column: **S** operator session or 
 
 ### 4.2 Sessions
 
-`SessionSummary` (the one shape used by lists, detail, and WS): `session_id, slug, owner, tenant_id, channel, engine, headless, incognito, persistence_mode, current_url, created_at, closed_at, closed_reason, archived_at, lease_expires_at, lease_paused_at, lease_remaining_ms, state ('reserved'|'launching'|'live'|'paused'|'draining'|'closed'|'crashed'), live, disable_evaluate, vault_enabled, stealth, fingerprint, humanize, stealth_recorded, identity, browser?:{version, sandboxed}, proxy_label, counts:{tool_calls, errors, pages, blocked, attention_open, vault_access}, has_live_viewers, client:{name, version, agent_name?, model?}` — `browser` (live sessions only; absent for stored rows) is the running engine's real version (`null` for a persistent context) and whether it runs inside Chromium's sandbox (D-27); `client` is the launching MCP connection's self-reported identity (02 §1.4: `clientInfo`, `X-BH-Workspace` as `agent_name`, `X-BH-Agent-Model` as `model`; absent headers are omitted), `null` when the session has no connection or the client declared nothing.
+`SessionSummary` (the one shape used by lists, detail, and WS): `session_id, slug, owner, tenant_id, channel, engine, headless, incognito, persistence_mode, current_url, created_at, closed_at, closed_reason, archived_at, lease_expires_at, lease_paused_at, lease_remaining_ms, state ('reserved'|'launching'|'live'|'paused'|'draining'|'closed'|'crashed'), live, disable_evaluate, vault_enabled, stealth, fingerprint, humanize, stealth_recorded, identity, browser?:{version, sandboxed}, proxy_label, counts:{tool_calls, errors, pages, blocked, attention_open, vault_access}, has_live_viewers, harness, client:{name, version, agent_name?, model?, harness?, harness_label?, harness_source?, model_source?, workspace?, title?, protocol_version?, meta?}` — `browser` (live sessions only; absent for stored rows) is the running engine's real version (`null` for a persistent context) and whether it runs inside Chromium's sandbox (D-27); `harness` is the harness that launched the session (02 §1.4), fixed at launch (`sessions.harness`), always present: a slug, or `unknown` for sessions whose launch identified nothing and for sessions created before schema v3. `client` is the launching MCP connection's self-reported identity (02 §1.4): `name`/`version`/`title` from `clientInfo`, `protocol_version`, `harness` (slug) with `harness_label` and `harness_source`, `model` with `model_source`, `workspace` (also as `agent_name`, kept for compatibility) and the capped `meta` bag; absent values are omitted. For a live session it is the identity resolved when it launched; for a stored session, the connection row's latest resolution. It is `null` when the session has no connection row, or when the client reported nothing at all (no name, version, workspace or model, and harness `unknown`).
 
 `counts` are live and identical in list rows, `GET /sessions/{id}` (`.session.counts` and top-level `counts`) and WS `session.updated`. For a live session they come from the in-memory aggregate (`app/sessions/session-counters.ts`), which subscribes to the same bus events the recorder persists: `tool.called` → `tool_calls` +1 and `errors` +1 when `error_code` is set (soft failures count); `page.visited` → `pages`; `blocklist.hit` → `blocked`; `vault.access` → `vault_access`; `attention.created`/`attention.resolved` → `attention_open` ±1. Every change publishes `session.updated` (coalesced 250 ms per session). `attention_open` counts pending **attention** requests only (vault confirms excluded, in the DB view too). A blocked `request_attention` counts in `tool_calls` once it returns. The takeover gate needs an open request with `mode = 'takeover'`; `attention_open > 0` alone is not sufficient.
 
 | Method | Path | Auth | Request | Response | Errors |
 |---|---|---|---|---|---|
-| GET | `/sessions` | S | filters: `state[]` (enum), `view` (`all|live|closed|archived`, default all-non-archived), `archived` (`exclude|include|only`), `owner`, `channel[]`, `persistence_mode[]`, `q`, `since`, `until`; sort: `created_at|slug|channel|last_activity_at|errors|lease_expires_at|closed_at|owner|persistence_mode|blocked` | `Page<SessionSummary>` + `facets:{owners, channels, persistence_modes, states}` with counts | — |
+| GET | `/sessions` | S | filters: `state[]` (enum), `view` (`all|live|closed|archived`, default all-non-archived), `archived` (`exclude|include|only`), `owner`, `channel[]`, `persistence_mode[]`, `harness[]` (slugs; `unknown` matches sessions without a launch harness), `q`, `since`, `until`; sort: `created_at|slug|channel|last_activity_at|errors|lease_expires_at|closed_at|owner|persistence_mode|blocked|harness` | `Page<SessionSummary>` + `facets:{owners, channels, persistence_modes, states, harnesses}` with counts (`harnesses` counts `unknown` like any slug) | — |
 | POST | `/sessions/bulk` | S | `{action:'archive'|'unarchive'|'terminate'|'delete', session_ids[≤100]}` + `Idempotency-Key` | `{results:[{session_id, ok, error?:{code,title}}], ok_count, error_count}` (207-style body, status 200) | 400 |
 | GET | `/sessions/{session_id}` | S | — | `{session: SessionSummary, trace:{enabled, path, viewer_available, size_bytes?}, data_dir:{path, persistent}, counts, now}` (no embedded arrays) | 404 `SESSION_NOT_FOUND` |
-| GET | `/sessions/{session_id}/tool-calls` | S | filters `tool[]`, `ok` (bool), `error_code[]`, `q`, `since`, `until`; sort `ts|duration_ms` | `Page<ToolCallRow>` — `event_id, tool, tab_id, ok, error_code, error_message, duration_ms, result_size_bytes, ts, trace_id, has_screenshot, args_json?, result_text?` (`args_json`/`result_text` only with `?expand=detail`) | 404 |
+| GET | `/sessions/{session_id}/tool-calls` | S | filters `tool[]`, `ok` (bool), `error_code[]`, `q`, `since`, `until`; sort `ts|duration_ms` | `Page<ToolCallRow>` — `event_id, tool, tab_id, ok, error_code, error_message, duration_ms, result_size_bytes, ts, trace_id, has_screenshot, harness?, args_json?, result_text?` (`args_json`/`result_text` only with `?expand=detail`; `harness` is the harness of the connection that made the call, falling back to the session's launch harness, else `unknown`; always present in REST rows and in the `tool.called` feed row) | 404 |
 | GET | `/sessions/{session_id}/tool-calls/{event_id}` | S | — | full `ToolCallRow` + `screenshot?` | 404 |
 | GET | `/sessions/{session_id}/pages` | S | filters `category[]`, `domain`, `tab_id`, `q`; sort `ts` | `Page<PageRow>` — `event_id, tab_id, url, title, domain, category, ts` | 404 |
 | GET | `/sessions/{session_id}/attention` | S | filters `status[]`, `mode[]` | `Page<OperatorRequestRow>` | 404 |
@@ -213,9 +213,10 @@ Conventions (§5) apply to every list. `Auth` column: **S** operator session or 
 
 | Method | Path | Auth | Request | Response |
 |---|---|---|---|---|
-| GET | `/tool-calls` | S | filters `session_id`, `has_session` (`true` = only calls that ran in a session, `false` = only session-less calls, omitted = both), `tool[]`, `ok`, `error_code[]`, `q`, `since`, `until`; sort `ts|duration_ms` | `Page<ToolCallRow & {session_slug}>` (seed for the live feed and fleet error views); session-less calls (e.g. a failed `launch_session`) carry `session_id: null, session_slug: null` |
+| GET | `/tool-calls` | S | filters `session_id`, `has_session` (`true` = only calls that ran in a session, `false` = only session-less calls, omitted = both), `tool[]`, `ok`, `error_code[]`, `harness[]`, `q`, `since`, `until`; sort `ts|duration_ms` | `Page<ToolCallRow & {session_slug}>` (seed for the live feed and fleet error views); session-less calls (e.g. a failed `launch_session`) carry `session_id: null, session_slug: null` |
 | GET | `/activity` | S | `since`, `until` (default last 7 d), `bucket_ms` (60 000..86 400 000, default auto ≤ 720 buckets), `group_by?` (`tool|error_code|session`) | `{buckets:[{ts, tool_calls, errors, sessions_started, sessions_closed, blocked, attention, groups?}], summary:{sessions_total, sessions_live, sessions_window, tool_calls_window, tool_calls_total, errors_window, errors_total, blocked_window, blocked_total, attention_open, active_screencasts}, window:{since, until, bucket_ms}, now}` — gap-filled, axis aligned, never more than 720 buckets |
 | GET | `/metrics/tools` | S | `since`, `until`, `group_by` (`tool|error_code|tool,error_code`), `session_id?` | `{data:[{tool, error_code?, calls, errors, error_rate, p50_ms, p95_ms, p99_ms, max_ms}], now}` |
+| GET | `/metrics/harnesses` | S | `since`, `until` (default last 7 d) | `{data:[{harness, label, sessions, sessions_live, tool_calls, errors}], window:{since, until}, now}` — per harness over the window: sessions created, of those still live, tool calls and failed tool calls (harness of a call as in `ToolCallRow`); `unknown` is always present (zero counts included); sorted by sessions, then tool calls, descending, `unknown` last |
 | GET | `/pages` | S | filters `category[]`, `session_id`, `domain`, `q`, `since`, `until`; sort `ts|domain|category|session` | `Page<PageRow & {session_slug}>` + `facets:{category:[{value, count}]}` (always present, disjunctive: every filter except `category` applies; zero-count categories omitted) |
 | GET | `/pages/recent` | S | `limit` ≤ 200 | `{data:[PageRow & {session_slug}], now}` |
 | GET | `/pages/domains` | S | `since?`, `until?`, `limit` ≤ 100 | `{data:[{domain, count}], window, now}` |
@@ -268,6 +269,7 @@ One broker (D-15) backs two resource views; paths stay recognizable.
 | GET | `/system` | S | — | `{version, transport, uptime_ms, started_at, host, port, admin, capacity:{live, max, max_source:'config'|'derived'}, open_attention, active_screencasts, realtime:{connections}, allow_evaluate, persistence_mode, stealth:{profile, driver, fingerprint, humanize, captcha}, vault:{enabled, backend}, blocklist:{configured, path, patterns}, retention:{days, bytes, last_run_at, last_result, next_run_at, pruned_rows, artifacts_pending}, storage:{db_bytes, schema_version, min_reader_version, migrations:[{version, name, applied_at, duration_ms, app_version}], dropped_writes_total, write_queue_depth, last_backup_at, backups_count}, otel:{enabled, endpoint, protocol}, degradations:[SystemEvent], now}` plus `auth_mode:'off'|'token'` (the `auth` key: `token` requires a bearer on `/mcp`), `runtime:{bun, sqlite, playwright, patchright, chromium}`, `data_dir`, `mcp:{connections}`. `runtime.chromium` is the version of the Chromium build the configured driver launches (`browsers.json` of `patchright-core` when stealth uses Patchright, else `playwright-core`; `bundledChromiumVersion(driver)`), reported only when the boot probe found that executable (the same check as `health.checks.browser`); `null` means the binary is missing. Backup timestamps (`last_backup_at`, backup `created_at`) are integer epoch ms (filesystem mtimes are floored). Additive `browser?:{default_channel, sandbox_mode, running_as_root, channels:[{channel, label, source:'bundled'|'installed', installed, version, executable, sandbox:'sandboxed'|'unavailable'|'unknown', sandbox_reason}]}` (D-26, D-27): the browsers found on the host (detected once, on the first request, with the same lookup `init` and `doctor` use) and each executable's sandbox verdict, read live from the sandbox policy (`unknown` until a launch or the `sandbox=on` boot check decided; `sandbox_reason` is Chrome's own sentence) |
 | GET | `/system/config` | S | — | `{keys:[{key, value, source:'default'|'env'|'env(otel)'|'file'|'cli'|'derived', refs?, template?, shadowed:[{source, value, refs?}], secret}]}` — secret values `"[REDACTED]"`. `refs` lists the `{env:NAME}` references a config-file value used, `[{scheme:'env', ref, from:'value'|'default', at?}]`; `template` is the value as written in the file, never present when `secret`. `secret` is decided per run: keys flagged secret, plus keys whose value came through a reference with a credential-looking name (08 §3.1) |
 | GET | `/system/realtime` | S | — | `{connections:[{connection_id, principal, connected_at, last_seen_at, topics, screencasts, buffered_bytes, dropped_frames, messages_out}]}` |
+| GET | `/system/mcp/connections` | S | `limit` 1..200 (default 50) | `{connections:[McpConnectionRow], live, now}` — live connections first (most recently seen first), then recent closed ones, up to `limit`; `live` counts open rows. `McpConnectionRow` = `connection_id, transport, principal, live, harness, harness_label, harness_source, model, model_source, workspace, client_name, client_version, client_title, protocol_version, user_agent, ip, connected_at, last_seen_at, closed_at, sessions, conflicts:[{source, value, harness}], meta:{…}` (02 §1.4; rows written before schema v3 read their harness from the stored header value, else `unknown`) |
 | PATCH | `/system/log-level` | S (`system:write`) | `{spec:'info,sessions=debug'}` | `{ok:true, effective}` |
 | GET | `/system/events` | S | `since?`, `severity[]?` | `Page<SystemEvent>` (degradations; 10 §system_events) |
 | GET | `/logs` | S (`logs:read`) | `dir` (`desc` default \| `asc`), `cursor`, `after_seq`, `level[]` (exact set), `module[]` (root prefix), `session_id`, `trace_id`, `request_id`, `q`, `since`, `until`, `limit` 1..1000 (default 200) | `Page<LogRecord>` + `latest_seq` from the ring buffer (5 000 records). `dir=desc`: newest matching records first, `next_cursor` pages to **older** records (`null` when none are left); `dir=asc`: oldest held first, the cursor pages to newer. A cursor is bound to the `dir` that minted it (other `dir` → 400 `VALIDATION_FAILED`). `after_seq`: only records with `seq > after_seq` (reconnect gap fill, echoed in `applied.filters`). `latest_seq` is the newest `seq` assigned (0 when empty). In `LogRecord`, `trace_id`, `span_id`, `request_id`, `session_id`, `principal`, `transport` and `err` are absent, never `null`; misfit values move to `fields.<key>`; `err` is always a serialized error |
@@ -400,7 +402,7 @@ Every event is produced by the app-level event bus (01 §5); the hub only maps b
 
 ---
 
-## 7. Data model (schema v2)
+## 7. Data model (schema v3)
 
 All tables in `browserhive.db` (D-24). Conventions: `TEXT` ids, epoch-ms `INTEGER` columns suffixed `_at`/`_ts`, durations `_ms`, sizes `_bytes`, booleans `INTEGER CHECK IN (0,1)`, enums `TEXT CHECK (col IN (...))` generated from `contracts/enums`, every `session_id` FK `ON DELETE CASCADE`. `WITHOUT ROWID` on tables with a TEXT primary key that are never scanned in insertion order.
 
@@ -423,6 +425,14 @@ CREATE INDEX idx_auth_events_time ON auth_events(occurred_at);
 -- mcp client metadata (self-reported; never for access control)
 CREATE TABLE mcp_connections (connection_id TEXT PRIMARY KEY, principal_id TEXT, transport TEXT NOT NULL CHECK (transport IN ('http','stdio')), mcp_session_id TEXT, client_name TEXT, client_version TEXT, protocol_version TEXT, capabilities_json TEXT, agent_name TEXT, model TEXT, harness TEXT, ip TEXT, user_agent TEXT, connected_at INTEGER NOT NULL, last_seen_at INTEGER NOT NULL, closed_at INTEGER) WITHOUT ROWID;
 CREATE INDEX idx_mcp_connections_open ON mcp_connections(last_seen_at) WHERE closed_at IS NULL;
+-- v3 (0003-harness-identity): the resolved identity (02 §1.4); `agent_name` stays and is written with `workspace`
+ALTER TABLE mcp_connections ADD COLUMN client_title TEXT;
+ALTER TABLE mcp_connections ADD COLUMN workspace TEXT;               -- backfilled from agent_name
+ALTER TABLE mcp_connections ADD COLUMN harness_source TEXT;          -- env|header|injected_env|url|meta|client_info|user_agent|none (open vocabulary; backfilled 'header' where harness was set)
+ALTER TABLE mcp_connections ADD COLUMN model_source TEXT;            -- header|env|meta (backfilled 'header' where model was set)
+ALTER TABLE mcp_connections ADD COLUMN harness_conflicts_json TEXT;  -- [{source, value, harness}]
+ALTER TABLE mcp_connections ADD COLUMN meta_json TEXT;               -- the capped meta bag
+CREATE INDEX idx_mcp_connections_seen ON mcp_connections(last_seen_at, connection_id);
 
 -- sessions (state table)
 CREATE TABLE sessions (
@@ -436,6 +446,9 @@ CREATE TABLE sessions (
   closed_at INTEGER, closed_reason TEXT CHECK (closed_reason IN ('user','operator','lease_expired','crash','shutdown','interrupted','launch_failed')),
   archived_at INTEGER, last_url TEXT, launch_ms INTEGER, config_json TEXT NOT NULL
 ) WITHOUT ROWID;
+-- v3: the launch harness, written once at creation; NULL (sessions created before v3) reads `unknown`
+ALTER TABLE sessions ADD COLUMN harness TEXT;
+CREATE INDEX idx_sessions_harness ON sessions(harness, created_at);
 CREATE INDEX idx_sessions_open ON sessions(state) WHERE closed_at IS NULL;
 CREATE INDEX idx_sessions_owner ON sessions(owner, created_at);
 CREATE INDEX idx_sessions_created ON sessions(created_at, session_id);
@@ -509,7 +522,7 @@ CREATE INDEX idx_logs_ts ON logs(ts); CREATE INDEX idx_logs_trace ON logs(trace_
 CREATE TABLE resource_samples (ts INTEGER NOT NULL, session_id TEXT REFERENCES sessions(session_id) ON DELETE CASCADE, cpu_pct REAL, rss_bytes INTEGER, host_free_bytes INTEGER, PRIMARY KEY (ts, session_id)) WITHOUT ROWID;
 ```
 
-`meta.min_reader_version = 1`. Migration v1 (`0001-initial`) creates everything above except the v2 lines; migration v2 (`0002-notification-groups`, `compatible: true`, so the min reader stays 1) adds the notification grouping columns and indexes. The runner writes a backup before migrating. A dedicated CI test asserts fresh == migrated (D-04); fixtures `v1.db` and `v2.db` upgrade to head, and the golden is `schema-v2.json`.
+`meta.min_reader_version = 1`. Migration v1 (`0001-initial`) creates everything above except the v2 and v3 lines; migration v2 (`0002-notification-groups`, `compatible: true`, so the min reader stays 1) adds the notification grouping columns and indexes; migration v3 (`0003-harness-identity`, `compatible: true`) adds the identity columns and indexes, backfills `workspace` from `agent_name` and the two source columns where a value was set, and leaves `sessions.harness` NULL for existing sessions. The runner writes a backup before migrating. A dedicated CI test asserts fresh == migrated (D-04); fixtures `v1.db`, `v2.db` and `v3.db` upgrade to head, and the golden is `schema-v3.json`.
 
 ### 7.1 Retention classes
 
@@ -519,7 +532,7 @@ CREATE TABLE resource_samples (ts INTEGER NOT NULL, session_id TEXT REFERENCES s
 | audit | `vault_access`, `blocked_requests`, `auth_events`, `operator_actions`, `operator_requests` (terminal) | `auditRetentionDays` (90); never byte-pruned |
 | sessions | `sessions` rows | deleted only when all children are gone and `closed_at < now - retentionDays`; **archived sessions exempt** |
 | artifacts | `trace.zip`, `sessions/<id>/`, downloads | follow their session; deletion via `artifact_outbox` (row delete and outbox insert in one transaction; sweeper unlinks with retries; orphan scan weekly) |
-| connections | `mcp_connections` | closed rows with `closed_at < now - retentionDays` that no remaining `sessions` row references (a session keeps its client metadata as long as it lives, archived ones included); open rows never |
+| connections | `mcp_connections` (with its IP, `User-Agent` and meta bag) | closed rows with `closed_at < now - retentionDays` that no remaining `sessions` row references (a session keeps its client metadata as long as it lives, archived ones included); open rows never. A pruned row's tool calls are older than it, so they are pruned first; a session's own harness survives in `sessions.harness` |
 | notifications | `notifications` | 30 d after `dismissed_at`/`read_at`, 90 d otherwise |
 | backups | `backups/*.db` | keep last 5 |
 
@@ -528,7 +541,7 @@ CREATE TABLE resource_samples (ts INTEGER NOT NULL, session_id TEXT REFERENCES s
 ### 7.2 Ports (signatures abbreviated)
 
 ```ts
-interface SessionRepository { insert(row); update(id, patch); get(id); list(query): Promise<Page<SessionListRow>>; facets(query); markClosed(id, at, reason); archive(id, at); unarchive(id); delete(id): Promise<{rows, paths}>; reconcileOpen(at, reason); }
+interface SessionRepository { insert(row); update(id, patch); get(id); list(query): Promise<Page<SessionListRow>>; facets(query) /* owners, channels, persistence modes, states, harnesses */; markClosed(id, at, reason); archive(id, at); unarchive(id); delete(id): Promise<{rows, paths}>; reconcileOpen(at, reason); }
 interface ToolCallRepository { insert(row); get(eventId); listBySession(id, query); listAll(query /* hasSession? */); }
 interface PageRepository { insert(row); list(query); facets(query): {categories}; recent(limit); topDomains(query); }
 interface ScreenshotRepository { insert(row); get(eventId); listBySession(id, query); }
@@ -540,9 +553,10 @@ interface PrincipalRepository / CredentialRepository / AuthSessionRepository / G
 interface VaultBindingRepository { list(query); get(handle); upsert(binding, ifVersion?); remove(handle); exportAll(); importAll(doc, mode); }
 interface VaultGroupPolicyRepository { list(); get(groupKey); upsert(policy, ifVersion?); }
 interface NotificationRepository { …; list(query /* sort: updated_at|created_at */); findOpenGroup(principalId, groupKey); updateGroup(id, patch /* applies only while unread and undismissed */); }
-interface PreferenceRepository / SystemEventRepository / IdempotencyRepository / ArtifactOutboxRepository / McpConnectionRepository
+interface PreferenceRepository / SystemEventRepository / IdempotencyRepository / ArtifactOutboxRepository
+interface McpConnectionRepository { insert(row); update(id, patch); get(id); listOpen(); listRecent(limit) /* live first, with session counts */; closeAll(at); }
 interface UnitOfWork { transaction<T>(fn: (repos: Repositories) => Promise<T>): Promise<T>; }
-interface AnalyticsQueries { activity(query); toolMetrics(query); timeline(sessionId, query); summary(now, window); databaseSize(); }
+interface AnalyticsQueries { activity(query); toolMetrics(query); harnessMetrics(window); timeline(sessionId, query); summary(now, window); databaseSize(); }
 interface MaintenanceService { migrate(); backup(): Promise<path>; retentionSweep(); incrementalVacuum(); inventory(): Promise<PurgeInventory>; integrityCheck(); }
 ```
 
@@ -585,5 +599,5 @@ Deliberately silent: `session.opened`, `page.visited`, `session.removed`, `atten
 
 - `POST /sessions/{id}/input` exists so takeover can be scripted without a WebSocket client; it shares the attention gate and audit path with the WS `input` command.
 - Operator requests are exposed as two resource views (`/attention`, `/vault/confirm`) over one table. A combined `/operator-requests` endpoint was considered and rejected: it would be a third view of the same rows with no consumer.
-- `mcp_connections` records what the transport and `initialize` reveal (headers, `User-Agent`, `clientInfo`, protocol version, capabilities; see 02 §1.4). An explicit client-metadata tool is not added, because the tool catalog is a stable contract (D-12) and self-reported metadata is dashboard-only anyway.
+- `mcp_connections` records what the transport, `initialize` and each call reveal (headers, URL, `_meta`, `User-Agent`, `clientInfo`, protocol version, capabilities, the stdio environment; see 02 §1.4). An explicit client-metadata tool is not added, because the tool catalog is a stable contract (D-12) and self-reported identity is observability only (D-30). Per-harness counts are their own endpoint (`/metrics/harnesses`) rather than an `/activity` grouping, because a session's harness and a call's harness come from different tables.
 - The session cookie uses `Path=/` because the dashboard and the API share the origin root.

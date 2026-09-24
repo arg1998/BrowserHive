@@ -40,7 +40,7 @@ The stability contract of this spec: **an agent that works against a release of 
 | Option | Value | Why |
 |---|---|---|
 | `sessionIdGenerator` | `() => 'm-' + nanoid(16)` | stateful sessions so a client can hold a standalone SSE stream and resume |
-| `onsessioninitialized(id)` | creates a `connections` record (§1.4) | client metadata, dashboard "connected clients" |
+| `onsessioninitialized(id)` | creates the `mcp_connections` row with the identity resolved from `initialize` (§1.4) | client identity, the System page's MCP connections |
 | `onsessionclosed(id)` | marks the record closed; cancels open attention requests owned by that MCP session **only if** the principal has no other live MCP session (agents reconnect) | see §5 |
 | `enableDnsRebindingProtection` | **off**; `handleMcpRequest` applies the dashboard's Host policy instead (`isHostAllowed`, 03 §2: loopback names and the bound host on any port, `allowedHosts`, and IP literals under a wildcard bind), answering a foreign Host with 403 `Invalid Host header` | the SDK's check matches `host:port` exactly, which rejected every request behind a port mapping or SSH tunnel while the dashboard kept working |
 | `allowedOrigins` | empty (non-browser clients); browser-origin MCP clients are out of scope | |
@@ -65,17 +65,43 @@ The MCP route runs the same `AuthenticationProvider` chain as the admin API (D-0
 - Tokens: stored hashed (SHA-256 with a public 8-char prefix for lookup, constant-time compare on the hash) in `credentials` (kind `api_token`), seeded on first start for principal `agent-1` (32 random bytes, base64url), printed once. `BROWSERHIVE_AUTH_TOKENS=name:token,…` merges ephemeral tokens (never persisted). Revocation/expiry via `browserhive admin tokens` and the dashboard (System page).
 - Non-loopback `host` without `auth=token` is refused at config time unless `allowInsecureBind=true`.
 
-### 1.4 Principals, MCP sessions and client metadata
+### 1.4 Principals, MCP sessions and client identity
 
 Ownership is keyed on the **principal**, never on `Mcp-Session-Id`: a reconnecting client (new MCP session, same token) keeps its browser sessions. Under `auth=off` everything is owned by `local`.
 
-Each MCP session gets a row in `mcp_connections` (DDL in 03 §7: `connection_id`, `principal_id`, `transport`, `mcp_session_id`, `client_name`, `client_version`, `protocol_version`, `capabilities_json`, `agent_name`, `model`, `harness`, `ip`, `user_agent`, `connected_at`, `last_seen_at`, `closed_at`). What fills it:
+Each MCP session (each stdio process) gets a row in `mcp_connections` (DDL in 03 §7). Identity is **self-reported observability** (D-30): recorded and shown faithfully, never used for access control or any other decision, and described once on every surface as "reported by the client or by your configuration; BrowserHive can't verify it".
 
-- `initialize`, both transports: `clientInfo.name`/`version` and `capabilities` (the SDK's record of the handshake). HTTP also stores `protocolVersion`; stdio writes the row at startup and fills these in when `initialize` arrives.
-- HTTP only: `User-Agent`, and three optional headers, one column each — `X-BH-Agent-Harness` → `harness`, `X-BH-Agent-Model` → `model`, `X-BH-Workspace` → `agent_name`. A blank header counts as absent.
-- `ip` is reserved and always `null` today; `clientInfo.title` and other `initialize` `_meta` are not read.
+**Signals.** What each transport can see:
 
-Browser sessions record `connection_id` at creation and carry that connection's client (`name`, `version`, `agent_name`, `model`) as `SessionSummary.client` (03 §4.2), fixed at launch; `harness` is recorded but not surfaced yet. All of it is **self-reported, dashboard-only, never used for access control**. Per-call `_meta` contributes only tracing: a W3C `traceparent` (or a bare 32-hex id under `browserhive.ai/traceId` or `traceId`) is adopted as the parent of the tool span (D-08); other keys are ignored.
+| Signal | HTTP | stdio |
+|---|---|---|
+| `initialize`: `clientInfo.name`, `.version`, `.title`, `capabilities`, `protocolVersion`, `_meta` | yes | yes |
+| Per request: headers, URL (`extra.requestInfo`) | yes, every request | — |
+| Per call: `params._meta` of `tools/call` | yes | yes |
+| `User-Agent`, remote IP (the client IP of 03 §2, honouring `trustedProxies`) | yes | — |
+| Process environment | — | `BROWSERHIVE_HARNESS`, `BROWSERHIVE_MODEL`, `BROWSERHIVE_WORKSPACE`; `CLAUDECODE`, `GEMINI_CLI` |
+
+Headers (case-insensitive; a blank value counts as absent): `X-BH-Agent-Harness` (alias `X-BH-Harness`), `X-BH-Agent-Model` (alias `X-BH-Model`), `X-BH-Workspace`, and `X-BH-Meta-<Name>` for the meta bag. `_meta` keys: `ai.browserhive/harness`, `ai.browserhive/model`, `ai.browserhive/workspace`, and any other `ai.browserhive/<name>` for the meta bag; the `browserhive.ai/` prefix is read as an alias (never `browserhive.ai/traceId` or `browserhive.ai/error`, which keep their meanings). URL: `?harness=<name>` on the `/mcp` endpoint (query only; there is no path form). The identity environment variables are read by the stdio listener, not by the config resolver (08 §2.2).
+
+**Resolution, per request.** Every tool call resolves the identity from the connection's signals (`initialize`, the environment, the `initialize` request's headers and URL) overlaid with its own (its request's headers and URL, its `_meta`), and the connection row is updated when the result changes: `mcp_connections` is a cache of the latest resolution, so the design keeps working when a stateless MCP revision removes `initialize` (D-30). Harness, highest source first; the winner's source is `harness_source`:
+
+1. `env` — `BROWSERHIVE_HARNESS` (stdio) · `header` — `X-BH-Agent-Harness` / `X-BH-Harness` (HTTP);
+2. `injected_env` — set by the harness itself in the environment of stdio servers it spawns: `CLAUDECODE` → `claude-code`, `GEMINI_CLI` → `gemini-cli` (a non-empty value other than `0`/`false`);
+3. `url` — `?harness=`;
+4. `meta` — `_meta['ai.browserhive/harness']` of the call, then of `initialize`;
+5. `client_info` — `clientInfo.name` through the alias table;
+6. `user_agent` — `User-Agent` through the alias table;
+7. `none` — `unknown`.
+
+`capabilities` and `protocolVersion` are recorded and shown, not used to infer a harness (no verified ambiguity needs a tie-breaker; a fingerprint would be a guess). Normalisation (`normalizeHarness`, `contracts/harness`): declared values (steps 1, 3, 4) map through the slug, label and alias tables case- and punctuation-insensitively (`Claude Code`, `claude_code` → `claude-code`); an unrecognised declared value is kept as a sanitised slug (lower-case, runs of other characters become `-`, at most 32 characters). `clientInfo.name` and `User-Agent` map only through their alias tables; an unrecognised `clientInfo.name` is kept as a sanitised slug, while generic SDK defaults (`mcp`, `mcp-client`, `example-client`, `test-client`, `client`) and an unrecognised `User-Agent` give no signal. Signals of lower rank that name a *different* harness are **conflicts**: stored on the connection (`[{source, value, harness}]`), logged once per connection at `info` (`harness signals disagree`, naming the winner and what it shadowed), never a refusal.
+
+Model (declared only; MCP has no way to learn the model): `header` (`X-BH-Agent-Model`/`X-BH-Model`) or `env` (`BROWSERHIVE_MODEL`), then `meta` (`ai.browserhive/model`, call then `initialize`); recorded with `model_source`; absent is `null`, shown as "not reported". Workspace: `X-BH-Workspace` / `BROWSERHIVE_WORKSPACE`, then `meta` (`ai.browserhive/workspace`); stored in `workspace` and, for compatibility, in `agent_name`.
+
+**Meta bag.** `X-BH-Meta-<Name>` headers (the name lower-cased, as HTTP delivers it) and other `ai.browserhive/*` `_meta` keys, call over `initialize` over headers. Values are strings (numbers and booleans are stringified; other types are dropped). Caps: 16 keys, key ≤ 64 characters, value ≤ 256 bytes (UTF-8), 4 KiB in total over keys and values; entries past a cap are dropped and the connection logs one `info` line (`meta bag capped`, with the dropped count). Stored verbatim in `meta_json`; shown only as a key/value table; never faceted, filtered, used as a metric attribute or consulted by any code path.
+
+**Vocabulary.** `contracts/harness` holds the slug list with display labels, the alias tables and `normalizeHarness()`, `harnessLabel()` and `metricHarness()`. Slugs: `claude-code`, `claude-desktop`, `codex`, `cursor`, `cursor-cli`, `opencode`, `gemini-cli`, `vscode`, `copilot-cli`, `cline`, `roo-code`, `kilo-code`, `windsurf`, `continue`, `zed`, `goose`, `lm-studio`, `jetbrains`, `junie`, `n8n`, `raycast`, `crush`, `other`, `unknown`. On the wire `harness` is a string, never an enum: unrecognised slugs are valid values and display as themselves.
+
+**Where it lands.** The row stores the resolved harness, its source and conflicts, model and its source, workspace, `clientInfo` (name, version, title), protocol version, capabilities, `User-Agent`, IP and the meta bag. A browser session records `connection_id` and its **launch harness** (`sessions.harness`, written once at creation) and carries the connection's identity as `SessionSummary.client` (03 §4.2). The resolved harness of each call rides on the dispatcher's observation (`ToolObservation.harness`) and on the `tool.called` feed row, and becomes the `browserhive.harness` span attribute (10 §6). Per-call `_meta` also contributes tracing: a W3C `traceparent` (or a bare 32-hex id under `browserhive.ai/traceId` or `traceId`) is adopted as the parent of the tool span (D-08).
 
 ## 2. Tool definitions
 
@@ -111,6 +137,7 @@ interface ToolDefinition<I extends z.ZodObject | undefined, O extends z.ZodType>
 interface ToolCallContext {
   principal: RequestPrincipal;         // from authInfo or LOCAL
   connectionId: string | null;         // MCP session's connection record
+  client: SessionClientInfo | null;     // the identity resolved for this call (§1.4)
   request: RequestContext;             // trace_id, span_id, request_id (AsyncLocalStorage, D-08)
   eventId: string;                     // 'e-<ulid>', minted before the handler; used by screenshot archival
   reportProgress: (p: { progress: number; total?: number; message?: string }) => Promise<void>;
@@ -140,7 +167,7 @@ observe                   → exactly one ToolInvocation to the recorder, in `fi
 ```
 
 Invariants:
-- **Every terminal outcome emits exactly one observation**, including `TOOL_NOT_AVAILABLE`, `INVALID_ARGUMENTS` and authorization failures, so the audit trail shows calls that never reached a handler. Observation carries `{ eventId, tool, sessionId, tabId, args (per capture policy, key-redacted), ok, errorCode, errorMessage (redacted), resultText (capped 16 KiB, redacted), resultSize, durationMs, ts, principal, connectionId, traceId }`.
+- **Every terminal outcome emits exactly one observation**, including `TOOL_NOT_AVAILABLE`, `INVALID_ARGUMENTS` and authorization failures, so the audit trail shows calls that never reached a handler. Observation carries `{ eventId, tool, sessionId, tabId, args (per capture policy, key-redacted), ok, errorCode, errorMessage (redacted), resultText (capped 16 KiB, redacted), resultSize, durationMs, ts, principal, connectionId, harness, traceId }` (`harness`: the slug resolved for this call, §1.4).
 - The observer can never alter the result (errors inside `observe` are logged, never rethrown).
 - `sessions.get(id, principal)` is the only ownership check; it also resets the sliding lease and stamps `last_tool_at`. `SESSION_ACCESS_DENIED` carries the byte-identical message of `SESSION_NOT_FOUND`, so a foreign session is indistinguishable from an unknown one.
 - Redaction (`vault.redaction.scrub(sessionId, text)` + key-based `redactKeys`) is applied to the text block and to `structuredContent` (walked as strings) before the response leaves the dispatcher. Image blocks are not scrubbed (documented).
