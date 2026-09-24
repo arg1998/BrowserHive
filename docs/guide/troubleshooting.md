@@ -11,7 +11,10 @@ It prints a ✓ or ✗ per check and the fix for each ✗. Every error code, its
 ## Startup
 
 **[`BROWSER_NOT_INSTALLED`](../reference/errors.md#BROWSER_NOT_INSTALLED)**
-Run `browserhive init`. If you keep browsers elsewhere, set `PLAYWRIGHT_BROWSERS_PATH` the same way for `init` and the server. With `--stealthDriver patchright`, Patchright's Chromium must be installed too.
+Run `browserhive init`. If you keep browsers elsewhere, set `PLAYWRIGHT_BROWSERS_PATH` the same way for `init` and the server. With `--stealthDriver patchright`, Patchright's Chromium must be installed too. For `--defaultChannel chrome` (or a session asking for `channel: "chrome"`), install Google Chrome: `browserhive init --installChrome`. BrowserHive never falls back to another browser when the one asked for is missing.
+
+**[`SANDBOX_UNAVAILABLE`](../reference/errors.md#SANDBOX_UNAVAILABLE)** at startup (exit code 3)
+You set `--sandbox on` and the configured browser cannot run inside Chromium's sandbox on this machine. The message below the first line names the browser, Chrome's own reason, the cause on your OS, and what you can do, easiest first. On Ubuntu 23.10 and later that is usually: use the installed Google Chrome (`--defaultChannel chrome`), or give the bundled browser an AppArmor profile with `browserhive doctor --printApparmorProfile`. See [Security: the browser sandbox](security.md#the-browser-sandbox). `--sandbox auto` (the default) sandboxes where possible and never refuses to start.
 
 **[`PORT_IN_USE`](../reference/errors.md#PORT_IN_USE)**
 Another process holds the port, often a BrowserHive you started earlier. Find it with `lsof -i :9876` (macOS, Linux) or `netstat -ano | findstr 9876` (Windows), or use `--port`.
@@ -38,6 +41,15 @@ Nothing was changed; a backup exists in `<data-dir>/backups/`. Run `browserhive 
 Fix ownership of the data directory, or point `--dataDir` somewhere you own.
 
 ## Sessions and tools
+
+**[`SANDBOX_UNAVAILABLE`](../reference/errors.md#SANDBOX_UNAVAILABLE)** from `launch_session`
+The sandbox was required for this session (the server runs with `--sandbox on`, or the agent passed `launch_options: { chromiumSandbox: true }`) and this browser cannot provide it here. Retrying does not help. The message names the channels that do sandbox on this machine; otherwise drop `chromiumSandbox` or ask the operator to run `browserhive doctor`.
+
+**`doctor` warns "cannot run sandboxed here, falls back to no sandbox"**
+Under the default `--sandbox auto`, that browser runs without Chromium's sandbox on this machine (typical on Ubuntu 23.10+ with the bundled browser, as root, or in Docker). Sessions work; the guidance under the table says how to get the sandbox. The log says `sandbox fell back` once per browser.
+
+**A managed policy blocks automation**
+`doctor` reports policies such as `RemoteDebuggingAllowed=false` set by your organisation for Chrome or Edge. BrowserHive cannot drive that browser; use the bundled Chromium (`--defaultChannel chromium`) or ask your administrator.
 
 **[`SESSION_LIMIT_REACHED`](../reference/errors.md#SESSION_LIMIT_REACHED)**
 The cap is derived from RAM by default. Close idle sessions, shorten `--sessionLease`, or raise `--maxSessions` if the host can take it.

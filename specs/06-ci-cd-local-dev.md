@@ -147,6 +147,7 @@ Triggers: `pull_request`, `push` to `main`. Concurrency group `ci-${{ github.ref
 | `goldens` | ubuntu | `test:goldens`, `gen:openapi --check`, `gen:docs --check`, `gen:db-types --check`, export snapshots | yes |
 | `build` | ubuntu | `build`; uploads `packages/browserhive/dist` and the packed tarball as artifacts | yes |
 | `integration` | matrix `ubuntu-latest`, `macos-latest`, `windows-latest` | Playwright cache (`~/.cache/ms-playwright`, `~/Library/Caches/ms-playwright`, `%LOCALAPPDATA%\ms-playwright`) keyed on the **resolved** Playwright version from `bun.lock`; `bunx playwright install chromium --with-deps` on miss; `test:integration` (isolation, stealth, tool surface, auth states, persistence, observability, migration fixtures) | yes (ubuntu); macos/windows required after the first release |
+| `sandbox-matrix` | matrix `ubuntu-latest`, `macos-latest`, `windows-latest`; `continue-on-error` | `packages/browserhive/scripts/stealth-matrix.ts --sandbox config:off,config:auto,config:on,session --strict`: through BrowserHive (`createServer` → MCP → `launch_session` → `navigate` → `evaluate`) for the bundled Chromium and the runner's Google Chrome and Microsoft Edge, both stealth levels; the job summary gets one row per channel × stealth × sandbox request (sandboxed or not, measured on the browser process command lines; the page-visible stealth signals), the sandbox on/off parity verdict, and the raw sandboxed-launch error of any browser that could not sandbox; `--strict` fails on a stealth check miss or a parity difference; channels the runner lacks are reported as skipped. The evidence behind `sandbox=auto` as the default (D-27) | no |
 | `e2e` | ubuntu | needs `build`; starts the built server with a temp data dir; `bunx playwright test` (dashboard) with trace-on-failure artifact | yes |
 | `package` | ubuntu | needs `build`; `publint`, `attw --pack`, `smoke-installed` (pack → `bun add` into a clean temp project → `browserhive --version`, `--help`, stdio `initialize → tools/list` equals `ALL_TOOL_NAMES`, `serve` on a random port → `/health` ready → SIGTERM exits 0), `smoke-programmatic` (`import { createServer } from 'browserhive'`) | yes |
 | `licenses` | ubuntu | `license:check` over `dependencies` of `browserhive` and `dashboard` | yes |
@@ -155,6 +156,10 @@ Triggers: `pull_request`, `push` to `main`. Concurrency group `ci-${{ github.ref
 | `changeset` | ubuntu (PR only) | `changeset status --since origin/main`; comments when a user-facing package changed without a changeset | yes |
 
 Windows note: integration tests set `BROWSERHIVE_DATA_DIR` to a short temp path (`%RUNNER_TEMP%\bh`) to avoid MAX_PATH issues with Chromium profiles.
+
+### 6.1 `real-chrome.yml` (weekly drift check)
+
+Trigger: `schedule` (Mondays 07:00 UTC) and `workflow_dispatch`. One ubuntu job: installs the bundled Chromium, updates the runner's Google Chrome to current stable (`bunx playwright install chrome`), runs `test:integration` with `BHDEV_TEST_CHANNEL=chrome` (the real-browser suites launch their sessions on the installed Chrome; suites that test the `chromium` channel on purpose keep it), then the stealth and sandbox matrix for `chrome` with `--strict`. On failure it opens an issue titled "Weekly real-Chrome check failed", or comments on the open one, with the Chrome version and the run link. It never gates a pull request (D-26: installed browsers drift ahead of the tested build; the bundled channel does not).
 
 ## 7. `release.yml`
 

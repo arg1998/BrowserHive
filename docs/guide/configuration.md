@@ -114,6 +114,8 @@ If the file contains `authTokens`, keep it readable only by you (`chmod 600`); `
 | [`persistence`](../reference/configuration.md#persistence) | `memory` | default for `launch_session`: `memory`, `persistent`, `storage-state` |
 | [`vault`](../reference/configuration.md#vault) | `off` | `bitwarden` enables credential injection |
 | [`stealth`](../reference/configuration.md#stealth) | `standard` | `off`, `standard` or `max`; see also `fingerprint` and `humanize` |
+| [`defaultChannel`](../reference/configuration.md#defaultChannel) | `chromium` | the browser sessions use: the bundled `chromium`, or the installed `chrome` or `edge` ([choosing the browser](installation.md#choosing-the-browser)) |
+| [`sandbox`](../reference/configuration.md#sandbox) | `auto` | Chromium's sandbox: `auto` wherever the machine allows it, `on` required (refuses to start otherwise), `off` never ([security](security.md#the-browser-sandbox)) |
 | [`maxSessions`](../reference/configuration.md#maxSessions) | derived from RAM | concurrent session cap, or `unbounded` |
 | [`sessionLease`](../reference/configuration.md#sessionLease) | `2h` | idle sessions are closed after this long |
 | [`blocklist`](../reference/configuration.md#blocklist) | unset | URL blocklist file |

@@ -36,6 +36,20 @@ An agent can override `stealth`, `fingerprint`, `humanize`, `headless` and `chan
 - **Locale and timezone** from the host (`LC_ALL`, `LANG`, the system timezone). No coordinates are ever set.
 - `set_extra_http_headers` refuses to change `user-agent`, `accept-language` and `sec-ch-ua*` on stealth sessions, so the identity stays consistent.
 
+## Which browser
+
+The browser a session runs in matters as much as the patches applied to it. Three channels are available ([Installation: choosing the browser](installation.md#choosing-the-browser)):
+
+- **`chromium`** (default): the Chrome for Testing build BrowserHive downloads and pins. It is identical everywhere and needs nothing installed, but it reports its pinned full version (for example `153.0.8010.12`), a build real users may not be running.
+- **`chrome`**: the Google Chrome installed on the machine, at the version real users run. **This is the recommended setup for stealth, together with Patchright** (Patchright recommends the same). On Ubuntu 23.10+ it is also the browser that can use Chromium's sandbox.
+- **`edge`**: the installed Microsoft Edge. See the ceiling below: under stealth it is presented as Google Chrome.
+
+BrowserHive **never fakes the browser version**: the client-hint version list is the real engine's. With real Chrome the brands read `Not_A Brand, Chromium, Google Chrome` exactly as Chrome's own do (`Google Chrome` appears once).
+
+**Version drift.** An installed Chrome updates itself and can move ahead of the Chromium build a BrowserHive release was tested with. `browserhive doctor` warns when the browser you use is more than one major version ahead ("update BrowserHive, or use the bundled Chromium"), and a weekly job in BrowserHive's own CI runs the whole browser test suite against current stable Chrome to catch drift early.
+
+The sandbox does not change what a page sees: sessions with and without Chromium's sandbox report identical signals (measured on Linux, macOS and Windows for all three channels).
+
 ## What `fingerprint` adds
 
 A believable screen for headless sessions: a display size from a catalogue that matches the host OS family (for example 1512×982 at 2× on macOS, 1920×1080 on Windows and Linux; never Playwright's default 1280×720), with a window size and position derived from it so that `innerHeight < outerHeight ≤ availHeight ≤ screen.height` always holds. The patched getters report themselves as native code.
@@ -57,7 +71,7 @@ If applying the identity fails, the session continues without it and records [`S
 
 ## Launch-argument guard
 
-To protect isolation, `launch_options.args` may not contain `--user-data-dir`, `--profile-directory`, `--disk-cache-dir`, `--no-sandbox`, `--disable-setuid-sandbox`, `--disable-web-security`, `--disable-site-isolation-trials`, `--disable-features`, `--single-process`, `--no-zygote` or the remote-debugging switches. `chromiumSandbox: false`, `env`, `downloadsPath` and `recordVideo` are refused too. Violations fail with [`UNSAFE_LAUNCH_ARG`](../reference/errors.md#UNSAFE_LAUNCH_ARG). An `executablePath` override is allowed but disables channel routing ([`EXECUTABLE_PATH_OVERRIDE`](../reference/errors.md#EXECUTABLE_PATH_OVERRIDE)).
+To protect isolation, `launch_options.args` may not contain `--user-data-dir`, `--profile-directory`, `--disk-cache-dir`, `--no-sandbox`, `--disable-setuid-sandbox`, `--disable-web-security`, `--disable-site-isolation-trials`, `--disable-features`, `--single-process`, `--no-zygote` or the remote-debugging switches. `chromiumSandbox: false`, `env`, `downloadsPath` and `recordVideo` are refused too. (`chromiumSandbox: true` is allowed: it requires the sandbox for that session; the operator's `--sandbox` setting decides otherwise, see [Security](security.md#the-browser-sandbox).) Violations fail with [`UNSAFE_LAUNCH_ARG`](../reference/errors.md#UNSAFE_LAUNCH_ARG). An `executablePath` override is allowed but disables channel routing ([`EXECUTABLE_PATH_OVERRIDE`](../reference/errors.md#EXECUTABLE_PATH_OVERRIDE)).
 
 ## Proxies
 
@@ -81,8 +95,9 @@ These are known and documented, not bugs:
 - **The hardest bot checks** (for example Cloudflare Turnstile in strict mode) can still detect DevTools-protocol automation and synthetic input. Use [human takeover](attention.md) for them.
 - **Canvas, audio and font entropy** are the host's own: a stable identity tied to your machine, not a rotating one.
 - **GREASE brand and platform version** are plausible values, not byte-exact copies of the installed Chrome.
-- **Headless sessions render WebGL in software.** The reported WebGL renderer is SwiftShader even on a machine with a GPU, so a headless session looks like one without a GPU. Headed sessions use the real GPU.
-- **Headless sessions contradict themselves on notification permission**: the Permissions API says `prompt` while `Notification.permission` says `denied`.
+- **Headless sessions render WebGL in software.** The reported WebGL renderer is SwiftShader on Linux even on a machine with a GPU ("Microsoft Basic Render Driver" on a Windows VM), so a headless session looks like one without a GPU. Headed sessions use the real GPU. The same for all three channels.
+- **Headless sessions deny notification requests silently**: `Notification.requestPermission()` resolves `denied` after about 1.7 s without showing anything (both the bundled Chromium and Google Chrome). Before a request the Permissions API (`prompt`) and `Notification.permission` (`default`) agree.
+- **Edge is presented as Google Chrome.** With `channel: "edge"` and stealth on, the client-hint brands say `Google Chrome` (with Edge's own version number) while the user agent still says `Edg/`. A site that compares the two can tell. Use `chrome` for stealth.
 - **Without `--fingerprint`, headless sessions use Playwright's default 1280×720 screen**, a size real users rarely have. `--fingerprint` (on by default with `--stealth max`) picks a common display size instead.
 - **WebAuthn and passkeys** cannot be replayed from saved state.
 - **Firefox and WebKit** are not supported.

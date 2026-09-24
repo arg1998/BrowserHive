@@ -106,6 +106,7 @@ Decisions: D-07 (error model), D-08 (telemetry), D-20 (privacy).
 | RETENTION_FAILED | — | boot | backoff | `{step, reason}` (degradation record, §3) |
 | STALE_BROWSER_PROCESSES | — | boot | never | `{count}` (degradation record, §3) |
 | BROWSER_NOT_INSTALLED | 503 | domain/boot | after_operator | `{channel, install_command}` |
+| SANDBOX_UNAVAILABLE | 503 | boot/domain | never | `{channel, reason, required_by:'config'\|'launch_options', alternatives[], guidance[], executable?, cause?}` (D-27). Boot form: the `sandbox=on` preflight refuses to start, exit 3; the public message is the headline ("The sandbox is required (--sandbox on) but the configured browser cannot run sandboxed.") and `guidance` holds the operator block the CLI prints under it, instead of the hint. Tool form: `launch_session` when the sandbox was required (`sandbox=on`, or `launch_options.chromiumSandbox: true`) and this browser cannot run with it; the message ends with "Retrying will not help." and the short guidance, `alternatives` lists the channels checked to sandbox here, `executable` is omitted. `reason` is Chrome's own sentence (`No usable sandbox!`) |
 | UNAUTHORIZED | 401 | auth | never | `{}` |
 | INVALID_CREDENTIALS | 401 | auth | never | `{}` |
 | FORBIDDEN | 403 | auth | never | `{scope}` |
@@ -195,6 +196,7 @@ Process level (installed by the CLI, not by core): `unhandledRejection`/`uncaugh
 | `/Download.*(failed|canceled)/i` | DOWNLOAD_FAILED |
 | `setInputFiles` failures | UPLOAD_FAILED |
 | `/Executable doesn't exist/i` | BROWSER_NOT_INSTALLED (`details.install_command = 'browserhive init'`) |
+| a launch whose sandbox could not start: Chrome's or Playwright's markers (`Chromium sandboxing failed!`, `No usable sandbox`, `crbug.com/638180`, `crbug.com/357670`, `Failed to move to new namespace`, `zygote_host_impl_linux`, …), or any other failure of a sandboxed launch after which the same browser starts without the sandbox | SANDBOX_UNAVAILABLE (`retryable: never`) when the sandbox was required; under `sandbox=auto` the session falls back instead. **Never `INTERNAL_ERROR`**: the failure is a property of the host, and `backoff` would make an agent retry forever |
 | anything else | INTERNAL_ERROR (private message keeps the Playwright text) |
 
 The first line of the driver message (≤ 160 chars, redacted) is stored in `details.detail`; the public message is the registry text.
@@ -264,6 +266,8 @@ Reserved keys are namespaced: user fields that collide with reserved names are w
 ### 4.1 Levels and per-module spec
 
 `--logLevel` accepts a spec: `info` or `info,sessions=debug,persistence=trace`. Levels are `error`, `warn`, `info`, `debug` and `trace`; `trace` sits below `debug` for per-CDP-command and payload logging. Module names come from `LOG_MODULES` in `infra/logging/level-spec.ts`: the subsystems (`sessions`, `browsers`, `persistence`, `http`, `ws`, `mcp`, `vault`, `attention`, `auth`, `telemetry`, `retention`), the cross-cutting modules that log at boot (`config`, `blocklist`, `notifications`, `system`, `cli`), and `dashboard` for client errors. A logger bound to `sessions.lifecycle` matches `sessions`; an unknown module name is a usage error. Runtime change via `PATCH /api/v1/system/log-level` or `SIGUSR2` (re-reads the config file's `logLevel`).
+
+**Sandbox lines** (module `browsers.sandbox`, D-27). `sandbox fell back` (`warn`, once per browser executable per process under `sandbox=auto`; fields `channel`, `executable`, `reason`), `sandbox skipped as root` (`warn`, at boot under `auto` as root), `sandbox verified` (`info`, the `sandbox=on` boot check passed; `channel`, `version`), `sandbox required` (`error`, the boot check failed just before the refusal; `channel`, `reason`, `working`). A fallback is not a degradation record: it is the expected state of a host that cannot sandbox, shown on `/system` (`browser.channels[].sandbox`) and by `doctor`, not an incident. `browser launched` carries `sandboxed`.
 
 ### 4.2 Renderers
 

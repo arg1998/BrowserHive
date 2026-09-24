@@ -25,6 +25,8 @@ browserhive db migrate --dryRun   # list what would run
 browserhive db migrate
 ```
 
+**The browser sandbox is on by default since the release that added `--sandbox`.** Sessions now run inside Chromium's sandbox wherever the machine allows it (`sandbox=auto`). Where it cannot (Ubuntu 23.10+ with the bundled browser, root, Docker), sessions run as before and `browserhive doctor` now reports a warning (exit code 2) explaining why. `--sandbox off` restores the previous behaviour exactly. See [Security: the browser sandbox](security.md#the-browser-sandbox).
+
 Prereleases are published under the `next` tag: `bun add -g browserhive@next`.
 
 ## Downgrade

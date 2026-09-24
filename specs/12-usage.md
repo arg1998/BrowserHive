@@ -28,7 +28,7 @@ BrowserHive is a local MCP server that gives any agent harness N parallel, fully
 ## 2. Requirements
 
 - **Bun ≥ 1.4** (D-01). BrowserHive runs on Bun only. Install: `curl -fsSL https://bun.sh/install | bash` (macOS/Linux) or `powershell -c "irm bun.sh/install.ps1 | iex"` (Windows).
-- **Chromium** installed once by `browserhive init` (never downloaded during `npm install`).
+- **Chromium** installed once by `browserhive init` (never downloaded during `npm install`). Optionally **Google Chrome** or **Microsoft Edge**: `init` finds them and lets you make one the default (D-26).
 - **Bitwarden CLI** (`bw`) on `PATH` only if you use `--vault bitwarden`.
 - Platforms: macOS, Linux, Windows.
 
@@ -36,11 +36,11 @@ BrowserHive is a local MCP server that gives any agent harness N parallel, fully
 
 ```bash
 bun install -g browserhive        # or: npm install -g browserhive / pnpm add -g browserhive
-browserhive init                  # downloads Chromium for Playwright and Patchright, creates the data dir, prints a doctor report
+browserhive init                  # downloads Chromium, reports the browsers on this machine, lets you pick the default one
 browserhive --help
 ```
 
-`init` is idempotent and safe to re-run after upgrades. Use `browserhive doctor` any time to check Bun, browsers, data directory permissions, port availability and the database.
+`init` is idempotent and safe to re-run after upgrades. On a terminal it shows the browsers it found (the bundled Chromium, an installed Google Chrome or Microsoft Edge), whether each can run inside Chromium's sandbox on this machine, and a menu with the pros and cons of each for this OS; Enter keeps the current choice. It can install Google Chrome for you (Google's installer, administrator rights) when you pick that entry. In scripts: `browserhive init --channel chrome --yes` (or `--installChrome`); nothing is asked without a terminal. Use `browserhive doctor` any time to check Bun, browsers, data directory permissions, port availability and the database.
 
 Without a global install: `bunx browserhive` (or `npx browserhive`).
 
@@ -189,6 +189,7 @@ BrowserHive treats **the agent as untrusted and the operator as trusted**.
 - **`evaluate` + vault.** With `evaluate` on, the DOM is readable after the cooldown. Use `disable_evaluate: true` per session, `require_no_evaluate` per entry, or `--allowEvaluate false` server-wide (every `evaluate` call then returns `EVALUATE_DISABLED`).
 - **Traces do not contain typed credentials.** Tracing pauses around a `vault_fill` (D-13), so `trace.zip` never records the password keystrokes. Screenshots and the live view still show raw pixels; operators are trusted.
 - **Takeover is full control**, only while an attention request is open, re-checked on every input.
+- **Chromium's sandbox is on wherever this machine allows it** (`sandbox=auto`, D-27). Where it cannot run (Ubuntu 23.10+ with the bundled browser, running as root, default Docker) sessions fall back to no sandbox and `doctor` says why and how to fix it; `--sandbox on` makes it a requirement the server checks before it starts. Agents cannot turn it off (`chromiumSandbox: false` is refused).
 - **Non-loopback binds are refused** without `--auth token` (or `--allowInsecureBind`). The dashboard shares the port and the same rule; put TLS in front for remote use.
 - **The blocklist stops navigation, not egress.** Document loads are aborted; subresources are not. An `evaluate`-enabled agent can still `fetch()` a blocked URL.
 - **Cookie values are never stored** in the database or sent over the dashboard feed (D-20). Saved auth states on disk (`0600`) are your responsibility.
@@ -229,9 +230,10 @@ services:
 
 ```
 browserhive [serve] [flags]          start the server (default command)
-browserhive init [--browsers chromium] [--skipBrowsers]
-                                     install browsers, create the data dir, run doctor
-browserhive doctor [--json]          check Bun, browsers, data dir, port, database, config
+browserhive init [--browsers chromium] [--skipBrowsers] [--channel <chromium|chrome|edge>] [--installChrome] [--yes]
+                                     install browsers, choose the default one, create the data dir
+browserhive doctor [--json] [--printApparmorProfile]
+                                     check Bun, browsers, the sandbox, data dir, port, database, config
 browserhive config [--json] [--config <path>]
                                      print the effective configuration with the source of every value
 browserhive purge [--all] [--dryRun] [--yes]
@@ -265,7 +267,9 @@ Types ship with the package (`browserhive` exports `createServer`, `ServerOption
 ## 13. Troubleshooting
 
 - `browserhive doctor` first. It prints a table with ✓/✗ per check and the fix for each ✗.
-- **`BROWSER_NOT_INSTALLED`**: run `browserhive init` (or the exact `playwright install chromium@<ver>` it prints). `PLAYWRIGHT_BROWSERS_PATH` is honoured.
+- **`BROWSER_NOT_INSTALLED`**: run `browserhive init` (or the exact `playwright install chromium@<ver>` it prints); for `chrome`, `browserhive init --installChrome`. `PLAYWRIGHT_BROWSERS_PATH` is honoured. BrowserHive never launches a different browser than the one configured.
+- **`SANDBOX_UNAVAILABLE`**: the sandbox was required (`--sandbox on`, or an agent's `launch_options.chromiumSandbox: true`) and the browser cannot run with it on this machine. The message lists what works here, easiest first: on Ubuntu 23.10+ use the installed Google Chrome (`--defaultChannel chrome`), or give the bundled browser an AppArmor profile (`browserhive doctor --printApparmorProfile | sudo tee /etc/apparmor.d/browserhive-chromium`, then `sudo apparmor_parser -r /etc/apparmor.d/browserhive-chromium`); as root, run as a normal user; or use `--sandbox auto` (the default: sandbox where possible) or `--sandbox off`. Retrying does not help.
+- `doctor` warns **"cannot run sandboxed here, falls back"**: under the default `sandbox=auto` that browser runs without Chromium's sandbox on this machine; the guidance under the table says how to change that.
 - **`PORT_IN_USE`**: another process holds the port; `--port` or `lsof -i :9876`. **`BIND_FAILED`**: the address cannot be bound for another reason (permissions, an address not on this host); the message carries the errno.
 - **`INSECURE_BIND_REFUSED`**: add `--auth token` or `--allowInsecureBind`.
 - **`CONFIG_INVALID`** / **`CONFIG_UNKNOWN_KEY`**: the message names the key, the source it came from and the accepted values or the suggested spelling.
