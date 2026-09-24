@@ -68,7 +68,7 @@ One-time setup, safe to re-run:
 
 ## `doctor`
 
-Checks Bun, browsers (the bundled Chromium, installed Chrome and Edge, that the configured `defaultChannel` is installed, version drift, managed policies that block automation), Chromium's sandbox for each installed browser (each is launched once), running as root or in a container, data directory permissions and disk space, configuration, port availability, `bw` when the vault is on, the database and pending migrations, the OTLP endpoint when telemetry is on, `maxSessions` against RAM, and config-file permissions when it holds secrets. It also warns when the data directory contains an unrecognised data file, which BrowserHive neither reads nor migrates.
+Checks Bun, browsers (the bundled Chromium, installed Chrome and Edge, that the configured `defaultChannel` is installed, version drift, managed policies that block automation), Chromium's sandbox for each installed browser (each is launched once), running as root or in a container, data directory permissions and disk space, configuration, port availability, `bw` when the vault is on, the database and pending migrations, the OTLP endpoint when telemetry is on, `maxSessions` against RAM, and config-file permissions when it holds secrets (not when `authTokens` only [references](configuration.md#references) environment variables). It counts the values that came from references and warns about each referenced variable that was not set, so its default is in use. It also warns when the data directory contains an unrecognised data file, which BrowserHive neither reads nor migrates.
 
 `--json` prints `[{ check, status, detail }]`. Exit codes: `0` all good, `2` warnings only, `1` a check failed. When the configured browser cannot run sandboxed, the text output ends with what to do on this machine. `--printApparmorProfile` prints an AppArmor profile for the configured browser (for Ubuntu 23.10+) and exits; install it yourself with `sudo tee /etc/apparmor.d/<name>` and `sudo apparmor_parser -r`.
 
@@ -89,7 +89,7 @@ Stop the server first; `purge` warns if the database still lists open sessions.
 
 | Command | Output |
 |---|---|
-| `config show [--json]` | Every key with its effective value, source and shadowed values. Secrets are `<redacted>`. `--json` prints `{ key: { value, source, shadowed } }`. |
+| `config show [--json]` | Every key with its effective value, source and shadowed values. Secrets are `<redacted>`. A value read from an environment variable through a [reference](configuration.md#references) shows `config-file via $NAME`. `--json` prints `{ key: { value, source, shadowed, … } }`, with `refs` and `template` for referenced values. |
 | `config schema` | The JSON Schema for `browserhive.config.json`. |
 | `config validate [--config <path>]` | Runs the full resolver and prints exactly what `serve` would; exit `64` on error. |
 

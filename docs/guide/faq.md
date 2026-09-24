@@ -39,6 +39,9 @@ Pass Playwright's `proxy` in `launch_options` (or `context_options`) today. Loop
 **Can I run it in Docker or on a server?**
 Yes. Bind with `--host 0.0.0.0 --auth token`, put a TLS reverse proxy in front, add the name it forwards to `--allowedHosts`, and configure it with environment variables; see [Configuration](configuration.md#environment-only-deployments).
 
+**How do I keep secrets out of `browserhive.config.json`?**
+Write a reference to an environment variable in their place: `"authTokens": "ci-runner:{env:CI_TOKEN}"` or `"otelHeaders": { "Authorization": "Bearer {env:OTLP_TOKEN}" }`. The file can then be committed, `config show` and the dashboard name the variable without showing its value, and `doctor` stops asking you to `chmod 600` the file. See [References](configuration.md#references).
+
 **How many sessions can I run?**
 By default `min(floor(RAM in GiB / 1.5), 20)`. Each Chromium session typically needs a few hundred MB. Set `--maxSessions` to override.
 

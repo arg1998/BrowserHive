@@ -19,7 +19,7 @@ BROWSERHIVE_OTEL=true OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318 browserh
 | [`otel`](../reference/configuration.md#otel) | `false` | Turn export on. |
 | [`otelEndpoint`](../reference/configuration.md#otelEndpoint) | `http://127.0.0.1:4318` | OTLP/HTTP base URL; `/v1/traces`, `/v1/metrics`, `/v1/logs` are appended. Also `OTEL_EXPORTER_OTLP_ENDPOINT`. |
 | [`otelProtocol`](../reference/configuration.md#otelProtocol) | `http/protobuf` | or `http/json`. Also `OTEL_EXPORTER_OTLP_PROTOCOL`. |
-| [`otelHeaders`](../reference/configuration.md#otelHeaders) | none | `k=v,k2=v2`, for example an API key. Secret. Also `OTEL_EXPORTER_OTLP_HEADERS`. |
+| [`otelHeaders`](../reference/configuration.md#otelHeaders) | none | `k=v,k2=v2`, for example an API key. Secret. Also `OTEL_EXPORTER_OTLP_HEADERS`. In the config file, keep the key itself in the environment: `{ "Authorization": "Bearer {env:OTLP_TOKEN}" }` ([references](configuration.md#references)). |
 | [`otelServiceName`](../reference/configuration.md#otelServiceName) | `browserhive` | `service.name`. Also `OTEL_SERVICE_NAME`. |
 | [`otelSampleRatio`](../reference/configuration.md#otelSampleRatio) | `1` | Parent-based trace sampling ratio. Also `OTEL_TRACES_SAMPLER_ARG`. |
 | [`otelSignals`](../reference/configuration.md#otelSignals) | `traces,metrics,logs` | Which signals to export. |
