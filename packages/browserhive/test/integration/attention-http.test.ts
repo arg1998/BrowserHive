@@ -1,6 +1,8 @@
 /** @module test/integration/attention-http.test — a blocked `request_attention` over real Streamable HTTP returns once an operator resolves it over REST, even after the SSE stream sat idle past Bun's idle timeout; session counts track the attention lifecycle. */
 
+import { Database } from 'bun:sqlite';
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
+import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
@@ -27,7 +29,9 @@ function seeded(pattern: RegExp): string {
 }
 
 async function mcpClient(): Promise<Client> {
-  const transport = new StreamableHTTPClientTransport(new URL(`${base}/mcp`));
+  const transport = new StreamableHTTPClientTransport(new URL(`${base}/mcp`), {
+    requestInit: { headers: { 'x-bh-agent-model': 'test-model', 'x-bh-workspace': 'att-bot' } },
+  });
   const client = new Client({ name: 'attention-http-test', version: '1.0.0' });
   await client.connect(transport as Transport);
   return client;
@@ -134,6 +138,14 @@ describe('request_attention over Streamable HTTP', () => {
         arguments: { session_id: sessionId, selector: '#missing', timeout: 500 },
       });
       const before = await json(`/sessions/${sessionId}`);
+      // The launching client, from `initialize` plus the X-BH-* headers (spec 03 §4.2).
+      const launchedBy = {
+        name: 'attention-http-test',
+        version: '1.0.0',
+        agent_name: 'att-bot',
+        model: 'test-model',
+      };
+      expect(before['session']).toMatchObject({ client: launchedBy });
       // launch_session + navigate + list_tabs + click
       const expected = { tool_calls: 4, errors: 1, pages: 1, attention_open: 0 };
       expect(before['counts']).toMatchObject(expected);
@@ -192,6 +204,42 @@ describe('request_attention over Streamable HTTP', () => {
       expect(detail['counts']).toMatchObject({ attention_open: 1 });
       expect(detail['session']).toMatchObject({ counts: { attention_open: 1 } });
 
+      // Takeover input over REST while the request is open lands in the operator audit as one
+      // coalesced row, counts only (spec 03 §6.3).
+      const typed = await api(`/sessions/${sessionId}/input`, {
+        method: 'POST',
+        body: JSON.stringify({
+          inputs: [
+            { type: 'mouse', action: 'mouseMoved', x: 10, y: 10 },
+            { type: 'key', action: 'keyDown', key: 'a' },
+            { type: 'key', action: 'keyUp', key: 'a' },
+          ],
+        }),
+      });
+      expect(await typed.json()).toEqual({ accepted: 3, rejected: [] });
+      const audited = await waitFor(async () => {
+        const db = new Database(join(dir.path, 'browserhive.db'), { readonly: true });
+        try {
+          const row = db
+            .query(
+              "SELECT principal_id, details_json FROM operator_actions WHERE action = 'input' AND resource_id = ?",
+            )
+            .get(sessionId) as { principal_id: string; details_json: string } | null;
+          return row;
+        } finally {
+          db.close();
+        }
+      });
+      expect(JSON.parse(audited.details_json)).toEqual({
+        inputs: 3,
+        mouse: 1,
+        key: 2,
+        touch: 0,
+        via: ['rest'],
+        window_ms: 1000,
+      });
+      expect(audited.principal_id).not.toBe('unknown');
+
       // Let the SSE response stream sit idle longer than Bun's default idle timeout (10 s).
       await Bun.sleep(IDLE_MS);
       expect(settled).toBe(false);
@@ -217,6 +265,15 @@ describe('request_attention over Streamable HTTP', () => {
 
       await client.callTool({ name: 'close_session', arguments: { session_id: sessionId } });
       await client.close();
+      // Closed, the summary comes from the stored row: the client survives through the join.
+      const closed = await waitFor(async () => {
+        const page = await json(`/sessions/${sessionId}`);
+        const session = page['session'];
+        return typeof session === 'object' && session !== null && 'live' in session && !session.live
+          ? session
+          : null;
+      });
+      expect(closed).toMatchObject({ client: launchedBy });
     },
     { timeout: 180_000 },
   );

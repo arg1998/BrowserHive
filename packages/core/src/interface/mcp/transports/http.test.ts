@@ -7,12 +7,7 @@ import { agentPrincipal, LOCAL_PRINCIPAL } from '../../../domain/auth/principal.
 import type { McpConnectionRepository } from '../../../ports/persistence/operations.ts';
 import type { McpConnectionRecord } from '../../../ports/persistence/records-identity.ts';
 import { InMemoryEventStore } from './event-store.ts';
-import {
-  allowedHostsFor,
-  createMcpHttpHandler,
-  type McpHttpHandler,
-  type McpHttpOptions,
-} from './http.ts';
+import { createMcpHttpHandler, type McpHttpHandler, type McpHttpOptions } from './http.ts';
 
 let h: ToolHarness | undefined;
 afterEach(async () => {
@@ -65,6 +60,7 @@ async function sseJson(
 
 async function setup(
   onSessionClosed?: McpHttpOptions['onSessionClosed'],
+  extra: Partial<McpHttpOptions> = {},
 ): Promise<{ handler: McpHttpHandler; connections: RecordingConnections }> {
   const harness = await createToolHarness();
   h = harness;
@@ -77,8 +73,8 @@ async function setup(
     logger: harness.logger,
     connections,
     host: '127.0.0.1',
-    port: 9876,
     ...(onSessionClosed !== undefined && { onSessionClosed }),
+    ...extra,
   });
   return { handler, connections };
 }
@@ -157,6 +153,67 @@ describe('MCP Streamable HTTP transport', () => {
     expect(after.status).toBe(404);
   });
 
+  it('stores each X-BH-* header in its own column and carries the client into launched sessions', async () => {
+    const { handler, connections } = await setup();
+    const init = await handler.handleMcpRequest(
+      post(initialize, {
+        'x-bh-agent-harness': 'claude-code',
+        'x-bh-agent-model': 'claude-opus-5',
+        'x-bh-workspace': 'checkout-bot',
+      }),
+      LOCAL_PRINCIPAL,
+    );
+    const mcpSessionId = init.headers.get('mcp-session-id') ?? '';
+    expect([...connections.rows.values()][0]).toMatchObject({
+      harness: 'claude-code',
+      model: 'claude-opus-5',
+      agentName: 'checkout-bot',
+    });
+    const session = {
+      'mcp-session-id': mcpSessionId,
+      'mcp-protocol-version': LATEST_PROTOCOL_VERSION,
+    };
+    await handler.handleMcpRequest(
+      post({ jsonrpc: '2.0', method: 'notifications/initialized' }, session),
+      LOCAL_PRINCIPAL,
+    );
+    const launched = await sseJson(
+      await handler.handleMcpRequest(
+        post(
+          {
+            jsonrpc: '2.0',
+            id: 2,
+            method: 'tools/call',
+            params: { name: 'launch_session', arguments: { slug: 'probe' } },
+          },
+          session,
+        ),
+        LOCAL_PRINCIPAL,
+      ),
+    );
+    const sessionId = (launched.result as { structuredContent?: { session_id?: string } })
+      .structuredContent?.session_id;
+    const live = h?.services.sessions.peek(sessionId ?? '');
+    expect(live).toBeDefined();
+    if (live === undefined || h === undefined) return;
+    expect(h.services.sessions.summary(live).client).toEqual({
+      name: 'probe',
+      version: '9.9',
+      agent_name: 'checkout-bot',
+      model: 'claude-opus-5',
+    });
+  });
+
+  it('a client that sends no X-BH-* headers stores nulls, not empty strings', async () => {
+    const { handler, connections } = await setup();
+    await handler.handleMcpRequest(post(initialize, { 'x-bh-agent-model': '  ' }), LOCAL_PRINCIPAL);
+    expect([...connections.rows.values()][0]).toMatchObject({
+      harness: null,
+      model: null,
+      agentName: null,
+    });
+  });
+
   it('refuses requests without a session that are not initialize, and malformed JSON', async () => {
     const { handler } = await setup();
     expect(
@@ -184,16 +241,27 @@ describe('MCP Streamable HTTP transport', () => {
     expect(response.status).toBe(403);
   });
 
-  it('allowedHostsFor covers the bound host and loopback with and without port', () => {
-    expect(allowedHostsFor('127.0.0.1', 80, ['mcp.example'])).toEqual(
-      expect.arrayContaining([
-        '127.0.0.1',
-        '127.0.0.1:80',
-        'localhost:80',
-        '[::1]:80',
-        'mcp.example',
-      ]),
+  it('accepts loopback on any port: a port mapping or an SSH tunnel must not 403 MCP', async () => {
+    const { handler } = await setup();
+    // `docker run -p 8080:9876`, `ssh -L 2222:localhost:9876`: the Host names another port.
+    for (const host of ['localhost:8080', '127.0.0.1:2222', '[::1]:9999', 'localhost']) {
+      const response = await handler.handleMcpRequest(post(initialize, { host }), LOCAL_PRINCIPAL);
+      expect({ host, status: response.status }).toEqual({ host, status: 200 });
+    }
+  });
+
+  it('accepts an allowedHosts name on any port, and still rejects everything else', async () => {
+    const { handler } = await setup(undefined, { allowedHosts: ['browserhive.example.com'] });
+    const proxied = await handler.handleMcpRequest(
+      post(initialize, { host: 'BrowserHive.Example.com:443' }),
+      LOCAL_PRINCIPAL,
     );
+    expect(proxied.status).toBe(200);
+    const foreign = await handler.handleMcpRequest(
+      post(initialize, { host: 'evil.example.com' }),
+      LOCAL_PRINCIPAL,
+    );
+    expect(foreign.status).toBe(403);
   });
 });
 

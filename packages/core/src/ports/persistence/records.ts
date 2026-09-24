@@ -43,6 +43,7 @@ export type {
   VaultGroupPolicyRecord,
 } from './records-vault.ts';
 
+import type { SessionClientInfo } from '../../domain/session/client-info.ts';
 import type { JsonObject } from './json.ts';
 
 export type { JsonObject, JsonValue } from './json.ts';
@@ -125,6 +126,8 @@ export interface SessionCounts {
 /** A session with its aggregates (list and detail views). */
 export interface SessionListRow extends SessionRecord {
   readonly counts: SessionCounts;
+  /** The launching connection's self-reported client (`mcp_connections`), `null` when unknown. */
+  readonly client: SessionClientInfo | null;
 }
 
 // --- event log --------------------------------------------------------------------------------

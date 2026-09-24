@@ -46,6 +46,46 @@ describe('auth-state save + restore (real Chromium)', () => {
     ).toBe('restored-value');
   });
 
+  it('storage-state: IndexedDB survives save and restore', async () => {
+    const h = state.harness;
+    const putIdb = `() => new Promise((resolve, reject) => {
+      const open = indexedDB.open('bh-auth', 1);
+      open.onupgradeneeded = () => open.result.createObjectStore('kv');
+      open.onerror = () => reject(open.error);
+      open.onsuccess = () => {
+        const tx = open.result.transaction('kv', 'readwrite');
+        tx.objectStore('kv').put('idb-token', 'auth');
+        tx.oncomplete = () => resolve('ok');
+        tx.onerror = () => reject(tx.error);
+      };
+    })`;
+    const getIdb = `() => new Promise((resolve, reject) => {
+      const open = indexedDB.open('bh-auth', 1);
+      open.onupgradeneeded = () => open.result.createObjectStore('kv');
+      open.onerror = () => reject(open.error);
+      open.onsuccess = () => {
+        const get = open.result.transaction('kv').objectStore('kv').get('auth');
+        get.onsuccess = () => resolve(get.result ?? null);
+        get.onerror = () => reject(get.error);
+      };
+    })`;
+    const src = await h.launch({ slug: 'idb-src' });
+    await h.callJson('navigate', { session_id: src, url: state.fixture.url('/') });
+    await h.callJson('evaluate', { session_id: src, expression: putIdb });
+    await h.callJson('save_storage_state', { session_id: src, name: 'idb-login' });
+    const dst = await h.launch({
+      slug: 'idb-dst',
+      persistence_mode: 'storage-state',
+      context_options: { storageState: 'idb-login' },
+    });
+    await h.callJson('navigate', { session_id: dst, url: state.fixture.url('/') });
+    const read = await h.callJson<{ result: unknown }>('evaluate', {
+      session_id: dst,
+      expression: getIdb,
+    });
+    expect(read.result).toBe('idb-token');
+  });
+
   it('full-profile: save through the tool, and restore a flushed profile into a new persistent session', async () => {
     const h = state.harness;
     const src = await h.launch({ slug: 'psrc', persistence_mode: 'persistent' });

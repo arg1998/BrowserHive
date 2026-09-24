@@ -230,6 +230,7 @@ describe('createSessionInputFromWire', () => {
         humanize: true,
       },
       'c-1',
+      { name: 'claude-code', version: '2.1.0', agentName: null, model: 'claude-opus-5' },
     );
     expect(mapped).toEqual({
       slug: 'shop',
@@ -246,10 +247,12 @@ describe('createSessionInputFromWire', () => {
       fingerprint: false,
       humanize: true,
       connectionId: 'c-1',
+      client: { name: 'claude-code', version: '2.1.0', agentName: null, model: 'claude-opus-5' },
     });
     expect(createSessionInputFromWire({ slug: 'shop' })).toEqual({
       slug: 'shop',
       connectionId: null,
+      client: null,
     });
   });
 });

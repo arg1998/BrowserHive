@@ -36,6 +36,10 @@ export const ScreencastStartCommand = z.strictObject({
   session_id: SessionId,
   max_width: screencastDimension.optional(),
   max_height: screencastDimension.optional(),
+  /**
+   * Accepted for compatibility and ignored: one stream serves every viewer of a session, so JPEG
+   * quality is the server's `--screencastQuality`. Size, by contrast, is per viewer (largest wins).
+   */
   quality: z.number().int().min(SCREENCAST_QUALITY.min).max(SCREENCAST_QUALITY.max).optional(),
   ...corr,
 });

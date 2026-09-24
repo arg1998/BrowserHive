@@ -42,7 +42,7 @@ The stability contract of this spec: **an agent that works against a release of 
 | `sessionIdGenerator` | `() => 'm-' + nanoid(16)` | stateful sessions so a client can hold a standalone SSE stream and resume |
 | `onsessioninitialized(id)` | creates a `connections` record (§1.4) | client metadata, dashboard "connected clients" |
 | `onsessionclosed(id)` | marks the record closed; cancels open attention requests owned by that MCP session **only if** the principal has no other live MCP session (agents reconnect) | see §5 |
-| `enableDnsRebindingProtection` / `allowedHosts` | on; `[host, host:port, 'localhost', '127.0.0.1', '[::1]']` plus configured `allowedHosts` | loopback default posture |
+| `enableDnsRebindingProtection` | **off**; `handleMcpRequest` applies the dashboard's Host policy instead (`isHostAllowed`, 03 §2: loopback names and the bound host on any port, `allowedHosts`, and IP literals under a wildcard bind), answering a foreign Host with 403 `Invalid Host header` | the SDK's check matches `host:port` exactly, which rejected every request behind a port mapping or SSH tunnel while the dashboard kept working |
 | `allowedOrigins` | empty (non-browser clients); browser-origin MCP clients are out of scope | |
 | `keepAliveMs` | 25 000 | under the common 30 s idle proxies cut |
 | `enableJsonResponse` | `false` (SSE responses) | progress notifications for `request_attention` and `type_text` need a stream |
@@ -69,7 +69,13 @@ The MCP route runs the same `AuthenticationProvider` chain as the admin API (D-0
 
 Ownership is keyed on the **principal**, never on `Mcp-Session-Id`: a reconnecting client (new MCP session, same token) keeps its browser sessions. Under `auth=off` everything is owned by `local`.
 
-Each MCP session gets a row in `connections` (`connection_id`, `principal_id`, `transport`, `client_name`, `client_version`, `client_title`, `protocol_version`, `capabilities_json`, `remote_ip`, `user_agent`, `meta_json`, `connected_at`, `last_seen_at`, `closed_at`). Sources, most-trusted wins on conflict: the transport (IP, `User-Agent`, `X-BH-Agent-Model`, `X-BH-Agent-Harness`, `X-BH-Workspace` headers) → `initialize` (`clientInfo`, `protocolVersion`, `capabilities`, `_meta['browserhive.ai/*']`) → per-call `_meta` (`model`, `turn`, `traceId`). Browser sessions record `connection_id` at creation. All of it is **self-reported, dashboard-only, never used for access control**; the `_meta['browserhive.ai/traceId']` (or standard `traceparent` in `_meta`) is adopted as the parent of the tool span (D-08).
+Each MCP session gets a row in `mcp_connections` (DDL in 03 §7: `connection_id`, `principal_id`, `transport`, `mcp_session_id`, `client_name`, `client_version`, `protocol_version`, `capabilities_json`, `agent_name`, `model`, `harness`, `ip`, `user_agent`, `connected_at`, `last_seen_at`, `closed_at`). What fills it:
+
+- `initialize`, both transports: `clientInfo.name`/`version` and `capabilities` (the SDK's record of the handshake). HTTP also stores `protocolVersion`; stdio writes the row at startup and fills these in when `initialize` arrives.
+- HTTP only: `User-Agent`, and three optional headers, one column each — `X-BH-Agent-Harness` → `harness`, `X-BH-Agent-Model` → `model`, `X-BH-Workspace` → `agent_name`. A blank header counts as absent.
+- `ip` is reserved and always `null` today; `clientInfo.title` and other `initialize` `_meta` are not read.
+
+Browser sessions record `connection_id` at creation and carry that connection's client (`name`, `version`, `agent_name`, `model`) as `SessionSummary.client` (03 §4.2), fixed at launch; `harness` is recorded but not surfaced yet. All of it is **self-reported, dashboard-only, never used for access control**. Per-call `_meta` contributes only tracing: a W3C `traceparent` (or a bare 32-hex id under `browserhive.ai/traceId` or `traceId`) is adopted as the parent of the tool span (D-08); other keys are ignored.
 
 ## 2. Tool definitions
 
@@ -302,7 +308,7 @@ Rules the dispatcher and tools enforce on top of the shapes in §3. They are par
 
 ## 6. Auth states (agent view)
 
-Files under `<data-dir>/auth-states/`: `<name>.storage.json` (Playwright storageState), `<name>.profile.zip` (managed userdata, regular files only, `zipSync` level 6, zip-slip guard on restore), `<name>.meta.json` (`{ name, kind, saved_at, source_session_id, size, owner }`), `<name>.identity.json` (`{ seed }` only). All 0600. Restore: storage via `launch_session({ context_options: { storageState: '<name>' } })` in `memory`/`storage-state` modes (string + `persistent` ⇒ `INVALID_PERSISTENCE_CONFIG`); profile via `launch_session({ persistence_mode:'persistent', restore_profile:'<name>' })` which unzips into the new session's `userdata` and reloads the identity seed. Missing name ⇒ `AUTH_STATE_NOT_FOUND` (`No saved ${'full-profile'|'storage-state'} snapshot named '<name>'. Use list_saved_auths to see what is available.`).
+Files under `<data-dir>/auth-states/`: `<name>.storage.json` (Playwright storageState with `indexedDB: true`: cookies, localStorage and IndexedDB — many sites keep their auth tokens in IndexedDB), `<name>.profile.zip` (managed userdata, regular files only, `zipSync` level 6, zip-slip guard on restore), `<name>.meta.json` (`{ name, kind, saved_at, source_session_id, size, owner }`), `<name>.identity.json` (`{ seed }` only). All 0600. Restore: storage via `launch_session({ context_options: { storageState: '<name>' } })` in `memory`/`storage-state` modes (string + `persistent` ⇒ `INVALID_PERSISTENCE_CONFIG`); profile via `launch_session({ persistence_mode:'persistent', restore_profile:'<name>' })` which unzips into the new session's `userdata` and reloads the identity seed. Missing name ⇒ `AUTH_STATE_NOT_FOUND` (`No saved ${'full-profile'|'storage-state'} snapshot named '<name>'. Use list_saved_auths to see what is available.`).
 
 ## 7. Humanize (as tools see it)
 

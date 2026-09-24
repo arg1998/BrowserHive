@@ -161,7 +161,7 @@ Message: `Concurrent session limit reached (max={limit}). Close a session and re
 
 Hint: Close an idle session or wait for a lease to expire, then retry.
 
-Cause: The number of live sessions equals `maxSessions` (derived from host RAM by default).
+Cause: The number of live sessions equals `maxSessions` (derived from available RAM by default).
 
 Resolution: Close sessions you no longer need, or raise `maxSessions` on a host with more memory.
 
@@ -1438,7 +1438,7 @@ Message: `The data directory {path} is not writable.`
 
 Hint: Fix permissions or choose another dataDir.
 
-Cause: The data directory could not be created with mode 0700 or is owned by another user.
+Cause: The data directory could not be created, or is owned by another user. A filesystem that only refuses the 0700 mode is not fatal: boot logs a warning instead.
 
 Resolution: Point `dataDir` at a directory the server user owns.
 

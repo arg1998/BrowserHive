@@ -81,6 +81,9 @@ These are known and documented, not bugs:
 - **The hardest bot checks** (for example Cloudflare Turnstile in strict mode) can still detect DevTools-protocol automation and synthetic input. Use [human takeover](attention.md) for them.
 - **Canvas, audio and font entropy** are the host's own: a stable identity tied to your machine, not a rotating one.
 - **GREASE brand and platform version** are plausible values, not byte-exact copies of the installed Chrome.
+- **Headless sessions render WebGL in software.** The reported WebGL renderer is SwiftShader even on a machine with a GPU, so a headless session looks like one without a GPU. Headed sessions use the real GPU.
+- **Headless sessions contradict themselves on notification permission**: the Permissions API says `prompt` while `Notification.permission` says `denied`.
+- **Without `--fingerprint`, headless sessions use Playwright's default 1280×720 screen**, a size real users rarely have. `--fingerprint` (on by default with `--stealth max`) picks a common display size instead.
 - **WebAuthn and passkeys** cannot be replayed from saved state.
 - **Firefox and WebKit** are not supported.
 

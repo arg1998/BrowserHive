@@ -21,6 +21,8 @@ import {
 } from './live-view.ts';
 
 /** Applied to the next bridge the factory opens (set before the race under test). */
+const OPERATOR_WS = { principalId: 'admin', via: 'ws' } as const;
+
 const nextBridge: { failStart?: Error; captureGate?: Promise<void> } = {};
 
 const METADATA = { deviceWidth: 800, deviceHeight: 600, pageScaleFactor: 1, offsetTop: 0 };
@@ -112,6 +114,7 @@ async function harness() {
   const opened: FakeBridge[] = [];
   const timers: { fn: () => void; ms: number; cancelled: boolean }[] = [];
   const pointers: number[] = [];
+  const audited: [string, string, string][] = [];
   const live = new LiveView({
     sessions,
     bridges: async (s) => {
@@ -130,6 +133,7 @@ async function harness() {
       };
     },
     onOperatorPointer: (_s, x) => pointers.push(x),
+    onOperatorInput: (sessionId, actor, kind) => audited.push([sessionId, actor.via, kind]),
   });
   const bridge = () => {
     const last = opened.at(-1);
@@ -144,7 +148,7 @@ async function harness() {
     }
     await live.settled();
   };
-  return { sessions, session, opened, bridge, live, timers, pointers, logger, fireGrace };
+  return { sessions, session, opened, bridge, live, timers, pointers, audited, logger, fireGrace };
 }
 
 function viewer(id: string, width: number, height: number) {
@@ -360,7 +364,11 @@ describe('LiveView', () => {
 
   it('maps input to CDP with defaults and resyncs the cursor after mouse input', async () => {
     const h = await harness();
-    await h.live.sendInput(h.session.id, { type: 'mouse', action: 'mousePressed', x: 5, y: 6 });
+    await h.live.sendInput(
+      h.session.id,
+      { type: 'mouse', action: 'mousePressed', x: 5, y: 6 },
+      OPERATOR_WS,
+    );
     expect(h.bridge().params.at(-1)).toEqual({
       type: 'mousePressed',
       x: 5,
@@ -369,11 +377,11 @@ describe('LiveView', () => {
       clickCount: 1,
       modifiers: 0,
     });
-    await h.live.sendInput(h.session.id, {
-      type: 'touch',
-      action: 'touchStart',
-      points: [{ x: 1, y: 2 }],
-    });
+    await h.live.sendInput(
+      h.session.id,
+      { type: 'touch', action: 'touchStart', points: [{ x: 1, y: 2 }] },
+      OPERATOR_WS,
+    );
     expect(h.bridge().params.at(-1)).toEqual({
       type: 'touchStart',
       touchPoints: [{ x: 1, y: 2 }],
@@ -381,6 +389,23 @@ describe('LiveView', () => {
     });
     expect(h.pointers).toEqual([5]);
     expect(h.opened).toHaveLength(1);
+  });
+
+  it('reports each input the browser accepted for the audit, and none it rejected', async () => {
+    const h = await harness();
+    await h.live.sendInput(
+      h.session.id,
+      { type: 'key', action: 'keyDown', key: 'a' },
+      { principalId: 'admin', via: 'rest' },
+    );
+    expect(h.audited).toEqual([[h.session.id, 'rest', 'key']]);
+    h.bridge().dispatchKeyEvent = async () => {
+      throw new Error('Target closed');
+    };
+    await expect(
+      h.live.sendInput(h.session.id, { type: 'key', action: 'keyUp', key: 'a' }, OPERATOR_WS),
+    ).rejects.toThrow('Target closed');
+    expect(h.audited).toHaveLength(1);
   });
 
   it('setViewport resizes the page; unknown sessions are SESSION_NOT_FOUND', async () => {

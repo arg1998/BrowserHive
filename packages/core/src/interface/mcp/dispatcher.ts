@@ -6,6 +6,7 @@ import { isSpanContextValid, SpanStatusCode, type Tracer, trace } from '@opentel
 import type { z } from 'zod';
 import type { RequestPrincipal } from '../../domain/auth/principal.ts';
 import type { ProgressReport } from '../../domain/operator-requests/heartbeat.ts';
+import type { SessionClientInfo } from '../../domain/session/client-info.ts';
 import type { Session } from '../../domain/session/session.ts';
 import { type RequestContext, runWithRequestContext } from '../../kernel/context.ts';
 import { AppError } from '../../kernel/errors/app-error.ts';
@@ -45,6 +46,8 @@ export interface ToolDispatcherDeps {
 export interface DispatchCall {
   readonly principal: RequestPrincipal;
   readonly connectionId: string | null;
+  /** Self-reported client identity; absent or `null` when unknown. */
+  readonly client?: SessionClientInfo | null;
   /** The request's `_meta` (trace parent, progress token). */
   readonly meta?: Readonly<Record<string, unknown>>;
   readonly signal: AbortSignal;
@@ -169,6 +172,7 @@ export class ToolDispatcher {
     const ctx: PolicyContext = {
       principal: call.principal,
       connectionId: call.connectionId,
+      client: call.client ?? null,
       request: ids.request,
       eventId: ids.eventId,
       tool: name,

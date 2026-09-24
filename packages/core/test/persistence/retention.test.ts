@@ -233,6 +233,51 @@ describe('retentionSweep', () => {
     ).toBe(true);
   });
 
+  it('prunes closed MCP connections past the window unless a session still points at them', async () => {
+    const old = NOW - 10 * DAY;
+    const connection = (connectionId: string, closedAt: number | null) =>
+      t.repos.mcpConnections.insert({
+        connectionId,
+        principalId: 'local',
+        transport: 'http',
+        mcpSessionId: null,
+        clientName: 'claude-code',
+        clientVersion: '2.0.0',
+        protocolVersion: null,
+        capabilities: null,
+        agentName: null,
+        model: null,
+        harness: null,
+        ip: null,
+        userAgent: null,
+        connectedAt: old,
+        lastSeenAt: closedAt ?? NOW,
+        closedAt,
+      });
+    await connection('c-gone', old);
+    await connection('c-referenced', old);
+    await connection('c-open', null);
+    await connection('c-fresh', NOW - DAY);
+    await t.repos.sessions.insert(
+      sessionRecord({
+        sessionId: 'arch-0000002',
+        connectionId: 'c-referenced',
+        createdAt: old,
+        closedAt: old + 1,
+        closedReason: 'user',
+        state: 'closed',
+        archivedAt: old + 2,
+      }),
+    );
+    const result = await maintenance.retentionSweep(policy);
+    expect(result.failures).toEqual([]);
+    expect(result.prunedRows['mcp_connections']).toBe(1);
+    const left = t.handle.raw
+      .query('SELECT connection_id FROM mcp_connections ORDER BY connection_id')
+      .all() as { connection_id: string }[];
+    expect(left.map((row) => row.connection_id)).toEqual(['c-fresh', 'c-open', 'c-referenced']);
+  });
+
   it('enforces the byte cap by pruning progressively older telemetry', async () => {
     for (let i = 0; i < 300; i++) {
       await t.repos.toolCalls.insert(

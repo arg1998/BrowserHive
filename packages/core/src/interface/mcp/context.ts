@@ -2,6 +2,7 @@
 
 import type { RequestPrincipal } from '../../domain/auth/principal.ts';
 import type { ProgressReport } from '../../domain/operator-requests/heartbeat.ts';
+import type { SessionClientInfo } from '../../domain/session/client-info.ts';
 import type { Session } from '../../domain/session/session.ts';
 import type { RequestContext } from '../../kernel/context.ts';
 import { AppError } from '../../kernel/errors/app-error.ts';
@@ -15,6 +16,8 @@ export interface ToolCallContext {
   readonly principal: RequestPrincipal;
   /** MCP session's connection record, or `null` (stdio, in-memory). */
   readonly connectionId: string | null;
+  /** What the MCP client said about itself (`clientInfo` + `X-BH-*` headers); `null` when nothing. */
+  readonly client: SessionClientInfo | null;
   readonly request: RequestContext;
   /** `e-<ulid>`, minted before the handler; used by screenshot archival. */
   readonly eventId: string;

@@ -32,7 +32,7 @@ defaults  <  environment (BROWSERHIVE_*)  <  browserhive.config.json  <  CLI arg
 Rules:
 
 - A key is *supplied* by a source when the source provides a non-empty value for it. An empty string in env or JSON is a **usage error**, not "unset": treating empty as unset would hide typos such as `BROWSERHIVE_PORT=` in a service file.
-- The winning source is recorded per key as its **provenance**: `default`, `env`, `file`, `cli`, or `derived`. `derived` marks a default computed from another key (`trace` from `admin`, `fingerprint` from `stealth`, `maxSessions` from host RAM, `dataDir` from the OS). The derivation source is recorded as `derivedFrom`.
+- The winning source is recorded per key as its **provenance**: `default`, `env`, `file`, `cli`, or `derived`. `derived` marks a default computed from another key (`trace` from `admin`, `fingerprint` from `stealth`, `maxSessions` from available RAM, `dataDir` from the OS). The derivation source is recorded as `derivedFrom`.
 - When a key is supplied by two or more sources, exactly one line is logged at `info` during the `resolve-config` phase, after the schema has accepted the final value:
 
 ```
@@ -171,6 +171,7 @@ Columns: key · type / grammar · default · validation · consumer · boot/runt
 | `authTokens` | list of `name:token` · **secret** | `[]` | env-preferred; each token ≥ 32 chars; merged with stored tokens, never persisted; rendered `<redacted>` | token provider | boot |
 | `allowInsecureBind` | boolean | `false` | acknowledges a non-loopback bind without auth | bind guard | boot |
 | `trustedProxies` | list of CIDR/IP | `[]` | `X-Forwarded-For` honored only from these peers | http middleware | boot |
+| `allowedHosts` | list of host names / IP literals (no port) | `[]` | extra names the `Host` check accepts besides loopback and `host` (03 §2); ports are ignored, so one entry covers a proxy on 443 and a port mapping alike; also valid on a loopback bind (a same-machine proxy that preserves `Host`) | host guard, `/mcp` | boot |
 | `admin` | boolean | `false` | enables dashboard, REST, WS, trace viewer; requires http | composition | boot |
 | `dataDir` | path | OS default (D-24) | absolute after resolution; created 0700 | DataDir | boot |
 | `shutdownTimeout` | duration | `20s` | total budget for graceful stop (listeners 2 s → sessions → storage) | composition | boot |
@@ -183,7 +184,7 @@ Columns: key · type / grammar · default · validation · consumer · boot/runt
 | `persistence` | enum `memory` \| `persistent` \| `storage-state` | `memory` | default mode; per-session `persistence_mode` overrides | session service | boot |
 | `defaultHeadless` | boolean | `true` | per-session `headless` overrides | session service | boot |
 | `defaultChannel` | enum `chromium` \| `chrome` \| `edge` | `chromium` | per-session `channel` overrides | session service | boot |
-| `maxSessions` | integer ≥ 1 \| `unbounded` | derived: `min(floor(hostRamGiB / 1.5), 20)`, min 1 | provenance `derived` (`derivedFrom: hostMemory`); `unbounded` accepted, discouraged in `doctor` | admission policy | boot |
+| `maxSessions` | integer ≥ 1 \| `unbounded` | derived: `min(floor(ramGiB / 1.5), 20)`, min 1, where `ramGiB` is host RAM capped by the smallest cgroup memory limit on the process's cgroup and its ancestors (v2 `memory.max`, v1 `memory.limit_in_bytes`; Linux only) — a container or a systemd `MemoryMax=` slice would otherwise admit sessions for memory it can never get | provenance `derived` (`derivedFrom: hostMemory`); `unbounded` accepted, discouraged in `doctor` | admission policy | boot |
 | `sessionLease` | duration ≥ `1m` | `2h` | sliding inactivity lease | lease | boot |
 | `attentionTimeout` | duration ≥ `1m` | `6h` | server cap on `request_attention` | operator-request broker | boot |
 | `minAttentionWait` | duration | `30m` | `0` disables the floor; must be `< attentionTimeout`; injected into the tool description | attention tool | boot |
@@ -248,7 +249,7 @@ export const serverConfigSchema = z.object({
   maxSessions: key(zMaxSessions, {
     default: derived('hostMemory'),
     group: 'sessions',
-    describe: 'Maximum concurrent browser sessions. Derived from host RAM when unset.',
+    describe: 'Maximum concurrent browser sessions. Derived from available RAM when unset.',
   }),
   otelHeaders: key(zMap, { default: {}, group: 'telemetry', secret: true, describe: '…' }),
   // …
@@ -295,7 +296,7 @@ Positional rules: the first argument is the command if it is a known command wor
 
 **`init`** — the one-time setup that replaces any `postinstall` (D-18). Steps, each idempotent and reported with ✓/✗: create the data dir (0700) and subdirectories; run `playwright install chromium` (respecting `PLAYWRIGHT_BROWSERS_PATH`); if `stealthDriver` is `auto`/`patchright`, run `patchright install chromium`; open/create the database and apply migrations; write `browserhive.schema.json` next to a discovered config file if `--writeSchema`; print next steps (`browserhive`, `browserhive --admin`, docs link). Flags: `--browsers chromium` (only member today; `chrome`/`edge` are branded channels installed by the OS), `--force` (re-download), `--dataDir`, `--config`, `--stealthDriver`. Network is required only for the browser download; a missing browser at first `launch_session` later produces `BROWSER_NOT_INSTALLED` naming `browserhive init`.
 
-**`doctor`** — prints a table and exits 0 (all ✓), 1 (any ✗), or 2 (warnings only). Checks: Bun version ≥ 1.4; Chromium present for the resolved `stealthDriver` (Playwright and Patchright paths, exact versions); data dir exists, owner-only permissions, free disk; config file found and valid (runs the full resolver and prints shadow lines); port free on the resolved host; `bw` CLI on PATH when `vault=bitwarden`; unrecognised data files in the data dir (check `unrecognised data files`, warning: "unrecognised data file 'events.db' found; BrowserHive does not read or migrate it"); database opens, `user_version`, `min_reader_version`, pending migrations, last backup; OTLP endpoint reachable when `otel=true` (HEAD request, 2 s timeout, warning only); `maxSessions` vs host RAM sanity; `authTokens` supplied via a config file with mode broader than 0600 (warning). `--json` emits the same as an array of `{ check, status, detail }`.
+**`doctor`** — prints a table and exits 0 (all ✓), 1 (any ✗), or 2 (warnings only). Checks: Bun version ≥ 1.4; Chromium present for the resolved `stealthDriver` (Playwright and Patchright paths, exact versions); data dir exists, owner-only permissions, free disk; config file found and valid (runs the full resolver and prints shadow lines); port free on the resolved host; `bw` CLI on PATH when `vault=bitwarden`; unrecognised data files in the data dir (check `unrecognised data files`, warning: "unrecognised data file 'events.db' found; BrowserHive does not read or migrate it"); database opens, `user_version`, `min_reader_version`, pending migrations, last backup; OTLP endpoint reachable when `otel=true` (HEAD request, 2 s timeout, warning only); `maxSessions` vs available RAM sanity; `authTokens` supplied via a config file with mode broader than 0600 (warning). `--json` emits the same as an array of `{ check, status, detail }`.
 
 **`purge`** — resolves only `dataDir` (so a broken config file can never prevent starting over); prints an inventory (row counts per table via a read-only, non-migrating connection; directory sizes; absolute paths; total); default targets are the database (+ WAL/SHM) and `sessions/`; `--all` adds auth states, uploads, backups and admin credentials; the vault policy tables live in the database and are dropped with it, so the inventory states that vault bindings are lost; requires typing `YES`; `--all` asks a second `YES`; `--dryRun` prints and exits 0; `--yes` skips prompts; without a TTY and without `--yes` it refuses (exit 1); warns when open sessions exist in the DB. `--dry-run` is an unsupported spelling answered with a hint naming `--dryRun` (§5.5).
 
@@ -337,7 +338,7 @@ FLAGS — server
   --admin                      Enable the dashboard (http only).   default: false
   ...
 FLAGS — sessions
-  --maxSessions <n|unbounded>  Concurrent session cap.             default: derived from host RAM
+  --maxSessions <n|unbounded>  Concurrent session cap.             default: derived from available RAM
   ...
 FLAGS — telemetry
   --otel                       Export traces, metrics, logs via OTLP.  default: false

@@ -138,6 +138,21 @@ const ROWS: readonly ErrorRow[] = [
       "browserhive: invalid value for --sessionLease: '30s'. Expected a duration of at least '1m'.",
   },
   {
+    name: 'a malformed secret is redacted, never echoed (env)',
+    env: { BROWSERHIVE_AUTH_TOKENS: 'z'.repeat(40) },
+    exitCode: 64,
+    code: 'CONFIG_INVALID',
+    rendered:
+      "browserhive: invalid value for BROWSERHIVE_AUTH_TOKENS: <redacted>. Expected items of the form 'name:token' with a token of at least 32 characters.",
+  },
+  {
+    name: 'a malformed secret is redacted, never echoed (config file)',
+    file: '{"otelHeaders": {"authorization": 42}}',
+    exitCode: 64,
+    code: 'CONFIG_INVALID',
+    rendered: `browserhive: invalid value for 'otelHeaders' in ${FILE}: <redacted>. Expected a comma-separated map like 'k=v,k2=v2' (or a JSON object of strings).`,
+  },
+  {
     name: 'port 0 is rejected outside the programmatic API',
     argv: ['--port', '0'],
     exitCode: 64,

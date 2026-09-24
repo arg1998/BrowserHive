@@ -33,7 +33,7 @@ export const SESSION_KEYS = {
     default: derived('hostMemory'),
     group: 'sessions',
     describe:
-      'Maximum concurrent browser sessions, or unbounded. Derived from host RAM when unset (min(floor(GiB / 1.5), 20)).',
+      'Maximum concurrent browser sessions, or unbounded. Derived from available RAM when unset (min(floor(GiB / 1.5), 20); on Linux, host RAM capped by the cgroup memory limit).',
   }),
   sessionLease: key(zLeaseDuration, {
     default: 7_200_000,

@@ -162,7 +162,8 @@ export class InMemorySessionRepository implements SessionRepository {
   }
 
   private row(record: SessionRecord): SessionListRow {
-    return { ...record, counts: this.counts(record.sessionId) };
+    // `mcpConnections` is not implemented in memory, so no stored session knows its client.
+    return { ...record, counts: this.counts(record.sessionId), client: null };
   }
 }
 

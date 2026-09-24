@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'bun:test';
 import { FAKE_BW_DIR, FAKE_BW_TOKEN, fakeBwEnv } from '../../../test/helpers/fake-bw/index.ts';
 import { ProcessSpawnError } from '../../ports/process-runner.ts';
-import { createBunProcessRunner } from './bun-process-runner.ts';
+import { createBunProcessRunner, finish } from './bun-process-runner.ts';
 
 const runner = createBunProcessRunner();
 const BUN = process.execPath;
@@ -78,5 +78,33 @@ describe('createBunProcessRunner', () => {
     expect(r.code).toBe(0);
     expect(JSON.parse(r.stdout)).toEqual({ status: 'unlocked' });
     expect(env['PATH']?.startsWith(FAKE_BW_DIR)).toBe(true);
+  });
+});
+
+describe('finish', () => {
+  it('handles a pending stdin write that later fails with EPIPE (the child exited first)', async () => {
+    // Bun's FileSink.write returns a Promise when the pipe is full; the child exits without reading,
+    // so it rejects. Timing-dependent with a real child, deterministic here.
+    const epipe = Object.assign(new Error('broken pipe, write'), { code: 'EPIPE' });
+    const empty = () => new ReadableStream<Uint8Array>({ start: (c) => c.close() });
+    const proc = {
+      stdin: {
+        write: () => new Promise<number>((_, reject) => setTimeout(() => reject(epipe), 5)),
+        end: () => 0,
+        flush: () => 0,
+        ref: () => undefined,
+        unref: () => undefined,
+        start: () => undefined,
+      },
+      stdout: empty(),
+      stderr: empty(),
+      exited: Promise.resolve(0),
+      signalCode: null,
+      kill: () => undefined,
+    } as unknown as Parameters<typeof finish>[0];
+    const result = await finish(proc, { env: {}, timeoutMs: 1_000, stdin: 'x'.repeat(1024) });
+    expect(result.code).toBe(0);
+    // Let the rejection land: unhandled, it fails this test (as it did on CI).
+    await Bun.sleep(20);
   });
 });

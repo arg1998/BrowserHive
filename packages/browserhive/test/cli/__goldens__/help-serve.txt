@@ -27,6 +27,9 @@ FLAGS — server
                                     default: false
   --trustedProxies <a,b,...>        Peers whose X-Forwarded-For is honoured (IPs or CIDR ranges).
                                     Never used on a loopback bind. default: none
+  --allowedHosts <a,b,...>          Extra Host names to accept besides loopback and the bound host,
+                                    such as the name a reverse proxy forwards. Ports are ignored.
+                                    default: none
   --admin                           Enable the dashboard, REST API, WebSocket and trace viewer (http
                                     only). default: false
   --dataDir <path>                  Data directory (database, sessions, auth states, uploads,
@@ -46,8 +49,9 @@ FLAGS — sessions
                                     Default browser channel; launch_session channel overrides per
                                     session. default: chromium
   --maxSessions <n|unbounded>       Maximum concurrent browser sessions, or unbounded. Derived from
-                                    host RAM when unset (min(floor(GiB / 1.5), 20)).
-                                    default: derived from host RAM
+                                    available RAM when unset (min(floor(GiB / 1.5), 20); on Linux,
+                                    host RAM capped by the cgroup memory limit). default: derived
+                                    from available RAM
   --sessionLease <duration>         Sliding inactivity lease after which an idle session is reaped.
                                     default: 2h
   --attentionTimeout <duration>     Server cap on how long request_attention may block. default: 6h

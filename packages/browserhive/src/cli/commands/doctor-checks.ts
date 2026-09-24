@@ -286,7 +286,7 @@ export async function checkOtel(deps: CliDeps, config: ServerConfig): Promise<Ch
     : result('otel', 'warn', `${config.otelEndpoint} unreachable: ${probe.detail}`);
 }
 
-/** `maxSessions` against host RAM. */
+/** `maxSessions` against the RAM this process may use (host RAM capped by any cgroup limit). */
 export function checkCapacity(deps: CliDeps, config: ServerConfig): CheckResult {
   const ramGib = deps.host.totalMemoryBytes / 1024 ** 3;
   const ram = `${ramGib.toFixed(1)} GiB RAM`;

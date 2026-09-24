@@ -118,7 +118,8 @@ export const BOOT_ERRORS = {
     details: z.object({ path: z.string() }),
     docs: true,
     exitCode: 1,
-    cause: 'The data directory could not be created with mode 0700 or is owned by another user.',
+    cause:
+      'The data directory could not be created, or is owned by another user. A filesystem that only refuses the 0700 mode is not fatal: boot logs a warning instead.',
     resolution: 'Point `dataDir` at a directory the server user owns.',
   }),
   DATA_DIR_LOCKED: defineError({

@@ -34,9 +34,13 @@ export const launchSession = defineTool('launch_session', {
   async handler(ctx, args) {
     const sessions = ctx.services.sessions;
     const session = await drive(ctx, {}, () =>
-      sessions.create(createSessionInputFromWire(wireArgs(args), ctx.connectionId), ctx.principal, {
-        signal: ctx.signal,
-      }),
+      sessions.create(
+        createSessionInputFromWire(wireArgs(args), ctx.connectionId, ctx.client),
+        ctx.principal,
+        {
+          signal: ctx.signal,
+        },
+      ),
     );
     return json(sessions.metadata(session));
   },

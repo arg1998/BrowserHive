@@ -11,6 +11,7 @@ import {
   parseLaunchOptions,
   storageStateName,
 } from '../policies/launch-options.ts';
+import type { SessionClientInfo } from './client-info.ts';
 import type { SessionPrincipal } from './principal.ts';
 
 /** Server defaults a request inherits (from `ServerConfig`; see `sessionDefaultsFromConfig`). */
@@ -59,6 +60,8 @@ export interface CreateSessionInput {
   readonly humanize?: boolean;
   /** MCP connection that launched the session, for `sessions.connection_id`. */
   readonly connectionId?: string | null;
+  /** What that connection's client said about itself (dashboard only). */
+  readonly client?: SessionClientInfo | null;
 }
 
 /** The wire form of `launch_session` args (snake_case, defaults already applied by the tool schema). */
@@ -82,6 +85,7 @@ export interface LaunchSessionWireArgs {
 export function createSessionInputFromWire(
   args: LaunchSessionWireArgs,
   connectionId: string | null = null,
+  client: SessionClientInfo | null = null,
 ): CreateSessionInput {
   return {
     slug: args.slug,
@@ -98,6 +102,7 @@ export function createSessionInputFromWire(
     ...(args.fingerprint !== undefined && { fingerprint: args.fingerprint }),
     ...(args.humanize !== undefined && { humanize: args.humanize }),
     connectionId,
+    client,
   };
 }
 
@@ -121,6 +126,8 @@ export interface CreateSessionRequest {
   readonly owner: string;
   readonly tenantId: string | null;
   readonly connectionId: string | null;
+  /** Self-reported client of that connection, fixed at creation (dashboard only). */
+  readonly client: SessionClientInfo | null;
 }
 
 function invalidPersistence(reason: string): AppError<'INVALID_PERSISTENCE_CONFIG'> {
@@ -220,5 +227,6 @@ export function validateCreateRequest(
     owner: principal.subject,
     tenantId: principal.tenantId ?? null,
     connectionId: input.connectionId ?? null,
+    client: input.client ?? null,
   };
 }

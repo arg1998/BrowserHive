@@ -22,9 +22,14 @@ beforeEach(async () => {
 });
 afterEach(async () => rm(dir, { recursive: true, force: true }));
 
+const storageStateCalls: { path: string; indexedDB: boolean }[] = [];
 const source = {
-  storageState: async ({ path }: { path: string }) => {
-    await writeFile(path, JSON.stringify({ cookies: [{ name: 'sid', value: 'v' }], origins: [] }));
+  storageState: async (options: { path: string; indexedDB: boolean }) => {
+    storageStateCalls.push(options);
+    await writeFile(
+      options.path,
+      JSON.stringify({ cookies: [{ name: 'sid', value: 'v' }], origins: [] }),
+    );
   },
 };
 
@@ -41,6 +46,7 @@ describe('AuthStateStore', () => {
   it('saves a storage state 0600 with a manifest and lists it newest first per owner', async () => {
     const saved = await store.saveStorageState(source, 'first', 'demo-00000001', local);
     expect(saved.path).toBe(join(dir, 'auth-states', 'first.storage.json'));
+    expect(storageStateCalls.at(-1)).toEqual({ path: saved.path, indexedDB: true });
     expect((await stat(saved.path)).mode & 0o777).toBe(0o600);
     const manifest = JSON.parse(
       await readFile(join(dir, 'auth-states', 'first.meta.json'), 'utf8'),

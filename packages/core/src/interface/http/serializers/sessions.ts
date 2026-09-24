@@ -2,6 +2,7 @@
 
 import type { SessionFacets, SessionSummary, SessionsQuery } from '@browserhive/contracts/http';
 import type { z } from 'zod';
+import { toWireClient } from '../../../app/sessions/metadata.ts';
 import type {
   SessionFacets as RepoFacets,
   SessionListQuery,
@@ -53,7 +54,7 @@ export function sessionRowToSummary(
     proxy_label: row.proxyLabel,
     counts: countsOf(row),
     has_live_viewers: hasLiveViewers,
-    client: null,
+    client: toWireClient(row.client),
   };
 }
 
@@ -81,6 +82,8 @@ export function overlayLive(
   return {
     ...live,
     archived_at: row?.archivedAt ?? live.archived_at,
+    // Both come from the same connection; the row covers a session whose aggregate predates it.
+    client: live.client ?? toWireClient(row?.client ?? null),
     has_live_viewers: hasLiveViewers,
   };
 }

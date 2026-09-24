@@ -80,6 +80,22 @@
       "x-browserhive-env": "BROWSERHIVE_TRUSTED_PROXIES",
       "x-browserhive-cli": "--trustedProxies"
     },
+    "allowedHosts": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "description": "Extra Host names to accept besides loopback and the bound host, such as the name a reverse proxy forwards. Ports are ignored.",
+      "x-browserhive-env": "BROWSERHIVE_ALLOWED_HOSTS",
+      "x-browserhive-cli": "--allowedHosts"
+    },
     "admin": {
       "description": "Enable the dashboard, REST API, WebSocket and trace viewer (http only).",
       "x-browserhive-env": "BROWSERHIVE_ADMIN",
@@ -143,7 +159,7 @@
       "x-browserhive-cli": "--defaultChannel"
     },
     "maxSessions": {
-      "description": "Maximum concurrent browser sessions, or unbounded. Derived from host RAM when unset (min(floor(GiB / 1.5), 20)).",
+      "description": "Maximum concurrent browser sessions, or unbounded. Derived from available RAM when unset (min(floor(GiB / 1.5), 20); on Linux, host RAM capped by the cgroup memory limit).",
       "x-browserhive-env": "BROWSERHIVE_MAX_SESSIONS",
       "x-browserhive-cli": "--maxSessions",
       "type": [

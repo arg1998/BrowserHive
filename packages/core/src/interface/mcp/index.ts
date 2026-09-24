@@ -71,7 +71,6 @@ export { createNodeToolFs, TOOL_DIR_MODE } from './tool-fs.ts';
 export { classifyToolOutcome, SOFT_ERROR_CODES, type SoftFailure } from './tool-outcome.ts';
 export { InMemoryEventStore } from './transports/event-store.ts';
 export {
-  allowedHostsFor,
   createMcpHttpHandler,
   MCP_KEEP_ALIVE_MS,
   MCP_SESSION_HEADER,

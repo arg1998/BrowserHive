@@ -8,7 +8,7 @@ import {
   SqliteUnitOfWork,
   SqliteWriteQueue,
 } from '@browserhive/core/persistence';
-import { createLogPersistSink } from '@browserhive/core/runtime';
+import { createLogPersistSink, serializeError } from '@browserhive/core/runtime';
 import { type BootContext, part } from '../context.ts';
 import { ensureDataDir } from '../data-dir.ts';
 import { acquireDataDirLock } from '../lock-file.ts';
@@ -19,7 +19,14 @@ export async function openStoragePhase(ctx: BootContext): Promise<PhaseHandle> {
   ctx.health.enter('open-storage');
   const { logger } = part(ctx.observability, 'observability');
   const log = logger.child({ module: 'persistence' });
-  const layout = ensureDataDir(ctx.config.dataDir);
+  const layout = ensureDataDir(ctx.config.dataDir, {
+    onChmodFailed: (dir, err) =>
+      log.warn('data dir chmod failed', {
+        path: dir,
+        mode: '0700',
+        err: serializeError(err),
+      }),
+  });
   const lock = acquireDataDirLock({
     dataDir: layout.root,
     owner: 'serve',

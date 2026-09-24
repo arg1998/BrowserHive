@@ -42,6 +42,18 @@ export async function openStdioListener(ctx: BootContext): Promise<PhaseHandle> 
     dispatcher: domain.dispatcher,
     connectionIdOf: () => connectionId,
   });
+  // The row is written before the client speaks; fill in what `initialize` revealed (spec 02 §1.4).
+  server.server.oninitialized = () => {
+    const info = server.server.getClientVersion();
+    storage.uow.repos.mcpConnections
+      .update(connectionId, {
+        clientName: info?.name ?? null,
+        clientVersion: info?.version ?? null,
+        capabilities: server.server.getClientCapabilities() ?? null,
+        lastSeenAt: ctx.clock.now(),
+      })
+      .catch((err: unknown) => log.warn('connection row failed', { err: serializeError(err) }));
+  };
   let closing = false;
   const clientGone = (): void => {
     if (closing) return;

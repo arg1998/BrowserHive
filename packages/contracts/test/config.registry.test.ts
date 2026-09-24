@@ -23,6 +23,7 @@ const SPEC_KEYS = [
   'authTokens',
   'allowInsecureBind',
   'trustedProxies',
+  'allowedHosts',
   'admin',
   'dataDir',
   'shutdownTimeout',

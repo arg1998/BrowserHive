@@ -61,7 +61,7 @@ export class CapAdmissionPolicy implements AdmissionPolicy {
 }
 
 /**
- * Builds the default policy: an explicit `maxSessions`, or the D-21 derivation from host RAM.
+ * Builds the default policy: an explicit `maxSessions`, or the D-21 derivation from available RAM.
  */
 export function defaultAdmissionPolicy(
   source: { readonly maxSessions: MaxSessions } | { readonly totalMemoryBytes: number },

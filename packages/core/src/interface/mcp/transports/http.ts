@@ -1,4 +1,4 @@
-/** @module interface/mcp/transports/http — Streamable HTTP for `/mcp`: one web-standard SDK transport + server per MCP session, connection rows, DNS-rebinding protection, resumable SSE (spec 02 §1.2–1.4). */
+/** @module interface/mcp/transports/http — Streamable HTTP for `/mcp`: one web-standard SDK transport + server per MCP session, connection rows, DNS-rebinding protection (the dashboard's Host policy), resumable SSE (spec 02 §1.2–1.4). */
 
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
@@ -9,6 +9,8 @@ import type { Clock } from '../../../ports/clock.ts';
 import type { IdGenerator } from '../../../ports/id-generator.ts';
 import type { Logger } from '../../../ports/logger.ts';
 import type { McpConnectionRepository } from '../../../ports/persistence/operations.ts';
+import { hostnameOf, isHostAllowed } from '../../http/middleware/host-guard.ts';
+import { declaredClientOf } from '../client-info.ts';
 import type { RuntimeFacts } from '../context.ts';
 import type { ToolDispatcher } from '../dispatcher.ts';
 import { authInfoFor } from '../principal.ts';
@@ -38,10 +40,9 @@ export interface McpHttpOptions {
   readonly logger: Logger;
   /** `null` skips connection rows (tests, no database). */
   readonly connections: McpConnectionRepository | null;
-  /** Bound host and port (for `allowedHosts`). */
+  /** Bound host (for the Host check). */
   readonly host: string;
-  readonly port: number;
-  /** Extra `Host` values to accept (reverse proxies). */
+  /** Extra `Host` names to accept (`--allowedHosts`: reverse proxies, custom DNS names). */
   readonly allowedHosts?: readonly string[];
   readonly keepAliveMs?: number;
   /**
@@ -78,16 +79,6 @@ const InitializeParams = z.looseObject({
   capabilities: z.record(z.string(), z.unknown()).optional(),
 });
 
-/** Host values accepted by DNS-rebinding protection: the bound host and loopback, with and without port. */
-export function allowedHostsFor(
-  host: string,
-  port: number,
-  extra: readonly string[] = [],
-): string[] {
-  const bare = [host, 'localhost', '127.0.0.1', '[::1]'];
-  return [...new Set([...bare.flatMap((h) => [h, `${h}:${port}`]), ...extra])];
-}
-
 function jsonRpcError(status: number, code: number, message: string): Response {
   return new Response(JSON.stringify({ jsonrpc: '2.0', error: { code, message }, id: null }), {
     status,
@@ -110,7 +101,10 @@ function initializeParams(body: unknown): z.infer<typeof InitializeParams> {
 export function createMcpHttpHandler(options: McpHttpOptions): McpHttpHandler {
   const sessions = new Map<string, Entry>();
   const log = options.logger.child({ module: 'mcp.http' });
-  const allowedHosts = allowedHostsFor(options.host, options.port, options.allowedHosts);
+  const hostPolicy = {
+    host: options.host,
+    ...(options.allowedHosts !== undefined && { allowedHosts: options.allowedHosts }),
+  };
 
   const record = (label: string, work: Promise<unknown> | undefined): void => {
     void work?.catch((err: unknown) =>
@@ -148,13 +142,15 @@ export function createMcpHttpHandler(options: McpHttpOptions): McpHttpHandler {
   ): Promise<Response> => {
     const connectionId = `c-${options.ids.opaque(10)}`;
     const params = initializeParams(body);
+    const declared = declaredClientOf(request.headers);
     let entry: Entry | undefined;
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: () => `m-${options.ids.opaque(16)}`,
       enableJsonResponse: false,
       eventStore: new InMemoryEventStore(),
-      enableDnsRebindingProtection: true,
-      allowedHosts,
+      // The SDK's own check matches `host:port` exactly, which rejects every request behind a port
+      // mapping or an SSH tunnel. `handleMcpRequest` applies the dashboard's port-agnostic policy.
+      enableDnsRebindingProtection: false,
       keepAliveMs: options.keepAliveMs ?? MCP_KEEP_ALIVE_MS,
       onsessioninitialized: (sessionId) => {
         entry = { transport, connectionId, subject: principal.subject, closed: false };
@@ -171,9 +167,9 @@ export function createMcpHttpHandler(options: McpHttpOptions): McpHttpHandler {
             clientVersion: params.clientInfo?.version ?? null,
             protocolVersion: params.protocolVersion ?? null,
             capabilities: params.capabilities ?? null,
-            agentName: request.headers.get('x-bh-agent-harness'),
-            model: request.headers.get('x-bh-agent-model'),
-            harness: request.headers.get('x-bh-agent-harness'),
+            agentName: declared.agentName,
+            model: declared.model,
+            harness: declared.harness,
             ip: null,
             userAgent: request.headers.get('user-agent'),
             connectedAt: now,
@@ -191,6 +187,7 @@ export function createMcpHttpHandler(options: McpHttpOptions): McpHttpHandler {
       runtime: options.runtime,
       dispatcher: options.dispatcher,
       connectionIdOf: () => connectionId,
+      declaredClient: declared,
     });
     await server.connect(transport);
     return transport.handleRequest(request, { parsedBody: body, authInfo: authInfoFor(principal) });
@@ -204,6 +201,12 @@ export function createMcpHttpHandler(options: McpHttpOptions): McpHttpHandler {
       return mcpSessionId === undefined ? null : (sessions.get(mcpSessionId)?.connectionId ?? null);
     },
     async handleMcpRequest(request, principal) {
+      // DNS-rebinding defense, identical to `hostGuard` (spec 03 §2), so `/mcp` and the dashboard
+      // can never disagree about a Host. The HTTP layer checks first; this covers embedders.
+      const host = request.headers.get('host') ?? new URL(request.url).host;
+      if (!isHostAllowed(hostnameOf(host), hostPolicy)) {
+        return jsonRpcError(403, -32000, `Invalid Host header: ${host}`);
+      }
       const sessionId = request.headers.get(MCP_SESSION_HEADER);
       if (sessionId !== null) {
         const entry = sessions.get(sessionId);

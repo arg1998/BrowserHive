@@ -6,7 +6,7 @@ import { requireSession } from '../../context.ts';
 import { defineTool, json, type ToolPack } from '../../definition.ts';
 import { sessionOwnership } from '../../policies.ts';
 
-/** `save_storage_state`: cookies + localStorage snapshot (0600 file + manifest). */
+/** `save_storage_state`: cookies, localStorage and IndexedDB snapshot (0600 file + manifest). */
 export const saveStorageState = defineTool('save_storage_state', {
   policies: [sessionOwnership],
   async handler(ctx, args) {

@@ -32,6 +32,16 @@ const zCidrList = zList
   })
   .meta({ grammar: 'a comma-separated list of IP addresses or CIDR ranges' });
 
+/**
+ * `allowedHosts` items: host names or IP literals, without a port — the Host check compares names
+ * only, so one entry covers every port a proxy or port mapping might use.
+ */
+const zHostList = zList
+  .refine((items) => items.every((item) => zHost.safeParse(item).success), {
+    message: "Expected host names or IP addresses without a port, like 'browserhive.example.com'.",
+  })
+  .meta({ grammar: 'a comma-separated list of host names or IP addresses' });
+
 /** Keys of the `server` group. */
 export const SERVER_KEYS = {
   config: key(zPath, {
@@ -79,6 +89,13 @@ export const SERVER_KEYS = {
     group: 'server',
     describe:
       'Peers whose X-Forwarded-For is honoured (IPs or CIDR ranges). Never used on a loopback bind.',
+  }),
+  allowedHosts: key(zHostList, {
+    default: [],
+    group: 'server',
+    describe:
+      'Extra Host names to accept besides loopback and the bound host, such as the name a reverse proxy forwards. Ports are ignored.',
+    examples: ['browserhive.example.com'],
   }),
   admin: key(zBool, {
     default: false,

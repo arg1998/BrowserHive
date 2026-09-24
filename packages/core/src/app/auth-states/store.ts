@@ -41,7 +41,8 @@ export interface AuthStateFs extends ZipFs {
 
 /** Anything that can write a Playwright storage state to a path (a `BrowserContext`). */
 export interface StorageStateSource {
-  storageState(options: { path: string }): Promise<unknown>;
+  /** `indexedDB` is required so a caller can never silently drop it again (Playwright's default is off). */
+  storageState(options: { path: string; indexedDB: boolean }): Promise<unknown>;
 }
 
 /** Manifest written next to every snapshot (`<name>.meta.json`); `owner` is optional on read (spec 02 §6). */
@@ -95,7 +96,7 @@ function notFound(name: string, kind: 'storage' | 'profile'): AppError<'AUTH_STA
 }
 
 /**
- * Two snapshot kinds: `storage` (`<name>.storage.json`, cookies + localStorage; restored into a
+ * Two snapshot kinds: `storage` (`<name>.storage.json`, cookies, localStorage and IndexedDB; restored into a
  * fresh non-persistent context) and `profile` (`<name>.profile.zip` of a managed `userdata`;
  * restored into a new persistent session). Each has a `<name>.meta.json` manifest so listings never
  * open the payload, and a profile may carry `<name>.identity.json` (`{ seed }` only).
@@ -144,7 +145,8 @@ export class AuthStateStore implements AuthStateLocator {
     assertValidAuthName(name);
     await this.fs.mkdir(this.dir, AUTH_DIR_MODE);
     const path = this.storageStateFile(name);
-    await source.storageState({ path });
+    // IndexedDB is part of a login for many sites (Firebase Auth keeps its tokens there).
+    await source.storageState({ path, indexedDB: true });
     // Playwright writes 0644; the snapshot holds cookies/tokens, so pin it owner-only.
     await this.fs.chmod(path, AUTH_FILE_MODE);
     const size = (await this.fs.stat(path))?.size ?? 0;
@@ -162,7 +164,7 @@ export class AuthStateStore implements AuthStateLocator {
   /**
    * Saves a heavy full-profile snapshot by zipping a managed `userdata` dir (the caller enforces
    * `persistent` mode). Chromium commits DOM storage lazily, so a snapshot of a live profile may
-   * miss the very latest writes; a closed/idle profile is the most consistent source.
+   * miss the very latest writes; snapshot while the session is idle for the most consistent copy.
    */
   async saveFullProfile(
     userDataDir: string,

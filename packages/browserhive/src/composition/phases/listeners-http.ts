@@ -139,6 +139,10 @@ export async function openHttpListener(
     logs: ring,
     schedule: timers.schedule,
     every: timers.every,
+    inputAudit: {
+      actions: storage.uow.repos.operatorActions,
+      eventId: () => domain.ids.eventId(),
+    },
     quality: config.screencastQuality,
     onOperatorPointer: (session, x, y) => {
       try {
@@ -186,7 +190,7 @@ export async function openHttpListener(
       logger,
       connections: storage.uow.repos.mcpConnections,
       host: config.host,
-      port,
+      allowedHosts: config.allowedHosts,
       onSessionClosed: (closed) => {
         if (closed.remainingForSubject > 0) return;
         void cancelAttentionOf(domain.broker, closed.subject).catch((err: unknown) =>
@@ -203,6 +207,7 @@ export async function openHttpListener(
         admin: config.admin,
         authMode: config.auth,
         trustedProxies: config.trustedProxies,
+        allowedHosts: config.allowedHosts,
         allowInsecureBind: config.allowInsecureBind,
       },
       services: {

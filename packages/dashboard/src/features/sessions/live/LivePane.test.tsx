@@ -73,7 +73,9 @@ async function startStream(view: ReturnType<typeof mount>) {
   const socket = view.connect();
   await waitFor(() => expect(socket.sentOfType('screencast.start')).toHaveLength(1));
   const start = socket.sentOfType('screencast.start')[0];
-  expect(start).toMatchObject({ session_id: ID, quality: 80 });
+  expect(start).toMatchObject({ session_id: ID });
+  // The stream is shared by every viewer, so the server's --screencastQuality decides JPEG quality.
+  expect(start).not.toHaveProperty('quality');
   await act(async () => {
     socket.receive({
       v: 1,

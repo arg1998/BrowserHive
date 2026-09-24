@@ -6,6 +6,7 @@ import type { LogsPort } from '../http/services.ts';
 import type { CdpBridgeFactory } from './cdp-bridge.ts';
 import { wireFeed } from './feed.ts';
 import { RealtimeHub, type RealtimeHubDeps } from './hub.ts';
+import { OperatorInputAudit, type OperatorInputAuditDeps } from './input-audit.ts';
 import { LiveView, type LiveViewDeps, type Schedule } from './live-view.ts';
 import { type WebSocketHandler, websocketHandler } from './upgrade.ts';
 
@@ -19,6 +20,12 @@ export { WsConnection } from './connection.ts';
 export { topicsForEvent, wireFeed } from './feed.ts';
 export { RealtimeHub, type RealtimeHubDeps } from './hub.ts';
 export { DEFAULT_HUB_LIMITS, type HubLimits } from './hub-support.ts';
+export {
+  INPUT_AUDIT_WINDOW_MS,
+  type OperatorActor,
+  OperatorInputAudit,
+  type OperatorInputAuditDeps,
+} from './input-audit.ts';
 export { LiveView, type LiveViewDeps, type Schedule, type ScreencastViewer } from './live-view.ts';
 export { bunSocket, type WsSocket } from './socket.ts';
 export {
@@ -34,13 +41,15 @@ export const SWEEP_INTERVAL_MS = 15_000;
 /** Everything `createRealtimeHub` needs. */
 export interface CreateRealtimeHubDeps
   extends Omit<RealtimeHubDeps, 'liveView'>,
-    Omit<LiveViewDeps, 'bridges' | 'logger' | 'schedule'> {
+    Omit<LiveViewDeps, 'bridges' | 'logger' | 'schedule' | 'onOperatorInput'> {
   readonly bus: EventBus<DomainEvents>;
   readonly bridges: CdpBridgeFactory;
   readonly logs?: LogsPort;
   readonly schedule: Schedule;
   /** Repeating timer seam; returns a cancel. */
   readonly every: (fn: () => void, ms: number) => () => void;
+  /** Where the `operator.input` audit writes (spec 03 §6.3); absent → input is not audited (tests). */
+  readonly inputAudit?: Pick<OperatorInputAuditDeps, 'actions' | 'eventId'>;
 }
 
 /** The realtime subsystem as the composition root sees it. */
@@ -56,6 +65,15 @@ export interface Realtime {
 
 /** Builds the hub, live view and feed wiring. */
 export function createRealtimeHub(deps: CreateRealtimeHubDeps): Realtime {
+  const audit =
+    deps.inputAudit === undefined
+      ? undefined
+      : new OperatorInputAudit({
+          ...deps.inputAudit,
+          now: () => deps.clock.now(),
+          schedule: deps.schedule,
+          logger: deps.logger,
+        });
   const liveView = new LiveView({
     sessions: deps.sessions,
     bridges: deps.bridges,
@@ -66,6 +84,9 @@ export function createRealtimeHub(deps: CreateRealtimeHubDeps): Realtime {
     ...(deps.graceMs !== undefined && { graceMs: deps.graceMs }),
     ...(deps.onOperatorPointer !== undefined && { onOperatorPointer: deps.onOperatorPointer }),
     ...(deps.onViewportChanged !== undefined && { onViewportChanged: deps.onViewportChanged }),
+    ...(audit !== undefined && {
+      onOperatorInput: (sessionId, actor, kind) => audit.record(sessionId, actor, kind),
+    }),
   });
   const hub = new RealtimeHub({ ...deps, liveView });
   const stops: (() => void)[] = [];
@@ -94,6 +115,8 @@ export function createRealtimeHub(deps: CreateRealtimeHubDeps): Realtime {
       for (const stop of stops.splice(0)) stop();
       hub.dispose();
       await liveView.dispose();
+      // The last partial second of input is still audited on shutdown.
+      await audit?.flushAll();
     },
   };
 }

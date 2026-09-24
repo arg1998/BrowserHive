@@ -168,17 +168,17 @@ stdio:
 }
 ```
 
-Requests whose `Host` header is not the bind address, `localhost`, `127.0.0.1` or `[::1]` are rejected (DNS-rebinding protection).
+Requests whose `Host` header names something other than the bind address, `localhost`, `127.0.0.1`, `[::1]` or an entry of [`--allowedHosts`](../reference/configuration.md#allowedHosts) are rejected (DNS-rebinding protection). The port is not compared, so a port mapping or an SSH tunnel to another local port works.
 
 ## Optional client metadata
 
-The dashboard shows which client and model drive each session. Clients may send these headers (self-reported, display only, never used for access control):
+A session's details in the dashboard show the client that launched it: the name and version the client sends in `initialize`, over either transport. Clients using HTTP may also send these headers on the `initialize` request (self-reported, display only, never used for access control):
 
-| Header | Example |
-|---|---|
-| `X-BH-Agent-Model` | `claude-sonnet-4-5` |
-| `X-BH-Agent-Harness` | `claude-code` |
-| `X-BH-Workspace` | `checkout-bot` |
+| Header | Example | Shown as |
+|---|---|---|
+| `X-BH-Agent-Model` | `claude-opus-5` | the model, after the client name |
+| `X-BH-Workspace` | `checkout-bot` | a label for this agent, after the client name |
+| `X-BH-Agent-Harness` | `claude-code` | recorded, not shown yet |
 
 A W3C `traceparent` in a tool call's `_meta` becomes the parent of the tool span when [telemetry](telemetry.md) is on.
 
