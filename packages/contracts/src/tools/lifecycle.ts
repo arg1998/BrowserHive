@@ -80,6 +80,7 @@ export const LAUNCH_SESSION = defineTool({
     'INVALID_PERSISTENCE_CONFIG',
     'AUTH_STATE_NOT_FOUND',
     'BROWSER_NOT_INSTALLED',
+    'SANDBOX_UNAVAILABLE',
   ],
   since: SINCE,
 });

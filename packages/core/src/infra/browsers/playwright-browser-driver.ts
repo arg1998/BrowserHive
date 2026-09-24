@@ -28,6 +28,8 @@ import type { HostFacts } from './host-facts.ts';
 import { IdentityApplier } from './identity-applier.ts';
 import { buildLaunchOptions, executablePathWarning } from './launch-args.ts';
 import { installNativeGetters, mergeNativeGetterPayloads } from './native-getter.ts';
+import { isSandboxFailure, sandboxFailureReason } from './sandbox.ts';
+import { sandboxUnavailable } from './sandbox-error.ts';
 import { PlaywrightSessionHandle } from './session-handle.ts';
 import { deviceMemoryPayload } from './stealth-identity.ts';
 import { PlaywrightTracingHandle, traceStartWarning } from './tracing.ts';
@@ -186,6 +188,21 @@ export class PlaywrightBrowserDriver implements BrowserDriver {
       if (isAppError(err)) throw err;
       const notInstalled = browserNotInstalledFromLaunchError(err, spec.channel, this.chromiumDeps);
       if (notInstalled !== null) throw notInstalled;
+      // A sandbox that cannot start is a property of this host, not an internal fault: retrying
+      // never helps, so it must not read as INTERNAL_ERROR with `backoff`.
+      if (isSandboxFailure(err)) {
+        throw sandboxUnavailable({
+          channel: spec.channel,
+          reason: sandboxFailureReason(err),
+          requiredBy: 'launch_options',
+          alternatives: [],
+          guidance: [
+            "Ask the operator to run 'browserhive doctor' for the options on this host.",
+            'Or launch without launch_options.chromiumSandbox.',
+          ],
+          err,
+        });
+      }
       throw new AppError(
         'INTERNAL_ERROR',
         { ref: 'browser-launch' },

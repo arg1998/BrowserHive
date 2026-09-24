@@ -2,7 +2,7 @@
 
 # Error reference
 
-Every error code BrowserHive can produce (98 codes), generated from `ERROR_REGISTRY` in `@browserhive/contracts/errors`. Each code has a stable anchor: `errors.md#<CODE>`, which is also the `type` URL of HTTP problem responses (`https://browserhive.ai/docs/errors#<CODE>`).
+Every error code BrowserHive can produce (99 codes), generated from `ERROR_REGISTRY` in `@browserhive/contracts/errors`. Each code has a stable anchor: `errors.md#<CODE>`, which is also the `type` URL of HTTP problem responses (`https://browserhive.ai/docs/errors#<CODE>`).
 
 ## How errors reach you
 
@@ -1233,6 +1233,7 @@ Stop the process before it serves anything. The CLI prints `[CODE] message` and 
 | [`CONFIG_INVALID`](#CONFIG_INVALID) | Invalid configuration value | 400 | never |
 | [`CONFIG_UNKNOWN_KEY`](#CONFIG_UNKNOWN_KEY) | Unknown configuration key | 400 | never |
 | [`BLOCKLIST_LOAD_FAILED`](#BLOCKLIST_LOAD_FAILED) | Blocklist could not be loaded | 400 | never |
+| [`SANDBOX_UNAVAILABLE`](#SANDBOX_UNAVAILABLE) | Sandbox unavailable | 503 | never |
 | [`DATA_DIR_UNWRITABLE`](#DATA_DIR_UNWRITABLE) | Data directory not writable | 500 | never |
 | [`DATA_DIR_LOCKED`](#DATA_DIR_LOCKED) | Data directory in use | 409 | never |
 | [`DB_OPEN_FAILED`](#DB_OPEN_FAILED) | Database could not be opened | 500 | never |
@@ -1422,6 +1423,37 @@ Details:
 |---|---|---|---|
 | `path` | `string` | yes | — |
 | `reason` | `string` | yes | — |
+
+<a id="SANDBOX_UNAVAILABLE"></a>
+### `SANDBOX_UNAVAILABLE`
+
+| Property | Value |
+|---|---|
+| Title | Sandbox unavailable |
+| HTTP status | 503 |
+| Category | `boot` |
+| Retryable | `never` (do not retry; the request cannot succeed as sent) |
+| Exit code | 3 |
+
+Message: `Channel '{channel}' cannot run with Chromium's sandbox on this host: {reason}`
+
+Hint: Retrying will not help. Use a browser that can run sandboxed here, or change the sandbox setting; 'browserhive doctor' lists the options for this host.
+
+Cause: The sandbox was required, by `sandbox=on` or by an agent's `launch_options.chromiumSandbox: true`, and the browser could not start with it. Typical hosts: Ubuntu 23.10+ with the bundled browser (AppArmor restricts user namespaces to programs with a profile), running as root (Chrome refuses), Docker's default seccomp profile, or a kernel with unprivileged user namespaces disabled. With `sandbox=on` the server refuses to start (exit code 3); a `launch_session` fails with this code and `retryable: never`. Under `sandbox=auto` it is never raised: the session falls back.
+
+Resolution: Run `browserhive doctor`: it probes every installed browser and prints the ways out for this host, easiest first (a browser that sandboxes here, an AppArmor profile via `browserhive doctor --printApparmorProfile`, running as a normal user, `sandbox=auto` or `sandbox=off`).
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `channel` | `string` | yes | — |
+| `reason` | `string` | yes | — |
+| `required_by` | one of `config`, `launch_options` | yes | — |
+| `executable` | `string` | no | — |
+| `cause` | `string` | no | — |
+| `alternatives` | `string[]` | yes | — |
+| `guidance` | `string[]` | yes | — |
 
 <a id="DATA_DIR_UNWRITABLE"></a>
 ### `DATA_DIR_UNWRITABLE`

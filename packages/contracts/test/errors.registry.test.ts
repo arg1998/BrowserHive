@@ -123,6 +123,7 @@ const SPEC_CODES = [
   'RETENTION_FAILED',
   'STALE_BROWSER_PROCESSES',
   'DATA_DIR_LOCKED',
+  'SANDBOX_UNAVAILABLE',
 ] as const;
 
 describe('ERROR_REGISTRY completeness', () => {
@@ -161,6 +162,8 @@ describe('ERROR_REGISTRY completeness', () => {
     expect(ERROR_REGISTRY.INSECURE_BIND_REFUSED.exitCode).toBe(3);
     expect(ERROR_REGISTRY.ADMIN_REQUIRES_HTTP.exitCode).toBe(3);
     expect(ERROR_REGISTRY.PORT_IN_USE.exitCode).toBe(3);
+    expect(ERROR_REGISTRY.SANDBOX_UNAVAILABLE.exitCode).toBe(3);
+    expect(ERROR_REGISTRY.SANDBOX_UNAVAILABLE.retryable).toBe('never');
     expect(ERROR_REGISTRY.CONFIG_INVALID.exitCode).toBe(64);
     expect(ERROR_REGISTRY.CONFIG_UNKNOWN_KEY.exitCode).toBe(64);
   });

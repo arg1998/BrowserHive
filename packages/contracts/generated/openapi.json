@@ -180,6 +180,7 @@
               "CONFIG_INVALID",
               "CONFIG_UNKNOWN_KEY",
               "BLOCKLIST_LOAD_FAILED",
+              "SANDBOX_UNAVAILABLE",
               "DATA_DIR_UNWRITABLE",
               "DATA_DIR_LOCKED",
               "DB_OPEN_FAILED",
