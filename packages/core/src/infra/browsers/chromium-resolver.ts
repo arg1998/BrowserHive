@@ -36,7 +36,11 @@ export function installCommandFor(channel: string, playwrightVersion: string): s
   if (channel === 'chromium') {
     return `browserhive init  (runs: npx playwright install chromium@${playwrightVersion})`;
   }
-  return `install the ${channel === 'edge' ? 'Microsoft Edge' : 'Google Chrome'} browser on this host`;
+  if (channel === 'chrome') {
+    // Google's own installer, run through Playwright; `init` asks before it does anything.
+    return 'browserhive init --installChrome  (runs: npx playwright install chrome, needs administrator rights)';
+  }
+  return 'install the Microsoft Edge browser on this host';
 }
 
 /** Builds the typed error for a missing browser. */

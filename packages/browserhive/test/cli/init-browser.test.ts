@@ -46,7 +46,7 @@ describe('init: detection report', () => {
     );
     expect(run.stdout).toContain('– edge        not installed');
     expect(run.stdout).toContain(
-      '! sandbox     chrome: works · chromium: unavailable here (AppArmor) · sandbox=off',
+      '! sandbox     chrome: works · chromium: unavailable here (AppArmor), falls back',
     );
     expect(run.stdout).toContain('✓ default browser  chromium');
     expect(fs.writes.filter((w) => w.startsWith('write'))).toEqual([]);

@@ -290,7 +290,7 @@ Per-session close and trace-finalize cap.
 | [`persistence`](#persistence) | `--persistence` | `BROWSERHIVE_PERSISTENCE` | `memory` |
 | [`defaultHeadless`](#defaultHeadless) | `--defaultHeadless` | `BROWSERHIVE_DEFAULT_HEADLESS` | `true` |
 | [`defaultChannel`](#defaultChannel) | `--defaultChannel` | `BROWSERHIVE_DEFAULT_CHANNEL` | `chromium` |
-| [`sandbox`](#sandbox) | `--sandbox` | `BROWSERHIVE_SANDBOX` | `off` |
+| [`sandbox`](#sandbox) | `--sandbox` | `BROWSERHIVE_SANDBOX` | `auto` |
 | [`maxSessions`](#maxSessions) | `--maxSessions` | `BROWSERHIVE_MAX_SESSIONS` | derived (hostMemory) |
 | [`sessionLease`](#sessionLease) | `--sessionLease` | `BROWSERHIVE_SESSION_LEASE` | `2h` |
 | [`attentionTimeout`](#attentionTimeout) | `--attentionTimeout` | `BROWSERHIVE_ATTENTION_TIMEOUT` | `6h` |
@@ -353,7 +353,7 @@ Chromium's sandbox. auto runs each browser sandboxed where it can and falls back
 | Environment | `BROWSERHIVE_SANDBOX` |
 | Config file | `"sandbox"` |
 | Type | one of: auto, on, off |
-| Default | `off` |
+| Default | `auto` |
 | Notes | restart required |
 
 <a id="maxSessions"></a>

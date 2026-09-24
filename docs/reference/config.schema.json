@@ -159,7 +159,7 @@
       "x-browserhive-cli": "--defaultChannel"
     },
     "sandbox": {
-      "default": "off",
+      "default": "auto",
       "type": "string",
       "enum": [
         "auto",

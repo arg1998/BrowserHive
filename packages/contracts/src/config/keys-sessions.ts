@@ -31,7 +31,7 @@ export const SESSION_KEYS = {
     describe: 'Default browser channel; launch_session channel overrides per session.',
   }),
   sandbox: key(zEnumOf(SandboxMode.options), {
-    default: 'off',
+    default: 'auto',
     group: 'sessions',
     describe:
       "Chromium's sandbox. auto runs each browser sandboxed where it can and falls back where it cannot (warned once); on requires it: the server refuses to start (exit 3) and a session fails with SANDBOX_UNAVAILABLE when a browser cannot provide it; off never uses it.",

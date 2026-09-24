@@ -322,20 +322,39 @@ describe('doctor: browsers and the sandbox', () => {
     expect(other.byName.get('managed policies')?.status).toBe('warn');
   });
 
-  it('sandbox rows: probed once per installed channel; unavailable is ok under off', async () => {
+  it('sandbox rows: probed once per installed channel; the verdict is judged by the mode', async () => {
     const probes = probeState({
       browsers: [detected('chromium'), detected('chrome', { installed: true }), detected('edge')],
       sandbox: { chromium: unavailable, chrome: works },
       environment: ubuntu,
       apparmorCovered: false,
     });
-    const { byName } = await doctorJson({ argv: [], fs: healthyFs(), probes });
+    const auto = await doctorJson({ argv: [], fs: healthyFs(), probes });
     expect(probes.probed).toEqual(['chromium', 'chrome']);
-    expect(byName.get('sandbox (chromium)')).toMatchObject({
+    expect(auto.byName.get('sandbox (chromium)')).toMatchObject({
+      status: 'warn',
+      detail:
+        'cannot run sandboxed here, falls back to no sandbox (sandbox=auto): No usable sandbox!',
+    });
+    expect(auto.byName.get('sandbox (chrome)')).toMatchObject({
+      status: 'ok',
+      detail: 'runs sandboxed (sandbox=auto)',
+    });
+    const off = await doctorJson({ argv: ['--sandbox', 'off'], fs: healthyFs(), probes });
+    expect(off.byName.get('sandbox (chromium)')).toMatchObject({
       status: 'ok',
       detail: 'sandbox=off; cannot run sandboxed here: No usable sandbox!',
     });
-    expect(byName.get('sandbox (chrome)')?.status).toBe('ok');
+    const on = await doctorJson({ argv: ['--sandbox', 'on'], fs: healthyFs(), probes });
+    expect(on.byName.get('sandbox (chromium)')?.status).toBe('fail');
+    expect(on.run.code).toBe(1);
+    const onChrome = await doctorJson({
+      argv: ['--sandbox', 'on', '--defaultChannel', 'chrome'],
+      fs: healthyFs(),
+      probes,
+    });
+    expect(onChrome.byName.get('sandbox (chromium)')?.status).toBe('warn');
+    expect(onChrome.byName.get('sandbox (chrome)')?.status).toBe('ok');
   });
 
   it('text mode prints the guidance for the configured channel: working browser first, AppArmor next', async () => {
