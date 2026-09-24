@@ -29,6 +29,16 @@ export function rowRefs(refs: readonly SystemConfigRef[] | undefined): readonly 
   return [...byName].map(([name, entry]) => ({ name, from: entry.from, at: entry.at }));
 }
 
+/** `[0]` → item 1 of the list; `Authorization` or `modules.sessions` → the name, in code. */
+function positionText(at: string) {
+  const index = /^\[(\d+)\]$/.exec(at)?.[1];
+  return index === undefined ? (
+    <code className="font-mono text-foreground">{at}</code>
+  ) : (
+    `item ${Number(index) + 1} of the list`
+  );
+}
+
 const REF_TEXT = /(\{env:[A-Za-z_][A-Za-z0-9_]*(?::-[^{}]*)?\})/;
 
 /** The value as written, with every reference picked out in the variable hue. */
@@ -112,11 +122,11 @@ export function RefChip({ configKey, refInfo, template, secret }: RefChipProps) 
             </p>
             {refInfo.at.length > 0 ? (
               <p className="text-sm text-muted-foreground">
-                Fills{' '}
+                Used for{' '}
                 {refInfo.at.map((at, index) => (
                   <span key={at}>
                     {index > 0 ? ', ' : ''}
-                    <code className="font-mono text-foreground">{at}</code>
+                    {positionText(at)}
                   </span>
                 ))}
                 .

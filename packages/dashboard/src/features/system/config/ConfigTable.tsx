@@ -81,7 +81,8 @@ function Source({ row }: { readonly row: SystemConfigKey }) {
   const info = SOURCE_INFO[row.source];
   const refs = rowRefs(row.refs);
   return (
-    <div className="flex min-w-0 flex-col items-start gap-1">
+    // The variable chips sit beside the source chip and wrap below it only when the column is narrow.
+    <div className="flex min-w-0 flex-wrap items-center gap-1">
       <Chip tone={info.tone} className="font-mono">
         {row.source}
         <span className="sr-only">: {info.hint}</span>
@@ -89,7 +90,7 @@ function Source({ row }: { readonly row: SystemConfigKey }) {
       {refs.length > 0 ? (
         <ul
           aria-label={`Environment variables ${row.key} reads`}
-          className="flex max-w-full flex-col items-start gap-1"
+          className="flex max-w-full flex-wrap items-center gap-1"
         >
           {refs.map((ref) => (
             <li key={ref.name} className="max-w-full">
