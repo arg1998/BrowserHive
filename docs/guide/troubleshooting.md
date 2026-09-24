@@ -45,7 +45,7 @@ Fix ownership of the data directory, or point `--dataDir` somewhere you own.
 **[`SANDBOX_UNAVAILABLE`](../reference/errors.md#SANDBOX_UNAVAILABLE)** from `launch_session`
 The sandbox was required for this session (the server runs with `--sandbox on`, or the agent passed `launch_options: { chromiumSandbox: true }`) and this browser cannot provide it here. Retrying does not help. The message names the channels that do sandbox on this machine; otherwise drop `chromiumSandbox` or ask the operator to run `browserhive doctor`.
 
-**`doctor` warns "cannot run sandboxed here, falls back to no sandbox"**
+**`doctor` says "cannot run sandboxed here, falls back to no sandbox"**
 Under the default `--sandbox auto`, that browser runs without Chromium's sandbox on this machine (typical on Ubuntu 23.10+ with the bundled browser, as root, or in Docker). Sessions work; the guidance under the table says how to get the sandbox. The log says `sandbox fell back` once per browser.
 
 **A managed policy blocks automation**

@@ -331,8 +331,9 @@ describe('doctor: browsers and the sandbox', () => {
     });
     const auto = await doctorJson({ argv: [], fs: healthyFs(), probes });
     expect(probes.probed).toEqual(['chromium', 'chrome']);
+    expect(auto.run.code).toBe(0);
     expect(auto.byName.get('sandbox (chromium)')).toMatchObject({
-      status: 'warn',
+      status: 'ok',
       detail:
         'cannot run sandboxed here, falls back to no sandbox (sandbox=auto): No usable sandbox!',
     });

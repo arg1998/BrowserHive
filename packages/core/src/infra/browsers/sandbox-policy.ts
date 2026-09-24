@@ -7,6 +7,20 @@ import type { Clock } from '../../ports/clock.ts';
 import type { Logger } from '../../ports/logger.ts';
 import { isSandboxFailure, sandboxFailureReason } from './sandbox.ts';
 
+/**
+ * Whether an unrecognised failure of a sandboxed launch may be blamed on the sandbox once the same
+ * browser starts without it: the browser process itself exited during launch (Playwright attaches
+ * its log as "Browser logs:"), and it was not a timeout. A failure after the browser started (a
+ * context or page error) or a timeout under load proves nothing and is never cached.
+ */
+function provable(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    /Browser logs:/.test(err.message) &&
+    !/Timeout \d+ms exceeded/.test(err.message)
+  );
+}
+
 /** What is known about one executable. */
 export type SandboxVerdict =
   | { readonly state: 'works' }
@@ -155,8 +169,9 @@ export class SandboxPolicy {
     } catch (err) {
       if (isAppError(err)) throw err;
       if (!isSandboxFailure(err)) {
-        // Not a failure Chrome names as the sandbox (Edge's differs): the same browser starting
-        // without it is the proof. It is closed again at once; the session never runs unsandboxed.
+        if (!provable(err)) throw err;
+        // Not a failure text BrowserHive recognises: the same browser starting without the
+        // sandbox is the proof. It is closed again at once; the session never runs unsandboxed.
         let confirmed: T;
         try {
           confirmed = await attempt(false);
@@ -177,8 +192,10 @@ export class SandboxPolicy {
   ): Promise<SandboxedLaunch<T>> {
     const key = keyOf(target);
     // One launch per executable decides; concurrent first launches wait for it.
-    const pending = this.probing.get(key);
-    if (pending !== undefined) await pending;
+    for (let pending = this.probing.get(key); pending !== undefined; ) {
+      await pending;
+      pending = this.probing.get(key);
+    }
     const known = this.verdict(target);
     if (known?.state === 'unavailable') return { value: await attempt(false), sandboxed: false };
     if (known?.state === 'works') {
@@ -190,12 +207,10 @@ export class SandboxPolicy {
       }
     }
     let done: () => void = () => undefined;
-    this.probing.set(
-      key,
-      new Promise<void>((resolve) => {
-        done = resolve;
-      }),
-    );
+    const mine = new Promise<void>((resolve) => {
+      done = resolve;
+    });
+    this.probing.set(key, mine);
     try {
       try {
         const value = await attempt(true);
@@ -203,12 +218,17 @@ export class SandboxPolicy {
         return { value, sandboxed: true };
       } catch (err) {
         if (isAppError(err)) throw err;
-        // The sandbox is blamed only if the same browser then starts without it (as the probe
-        // does); when that fails too, its own error surfaces and nothing is cached.
-        return await this.fallBack(target, err, attempt);
+        if (isSandboxFailure(err) || provable(err)) {
+          // Blamed only once the same browser starts without the sandbox (as the probe does);
+          // when that fails too, its own error surfaces and nothing is cached.
+          return await this.fallBack(target, err, attempt);
+        }
+        // A timeout or a failure after the browser started proves nothing: this session runs
+        // unsandboxed, nothing is cached, and the next launch tries the sandbox again.
+        return { value: await attempt(false), sandboxed: false };
       }
     } finally {
-      this.probing.delete(key);
+      if (this.probing.get(key) === mine) this.probing.delete(key);
       done();
     }
   }

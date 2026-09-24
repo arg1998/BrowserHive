@@ -29,7 +29,6 @@ import type { HostFacts } from './host-facts.ts';
 import { IdentityApplier } from './identity-applier.ts';
 import { buildLaunchOptions, executablePathWarning } from './launch-args.ts';
 import { installNativeGetters, mergeNativeGetterPayloads } from './native-getter.ts';
-import { isSandboxFailure, sandboxFailureReason } from './sandbox.ts';
 import { sandboxUnavailable } from './sandbox-error.ts';
 import { SandboxPolicy } from './sandbox-policy.ts';
 import { PlaywrightSessionHandle } from './session-handle.ts';
@@ -223,21 +222,34 @@ export class PlaywrightBrowserDriver implements BrowserDriver {
           ...options,
           ...contextOptions,
         });
-        // Chromium has already opened `pages()[0]` here, but it sits at `about:blank` — no navigation
-        // has happened, so a context-level init script still lands before any page script runs.
-        if (scriptPayload !== null)
-          await context.addInitScript(installNativeGetters, scriptPayload);
-        const page = context.pages()[0] ?? (await context.newPage());
-        return { browser: context.browser(), context, page };
+        try {
+          // Chromium has already opened `pages()[0]` here, but it sits at `about:blank` — no
+          // navigation has happened, so a context-level init script still lands before any page
+          // script runs.
+          if (scriptPayload !== null)
+            await context.addInitScript(installNativeGetters, scriptPayload);
+          const page = context.pages()[0] ?? (await context.newPage());
+          return { browser: context.browser(), context, page };
+        } catch (err) {
+          // Never leave a half-opened browser behind (it would also hold the profile lock).
+          await context.close().catch(() => undefined);
+          throw err;
+        }
       }
       // `memory` and `storage-state` share the same mechanics: launch a browser, then open a
       // context. For `storage-state`, the snapshot rides through `storageState`.
       const browser = await browserType.launch(options);
-      const context = await browser.newContext(contextOptions);
-      // Before `newPage()`, so the first tab is covered like every later one.
-      if (scriptPayload !== null) await context.addInitScript(installNativeGetters, scriptPayload);
-      const page = await context.newPage();
-      return { browser, context, page };
+      try {
+        const context = await browser.newContext(contextOptions);
+        // Before `newPage()`, so the first tab is covered like every later one.
+        if (scriptPayload !== null)
+          await context.addInitScript(installNativeGetters, scriptPayload);
+        const page = await context.newPage();
+        return { browser, context, page };
+      } catch (err) {
+        await browser.close().catch(() => undefined);
+        throw err;
+      }
     };
 
     let browser: Browser | null = null;
@@ -265,18 +277,8 @@ export class PlaywrightBrowserDriver implements BrowserDriver {
       if (isAppError(err)) throw err;
       const notInstalled = browserNotInstalledFromLaunchError(err, spec.channel, this.chromiumDeps);
       if (notInstalled !== null) throw notInstalled;
-      // A sandbox that cannot start is a property of this host, not an internal fault: retrying
-      // never helps, so it must not read as INTERNAL_ERROR with `backoff`.
-      if (isSandboxFailure(err)) {
-        throw sandboxUnavailable({
-          channel: spec.channel,
-          reason: sandboxFailureReason(err),
-          requiredBy: 'launch_options',
-          alternatives: [],
-          guidance: [...ASK_OPERATOR_GUIDANCE],
-          err,
-        });
-      }
+      // Sandbox failures of a sandboxed attempt were already typed by the policy
+      // (SANDBOX_UNAVAILABLE, never INTERNAL_ERROR); what reaches here is an unsandboxed launch.
       throw new AppError(
         'INTERNAL_ERROR',
         { ref: 'browser-launch' },

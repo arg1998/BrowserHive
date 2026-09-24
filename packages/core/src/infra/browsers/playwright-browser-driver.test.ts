@@ -115,4 +115,28 @@ describe('launch failure classification', () => {
     const err = await launchError(driverFor(chromium.type), spec());
     expect(err).toMatchObject({ code: 'INTERNAL_ERROR', details: { ref: 'browser-launch' } });
   });
+
+  it('a browser whose first page fails is closed, not leaked', async () => {
+    let closed = 0;
+    const browser = {
+      newContext: async () => ({
+        addInitScript: async () => undefined,
+        newPage: async () => {
+          throw new Error(
+            'browserContext.newPage: Target page, context or browser has been closed',
+          );
+        },
+      }),
+      close: async () => {
+        closed += 1;
+      },
+    };
+    const type = {
+      launch: async () => browser,
+      executablePath: () => '/cache/chromium-1243/chrome',
+    } as unknown as BrowserType;
+    const err = await launchError(driverFor(type), spec());
+    expect(err).toMatchObject({ code: 'INTERNAL_ERROR' });
+    expect(closed).toBe(1);
+  });
 });

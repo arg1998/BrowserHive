@@ -13,10 +13,10 @@ import type { CheckResult, CheckStatus } from './doctor-checks.ts';
 /** The `sandbox` setting as doctor judges it. */
 export type SandboxMode = 'auto' | 'on' | 'off';
 
-/** The `sandbox` setting of a resolved config (`off` before the key existed). */
+/** The `sandbox` setting of a resolved config (its default, `auto`, when the config did not resolve). */
 export function sandboxModeOf(config: Readonly<Record<string, unknown>> | null): SandboxMode {
   const value = config?.['sandbox'];
-  return value === 'auto' || value === 'on' || value === 'off' ? value : 'off';
+  return value === 'auto' || value === 'on' || value === 'off' ? value : 'auto';
 }
 
 /** What the browser checks found, for the rows and the guidance block. */
@@ -218,7 +218,8 @@ export function browserRows(
 
   if (environment.root) {
     const status: CheckStatus =
-      config.sandbox === 'on' ? 'fail' : config.sandbox === 'auto' ? 'warn' : 'ok';
+      // Informational unless the sandbox is required: under auto sessions still launch (D-27).
+      config.sandbox === 'on' ? 'fail' : 'ok';
     rows.push(
       row(
         'sandbox',
@@ -238,7 +239,7 @@ export function browserRows(
     environment.root || environment.container
       ? row(
           'user',
-          config.sandbox === 'off' ? 'ok' : 'warn',
+          config.sandbox === 'on' ? 'warn' : 'ok',
           `${environment.root ? 'running as root' : 'normal user'}${environment.container ? ' in a container' : ''}: Chromium's sandbox needs a normal user${environment.container ? " and Playwright's seccomp profile" : ''}`,
         )
       : row('user', 'ok', 'normal user, not in a container'),
@@ -279,9 +280,11 @@ function sandboxRow(
             : `cannot run sandboxed here; launch_session for it gets SANDBOX_UNAVAILABLE: ${verdict.reason}`,
         );
       }
+      // Sessions still launch under auto, so this is information with a fix, not a warning: a
+      // doctor that exits 2 here would break healthchecks that passed before the setting existed.
       return row(
         name,
-        'warn',
+        'ok',
         `cannot run sandboxed here, falls back to no sandbox (${modeText(config.sandbox)}): ${verdict.reason}`,
       );
     }

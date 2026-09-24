@@ -110,7 +110,7 @@ browserhive doctor
 - The configured `defaultChannel` is installed (a failure otherwise, with the install command).
 - The browser in use is not more than one major version ahead of the tested build (a warning).
 - No managed browser policy blocks automation, such as `RemoteDebuggingAllowed=false` (a failure for the configured browser).
-- Chromium's sandbox, per installed browser: each one is launched once to find out. When the configured browser cannot sandbox, the guidance under the table says why and what to do. See [Security: the browser sandbox](security.md#the-browser-sandbox).
+- Chromium's sandbox, per installed browser: each one is launched once to find out (under the default `--sandbox auto` a browser that falls back is reported, not counted as a warning). When the configured browser cannot sandbox, the guidance under the table says why and what to do. See [Security: the browser sandbox](security.md#the-browser-sandbox).
 - Whether BrowserHive runs as root or in a container, which rules out the sandbox.
 - The data directory exists, has owner-only permissions and has free disk space.
 - The configuration is valid. It runs the full resolver and prints any shadow lines.

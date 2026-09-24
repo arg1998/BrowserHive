@@ -97,17 +97,39 @@ async function runHelper(
   }
 }
 
-function bundledPath(resolver: DriverResolver): string | null {
+/** The BrowserType the configured sessions launch `chromium` through (Patchright's when stealth uses it). */
+function sessionBrowserType(
+  resolver: DriverResolver,
+  config: Pick<ServerConfig, 'stealth' | 'stealthDriver'>,
+): ReturnType<DriverResolver['stock']> {
+  if (config.stealth === 'off') return resolver.stock();
   try {
-    const path = resolver.stock().executablePath();
+    return resolver.resolveStealth(config.stealthDriver).browserType;
+  } catch {
+    return resolver.stock();
+  }
+}
+
+function bundledPath(
+  resolver: DriverResolver,
+  config: Pick<ServerConfig, 'stealth' | 'stealthDriver'>,
+): string | null {
+  try {
+    const path = sessionBrowserType(resolver, config).executablePath();
     return path !== '' && existsSync(path) ? path : null;
   } catch {
     return null;
   }
 }
 
-/** The real host: files, `--version`, and headless probe launches through stock Playwright. */
-export function realSandboxHost(resolver: DriverResolver): SandboxHost {
+/**
+ * The real host: files, `--version`, and headless probe launches through the driver sessions use,
+ * so the verdict is recorded for the same executable sessions launch.
+ */
+export function realSandboxHost(
+  resolver: DriverResolver,
+  config: Pick<ServerConfig, 'stealth' | 'stealthDriver'>,
+): SandboxHost {
   return {
     environment: () =>
       inspectSandboxEnvironment({
@@ -117,7 +139,9 @@ export function realSandboxHost(resolver: DriverResolver): SandboxHost {
         readFile: readText,
       }),
     probe: (channel) =>
-      probeSandbox(resolver.stock(), { playwrightChannel: PLAYWRIGHT_CHANNEL[channel] }),
+      probeSandbox(sessionBrowserType(resolver, config), {
+        playwrightChannel: PLAYWRIGHT_CHANNEL[channel],
+      }),
     detect: () =>
       detectBrowsers({
         platform: process.platform,
@@ -127,12 +151,12 @@ export function realSandboxHost(resolver: DriverResolver): SandboxHost {
         listDir,
         run: runHelper,
         bundled: {
-          executablePath: bundledPath(resolver),
+          executablePath: bundledPath(resolver, config),
           version: bundledChromiumVersion('playwright'),
         },
       }),
     executable: (channel) =>
-      channelExecutable(channel, () => bundledPath(resolver), playwrightChannelExecutable),
+      channelExecutable(channel, () => bundledPath(resolver, config), playwrightChannelExecutable),
     apparmorCovers: (path) =>
       apparmorProfileCovers(path, { platform: process.platform, listDir, readFile: readText }),
   };
@@ -179,7 +203,7 @@ function targetOf(
  */
 export async function buildSandbox(input: SandboxInput): Promise<SandboxWiring> {
   const { config, logger } = input;
-  const host = input.host ?? realSandboxHost(input.resolver);
+  const host = input.host ?? realSandboxHost(input.resolver, config);
   const environment = host.environment();
   const log = logger.child({ module: 'browsers.sandbox' });
   const setting = sandboxSetting(input.provenance, input.configFilePath, config.sandbox);

@@ -138,7 +138,9 @@ describe('sandbox=auto', () => {
     const unrecognised = async (sandbox: boolean) => {
       attempts.push(sandbox);
       if (sandbox)
-        throw new Error('browserType.launch: Browser closed.\n  - [err] Trace/breakpoint trap');
+        throw new Error(
+          'browserType.launch: Browser closed.\nBrowser logs:\n[err] Trace/breakpoint trap',
+        );
       return sandbox;
     };
     expect(await p.launch(edge, false, unrecognised)).toEqual({ value: false, sandboxed: false });
@@ -153,7 +155,8 @@ describe('sandbox=auto', () => {
     const edge: SandboxTarget = { channel: 'edge', executablePath: '/opt/microsoft/msedge/msedge' };
     const disposed: boolean[] = [];
     const unrecognised = async (sandbox: boolean) => {
-      if (sandbox) throw new Error('browserType.launch: Browser closed.');
+      if (sandbox)
+        throw new Error('browserType.launch: Browser closed.\nBrowser logs:\n[err] abort');
       return sandbox;
     };
     const err = await p
@@ -170,6 +173,42 @@ describe('sandbox=auto', () => {
       .catch((e: unknown) => e);
     expect(broken).toBeInstanceOf(Error);
     expect((broken as Error).message).toBe('crash');
+  });
+
+  it('a timeout or a failure after the browser started is never cached as unavailable', async () => {
+    for (const message of [
+      'browserType.launch: Timeout 180000ms exceeded.\nBrowser logs:\n[err] slow',
+      'browserContext.newPage: Target page, context or browser has been closed',
+    ]) {
+      const { p, logger } = policy('auto');
+      let first = true;
+      const flaky = async (sandbox: boolean) => {
+        if (first) {
+          first = false;
+          throw new Error(message);
+        }
+        return sandbox;
+      };
+      expect(await p.launch(CHROME, false, flaky)).toEqual({ value: false, sandboxed: false });
+      expect(p.verdict(CHROME)).toBeUndefined();
+      expect(await p.launch(CHROME, false, flaky)).toEqual({ value: true, sandboxed: true });
+      expect(logger.records.filter((r) => r.level === 'warn')).toEqual([]);
+    }
+  });
+
+  it('a required sandbox is not blamed for a timeout: the error surfaces, nothing is cached', async () => {
+    const { p } = policy('on');
+    const timeout = new Error('browserType.launch: Timeout 180000ms exceeded.\nBrowser logs:\n');
+    const attempts: boolean[] = [];
+    const err = await p
+      .launch(CHROME, false, async (sandbox) => {
+        attempts.push(sandbox);
+        throw timeout;
+      })
+      .catch((e: unknown) => e);
+    expect(err).toBe(timeout);
+    expect(attempts).toEqual([true]);
+    expect(p.verdict(CHROME)).toBeUndefined();
   });
 
   it('a browser that fails either way surfaces its own error (never swallowed)', async () => {
