@@ -36,6 +36,23 @@ describe('secret config literals (spec 10 §9)', () => {
     expect(literals).not.toContain('Bearer');
   });
 
+  it('registers a secret that reached the config through a config-file reference', () => {
+    const { config } = resolveOk({
+      env: { CI_SECRET: TOKEN, OTLP_KEY: 'k'.repeat(40) },
+      files: {
+        '/work/browserhive.config.json': JSON.stringify({
+          otel: true,
+          authTokens: 'ci:{env:CI_SECRET}',
+          otelHeaders: { authorization: 'Bearer {env:OTLP_KEY}' },
+        }),
+      },
+    });
+    const literals = secretConfigLiterals(config);
+    expect(literals).toContain(TOKEN);
+    expect(literals).toContain('k'.repeat(40));
+    expect(literals).not.toContain('ci');
+  });
+
   it('is empty for the defaults', () => {
     expect(secretConfigLiterals(resolveOk().config)).toEqual([]);
   });

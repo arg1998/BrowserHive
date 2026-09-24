@@ -4,15 +4,19 @@ import {
   CONFIG_KEYS,
   type ConfigKey,
   type ExplicitKeys,
+  firstRefLike,
   formatShadowLine,
   isInsecureBind,
   isLoopbackHost,
+  keyMeta,
   lookupKey,
   type Provenance,
+  type RefToken,
   type ServerConfig,
   type ShadowLine,
   serverConfigSchemaFor,
 } from '@browserhive/contracts/config';
+import { isSensitiveKey } from '../../kernel/redact.ts';
 import { err, ok, type Result } from '../../kernel/result.ts';
 import type { HostEnvironment } from '../../ports/host-environment.ts';
 import { tokenizeArgs } from './argv.ts';
@@ -24,6 +28,7 @@ import {
   discoverConfigFile,
 } from './discover.ts';
 import { type ConfigFailure, type ConfigProblem, configFailure } from './failure.ts';
+import { envLookup } from './interpolate.ts';
 import { keyKind } from './kinds.ts';
 import {
   type CollectedLayer,
@@ -36,6 +41,7 @@ import {
 } from './layers.ts';
 import { mergeLayers, type ParsedLayer } from './merge.ts';
 import { type ParsedEntry, parseEntry } from './parse.ts';
+import { unexpandedRefWarning } from './ref-messages.ts';
 import { isRegisteredSpelling } from './suggest.ts';
 
 /** Inputs of {@link resolveConfig}. Everything is injected; nothing reads `process`. */
@@ -61,7 +67,7 @@ export interface ResolveConfigInput {
 export interface ConfigDiagnostics {
   /** One `config: …` line per key supplied by more than one source, in registry order. */
   readonly shadowLines: readonly ShadowLine[];
-  /** Human warnings (non-fatal): insecure bind acknowledged, ignored OTEL variables. */
+  /** Human warnings (non-fatal): insecure bind acknowledged, ignored OTEL variables, references outside the config file. */
   readonly warnings: readonly string[];
 }
 
@@ -75,6 +81,12 @@ export interface ResolvedConfigBundle {
   readonly configFilePath: string | undefined;
   /** Keys supplied by env, file or CLI. */
   readonly explicitKeys: ExplicitKeys;
+  /**
+   * What config-file references with credential-looking names produced (spec 08 §3.1), for the
+   * always-on `SecretRegistry` entries (10 §9). Never rendered. Secret keys' values are registered
+   * through their extractors instead, so only the heuristic's values are here.
+   */
+  readonly referencedSecrets: readonly string[];
 }
 
 function deepFreeze<T>(value: T): T {
@@ -107,6 +119,41 @@ function parseLayer(
     else problems.push(parsed.error);
   }
   return { layer, problems };
+}
+
+function firstRefLikeIn(raw: unknown): RefToken | undefined {
+  if (typeof raw === 'string') return firstRefLike(raw);
+  if (typeof raw !== 'object' || raw === null) return undefined;
+  for (const item of Object.values(raw)) {
+    const found = firstRefLikeIn(item);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+}
+
+/** One warning per env variable, flag or option holding reference-shaped text (spec 08 §3.1). */
+function unexpandedRefWarnings(layers: readonly CollectedLayer[]): string[] {
+  const warnings: string[] = [];
+  for (const layer of layers) {
+    for (const entry of layer.entries.values()) {
+      const token = firstRefLikeIn(entry.raw);
+      if (token === undefined) continue;
+      warnings.push(unexpandedRefWarning(entry.location, token, keyMeta(entry.key).secret));
+    }
+  }
+  return warnings;
+}
+
+/** Values of references with credential-looking names in the parsed file layer (never defaults). */
+function referencedSecretsOf(layer: ParsedLayer): string[] {
+  const out: string[] = [];
+  for (const entry of layer.values()) {
+    entry.refs?.forEach((ref, index) => {
+      const value = entry.refValues?.[index];
+      if (ref.from === 'value' && value !== undefined && isSensitiveKey(ref.ref)) out.push(value);
+    });
+  }
+  return out;
 }
 
 function firstValue(layers: readonly ParsedLayer[], key: ConfigKey): unknown {
@@ -186,9 +233,16 @@ export function resolveConfig(
     isBoolean: isBooleanFlag,
     known: (name) => isRegisteredSpelling('cli', `--${name}`),
   });
-  const env = parseLayer(collectEnvLayer(input.env), parseOptions);
-  const cli = parseLayer(collectCliLayer(tokens), parseOptions);
-  const overrides = parseLayer(collectOverridesLayer(input.overrides ?? {}), parseOptions);
+  const collectedEnv = collectEnvLayer(input.env);
+  const collectedCli = collectCliLayer(tokens);
+  const collectedOverrides = collectOverridesLayer(input.overrides ?? {});
+  const collectedOtel = collectOtelLayer(input.env);
+  warnings.push(
+    ...unexpandedRefWarnings([collectedEnv, collectedOtel, collectedCli, collectedOverrides]),
+  );
+  const env = parseLayer(collectedEnv, parseOptions);
+  const cli = parseLayer(collectedCli, parseOptions);
+  const overrides = parseLayer(collectedOverrides, parseOptions);
   problems.push(...env.problems, ...cli.problems, ...overrides.problems);
   const cliLayer: ParsedLayer = new Map([...cli.layer, ...overrides.layer]);
 
@@ -212,7 +266,8 @@ export function resolveConfig(
     else file = discovered.value;
   }
   if (file !== undefined) {
-    const parsedFile = parseLayer(collectFileLayer(file.json, file.path), parseOptions);
+    const lookup = envLookup(input.env, input.host.platform);
+    const parsedFile = parseLayer(collectFileLayer(file.json, file.path, lookup), parseOptions);
     problems.push(...parsedFile.problems);
     fileLayer = parsedFile.layer;
     if (file.origin === 'dataDir' && fileLayer.has('dataDir')) {
@@ -228,7 +283,7 @@ export function resolveConfig(
 
   // OTEL sub-source: consulted below BROWSERHIVE_* env; parse failures only matter when otel is on.
   const otelOn = firstValue([cliLayer, fileLayer, env.layer], 'otel') === true;
-  const otel = parseLayer(collectOtelLayer(input.env), parseOptions);
+  const otel = parseLayer(collectedOtel, parseOptions);
   if (otelOn) problems.push(...otel.problems);
   else warnings.push(...otel.problems.map((p) => `ignoring ${p.location}: ${p.message}`));
 
@@ -273,5 +328,6 @@ export function resolveConfig(
     diagnostics: deepFreeze({ shadowLines, warnings }),
     configFilePath: file?.path,
     explicitKeys: merged.explicit,
+    referencedSecrets: deepFreeze(referencedSecretsOf(fileLayer)),
   });
 }

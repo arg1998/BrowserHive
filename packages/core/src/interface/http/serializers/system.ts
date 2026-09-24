@@ -107,7 +107,11 @@ function isRedacted(value: unknown): boolean {
   return typeof value === 'object' && value !== null && 'redacted' in value;
 }
 
-/** `GET /system/config` keys: secrets → `[REDACTED]`, shadowed values kept as rendered text. */
+/**
+ * `GET /system/config` keys: secrets → `[REDACTED]`, shadowed values kept as rendered text. The
+ * variables config-file references used are always named (`refs`); the value as written
+ * (`template`) only when the key is not redacted (spec 08 §3.1).
+ */
 export function configKeysToWire(view: ConfigView): z.input<typeof SystemConfigKey>[] {
   return CONFIG_KEYS.map((key) => {
     const entry = view[key];
@@ -116,9 +120,12 @@ export function configKeysToWire(view: ConfigView): z.input<typeof SystemConfigK
       key,
       value: secret ? REDACTED : (entry.value ?? null),
       source: entry.source,
+      ...(entry.refs !== undefined && { refs: entry.refs.map((ref) => ({ ...ref })) }),
+      ...(entry.template !== undefined && !secret && { template: entry.template }),
       shadowed: entry.shadowed.map((s) => ({
         source: s.source,
         value: secret ? REDACTED : s.value,
+        ...(s.refs !== undefined && { refs: s.refs.map((ref) => ({ ...ref })) }),
       })),
       secret,
     };
