@@ -185,7 +185,7 @@ export function sessionColumns(
       sortAliases: { channel: 'channel', owner: 'owner', persistence: 'persistence' },
       priority: 1,
       className:
-        'w-[13rem] min-w-[13rem] max-w-[18rem] py-1.5 @min-[44rem]:min-w-[14.5rem] @min-[56rem]:min-w-0 @min-[64rem]:w-[15rem]',
+        'w-[14rem] min-w-[14rem] max-w-[18rem] py-1.5 @min-[44rem]:min-w-[14.5rem] @min-[56rem]:min-w-0 @min-[64rem]:w-[15rem]',
       cell: (s) => <SessionTitleCell session={s} showOwner={options.showOwner} />,
     },
     {
