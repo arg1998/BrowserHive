@@ -194,6 +194,27 @@ export async function engineVersion(channel: ProbeChannel): Promise<string | nul
 }
 
 /**
+ * Diagnostics only: the raw Playwright error of a sandboxed launch of `channel`, so a CI summary shows
+ * the text BrowserHive's classifier has to recognise. Not a stealth or sandbox claim.
+ *
+ * @returns The first lines of the error, or null when the sandboxed launch works.
+ */
+export async function rawSandboxError(channel: ProbeChannel): Promise<string | null> {
+  try {
+    const browser = await chromium.launch({
+      channel: PLAYWRIGHT_CHANNEL[channel],
+      headless: true,
+      chromiumSandbox: true,
+    });
+    await browser.close();
+    return null;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '';
+    return message.split('\n').slice(0, 40).join('\n');
+  }
+}
+
+/**
  * Checks of plan §6 against one row's signals.
  *
  * @returns The failed checks, empty when all passed.
@@ -350,7 +371,16 @@ export async function runMatrix(options: MatrixOptions): Promise<ProbeRow[]> {
             // `sandbox=on` refusing to start is a measured outcome, not a harness failure.
             const code =
               typeof err === 'object' && err !== null && 'code' in err ? String(err.code) : null;
-            const message = err instanceof Error ? err.message : null;
+            const details: unknown =
+              typeof err === 'object' && err !== null && 'details' in err ? err.details : null;
+            const reason =
+              typeof details === 'object' && details !== null && 'reason' in details
+                ? String(details.reason)
+                : null;
+            const message =
+              err instanceof Error
+                ? `${err.message}${reason === null ? '' : ` (reason: ${reason})`}`
+                : null;
             for (const channel of spec.channels) {
               for (const sandbox of spec.modes) {
                 const row: ProbeRow = {

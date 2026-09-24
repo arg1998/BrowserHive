@@ -253,6 +253,11 @@ export class PlaywrightBrowserDriver implements BrowserDriver {
         target,
         spec.launchOptions?.chromiumSandbox === true,
         open,
+        // A launch made only to prove the sandbox was the cause is closed again at once.
+        async (proof) => {
+          await proof.context.close().catch(() => undefined);
+          await proof.browser?.close().catch(() => undefined);
+        },
       );
       ({ browser, context, page } = opened.value);
       sandboxed = opened.sandboxed;

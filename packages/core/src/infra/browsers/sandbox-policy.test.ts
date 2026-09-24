@@ -131,19 +131,45 @@ describe('sandbox=auto', () => {
     expect((await p.launch(CHROME, false, browser(true).attempt)).sandboxed).toBe(true);
   });
 
-  it('a failure that is not the sandbox is not blamed on it, and is not cached', async () => {
-    const { p } = policy('auto');
-    let first = true;
-    const flaky = async (sandbox: boolean) => {
-      if (first) {
-        first = false;
-        throw new Error('Timeout 180000ms exceeded.');
-      }
+  it('an unrecognised failure is blamed on the sandbox only because the browser starts without it', async () => {
+    const { p, logger } = policy('auto');
+    const edge: SandboxTarget = { channel: 'edge', executablePath: '/opt/microsoft/msedge/msedge' };
+    const attempts: boolean[] = [];
+    const unrecognised = async (sandbox: boolean) => {
+      attempts.push(sandbox);
+      if (sandbox)
+        throw new Error('browserType.launch: Browser closed.\n  - [err] Trace/breakpoint trap');
       return sandbox;
     };
-    expect(await p.launch(CHROME, false, flaky)).toEqual({ value: false, sandboxed: false });
-    expect(p.verdict(CHROME)).toBeUndefined();
-    expect(await p.launch(CHROME, false, flaky)).toEqual({ value: true, sandboxed: true });
+    expect(await p.launch(edge, false, unrecognised)).toEqual({ value: false, sandboxed: false });
+    expect(await p.launch(edge, false, unrecognised)).toEqual({ value: false, sandboxed: false });
+    expect(attempts).toEqual([true, false, false]);
+    expect(p.verdict(edge)?.state).toBe('unavailable');
+    expect(logger.records.filter((r) => r.level === 'warn')).toHaveLength(1);
+  });
+
+  it('a required sandbox with an unrecognised failure is confirmed, closed, and fails typed', async () => {
+    const { p } = policy('off');
+    const edge: SandboxTarget = { channel: 'edge', executablePath: '/opt/microsoft/msedge/msedge' };
+    const disposed: boolean[] = [];
+    const unrecognised = async (sandbox: boolean) => {
+      if (sandbox) throw new Error('browserType.launch: Browser closed.');
+      return sandbox;
+    };
+    const err = await p
+      .launch(edge, true, unrecognised, async (v) => {
+        disposed.push(v);
+      })
+      .catch((e: unknown) => e);
+    expect(err).toMatchObject({ code: 'SANDBOX_UNAVAILABLE', retryable: 'never' });
+    expect(disposed).toEqual([false]);
+    const broken = await p
+      .launch(CHROME, true, async () => {
+        throw new Error('crash');
+      })
+      .catch((e: unknown) => e);
+    expect(broken).toBeInstanceOf(Error);
+    expect((broken as Error).message).toBe('crash');
   });
 
   it('a browser that fails either way surfaces its own error (never swallowed)', async () => {

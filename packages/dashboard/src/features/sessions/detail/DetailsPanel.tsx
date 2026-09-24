@@ -5,7 +5,7 @@ import { KeyValue, type KeyValueItem } from '@/components/shared/KeyValue.tsx';
 import { LeaseBar } from '@/components/shared/lease-bar.tsx';
 import { RelativeTime } from '@/components/shared/RelativeTime.tsx';
 import { Panel } from '@/components/shared/Section.tsx';
-import { StatusBadge } from '@/components/shared/StatusBadge.tsx';
+import { StatusBadge, TonePill } from '@/components/shared/StatusBadge.tsx';
 import { UrlCell } from '@/components/shared/url-cell.tsx';
 import { formatNumber } from '@/lib/format/bytes.ts';
 import { formatDuration } from '@/lib/format/time.ts';
@@ -129,13 +129,28 @@ function SessionRecord({ detail }: { readonly detail: SessionDetail }) {
     {
       key: 'Browser',
       value: [
-        session.channel,
+        session.browser?.version != null
+          ? `${session.channel} ${session.browser.version}`
+          : session.channel,
         session.headless ? 'headless' : 'headed',
         session.incognito ? 'incognito' : null,
       ]
         .filter((v) => v !== null)
         .join(' · '),
     },
+    // Live sessions only: whether Chromium's sandbox is on for this browser process.
+    ...(session.browser !== undefined
+      ? [
+          {
+            key: 'Sandbox',
+            value: session.browser.sandboxed ? (
+              <TonePill entry={{ label: 'sandboxed', tone: 'success', icon: 'check' }} />
+            ) : (
+              <span className="text-muted-foreground">not sandboxed</span>
+            ),
+          },
+        ]
+      : []),
     { key: 'Persistence', value: session.persistence_mode },
     { key: 'Started', value: <RelativeTime at={session.created_at} mode="both" /> },
   );

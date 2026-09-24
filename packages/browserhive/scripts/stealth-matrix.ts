@@ -18,6 +18,7 @@ import {
   type ProbeSandbox,
   type ProbeStealth,
   parityProblems,
+  rawSandboxError,
   runMatrix,
 } from '../test/stealth/probe.ts';
 
@@ -127,10 +128,32 @@ const md = [
   '',
 ].join('\n');
 
+// Diagnostics: the raw error text of every channel whose sandbox failed, for the classifier.
+const failedChannels = [
+  ...new Set(
+    rows
+      .filter(
+        (r) =>
+          r.outcome === 'failed' ||
+          (r.sandbox !== 'off' && r.sandbox !== 'config:off' && r.sandboxed === false),
+      )
+      .map((r) => r.channel),
+  ),
+];
+const raw: string[] = [];
+for (const channel of failedChannels) {
+  const text = await rawSandboxError(channel);
+  if (text !== null)
+    raw.push(
+      `<details><summary>${channel}: raw sandboxed launch error</summary>\n\n\`\`\`\n${text}\n\`\`\`\n</details>`,
+    );
+}
+if (raw.length > 0) console.log(raw.join('\n'));
+
 const out = arg('out');
 if (out !== undefined) writeFileSync(out, `${JSON.stringify({ facts, rows, parity }, null, 2)}\n`);
 const summary = arg('summary');
-if (summary !== undefined && summary !== '') appendFileSync(summary, `${md}\n`);
+if (summary !== undefined && summary !== '') appendFileSync(summary, `${md}\n${raw.join('\n')}\n`);
 console.log(md);
 
 const failedChecks = rows.some((r) => r.outcome === 'launched' && r.problems.length > 0);

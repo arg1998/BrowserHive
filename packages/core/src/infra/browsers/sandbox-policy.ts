@@ -3,7 +3,6 @@
 import type { Channel, SandboxMode } from '@browserhive/contracts/enums';
 import type { AppError } from '../../kernel/errors/app-error.ts';
 import { isAppError } from '../../kernel/errors/app-error.ts';
-import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { Clock } from '../../ports/clock.ts';
 import type { Logger } from '../../ports/logger.ts';
 import { isSandboxFailure, sandboxFailureReason } from './sandbox.ts';
@@ -127,10 +126,11 @@ export class SandboxPolicy {
     target: SandboxTarget,
     agentRequested: boolean,
     attempt: (sandbox: boolean) => Promise<T>,
+    dispose: (value: T) => Promise<void> = async () => undefined,
   ): Promise<SandboxedLaunch<T>> {
     const required: SandboxRequirement | null =
       this.deps.mode === 'on' ? 'config' : agentRequested ? 'launch_options' : null;
-    if (required !== null) return this.launchRequired(target, required, attempt);
+    if (required !== null) return this.launchRequired(target, required, attempt, dispose);
     if (this.deps.mode === 'off' || this.deps.root) {
       return { value: await attempt(false), sandboxed: false };
     }
@@ -141,6 +141,7 @@ export class SandboxPolicy {
     target: SandboxTarget,
     requiredBy: SandboxRequirement,
     attempt: (sandbox: boolean) => Promise<T>,
+    dispose: (value: T) => Promise<void>,
   ): Promise<SandboxedLaunch<T>> {
     const known = this.verdict(target);
     if (known?.state === 'unavailable') {
@@ -152,7 +153,18 @@ export class SandboxPolicy {
       this.record(target, { state: 'works' });
       return { value, sandboxed: true };
     } catch (err) {
-      if (isAppError(err) || !isSandboxFailure(err)) throw err;
+      if (isAppError(err)) throw err;
+      if (!isSandboxFailure(err)) {
+        // Not a failure Chrome names as the sandbox (Edge's differs): the same browser starting
+        // without it is the proof. It is closed again at once; the session never runs unsandboxed.
+        let confirmed: T;
+        try {
+          confirmed = await attempt(false);
+        } catch {
+          throw err;
+        }
+        await dispose(confirmed).catch(() => undefined);
+      }
       const reason = sandboxFailureReason(err);
       this.record(target, { state: 'unavailable', reason });
       throw this.error(target, reason, requiredBy, err);
@@ -191,14 +203,9 @@ export class SandboxPolicy {
         return { value, sandboxed: true };
       } catch (err) {
         if (isAppError(err)) throw err;
-        if (isSandboxFailure(err)) return await this.fallBack(target, err, attempt);
-        // Not recognisably the sandbox: retry once without it, but do not blame the sandbox.
-        const value = await attempt(false);
-        this.log.debug('sandboxed launch retried', {
-          channel: target.channel,
-          err: serializeError(err),
-        });
-        return { value, sandboxed: false };
+        // The sandbox is blamed only if the same browser then starts without it (as the probe
+        // does); when that fails too, its own error surfaces and nothing is cached.
+        return await this.fallBack(target, err, attempt);
       }
     } finally {
       this.probing.delete(key);
