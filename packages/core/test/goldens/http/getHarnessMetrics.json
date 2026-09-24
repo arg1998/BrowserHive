@@ -1,0 +1,33 @@
+{
+  "data": [
+    {
+      "harness": "claude-code",
+      "label": "Claude Code",
+      "sessions": 2,
+      "sessions_live": 1,
+      "tool_calls": 5,
+      "errors": 1
+    },
+    {
+      "harness": "nightly-scraper",
+      "label": "nightly-scraper",
+      "sessions": 1,
+      "sessions_live": 0,
+      "tool_calls": 2,
+      "errors": 0
+    },
+    {
+      "harness": "unknown",
+      "label": "Unknown",
+      "sessions": 1,
+      "sessions_live": 0,
+      "tool_calls": 0,
+      "errors": 0
+    }
+  ],
+  "window": {
+    "since": 0,
+    "until": 1700000000000
+  },
+  "now": 1700000000000
+}

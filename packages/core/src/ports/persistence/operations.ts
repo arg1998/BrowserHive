@@ -63,9 +63,17 @@ export type McpConnectionPatch = Partial<
     | 'clientVersion'
     | 'protocolVersion'
     | 'capabilities'
+    | 'clientTitle'
+    | 'workspace'
     | 'agentName'
     | 'model'
+    | 'modelSource'
     | 'harness'
+    | 'harnessSource'
+    | 'conflicts'
+    | 'meta'
+    | 'ip'
+    | 'userAgent'
     | 'lastSeenAt'
     | 'closedAt'
   >
@@ -81,6 +89,14 @@ export interface McpConnectionRepository {
   get(connectionId: string): Promise<McpConnectionRecord | null>;
   /** Connections not yet closed, most recently seen first. */
   listOpen(): Promise<readonly McpConnectionRecord[]>;
+  /**
+   * Open connections (most recently seen first), then closed ones (most recently seen first), up
+   * to `limit`, each with the number of sessions it launched; `live` counts every open row.
+   */
+  listRecent(limit: number): Promise<{
+    readonly rows: readonly (McpConnectionRecord & { readonly sessions: number })[];
+    readonly live: number;
+  }>;
   /** Closes every open connection (startup recovery); returns the count. */
   closeAll(at: number): Promise<number>;
 }

@@ -1,6 +1,7 @@
 /** @module interface/mcp/dispatcher — the one pipeline every tool call runs through: resolve → span + request context → parse → policies → execute → map error → classify → shape → redact → observe exactly once (spec 02 §2.3). */
 
 import { ERROR_REGISTRY } from '@browserhive/contracts/errors';
+import { UNKNOWN_HARNESS } from '@browserhive/contracts/harness';
 import type { ToolName } from '@browserhive/contracts/tools';
 import { isSpanContextValid, SpanStatusCode, type Tracer, trace } from '@opentelemetry/api';
 import type { z } from 'zod';
@@ -14,6 +15,7 @@ import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type { ToolCallContext } from './context.ts';
 import type { PolicyContext, ToolFacts, ToolResult } from './definition.ts';
+import type { ResolvedIdentity } from './identity.ts';
 import { publishObservation, type TerminalOutcome } from './observe.ts';
 import type { ToolRegistry } from './registry.ts';
 import type { ToolServices } from './services.ts';
@@ -48,11 +50,23 @@ export interface DispatchCall {
   readonly connectionId: string | null;
   /** Self-reported client identity; absent or `null` when unknown. */
   readonly client?: SessionClientInfo | null;
+  /** The identity resolved for this call (02 §1.4); absent when the server has none (tests, embedders). */
+  readonly identity?: ResolvedIdentity;
   /** The request's `_meta` (trace parent, progress token). */
   readonly meta?: Readonly<Record<string, unknown>>;
   readonly signal: AbortSignal;
   /** Sends `notifications/progress`; absent when the client supplied no progress token. */
   readonly sendProgress?: (report: ProgressReport) => Promise<void>;
+}
+
+/** Span attributes of the caller's identity (10 §6); `model` only when one was reported. */
+export function identityAttributes(identity: ResolvedIdentity | undefined): Record<string, string> {
+  if (identity === undefined) return {};
+  return {
+    'browserhive.harness': identity.harness,
+    'browserhive.harness_source': identity.harnessSource,
+    ...(identity.model !== null && { 'browserhive.model': identity.model }),
+  };
 }
 
 function issuePath(path: readonly PropertyKey[]): string {
@@ -112,6 +126,7 @@ export class ToolDispatcher {
           'browserhive.tool': name,
           'browserhive.event_id': eventId,
           'browserhive.principal': call.principal.subject,
+          ...identityAttributes(call.identity),
         },
       },
       parent,
@@ -254,7 +269,13 @@ export class ToolDispatcher {
     const tabId = facts?.pageVisit?.tabId ?? tabArg ?? resolved?.tabs.activeTabId() ?? null;
     // `toolCalls`/`errors` are counted from the published `tool.called` (app/sessions/session-counters).
     const durationMs = Math.max(0, services.clock.now() - ids.ts);
-    log.info('tool called', { ok, durationMs, ...(errorCode !== null && { errorCode }) });
+    const harness = call.identity?.harness ?? UNKNOWN_HARNESS;
+    log.info('tool called', {
+      ok,
+      durationMs,
+      harness,
+      ...(errorCode !== null && { errorCode }),
+    });
     return {
       shaped,
       eventId: ids.eventId,
@@ -263,6 +284,7 @@ export class ToolDispatcher {
       tabId,
       connectionId: call.connectionId,
       principal: call.principal.subject,
+      harness,
       rawArgs,
       ok,
       errorCode,

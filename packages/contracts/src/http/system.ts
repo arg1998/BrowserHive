@@ -10,7 +10,18 @@ import {
   Transport,
 } from '../enums/index.ts';
 import { ConnectionId, SessionId } from '../ids/index.ts';
-import { Bytes, Count, csv, DurationMs, EpochMs, listQuery, page, sortable } from './common.ts';
+import {
+  Bytes,
+  Count,
+  csv,
+  DurationMs,
+  EpochMs,
+  listQuery,
+  page,
+  QueryInt,
+  sortable,
+} from './common.ts';
+import { HarnessSlug } from './sessions.ts';
 
 /** One degradation row (`system_events`, spec 10 §3), aggregated by code + details fingerprint. */
 export const SystemEvent = z.object({
@@ -225,6 +236,70 @@ export type RealtimeConnection = z.infer<typeof RealtimeConnection>;
 export const SystemRealtimeResponse = z.object({ connections: z.array(RealtimeConnection) });
 /** `GET /system/realtime` body. */
 export type SystemRealtimeResponse = z.infer<typeof SystemRealtimeResponse>;
+
+/** A signal that named a different harness than the one that won (spec 02 §1.4). */
+export const HarnessConflict = z.object({
+  /** Source of the losing signal (`client_info`, `user_agent`, …). */
+  source: z.string(),
+  /** Its raw value (a clientInfo name, a User-Agent, a declared value). */
+  value: z.string(),
+  /** The harness it named. */
+  harness: HarnessSlug,
+});
+/** A signal that named a different harness than the one that won. */
+export type HarnessConflict = z.infer<typeof HarnessConflict>;
+
+/** One MCP connection (an HTTP MCP session or a stdio process) with its resolved identity (D-30). */
+export const McpConnectionRow = z.object({
+  connection_id: z.string(),
+  transport: Transport,
+  principal: z.string().nullable(),
+  live: z.boolean(),
+  harness: HarnessSlug,
+  harness_label: z.string(),
+  harness_source: z.string(),
+  model: z.string().nullable(),
+  model_source: z.string().nullable(),
+  workspace: z.string().nullable(),
+  client_name: z.string().nullable(),
+  client_version: z.string().nullable(),
+  client_title: z.string().nullable(),
+  protocol_version: z.string().nullable(),
+  user_agent: z.string().nullable(),
+  ip: z.string().nullable(),
+  connected_at: EpochMs,
+  last_seen_at: EpochMs,
+  closed_at: EpochMs.nullable(),
+  /** Browser sessions this connection launched. */
+  sessions: Count,
+  conflicts: z.array(HarnessConflict),
+  /** The capped meta bag (display only). */
+  meta: z.record(z.string(), z.string()),
+});
+/** One MCP connection. */
+export type McpConnectionRow = z.infer<typeof McpConnectionRow>;
+
+/** Default and maximum rows of `GET /system/mcp/connections`. */
+export const MCP_CONNECTIONS_LIMIT_DEFAULT = 50;
+/** Maximum rows of `GET /system/mcp/connections`. */
+export const MCP_CONNECTIONS_LIMIT_MAX = 200;
+
+/** `GET /system/mcp/connections` query. */
+export const McpConnectionsQuery = z.strictObject({
+  limit: QueryInt.min(1).max(MCP_CONNECTIONS_LIMIT_MAX).default(MCP_CONNECTIONS_LIMIT_DEFAULT),
+});
+/** `GET /system/mcp/connections` query. */
+export type McpConnectionsQuery = z.infer<typeof McpConnectionsQuery>;
+
+/** `GET /system/mcp/connections` body: live connections first, then recent closed ones. */
+export const McpConnectionsResponse = z.object({
+  connections: z.array(McpConnectionRow),
+  /** Open connections (all of them, not only those in `connections`). */
+  live: Count,
+  now: EpochMs,
+});
+/** `GET /system/mcp/connections` body. */
+export type McpConnectionsResponse = z.infer<typeof McpConnectionsResponse>;
 
 /** Per-module log level spec grammar: `info` or `info,sessions=debug,persistence=trace`. */
 export const LOG_LEVEL_SPEC_RE =

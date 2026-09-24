@@ -234,6 +234,7 @@ export type RepositoryPorts = Pick<
   | 'blocklistAudit'
   | 'systemEvents'
   | 'operatorActions'
+  | 'mcpConnections'
 >;
 
 /** Session closing verb used by terminate/delete/bulk. */
@@ -246,6 +247,7 @@ export type HttpEvents = Pick<DomainEvents, 'session.removed'>;
 export type McpRequestHandler = (
   request: Request,
   principal: RequestPrincipal,
+  context?: { readonly clientIp?: string | null },
 ) => Promise<Response>;
 
 /** The narrow record handlers receive (spec 03 §1.2). */

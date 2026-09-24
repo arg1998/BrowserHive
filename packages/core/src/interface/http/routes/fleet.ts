@@ -1,9 +1,12 @@
 /** @module interface/http/routes/fleet — cross-session tool calls, pages, activity and tool metrics (spec 03 §4.3). */
 
+import { harnessLabel } from '@browserhive/contracts/harness';
 import {
   ACTIVITY_DEFAULT_WINDOW_MS,
   ActivityQuery,
   ActivityResponse,
+  HarnessMetricsQuery,
+  HarnessMetricsResponse,
   PageDomainsQuery,
   PageDomainsResponse,
   PagesPage,
@@ -119,6 +122,31 @@ export const FLEET_ROUTES = [
           p99_ms: r.p99Ms,
           max_ms: r.maxMs,
         })),
+        now: ctx.now,
+      });
+    },
+  }),
+  defineRoute({
+    operationId: 'getHarnessMetrics',
+    tags: ['activity'],
+    summary:
+      'Sessions and tool calls per agent harness over a window (self-reported identity, D-30).',
+    request: { query: HarnessMetricsQuery },
+    responses: { 200: HarnessMetricsResponse },
+    async handler({ input, services, ctx }) {
+      const until = input.query.until ?? ctx.now;
+      const since = input.query.since ?? until - ACTIVITY_DEFAULT_WINDOW_MS;
+      const rows = await services.analytics.harnessMetrics({ since, until });
+      return reply(200, {
+        data: rows.map((r) => ({
+          harness: r.harness,
+          label: harnessLabel(r.harness),
+          sessions: r.sessions,
+          sessions_live: r.sessionsLive,
+          tool_calls: r.toolCalls,
+          errors: r.errors,
+        })),
+        window: { since, until },
         now: ctx.now,
       });
     },

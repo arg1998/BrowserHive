@@ -116,7 +116,7 @@ export function createHttpApp(deps: HttpAppDeps): HttpApp {
     if (principal === null) throw new AppError('UNAUTHORIZED', {});
     c.set('principal', principal);
     disableIdleTimeout(c);
-    return deps.mcp(c.req.raw, principal);
+    return deps.mcp(c.req.raw, principal, { clientIp: c.get('clientIp') });
   });
 
   app.get(`${API_PREFIX}${WS_PATH}`, upgradeHandler(deps.adminAuthenticator));

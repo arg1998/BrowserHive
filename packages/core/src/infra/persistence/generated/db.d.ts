@@ -118,19 +118,25 @@ export interface McpConnections {
   agent_name: string | null;
   capabilities_json: string | null;
   client_name: string | null;
+  client_title: string | null;
   client_version: string | null;
   closed_at: number | null;
   connected_at: number;
   connection_id: string;
   harness: string | null;
+  harness_conflicts_json: string | null;
+  harness_source: string | null;
   ip: string | null;
   last_seen_at: number;
   mcp_session_id: string | null;
+  meta_json: string | null;
   model: string | null;
+  model_source: string | null;
   principal_id: string | null;
   protocol_version: string | null;
   transport: string;
   user_agent: string | null;
+  workspace: string | null;
 }
 
 export interface Meta {
@@ -256,6 +262,7 @@ export interface Sessions {
   disable_evaluate: Generated<number>;
   engine: Generated<string>;
   fingerprint: number;
+  harness: string | null;
   headless: number;
   humanize: number;
   identity_json: string | null;

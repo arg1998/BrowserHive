@@ -319,6 +319,11 @@ export const ROUTE_CASES: readonly RouteCase[] = [
     invalid: { path: api('/metrics/tools?group_by=nope') },
   },
   {
+    operationId: 'getHarnessMetrics',
+    success: { path: api('/metrics/harnesses'), status: 200 },
+    invalid: { path: api('/metrics/harnesses?since=soon') },
+  },
+  {
     operationId: 'listPages',
     success: { path: api('/pages'), status: 200 },
     invalid: { path: api('/pages?sort=bogus') },
@@ -540,6 +545,11 @@ export const ROUTE_CASES: readonly RouteCase[] = [
     operationId: 'getSystemRealtime',
     success: { path: api('/system/realtime'), status: 200 },
     invalid: null,
+  },
+  {
+    operationId: 'listMcpConnections',
+    success: { path: api('/system/mcp/connections'), status: 200 },
+    invalid: { path: api('/system/mcp/connections?limit=0') },
   },
   {
     operationId: 'setLogLevel',

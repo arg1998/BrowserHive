@@ -1,6 +1,7 @@
 /** @module composition/phases/listeners-http — the http front door: realtime hub, `Bun.serve` on host/port (port 0 supported), MCP Streamable HTTP handler and the Hono app on one port (D-02). */
 
 import type { ServerConfig } from '@browserhive/contracts/config';
+import { IDENTITY_ENV_VARS } from '@browserhive/contracts/config';
 import { RealtimeConnection } from '@browserhive/contracts/http';
 import {
   AppError,
@@ -118,6 +119,14 @@ export async function openHttpListener(
     );
   }
   const log = logger.child({ module: 'http' });
+  const identityVars = IDENTITY_ENV_VARS.filter((name) => (ctx.input.env[name] ?? '') !== '');
+  if (identityVars.length > 0) {
+    // Per-process identity describes a stdio client; HTTP clients declare with headers (08 §2.2).
+    log.info('identity env ignored', {
+      variables: identityVars.join(', '),
+      hint: 'HTTP clients declare identity with X-BH-Agent-Harness, X-BH-Agent-Model and X-BH-Workspace',
+    });
+  }
   const timers = createTimers((err) =>
     log.warn('timer callback failed', { err: serializeError(err) }),
   );
@@ -253,7 +262,7 @@ export async function openHttpListener(
       },
       adminAuthenticator: domain.adminAuthenticator,
       mcpAuthenticator: domain.mcpAuthenticator,
-      mcp: (request, principal) => handler.handleMcpRequest(request, principal),
+      mcp: (request, principal, context) => handler.handleMcpRequest(request, principal, context),
       clock: ctx.clock,
       ids: domain.ids,
       logger,

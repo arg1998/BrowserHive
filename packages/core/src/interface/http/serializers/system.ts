@@ -1,8 +1,10 @@
 /** @module interface/http/serializers/system — degradations, notifications, log records and config provenance → wire (spec 03 §4.7–4.8). */
 
 import { CONFIG_KEYS } from '@browserhive/contracts/config';
+import { harnessLabel, normalizeHarness, UNKNOWN_HARNESS } from '@browserhive/contracts/harness';
 import type {
   LogRecord,
+  McpConnectionRow,
   Notification,
   SystemConfigKey,
   SystemEvent,
@@ -11,7 +13,11 @@ import { LogTransport, REDACTED, SerializedError } from '@browserhive/contracts/
 import { parseSessionId } from '@browserhive/contracts/ids';
 import type { z } from 'zod';
 import type { ConfigView } from '../../../app/config/provenance-view.ts';
-import type { NotificationRecord, SystemEventRecord } from '../../../ports/persistence/records.ts';
+import type {
+  McpConnectionRecord,
+  NotificationRecord,
+  SystemEventRecord,
+} from '../../../ports/persistence/records.ts';
 import type { LogEntry } from '../services.ts';
 
 /** One degradation row. */
@@ -130,4 +136,40 @@ export function configKeysToWire(view: ConfigView): z.input<typeof SystemConfigK
       secret,
     };
   });
+}
+
+/**
+ * One `mcp_connections` row as the wire `McpConnectionRow` (03 §4.7, D-30). A row written before
+ * schema v3 holds the raw header value and no source: it is normalised and marked `header`.
+ */
+export function mcpConnectionToWire(
+  row: McpConnectionRecord & { readonly sessions: number },
+): z.input<typeof McpConnectionRow> {
+  const harness =
+    row.harness === null ? UNKNOWN_HARNESS : (normalizeHarness(row.harness) ?? UNKNOWN_HARNESS);
+  const source = row.harnessSource ?? (row.harness === null ? 'none' : 'header');
+  return {
+    connection_id: row.connectionId,
+    transport: row.transport,
+    principal: row.principalId,
+    live: row.closedAt === null,
+    harness,
+    harness_label: harnessLabel(harness),
+    harness_source: source,
+    model: row.model,
+    model_source: row.modelSource ?? (row.model === null ? null : 'header'),
+    workspace: row.workspace ?? row.agentName,
+    client_name: row.clientName,
+    client_version: row.clientVersion,
+    client_title: row.clientTitle,
+    protocol_version: row.protocolVersion,
+    user_agent: row.userAgent,
+    ip: row.ip,
+    connected_at: row.connectedAt,
+    last_seen_at: row.lastSeenAt,
+    closed_at: row.closedAt,
+    sessions: row.sessions,
+    conflicts: row.conflicts.map((c) => ({ source: c.source, value: c.value, harness: c.harness })),
+    meta: { ...row.meta },
+  };
 }

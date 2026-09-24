@@ -22,6 +22,7 @@ export type {
   AuthSessionRecord,
   CredentialRecord,
   GrantRecord,
+  HarnessConflictRecord,
   McpConnectionRecord,
   NewAuthEvent,
   PrincipalRecord,
@@ -92,6 +93,8 @@ export interface SessionRecord {
   readonly lastUrl: string | null;
   readonly launchMs: number | null;
   readonly config: JsonObject;
+  /** The launch harness (spec 02 §1.4), written once; `null` for sessions created before schema v3. */
+  readonly harness: string | null;
 }
 
 /** Mutable subset of {@link SessionRecord} accepted by `SessionRepository.update`. */

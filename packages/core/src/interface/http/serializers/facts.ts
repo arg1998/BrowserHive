@@ -47,6 +47,7 @@ export function toolCallToWire(row: ToolCallListRow, detail: boolean): z.input<t
     ts: row.ts,
     trace_id: row.traceId,
     has_screenshot: row.hasScreenshot,
+    harness: row.harness,
     ...(detail && { args_json: row.args, result_text: row.resultText }),
   };
 }
@@ -137,6 +138,7 @@ export function toolCallsQueryToRepo(
     ...(query.tool !== undefined && { tools: query.tool }),
     ...(query.ok !== undefined && { ok: query.ok }),
     ...(query.error_code !== undefined && { errorCodes: query.error_code }),
+    ...('harness' in query && query.harness !== undefined && { harnesses: query.harness }),
     ...(query.q !== undefined && { q: query.q }),
     ...(query.since !== undefined && { since: query.since }),
     ...(query.until !== undefined && { until: query.until }),

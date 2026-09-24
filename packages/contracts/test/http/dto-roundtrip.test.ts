@@ -78,6 +78,7 @@ const cases: ReadonlyArray<readonly [string, z.ZodType, unknown]> = [
         channels: [{ value: 'chromium', count: 1 }],
         persistence_modes: [{ value: 'memory', count: 1 }],
         states: [{ value: 'live', count: 1 }],
+        harnesses: [{ value: 'claude-code', count: 1 }],
       },
     },
   ],

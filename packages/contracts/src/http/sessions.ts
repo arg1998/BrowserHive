@@ -38,12 +38,32 @@ export const SessionCounts = z.object({
 /** Per-session counters. */
 export type SessionCounts = z.infer<typeof SessionCounts>;
 
-/** Self-reported MCP client metadata (dashboard-only, never for access control). */
+/** A harness slug: a known slug, `unknown`, `other` or a sanitised unrecognised value; never an enum (D-30). */
+export const HarnessSlug = z.string().min(1).max(64);
+
+/**
+ * Self-reported MCP client identity (spec 02 §1.4; observability only, never for access control,
+ * D-30). Absent values are omitted. `agent_name` is the workspace, kept for compatibility.
+ */
 export const SessionClient = z.object({
   name: z.string().nullable(),
   version: z.string().nullable(),
   agent_name: z.string().optional(),
   model: z.string().optional(),
+  /** Resolved harness slug. */
+  harness: HarnessSlug.optional(),
+  /** Display label of `harness`. */
+  harness_label: z.string().optional(),
+  /** How `harness` was recognised (`env|header|injected_env|url|meta|client_info|user_agent|none`; open). */
+  harness_source: z.string().optional(),
+  /** Where `model` came from (`header|env|meta`). */
+  model_source: z.string().optional(),
+  workspace: z.string().optional(),
+  /** `clientInfo.title`. */
+  title: z.string().optional(),
+  protocol_version: z.string().optional(),
+  /** The capped meta bag (display only). */
+  meta: z.record(z.string(), z.string()).optional(),
 });
 /** Self-reported MCP client metadata. */
 export type SessionClient = z.infer<typeof SessionClient>;
@@ -87,6 +107,8 @@ export const SessionSummary = z.object({
   proxy_label: z.string().nullable(),
   counts: SessionCounts,
   has_live_viewers: z.boolean(),
+  /** The harness that launched the session, fixed at launch; `unknown` when nothing identified it. */
+  harness: HarnessSlug,
   client: SessionClient.nullable(),
 });
 /** The one session shape used by lists, detail and WS. */
@@ -114,6 +136,7 @@ export const SessionSortKey = sortable([
   'owner',
   'persistence_mode',
   'blocked',
+  'harness',
 ]);
 /** Sort keys accepted by `GET /sessions`. */
 export type SessionSortKey = z.infer<typeof SessionSortKey>;
@@ -128,6 +151,7 @@ export const SessionsQuery = listQuery({
     owner: z.string().min(1).max(128).optional(),
     channel: csv(Channel),
     persistence_mode: csv(PersistenceMode),
+    harness: csv(HarnessSlug),
     q: QueryText.optional(),
     ...windowQuery,
   },
@@ -141,6 +165,7 @@ export const SessionFacets = z.object({
   channels: z.array(Facet),
   persistence_modes: z.array(Facet),
   states: z.array(Facet),
+  harnesses: z.array(Facet),
 });
 /** Facets returned with the session list. */
 export type SessionFacets = z.infer<typeof SessionFacets>;

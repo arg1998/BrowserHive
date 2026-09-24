@@ -1,13 +1,15 @@
-/** @module features/overview/OverviewPage — fleet health: header + range, degradations callout, KPI row, activity chart, then two columns from 1280px (recent sessions + websites visited | recent failures + most visited domains) (spec 04 §12.1) */
+/** @module features/overview/OverviewPage — fleet health: header + range, degradations callout, KPI row, activity chart, then two columns from 1280px (recent sessions + websites visited | recent failures + most visited domains + harnesses) (spec 04 §12.1) */
 import { useTopic } from '@/app/providers/SocketProvider.tsx';
 import { ErrorState } from '@/components/shared/ErrorState.tsx';
 import { PageHeader } from '@/components/shared/PageHeader.tsx';
 import { TimeRangeControl } from '@/components/shared/time-range-control.tsx';
+import { HarnessesCard } from '@/features/harness/HarnessesCard.tsx';
 import { TopDomainsCard } from '@/features/websites/components/TopDomainsCard.tsx';
 import { toAppError } from '@/lib/api/errors.ts';
 import { useSearchState } from '@/lib/search/use-search-state.ts';
 import {
   useActivity,
+  useHarnessMetrics,
   useRecentFailures,
   useRecentPages,
   useRecentSessions,
@@ -52,6 +54,7 @@ export function OverviewPage() {
   const recentSessions = useRecentSessions();
   const failures = useRecentFailures(window);
   const domains = useTopDomains(window, TOP_DOMAINS);
+  const harnesses = useHarnessMetrics(window);
   const vaultEnabled = system.data?.vault.enabled === true;
   const vaultFills = useVaultFills(window, vaultEnabled);
   useTopic('sessions');
@@ -129,6 +132,7 @@ export function OverviewPage() {
             top={TOP_DOMAINS}
             hrefFor={(domain) => domainHref(domain, search)}
           />
+          <HarnessesCard query={harnesses} rangeLabel={window.label} window={window} />
         </div>
       </div>
     </div>

@@ -308,8 +308,8 @@ All spans use `@opentelemetry/api`'s tracer `browserhive`; attributes use the `b
 
 | Span | Attributes |
 |---|---|
-| `mcp.tool_call` (root for a tool call) | `browserhive.tool`, `browserhive.session_id`, `browserhive.tab_id`, `browserhive.principal`, `browserhive.event_id`, `browserhive.ok`, `browserhive.error_code`, `browserhive.result_bytes` |
-| `session.create` + children `session.validate`, `session.admit`, `session.reserve`, `session.prepare_profile`, `session.resolve_identity`, `session.launch`, `session.install_policies`, `session.start_tracing`, `session.apply_identity`, `session.register` | `browserhive.session_id`, `browserhive.channel`, `browserhive.stealth`, `browserhive.persistence_mode`, `browserhive.phase_ms` |
+| `mcp.tool_call` (root for a tool call) | `browserhive.tool`, `browserhive.session_id`, `browserhive.tab_id`, `browserhive.principal`, `browserhive.event_id`, `browserhive.ok`, `browserhive.error_code`, `browserhive.result_bytes`, `browserhive.harness`, `browserhive.harness_source`, `browserhive.model` (only when reported) |
+| `session.create` + children `session.validate`, `session.admit`, `session.reserve`, `session.prepare_profile`, `session.resolve_identity`, `session.launch`, `session.install_policies`, `session.start_tracing`, `session.apply_identity`, `session.register` | `browserhive.session_id`, `browserhive.channel`, `browserhive.stealth`, `browserhive.persistence_mode`, `browserhive.phase_ms`, `browserhive.harness`, `browserhive.harness_source`, `browserhive.model` (only when reported) |
 | `session.close` | `browserhive.reason` |
 | `browser.launch` | `browserhive.driver` (`playwright`/`patchright`), `browserhive.channel`, `browserhive.headless` |
 | `page.navigate` | `url.full` (sanitized), `http.response.status_code`, `browserhive.wait_until` |
@@ -331,9 +331,9 @@ All spans use `@opentelemetry/api`'s tracer `browserhive`; attributes use the `b
 
 | Instrument | Type | Attributes |
 |---|---|---|
-| `browserhive.tool_calls` | counter | `tool`, `ok`, `error_code` |
+| `browserhive.tool_calls` | counter | `tool`, `ok`, `error_code`, `harness` (folded, below) |
 | `browserhive.tool_call.duration` | histogram (ms) | `tool` |
-| `browserhive.sessions.active` | up-down counter | `state` |
+| `browserhive.sessions.active` | up-down counter | `harness` (folded, below) |
 | `browserhive.session.launch.duration` | histogram (ms) | `channel`, `stealth` |
 | `browserhive.session.lifetime` | histogram (ms) | `closed_reason` |
 | `browserhive.ws.connections` | up-down counter | — |
@@ -351,6 +351,8 @@ All spans use `@opentelemetry/api`'s tracer `browserhive`; attributes use the `b
 | `browserhive.process.*` | gauges: rss, heap, event-loop lag (sampled) | — |
 
 The same registry backs `/api/v1/system` figures; with `--otel` off, the in-process meter provider is the SDK's no-op.
+
+**Cardinality rule for client identity (D-30).** `harness` is a metric attribute only on `browserhive.tool_calls` and `browserhive.sessions.active`, and only as `metricHarness(slug)`: the known slug table of `contracts/harness` (including `unknown` and `other`), with every other value folded into `other`, so it adds at most that many series per existing combination. It is never an attribute of `browserhive.tool_call.duration` (a histogram already split by 43 tools). `model`, `workspace`, `harness_source`, client names, `User-Agent` and meta-bag keys or values are never metric attributes; spans carry `browserhive.harness`, `browserhive.harness_source` and `browserhive.model` because a span is one event. The `tool called` log line carries `harness` as a field.
 
 ---
 

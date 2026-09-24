@@ -19,6 +19,8 @@ export interface TerminalOutcome {
   readonly tabId: string | null;
   readonly connectionId: string | null;
   readonly principal: string;
+  /** The harness resolved for this call (`unknown` when none). */
+  readonly harness: string;
   readonly rawArgs: unknown;
   readonly ok: boolean;
   readonly errorCode: string | null;
@@ -88,6 +90,7 @@ export function buildObservation(outcome: TerminalOutcome): ToolObservation {
     durationMs: outcome.durationMs,
     ts: outcome.ts,
     principal: outcome.principal,
+    harness: outcome.harness,
     traceId: outcome.traceId,
     spanId: outcome.spanId,
     seq: outcome.seq,
@@ -118,6 +121,7 @@ export function publishObservation(
       ts: observation.ts,
       trace_id: observation.traceId,
       has_screenshot: outcome.facts?.screenshot !== undefined,
+      harness: observation.harness,
     });
     services.bus.publish('tool.called', {
       type: 'tool.called',

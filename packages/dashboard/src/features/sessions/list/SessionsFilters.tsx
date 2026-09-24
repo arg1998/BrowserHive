@@ -1,4 +1,4 @@
-/** @module features/sessions/list/SessionsFilters — FilterBar for `/sessions`: View toggle group, Owner select, Channel/Persistence chips with facet counts, search, active tokens (spec 04 §12.2) */
+/** @module features/sessions/list/SessionsFilters — FilterBar for `/sessions`: View toggle group, Owner select, Channel/Persistence/Harness chips with facet counts, search, active tokens (spec 04 §12.2) */
 import type { SessionFacets } from '@browserhive/contracts/http';
 import {
   type FacetChip,
@@ -8,6 +8,7 @@ import {
 } from '@/components/shared/FilterBar.tsx';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group.tsx';
 import { formatAbsoluteShort } from '@/lib/format/time.ts';
+import { harnessLabel } from '@/lib/harness.ts';
 import type { SessionsSearch } from '../search.ts';
 
 /** View options (segmented control). */
@@ -47,6 +48,13 @@ export function SessionsFilters({
       label: 'Persistence',
       options: facets?.persistence_modes ?? [],
       selected: search.persistence ?? [],
+    },
+    {
+      param: 'harness',
+      label: 'Harness',
+      options: facets?.harnesses ?? [],
+      selected: search.harness ?? [],
+      format: harnessLabel,
     },
   ].filter((chip) => chip.options.length > 1 || chip.selected.length > 0);
   const tokens: FilterToken[] = [];

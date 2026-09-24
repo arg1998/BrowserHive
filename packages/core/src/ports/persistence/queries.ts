@@ -56,7 +56,8 @@ export type SessionSortKey =
   | 'closed_at'
   | 'owner'
   | 'persistence_mode'
-  | 'blocked';
+  | 'blocked'
+  | 'harness';
 
 /** Filters of `GET /sessions`. */
 export interface SessionListQuery extends PageQuery, TimeWindow {
@@ -67,6 +68,8 @@ export interface SessionListQuery extends PageQuery, TimeWindow {
   readonly owner?: string;
   readonly channels?: readonly SessionChannel[];
   readonly persistenceModes?: readonly PersistenceMode[];
+  /** Launch harness slugs; `unknown` also matches sessions without one. */
+  readonly harnesses?: readonly string[];
   /** Free text over slug and session id. */
   readonly q?: string;
   readonly sort?: SessionSortKey;
@@ -78,6 +81,8 @@ export interface SessionFacets {
   readonly channels: readonly FacetCount[];
   readonly persistenceModes: readonly FacetCount[];
   readonly states: readonly FacetCount[];
+  /** Launch harness, `unknown` for sessions without one. */
+  readonly harnesses: readonly FacetCount[];
 }
 
 /** One facet value with its row count. */
@@ -96,6 +101,8 @@ export interface ToolCallListQuery extends PageQuery, TimeWindow {
   /** `true`: only calls with an `error_code` (hard and soft failures); `false`: only calls without. */
   readonly hasError?: boolean;
   readonly errorCodes?: readonly string[];
+  /** Harness slugs of the call (as in `ToolCallListRow.harness`). */
+  readonly harnesses?: readonly string[];
   /** Free text over tool, error code, error message and tab id. */
   readonly q?: string;
   readonly sort?: 'ts' | 'duration_ms';

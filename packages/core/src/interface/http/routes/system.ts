@@ -1,6 +1,8 @@
 /** @module interface/http/routes/system — system info, config provenance, realtime, log level, degradations (spec 03 §4.7). */
 
 import {
+  McpConnectionsQuery,
+  McpConnectionsResponse,
   SetLogLevelRequest,
   SetLogLevelResponse,
   SystemConfigResponse,
@@ -11,7 +13,7 @@ import {
 } from '@browserhive/contracts/http';
 import { defineRoute, reply } from '../define-route.ts';
 import { envelope, pagingOf } from '../serializers/page.ts';
-import { configKeysToWire, systemEventToWire } from '../serializers/system.ts';
+import { configKeysToWire, mcpConnectionToWire, systemEventToWire } from '../serializers/system.ts';
 
 const tags = ['system'];
 
@@ -46,6 +48,22 @@ export const SYSTEM_ROUTES = [
     responses: { 200: SystemRealtimeResponse },
     async handler({ services }) {
       return reply(200, { connections: [...services.realtime.connections()] });
+    },
+  }),
+  defineRoute({
+    operationId: 'listMcpConnections',
+    tags,
+    summary:
+      'MCP connections with their self-reported identity: live ones first, then recent (D-30).',
+    request: { query: McpConnectionsQuery },
+    responses: { 200: McpConnectionsResponse },
+    async handler({ input, services, ctx }) {
+      const recent = await services.repos.mcpConnections.listRecent(input.query.limit);
+      return reply(200, {
+        connections: recent.rows.map(mcpConnectionToWire),
+        live: recent.live,
+        now: ctx.now,
+      });
     },
   }),
   defineRoute({

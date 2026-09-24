@@ -921,6 +921,11 @@
                 "has_live_viewers": {
                   "type": "boolean"
                 },
+                "harness": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
                 "client": {
                   "type": [
                     "object",
@@ -944,6 +949,35 @@
                     },
                     "model": {
                       "type": "string"
+                    },
+                    "harness": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64
+                    },
+                    "harness_label": {
+                      "type": "string"
+                    },
+                    "harness_source": {
+                      "type": "string"
+                    },
+                    "model_source": {
+                      "type": "string"
+                    },
+                    "workspace": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "protocol_version": {
+                      "type": "string"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -983,6 +1017,7 @@
                 "proxy_label",
                 "counts",
                 "has_live_viewers",
+                "harness",
                 "client"
               ]
             }
@@ -1146,13 +1181,46 @@
                     "count"
                   ]
                 }
+              },
+              "harnesses": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "value": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "count"
+                  ]
+                }
               }
             },
             "required": [
               "owners",
               "channels",
               "persistence_modes",
-              "states"
+              "states",
+              "harnesses"
             ]
           },
           "applied": {
@@ -1501,6 +1569,11 @@
               "has_live_viewers": {
                 "type": "boolean"
               },
+              "harness": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
               "client": {
                 "type": [
                   "object",
@@ -1524,6 +1597,35 @@
                   },
                   "model": {
                     "type": "string"
+                  },
+                  "harness": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "harness_label": {
+                    "type": "string"
+                  },
+                  "harness_source": {
+                    "type": "string"
+                  },
+                  "model_source": {
+                    "type": "string"
+                  },
+                  "workspace": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "protocol_version": {
+                    "type": "string"
+                  },
+                  "meta": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
                   }
                 },
                 "required": [
@@ -1563,6 +1665,7 @@
               "proxy_label",
               "counts",
               "has_live_viewers",
+              "harness",
               "client"
             ]
           },
@@ -1774,6 +1877,11 @@
                 "has_screenshot": {
                   "type": "boolean"
                 },
+                "harness": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
                 "args_json": {},
                 "result_text": {
                   "type": [
@@ -1975,6 +2083,11 @@
           },
           "has_screenshot": {
             "type": "boolean"
+          },
+          "harness": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
           },
           "args_json": {},
           "result_text": {
@@ -3168,6 +3281,11 @@
                         "has_screenshot": {
                           "type": "boolean"
                         },
+                        "harness": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 64
+                        },
                         "args_json": {},
                         "result_text": {
                           "type": [
@@ -4224,6 +4342,11 @@
                 "has_screenshot": {
                   "type": "boolean"
                 },
+                "harness": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
                 "args_json": {},
                 "result_text": {
                   "type": [
@@ -4589,6 +4712,77 @@
         },
         "required": [
           "data",
+          "now"
+        ]
+      },
+      "HarnessMetricsResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "harness": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "label": {
+                  "type": "string"
+                },
+                "sessions": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "sessions_live": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "tool_calls": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "errors": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "harness",
+                "label",
+                "sessions",
+                "sessions_live",
+                "tool_calls",
+                "errors"
+              ]
+            }
+          },
+          "window": {
+            "type": "object",
+            "properties": {
+              "since": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "until": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "since",
+              "until"
+            ]
+          },
+          "now": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "data",
+          "window",
           "now"
         ]
       },
@@ -7866,6 +8060,189 @@
           "connections"
         ]
       },
+      "McpConnectionsResponse": {
+        "type": "object",
+        "properties": {
+          "connections": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "connection_id": {
+                  "type": "string"
+                },
+                "transport": {
+                  "type": "string",
+                  "enum": [
+                    "stdio",
+                    "http"
+                  ]
+                },
+                "principal": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "live": {
+                  "type": "boolean"
+                },
+                "harness": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "harness_label": {
+                  "type": "string"
+                },
+                "harness_source": {
+                  "type": "string"
+                },
+                "model": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "model_source": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "workspace": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "client_name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "client_version": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "client_title": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "protocol_version": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "user_agent": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "ip": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "connected_at": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "last_seen_at": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "closed_at": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "sessions": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "conflicts": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "source": {
+                        "type": "string"
+                      },
+                      "value": {
+                        "type": "string"
+                      },
+                      "harness": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "value",
+                      "harness"
+                    ]
+                  }
+                },
+                "meta": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "connection_id",
+                "transport",
+                "principal",
+                "live",
+                "harness",
+                "harness_label",
+                "harness_source",
+                "model",
+                "model_source",
+                "workspace",
+                "client_name",
+                "client_version",
+                "client_title",
+                "protocol_version",
+                "user_agent",
+                "ip",
+                "connected_at",
+                "last_seen_at",
+                "closed_at",
+                "sessions",
+                "conflicts",
+                "meta"
+              ]
+            }
+          },
+          "live": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "now": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "connections",
+          "live",
+          "now"
+        ]
+      },
       "SetLogLevelResponse": {
         "type": "object",
         "properties": {
@@ -10035,7 +10412,8 @@
                 "closed_at",
                 "owner",
                 "persistence_mode",
-                "blocked"
+                "blocked",
+                "harness"
               ],
               "default": "created_at"
             },
@@ -10144,6 +10522,23 @@
             },
             "required": false,
             "name": "persistence_mode",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "minItems": 1
+            },
+            "required": false,
+            "name": "harness",
             "in": "query"
           },
           {
@@ -13641,6 +14036,23 @@
             "required": false,
             "name": "has_session",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "minItems": 1
+            },
+            "required": false,
+            "name": "harness",
+            "in": "query"
           }
         ],
         "responses": {
@@ -13908,6 +14320,112 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ToolMetricsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, PASSWORD_CHANGE_REQUIRED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/metrics/harnesses": {
+      "get": {
+        "operationId": "getHarnessMetrics",
+        "tags": [
+          "activity"
+        ],
+        "summary": "Sessions and tool calls per agent harness over a window (self-reported identity, D-30).",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-browserhive-scope": "sessions:read",
+        "parameters": [
+          {
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "required": false,
+            "name": "since",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "required": false,
+            "name": "until",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sessions and tool calls per agent harness over a window (self-reported identity, D-30).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HarnessMetricsResponse"
                 }
               }
             }
@@ -17714,6 +18232,99 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SystemRealtimeResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, PASSWORD_CHANGE_REQUIRED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/mcp/connections": {
+      "get": {
+        "operationId": "listMcpConnections",
+        "tags": [
+          "system"
+        ],
+        "summary": "MCP connections with their self-reported identity: live ones first, then recent (D-30).",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-browserhive-scope": "system:read",
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "MCP connections with their self-reported identity: live ones first, then recent (D-30).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpConnectionsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }

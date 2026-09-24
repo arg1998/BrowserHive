@@ -95,6 +95,17 @@ export class SessionService {
       deadlineMs: options.deadlineMs ?? DEFAULT_CREATE_DEADLINE_MS,
     };
     return this.tracer.startActiveSpan('session.create', async (span) => {
+      const client = input.client ?? null;
+      // The caller's self-reported identity (10 §6); spans only, never a decision input.
+      if (client?.harness !== undefined && client.harness !== null) {
+        span.setAttribute('browserhive.harness', client.harness);
+        if (client.harnessSource !== undefined && client.harnessSource !== null) {
+          span.setAttribute('browserhive.harness_source', client.harnessSource);
+        }
+      }
+      if (client?.model !== undefined && client.model !== null) {
+        span.setAttribute('browserhive.model', client.model);
+      }
       try {
         const outcome = await runCreatePipeline(
           this.pipelineDeps(input, principal),

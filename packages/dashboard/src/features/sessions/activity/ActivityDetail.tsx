@@ -11,6 +11,7 @@ import { toAppError } from '@/lib/api/errors.ts';
 import { formatBytes } from '@/lib/format/bytes.ts';
 import { formatAbsolute, formatMs } from '@/lib/format/time.ts';
 import { cn } from '@/lib/utils.ts';
+import { HarnessName } from '../../harness/HarnessName.tsx';
 import { useToolCallDetailQuery } from '../api.ts';
 import type { ActivityEntry } from './activity-model.ts';
 import { ScreenshotThumb } from './ScreenshotThumb.tsx';
@@ -140,6 +141,9 @@ function ToolBody({
               ]
             : null,
           ['At', formatAbsolute(detail.ts)],
+          detail.harness !== undefined
+            ? ['Harness', <HarnessName key="h" harness={detail.harness} />]
+            : null,
         ]}
       />
       {failed ? <ErrorBox code={detail.error_code} message={detail.error_message} /> : null}

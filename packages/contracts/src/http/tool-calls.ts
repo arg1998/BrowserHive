@@ -14,6 +14,7 @@ import {
   sortable,
   windowQuery,
 } from './common.ts';
+import { HarnessSlug } from './sessions.ts';
 
 /** Tool name as recorded (frozen catalog; a plain string on the wire so rows recorded under a name outside the current catalog still parse). */
 export const ToolName = z.string().min(1).max(64);
@@ -32,6 +33,8 @@ export const ToolCallRow = z.object({
   ts: EpochMs,
   trace_id: z.string().nullable(),
   has_screenshot: z.boolean(),
+  /** Harness of the call (its connection's, else its session's launch harness, else `unknown`). */
+  harness: HarnessSlug.optional(),
   args_json: z.unknown().optional(),
   result_text: z.string().nullable().optional(),
 });
@@ -91,6 +94,8 @@ export const ToolCallsQuery = listQuery({
      * both; session-less rows carry `session_id: null` and `session_slug: null`.
      */
     has_session: QueryBool.optional(),
+    /** Harness slugs (`unknown` included). */
+    harness: csv(HarnessSlug),
   },
 });
 /** `GET /tool-calls` query. */

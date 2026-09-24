@@ -105,6 +105,7 @@ export function toolCalled(
       eventId: base.row.event_id,
       sessionId,
       connectionId: null,
+      harness: 'unknown',
       tool: opts.tool ?? 'navigate',
       tabId: null,
       args: {},

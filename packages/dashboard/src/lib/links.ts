@@ -23,6 +23,7 @@ export const DOCS_PAGES = {
   installation: { page: 'guide/installation' },
   mcpClients: { page: 'guide/mcp-clients' },
   agentTokens: { page: 'guide/mcp-clients', anchor: 'authentication-tokens' },
+  harnessIdentity: { page: 'guide/mcp-clients', anchor: 'harness-identity' },
   dashboard: { page: 'guide/dashboard' },
   dashboardOverview: { page: 'guide/dashboard', anchor: 'overview' },
   dashboardSessions: { page: 'guide/dashboard', anchor: 'sessions' },

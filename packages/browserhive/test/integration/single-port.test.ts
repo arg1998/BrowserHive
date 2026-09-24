@@ -146,6 +146,26 @@ describe('single port: MCP + REST + WS + health', () => {
     };
     if (health.checks.browser === 'ok') expect(info.runtime.chromium).toMatch(/^\d+\.\d+\./);
     else expect(info.runtime.chromium).toBeNull();
+
+    // The MCP client of the first test is listed with its self-reported identity and its IP,
+    // resolved by the same client-IP middleware as the admin API (D-30).
+    const connections = await fetch(`${base}/api/v1/system/mcp/connections`, {
+      headers: { origin, cookie },
+    });
+    expect(connections.status).toBe(200);
+    const listed = (await connections.json()) as {
+      connections: {
+        client_name: string | null;
+        harness: string;
+        harness_source: string;
+        ip: string | null;
+      }[];
+    };
+    expect(listed.connections.find((c) => c.client_name === 'single-port-test')).toMatchObject({
+      harness: 'single-port-test',
+      harness_source: 'client_info',
+      ip: expect.stringMatching(/^(127\.0\.0\.1|::1|::ffff:127\.0\.0\.1)$/),
+    });
   });
 
   it('serves the dashboard SPA at / when it has been built', async () => {

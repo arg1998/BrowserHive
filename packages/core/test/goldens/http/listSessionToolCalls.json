@@ -12,7 +12,8 @@
       "result_size_bytes": 2,
       "ts": 1699999980000,
       "trace_id": null,
-      "has_screenshot": false
+      "has_screenshot": false,
+      "harness": "unknown"
     },
     {
       "event_id": "e-00000000000000000000000001",
@@ -26,7 +27,8 @@
       "result_size_bytes": 2,
       "ts": 1699999970000,
       "trace_id": null,
-      "has_screenshot": true
+      "has_screenshot": true,
+      "harness": "unknown"
     }
   ],
   "page": {

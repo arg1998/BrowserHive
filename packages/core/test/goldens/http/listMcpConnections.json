@@ -1,0 +1,56 @@
+{
+  "connections": [
+    {
+      "connection_id": "c-seed000001",
+      "transport": "http",
+      "principal": "local",
+      "live": true,
+      "harness": "claude-code",
+      "harness_label": "Claude Code",
+      "harness_source": "client_info",
+      "model": "claude-opus-5",
+      "model_source": "header",
+      "workspace": "checkout",
+      "client_name": "claude-code",
+      "client_version": "2.1.281",
+      "client_title": null,
+      "protocol_version": "2025-06-18",
+      "user_agent": "claude-code/2.1.281 (cli)",
+      "ip": "127.0.0.1",
+      "connected_at": 1699999880000,
+      "last_seen_at": 1699999995000,
+      "closed_at": null,
+      "sessions": 1,
+      "conflicts": [],
+      "meta": {
+        "team": "growth"
+      }
+    },
+    {
+      "connection_id": "c-seed000002",
+      "transport": "stdio",
+      "principal": "local",
+      "live": false,
+      "harness": "unknown",
+      "harness_label": "Unknown",
+      "harness_source": "none",
+      "model": null,
+      "model_source": null,
+      "workspace": null,
+      "client_name": "mcp",
+      "client_version": "0.1.0",
+      "client_title": null,
+      "protocol_version": "2025-06-18",
+      "user_agent": null,
+      "ip": null,
+      "connected_at": 1699999400000,
+      "last_seen_at": 1699999500000,
+      "closed_at": 1699999600000,
+      "sessions": 0,
+      "conflicts": [],
+      "meta": {}
+    }
+  ],
+  "live": 1,
+  "now": 1700000000000
+}

@@ -38,6 +38,7 @@
         "vault_access": 0
       },
       "has_live_viewers": false,
+      "harness": "claude-code",
       "client": null
     },
     {
@@ -78,6 +79,7 @@
         "vault_access": 0
       },
       "has_live_viewers": false,
+      "harness": "unknown",
       "client": null
     }
   ],
@@ -89,7 +91,17 @@
     "owners": [],
     "channels": [],
     "persistence_modes": [],
-    "states": []
+    "states": [],
+    "harnesses": [
+      {
+        "value": "claude-code",
+        "count": 1
+      },
+      {
+        "value": "unknown",
+        "count": 1
+      }
+    ]
   },
   "applied": {
     "filters": {

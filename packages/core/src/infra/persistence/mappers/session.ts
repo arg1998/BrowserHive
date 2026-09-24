@@ -54,6 +54,7 @@ export function sessionFromRow(row: Selectable<Sessions>): SessionRecord {
     lastUrl: row.last_url,
     launchMs: row.launch_ms,
     config: parseJsonObject(row.config_json, where),
+    harness: row.harness,
   };
 }
 
@@ -89,6 +90,7 @@ export function sessionToRow(record: SessionRecord): Selectable<Sessions> {
     last_url: record.lastUrl,
     launch_ms: record.launchMs,
     config_json: toJson(record.config),
+    harness: record.harness,
   };
 }
 

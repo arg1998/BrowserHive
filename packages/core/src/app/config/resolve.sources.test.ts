@@ -26,6 +26,20 @@ describe('paths, OTEL sub-source, overrides and freezing', () => {
     );
   });
 
+  it('skips the identity variables: not config, no provenance, empty allowed (08 §2.2)', () => {
+    const resolved = resolveOk({
+      env: {
+        BROWSERHIVE_HARNESS: 'codex',
+        BROWSERHIVE_MODEL: '',
+        BROWSERHIVE_WORKSPACE: 'shop',
+        BROWSERHIVE_PORT: '9000',
+      },
+    });
+    expect(resolved.config.port).toBe(9000);
+    expect(Object.keys(resolved.provenance)).not.toContain('harness');
+    expect(JSON.stringify(resolved.provenance)).not.toContain('BROWSERHIVE_HARNESS');
+  });
+
   it('reads OTEL_* below BROWSERHIVE_* env and never enables telemetry by itself', () => {
     const onlyOtel = resolveOk({
       env: {

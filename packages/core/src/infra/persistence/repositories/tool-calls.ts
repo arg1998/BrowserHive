@@ -1,5 +1,6 @@
 /** @module infra/persistence/repositories/tool-calls — SQLite `ToolCallRepository`. */
 
+import { normalizeHarness, UNKNOWN_HARNESS } from '@browserhive/contracts/harness';
 import { type Kysely, sql } from 'kysely';
 import type { Page, ToolCallListQuery } from '../../../ports/persistence/queries.ts';
 import type { ToolCallRecord } from '../../../ports/persistence/records.ts';
@@ -24,15 +25,20 @@ const SORT: Record<'ts' | 'duration_ms', SortExpr> = {
   duration_ms: { expr: sql.ref('t.duration_ms'), nullValue: 0 },
 };
 
+/** A call's harness: its connection's latest resolution, else its session's launch harness (02 §1.4). */
+export const TOOL_CALL_HARNESS = sql<string>`COALESCE(m.harness, s.harness, 'unknown')`;
+
 function base(db: Kysely<DB>) {
   return db
     .selectFrom('tool_calls as t')
     .leftJoin('sessions as s', 's.session_id', 't.session_id')
     .leftJoin('screenshots as sc', 'sc.event_id', 't.event_id')
+    .leftJoin('mcp_connections as m', 'm.connection_id', 't.connection_id')
     .selectAll('t')
     .select([
       's.slug as session_slug',
       sql<number>`(sc.event_id IS NOT NULL)`.as('has_screenshot'),
+      TOOL_CALL_HARNESS.as('harness'),
     ]);
 }
 
@@ -52,6 +58,10 @@ function applyFilters(qb: BaseQuery, q: ToolCallListQuery): BaseQuery {
   }
   if (q.errorCodes !== undefined && q.errorCodes.length > 0)
     out = out.where('t.error_code', 'in', [...q.errorCodes]);
+  if (q.harnesses !== undefined && q.harnesses.length > 0) {
+    const harnesses = [...q.harnesses];
+    out = out.where((eb) => eb(TOOL_CALL_HARNESS, 'in', harnesses));
+  }
   if (q.q !== undefined && q.q !== '') {
     const term = q.q;
     out = out.where((eb) =>
@@ -73,6 +83,7 @@ function toListRow(row: Row): ToolCallListRow {
     ...toolCallFromRow(row),
     sessionSlug: row.session_slug,
     hasScreenshot: asNumber(row.has_screenshot) !== 0,
+    harness: normalizeHarness(row.harness) ?? UNKNOWN_HARNESS,
   };
 }
 

@@ -104,6 +104,8 @@ export class InMemoryToolCallRepository implements ToolCallRepository {
       ...record,
       sessionSlug: this.slugOf(record.sessionId),
       hasScreenshot: this.withScreenshot.has(record.eventId),
+      // Connections are not joined in memory: every call reads `unknown`.
+      harness: 'unknown',
     };
   }
 }

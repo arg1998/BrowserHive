@@ -32,13 +32,21 @@ class RecordingConnections implements McpConnectionRepository {
   async listOpen(): Promise<readonly McpConnectionRecord[]> {
     return [...this.rows.values()].filter((r) => r.closedAt === null);
   }
+  async listRecent(limit: number) {
+    const rows = [...this.rows.values()].slice(0, limit).map((r) => ({ ...r, sessions: 0 }));
+    return { rows, live: rows.filter((r) => r.closedAt === null).length };
+  }
   async closeAll(): Promise<number> {
     return 0;
   }
 }
 
-function post(body: unknown, headers: Record<string, string> = {}): Request {
-  return new Request('http://127.0.0.1:9876/mcp', {
+function post(
+  body: unknown,
+  headers: Record<string, string> = {},
+  url = 'http://127.0.0.1:9876/mcp',
+): Request {
+  return new Request(url, {
     method: 'POST',
     headers: {
       host: '127.0.0.1:9876',
@@ -160,14 +168,30 @@ describe('MCP Streamable HTTP transport', () => {
         'x-bh-agent-harness': 'claude-code',
         'x-bh-agent-model': 'claude-opus-5',
         'x-bh-workspace': 'checkout-bot',
+        'x-bh-meta-team': 'growth',
+        'user-agent': 'Cursor/1.7.3 (linux x64)',
       }),
       LOCAL_PRINCIPAL,
+      { clientIp: '10.0.0.7' },
     );
     const mcpSessionId = init.headers.get('mcp-session-id') ?? '';
     expect([...connections.rows.values()][0]).toMatchObject({
       harness: 'claude-code',
+      harnessSource: 'header',
       model: 'claude-opus-5',
+      modelSource: 'header',
       agentName: 'checkout-bot',
+      workspace: 'checkout-bot',
+      clientName: 'probe',
+      protocolVersion: LATEST_PROTOCOL_VERSION,
+      userAgent: 'Cursor/1.7.3 (linux x64)',
+      ip: '10.0.0.7',
+      meta: { team: 'growth' },
+      // clientInfo and the User-Agent name other harnesses: recorded as conflicts, never a refusal.
+      conflicts: [
+        { source: 'client_info', value: 'probe', harness: 'probe' },
+        { source: 'user_agent', value: 'Cursor/1.7.3 (linux x64)', harness: 'cursor' },
+      ],
     });
     const session = {
       'mcp-session-id': mcpSessionId,
@@ -196,21 +220,78 @@ describe('MCP Streamable HTTP transport', () => {
     const live = h?.services.sessions.peek(sessionId ?? '');
     expect(live).toBeDefined();
     if (live === undefined || h === undefined) return;
+    expect(h.services.sessions.summary(live).harness).toBe('claude-code');
     expect(h.services.sessions.summary(live).client).toEqual({
       name: 'probe',
       version: '9.9',
       agent_name: 'checkout-bot',
       model: 'claude-opus-5',
+      harness: 'claude-code',
+      harness_label: 'Claude Code',
+      harness_source: 'header',
+      model_source: 'header',
+      workspace: 'checkout-bot',
+      protocol_version: LATEST_PROTOCOL_VERSION,
+      meta: { team: 'growth' },
+    });
+    expect(h.observations().at(-1)?.harness).toBe('claude-code');
+  });
+
+  it('resolves identity per request: a later call can declare a model in _meta', async () => {
+    const { handler, connections } = await setup();
+    const init = await handler.handleMcpRequest(
+      post(initialize, {}, 'http://127.0.0.1:9876/mcp?harness=opencode'),
+      LOCAL_PRINCIPAL,
+    );
+    const session = {
+      'mcp-session-id': init.headers.get('mcp-session-id') ?? '',
+      'mcp-protocol-version': LATEST_PROTOCOL_VERSION,
+    };
+    const row = () => [...connections.rows.values()][0];
+    expect(row()).toMatchObject({ harness: 'opencode', harnessSource: 'url', model: null });
+    await handler.handleMcpRequest(
+      post({ jsonrpc: '2.0', method: 'notifications/initialized' }, session),
+      LOCAL_PRINCIPAL,
+    );
+    await sseJson(
+      await handler.handleMcpRequest(
+        post(
+          {
+            jsonrpc: '2.0',
+            id: 3,
+            method: 'tools/call',
+            params: {
+              name: 'list_sessions',
+              arguments: {},
+              _meta: { 'ai.browserhive/model': 'o5', 'ai.browserhive/ticket': 'BH-1' },
+            },
+          },
+          session,
+          'http://127.0.0.1:9876/mcp?harness=opencode',
+        ),
+        LOCAL_PRINCIPAL,
+      ),
+    );
+    expect(row()).toMatchObject({
+      harness: 'opencode',
+      model: 'o5',
+      modelSource: 'meta',
+      meta: { ticket: 'BH-1' },
     });
   });
 
-  it('a client that sends no X-BH-* headers stores nulls, not empty strings', async () => {
+  it('blank X-BH-* headers are absent: nulls, not empty strings, and clientInfo decides', async () => {
     const { handler, connections } = await setup();
     await handler.handleMcpRequest(post(initialize, { 'x-bh-agent-model': '  ' }), LOCAL_PRINCIPAL);
     expect([...connections.rows.values()][0]).toMatchObject({
-      harness: null,
+      harness: 'probe',
+      harnessSource: 'client_info',
       model: null,
+      modelSource: null,
       agentName: null,
+      workspace: null,
+      conflicts: [],
+      meta: {},
     });
   });
 

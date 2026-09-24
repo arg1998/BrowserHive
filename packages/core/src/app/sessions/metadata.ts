@@ -1,6 +1,7 @@
 /** @module app/sessions/metadata — wire and storage projections of a Session: tool SessionMetadata, HTTP/WS SessionSummary, DB SessionRecord/SessionPatch. */
 
 import type { StealthDriverName } from '@browserhive/contracts/enums';
+import { harnessLabel, UNKNOWN_HARNESS } from '@browserhive/contracts/harness';
 import type { SessionSummary } from '@browserhive/contracts/http';
 import { SessionId } from '@browserhive/contracts/ids';
 import type {
@@ -93,15 +94,36 @@ export function toSessionMetadata(session: Session): SessionMetadataWithDriver {
   };
 }
 
-/** `SessionSummary.client`: the self-reported client that launched the session, or `null`. */
+function present(value: string | null | undefined): value is string {
+  return value !== null && value !== undefined;
+}
+
+/** `SessionSummary.client`: the self-reported client that launched the session, or `null` (absent values omitted). */
 export function toWireClient(client: SessionClientInfo | null): SessionSummary['client'] {
   if (client === null) return null;
+  const workspace = client.workspace ?? client.agentName;
+  const meta = client.meta ?? {};
   return {
     name: client.name,
     version: client.version,
-    ...(client.agentName !== null && { agent_name: client.agentName }),
-    ...(client.model !== null && { model: client.model }),
+    ...(present(client.agentName) && { agent_name: client.agentName }),
+    ...(present(client.model) && { model: client.model }),
+    ...(present(client.harness) && {
+      harness: client.harness,
+      harness_label: harnessLabel(client.harness),
+    }),
+    ...(present(client.harnessSource) && { harness_source: client.harnessSource }),
+    ...(present(client.modelSource) && { model_source: client.modelSource }),
+    ...(present(workspace) && { workspace }),
+    ...(present(client.title) && { title: client.title }),
+    ...(present(client.protocolVersion) && { protocol_version: client.protocolVersion }),
+    ...(Object.keys(meta).length > 0 && { meta: { ...meta } }),
   };
+}
+
+/** The launch harness a session records (`sessions.harness`): the identity resolved for `launch_session`. */
+export function launchHarnessOf(client: SessionClientInfo | null): string | null {
+  return client?.harness ?? null;
 }
 
 /** The one HTTP/WS shape (spec 03 §4.2). `has_live_viewers` is enriched by the interface layer. */
@@ -151,6 +173,7 @@ export function toSessionSummary(session: Session, now: number): SessionSummary 
       vault_access: session.counts.vaultAccess,
     },
     has_live_viewers: false,
+    harness: launchHarnessOf(request.client) ?? UNKNOWN_HARNESS,
     client: toWireClient(request.client),
   };
 }
@@ -211,6 +234,7 @@ export function toSessionRecord(session: Session): SessionRecord {
     lastUrl: safeCurrentUrl(session),
     launchMs: session.launchMs,
     config: configJson(session),
+    harness: launchHarnessOf(request.client),
   };
 }
 

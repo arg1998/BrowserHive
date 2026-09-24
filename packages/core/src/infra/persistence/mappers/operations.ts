@@ -18,6 +18,7 @@ import type {
   SchemaMigrationRecord,
   SystemEventRecord,
 } from '../../../ports/persistence/records.ts';
+import type { HarnessConflictRecord } from '../../../ports/persistence/records-identity.ts';
 import type {
   ArtifactOutbox,
   IdempotencyKeys,
@@ -151,6 +152,38 @@ export function idempotencyToRow(record: IdempotencyRecord): Selectable<Idempote
   };
 }
 
+function conflictsToJson(conflicts: readonly HarnessConflictRecord[]): string | null {
+  return conflicts.length === 0 ? null : JSON.stringify(conflicts);
+}
+
+function metaToJson(meta: Readonly<Record<string, string>>): string | null {
+  return Object.keys(meta).length === 0 ? null : JSON.stringify(meta);
+}
+
+function conflictsFromJson(text: string | null, where: string): readonly HarnessConflictRecord[] {
+  if (text === null) return [];
+  const value = parseJsonValue(text, where);
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item): HarnessConflictRecord[] => {
+    if (typeof item !== 'object' || item === null || Array.isArray(item)) return [];
+    const { source, value: raw, harness } = item;
+    return typeof source === 'string' && typeof raw === 'string' && typeof harness === 'string'
+      ? [{ source, value: raw, harness }]
+      : [];
+  });
+}
+
+function metaFromJson(text: string | null, where: string): Readonly<Record<string, string>> {
+  if (text === null) return {};
+  const value = parseJsonValue(text, where);
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      (entry): entry is [string, string] => typeof entry[1] === 'string',
+    ),
+  );
+}
+
 /** `mcp_connections` row → record. */
 export function mcpConnectionFromRow(row: Selectable<McpConnections>): McpConnectionRecord {
   const where = `mcp_connections.${row.connection_id}`;
@@ -163,9 +196,16 @@ export function mcpConnectionFromRow(row: Selectable<McpConnections>): McpConnec
     clientVersion: row.client_version,
     protocolVersion: row.protocol_version,
     capabilities: parseJsonObjectOrNull(row.capabilities_json, where),
+    clientTitle: row.client_title,
+    // Rows written before schema v3 carry the workspace only in `agent_name`.
+    workspace: row.workspace ?? row.agent_name,
     agentName: row.agent_name,
     model: row.model,
+    modelSource: row.model_source,
     harness: row.harness,
+    harnessSource: row.harness_source,
+    conflicts: conflictsFromJson(row.harness_conflicts_json, where),
+    meta: metaFromJson(row.meta_json, where),
     ip: row.ip,
     userAgent: row.user_agent,
     connectedAt: row.connected_at,
@@ -185,9 +225,15 @@ export function mcpConnectionToRow(record: McpConnectionRecord): Selectable<McpC
     client_version: record.clientVersion,
     protocol_version: record.protocolVersion,
     capabilities_json: toJsonOrNull(record.capabilities),
+    client_title: record.clientTitle,
+    workspace: record.workspace,
     agent_name: record.agentName,
     model: record.model,
+    model_source: record.modelSource,
     harness: record.harness,
+    harness_source: record.harnessSource,
+    harness_conflicts_json: conflictsToJson(record.conflicts),
+    meta_json: metaToJson(record.meta),
     ip: record.ip,
     user_agent: record.userAgent,
     connected_at: record.connectedAt,
@@ -207,9 +253,19 @@ export function mcpConnectionPatchToRow(patch: McpConnectionPatch): Updateable<M
     ...(patch.capabilities !== undefined && {
       capabilities_json: toJsonOrNull(patch.capabilities),
     }),
+    ...(patch.clientTitle !== undefined && { client_title: patch.clientTitle }),
+    ...(patch.workspace !== undefined && { workspace: patch.workspace }),
     ...(patch.agentName !== undefined && { agent_name: patch.agentName }),
     ...(patch.model !== undefined && { model: patch.model }),
+    ...(patch.modelSource !== undefined && { model_source: patch.modelSource }),
     ...(patch.harness !== undefined && { harness: patch.harness }),
+    ...(patch.harnessSource !== undefined && { harness_source: patch.harnessSource }),
+    ...(patch.conflicts !== undefined && {
+      harness_conflicts_json: conflictsToJson(patch.conflicts),
+    }),
+    ...(patch.meta !== undefined && { meta_json: metaToJson(patch.meta) }),
+    ...(patch.ip !== undefined && { ip: patch.ip }),
+    ...(patch.userAgent !== undefined && { user_agent: patch.userAgent }),
     ...(patch.lastSeenAt !== undefined && { last_seen_at: patch.lastSeenAt }),
     ...(patch.closedAt !== undefined && { closed_at: patch.closedAt }),
   };

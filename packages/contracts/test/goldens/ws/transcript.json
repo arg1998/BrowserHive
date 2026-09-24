@@ -78,10 +78,15 @@
               "vault_access": 0
             },
             "has_live_viewers": false,
+            "harness": "claude-code",
             "client": {
               "name": "claude-code",
               "version": "1.0.0",
-              "agent_name": "agent"
+              "agent_name": "agent",
+              "harness": "claude-code",
+              "harness_label": "Claude Code",
+              "harness_source": "client_info",
+              "workspace": "agent"
             }
           }
         }
@@ -150,7 +155,8 @@
             "result_size_bytes": 128,
             "ts": 1735689595000,
             "trace_id": "abcdef0123456789abcdef0123456789",
-            "has_screenshot": false
+            "has_screenshot": false,
+            "harness": "claude-code"
           },
           "has_detail": true
         }

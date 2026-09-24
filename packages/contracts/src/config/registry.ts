@@ -43,6 +43,23 @@ export const RESERVED_ENUM_MEMBERS: Readonly<Partial<Record<ConfigKey, readonly 
   transport: ['ws'],
 };
 
+/**
+ * `BROWSERHIVE_*` names that are per-process client identity, not configuration (spec 08 §2.2,
+ * D-30): the env collector skips them, and they are "did you mean" candidates for misspellings.
+ */
+export const IDENTITY_ENV_VARS = [
+  'BROWSERHIVE_HARNESS',
+  'BROWSERHIVE_MODEL',
+  'BROWSERHIVE_WORKSPACE',
+] as const;
+/** Union of {@link IDENTITY_ENV_VARS}. */
+export type IdentityEnvVar = (typeof IDENTITY_ENV_VARS)[number];
+
+/** Whether `name` is one of the identity environment variables. */
+export function isIdentityEnvVar(name: string): name is IdentityEnvVar {
+  return (IDENTITY_ENV_VARS as readonly string[]).includes(name);
+}
+
 /** Unsupported spellings recognised by the config resolver and answered with an unknown-key hint, mapped to the canonical key (`null`: no equivalent) (spec 08 §5.5). */
 export const KEY_ALIASES: Readonly<Record<string, ConfigKey | null>> = {
   '--admin-bind': null,

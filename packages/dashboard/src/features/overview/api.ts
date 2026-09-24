@@ -1,4 +1,4 @@
-/** @module features/overview/api — overview queries: activity window, system status, recent pages/sessions, recent failed tool calls, vault fills, top domains (spec 04 §12.1). Windows hang off one per-page anchor, so query keys never roll over with the clock. */
+/** @module features/overview/api — overview queries: activity window, system status, recent pages/sessions, recent failed tool calls, vault fills, top domains, per-harness counts (spec 04 §12.1). Windows hang off one per-page anchor, so query keys never roll over with the clock. */
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useApi } from '@/app/providers/AuthProvider.tsx';
@@ -170,6 +170,20 @@ export function useVaultFills(window: ResolvedWindow, enabled: boolean) {
     queryFn: () => api.listVaultLog({ query }),
     placeholderData: keepPreviousData,
     enabled,
+  });
+}
+
+/** Sessions and tool calls per harness over the window (`all` asks from the epoch; the server default is 7 days). */
+export function useHarnessMetrics(window: ResolvedWindow) {
+  const api = useApi();
+  const query = {
+    since: window.since ?? 0,
+    ...(window.until !== undefined && { until: window.until }),
+  };
+  return useQuery({
+    queryKey: keys.overview.harnesses(query),
+    queryFn: () => api.getHarnessMetrics({ query }),
+    placeholderData: keepPreviousData,
   });
 }
 

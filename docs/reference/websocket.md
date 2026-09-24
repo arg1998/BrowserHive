@@ -150,14 +150,14 @@ Payloads of `kind: "event"` frames, discriminated on `type`. DTO fields (`sessio
 
 | Field | Type | Required | Constraints |
 |---|---|---|---|
-| `session` | `object` | yes | keys `session_id`, `slug`, `owner`, `tenant_id`, `channel`, `engine`, `headless`, `incognito`, `persistence_mode`, `current_url`, `created_at`, `last_activity_at`, `closed_at`, `closed_reason`, `archived_at`, `lease_expires_at`, `lease_paused_at`, `lease_remaining_ms`, `state`, `live`, `disable_evaluate`, `vault_enabled`, `stealth`, `fingerprint`, `humanize`, `stealth_recorded`, `identity`, `browser`, `proxy_label`, `counts`, `has_live_viewers`, `client` |
+| `session` | `object` | yes | keys `session_id`, `slug`, `owner`, `tenant_id`, `channel`, `engine`, `headless`, `incognito`, `persistence_mode`, `current_url`, `created_at`, `last_activity_at`, `closed_at`, `closed_reason`, `archived_at`, `lease_expires_at`, `lease_paused_at`, `lease_remaining_ms`, `state`, `live`, `disable_evaluate`, `vault_enabled`, `stealth`, `fingerprint`, `humanize`, `stealth_recorded`, `identity`, `browser`, `proxy_label`, `counts`, `has_live_viewers`, `harness`, `client` |
 
 <a id="event-session-updated"></a>
 ### `session.updated`
 
 | Field | Type | Required | Constraints |
 |---|---|---|---|
-| `session` | `object` | yes | keys `session_id`, `slug`, `owner`, `tenant_id`, `channel`, `engine`, `headless`, `incognito`, `persistence_mode`, `current_url`, `created_at`, `last_activity_at`, `closed_at`, `closed_reason`, `archived_at`, `lease_expires_at`, `lease_paused_at`, `lease_remaining_ms`, `state`, `live`, `disable_evaluate`, `vault_enabled`, `stealth`, `fingerprint`, `humanize`, `stealth_recorded`, `identity`, `browser`, `proxy_label`, `counts`, `has_live_viewers`, `client` |
+| `session` | `object` | yes | keys `session_id`, `slug`, `owner`, `tenant_id`, `channel`, `engine`, `headless`, `incognito`, `persistence_mode`, `current_url`, `created_at`, `last_activity_at`, `closed_at`, `closed_reason`, `archived_at`, `lease_expires_at`, `lease_paused_at`, `lease_remaining_ms`, `state`, `live`, `disable_evaluate`, `vault_enabled`, `stealth`, `fingerprint`, `humanize`, `stealth_recorded`, `identity`, `browser`, `proxy_label`, `counts`, `has_live_viewers`, `harness`, `client` |
 
 <a id="event-session-closed"></a>
 ### `session.closed`
@@ -192,7 +192,7 @@ Payloads of `kind: "event"` frames, discriminated on `type`. DTO fields (`sessio
 
 | Field | Type | Required | Constraints |
 |---|---|---|---|
-| `row` | `object` | yes | keys `event_id`, `session_id`, `tool`, `tab_id`, `ok`, `error_code`, `error_message`, `duration_ms`, `result_size_bytes`, `ts`, `trace_id`, `has_screenshot`, `args_json`, `result_text` |
+| `row` | `object` | yes | keys `event_id`, `session_id`, `tool`, `tab_id`, `ok`, `error_code`, `error_message`, `duration_ms`, `result_size_bytes`, `ts`, `trace_id`, `has_screenshot`, `harness`, `args_json`, `result_text` |
 | `has_detail` | `boolean` | yes | — |
 
 <a id="event-page-visited"></a>
