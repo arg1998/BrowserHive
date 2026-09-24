@@ -1,5 +1,6 @@
 /** @module infra/persistence/analytics — SQLite `AnalyticsQueries` (activity buckets, tool metrics, timeline, summary). */
 
+import { normalizeHarness, UNKNOWN_HARNESS } from '@browserhive/contracts/harness';
 import { type Kysely, sql } from 'kysely';
 import type {
   ActivityBucket,
@@ -7,6 +8,7 @@ import type {
   ActivityResult,
   ActivitySummary,
   AnalyticsQueries,
+  HarnessMetricsRow,
   TimelineItem,
   TimelineKind,
   TimelineQuery,
@@ -19,6 +21,7 @@ import type { Repositories } from '../../ports/persistence/unit-of-work.ts';
 import type { WriteQueue } from '../../ports/persistence/write-queue.ts';
 import type { DB } from './generated/db.d.ts';
 import { asNumber, clampLimit, decodeCursor, encodeCursor } from './repositories/common.ts';
+import { TOOL_CALL_HARNESS } from './repositories/tool-calls.ts';
 
 /** Smallest bucket of `GET /activity`. */
 export const MIN_BUCKET_MS = 60_000;
@@ -319,6 +322,72 @@ export class SqliteAnalyticsQueries implements AnalyticsQueries {
       items: slice,
       nextCursor: last === undefined ? null : encodeCursor(TIMELINE, { key: last.ts, id: last.id }),
     };
+  }
+
+  async harnessMetrics(window: {
+    readonly since: number;
+    readonly until: number;
+  }): Promise<readonly HarnessMetricsRow[]> {
+    await this.#drain();
+    const { since, until } = window;
+    const sessions = await this.#db
+      .selectFrom('sessions')
+      .select([
+        sql<string>`COALESCE(harness, 'unknown')`.as('harness'),
+        sql<number>`COUNT(*)`.as('n'),
+        sql<number>`SUM(CASE WHEN closed_at IS NULL THEN 1 ELSE 0 END)`.as('live'),
+      ])
+      .where('created_at', '>=', since)
+      .where('created_at', '<=', until)
+      .groupBy(sql`COALESCE(harness, 'unknown')`)
+      .execute();
+    const calls = await this.#db
+      .selectFrom('tool_calls as t')
+      .leftJoin('sessions as s', 's.session_id', 't.session_id')
+      .leftJoin('mcp_connections as m', 'm.connection_id', 't.connection_id')
+      .select([
+        TOOL_CALL_HARNESS.as('harness'),
+        sql<number>`COUNT(*)`.as('n'),
+        sql<number>`SUM(CASE WHEN t.error_code IS NOT NULL THEN 1 ELSE 0 END)`.as('errors'),
+      ])
+      .where('t.ts', '>=', since)
+      .where('t.ts', '<=', until)
+      .groupBy(TOOL_CALL_HARNESS)
+      .execute();
+    const byHarness = new Map<
+      string,
+      { sessions: number; sessionsLive: number; toolCalls: number; errors: number }
+    >();
+    const entry = (raw: string) => {
+      // Rows written before schema v3 may hold a raw header value; fold it onto its slug.
+      const harness = normalizeHarness(raw) ?? UNKNOWN_HARNESS;
+      let found = byHarness.get(harness);
+      if (found === undefined) {
+        found = { sessions: 0, sessionsLive: 0, toolCalls: 0, errors: 0 };
+        byHarness.set(harness, found);
+      }
+      return found;
+    };
+    entry(UNKNOWN_HARNESS);
+    for (const row of sessions) {
+      const e = entry(row.harness);
+      e.sessions += asNumber(row.n);
+      e.sessionsLive += asNumber(row.live);
+    }
+    for (const row of calls) {
+      const e = entry(row.harness);
+      e.toolCalls += asNumber(row.n);
+      e.errors += asNumber(row.errors);
+    }
+    return [...byHarness.entries()]
+      .map(([harness, counts]) => ({ harness, ...counts }))
+      .sort(
+        (a, b) =>
+          Number(a.harness === UNKNOWN_HARNESS) - Number(b.harness === UNKNOWN_HARNESS) ||
+          b.sessions - a.sessions ||
+          b.toolCalls - a.toolCalls ||
+          a.harness.localeCompare(b.harness),
+      );
   }
 
   async summary(now: number, windowMs: number): Promise<ActivitySummary> {

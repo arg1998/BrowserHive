@@ -270,6 +270,37 @@ export class SqliteMcpConnectionRepository implements McpConnectionRepository {
     return rows.map(mcpConnectionFromRow);
   }
 
+  async listRecent(limit: number): Promise<{
+    readonly rows: readonly (McpConnectionRecord & { readonly sessions: number })[];
+    readonly live: number;
+  }> {
+    const rows = await this.#db
+      .selectFrom('mcp_connections as m')
+      .selectAll('m')
+      .select(
+        sql<number>`(SELECT COUNT(*) FROM sessions s WHERE s.connection_id = m.connection_id)`.as(
+          'session_count',
+        ),
+      )
+      .orderBy(sql`(m.closed_at IS NULL)`, 'desc')
+      .orderBy('m.last_seen_at', 'desc')
+      .orderBy('m.connection_id', 'desc')
+      .limit(Math.max(1, Math.floor(limit)))
+      .execute();
+    const live = await this.#db
+      .selectFrom('mcp_connections')
+      .select(sql<number>`COUNT(*)`.as('n'))
+      .where('closed_at', 'is', null)
+      .executeTakeFirst();
+    return {
+      rows: rows.map(({ session_count, ...row }) => ({
+        ...mcpConnectionFromRow(row),
+        sessions: asNumber(session_count),
+      })),
+      live: asNumber(live?.n),
+    };
+  }
+
   async closeAll(at: number): Promise<number> {
     const result = await this.#db
       .updateTable('mcp_connections')

@@ -82,16 +82,22 @@ export async function seedFixture(uow: SqliteUnitOfWork): Promise<void> {
       clientVersion: '1.0',
       protocolVersion: '2025-06-18',
       capabilities: {},
-      agentName: null,
-      model: null,
-      harness: null,
+      agentName: 'fixture-workspace',
+      model: 'fixture-model',
+      harness: 'claude-code',
+      clientTitle: 'Fixture Client',
+      workspace: 'fixture-workspace',
+      modelSource: 'header',
+      harnessSource: 'header',
+      conflicts: [{ source: 'client_info', value: 'fixture-client', harness: 'fixture-client' }],
+      meta: { team: 'fixture' },
       ip: '127.0.0.1',
-      userAgent: null,
+      userAgent: 'fixture-agent/1.0',
       connectedAt: at,
       lastSeenAt: at,
       closedAt: null,
     });
-    await r.sessions.insert(sessionRecord({ connectionId: 'c-1' }));
+    await r.sessions.insert(sessionRecord({ connectionId: 'c-1', harness: 'claude-code' }));
     await r.sessions.insert(
       sessionRecord({
         sessionId: 'old-11111111',

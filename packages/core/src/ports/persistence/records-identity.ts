@@ -74,6 +74,13 @@ export type NewAuthEvent = Omit<AuthEventRecord, 'seq'>;
 
 // --- mcp connections --------------------------------------------------------------------------
 
+/** A lower-ranked signal that named another harness than the resolved one. */
+export interface HarnessConflictRecord {
+  readonly source: string;
+  readonly value: string;
+  readonly harness: string;
+}
+
 /** Self-reported MCP client metadata (`mcp_connections`); never used for access control. */
 export interface McpConnectionRecord {
   readonly connectionId: string;
@@ -84,9 +91,23 @@ export interface McpConnectionRecord {
   readonly clientVersion: string | null;
   readonly protocolVersion: string | null;
   readonly capabilities: JsonObject | null;
+  /** `clientInfo.title`. */
+  readonly clientTitle: string | null;
+  /** The workspace; also written to `agentName` for compatibility. */
+  readonly workspace: string | null;
+  /** Legacy column, written with `workspace`. */
   readonly agentName: string | null;
   readonly model: string | null;
+  /** Where `model` came from (`header|env|meta`), `null` when absent. */
+  readonly modelSource: string | null;
+  /** Resolved harness slug (a pre-v3 row may hold the raw header value). */
   readonly harness: string | null;
+  /** How `harness` was recognised (spec 02 §1.4); `null` on rows written before v3 without a harness. */
+  readonly harnessSource: string | null;
+  /** Signals that named another harness. */
+  readonly conflicts: readonly HarnessConflictRecord[];
+  /** The capped meta bag. */
+  readonly meta: Readonly<Record<string, string>>;
   readonly ip: string | null;
   readonly userAgent: string | null;
   readonly connectedAt: number;

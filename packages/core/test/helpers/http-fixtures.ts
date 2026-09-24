@@ -54,6 +54,7 @@ export function sessionRecord(overrides: Partial<SessionRecord> = {}): SessionRe
     lastUrl: 'https://example.com/',
     launchMs: 1000,
     config: {},
+    harness: null,
     ...overrides,
   };
 }

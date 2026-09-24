@@ -126,6 +126,7 @@ export type {
   CredentialRecord,
   EventRecord,
   GrantRecord,
+  HarnessConflictRecord,
   IdempotencyRecord,
   JsonObject,
   JsonValue,

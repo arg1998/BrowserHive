@@ -7,6 +7,8 @@ import type { ToolCallRecord } from './records.ts';
 export interface ToolCallListRow extends ToolCallRecord {
   readonly sessionSlug: string | null;
   readonly hasScreenshot: boolean;
+  /** The call's harness: its connection's, else its session's launch harness, else `unknown` (normalised). */
+  readonly harness: string;
 }
 
 /** Repository over `tool_calls`. */

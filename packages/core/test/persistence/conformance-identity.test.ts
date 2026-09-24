@@ -176,6 +176,12 @@ describe('McpConnectionRepository', () => {
     agentName: null,
     model: null,
     harness: null,
+    clientTitle: null,
+    workspace: null,
+    modelSource: null,
+    harnessSource: null,
+    conflicts: [],
+    meta: {},
     ip: '127.0.0.1',
     userAgent: null,
     connectedAt: 1,
@@ -201,5 +207,38 @@ describe('McpConnectionRepository', () => {
     expect((await t.repos.mcpConnections.listOpen()).length).toBe(1);
     expect(await t.repos.mcpConnections.closeAll(9)).toBe(1);
     expect((await t.repos.mcpConnections.listOpen()).length).toBe(0);
+  });
+
+  it('round-trips the resolved identity and lists live connections first', async () => {
+    const identity = {
+      harness: 'claude-code',
+      harnessSource: 'injected_env',
+      model: 'opus',
+      modelSource: 'env',
+      workspace: 'shop',
+      agentName: 'shop',
+      clientTitle: 'Claude Code',
+      conflicts: [{ source: 'client_info', value: 'cursor-vscode', harness: 'cursor' }],
+      meta: { team: 'growth' },
+    };
+    await t.repos.mcpConnections.insert({ ...connection, ...identity, closedAt: 3, lastSeenAt: 9 });
+    await t.repos.mcpConnections.insert({ ...connection, connectionId: 'c-2', lastSeenAt: 2 });
+    expect(await t.repos.mcpConnections.get('c-1')).toEqual({
+      ...connection,
+      ...identity,
+      closedAt: 3,
+      lastSeenAt: 9,
+    });
+    expect(
+      await t.repos.mcpConnections.update('c-2', { meta: {}, conflicts: [], ip: '10.0.0.2' }),
+    ).toBe(true);
+    const recent = await t.repos.mcpConnections.listRecent(10);
+    expect(recent.live).toBe(1);
+    expect(recent.rows.map((r) => [r.connectionId, r.sessions])).toEqual([
+      ['c-2', 0],
+      ['c-1', 0],
+    ]);
+    expect(recent.rows[0]?.ip).toBe('10.0.0.2');
+    expect((await t.repos.mcpConnections.listRecent(1)).rows).toHaveLength(1);
   });
 });

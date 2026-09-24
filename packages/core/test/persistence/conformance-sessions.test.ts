@@ -40,7 +40,13 @@ describe('SessionRepository', () => {
         capabilities: null,
         agentName: null,
         model: null,
-        harness: 'claude-code',
+        harness: null,
+        clientTitle: null,
+        workspace: null,
+        modelSource: null,
+        harnessSource: null,
+        conflicts: [],
+        meta: {},
         ip: null,
         userAgent: null,
         connectedAt: 1,
@@ -51,10 +57,17 @@ describe('SessionRepository', () => {
     await connection('c-full', {
       clientName: 'claude-code',
       clientVersion: '2.1.0',
+      clientTitle: 'Claude Code',
       agentName: 'checkout-bot',
+      workspace: 'checkout-bot',
       model: 'claude-opus-5',
+      modelSource: 'header',
+      harness: 'claude-code',
+      harnessSource: 'client_info',
     });
     await connection('c-silent', {});
+    // A row written before schema v3: the raw header value, no source.
+    await connection('c-legacy', { harness: 'Claude Code', agentName: 'old-bot' });
     await t.repos.sessions.insert(
       sessionRecord({ sessionId: 'full-0000001', connectionId: 'c-full' }),
     );
@@ -62,11 +75,26 @@ describe('SessionRepository', () => {
       sessionRecord({ sessionId: 'slnt-0000001', connectionId: 'c-silent' }),
     );
     await t.repos.sessions.insert(sessionRecord({ sessionId: 'none-0000001', connectionId: null }));
+    await t.repos.sessions.insert(
+      sessionRecord({ sessionId: 'lgcy-0000001', connectionId: 'c-legacy' }),
+    );
     expect((await t.repos.sessions.get('full-0000001'))?.client).toEqual({
       name: 'claude-code',
       version: '2.1.0',
+      title: 'Claude Code',
       agentName: 'checkout-bot',
+      workspace: 'checkout-bot',
       model: 'claude-opus-5',
+      modelSource: 'header',
+      harness: 'claude-code',
+      harnessSource: 'client_info',
+      protocolVersion: null,
+      meta: {},
+    });
+    expect((await t.repos.sessions.get('lgcy-0000001'))?.client).toMatchObject({
+      harness: 'claude-code',
+      harnessSource: 'header',
+      workspace: 'old-bot',
     });
     // A connection that declared nothing, and a session without one, are both "unknown".
     expect((await t.repos.sessions.get('slnt-0000001'))?.client).toBeNull();
@@ -78,6 +106,40 @@ describe('SessionRepository', () => {
     // The foreign key is ON DELETE SET NULL, so a pruned connection leaves an unknown client.
     t.handle.raw.exec("DELETE FROM mcp_connections WHERE connection_id = 'c-full'");
     expect((await t.repos.sessions.get('full-0000001'))?.client).toBeNull();
+  });
+
+  it('facets, filters and sorts by launch harness, NULL reading unknown', async () => {
+    await t.repos.sessions.insert(
+      sessionRecord({ sessionId: 'cc-00000001', harness: 'claude-code' }),
+    );
+    await t.repos.sessions.insert(
+      sessionRecord({ sessionId: 'cc-00000002', harness: 'claude-code' }),
+    );
+    await t.repos.sessions.insert(sessionRecord({ sessionId: 'cx-00000001', harness: 'codex' }));
+    await t.repos.sessions.insert(sessionRecord({ sessionId: 'nn-00000001', harness: null }));
+    const facets = await t.repos.sessions.facets({});
+    expect(facets.harnesses).toEqual([
+      { value: 'claude-code', count: 2 },
+      { value: 'codex', count: 1 },
+      { value: 'unknown', count: 1 },
+    ]);
+    const unknown = await t.repos.sessions.list({ limit: 10, harnesses: ['unknown'] });
+    expect(unknown.items.map((r) => r.sessionId)).toEqual(['nn-00000001']);
+    const sorted = await t.repos.sessions.list({ limit: 10, sort: 'harness', dir: 'asc' });
+    expect(sorted.items.map((r) => r.harness)).toEqual([
+      'claude-code',
+      'claude-code',
+      'codex',
+      null,
+    ]);
+    const second = await t.repos.sessions.list({ limit: 2, sort: 'harness', dir: 'asc' });
+    const next = await t.repos.sessions.list({
+      limit: 2,
+      sort: 'harness',
+      dir: 'asc',
+      ...(second.nextCursor !== null && { cursor: second.nextCursor }),
+    });
+    expect(next.items.map((r) => r.sessionId)).toEqual(['cx-00000001', 'nn-00000001']);
   });
 
   it('updates, closes once, archives and reconciles', async () => {

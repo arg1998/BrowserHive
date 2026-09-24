@@ -1,5 +1,6 @@
 /** @module infra/persistence/repositories/sessions — SQLite `SessionRepository` with the aggregated list view. */
 
+import { normalizeHarness, UNKNOWN_HARNESS } from '@browserhive/contracts/harness';
 import { type Kysely, sql } from 'kysely';
 import { clientInfoOrNull } from '../../../domain/session/client-info.ts';
 import type { ClosedReason } from '../../../ports/persistence/enums.ts';
@@ -45,7 +46,11 @@ const SORT: Record<SessionSortKey, SortExpr> = {
   owner: { expr: sql.ref('v.owner'), nullValue: '' },
   persistence_mode: { expr: sql.ref('v.persistence_mode'), nullValue: '' },
   blocked: { expr: sql.ref('v.blocked'), nullValue: 0 },
+  harness: { expr: sql.ref('v.harness_key'), nullValue: 'unknown' },
 };
+
+/** A session's launch harness for facets, filters and sorting: NULL (pre-v3) reads `unknown`. */
+const LAUNCH_HARNESS = sql<string>`COALESCE(s.harness, 'unknown')`;
 
 function count(table: string, extra = ''): ReturnType<typeof sql<number>> {
   return sql<number>`(SELECT COUNT(*) FROM ${sql.table(table)} c WHERE c.session_id = s.session_id${sql.raw(extra)})`;
@@ -62,6 +67,15 @@ function view(db: Kysely<DB>) {
       'm.client_version as client_version',
       'm.agent_name as client_agent_name',
       'm.model as client_model',
+      'm.client_title as client_title',
+      'm.workspace as client_workspace',
+      'm.model_source as client_model_source',
+      'm.harness as client_harness',
+      'm.harness_source as client_harness_source',
+      'm.protocol_version as client_protocol_version',
+      'm.meta_json as client_meta_json',
+      'm.connection_id as client_connection_id',
+      LAUNCH_HARNESS.as('harness_key'),
       count('tool_calls').as('tool_calls'),
       count('tool_calls', ' AND c.error_code IS NOT NULL').as('errors'),
       count('pages').as('pages'),
@@ -97,6 +111,9 @@ function applyFilters(qb: ViewQuery, q: SessionListQuery): ViewQuery {
   if (q.persistenceModes !== undefined && q.persistenceModes.length > 0) {
     out = out.where('v.persistence_mode', 'in', [...q.persistenceModes]);
   }
+  if (q.harnesses !== undefined && q.harnesses.length > 0) {
+    out = out.where('v.harness_key', 'in', [...q.harnesses]);
+  }
   if (q.q !== undefined && q.q !== '') {
     const term = q.q;
     out = out.where((eb) =>
@@ -111,16 +128,59 @@ function applyFilters(qb: ViewQuery, q: SessionListQuery): ViewQuery {
   return out;
 }
 
+function metaOf(text: string | null): Readonly<Record<string, string>> {
+  if (text === null) return {};
+  try {
+    const value: unknown = JSON.parse(text);
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
+    return Object.fromEntries(
+      Object.entries(value).filter((e): e is [string, string] => typeof e[1] === 'string'),
+    );
+  } catch {
+    return {};
+  }
+}
+
 function toListRow(row: ViewRow): SessionListRow {
-  const { client_name, client_version, client_agent_name, client_model, ...session } = row;
+  const {
+    client_name,
+    client_version,
+    client_agent_name,
+    client_model,
+    client_title,
+    client_workspace,
+    client_model_source,
+    client_harness,
+    client_harness_source,
+    client_protocol_version,
+    client_meta_json,
+    client_connection_id,
+    harness_key: _harnessKey,
+    ...session
+  } = row;
+  // No connection row (never recorded, or pruned) means no client.
   return {
     ...sessionFromRow(session),
-    client: clientInfoOrNull({
-      name: client_name,
-      version: client_version,
-      agentName: client_agent_name,
-      model: client_model,
-    }),
+    client:
+      client_connection_id !== null
+        ? clientInfoOrNull({
+            name: client_name,
+            version: client_version,
+            title: client_title,
+            agentName: client_agent_name,
+            workspace: client_workspace ?? client_agent_name,
+            model: client_model,
+            modelSource: client_model_source,
+            // Rows written before schema v3 hold the raw header value.
+            harness:
+              client_harness === null
+                ? UNKNOWN_HARNESS
+                : (normalizeHarness(client_harness) ?? UNKNOWN_HARNESS),
+            harnessSource: client_harness_source ?? (client_harness === null ? 'none' : 'header'),
+            protocolVersion: client_protocol_version,
+            meta: metaOf(client_meta_json),
+          })
+        : null,
     counts: {
       toolCalls: asNumber(row.tool_calls),
       errors: asNumber(row.errors),
@@ -202,7 +262,7 @@ export class SqliteSessionRepository implements SessionRepository {
 
   async facets(query: SessionListQuery): Promise<SessionFacets> {
     const facet = async (
-      column: 'owner' | 'channel' | 'persistence_mode' | 'state',
+      column: 'owner' | 'channel' | 'persistence_mode' | 'state' | 'harness_key',
     ): Promise<FacetCount[]> => {
       const rows = await applyFilters(this.#view(), query)
         .clearSelect()
@@ -220,6 +280,7 @@ export class SqliteSessionRepository implements SessionRepository {
       channels: await facet('channel'),
       persistenceModes: await facet('persistence_mode'),
       states: await facet('state'),
+      harnesses: await facet('harness_key'),
     };
   }
 
@@ -302,6 +363,6 @@ export class SqliteSessionRepository implements SessionRepository {
 }
 
 function sortValue(row: ViewRow, key: SessionSortKey, nullValue: number | string): number | string {
-  const value = row[key];
+  const value = key === 'harness' ? row.harness_key : row[key];
   return value === null ? nullValue : value;
 }

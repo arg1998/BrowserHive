@@ -415,6 +415,7 @@ describe('SchemaMigrationRepository', () => {
     expect((await t.repos.schemaMigrations.list()).map((m) => [m.version, m.name])).toEqual([
       [1, 'initial'],
       [2, 'notification-groups'],
+      [3, 'harness-identity'],
     ]);
     expect(await t.repos.schemaMigrations.currentVersion()).toBe(SCHEMA_VERSION);
   });

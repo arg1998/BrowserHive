@@ -67,6 +67,16 @@ export interface ToolMetricsRow {
   readonly maxMs: number;
 }
 
+/** Per-harness counts over a window (`GET /metrics/harnesses`, D-30). */
+export interface HarnessMetricsRow {
+  /** Normalised slug (`unknown` included). */
+  readonly harness: string;
+  readonly sessions: number;
+  readonly sessionsLive: number;
+  readonly toolCalls: number;
+  readonly errors: number;
+}
+
 /** Timeline item kinds. */
 export type TimelineKind = 'tool' | 'page' | 'attention' | 'vault' | 'blocked';
 
@@ -119,6 +129,14 @@ export interface AnalyticsQueries {
   activity(query: ActivityQuery): Promise<ActivityResult>;
   /** Per-tool / per-error latency and error-rate metrics. */
   toolMetrics(query: ToolMetricsQuery): Promise<readonly ToolMetricsRow[]>;
+  /**
+   * Sessions created (by launch harness) and tool calls made (by the call's harness) in the window;
+   * `unknown` always present; sorted by sessions, then tool calls, descending, `unknown` last.
+   */
+  harnessMetrics(window: {
+    readonly since: number;
+    readonly until: number;
+  }): Promise<readonly HarnessMetricsRow[]>;
   /** Merged per-session timeline sorted by `(ts, id)` descending. */
   timeline(sessionId: string, query: TimelineQuery): Promise<Page<TimelineItem>>;
   /** Headline counters over the trailing `windowMs`. */

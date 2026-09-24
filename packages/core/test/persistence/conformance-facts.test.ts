@@ -50,11 +50,13 @@ describe('ToolCallRepository', () => {
       ...a,
       sessionSlug: 'shop',
       hasScreenshot: true,
+      harness: 'unknown',
     });
     expect(await t.repos.toolCalls.get('e-c')).toEqual({
       ...c,
       sessionSlug: null,
       hasScreenshot: false,
+      harness: 'unknown',
     });
     const page = await t.repos.toolCalls.listBySession('shop-a1b2c3d4', { limit: 1, total: true });
     expect(page.items.map((r) => r.eventId)).toEqual(['e-b']);
@@ -88,6 +90,55 @@ describe('ToolCallRepository', () => {
         (r) => r.eventId,
       ),
     ).toEqual(['e-b', 'e-a', 'e-c']);
+  });
+
+  it("derives each call's harness from its connection, then its session (02 §1.4)", async () => {
+    await t.repos.mcpConnections.insert({
+      connectionId: 'c-codex',
+      principalId: 'local',
+      transport: 'http',
+      mcpSessionId: null,
+      clientName: 'codex-mcp-client',
+      clientVersion: null,
+      protocolVersion: null,
+      capabilities: null,
+      agentName: null,
+      model: null,
+      harness: 'codex',
+      clientTitle: null,
+      workspace: null,
+      modelSource: null,
+      harnessSource: 'client_info',
+      conflicts: [],
+      meta: {},
+      ip: null,
+      userAgent: null,
+      connectedAt: 1,
+      lastSeenAt: 1,
+      closedAt: null,
+    });
+    await t.repos.sessions.insert(
+      sessionRecord({ sessionId: 'oc-00000001', slug: 'oc', harness: 'opencode', createdAt: 5 }),
+    );
+    await t.repos.toolCalls.insert(
+      toolCallRecord({ eventId: 'e-1', connectionId: 'c-codex', ts: 10, seq: 1 }),
+    );
+    await t.repos.toolCalls.insert(
+      toolCallRecord({ eventId: 'e-2', sessionId: 'oc-00000001', ts: 11, seq: 1, errorCode: 'X' }),
+    );
+    await t.repos.toolCalls.insert(toolCallRecord({ eventId: 'e-3', ts: 12, seq: 2 }));
+    const harnessOf = async (id: string) => (await t.repos.toolCalls.get(id))?.harness;
+    expect(await harnessOf('e-1')).toBe('codex');
+    expect(await harnessOf('e-2')).toBe('opencode');
+    expect(await harnessOf('e-3')).toBe('unknown');
+    const only = await t.repos.toolCalls.listAll({ limit: 10, harnesses: ['codex', 'unknown'] });
+    expect(only.items.map((r) => r.eventId).sort()).toEqual(['e-1', 'e-3']);
+    const metrics = await t.analytics.harnessMetrics({ since: 0, until: 100 });
+    expect(metrics).toEqual([
+      { harness: 'opencode', sessions: 1, sessionsLive: 1, toolCalls: 1, errors: 1 },
+      { harness: 'codex', sessions: 0, sessionsLive: 0, toolCalls: 1, errors: 0 },
+      { harness: 'unknown', sessions: 0, sessionsLive: 0, toolCalls: 1, errors: 0 },
+    ]);
   });
 
   it('escapes LIKE wildcards in free text', async () => {

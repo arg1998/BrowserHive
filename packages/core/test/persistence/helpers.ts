@@ -100,6 +100,7 @@ export function sessionRecord(overrides: Partial<SessionRecord> = {}): SessionRe
     lastUrl: null,
     launchMs: 500,
     config: { channel: 'chromium', headless: true },
+    harness: null,
     ...overrides,
   };
 }
