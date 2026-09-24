@@ -82,6 +82,8 @@ export const SessionSummary = z.object({
   humanize: z.boolean(),
   stealth_recorded: z.boolean(),
   identity: AppliedIdentity.nullable(),
+  /** The running browser's real version (null for a persistent context) and whether it runs sandboxed; live sessions only. */
+  browser: z.object({ version: z.string().nullable(), sandboxed: z.boolean() }).optional(),
   proxy_label: z.string().nullable(),
   counts: SessionCounts,
   has_live_viewers: z.boolean(),

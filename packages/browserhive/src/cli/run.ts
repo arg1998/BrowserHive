@@ -105,7 +105,9 @@ export function reportError(out: Output, error: unknown, debug: boolean): number
   const facts = appErrorFacts(error);
   if (facts !== null) {
     out.diagnostic(`browserhive: [${facts.code}] ${facts.message}`);
-    if (facts.hint !== undefined) out.diagnostic(`hint: ${facts.hint}`);
+    // A boot refusal that carries its own guidance (sandbox=on) prints it instead of the hint.
+    if (facts.guidance.length > 0) for (const line of facts.guidance) out.diagnostic(line);
+    else if (facts.hint !== undefined) out.diagnostic(`hint: ${facts.hint}`);
     if (debug && facts.stack !== undefined) out.diagnostic(facts.stack);
     return facts.exitCode;
   }

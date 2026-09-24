@@ -48,6 +48,7 @@ import type { DegradationRelay } from './adapters/degradation-relay.ts';
 import type { DataDirLayout } from './data-dir.ts';
 import type { PhaseTracker } from './health.ts';
 import type { DataDirLock } from './lock-file.ts';
+import type { SandboxWiring } from './sandbox.ts';
 import type { BootInput } from './types.ts';
 
 /** Filled by `observability`. */
@@ -91,6 +92,8 @@ export interface DomainPart {
   readonly browserInstalled: boolean;
   /** Version of the Chromium build `chromium` sessions launch; `null` when it is not installed. */
   readonly chromiumVersion: string | null;
+  /** The sandbox policy and `/system`'s browser block. */
+  readonly sandbox: SandboxWiring;
   readonly blocklist: BlocklistService;
   readonly authStates: AuthStateStore;
   readonly sessions: SessionService;

@@ -51,6 +51,9 @@ export const KEY_ALIASES: Readonly<Record<string, ConfigKey | null>> = {
   '--log-pretty': 'logFormat',
   BROWSERHIVE_LOG_PRETTY: 'logFormat',
   BROWSERHIVE_DISABLE_PATCHRIGHT: 'stealthDriver',
+  // Chrome's own flag; BrowserHive's equivalent is `--sandbox off`.
+  '--no-sandbox': 'sandbox',
+  BROWSERHIVE_NO_SANDBOX: 'sandbox',
   BROWSERHIVE_ADMIN_BIND: null,
   BROWSERHIVE_ADMIN_PORT: null,
 };

@@ -158,6 +158,18 @@
       "x-browserhive-env": "BROWSERHIVE_DEFAULT_CHANNEL",
       "x-browserhive-cli": "--defaultChannel"
     },
+    "sandbox": {
+      "default": "off",
+      "type": "string",
+      "enum": [
+        "auto",
+        "on",
+        "off"
+      ],
+      "description": "Chromium's sandbox. auto runs each browser sandboxed where it can and falls back where it cannot (warned once); on requires it: the server refuses to start (exit 3) and a session fails with SANDBOX_UNAVAILABLE when a browser cannot provide it; off never uses it.",
+      "x-browserhive-env": "BROWSERHIVE_SANDBOX",
+      "x-browserhive-cli": "--sandbox"
+    },
     "maxSessions": {
       "description": "Maximum concurrent browser sessions, or unbounded. Derived from available RAM when unset (min(floor(GiB / 1.5), 20); on Linux, host RAM capped by the cgroup memory limit).",
       "x-browserhive-env": "BROWSERHIVE_MAX_SESSIONS",

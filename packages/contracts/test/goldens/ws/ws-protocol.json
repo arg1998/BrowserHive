@@ -613,6 +613,19 @@
                           }
                         ]
                       },
+                      "browser": {
+                        "type": "object",
+                        "properties": {
+                          "version": {
+                            "type": ["string", "null"]
+                          },
+                          "sandboxed": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": ["version", "sandboxed"],
+                        "additionalProperties": false
+                      },
                       "proxy_label": {
                         "type": ["string", "null"]
                       },
@@ -894,6 +907,19 @@
                             "type": "null"
                           }
                         ]
+                      },
+                      "browser": {
+                        "type": "object",
+                        "properties": {
+                          "version": {
+                            "type": ["string", "null"]
+                          },
+                          "sandboxed": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": ["version", "sandboxed"],
+                        "additionalProperties": false
                       },
                       "proxy_label": {
                         "type": ["string", "null"]
@@ -3264,6 +3290,19 @@
                   }
                 ]
               },
+              "browser": {
+                "type": "object",
+                "properties": {
+                  "version": {
+                    "type": ["string", "null"]
+                  },
+                  "sandboxed": {
+                    "type": "boolean"
+                  }
+                },
+                "required": ["version", "sandboxed"],
+                "additionalProperties": false
+              },
               "proxy_label": {
                 "type": ["string", "null"]
               },
@@ -3545,6 +3584,19 @@
                     "type": "null"
                   }
                 ]
+              },
+              "browser": {
+                "type": "object",
+                "properties": {
+                  "version": {
+                    "type": ["string", "null"]
+                  },
+                  "sandboxed": {
+                    "type": "boolean"
+                  }
+                },
+                "required": ["version", "sandboxed"],
+                "additionalProperties": false
               },
               "proxy_label": {
                 "type": ["string", "null"]

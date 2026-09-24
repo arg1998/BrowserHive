@@ -28,6 +28,7 @@ export { PrincipalKind } from './principal-kind.ts';
 export { ProvenanceSource } from './provenance-source.ts';
 export { RecordToolResults } from './record-tool-results.ts';
 export { Retryable } from './retryable.ts';
+export { SandboxMode } from './sandbox-mode.ts';
 export { SavedAuthKind } from './saved-auth-kind.ts';
 export { Scope } from './scope.ts';
 export { SessionStatus } from './session-status.ts';

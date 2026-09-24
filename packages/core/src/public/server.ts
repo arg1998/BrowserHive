@@ -49,6 +49,7 @@ export {
   type SandboxEnvironment,
   type SandboxProbeResult,
 } from '../infra/browsers/sandbox.ts';
+export { sandboxUnavailable } from '../infra/browsers/sandbox-error.ts';
 export {
   type GuidanceAlternative,
   type GuidanceTarget,
@@ -58,6 +59,13 @@ export {
   sandboxGuidance,
   shortSandboxGuidance,
 } from '../infra/browsers/sandbox-guidance.ts';
+export {
+  SandboxPolicy,
+  type SandboxRequirement,
+  type SandboxStatusEntry,
+  type SandboxTarget,
+  type SandboxUnavailableFactory,
+} from '../infra/browsers/sandbox-policy.ts';
 export { createBunDesktop } from '../infra/desktop/bun-desktop.ts';
 export { createArtifactFiles } from '../infra/static/artifact-files.ts';
 export { createBunStaticAssets } from '../infra/static/bun-static-assets.ts';

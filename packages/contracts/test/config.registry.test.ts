@@ -31,6 +31,7 @@ const SPEC_KEYS = [
   'persistence',
   'defaultHeadless',
   'defaultChannel',
+  'sandbox',
   'maxSessions',
   'sessionLease',
   'attentionTimeout',

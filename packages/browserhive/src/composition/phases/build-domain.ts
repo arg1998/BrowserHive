@@ -66,6 +66,9 @@ async function buildDomain(
     logger,
     bus,
     relay,
+    provenance: ctx.input.resolved.provenance,
+    configFilePath: ctx.input.resolved.configFilePath,
+    ...(ctx.input.sandboxHost !== undefined && { sandboxHost: ctx.input.sandboxHost }),
   });
   undo.push(() => sessionParts.stopWatcher?.());
   ctx.health.check('browser', sessionParts.browserInstalled ? 'ok' : 'degraded');
@@ -162,6 +165,7 @@ async function buildDomain(
     driverName: sessionParts.driverName,
     browserInstalled: sessionParts.browserInstalled,
     chromiumVersion: sessionParts.chromiumVersion,
+    sandbox: sessionParts.sandbox,
     blocklist: sessionParts.blocklist,
     authStates: sessionParts.authStates,
     sessions,

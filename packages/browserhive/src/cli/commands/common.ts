@@ -44,6 +44,8 @@ export interface AppErrorFacts {
   readonly hint: string | undefined;
   readonly exitCode: number;
   readonly stack: string | undefined;
+  /** Operator guidance lines carried in `details.guidance` (the `sandbox=on` refusal). */
+  readonly guidance: readonly string[];
 }
 
 /**
@@ -57,12 +59,20 @@ export function appErrorFacts(value: unknown): AppErrorFacts | null {
   if (typeof code !== 'string' || !isErrorCode(code)) return null;
   const spec = ERROR_REGISTRY[code];
   const publicMessage: unknown = 'publicMessage' in value ? value.publicMessage : undefined;
+  const details: unknown = 'details' in value ? value.details : undefined;
+  const guidance: unknown =
+    typeof details === 'object' && details !== null && 'guidance' in details
+      ? details.guidance
+      : undefined;
   return {
     code,
     message: typeof publicMessage === 'string' ? publicMessage : value.message,
     hint: spec.hint,
     exitCode: 'exitCode' in spec && typeof spec.exitCode === 'number' ? spec.exitCode : EXIT.fatal,
     stack: value.stack,
+    guidance: Array.isArray(guidance)
+      ? guidance.filter((line): line is string => typeof line === 'string')
+      : [],
   };
 }
 

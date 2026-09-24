@@ -219,6 +219,8 @@ export {
   SetLogLevelRequest,
   SetLogLevelResponse,
   StorageStatus,
+  SystemBrowser,
+  SystemBrowserChannel,
   SystemCapacity,
   SystemConfigKey,
   SystemConfigResponse,

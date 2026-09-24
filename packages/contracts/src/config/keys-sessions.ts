@@ -1,6 +1,7 @@
 /** @module contracts/config/keys-sessions — session, browser and stealth keys (spec 08 §5.2) */
 import type { z } from 'zod';
 import { Channel } from '../enums/channel.ts';
+import { SandboxMode } from '../enums/sandbox-mode.ts';
 import { StealthDriver } from '../enums/stealth-driver.ts';
 import { StealthLevel } from '../enums/stealth-level.ts';
 import { derived, key } from './key.ts';
@@ -28,6 +29,12 @@ export const SESSION_KEYS = {
     default: 'chromium',
     group: 'sessions',
     describe: 'Default browser channel; launch_session channel overrides per session.',
+  }),
+  sandbox: key(zEnumOf(SandboxMode.options), {
+    default: 'off',
+    group: 'sessions',
+    describe:
+      "Chromium's sandbox. auto runs each browser sandboxed where it can and falls back where it cannot (warned once); on requires it: the server refuses to start (exit 3) and a session fails with SANDBOX_UNAVAILABLE when a browser cannot provide it; off never uses it.",
   }),
   maxSessions: key(zMaxSessions, {
     default: derived('hostMemory'),

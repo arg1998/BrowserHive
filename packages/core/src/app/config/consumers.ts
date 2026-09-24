@@ -25,6 +25,7 @@ export const CONSUMED_KEYS: Readonly<Record<ConfigKey, string>> = {
   persistence: 'app/sessions/session-service',
   defaultHeadless: 'app/sessions/session-service',
   defaultChannel: 'app/sessions/session-service',
+  sandbox: 'infra/browsers/sandbox-policy',
   maxSessions: 'domain/session/admission',
   sessionLease: 'app/sessions/session-service',
   attentionTimeout: 'domain/operator-requests/broker',

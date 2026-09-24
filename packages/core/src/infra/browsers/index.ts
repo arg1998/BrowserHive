@@ -113,6 +113,7 @@ export {
   UNSAFE_LAUNCH_OPTION_FIELDS,
 } from './pass-through.ts';
 export {
+  ASK_OPERATOR_GUIDANCE,
   capabilitiesFor,
   PlaywrightBrowserDriver,
   type PlaywrightBrowserDriverDeps,
@@ -133,6 +134,7 @@ export {
   type SandboxProbeTarget,
   sandboxFailureReason,
 } from './sandbox.ts';
+export { type SandboxUnavailableInput, sandboxUnavailable } from './sandbox-error.ts';
 export {
   type GuidanceAlternative,
   type GuidanceOption,
@@ -144,6 +146,16 @@ export {
   shortSandboxGuidance,
   wrap,
 } from './sandbox-guidance.ts';
+export {
+  type SandboxedLaunch,
+  SandboxPolicy,
+  type SandboxPolicyDeps,
+  type SandboxRequirement,
+  type SandboxStatusEntry,
+  type SandboxTarget,
+  type SandboxUnavailableFactory,
+  type SandboxVerdict,
+} from './sandbox-policy.ts';
 export { PlaywrightSessionHandle, type SessionHandleInput } from './session-handle.ts';
 export {
   archFor,

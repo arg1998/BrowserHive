@@ -199,16 +199,18 @@ export async function engineVersion(channel: ProbeChannel): Promise<string | nul
  * @returns The failed checks, empty when all passed.
  */
 export function stealthProblems(
-  channel: ProbeChannel,
+  _channel: ProbeChannel,
   stealth: ProbeStealth,
   signals: PageSignals,
   engine: string | null,
 ): string[] {
   const problems: string[] = [];
   if (signals.ua.includes('HeadlessChrome')) problems.push('UA contains HeadlessChrome');
-  const brandName = channel === 'edge' ? 'Microsoft Edge' : 'Google Chrome';
-  const branded = (signals.brands ?? []).filter((b) => b.startsWith(`${brandName}/`)).length;
-  if (branded !== 1) problems.push(`brands list ${brandName} ${branded} times`);
+  // Every channel is presented as Google Chrome today, Edge included (a known incoherence with
+  // Edge's `Edg/` UA, plan §11): the check pins that behaviour so a change is noticed, and that
+  // real Chrome's own brand is not duplicated by the relabel.
+  const branded = (signals.brands ?? []).filter((b) => b.startsWith('Google Chrome/')).length;
+  if (branded !== 1) problems.push(`brands list Google Chrome ${branded} times`);
   if (signals.webdriver !== false) problems.push(`navigator.webdriver is ${signals.webdriver}`);
   if (signals.chrome !== 'object') problems.push(`window.chrome is ${signals.chrome}`);
   if (signals.plugins !== 5) problems.push(`plugins.length is ${signals.plugins}`);
@@ -311,12 +313,25 @@ export async function runMatrix(options: MatrixOptions): Promise<ProbeRow[]> {
   const rows: ProbeRow[] = [];
   try {
     for (const stealth of options.stealth) {
-      const groups = new Map<string, ProbeSandbox[]>();
+      // One server per sandbox setting; `on` gets one per channel, as that channel's default, so
+      // its boot preflight checks exactly the browser being measured.
+      const servers: {
+        readonly sandbox: string;
+        readonly channels: readonly ProbeChannel[];
+        readonly modes: ProbeSandbox[];
+      }[] = [];
       for (const mode of options.sandbox) {
-        const group = serverSandboxFor(mode) ?? '';
-        groups.set(group, [...(groups.get(group) ?? []), mode]);
+        const serverSandbox = serverSandboxFor(mode) ?? '';
+        if (serverSandbox === 'on') {
+          for (const channel of options.channels)
+            servers.push({ sandbox: 'on', channels: [channel], modes: [mode] });
+          continue;
+        }
+        const existing = servers.find((s) => s.sandbox === serverSandbox && s.channels.length > 1);
+        if (existing !== undefined) existing.modes.push(mode);
+        else servers.push({ sandbox: serverSandbox, channels: options.channels, modes: [mode] });
       }
-      for (const [serverSandbox, modes] of groups) {
+      for (const spec of servers) {
         const dataDir = mkdtempSync(join(tmpdir(), 'bh-matrix-'));
         const server = await createServer({
           port: 0,
@@ -325,17 +340,47 @@ export async function runMatrix(options: MatrixOptions): Promise<ProbeRow[]> {
           configFile: false,
           output: silent,
           stealth,
-          ...(serverSandbox !== '' && ({ sandbox: serverSandbox } as Record<string, unknown>)),
+          ...(spec.sandbox !== '' && ({ sandbox: spec.sandbox } as Record<string, unknown>)),
+          ...(spec.sandbox === 'on' && { defaultChannel: spec.channels[0] }),
         });
         try {
-          await server.listen();
+          try {
+            await server.listen();
+          } catch (err) {
+            // `sandbox=on` refusing to start is a measured outcome, not a harness failure.
+            const code =
+              typeof err === 'object' && err !== null && 'code' in err ? String(err.code) : null;
+            const message = err instanceof Error ? err.message : null;
+            for (const channel of spec.channels) {
+              for (const sandbox of spec.modes) {
+                const row: ProbeRow = {
+                  channel,
+                  stealth,
+                  sandbox,
+                  outcome:
+                    message !== null && /is not installed/.test(message) ? 'skipped' : 'failed',
+                  errorCode: code === null ? null : `boot:${code}`,
+                  errorMessage: message,
+                  retryable: null,
+                  sandboxed: null,
+                  signals: null,
+                  engineVersion: engines.get(channel) ?? null,
+                  problems: [],
+                  launchMs: null,
+                };
+                rows.push(row);
+                options.onRow?.(row);
+              }
+            }
+            continue;
+          }
           const client = new Client({ name: 'stealth-matrix', version: '1.0.0' });
           await client.connect(
             new StreamableHTTPClientTransport(new URL(`${server.url}/mcp`)) as Transport,
           );
           try {
-            for (const channel of options.channels) {
-              for (const sandbox of modes) {
+            for (const channel of spec.channels) {
+              for (const sandbox of spec.modes) {
                 const row = await measure(client, {
                   channel,
                   stealth,
