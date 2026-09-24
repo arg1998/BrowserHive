@@ -262,7 +262,7 @@ export async function openHttpListener(
       },
       adminAuthenticator: domain.adminAuthenticator,
       mcpAuthenticator: domain.mcpAuthenticator,
-      mcp: (request, principal) => handler.handleMcpRequest(request, principal),
+      mcp: (request, principal, context) => handler.handleMcpRequest(request, principal, context),
       clock: ctx.clock,
       ids: domain.ids,
       logger,

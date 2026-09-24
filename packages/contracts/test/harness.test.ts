@@ -70,7 +70,8 @@ describe('harnessFromClientName', () => {
 describe('harnessFromUserAgent', () => {
   const rows: readonly (readonly [string | null, string | null])[] = [
     ['codex-mcp-client/0.154.0', 'codex'],
-    ['claude-code/2.1.281 (cli)', 'claude-code'],
+    ['claude-code/2.1.282 (sdk-cli)', 'claude-code'],
+    ['opencode/1.18.31', 'opencode'],
     ['Cursor/1.7.3 (linux x64)', 'cursor'],
     [
       'Mozilla/5.0 (Macintosh) AppleWebKit/537.36 Claude/0.14.10 Chrome/138.0 Electron/37.2.0 Safari/537.36',

@@ -152,6 +152,7 @@ const CLIENT_NAME_PREFIXES: readonly (readonly [string, KnownHarness])[] = [
 export const USER_AGENT_PATTERNS: readonly (readonly [RegExp, KnownHarness])[] = [
   [/^codex-mcp-client\//i, 'codex'],
   [/^claude-code\//i, 'claude-code'],
+  [/^opencode\//i, 'opencode'],
   [/^Cursor\/\d/, 'cursor'],
   [/\bClaude\/\d[^ ]*.*\bElectron\//, 'claude-desktop'],
 ];
