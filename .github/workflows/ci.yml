@@ -225,11 +225,12 @@ jobs:
         run: bun run test:integration
 
   sandbox-matrix:
-    # Cross-OS sandbox and stealth smoke check: launches sessions through BrowserHive with the
-    # Chromium sandbox off and on, for the bundled Chromium and the Google Chrome and Microsoft Edge
-    # the runner images ship, and records whether the sandbox works plus the page-visible stealth
-    # signals in the job summary. Informational only: it is not a required check, and a channel the
-    # runner lacks is reported as skipped.
+    # Cross-OS sandbox and stealth smoke check: launches sessions through BrowserHive under each
+    # `sandbox` setting (off, auto, on) and with an agent's `chromiumSandbox: true`, for the bundled
+    # Chromium and the Google Chrome and Microsoft Edge the runner images ship. The job summary shows
+    # whether each browser runs sandboxed and the page-visible stealth signals; --strict fails the
+    # job when a launched session misses a stealth check or sandbox on/off signals differ. Not a
+    # required check; a channel the runner lacks is reported as skipped.
     needs: changes
     if: needs.changes.outputs.code == 'true'
     continue-on-error: true
@@ -263,7 +264,7 @@ jobs:
         run: bunx playwright install chromium --with-deps
       - name: Measure
         shell: bash
-        run: bun packages/browserhive/scripts/stealth-matrix.ts --out "matrix-${{ matrix.os }}.json" --summary "$GITHUB_STEP_SUMMARY"
+        run: bun packages/browserhive/scripts/stealth-matrix.ts --sandbox config:off,config:auto,config:on,session --strict --out "matrix-${{ matrix.os }}.json" --summary "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
