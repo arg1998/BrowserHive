@@ -124,7 +124,7 @@ Keyboard: `⌘K` command palette (pages, sessions, actions), `⌘B` sidebar, `/`
 
 ## 7. Configuration in one page
 
-Precedence (rightmost wins): **defaults < environment < `browserhive.config.json` < CLI flags** (D-06). When a key comes from more than one source, startup logs which value shadowed which. Names are mechanical: CLI `--maxSessions`, env `BROWSERHIVE_MAX_SESSIONS`, JSON `"maxSessions"`. Unknown or misspelled keys stop startup with a suggestion.
+Precedence (rightmost wins): **defaults < environment < `browserhive.config.json` < CLI flags** (D-06). When a key comes from more than one source, startup logs which value shadowed which. Names are mechanical: CLI `--maxSessions`, env `BROWSERHIVE_MAX_SESSIONS`, JSON `"maxSessions"`. Unknown or misspelled keys stop startup with a suggestion. A string in the config file may reference environment variables (`"authTokens": "ci:{env:CI_TOKEN}"`, `{env:NAME:-default}`), so a checked-in file can leave its secrets to the environment; `config show`, the startup log and the dashboard name the variable each value came from (D-29).
 
 The config file is looked up as `--config <path>`, then `./browserhive.config.json`, then `<data-dir>/browserhive.config.json`. For editor completion, write the JSON Schema next to it (`browserhive config schema > browserhive.schema.json`, or `browserhive init --writeSchema`) and add `"$schema": "./browserhive.schema.json"`. Unsupported spellings such as `--max-sessions` stop startup with the correct name (`--maxSessions`).
 

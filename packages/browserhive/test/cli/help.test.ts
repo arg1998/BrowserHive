@@ -63,6 +63,9 @@ describe('help layout', () => {
     expect(text).toContain('default: 9876');
     expect(text).toContain('[secret]');
     expect(text).toContain('Precedence: defaults < environment < browserhive.config.json < flags');
+    expect(text).toContain(
+      'References: a config-file value may contain {env:NAME} or {env:NAME:-default}.',
+    );
   });
 
   it('help config lists the environment variable of every key', () => {

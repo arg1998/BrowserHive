@@ -223,6 +223,7 @@ export {
   SystemBrowserChannel,
   SystemCapacity,
   SystemConfigKey,
+  SystemConfigRef,
   SystemConfigResponse,
   SystemEvent,
   SystemEventsPage,

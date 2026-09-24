@@ -105,3 +105,66 @@ describe('configSourceSummary', () => {
     expect(configSourceSummary(resolveOk().provenance, undefined)).toBe('none');
   });
 });
+
+describe('references in the views (spec 08 §3.1, §7.1)', () => {
+  const refs = () =>
+    resolveOk({
+      env: {
+        OTLP_HOST: 'collector.internal',
+        OTLP_TOKEN: 't'.repeat(40),
+        BROWSERHIVE_MAX_SESSIONS: '2',
+      },
+      argv: ['--maxSessions', '8'],
+      files: {
+        [FILE]: JSON.stringify({
+          otel: true,
+          otelEndpoint: 'http://{env:OTLP_HOST}:4318',
+          otelHeaders: { Authorization: 'Bearer {env:OTLP_TOKEN}' },
+          maxSessions: '{env:MAX:-4}',
+        }),
+      },
+    });
+
+  it('config show: SOURCE names the variables, SHADOWED marks a shadowed file value', () => {
+    const rows = Object.fromEntries(configShowRows(refs().provenance).map((r) => [r.key, r]));
+    expect(rows['otelEndpoint']).toEqual({
+      key: 'otelEndpoint',
+      value: 'http://collector.internal:4318',
+      source: 'config-file via $OTLP_HOST',
+      shadowed: [],
+    });
+    expect(rows['otelHeaders']).toMatchObject({
+      value: '<redacted>',
+      source: 'config-file via $OTLP_TOKEN',
+    });
+    expect(rows['maxSessions']?.shadowed).toEqual(['config-file=4 via $MAX (default)', 'env=2']);
+  });
+
+  it('configView carries refs everywhere and a template only when the key is not secret', () => {
+    const b = refs();
+    const view = configView(b.config, b.provenance);
+    expect(view.otelEndpoint).toMatchObject({
+      refs: [{ scheme: 'env', ref: 'OTLP_HOST', from: 'value' }],
+      template: 'http://{env:OTLP_HOST}:4318',
+    });
+    expect(view.otelHeaders.value).toEqual({ redacted: true });
+    expect(view.otelHeaders.refs).toEqual([
+      { scheme: 'env', ref: 'OTLP_TOKEN', from: 'value', at: 'Authorization' },
+    ]);
+    expect(view.otelHeaders.template).toBeUndefined();
+    expect(view.maxSessions.shadowed[0]).toEqual({
+      source: 'file',
+      value: '4',
+      location: `file:${FILE}#maxSessions`,
+      refs: [{ scheme: 'env', ref: 'MAX', from: 'default' }],
+    });
+    expect(JSON.stringify(view)).not.toContain('t'.repeat(40));
+  });
+
+  it('the banner summary counts rungs, not references', () => {
+    const b = refs();
+    expect(configSourceSummary(b.provenance, b.configFilePath)).toBe(
+      `env:1  file:${FILE}:4  cli:1`,
+    );
+  });
+});

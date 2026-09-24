@@ -1,7 +1,19 @@
 /** @module cli/commands/doctor-checks — the individual `browserhive doctor` checks, each returning `{ check, status, detail }` from injected probes (spec 08 §7.1) */
 import { join } from 'node:path';
-import type { ServerConfig } from '@browserhive/contracts/config';
-import { deriveMaxSessions, type ResolvedConfigBundle } from '@browserhive/core/config';
+import {
+  CONFIG_KEYS,
+  formatRefNames,
+  type RefToken,
+  type ServerConfig,
+  scanRefs,
+  type ValueRef,
+} from '@browserhive/contracts/config';
+import {
+  deriveMaxSessions,
+  isJsonObject,
+  parseJson,
+  type ResolvedConfigBundle,
+} from '@browserhive/core/config';
 import type { CliDeps } from '../deps.ts';
 import { databasePath, formatTimestamp, size } from './common.ts';
 
@@ -72,7 +84,40 @@ export function checkConfig(
   const shadowed = bundle.diagnostics.shadowLines.length;
   const warnings = bundle.diagnostics.warnings;
   if (warnings.length > 0) return result('config', 'warn', `${file}; ${warnings[0]}`);
-  return result('config', 'ok', `valid · ${file}${shadowed > 0 ? ` · ${shadowed} shadowed` : ''}`);
+  const fromRefs = CONFIG_KEYS.filter((key) => bundle.provenance[key].refs !== undefined).length;
+  return result(
+    'config',
+    'ok',
+    `valid · ${file}${shadowed > 0 ? ` · ${shadowed} shadowed` : ''}${fromRefs > 0 ? ` · ${fromRefs} from references` : ''}`,
+  );
+}
+
+/**
+ * One warning per reference that fell back to its `:-` default in an effective value (spec 08
+ * §7.1): usually a variable someone meant to set. The default's text is never shown.
+ *
+ * @returns The rows, in registry order (none when resolution failed).
+ */
+export function checkReferenceDefaults(
+  resolution: { readonly ok: true; readonly value: ResolvedConfigBundle } | { readonly ok: false },
+): readonly CheckResult[] {
+  if (!resolution.ok) return [];
+  const rows: CheckResult[] = [];
+  for (const key of CONFIG_KEYS) {
+    const names = new Set<string>();
+    for (const ref of resolution.value.provenance[key].refs ?? []) {
+      if (ref.from !== 'default' || names.has(ref.ref)) continue;
+      names.add(ref.ref);
+      rows.push(
+        result(
+          'reference',
+          'warn',
+          `${key}: ${ref.ref} is not set (or empty), so the config file's default is used`,
+        ),
+      );
+    }
+  }
+  return rows;
 }
 
 /** Chromium for Playwright and, unless `stealthDriver=playwright`, for Patchright. */
@@ -308,14 +353,94 @@ export function checkCapacity(deps: CliDeps, config: ServerConfig): CheckResult 
   return result('max sessions', 'ok', `${config.maxSessions} · ${ram}`);
 }
 
-/** `authTokens` supplied by a config file readable by others. */
+/** Splits the tokens of one list value into items at literal commas (a reference is never split). */
+function listItems(tokens: readonly RefToken[]): RefToken[][] {
+  const items: RefToken[][] = [[]];
+  for (const token of tokens) {
+    if (token.kind !== 'literal') {
+      items.at(-1)?.push(token);
+      continue;
+    }
+    token.text.split(',').forEach((part, index) => {
+      if (index > 0) items.push([]);
+      if (part !== '') items.at(-1)?.push({ kind: 'literal', text: part });
+    });
+  }
+  return items;
+}
+
+/**
+ * Whether one `name:token` item takes its token only from references: the part after the first
+ * literal `:` (or the whole item) holds at least one reference, no other text, and no default
+ * (a default would be a token written in the file).
+ */
+function tokenIsReference(item: readonly RefToken[]): boolean {
+  const colonAt = item.findIndex((token) => token.kind === 'literal' && token.text.includes(':'));
+  const colonToken = item[colonAt];
+  const tokenPart: readonly RefToken[] =
+    colonToken === undefined
+      ? item
+      : [
+          { kind: 'literal', text: colonToken.text.slice(colonToken.text.indexOf(':') + 1) },
+          ...item.slice(colonAt + 1),
+        ];
+  let refs = 0;
+  for (const token of tokenPart) {
+    if (token.kind === 'literal') {
+      if (token.text.trim() !== '') return false;
+    } else if (token.kind === 'ref' && (token.fallback ?? '') === '') {
+      refs += 1;
+    } else {
+      return false;
+    }
+  }
+  return refs > 0;
+}
+
+/**
+ * Whether the config file's `authTokens` value holds no token itself: every item's token is a
+ * reference (`"ci:{env:CI_TOKEN}"`, `"{env:BH_TOKENS}"`, spec 08 §3.1).
+ *
+ * @returns `true` only when that can be shown from the file's text.
+ */
+export function authTokensAreReferences(raw: unknown): boolean {
+  const items =
+    typeof raw === 'string'
+      ? listItems(scanRefs(raw))
+      : Array.isArray(raw)
+        ? raw.map((item) => (typeof item === 'string' ? [...scanRefs(item)] : null))
+        : null;
+  if (items === null || items.length === 0) return false;
+  return items.every((item) => item !== null && tokenIsReference(item));
+}
+
+function fileAuthTokens(deps: CliDeps, path: string): unknown {
+  try {
+    const parsed = parseJson(deps.configFs.readFile(path));
+    return parsed.ok && isJsonObject(parsed.value) ? parsed.value['authTokens'] : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** `authTokens` supplied by a config file readable by others, unless the file only references them. */
 export function checkSecretsFile(deps: CliDeps, bundle: ResolvedConfigBundle): CheckResult {
   const path = bundle.configFilePath;
-  const fromFile =
-    bundle.provenance.authTokens.source === 'file' ||
-    bundle.provenance.authTokens.shadowed.some((s) => s.source === 'file');
+  const tokens = bundle.provenance.authTokens;
+  const fromFile = tokens.source === 'file' || tokens.shadowed.some((s) => s.source === 'file');
   if (path === undefined || !fromFile)
     return result('secrets', 'ok', 'no secrets in a config file');
+  if (authTokensAreReferences(fileAuthTokens(deps, path))) {
+    const refs: readonly ValueRef[] =
+      tokens.source === 'file'
+        ? (tokens.refs ?? [])
+        : (tokens.shadowed.find((s) => s.source === 'file')?.refs ?? []);
+    return result(
+      'secrets',
+      'ok',
+      `authTokens in ${path} come from ${formatRefNames(refs)}; the file holds no token`,
+    );
+  }
   const mode = deps.configFs.stat(path)?.mode;
   if (mode !== undefined && (mode & 0o077) !== 0) {
     return result(

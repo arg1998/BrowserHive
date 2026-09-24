@@ -16,7 +16,7 @@ When a key comes from more than one source, the startup log says which value won
 config: maxSessions=8 (cli) shadows config-file=4, env=2
 ```
 
-`browserhive config show` prints the effective value and source of every key, and the dashboard's System page shows the same table. Secrets such as `authTokens` and `otelHeaders` are always shown as `<redacted>`.
+`browserhive config show` prints the effective value and source of every key, and the dashboard's System page shows the same table. Secrets such as `authTokens` and `otelHeaders` are always shown as `<redacted>`. A value the config file reads from an environment variable names it: `(config-file via $OTLP_HOST)` (see [References](#references)).
 
 ## Naming
 
@@ -45,6 +45,7 @@ Configuration problems stop the process before it binds a port or opens the data
 browserhive: unknown flag '--maxSession'. Did you mean '--maxSessions'? Run 'browserhive --help'.
 browserhive: invalid value for --sessionLease: '2 hours'. Expected a duration like '2h', '30m', '90s', '500ms', or an integer of milliseconds.
 browserhive: BROWSERHIVE_PORT is set but empty. Unset it or provide a value.
+browserhive: 'otelHeaders' in /etc/browserhive/browserhive.config.json references {env:OTLP_TOKEN}, but OTLP_TOKEN is not set. Set it, or write a default as {env:OTLP_TOKEN:-<value>}.
 ```
 
 Unknown `BROWSERHIVE_*` environment variables and unknown keys in the config file fail the same way. An empty value is an error, not "unset". Some combinations are rejected too, for example `humanize=true` with `stealth=off`, or `admin=true` with `transport=stdio`. The full list is under [cross-field rules](../reference/configuration.md#cross-field-rules).
@@ -101,7 +102,48 @@ browserhive config schema > browserhive.schema.json
 
 The same schema is published in this repository as [config.schema.json](../reference/config.schema.json).
 
-If the file contains `authTokens`, keep it readable only by you (`chmod 600`); `doctor` warns otherwise. Prefer the environment for secrets.
+If the file contains a token in `authTokens`, keep it readable only by you (`chmod 600`); `doctor` warns otherwise. Better, keep the token out of the file: `"authTokens": "ci-runner:{env:CI_TOKEN}"` reads it from the environment (see [References](#references)), and `doctor` has nothing to warn about.
+
+## References
+
+A string in `browserhive.config.json` can read an environment variable. The file can then be checked in and shared, while secrets and per-machine values come from the environment:
+
+```json
+{
+  "otel": true,
+  "otelEndpoint": "http://{env:OTLP_HOST:-127.0.0.1}:4318",
+  "otelHeaders": { "Authorization": "Bearer {env:OTLP_TOKEN}" },
+  "authTokens": ["ci-runner:{env:CI_TOKEN}"],
+  "maxSessions": "{env:MAX_SESSIONS:-4}"
+}
+```
+
+| Write | Gets |
+|---|---|
+| `{env:NAME}` | The value of `NAME`. Startup stops with an error if `NAME` is not set or is empty. |
+| `{env:NAME:-default}` | The value of `NAME`, or `default` when `NAME` is not set or is empty. |
+| `{{env:NAME}}` | The literal text `{env:NAME}`. |
+
+- A reference can be the whole value or part of it, including array elements and object values such as the headers in `otelHeaders`. The result is read exactly as the key's environment variable would be: `"maxSessions": "{env:MAX_SESSIONS}"` accepts `8` or `unbounded`, and `"authTokens": "{env:BH_TOKENS}"` accepts a comma-separated list. For numbers and booleans, write the reference as a string: `"port": "{env:PORT}"`.
+- Each value is read once. A variable whose own value contains `{env:…}` is used as it is, never expanded again.
+- Only the config file is expanded. On the command line and in `BROWSERHIVE_*` variables your shell already does this (`--authTokens "ci-runner:$CI_TOKEN"`); BrowserHive leaves `{env:…}` there untouched and prints a warning.
+- `env` is the only kind of reference, written in lower case. Text that looks like another kind, such as `{file:/run/secrets/token}` or `{ENV:NAME}`, stops startup with a message that says how to keep it literal: double the braces, `{{file:/run/secrets/token}}`. `${env:NAME}`, the OpenTelemetry Collector's spelling, stops startup with a hint to drop the `$`. Other braces, such as `{trace_id}` in `otelTraceUrlTemplate`, are left alone.
+- On Windows, variable names are case-insensitive, as they are in the OS.
+- A relative path that comes from a reference, as in `"blocklist": "{env:BLOCKLIST}"`, resolves against the config file's directory, like every path in the file.
+
+Every place that shows the configuration names the variable:
+
+```
+config: otelEndpoint=http://collector.internal:4318 (config-file via $OTLP_HOST) shadows env=http://127.0.0.1:4318
+config: otelHeaders=<redacted> (config-file via $OTLP_TOKEN) shadows env(otel)=<redacted>
+```
+
+- `browserhive config show` prints `config-file via $OTLP_HOST` in the SOURCE column, and `config-file via $MAX_SESSIONS (default)` when the default was used.
+- `browserhive config show --json` and `GET /api/v1/system/config` add `refs` (the variables and whether each default was used) and `template` (the value as written in the file).
+- On the dashboard's System page, a `$NAME` chip sits next to the source. Select it to see whether the variable was set and the value as written. The **Only values from references** switch lists just those keys.
+- `browserhive doctor` counts the values that came from references and warns about each variable that was not set, so its default is in use.
+
+Secrets stay hidden. For `authTokens` and `otelHeaders`, BrowserHive shows the variable's name but never its value or the text around it in the file, and it scrubs the value from logs. The same happens for any key whose variable name contains a word such as `token`, `secret`, `password`, `apikey` or `credential`: for that run the key is shown as `<redacted>` everywhere, even its values from other sources. Error messages name the key, the file and the variable, not the line.
 
 ## Most used keys
 

@@ -173,8 +173,14 @@ export function sandboxSetting(
       return `--sandbox ${mode}`;
     case 'env':
       return `BROWSERHIVE_SANDBOX=${mode}`;
-    case 'file':
-      return `"sandbox": "${mode}" in ${configFilePath ?? 'the config file'}`;
+    case 'file': {
+      const file = configFilePath ?? 'the config file';
+      // A reference (spec 08 §3.1): quote what the file says, then what it resolved to.
+      const template = provenance.sandbox.template;
+      return template === undefined
+        ? `"sandbox": "${mode}" in ${file}`
+        : `"sandbox": "${template}" in ${file}, resolved to ${mode}`;
+    }
     default:
       return `sandbox=${mode}`;
   }

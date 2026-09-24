@@ -36,6 +36,14 @@ Every key has one camelCase name. The other spellings are mechanical: `--maxSess
 
 First hit wins: `--config <path>` (or `BROWSERHIVE_CONFIG`), then `./browserhive.config.json`, then `<dataDir>/browserhive.config.json`. The file is plain JSON; `"$schema"` is the only extra key tolerated. A config file found inside the data directory may not set `dataDir`. The JSON Schema is [config.schema.json](config.schema.json) (also printed by `browserhive config schema`).
 
+## References to environment variables
+
+A string in the config file may contain `{env:NAME}` (required: an unset or empty `NAME` stops startup) or `{env:NAME:-default}` (the default when `NAME` is unset or empty); `{{env:NAME}}` is the literal text. References are expanded once, before the key's grammar applies, so `"maxSessions": "{env:MAX_SESSIONS}"` accepts what `BROWSERHIVE_MAX_SESSIONS` would. They work in whole values, inside longer strings, in array elements and in object values, and only in the config file. The provenance names the variable (`config-file via $OTLP_HOST`); a secret key shows the name but never the value. Every enum in [config.schema.json](config.schema.json) also accepts a reference. See [References](../guide/configuration.md#references).
+
+```
+config: otelEndpoint=http://collector.internal:4318 (config-file via $OTLP_HOST) shadows env=http://127.0.0.1:4318
+```
+
 ## Value grammars
 
 | Grammar | Accepted forms |

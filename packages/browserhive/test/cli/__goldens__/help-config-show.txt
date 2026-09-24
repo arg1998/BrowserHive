@@ -4,7 +4,9 @@ USAGE
   browserhive config show [flags]
 
 Every key exists as an environment variable (BROWSERHIVE_<SCREAMING_SNAKE>), a flag (--camelCase)
-and a JSON key (camelCase) in browserhive.config.json.
+and a JSON key (camelCase) in browserhive.config.json. A string in the file may reference an
+environment variable with {env:NAME} or {env:NAME:-default}; show names the variable in the SOURCE
+column (config-file via $NAME) and never prints a secret.
 
 FLAGS
   --json          Print machine-readable JSON instead of text.

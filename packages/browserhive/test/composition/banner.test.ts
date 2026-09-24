@@ -76,6 +76,29 @@ describe('renderBanner', () => {
     expect(renderBanner(FACTS, { color: false }).join('\n')).not.toContain('\x1b[');
   });
 
+  it('prints reference provenance and reference warnings as notes (spec 08 §1, §3.1)', () => {
+    const lines = renderBanner(
+      {
+        ...FACTS,
+        shadowLines: [
+          'config: otelHeaders=<redacted> (config-file via $OTLP_TOKEN) shadows env(otel)=<redacted>',
+        ],
+        warnings: [
+          "BROWSERHIVE_OTEL_ENDPOINT contains '{env:OTLP_HOST}'; references are expanded only in browserhive.config.json.",
+        ],
+        adminPassword: null,
+        agentToken: null,
+      },
+      { color: false },
+    );
+    expect(lines.slice(-4)).toEqual([
+      '',
+      ' config: otelHeaders=<redacted> (config-file via $OTLP_TOKEN) shadows env(otel)=<redacted>',
+      " ! BROWSERHIVE_OTEL_ENDPOINT contains '{env:OTLP_HOST}'; references are expanded only in browserhive.config.json.",
+      ' Press Ctrl-C to stop.',
+    ]);
+  });
+
   it('warns in the notes block when Chromium is missing', () => {
     const lines = renderBanner({ ...FACTS, browserMissing: true }, { color: false });
     expect(lines.join('\n')).toContain("run 'browserhive init' before launching sessions");

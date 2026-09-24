@@ -21,6 +21,7 @@ import {
   checkDataDir,
   checkOtel,
   checkPort,
+  checkReferenceDefaults,
   checkSecretsFile,
   checkUnrecognisedDataFiles,
   checkVault,
@@ -62,7 +63,11 @@ export async function runChecks(
 ): Promise<DoctorReport> {
   const { deps } = context;
   const { resolution, dataDir } = invocation;
-  const results: CheckResult[] = [checkBun(deps), checkConfig(resolution)];
+  const results: CheckResult[] = [
+    checkBun(deps),
+    checkConfig(resolution),
+    ...checkReferenceDefaults(resolution),
+  ];
   const config = resolution.ok ? resolution.value.config : null;
   results.push(...(await checkBrowsers(deps, config?.stealthDriver ?? 'auto')));
   const defaultChannel: Channel = config?.defaultChannel ?? 'chromium';

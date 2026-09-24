@@ -51,6 +51,7 @@ export const DOCS_PAGES = {
   telemetry: { page: 'guide/telemetry' },
   configuration: { page: 'guide/configuration' },
   configurationPrecedence: { page: 'guide/configuration', anchor: 'precedence' },
+  configurationReferences: { page: 'guide/configuration', anchor: 'references' },
   configurationReference: { page: 'reference/configuration' },
   upgrading: { page: 'guide/upgrading' },
   troubleshooting: { page: 'guide/troubleshooting' },

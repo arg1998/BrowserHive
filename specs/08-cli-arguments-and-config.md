@@ -17,7 +17,7 @@ related:
 > RFC 2119 when they appear in uppercase. `D-NN` identifiers refer to entries in the
 > [decision log](00-decisions.md). Terminology follows the [specification index](README.md#conventions).
 
-Governing decisions: D-06 (ladder and naming), D-02 (single port), D-08 (telemetry knobs), D-18 (`init`/`doctor`), D-19 (toolchain), D-24 (data dir), D-26 (browser choice), D-27 (sandbox), D-28 (`init` writes the config file).
+Governing decisions: D-06 (ladder and naming), D-02 (single port), D-08 (telemetry knobs), D-18 (`init`/`doctor`), D-19 (toolchain), D-24 (data dir), D-26 (browser choice), D-27 (sandbox), D-28 (`init` writes the config file), D-29 (references in config-file values).
 
 ---
 
@@ -39,9 +39,11 @@ Rules:
 config: maxSessions=8 (cli) shadows config-file=4, env=2
 config: logLevel=debug (config-file) shadows env=info
 config: authTokens=<redacted> (cli) shadows env=<redacted>
+config: otelEndpoint=http://collector.internal:4318 (config-file via $OTLP_HOST) shadows env=http://127.0.0.1:4318
+config: otelHeaders=<redacted> (config-file via $OTLP_TOKEN) shadows env(otel)=<redacted>
 ```
 
-Format: `config: <key>=<winningValue> (<winningSource>) shadows <source>=<value>[, <source>=<value>]`, listing the shadowed sources from highest to lowest precedence. Values of keys flagged `secret` render as `<redacted>` on both sides. Values are rendered in the canonical form the parser accepted (`2h`, not `7200000`).
+Format: `config: <key>=<winningValue> (<winningSource>[ via <refs>]) shadows <source>=<value>[ via <refs>][, <source>=<value>[ via <refs>]]`, listing the shadowed sources from highest to lowest precedence. Values of keys flagged `secret` render as `<redacted>` on both sides. Values are rendered in the canonical form the parser accepted (`2h`, not `7200000`). `<refs>` names the environment variables that references in a config-file value resolved (§3.1), in source order and without repeats, as `$A, $B`; a reference that used its `:-` default reads `$A (default)`. Only config-file values carry references.
 
 - Shadow lines are emitted once, at startup, to the log stream (stderr under stdio). They are also available afterwards via `browserhive config show` and `GET /api/v1/system/config` with the same provenance model.
 - There is no fifth source. Per-session overrides supplied by an agent in `launch_session` (persistence mode, headless, stealth flags…) are tool arguments, not configuration; they are documented in `02-mcp-and-tools.md` and never appear in the config schema.
@@ -79,7 +81,7 @@ One parser per grammar, defined once in `contracts/config/parsers.ts`, shared by
 | url | absolute `http:`/`https:` URL | |
 | string | as-is | Secrets are strings with `secret: true`. |
 
-Every parser produces a **canonical value** (`number` of ms, `number` of bytes, resolved path) and keeps the original text for provenance rendering.
+Every parser produces a **canonical value** (`number` of ms, `number` of bytes, resolved path) and keeps the original text for provenance rendering. In the config file, a string may contain references (`{env:NAME}`, §3.1) that are expanded before these grammars apply.
 
 ## 3. The config file
 
@@ -88,7 +90,8 @@ Every parser produces a **canonical value** (`number` of ms, `number` of bytes, 
 - `dataDir` is needed to find the third candidate. It is therefore resolved in a **pre-pass** from defaults, env, and CLI only; a `dataDir` inside a config file discovered via cwd or `--config` is honored, but a config file found *in* the data dir may not change `dataDir` (usage error: `config: dataDir cannot be set from a config file located in the data dir`).
 - The file may contain `"$schema": "./browserhive.schema.json"`; `$schema` is the only key outside the schema that is tolerated. `browserhive config schema` prints the JSON Schema (generated from the zod schema with `z.toJSONSchema`), and the docs site hosts a versioned copy.
 - Unknown keys fail fast (§4). Keys are checked with the same "did you mean" matcher as CLI flags.
-- Secrets in the file (`authTokens`) are accepted but `doctor` warns when the file mode is broader than `0600`.
+- String values may reference environment variables (`"authTokens": "ci:{env:CI_TOKEN}"`, §3.1), so a checked-in file need not contain secrets.
+- Secrets in the file (`authTokens`) are accepted but `doctor` warns when the file mode is broader than `0600`, unless the file's `authTokens` value takes every token from a reference (§3.1).
 
 Example:
 
@@ -120,6 +123,47 @@ Example:
 }
 ```
 
+### 3.1 References in config-file values
+
+A string in the config file may reference environment variables (D-29). References are expanded before the key's parser runs, so for that value the file speaks the environment spelling of the key: `"maxSessions": "{env:MAX_SESSIONS}"` with `MAX_SESSIONS=8` is the string `"8"`, parsed exactly like `BROWSERHIVE_MAX_SESSIONS=8`, and `"authTokens": "{env:BH_TOKENS}"` with a comma-separated value becomes a list.
+
+```json
+{
+  "otelEndpoint": "http://{env:OTLP_HOST:-127.0.0.1}:4318",
+  "otelHeaders": { "Authorization": "Bearer {env:OTLP_TOKEN}" },
+  "authTokens": ["ci-runner:{env:CI_TOKEN}"],
+  "maxSessions": "{env:MAX_SESSIONS:-4}"
+}
+```
+
+Grammar:
+
+```abnf
+ref         = "{" "env" ":" varname [ ":-" default ] "}"   ; "env" is the only scheme
+varname     = ( ALPHA / "_" ) *( ALPHA / DIGIT / "_" )
+default     = *( %x20-7A / %x7C / %x7E )    ; printable ASCII except "{" and "}"; may be empty
+escaped-ref = "{{" word ":" text "}}"       ; yields "{" word ":" text "}"
+word        = ALPHA *( ALPHA / DIGIT )
+text        = *( any character except "{" and "}" )
+```
+
+| Form | Meaning |
+|---|---|
+| `{env:NAME}` | The value of `NAME`. Unset, or set and empty: usage error (§4). |
+| `{env:NAME:-text}` | The value of `NAME`, or `text` when `NAME` is unset or empty. `text` may be empty and is literal. |
+| `{{word:text}}` | The literal text `{word:text}`, for any `word`. `${{env:X}}` is the literal `${env:X}`. |
+
+Rules:
+
+- **Where.** Only in string values of the config file: a whole value, part of a longer string (`"http://{env:HOST}:4318"`), an array element (each element on its own; a reference never splits into several elements) or an object value (`otelHeaders` values, the object form of `logLevel`). Never in key names. Numbers, booleans and `null` have no text: write `"port": "{env:PORT}"`, which the port grammar accepts like every other grammar.
+- **Not elsewhere.** `BROWSERHIVE_*` and `OTEL_*` values, flags and programmatic options are not expanded; the shell or service manager already did that. A `{env:…}` in one of them is kept as it is and produces one warning per variable, flag or option: `BROWSERHIVE_OTEL_ENDPOINT contains '{env:OTLP_HOST}'; references are expanded only in browserhive.config.json.` (on a secret key the reference is shown by name only, `{env:OTLP_TOKEN}`).
+- **One pass.** The string is scanned once, left to right; expanded text is never scanned again (`FOO='{env:BAR}'` gives the literal text `{env:BAR}`), and neither the scheme nor the name can be computed. All references read the same environment snapshot. On Windows a variable name matches case-insensitively, as it does in the OS (`{env:Path}` reads `PATH`); elsewhere names are case-sensitive.
+- **What starts a reference.** `{env:` always starts one, and it must be well formed: `{env:}`, `{env:1X}`, `{env:A-B}`, an unterminated `{env:A` and a nested `{env:A:-{env:B}}` are errors. A `{word:text}` with any other `word` (letters and digits, starting with a letter) is an unknown scheme and an error, including `{ENV:X}`, `{Env:X}` and `{file:/run/secrets/x}`. `${env:…}` is an error that suggests `{env:…}`; any other `${word:…}` is another tool's syntax and stays literal. Every other brace is literal: `{trace_id}`, `{}`, `{a:b`, `a}b`, `{0:C}`, `{ env:X }`.
+- **After expansion** the value is parsed, validated and guarded exactly as before: a reference producing `2 hours` fails the duration grammar, one producing `0.0.0.0` for `host` meets the insecure-bind guard, and the key is still supplied by `file` for the ladder, the cross-field rules and the explicit-key set. A relative path produced by a reference resolves against the config file's directory, like any path in the file. A value that is empty after expansion is a usage error with its own message (§4).
+- **Provenance.** A value that contained references records them as `refs`, in source order: `{ scheme: "env", ref: "<NAME>", from: "value" | "default", at?: "<position>" }`, where `at` locates the reference inside an array or object value (`[0]`, `Authorization`, `modules.sessions`). The winning value also records `template`, the value as written (the string itself; an array or object as compact JSON), except on secret keys. Shadow lines (§1), `config show`, `config show --json`, `GET /api/v1/system/config`, the dashboard and `doctor` name the variables.
+- **Secrets.** On a key flagged `secret`, neither the value nor the file's text around a reference is ever shown: no `template`, and problem messages name the variables only. The variable names are always shown. When a reference's *name* contains one of the credential words of spec 10 §9 (`token`, `secret`, `password`, `apikey`, …, case-insensitive), the key is treated as secret for that run: its value and shadowed values render `<redacted>`, it has no `template`, `GET /api/v1/system/config` marks it `secret: true`, problem messages redact its value, and the values those references produced are registered with the `SecretRegistry` (the values of secret keys are registered through their extractors, 10 §9).
+- **Not supported:** optional references, `:?`, `:+`, `-` without `:`, nested references, transforms, schemes other than `env`. `{cmd:…}` is refused permanently (D-29). Problem messages name the key and the file, not the line.
+
 ## 4. Fail-fast rules
 
 All configuration failures are detected before any port is bound, any browser is launched, or the database is opened. The process prints one message to stderr and exits.
@@ -132,13 +176,20 @@ All configuration failures are detected before any port is bound, any browser is
 | Reserved key set (§5.4) | 64 | `browserhive: 'proxy' is reserved for a future release and cannot be set.` |
 | Invalid value | 64 | `browserhive: invalid value for --sessionLease: '2 hours'. Expected a duration like '2h', '30m', '90s', '500ms', or an integer of milliseconds.` |
 | Empty value | 64 | `browserhive: BROWSERHIVE_PORT is set but empty. Unset it or provide a value.` |
+| Reference to an unset variable (§3.1) | 64 | `browserhive: 'otelHeaders' in /path/browserhive.config.json references {env:OTLP_TOKEN}, but OTLP_TOKEN is not set. Set it, or write a default as {env:OTLP_TOKEN:-<value>}.` |
+| Reference to an empty variable | 64 | `browserhive: 'otelHeaders' in /path/browserhive.config.json references {env:OTLP_TOKEN}, but OTLP_TOKEN is set and empty. Set it to a value, or write a default as {env:OTLP_TOKEN:-<value>}.` |
+| Value empty after expansion | 64 | `browserhive: 'otelServiceName' in /path/browserhive.config.json is empty after resolving {env:SERVICE:-}. Unset it or provide a value.` |
+| Invalid value produced by a reference | 64 | `browserhive: invalid value for 'otelEndpoint' in /path/browserhive.config.json: 'collector:4318' (interpolated from {env:OTLP_URL}). Expected an absolute http: or https: URL like 'http://127.0.0.1:4318'.` — on a secret key, or one whose reference name looks credential-bearing, the value reads `<redacted>` |
+| Malformed reference | 64 | `browserhive: 'port' in /path/browserhive.config.json: '{env:}' is not a valid reference. Expected {env:NAME} or {env:NAME:-default}, where NAME matches [A-Za-z_][A-Za-z0-9_]* and the default contains no braces.` — on a secret key: `'authTokens' in /path/browserhive.config.json contains a reference that is not valid. Expected …` |
+| Unknown reference scheme | 64 | `browserhive: 'authTokens' in /path/browserhive.config.json: unknown reference scheme in '{file:/run/secrets/tok}'. Supported references: {env:NAME}, {env:NAME:-default}. To keep the text literal, write '{{file:/run/secrets/tok}}'.` — `{ENV:X}` adds `Did you mean '{env:X}'?` after the first sentence; on a secret key only the scheme is named (`unknown reference scheme 'file'`) and the escape reads `double its braces: {{…}}` |
+| `${env:…}` | 64 | `browserhive: 'otelEndpoint' in /path/browserhive.config.json: '${env:OTLP_HOST}' looks like a reference with an extra '$'. Did you mean '{env:OTLP_HOST}'?` |
 | Cross-field violation | 64 | one of the exact texts below |
 | Policy refusal (security guard) | 3 | `browserhive: [INSECURE_BIND_REFUSED] Refusing to bind 0.0.0.0 without authentication. Set auth=token, or set allowInsecureBind=true to accept the risk.` |
 | `sandbox=on` and the configured browser cannot sandbox (boot preflight, §5.6) | 3 | `browserhive: [SANDBOX_UNAVAILABLE] The sandbox is required (--sandbox on) but the configured browser cannot run sandboxed.` followed by the guidance block |
 | Config file unreadable / invalid JSON | 64 | `browserhive: cannot read /path/browserhive.config.json: <reason>` |
 | Missing subcommand argument | 64 | `browserhive: 'db restore' requires a file argument.` |
 
-"Did you mean" uses Damerau-Levenshtein distance ≤ 2 (or a case-insensitive exact match) over the key registry. Every unknown item is reported (all of them, not just the first) before exiting.
+"Did you mean" uses Damerau-Levenshtein distance ≤ 2 (or a case-insensitive exact match) over the key registry. Every unknown item is reported (all of them, not just the first) before exiting. Reference problems are collected the same way: a file with four bad references prints four lines, one per reference (a string stops being scanned at its first malformed reference). The resolver's failure code for a reference problem is `CONFIG_REF_UNRESOLVED` (the value-empty-after-expansion case is `CONFIG_EMPTY_VALUE`; an invalid expanded value is `CONFIG_INVALID`).
 
 ### 4.1 Cross-field validations (all in one `superRefine`)
 
@@ -279,14 +330,17 @@ Resolver (`core/src/app/config/resolve.ts`, pure, injected `env`, `argv`, `cwd`,
 
 1. **Collect** raw layers: `defaults` (from schema), `env` (all `BROWSERHIVE_*` plus the OTEL sub-source), `file` (discovered per §3), `cli` (parsed argv). Each layer is `Map<canonicalKey, { raw, source, location }>`.
 2. **Normalize keys**: env and CLI spellings are converted to canonical keys through the registry; anything not in the registry is collected as unknown (with suggestions) and reported together.
+2.5. **Expand references** in the file layer only (§3.1): every string leaf of each file value is scanned once against the injected `env`; problems are collected like any other; the entry keeps its `refs` and, when the key is not secret, its `template`. The empty-value rule for the file runs after this step. Env, CLI, `OTEL_*` and programmatic values are only checked for reference-shaped text, which becomes a warning. A user without a config file runs none of this.
 3. **Parse per source** with the key's parser; failures are collected with source and location (`--sessionLease`, `BROWSERHIVE_SESSION_LEASE`, `file:/path#sessionLease`).
-4. **Merge with provenance**: walk keys; the highest-precedence supplied value wins; every lower supplied value is recorded as shadowed. Unsupplied keys take `default` or `derived(...)` (computed after the merge, in dependency order: `stealth → fingerprint`, `admin → trace`, `hostMemory → maxSessions`, `platform → dataDir`).
+4. **Merge with provenance**: walk keys; the highest-precedence supplied value wins; every lower supplied value is recorded as shadowed, with its `refs`. Unsupplied keys take `default` or `derived(...)` (computed after the merge, in dependency order: `stealth → fingerprint`, `admin → trace`, `hostMemory → maxSessions`, `platform → dataDir`).
 5. **Validate**: `serverConfigSchema.parse(merged)` including `superRefine`; then the policy guards (`INSECURE_BIND_REFUSED`, `ADMIN_REQUIRES_HTTP`, `BLOCKLIST_LOAD_FAILED` after reading the file).
 6. **Freeze**: return `Readonly<ResolvedConfig>` (deep-frozen) plus `Provenance` (per-key source, shadowed list, raw text) and `Diagnostics` (shadow lines to log).
 
 Test plan for the resolver (see `09-testing.md`): a table-driven suite where each row is `{ env, file, argv } → expected value + provenance + shadow lines | expected error text`; property test that env/CLI/JSON spellings round-trip through `namesFor`; a test that every key with a default has a consumer (a static list of consumers is asserted against the registry so a key that is parsed but never read cannot ship); a docs-gate test that every key appears in `docs/configuration.md` (generated) and in `--help`.
 
-Generation from the schema: `--help` (§7.2), `browserhive config schema` (JSON Schema draft 2020-12 with `description`, `default`, `enum`, `x-browserhive-env`, `x-browserhive-cli`), `docs/configuration.md` tables (`scripts/gen-docs.ts`, committed and diffed in CI), and the `GET /api/v1/system/config` response schema (OpenAPI component `ServerConfigView` = schema with secrets replaced by `{ redacted: true }`).
+Generation from the schema: `--help` (§7.2), `browserhive config schema` (JSON Schema draft 2020-12 with `description`, `default`, `enum`, `x-browserhive-env`, `x-browserhive-cli`), `docs/configuration.md` tables (`scripts/gen-docs.ts`, committed and diffed in CI), and the `GET /api/v1/system/config` response schema (OpenAPI component `ServerConfigView` = schema with secrets replaced by `{ redacted: true }`). Which keys are redacted is decided per run: the keys flagged `secret`, plus any key whose value came through a reference with a credential-looking name (§3.1).
+
+In the generated JSON Schema, every enum (the top-level enum keys and the enums inside the object form of `logLevel`) is widened to `anyOf: [<the enum>, { "$ref": "#/$defs/configRef" }]`, where `$defs.configRef` is a string containing an `{env:NAME}` or `{env:NAME:-default}` reference, so an editor accepts `"stealth": "{env:STEALTH}"` while `"stealth": "banana"` still fails. Every other key already accepts a string.
 
 ## 7. The command surface
 
@@ -311,13 +365,13 @@ Positional rules: the first argument is the command if it is a known command wor
 
 **`init`** — the one-time setup that replaces any `postinstall` (D-18). Steps, each idempotent and reported with ✓/✗ (– for "not present"): create the data dir (0700) and subdirectories; run `playwright install chromium` (respecting `PLAYWRIGHT_BROWSERS_PATH`); if `stealthDriver` is `auto`/`patchright`, run `patchright install chromium`; report the browsers (D-26): one line per channel (the bundled Chromium "always kept", the installed Chrome and Edge with version and path, or "not installed") and a `sandbox` line with each installed browser's verdict under the current `sandbox` setting (probed with one headless launch each, skipped as root); choose the default browser (below); open/create the database and apply migrations; write `browserhive.schema.json` next to a discovered config file if `--writeSchema`; print next steps (`browserhive`, `browserhive --admin`, docs link). Flags: `--browsers chromium` (only member today; `chrome`/`edge` are branded channels installed by the OS), `--force` (re-download), `--channel <chromium|chrome|edge>` (make it the default and save it), `--installChrome` (run Google's installer through `playwright install chrome`; needs administrator rights), `--yes` (save without asking), `--dataDir`, `--config`, `--stealthDriver`. Network is required only for the downloads; a missing browser at first `launch_session` later produces `BROWSER_NOT_INSTALLED` naming the install command.
 
-*Choosing the default browser.* On a terminal (stdin is a TTY, `CI` is unset, not in a container) and without `--channel`, `init` prints a menu of the installed channels plus, when Chrome is missing and Google ships a build for the platform, "Install Google Chrome (needs administrator rights)". Each entry lists pros and cons computed from what was detected (sandbox verdicts, the version the bundled build reports against the installed Chrome, how far an installed browser is ahead of the tested build, managed policies, Edge's stealth incoherence), never fixed prose. The current value is marked `← current` and is the default answer: pressing Enter changes nothing and writes nothing. Chrome is labelled "recommended for stealth" but never pre-selected. A different choice asks `Save defaultChannel=<channel> to <path>? [Y/n]` and merges the one key into the config file in use (other keys, their order and `$schema` kept) or, with none, creates `<data-dir>/browserhive.config.json` with mode 0600 (D-28). Without a terminal nothing is asked: `--channel` without `--yes` fails the step and writes nothing; a channel that is not installed fails without changing anything (no silent switch); `--installChrome` installs without changing the default unless `--channel chrome` is also given. When an env var or flag still overrides the saved value, `init` says so.
+*Choosing the default browser.* On a terminal (stdin is a TTY, `CI` is unset, not in a container) and without `--channel`, `init` prints a menu of the installed channels plus, when Chrome is missing and Google ships a build for the platform, "Install Google Chrome (needs administrator rights)". Each entry lists pros and cons computed from what was detected (sandbox verdicts, the version the bundled build reports against the installed Chrome, how far an installed browser is ahead of the tested build, managed policies, Edge's stealth incoherence), never fixed prose. The current value is marked `← current` and is the default answer: pressing Enter changes nothing and writes nothing. Chrome is labelled "recommended for stealth" but never pre-selected. A different choice asks `Save defaultChannel=<channel> to <path>? [Y/n]` and merges the one key into the config file in use (other keys, their order and `$schema` kept) or, with none, creates `<data-dir>/browserhive.config.json` with mode 0600 (D-28). Without a terminal nothing is asked: `--channel` without `--yes` fails the step and writes nothing; a channel that is not installed fails without changing anything (no silent switch); `--installChrome` installs without changing the default unless `--channel chrome` is also given. When an env var or flag still overrides the saved value, `init` says so. When the config file's `defaultChannel` is a reference (§3.1), `init` does not rewrite it (that would silently drop the reference): it names the variable to set and changes nothing.
 
-**`doctor`** — prints a table and exits 0 (all ✓), 1 (any ✗), or 2 (warnings only). Checks: Bun version ≥ 1.4; Chromium present for the resolved `stealthDriver` (Playwright and Patchright paths, exact versions); Google Chrome and Microsoft Edge (version and path, or "not installed", which is fine); the configured `defaultChannel` installed (✗ when it is not, naming the install command); version drift (! when the installed browser in use is more than one major version ahead of the tested Chromium); managed policies (✗ when a policy such as `RemoteDebuggingAllowed=false` blocks automation of the configured channel, ! for another channel); the sandbox per installed browser, probed with one headless launch (✓ sandboxes; under `auto` ✓ with "falls back to no sandbox" and the reason, since sessions still launch; under `on` ✗ for the configured channel and ! for others; under `off` ✓ with the verdict as information); running as root or in a container (! only under `sandbox=on`); in text mode, when the configured browser cannot sandbox, the same guidance block as the `sandbox=on` refusal is printed under the table; data dir exists, owner-only permissions, free disk; config file found and valid (runs the full resolver and prints shadow lines); port free on the resolved host; `bw` CLI on PATH when `vault=bitwarden`; unrecognised data files in the data dir (check `unrecognised data files`, warning: "unrecognised data file 'events.db' found; BrowserHive does not read or migrate it"); database opens, `user_version`, `min_reader_version`, pending migrations, last backup; OTLP endpoint reachable when `otel=true` (HEAD request, 2 s timeout, warning only); `maxSessions` vs available RAM sanity; `authTokens` supplied via a config file with mode broader than 0600 (warning). `--json` emits the same as an array of `{ check, status, detail }`. `--printApparmorProfile` prints an AppArmor profile for the configured channel's browser (shaped like Ubuntu's own `/etc/apparmor.d/chrome`: `flags=(unconfined)` plus `userns`) and exits; it never installs anything. `--print-apparmor-profile` is an unsupported spelling (§2).
+**`doctor`** — prints a table and exits 0 (all ✓), 1 (any ✗), or 2 (warnings only). Checks: Bun version ≥ 1.4; Chromium present for the resolved `stealthDriver` (Playwright and Patchright paths, exact versions); Google Chrome and Microsoft Edge (version and path, or "not installed", which is fine); the configured `defaultChannel` installed (✗ when it is not, naming the install command); version drift (! when the installed browser in use is more than one major version ahead of the tested Chromium); managed policies (✗ when a policy such as `RemoteDebuggingAllowed=false` blocks automation of the configured channel, ! for another channel); the sandbox per installed browser, probed with one headless launch (✓ sandboxes; under `auto` ✓ with "falls back to no sandbox" and the reason, since sessions still launch; under `on` ✗ for the configured channel and ! for others; under `off` ✓ with the verdict as information); running as root or in a container (! only under `sandbox=on`); in text mode, when the configured browser cannot sandbox, the same guidance block as the `sandbox=on` refusal is printed under the table; data dir exists, owner-only permissions, free disk; config file found and valid (runs the full resolver and prints shadow lines; the detail adds `· N from references` when config-file values used references (§3.1)); one `reference` warning per reference that fell back to its `:-` default (`otelEndpoint: OTLP_HOST is not set (or empty), so the config file's default is used`), never showing the default's text; port free on the resolved host; `bw` CLI on PATH when `vault=bitwarden`; unrecognised data files in the data dir (check `unrecognised data files`, warning: "unrecognised data file 'events.db' found; BrowserHive does not read or migrate it"); database opens, `user_version`, `min_reader_version`, pending migrations, last backup; OTLP endpoint reachable when `otel=true` (HEAD request, 2 s timeout, warning only); `maxSessions` vs available RAM sanity; `authTokens` supplied via a config file with mode broader than 0600 (warning), unless every token in the file's `authTokens` value is a reference (`"ci:{env:CI_TOKEN}"`, `"{env:BH_TOKENS}"`), in which case the file holds no secret and the check is ✓ naming the variables (`authTokens in <path> come from $CI_TOKEN; the file holds no token`); a reference with a non-empty default counts as a token written in the file. `--json` emits the same as an array of `{ check, status, detail }`. `--printApparmorProfile` prints an AppArmor profile for the configured channel's browser (shaped like Ubuntu's own `/etc/apparmor.d/chrome`: `flags=(unconfined)` plus `userns`) and exits; it never installs anything. `--print-apparmor-profile` is an unsupported spelling (§2).
 
 **`purge`** — resolves only `dataDir` (so a broken config file can never prevent starting over); prints an inventory (row counts per table via a read-only, non-migrating connection; directory sizes; absolute paths; total); default targets are the database (+ WAL/SHM) and `sessions/`; `--all` adds auth states, uploads, backups and admin credentials; the vault policy tables live in the database and are dropped with it, so the inventory states that vault bindings are lost; requires typing `YES`; `--all` asks a second `YES`; `--dryRun` prints and exits 0; `--yes` skips prompts; without a TTY and without `--yes` it refuses (exit 1); warns when open sessions exist in the DB. `--dry-run` is an unsupported spelling answered with a hint naming `--dryRun` (§5.5).
 
-**`config show`** — prints the effective configuration as a table: key, value (secrets `<redacted>`), source, shadowed sources; `--json` prints `{ key: { value, source, shadowed: [...] } }`. `config schema` prints the JSON Schema. `config validate [--config path]` runs the resolver and exits 64 on error, printing exactly what `serve` would.
+**`config show`** — prints the effective configuration as a table: key, value (secrets `<redacted>`), source, shadowed sources. A value that came through references reads `config-file via $OTLP_HOST` in the SOURCE column (`$A (default)` when the default was used), and a shadowed config-file value reads `config-file=<value> via $A`. `--json` prints `{ key: { value, source, derivedFrom?, location?, refs?, template?, shadowed: [{ source, value, location, refs? }], restartRequired } }`, with `null` for unset values, `{ "redacted": true }` for redacted ones, and `refs`/`template` as in §3.1 (never a `template` on a redacted key). `config schema` prints the JSON Schema. `config validate [--config path]` runs the resolver and exits 64 on error, printing exactly what `serve` would.
 
 **`db status`** — `user_version`, `min_reader_version`, `application_id`, pending migrations, size, page count, last backup, integrity check (`PRAGMA quick_check`). `db backup [--out path]` runs `VACUUM INTO`. `db restore <file>` refuses while a server holds the lock, verifies `application_id`, backs up the current file first, replaces it. `db migrate [--dryRun]` applies pending migrations (normally done by `serve`; useful in CI and before a version downgrade to inspect).
 
@@ -362,6 +416,7 @@ FLAGS — telemetry
   ...
 
 Precedence: defaults < environment < browserhive.config.json < flags (rightmost wins).
+References: a config-file value may contain {env:NAME} or {env:NAME:-default}.
 Docs: https://browserhive.ai/docs/configuration
 ```
 

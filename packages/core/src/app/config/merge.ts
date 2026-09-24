@@ -11,7 +11,7 @@ import {
 import type { HostEnvironment } from '../../ports/host-environment.ts';
 import { deriveMaxSessions, osDefaultDataDir } from './data-dir.ts';
 import { REDACTED_TEXT, renderValue } from './kinds.ts';
-import type { ParsedEntry } from './parse.ts';
+import { hasSensitiveRef, type ParsedEntry } from './parse.ts';
 
 /** One parsed layer: at most one entry per key. */
 export type ParsedLayer = ReadonlyMap<ConfigKey, ParsedEntry>;
@@ -26,12 +26,13 @@ export interface MergedConfig {
 }
 
 /**
- * Render a value for provenance: secrets become `<redacted>` on both sides of a shadow line.
+ * Render a value for provenance: secrets become `<redacted>` on both sides of a shadow line, and so
+ * does every value of a key made sensitive for this run by a reference name (spec 08 §3.1).
  *
  * @returns The canonical text, or `<redacted>`.
  */
-export function renderForProvenance(key: ConfigKey, value: unknown): string {
-  return keyMeta(key).secret ? REDACTED_TEXT : renderValue(key, value);
+export function renderForProvenance(key: ConfigKey, value: unknown, sensitive = false): string {
+  return keyMeta(key).secret || sensitive ? REDACTED_TEXT : renderValue(key, value);
 }
 
 /** Derivation order (spec 08 §6): `stealth → fingerprint`, `admin → trace`, `hostMemory → maxSessions`, `platform → dataDir`. */
@@ -81,17 +82,26 @@ export function mergeLayers(layers: readonly ParsedLayer[], host: HostEnvironmen
       if (winner.source === 'env' || winner.source === 'file' || winner.source === 'cli') {
         explicit.add(key);
       }
+      // One credential-looking reference name redacts the whole key for this run, winner and
+      // shadowed alike: the simplest rule that never under-redacts (spec 08 §3.1).
+      const sensitive =
+        !keyMeta(key).secret && supplied.some((entry) => hasSensitiveRef(entry.refs));
       const shadowed: SuppliedValue[] = supplied.slice(1).map((entry) => ({
         source: entry.source,
-        raw: renderForProvenance(key, entry.value),
+        raw: renderForProvenance(key, entry.value, sensitive),
         location: entry.location,
+        ...(entry.refs !== undefined && { refs: entry.refs }),
       }));
+      const redacted = keyMeta(key).secret || sensitive;
       provenance[key] = {
         key,
         source: winner.source,
-        rendered: renderForProvenance(key, winner.value),
+        rendered: renderForProvenance(key, winner.value, sensitive),
         location: winner.location,
         shadowed,
+        ...(winner.refs !== undefined && { refs: winner.refs }),
+        ...(winner.template !== undefined && !redacted && { template: winner.template }),
+        ...(sensitive && { sensitive: true as const }),
       };
       continue;
     }

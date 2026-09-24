@@ -69,7 +69,7 @@ Failures are returned as a status and reason (`origin_mismatch`, `not_authorized
 - **`evaluate` can read the DOM.** After the window closes, an agent with `evaluate` can read a field that still holds the credential. Use `clear_after_fill: true`, `disable_evaluate: true` per session, `require_no_evaluate` per vault entry, or `--allowEvaluate false` server-wide, which makes every `evaluate` call fail with [`EVALUATE_DISABLED`](../reference/errors.md#EVALUATE_DISABLED).
 - **Traces do not contain typed credentials.** Playwright tracing is stopped before the first credential keystroke and restarted after submit, and the parts are merged when the session closes. The replay has a gap instead of the login POST.
 - **Pixels are not redacted.** The live view and screenshots show exactly what the browser shows. Screenshot tracing skips frames while a redaction window is open, but operators are trusted with the live view.
-- Every secret BrowserHive creates or handles (seed password, tokens, cookies, vault session tokens, OTLP headers) is registered with a redactor that scrubs logs, database rows, WebSocket frames, MCP results and OTLP exports.
+- Every secret BrowserHive creates or handles (seed password, tokens, cookies, vault session tokens, OTLP headers) is registered with a redactor that scrubs logs, database rows, WebSocket frames, MCP results and OTLP exports. That includes secrets the config file reads from environment variables (`{env:CI_TOKEN}`, see [References](configuration.md#references)): the variable's name is shown so you know what to set, never its value or the file's text around it.
 
 ## What is recorded
 

@@ -1,10 +1,17 @@
 /** @module app/config/parse — parse one raw entry with its key's parser; relative paths, port 0 for the programmatic API, log-module registry check (spec 08 §6 step 3) */
 import { isAbsolute, resolve } from 'node:path';
-import { CONFIG_SHAPE, type ConfigKey, keyMeta } from '@browserhive/contracts/config';
+import {
+  CONFIG_SHAPE,
+  type ConfigKey,
+  keyMeta,
+  type ValueRef,
+} from '@browserhive/contracts/config';
+import { isSensitiveKey } from '../../kernel/redact.ts';
 import { err, ok, type Result } from '../../kernel/result.ts';
 import type { ConfigProblem } from './failure.ts';
 import { keyKind, quoteRaw, REDACTED_TEXT } from './kinds.ts';
 import type { RawEntry } from './layers.ts';
+import { interpolatedFrom } from './ref-messages.ts';
 
 /** A parsed entry: the canonical value plus where it came from. */
 export interface ParsedEntry {
@@ -12,6 +19,22 @@ export interface ParsedEntry {
   readonly value: unknown;
   readonly source: RawEntry['source'];
   readonly location: string;
+  /** References the config-file value resolved (spec 08 §3.1); absent when none. */
+  readonly refs?: readonly ValueRef[];
+  /** The config-file value as written; present only with `refs`. The merge drops it for redacted keys. */
+  readonly template?: string;
+  /** What each reference produced, parallel to `refs`; only for the secret registry. */
+  readonly refValues?: readonly string[];
+}
+
+/**
+ * Whether a reference name looks credential-bearing (the key-name heuristics of spec 10 §9), which
+ * makes its key redacted for this run (spec 08 §3.1).
+ *
+ * @returns `true` when any reference name matches.
+ */
+export function hasSensitiveRef(refs: readonly ValueRef[] | undefined): boolean {
+  return refs?.some((ref) => isSensitiveKey(ref.ref)) ?? false;
 }
 
 /** Options of {@link parseEntry}. */
@@ -44,9 +67,12 @@ export function expectedClause(key: ConfigKey, issueMessage: string): string {
 /**
  * The rejected value as it appears in the message. A secret key's value is never echoed, even when
  * it failed to parse: a malformed `BROWSERHIVE_AUTH_TOKENS` still carries a real token (spec 08 §1).
+ * Neither is a value that came through a reference with a credential-looking name (§3.1).
  */
 function shownRaw(entry: RawEntry): string {
-  return keyMeta(entry.key).secret ? REDACTED_TEXT : quoteRaw(entry.raw);
+  return keyMeta(entry.key).secret || hasSensitiveRef(entry.refs)
+    ? REDACTED_TEXT
+    : quoteRaw(entry.raw);
 }
 
 function invalid(entry: RawEntry, expected: string): ConfigProblem {
@@ -55,7 +81,7 @@ function invalid(entry: RawEntry, expected: string): ConfigProblem {
     key: entry.key,
     source: entry.source,
     location: entry.location,
-    message: `invalid value for ${entry.display}: ${shownRaw(entry)}. ${expected}`,
+    message: `invalid value for ${entry.display}: ${shownRaw(entry)}${interpolatedFrom(entry.refs)}. ${expected}`,
   };
 }
 
@@ -83,7 +109,15 @@ export function parseEntry(
   options: ParseOptions,
 ): Result<ParsedEntry, ConfigProblem> {
   const done = (value: unknown): Result<ParsedEntry, ConfigProblem> =>
-    ok({ key: entry.key, value, source: entry.source, location: entry.location });
+    ok({
+      key: entry.key,
+      value,
+      source: entry.source,
+      location: entry.location,
+      ...(entry.refs !== undefined && { refs: entry.refs }),
+      ...(entry.template !== undefined && { template: entry.template }),
+      ...(entry.refValues !== undefined && { refValues: entry.refValues }),
+    });
 
   if (entry.key === 'port' && entry.raw === 0 && entry.location.startsWith('options.')) {
     return done(0);

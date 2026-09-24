@@ -2,6 +2,7 @@
 import { z } from 'zod';
 import { GRAMMAR_META_KEY } from './grammar.ts';
 import { isKeyMeta, parseKeyMeta } from './key.ts';
+import { CONFIG_REF_PATTERN } from './refs.ts';
 import { CONFIG_KEYS, keyMeta, namesFor } from './registry.ts';
 import { CONFIG_SHAPE, type ConfigKey } from './shape.ts';
 
@@ -19,6 +20,50 @@ const INTERNAL_META_KEYS = [
   GRAMMAR_META_KEY,
 ] as const;
 
+/** Name of the `$defs` entry a widened enum points at. */
+export const CONFIG_REF_DEF = 'configRef';
+
+/** `$defs.configRef`: a string holding at least one `{env:NAME}` reference (spec 08 §3.1). */
+const CONFIG_REF_SCHEMA = {
+  type: 'string',
+  pattern: CONFIG_REF_PATTERN,
+  description:
+    'A reference such as {env:NAME} or {env:NAME:-default}, expanded from the environment when BrowserHive reads this file.',
+} as const;
+
+/** Keys of an enum node that describe the value itself and move into the enum branch of the `anyOf`. */
+const ENUM_BRANCH_KEYS = new Set(['type', 'enum']);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Every enum node becomes `anyOf: [<the enum>, { $ref: configRef }]` with its annotations kept outside,
+ * so an editor accepts `"stealth": "{env:STEALTH}"` and still rejects `"stealth": "banana"`. Every
+ * other grammar already accepts a string (spec 08 §6).
+ *
+ * @returns A widened copy.
+ */
+function widenEnums(node: unknown): unknown {
+  if (Array.isArray(node)) return node.map(widenEnums);
+  if (!isRecord(node)) return node;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(node)) out[key] = widenEnums(value);
+  if (!Array.isArray(out['enum'])) return out;
+  const branch: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(out))
+    if (ENUM_BRANCH_KEYS.has(key)) branch[key] = value;
+  const anyOf = [branch, { $ref: `#/$defs/${CONFIG_REF_DEF}` }];
+  // `anyOf` takes the place of `type`/`enum`, so annotations keep their order around it.
+  const widened: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(out)) {
+    if (!ENUM_BRANCH_KEYS.has(key)) widened[key] = value;
+    else if (!('anyOf' in widened)) widened['anyOf'] = anyOf;
+  }
+  return widened;
+}
+
 function keyOfSchema(schema: unknown): ConfigKey | undefined {
   return CONFIG_KEYS.find((key) => Object.is(CONFIG_SHAPE[key], schema));
 }
@@ -27,6 +72,7 @@ function keyOfSchema(schema: unknown): ConfigKey | undefined {
  * The JSON Schema for the config file: every key optional, `$schema` tolerated, unknown keys
  * rejected, CLI-only keys omitted. Each property carries `description`, `default`, `examples` and
  * the `x-browserhive-env` / `x-browserhive-cli` spellings; secrets carry `x-browserhive-secret`.
+ * Enums also accept a string holding an `{env:NAME}` reference (`$defs.configRef`, spec 08 §3.1).
  *
  * @returns A JSON-serializable schema object.
  */
@@ -67,8 +113,15 @@ export function configFileJsonSchema(): Record<string, unknown> {
       }
     },
   });
+  const widened = Object.fromEntries(
+    Object.entries(schema).map(([key, value]) => [
+      key,
+      key === 'properties' ? widenEnums(value) : value,
+    ]),
+  );
   return {
-    ...schema,
+    ...widened,
+    $defs: { [CONFIG_REF_DEF]: CONFIG_REF_SCHEMA },
     $id: CONFIG_FILE_SCHEMA_ID,
     title: 'BrowserHive configuration file',
     description:

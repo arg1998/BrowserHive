@@ -27,6 +27,7 @@ export const TAGLINE = 'local-first stealth browser MCP server';
 export const DOCS_URL = 'https://browserhive.ai/docs/configuration';
 const PRECEDENCE =
   'Precedence: defaults < environment < browserhive.config.json < flags (rightmost wins).';
+const REFERENCES = 'References: a config-file value may contain {env:NAME} or {env:NAME:-default}.';
 const INDENT = '  ';
 const GAP = '  ';
 const MAX_LABEL = 32;
@@ -178,6 +179,7 @@ function footer(options: HelpOptions): string[] {
   return [
     '',
     ...paragraph(PRECEDENCE, options),
+    ...paragraph(REFERENCES, options),
     ...paragraph(
       `Environment variables and JSON keys: ${options.style.bold('browserhive help config')}.`,
       options,

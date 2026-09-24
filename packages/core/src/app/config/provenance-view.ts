@@ -10,6 +10,9 @@ import {
   type ServerConfig,
   type ShadowLine,
   shadowLabel,
+  sourceWithRefs,
+  type ValueRef,
+  viaRefs,
 } from '@browserhive/contracts/config';
 import { REDACTED_TEXT } from './kinds.ts';
 
@@ -18,9 +21,9 @@ export interface ConfigShowRow {
   readonly key: ConfigKey;
   /** Rendered value (`<redacted>` for secrets, `—` when unset). */
   readonly value: string;
-  /** Source label (`config-file` for the file source). */
+  /** Source label (`config-file` for the file source, `config-file via $OTLP_HOST` with references). */
   readonly source: string;
-  /** Shadowed sources as `label=value`, highest precedence first. */
+  /** Shadowed sources as `label=value[ via $NAME]`, highest precedence first. */
   readonly shadowed: readonly string[];
 }
 
@@ -35,10 +38,15 @@ export interface ConfigViewEntry {
   readonly source: ProvenanceSource;
   readonly derivedFrom?: DerivedSource;
   readonly location?: string;
+  /** References the winning config-file value resolved (spec 08 §3.1). */
+  readonly refs?: readonly ValueRef[];
+  /** The winning config-file value as written; never present when the value is redacted. */
+  readonly template?: string;
   readonly shadowed: ReadonlyArray<{
     readonly source: ProvenanceSource;
     readonly value: string;
     readonly location: string;
+    readonly refs?: readonly ValueRef[];
   }>;
   readonly restartRequired: boolean;
 }
@@ -60,15 +68,19 @@ export function configShowRows(provenance: Provenance): readonly ConfigShowRow[]
       source:
         entry.source === 'derived'
           ? `derived (${entry.derivedFrom ?? ''})`
-          : shadowLabel(entry.source),
-      shadowed: entry.shadowed.map((value) => `${shadowLabel(value.source)}=${value.raw}`),
+          : sourceWithRefs(entry.source, entry.refs),
+      shadowed: entry.shadowed.map(
+        (value) => `${shadowLabel(value.source)}=${value.raw}${viaRefs(value.refs)}`,
+      ),
     };
   });
 }
 
 /**
  * The view served by `GET /api/v1/system/config` and printed by `config show --json`: typed
- * values with secrets replaced by `{ redacted: true }`, plus the provenance model of spec 08 §1.
+ * values with secrets replaced by `{ redacted: true }` (keys flagged secret, and keys a
+ * credential-looking reference name made sensitive for this run), plus the provenance model of
+ * spec 08 §1 with the references of §3.1.
  *
  * @returns The view keyed by canonical name.
  */
@@ -78,16 +90,20 @@ export function configView(config: Readonly<ServerConfig>, provenance: Provenanc
     const entry = provenance[key];
     const meta = keyMeta(key);
     const raw: unknown = config[key];
-    const value: unknown = meta.secret && raw !== undefined ? { redacted: true } : raw;
+    const redacted = meta.secret || entry.sensitive === true;
+    const value: unknown = redacted && raw !== undefined ? { redacted: true } : raw;
     view[key] = {
       value,
       source: entry.source,
       ...(entry.derivedFrom !== undefined && { derivedFrom: entry.derivedFrom }),
       ...(entry.location !== undefined && { location: entry.location }),
+      ...(entry.refs !== undefined && { refs: entry.refs }),
+      ...(entry.template !== undefined && !redacted && { template: entry.template }),
       shadowed: entry.shadowed.map((s) => ({
         source: s.source,
         value: s.raw,
         location: s.location,
+        ...(s.refs !== undefined && { refs: s.refs }),
       })),
       restartRequired: meta.restartRequired,
     };

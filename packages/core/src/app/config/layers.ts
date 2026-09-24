@@ -4,16 +4,20 @@ import {
   CONFIG_KEYS,
   type ConfigKey,
   ENV_PREFIX,
+  type EnvLookup,
   keyMeta,
   lookupKey,
   namesFor,
   type ProvenanceSource,
   reservedMessage,
+  type ValueRef,
 } from '@browserhive/contracts/config';
 import type { TokenizedArgs } from './argv.ts';
 import { type ConfigProblem, withSuggestion } from './failure.ts';
+import { interpolateJson } from './interpolate.ts';
 import type { JsonValue } from './json-parse.ts';
 import { keyKind } from './kinds.ts';
+import { emptyAfterMessage, refProblemMessage } from './ref-messages.ts';
 import { suggestKey } from './suggest.ts';
 
 /** One raw value for one key from one source, before parsing. */
@@ -28,6 +32,12 @@ export interface RawEntry {
   readonly display: string;
   /** Directory relative paths resolve against (config file dir for `file`, cwd otherwise). */
   readonly baseDir?: string;
+  /** References the config-file value resolved (spec 08 §3.1); absent when none. */
+  readonly refs?: readonly ValueRef[];
+  /** The config-file value as written, before expansion; present only with `refs`. Internal: the merge drops it for redacted keys. */
+  readonly template?: string;
+  /** What each reference produced, parallel to `refs`. Internal: only for the secret registry. */
+  readonly refValues?: readonly string[];
 }
 
 /** One collected layer: at most one raw entry per key, plus the problems found while collecting. */
@@ -195,23 +205,30 @@ export function collectCliLayer(tokens: TokenizedArgs): CollectedLayer {
   return { entries, problems };
 }
 
+/** What a value was written as: the string itself, or compact JSON for arrays and objects. */
+function templateOf(raw: JsonValue): string {
+  return typeof raw === 'string' ? raw : JSON.stringify(raw);
+}
+
 /**
  * Collect the config-file layer from its parsed JSON object (spec 08 §3): `$schema` is
  * ignored, unknown keys get "did you mean", reserved keys and `cliOnly` keys are rejected,
- * empty strings are usage errors. Relative paths later resolve against the file's directory.
+ * empty strings are usage errors. `{env:NAME}` references in string values are expanded against
+ * `lookup` (§3.1), and a value empty only after that is a usage error too. Relative paths later
+ * resolve against the file's directory.
  *
  * @returns The file layer.
  */
 export function collectFileLayer(
   json: { readonly [key: string]: JsonValue },
   filePath: string,
+  lookup: EnvLookup = () => undefined,
 ): CollectedLayer {
   const entries = new Map<ConfigKey, RawEntry>();
   const problems: ConfigProblem[] = [];
   const baseDir = dirname(filePath);
-  for (const name of Object.keys(json)) {
+  for (const [name, raw] of Object.entries(json)) {
     if (name === '$schema') continue;
-    const raw = json[name];
     const location = `file:${filePath}#${name}`;
     const found = lookupKey('json', name);
     if (found.kind === 'unknown') {
@@ -257,13 +274,39 @@ export function collectFileLayer(
       });
       continue;
     }
+    const expanded = interpolateJson(raw, lookup);
+    if (expanded.problems.length > 0) {
+      const secret = keyMeta(key).secret;
+      for (const { problem } of expanded.problems) {
+        problems.push({
+          code: 'CONFIG_REF_UNRESOLVED',
+          key,
+          source: 'file',
+          location,
+          message: refProblemMessage(key, filePath, problem, secret),
+        });
+      }
+      continue;
+    }
+    const refs = expanded.refs;
+    if (refs.length > 0 && expanded.value === '') {
+      problems.push({
+        code: 'CONFIG_EMPTY_VALUE',
+        key,
+        source: 'file',
+        location,
+        message: emptyAfterMessage(key, filePath, refs),
+      });
+      continue;
+    }
     entries.set(key, {
       key,
-      raw,
+      raw: expanded.value,
       source: 'file',
       location,
       display: `'${key}' in ${filePath}`,
       baseDir,
+      ...(refs.length > 0 && { refs, template: templateOf(raw), refValues: expanded.values }),
     });
   }
   return { entries, problems };

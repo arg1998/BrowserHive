@@ -2,7 +2,7 @@
 export { ProvenanceSource } from '../enums/provenance-source.ts';
 export { GRAMMAR_META_KEY, grammarFail, grammarOf } from './grammar.ts';
 export { isIPv4, isIPv6, isLoopbackHost, zHost } from './host.ts';
-export { CONFIG_FILE_SCHEMA_ID, configFileJsonSchema } from './json-schema.ts';
+export { CONFIG_FILE_SCHEMA_ID, CONFIG_REF_DEF, configFileJsonSchema } from './json-schema.ts';
 export {
   CONFIG_GROUPS,
   type ConfigGroup,
@@ -53,7 +53,25 @@ export {
   type ShadowLine,
   type SuppliedValue,
   shadowLabel,
+  sourceWithRefs,
+  viaRefs,
 } from './provenance.ts';
+export {
+  CONFIG_REF_PATTERN,
+  type EnvLookup,
+  type Expansion,
+  expandRefs,
+  firstRefLike,
+  formatRefNames,
+  REF_FORMS,
+  REF_SCHEMES,
+  type RefProblem,
+  type RefScheme,
+  type RefToken,
+  refTokenText,
+  scanRefs,
+  type ValueRef,
+} from './refs.ts';
 export {
   CONFIG_KEYS,
   ENV_PREFIX,

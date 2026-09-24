@@ -28,6 +28,9 @@ The dashboard is not available under `--transport stdio`. Run the HTTP transport
 **[`CONFIG_INVALID`](../reference/errors.md#CONFIG_INVALID) or [`CONFIG_UNKNOWN_KEY`](../reference/errors.md#CONFIG_UNKNOWN_KEY)**
 The message names the key, the source it came from (flag, environment variable or file and key) and the accepted values. Common causes: a kebab-case flag, a leftover `BROWSERHIVE_*` variable in your shell, an empty value, or a boolean written as `--admin false` instead of `--admin=false`. `browserhive config validate` reproduces the check, and `browserhive config show` shows which source won.
 
+**`… references {env:NAME}, but NAME is not set`**
+A value in `browserhive.config.json` reads an environment variable that the server's environment does not have. Export it in the shell or service that starts BrowserHive (a systemd `Environment=` line, `docker run -e`), or give the reference a default: `{env:NAME:-value}`. `unknown reference scheme` means text such as `{file:…}` or `{ENV:NAME}` looked like a reference; write `{{…}}` to keep it literal. See [References](configuration.md#references).
+
 **[`BLOCKLIST_LOAD_FAILED`](../reference/errors.md#BLOCKLIST_LOAD_FAILED)**
 The `--blocklist` file is missing or unreadable. A configured blocklist that cannot be read is fatal on purpose.
 

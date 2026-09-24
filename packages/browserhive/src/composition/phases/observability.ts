@@ -58,8 +58,10 @@ export async function observabilityPhase(ctx: BootContext): Promise<PhaseHandle>
   const color = routing.format === 'pretty' && resolveColor(config.color, input.env, streamIsTty);
   const secrets = new SecretRegistry({ now: () => ctx.clock.now() });
   // Operator-supplied secrets (agent tokens, OTLP headers) are registered at birth, before the
-  // first log line, exactly like the ones the server mints (spec 10 §9).
+  // first log line, exactly like the ones the server mints (spec 10 §9). So are the values that
+  // config-file references with credential-looking names produced (spec 08 §3.1).
   for (const literal of secretConfigLiterals(config)) secrets.add(literal);
+  for (const literal of input.resolved.referencedSecrets) secrets.add(literal);
   const redactor = createRedactor(secrets);
   const ring = createRingBuffer(config.logRingSize);
 
