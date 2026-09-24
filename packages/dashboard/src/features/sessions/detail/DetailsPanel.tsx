@@ -1,4 +1,4 @@
-/** @module features/sessions/detail/DetailsPanel — Details tab: a compact counts strip that links into Activity with filters, the session record (owner, client, browser, persistence, lease, lifetime, URL), identity & coherence, and "Resize the agent's browser" while live; zero-noise counts (vault fills only with the vault on) and a worded closed reason */
+/** @module features/sessions/detail/DetailsPanel — Details tab: a compact counts strip that links into Activity with filters, the session record (owner, browser, persistence, lease, lifetime, URL), the self-reported client (harness, model, workspace, meta), identity & coherence, and "Resize the agent's browser" while live; zero-noise counts (vault fills only with the vault on) and a worded closed reason */
 import type { SessionDetail, TimelineKind } from '@browserhive/contracts/http';
 import { Link } from '@tanstack/react-router';
 import { KeyValue, type KeyValueItem } from '@/components/shared/KeyValue.tsx';
@@ -13,6 +13,7 @@ import { ICONS } from '@/lib/icons.ts';
 import { useServerNow } from '@/lib/server-now.ts';
 import { sessionDisplayState } from '@/lib/status-registry.ts';
 import { cn } from '@/lib/utils.ts';
+import { ClientPanel } from '../../harness/ClientPanel.tsx';
 import { useSessionMutations, useVaultEnabled } from '../api.ts';
 import { closedReasonNote } from '../session-format.ts';
 import { IdentityCard } from './IdentityCard.tsx';
@@ -118,13 +119,6 @@ function SessionRecord({ detail }: { readonly detail: SessionDetail }) {
     },
     { key: 'Owner', value: session.owner },
   ];
-  if (session.client !== null) {
-    const c = session.client;
-    const parts = [c.name, c.version, c.agent_name, c.model].filter(
-      (v): v is string => typeof v === 'string' && v !== '',
-    );
-    if (parts.length > 0) items.push({ key: 'Client', value: parts.join(' · ') });
-  }
   items.push(
     {
       key: 'Browser',
@@ -190,7 +184,9 @@ export function DetailsPanel({ detail }: { readonly detail: SessionDetail }) {
       <CountsStrip detail={detail} vaultEnabled={vaultEnabled} />
       <div className="grid min-w-0 gap-5 xl:grid-cols-2">
         <SessionRecord detail={detail} />
+        <ClientPanel session={session} />
         <Panel
+          className="xl:col-span-2"
           title="Identity & coherence"
           info={
             <>

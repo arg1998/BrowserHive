@@ -41,6 +41,7 @@ function mount(url = '/system', system: unknown = systemInfo(), health: unknown 
       'GET /system': system,
       'GET /system/config': systemConfig(),
       'GET /system/realtime': { connections: [] },
+      'GET /system/mcp/connections': { connections: [], live: 0, now: NOW },
       'GET /auth/tokens': { data: [] },
       'GET /system/events': envelope([degradation(false), degradation(true)]),
       'GET /health': health,

@@ -11,6 +11,7 @@ import {
   isForbiddenError,
   useConfig,
   useHealth,
+  useMcpConnections,
   useRealtime,
   useSystem,
   useSystemEvents,
@@ -34,6 +35,7 @@ export function SystemPage() {
   const forbidden = isForbiddenError(system.error);
   const status = tab === 'status' && !forbidden;
   const realtime = useRealtime(status);
+  const mcpConnections = useMcpConnections(status);
   const events = useSystemEvents(status);
   const health = useHealth(status);
   const config = useConfig(tab === 'config' && !forbidden);
@@ -122,6 +124,7 @@ export function SystemPage() {
               healthQuery={health}
               events={events.data?.data ?? s.degradations}
               realtime={realtime}
+              mcpConnections={mcpConnections}
             />
           )}
         </DataPanel>

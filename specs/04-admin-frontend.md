@@ -88,6 +88,7 @@ packages/dashboard/
     │   ├── attention/  websites/  blocklist/  notifications/
     │   ├── vault/               bindings/, groups/, confirm/, status/, tester/, transfer/, log/
     │   ├── logs/  system/ (status/, tokens/, config/)  auth/  theme/
+    │   ├── harness/             HarnessName, ClientPanel, HarnessesCard, McpConnectionsPanel (D-30; shared by sessions, overview, system)
     ├── components/
     │   ├── ui/                  shadcn copies adapted to the tokens (button, select, tabs, tooltip, dialog, sheet, …)
     │   └── shared/              the §7 component set

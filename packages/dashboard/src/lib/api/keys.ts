@@ -85,6 +85,7 @@ export const keys = {
     all: ['overview'] as const,
     activity: (params?: KeyParams) => ['overview', 'activity', stableParams(params)] as const,
     failures: (params?: KeyParams) => ['overview', 'failures', stableParams(params)] as const,
+    harnesses: (params?: KeyParams) => ['overview', 'harnesses', stableParams(params)] as const,
   },
   toolCalls: {
     all: ['tool-calls'] as const,
@@ -95,6 +96,7 @@ export const keys = {
     status: () => ['system', 'status'] as const,
     config: () => ['system', 'config'] as const,
     realtime: () => ['system', 'realtime'] as const,
+    mcpConnections: () => ['system', 'mcp-connections'] as const,
     events: (params?: KeyParams) => ['system', 'events', stableParams(params)] as const,
   },
   logs: {

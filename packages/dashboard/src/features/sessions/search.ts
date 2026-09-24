@@ -1,6 +1,6 @@
 /** @module features/sessions/search — `/sessions` search params (table schema + view/owner/channel/persistence/since/until/archived; selection is local, never in the URL) and the mapping onto the REST query (spec 04 §12.2) */
 import { Channel, PersistenceMode } from '@browserhive/contracts/enums';
-import type { SessionsQuery } from '@browserhive/contracts/http';
+import { HarnessSlug, type SessionsQuery } from '@browserhive/contracts/http';
 import { z } from 'zod';
 import {
   csvParam,
@@ -21,6 +21,7 @@ export const SESSION_SORT_KEYS = [
   'persistence',
   'closed',
   'blocked',
+  'harness',
 ] as const;
 /** Sort key. */
 export type SessionSortKey = (typeof SESSION_SORT_KEYS)[number];
@@ -37,6 +38,7 @@ export const SORT_KEY_TO_API: { readonly [K in SessionSortKey]: SessionsQuery['s
   persistence: 'persistence_mode',
   closed: 'closed_at',
   blocked: 'blocked',
+  harness: 'harness',
 };
 
 /** View presets; absent = all (non-archived). */
@@ -50,6 +52,8 @@ export const sessionsSearch = tableSearchSchema(SESSION_SORT_KEYS).extend({
   owner: z.string().trim().min(1).max(128).optional().catch(undefined),
   channel: csvParam(Channel),
   persistence: csvParam(PersistenceMode),
+  /** Launch harness slugs (an open vocabulary, D-30). */
+  harness: csvParam(HarnessSlug),
   since: epochParam,
   until: epochParam,
   archived: z.enum(['include']).optional().catch(undefined),
@@ -66,6 +70,7 @@ export const SESSION_FILTER_KEYS = [
   'owner',
   'channel',
   'persistence',
+  'harness',
   'since',
   'until',
   'archived',
@@ -95,6 +100,7 @@ export function toSessionsQuery(
     ...(search.owner !== undefined && { owner: search.owner }),
     ...(search.channel !== undefined && { channel: search.channel }),
     ...(search.persistence !== undefined && { persistence_mode: search.persistence }),
+    ...(search.harness !== undefined && { harness: search.harness }),
     ...(search.since !== undefined && { since: search.since }),
     ...(search.until !== undefined && { until: search.until }),
   };

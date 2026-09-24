@@ -1,4 +1,4 @@
-/** @module features/sessions/list/sessions-columns — `/sessions` columns: Session (slug + the id's unique suffix, non-default browser, owner when owners differ) · State (dot + text, lease while live or closed time) · Last URL (grow, never squeezed under 14rem) · Activity (calls, errors only when > 0) · Created (relative) · row actions. Columns follow the table's own width (container queries, so the sidebar state counts): Created from 64rem, Activity from 56rem and State from 38rem (below those they fold into the Session cell) */
+/** @module features/sessions/list/sessions-columns — `/sessions` columns: Session (slug + the id's unique suffix, non-default browser, owner when owners differ) · State (dot + text, lease while live or closed time) · Last URL (grow, never squeezed under 14rem) · Activity (calls, errors only when > 0) · Agent (launch harness over workspace/model) · Created (relative) · row actions. Columns follow the table's own width (container queries, so the sidebar state counts): Created from 64rem, Activity from 56rem, Agent from 48rem and State from 38rem (below those they fold into the Session cell) */
 import type { SessionSummary } from '@browserhive/contracts/http';
 import type { ReactNode } from 'react';
 import { CopyButton } from '@/components/shared/CopyButton.tsx';
@@ -11,8 +11,10 @@ import type { DataTableColumn } from '@/components/shared/use-data-table.ts';
 import { Hint } from '@/components/ui/tooltip.tsx';
 import { formatNumber } from '@/lib/format/bytes.ts';
 import { truncateId } from '@/lib/format/ids.ts';
+import { harnessLabel, isUnknownHarness } from '@/lib/harness.ts';
 import { sessionDisplayState, statusEntry } from '@/lib/status-registry.ts';
 import { cn } from '@/lib/utils.ts';
+import { HarnessName } from '../../harness/HarnessName.tsx';
 import { browserLabel } from '../session-format.ts';
 
 /** The part of a session id that tells same-slug sessions apart (`shop-9f2k1x` → `9f2k1x`). */
@@ -43,6 +45,7 @@ export function SessionTitleCell({
         <span className="truncate text-base leading-5 font-medium text-foreground decoration-muted-foreground/60 underline-offset-4 group-hover/row:underline">
           {session.slug}
         </span>
+        <HarnessInline session={session} />
       </span>
       <span className="flex min-w-0 items-center gap-1.5 text-sm leading-5 text-muted-foreground">
         <Hint label={<span className="font-mono">{session.session_id}</span>}>
@@ -85,6 +88,32 @@ function ActivityInline({ session }: { readonly session: SessionSummary }) {
         <span className="text-danger-text">
           {' '}
           · {formatNumber(errors)} {errors === 1 ? 'error' : 'errors'}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+/** The harness beside the slug while the Agent column is hidden (it gives way to the slug); omitted when unknown. */
+function HarnessInline({ session }: { readonly session: SessionSummary }) {
+  if (isUnknownHarness(session.harness)) return null;
+  return (
+    <span className="max-w-[55%] min-w-0 shrink truncate text-sm leading-5 text-muted-foreground @min-[48rem]:hidden">
+      {harnessLabel(session.harness)}
+    </span>
+  );
+}
+
+/** Agent: the launch harness (a muted "Unknown" chip when nothing identified it) over the workspace, else the model, when reported. */
+export function AgentCell({ session }: { readonly session: SessionSummary }) {
+  const client = session.client;
+  const detail = client?.workspace ?? client?.agent_name ?? client?.model ?? null;
+  return (
+    <span className="flex min-w-0 flex-col items-start">
+      <HarnessName harness={session.harness} className="max-w-full text-base leading-5" />
+      {detail !== null ? (
+        <span className="max-w-full truncate text-sm leading-5 text-muted-foreground">
+          {detail}
         </span>
       ) : null}
     </span>
@@ -156,7 +185,7 @@ export function sessionColumns(
       sortAliases: { channel: 'channel', owner: 'owner', persistence: 'persistence' },
       priority: 1,
       className:
-        'w-[13rem] max-w-[18rem] py-1.5 @min-[44rem]:min-w-[14.5rem] @min-[56rem]:min-w-0 @min-[64rem]:w-[15rem]',
+        'w-[13rem] min-w-[13rem] max-w-[18rem] py-1.5 @min-[44rem]:min-w-[14.5rem] @min-[56rem]:min-w-0 @min-[64rem]:w-[15rem]',
       cell: (s) => <SessionTitleCell session={s} showOwner={options.showOwner} />,
     },
     {
@@ -183,6 +212,14 @@ export function sessionColumns(
       priority: 1,
       className: 'hidden w-28 py-1.5 @min-[56rem]:table-cell',
       cell: (s) => <ActivityCell session={s} />,
+    },
+    {
+      id: 'harness',
+      header: 'Agent',
+      sortable: true,
+      priority: 1,
+      className: 'hidden w-36 max-w-[11rem] py-1.5 @min-[48rem]:table-cell',
+      cell: (s) => <AgentCell session={s} />,
     },
     {
       id: 'created',

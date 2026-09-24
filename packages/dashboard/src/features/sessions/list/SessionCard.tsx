@@ -3,6 +3,7 @@ import type { SessionSummary } from '@browserhive/contracts/http';
 import type { ReactNode } from 'react';
 import { splitUrl } from '@/components/shared/url-cell.tsx';
 import { Checkbox } from '@/components/ui/checkbox.tsx';
+import { HarnessName } from '../../harness/HarnessName.tsx';
 import { browserLabel } from '../session-format.ts';
 import { ActivityCell, idSuffix, StateCell } from './sessions-columns.tsx';
 
@@ -39,6 +40,7 @@ export function SessionCard({ session, now, selected, onSelect, actions }: Sessi
             <span className="font-mono">{idSuffix(session)}</span>
             {browser !== null ? ` · ${browser}` : ''}
           </span>
+          <HarnessName harness={session.harness} className="mt-1 self-start text-sm" />
         </div>
         <div className="-mt-1 -mr-2 shrink-0">{actions}</div>
       </div>
