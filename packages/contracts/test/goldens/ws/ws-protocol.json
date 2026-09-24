@@ -676,6 +676,11 @@
                       "has_live_viewers": {
                         "type": "boolean"
                       },
+                      "harness": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      },
                       "client": {
                         "anyOf": [
                           {
@@ -692,6 +697,38 @@
                               },
                               "model": {
                                 "type": "string"
+                              },
+                              "harness": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 64
+                              },
+                              "harness_label": {
+                                "type": "string"
+                              },
+                              "harness_source": {
+                                "type": "string"
+                              },
+                              "model_source": {
+                                "type": "string"
+                              },
+                              "workspace": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "protocol_version": {
+                                "type": "string"
+                              },
+                              "meta": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
+                                "additionalProperties": {
+                                  "type": "string"
+                                }
                               }
                             },
                             "required": ["name", "version"],
@@ -734,6 +771,7 @@
                       "proxy_label",
                       "counts",
                       "has_live_viewers",
+                      "harness",
                       "client"
                     ],
                     "additionalProperties": false
@@ -971,6 +1009,11 @@
                       "has_live_viewers": {
                         "type": "boolean"
                       },
+                      "harness": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      },
                       "client": {
                         "anyOf": [
                           {
@@ -987,6 +1030,38 @@
                               },
                               "model": {
                                 "type": "string"
+                              },
+                              "harness": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 64
+                              },
+                              "harness_label": {
+                                "type": "string"
+                              },
+                              "harness_source": {
+                                "type": "string"
+                              },
+                              "model_source": {
+                                "type": "string"
+                              },
+                              "workspace": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "protocol_version": {
+                                "type": "string"
+                              },
+                              "meta": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
+                                "additionalProperties": {
+                                  "type": "string"
+                                }
                               }
                             },
                             "required": ["name", "version"],
@@ -1029,6 +1104,7 @@
                       "proxy_label",
                       "counts",
                       "has_live_viewers",
+                      "harness",
                       "client"
                     ],
                     "additionalProperties": false
@@ -1185,6 +1261,11 @@
                       },
                       "has_screenshot": {
                         "type": "boolean"
+                      },
+                      "harness": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
                       },
                       "args_json": {},
                       "result_text": {
@@ -3245,15 +3326,7 @@
               },
               "state": {
                 "type": "string",
-                "enum": [
-                  "reserved",
-                  "launching",
-                  "live",
-                  "paused",
-                  "draining",
-                  "closed",
-                  "crashed"
-                ]
+                "enum": ["reserved", "launching", "live", "paused", "draining", "closed", "crashed"]
               },
               "live": {
                 "type": "boolean"
@@ -3353,6 +3426,11 @@
               "has_live_viewers": {
                 "type": "boolean"
               },
+              "harness": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
               "client": {
                 "anyOf": [
                   {
@@ -3369,6 +3447,38 @@
                       },
                       "model": {
                         "type": "string"
+                      },
+                      "harness": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      },
+                      "harness_label": {
+                        "type": "string"
+                      },
+                      "harness_source": {
+                        "type": "string"
+                      },
+                      "model_source": {
+                        "type": "string"
+                      },
+                      "workspace": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "protocol_version": {
+                        "type": "string"
+                      },
+                      "meta": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {
+                          "type": "string"
+                        }
                       }
                     },
                     "required": ["name", "version"],
@@ -3411,6 +3521,7 @@
               "proxy_label",
               "counts",
               "has_live_viewers",
+              "harness",
               "client"
             ],
             "additionalProperties": false
@@ -3540,15 +3651,7 @@
               },
               "state": {
                 "type": "string",
-                "enum": [
-                  "reserved",
-                  "launching",
-                  "live",
-                  "paused",
-                  "draining",
-                  "closed",
-                  "crashed"
-                ]
+                "enum": ["reserved", "launching", "live", "paused", "draining", "closed", "crashed"]
               },
               "live": {
                 "type": "boolean"
@@ -3648,6 +3751,11 @@
               "has_live_viewers": {
                 "type": "boolean"
               },
+              "harness": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
               "client": {
                 "anyOf": [
                   {
@@ -3664,6 +3772,38 @@
                       },
                       "model": {
                         "type": "string"
+                      },
+                      "harness": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      },
+                      "harness_label": {
+                        "type": "string"
+                      },
+                      "harness_source": {
+                        "type": "string"
+                      },
+                      "model_source": {
+                        "type": "string"
+                      },
+                      "workspace": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "protocol_version": {
+                        "type": "string"
+                      },
+                      "meta": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {
+                          "type": "string"
+                        }
                       }
                     },
                     "required": ["name", "version"],
@@ -3706,6 +3846,7 @@
               "proxy_label",
               "counts",
               "has_live_viewers",
+              "harness",
               "client"
             ],
             "additionalProperties": false
@@ -3862,6 +4003,11 @@
               },
               "has_screenshot": {
                 "type": "boolean"
+              },
+              "harness": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
               },
               "args_json": {},
               "result_text": {

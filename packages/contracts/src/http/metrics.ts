@@ -2,6 +2,7 @@
 import { z } from 'zod';
 import { SessionId } from '../ids/index.ts';
 import { Count, DurationMs, EpochMs, QueryInt, windowQuery } from './common.ts';
+import { HarnessSlug } from './sessions.ts';
 
 /** Smallest activity bucket (1 minute). */
 export const ACTIVITY_BUCKET_MIN_MS = 60_000;
@@ -100,3 +101,33 @@ export type ToolMetricRow = z.infer<typeof ToolMetricRow>;
 export const ToolMetricsResponse = z.object({ data: z.array(ToolMetricRow), now: EpochMs });
 /** `GET /metrics/tools` body. */
 export type ToolMetricsResponse = z.infer<typeof ToolMetricsResponse>;
+
+/** `GET /metrics/harnesses` query (default window: the last 7 days). */
+export const HarnessMetricsQuery = z.strictObject({ ...windowQuery });
+/** `GET /metrics/harnesses` query. */
+export type HarnessMetricsQuery = z.infer<typeof HarnessMetricsQuery>;
+
+/** Per-harness counts over a window (D-30). */
+export const HarnessMetricRow = z.object({
+  harness: HarnessSlug,
+  label: z.string(),
+  /** Sessions created in the window with this launch harness. */
+  sessions: Count,
+  /** Of those, still live. */
+  sessions_live: Count,
+  /** Tool calls in the window made by this harness. */
+  tool_calls: Count,
+  /** Of those, failed (an `error_code`, soft failures included). */
+  errors: Count,
+});
+/** Per-harness counts. */
+export type HarnessMetricRow = z.infer<typeof HarnessMetricRow>;
+
+/** `GET /metrics/harnesses` body; `unknown` is always present. */
+export const HarnessMetricsResponse = z.object({
+  data: z.array(HarnessMetricRow),
+  window: z.object({ since: EpochMs, until: EpochMs }),
+  now: EpochMs,
+});
+/** `GET /metrics/harnesses` body. */
+export type HarnessMetricsResponse = z.infer<typeof HarnessMetricsResponse>;

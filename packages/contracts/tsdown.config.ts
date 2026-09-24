@@ -5,6 +5,7 @@ export default defineConfig({
     index: 'src/index.ts',
     config: 'src/config/index.ts',
     errors: 'src/errors/index.ts',
+    harness: 'src/harness/index.ts',
     enums: 'src/enums/index.ts',
     ids: 'src/ids/index.ts',
     tools: 'src/tools/index.ts',

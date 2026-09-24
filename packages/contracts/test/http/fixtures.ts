@@ -60,7 +60,16 @@ export const sessionSummary = (): Input<typeof SessionSummary> => ({
   proxy_label: null,
   counts: { tool_calls: 3, errors: 1, pages: 2, blocked: 0, attention_open: 0, vault_access: 0 },
   has_live_viewers: false,
-  client: { name: 'claude-code', version: '1.0.0', agent_name: 'agent' },
+  harness: 'claude-code',
+  client: {
+    name: 'claude-code',
+    version: '1.0.0',
+    agent_name: 'agent',
+    harness: 'claude-code',
+    harness_label: 'Claude Code',
+    harness_source: 'client_info',
+    workspace: 'agent',
+  },
 });
 
 export const toolCallRow = (): Input<typeof ToolCallRow> => ({
@@ -76,6 +85,7 @@ export const toolCallRow = (): Input<typeof ToolCallRow> => ({
   ts: NOW - 5_000,
   trace_id: 'abcdef0123456789abcdef0123456789',
   has_screenshot: false,
+  harness: 'claude-code',
 });
 
 export const pageRow = (): Input<typeof PageRow> => ({
