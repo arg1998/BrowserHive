@@ -154,4 +154,12 @@ describe('sandboxSetting', () => {
     );
     expect(sandboxSetting(provenance('default'), undefined, 'on')).toBe('sandbox=on');
   });
+  it('quotes a reference as the file writes it, with what it resolved to', () => {
+    const provenance = {
+      sandbox: { source: 'file', template: '{env:BH_SANDBOX}' },
+    } as unknown as Parameters<typeof sandboxSetting>[0];
+    expect(sandboxSetting(provenance, '/etc/bh.json', 'on')).toBe(
+      '"sandbox": "{env:BH_SANDBOX}" in /etc/bh.json, resolved to on',
+    );
+  });
 });

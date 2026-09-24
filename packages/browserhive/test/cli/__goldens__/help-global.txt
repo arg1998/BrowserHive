@@ -139,5 +139,6 @@ FLAGS — telemetry
                                     substituted. Used only by the dashboard.
 
 Precedence: defaults < environment < browserhive.config.json < flags (rightmost wins).
+References: a config-file value may contain {env:NAME} or {env:NAME:-default}.
 Environment variables and JSON keys: browserhive help config.
 Docs: https://browserhive.ai/docs/configuration

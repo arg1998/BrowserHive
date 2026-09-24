@@ -11,12 +11,31 @@ import { cliHarness, MemoryFs } from './helpers.ts';
 
 const TOKEN = 'ci-runner:0123456789abcdef0123456789abcdef';
 
-const ViewEntry = z.object({
+const Ref = z.strictObject({
+  scheme: z.literal('env'),
+  ref: z.string(),
+  from: z.enum(['value', 'default']),
+  at: z.string().optional(),
+});
+const ViewEntry = z.strictObject({
   value: z.unknown(),
   source: z.enum(['default', 'env', 'env(otel)', 'file', 'cli', 'derived']),
-  shadowed: z.array(z.object({ source: z.string(), value: z.string(), location: z.string() })),
+  derivedFrom: z.string().optional(),
+  location: z.string().optional(),
+  refs: z.array(Ref).optional(),
+  template: z.string().optional(),
+  shadowed: z.array(
+    z.strictObject({
+      source: z.string(),
+      value: z.string(),
+      location: z.string(),
+      refs: z.array(Ref).optional(),
+    }),
+  ),
   restartRequired: z.boolean(),
 });
+/** A low-entropy sentinel secret (gitleaks scans every commit). */
+const SENTINEL = 's'.repeat(40);
 
 describe('config show', () => {
   it('prints the provenance table with sources and shadowed values', async () => {
@@ -73,6 +92,93 @@ describe('config show', () => {
   });
 });
 
+describe('config show with references (spec 08 §3.1, §7.1)', () => {
+  const fs = () =>
+    new MemoryFs({
+      '/work/browserhive.config.json': JSON.stringify({
+        otel: true,
+        otelEndpoint: 'http://{env:OTLP_HOST:-127.0.0.1}:4318',
+        otelHeaders: { Authorization: 'Bearer {env:OTLP_TOKEN}' },
+        authTokens: ['ci-runner:{env:CI_TOKEN}'],
+        otelServiceName: '{env:GRAFANA_API_TOKEN}',
+      }),
+    });
+  const env = {
+    OTLP_TOKEN: SENTINEL,
+    CI_TOKEN: SENTINEL,
+    GRAFANA_API_TOKEN: SENTINEL,
+    BROWSERHIVE_OTEL_ENDPOINT: 'http://127.0.0.1:4318',
+  };
+
+  it('names the variables in SOURCE and never prints a secret', async () => {
+    const run = await cliHarness({ argv: ['config', 'show'], env, fs: fs() });
+    expect(run.code).toBe(0);
+    expect(run.stdout).toMatch(
+      /^otelEndpoint\s+http:\/\/127\.0\.0\.1:4318\s+config-file via \$OTLP_HOST \(default\)\s+env=http:\/\/127\.0\.0\.1:4318$/m,
+    );
+    expect(run.stdout).toMatch(/^otelHeaders\s+<redacted>\s+config-file via \$OTLP_TOKEN\s*$/m);
+    expect(run.stdout).toMatch(/^authTokens\s+<redacted>\s+config-file via \$CI_TOKEN\s*$/m);
+    expect(run.stdout).toMatch(
+      /^otelServiceName\s+<redacted>\s+config-file via \$GRAFANA_API_TOKEN\s*$/m,
+    );
+    expect(`${run.stdout}${run.stderr}`).not.toContain(SENTINEL);
+  });
+
+  it('--json carries refs, and a template only where the value is shown', async () => {
+    const run = await cliHarness({ argv: ['config', 'show', '--json'], env, fs: fs() });
+    expect(run.code).toBe(0);
+    expect(run.stdout).not.toContain(SENTINEL);
+    const view = z.record(z.string(), ViewEntry).parse(JSON.parse(run.stdout));
+    expect(view['otelEndpoint']).toMatchObject({
+      value: 'http://127.0.0.1:4318',
+      source: 'file',
+      refs: [{ scheme: 'env', ref: 'OTLP_HOST', from: 'default' }],
+      template: 'http://{env:OTLP_HOST:-127.0.0.1}:4318',
+      shadowed: [{ source: 'env', value: 'http://127.0.0.1:4318' }],
+    });
+    expect(view['otelHeaders']).toMatchObject({
+      value: { redacted: true },
+      refs: [{ scheme: 'env', ref: 'OTLP_TOKEN', from: 'value', at: 'Authorization' }],
+    });
+    for (const key of ['otelHeaders', 'authTokens', 'otelServiceName']) {
+      expect(view[key]?.template).toBeUndefined();
+    }
+    expect(view['otelServiceName']?.value).toEqual({ redacted: true });
+  });
+
+  it('validate prints the shadow line with the variable, and warns about a reference outside the file', async () => {
+    const run = await cliHarness({
+      argv: ['config', 'validate', '--otelServiceName', '{env:NAME}'],
+      env,
+      fs: fs(),
+    });
+    expect(run.code).toBe(0);
+    expect(run.stderr).toContain(
+      "browserhive: warning: --otelServiceName contains '{env:NAME}'; references are expanded only in browserhive.config.json.",
+    );
+    expect(run.stderr).toContain(
+      'config: otelEndpoint=http://127.0.0.1:4318 (config-file via $OTLP_HOST (default)) shadows env=http://127.0.0.1:4318',
+    );
+    expect(run.stderr).toContain(
+      // One credential-looking name redacts the whole key for the run, the flag's value too.
+      'config: otelServiceName=<redacted> (cli) shadows config-file=<redacted> via $GRAFANA_API_TOKEN',
+    );
+    expect(`${run.stdout}${run.stderr}`).not.toContain(SENTINEL);
+  });
+
+  it('an unset variable fails validate like serve, naming the variable only', async () => {
+    const validate = await cliHarness({ argv: ['config', 'validate'], env: {}, fs: fs() });
+    const serve = await cliHarness({ argv: [], env: {}, fs: fs() });
+    expect(validate.code).toBe(64);
+    expect(validate.stderr.split('\n').filter(Boolean)).toEqual([
+      "browserhive: 'otelHeaders' in /work/browserhive.config.json references {env:OTLP_TOKEN}, but OTLP_TOKEN is not set. Set it, or write a default as {env:OTLP_TOKEN:-<value>}.",
+      "browserhive: 'authTokens' in /work/browserhive.config.json references {env:CI_TOKEN}, but CI_TOKEN is not set. Set it, or write a default as {env:CI_TOKEN:-<value>}.",
+      "browserhive: 'otelServiceName' in /work/browserhive.config.json references {env:GRAFANA_API_TOKEN}, but GRAFANA_API_TOKEN is not set. Set it, or write a default as {env:GRAFANA_API_TOKEN:-<value>}.",
+    ]);
+    expect(serve.stderr).toBe(validate.stderr);
+  });
+});
+
 describe('config schema', () => {
   it('prints the JSON Schema of the config file', async () => {
     const run = await cliHarness({ argv: ['config', 'schema'] });
@@ -87,6 +193,23 @@ describe('config schema', () => {
       expect(Object.keys(schema.properties)).toContain(key);
     }
     expect(new Ajv2020({ strict: false }).validateSchema(schema)).toBe(true);
+  });
+
+  it('a reference is valid for every key in the published schema', async () => {
+    const properties = z
+      .object({ properties: z.record(z.string(), z.unknown()) })
+      .parse(configFileJsonSchema()).properties;
+    const withRefs = Object.fromEntries(
+      Object.keys(properties)
+        .filter((key) => key !== '$schema')
+        .map((key) => [key, `{env:BH_${key.toUpperCase()}}`]),
+    );
+    const validate = new Ajv2020({ strict: false, allErrors: true }).compile(
+      configFileJsonSchema(),
+    );
+    expect(validate(withRefs) ? [] : validate.errors).toEqual([]);
+    expect(validate({ stealth: 'banana' })).toBe(false);
+    expect(validate({ stealth: '{env:STEALTH:-max}' })).toBe(true);
   });
 
   it('a config file built from the schema property names resolves', async () => {

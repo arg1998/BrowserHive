@@ -403,6 +403,16 @@ export async function saveDefaultChannel(
   }
 }
 
+/** The variable the config file's `defaultChannel` reads through a reference (spec 08 §3.1), if any. */
+function fileReference(resolved: ResolvedConfigBundle): string | undefined {
+  const provenance = resolved.provenance.defaultChannel;
+  const refs =
+    provenance.source === 'file'
+      ? provenance.refs
+      : provenance.shadowed.find((value) => value.source === 'file')?.refs;
+  return refs?.[0]?.ref;
+}
+
 /** A higher-precedence source (flag or env) that would override a saved file value. */
 function overriddenBy(resolved: ResolvedConfigBundle): string | null {
   const source = resolved.provenance.defaultChannel.source;
@@ -475,6 +485,16 @@ export async function stepBrowserChoice(
       'fail',
       'default browser',
       `${picked?.label ?? chosen} is not installed${chosen === 'chrome' ? '; add --installChrome' : ''}. Nothing was changed.`,
+    );
+    return false;
+  }
+  const referenced = fileReference(options.resolved);
+  if (referenced !== undefined) {
+    // Rewriting the key would silently drop the operator's reference (spec 08 §7.1).
+    out.status(
+      'fail',
+      'default browser',
+      `defaultChannel in ${options.resolved.configFilePath ?? 'the config file'} is read from $${referenced}; set ${referenced}=${chosen} instead. Nothing was changed.`,
     );
     return false;
   }

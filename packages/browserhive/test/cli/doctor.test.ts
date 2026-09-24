@@ -216,6 +216,48 @@ describe('doctor', () => {
     expect((await doctorJson({ argv: [], fs: tight })).byName.get('secrets')?.status).toBe('ok');
   });
 
+  it('references: the config row counts them, a default in use is a warning (spec 08 §7.1)', async () => {
+    const fs = healthyFs();
+    fs.put(
+      '/work/browserhive.config.json',
+      JSON.stringify({ port: '{env:BH_PORT}', maxSessions: '{env:BH_MAX:-4}' }),
+    );
+    const { byName, rows, run } = await doctorJson({ argv: [], env: { BH_PORT: '9901' }, fs });
+    expect(byName.get('config')).toEqual({
+      check: 'config',
+      status: 'ok',
+      detail: 'valid · /work/browserhive.config.json · 2 from references',
+    });
+    expect(rows.filter((r) => r.check === 'reference')).toEqual([
+      {
+        check: 'reference',
+        status: 'warn',
+        detail: "maxSessions: BH_MAX is not set (or empty), so the config file's default is used",
+      },
+    ]);
+    expect(rows.map((r) => r.check).slice(0, 3)).toEqual(['bun', 'config', 'reference']);
+    expect(run.code).toBe(2);
+  });
+
+  it('authTokens that only reference variables need no chmod, a literal token does', async () => {
+    const secretsRow = async (authTokens: unknown) => {
+      const fs = healthyFs();
+      fs.put('/work/browserhive.config.json', JSON.stringify({ authTokens }), 0o644);
+      const env = { CI_TOKEN: 'a'.repeat(32), BH_TOKENS: TOKEN };
+      return (await doctorJson({ argv: [], env, fs })).byName.get('secrets');
+    };
+    expect(await secretsRow('ci-runner:{env:CI_TOKEN}')).toEqual({
+      check: 'secrets',
+      status: 'ok',
+      detail:
+        'authTokens in /work/browserhive.config.json come from $CI_TOKEN; the file holds no token',
+    });
+    expect((await secretsRow(['{env:BH_TOKENS}', 'bot:{env:CI_TOKEN}']))?.status).toBe('ok');
+    expect((await secretsRow(`ci:{env:MISSING:-${'b'.repeat(32)}}`))?.status).toBe('warn');
+    expect((await secretsRow(`ci:${'b'.repeat(16)}{env:CI_TOKEN}`))?.status).toBe('warn');
+    expect((await secretsRow([TOKEN, 'bot:{env:CI_TOKEN}']))?.status).toBe('warn');
+  });
+
   it('an invalid configuration is a failed check, not a usage error', async () => {
     const { byName, run } = await doctorJson({
       argv: [],

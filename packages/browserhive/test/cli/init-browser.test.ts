@@ -159,6 +159,21 @@ describe('init: the menu', () => {
     );
   });
 
+  it('a defaultChannel read through a reference is never rewritten (spec 08 §7.1)', async () => {
+    const text = JSON.stringify({ port: 9000, defaultChannel: '{env:BH_CHANNEL:-chromium}' });
+    const fs = new MemoryFs({ '/work/browserhive.config.json': text });
+    const run = await cliHarness({
+      argv: ['init', '--skipBrowsers', '--channel', 'chrome', '--yes'],
+      fs,
+      probes: chromeHost(),
+    });
+    expect(run.code).toBe(1);
+    expect(run.stdout).toContain(
+      '✗ default browser  defaultChannel in /work/browserhive.config.json is read from $BH_CHANNEL; set BH_CHANNEL=chrome instead. Nothing was changed.',
+    );
+    expect(await fs.readFile('/work/browserhive.config.json')).toBe(text);
+  });
+
   it('an invalid number is asked again; the install entry is offered when Chrome is missing', async () => {
     const probes = probeState({ environment: ubuntu, sandbox: { chromium: unavailable } });
     const run = await cliHarness({
