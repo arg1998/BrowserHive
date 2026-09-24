@@ -8,7 +8,7 @@ import { expectNoA11yViolations } from '../../../test/helpers/axe.ts';
 import { envelope, problem, renderPage } from '../../../test/helpers/page-harness.tsx';
 import { act, fireEvent, screen, waitFor, within } from '../../../test/helpers/render.tsx';
 import { configDisplay, filterConfig } from './config/ConfigTable.tsx';
-import { readHealth, runtimeRows, settingsGroups, systemNotices } from './model.ts';
+import { browserRows, readHealth, runtimeRows, settingsGroups, systemNotices } from './model.ts';
 import { SystemPage } from './SystemPage.tsx';
 import { systemSearch, systemSection } from './search.ts';
 
@@ -191,5 +191,82 @@ describe('SystemPage', () => {
     expect(await screen.findByText('System is for operators')).toBeTruthy();
     expect(screen.queryAllByRole('button', { name: 'Retry' })).toHaveLength(0);
     expect(screen.queryByRole('tab')).toBeNull();
+  });
+});
+
+describe('browsers and sandbox', () => {
+  const browser = (mode: 'auto' | 'on' | 'off', root = false) =>
+    systemInfo({
+      browser: {
+        default_channel: 'chrome',
+        sandbox_mode: mode,
+        running_as_root: root,
+        channels: [
+          {
+            channel: 'chromium',
+            label: 'Chrome for Testing',
+            source: 'bundled',
+            installed: true,
+            version: '153.0.8010.12',
+            executable: '/cache/chromium-1243/chrome',
+            sandbox: 'unavailable',
+            sandbox_reason: 'No usable sandbox!',
+          },
+          {
+            channel: 'chrome',
+            label: 'Google Chrome',
+            source: 'installed',
+            installed: true,
+            version: '154.0.8037.57',
+            executable: '/opt/google/chrome/chrome',
+            sandbox: 'sandboxed',
+            sandbox_reason: null,
+          },
+          {
+            channel: 'edge',
+            label: 'Microsoft Edge',
+            source: 'installed',
+            installed: false,
+            version: null,
+            executable: null,
+            sandbox: 'unknown',
+            sandbox_reason: null,
+          },
+        ],
+      },
+    } as Partial<SystemInfo>);
+
+  it('lists the default first with a verdict per installed browser', () => {
+    const rows = browserRows(browser('auto')) ?? [];
+    expect(rows.map((r) => [r.channel, r.isDefault, r.sandbox?.label ?? null])).toEqual([
+      ['chrome', true, 'sandboxed'],
+      ['chromium', false, 'falls back: no sandbox'],
+      ['edge', false, null],
+    ]);
+    expect(rows[1]?.reason).toBe('No usable sandbox!');
+    expect(browserRows(systemInfo())).toBeNull();
+  });
+
+  it('an unknown verdict reads as "sandbox off" under off and as root under root', () => {
+    const unknown = (s: SystemInfo) => ({
+      ...s,
+      browser: s.browser && {
+        ...s.browser,
+        channels: s.browser.channels.map((c) => ({ ...c, sandbox: 'unknown' as const })),
+      },
+    });
+    expect(browserRows(unknown(browser('off')))?.[0]?.sandbox?.label).toBe('sandbox off');
+    expect(browserRows(unknown(browser('auto')))?.[0]?.sandbox?.label).toBe('not checked yet');
+    expect(browserRows(unknown(browser('auto', true)))?.[0]?.sandbox?.label).toBe(
+      'no sandbox as root',
+    );
+  });
+
+  it('the Status tab shows the Browsers and sandbox panel', async () => {
+    mount('/system', browser('auto'));
+    const list = await screen.findByRole('list', { name: 'Browsers' });
+    expect(within(list).getByText('Google Chrome')).toBeTruthy();
+    expect(within(list).getByText('No usable sandbox!')).toBeTruthy();
+    expect(screen.getByText(/sandbox auto: on wherever the browser can run with it/)).toBeTruthy();
   });
 });

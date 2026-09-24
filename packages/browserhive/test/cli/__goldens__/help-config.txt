@@ -42,6 +42,7 @@ NAMES
   --persistence           BROWSERHIVE_PERSISTENCE
   --defaultHeadless       BROWSERHIVE_DEFAULT_HEADLESS
   --defaultChannel        BROWSERHIVE_DEFAULT_CHANNEL
+  --sandbox               BROWSERHIVE_SANDBOX
   --maxSessions           BROWSERHIVE_MAX_SESSIONS
   --sessionLease          BROWSERHIVE_SESSION_LEASE
   --attentionTimeout      BROWSERHIVE_ATTENTION_TIMEOUT

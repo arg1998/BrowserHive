@@ -33,7 +33,15 @@ import { configKeyDocsUrl } from '@/lib/links.ts';
 import { useServerNow } from '@/lib/server-now.ts';
 import { diskTone, type Tone } from '@/lib/status-registry.ts';
 import { SettingsList } from '../components/SettingsList.tsx';
-import { checkTone, dbRatio, healthTone, kpis, runtimeRows, systemNotices } from '../model.ts';
+import {
+  browserRows,
+  checkTone,
+  dbRatio,
+  healthTone,
+  kpis,
+  runtimeRows,
+  systemNotices,
+} from '../model.ts';
 
 const SEVERITY_TONE: { readonly [K in SystemEvent['severity']]: Tone } = {
   info: 'info',
@@ -148,6 +156,87 @@ function HealthRuntimePanel({
         <SettingsList rows={runtimeRows(system, health)} label="Runtime versions" short />
       </div>
     </section>
+  );
+}
+
+const SANDBOX_MODE_NOTE: Readonly<Record<string, string>> = {
+  auto: 'sandbox auto: on wherever the browser can run with it',
+  on: 'sandbox on: required',
+  off: 'sandbox off',
+};
+
+/** The browsers this daemon found and whether each runs with Chromium's sandbox. */
+function BrowsersPanel({ system }: { readonly system: SystemInfo }) {
+  const rows = browserRows(system);
+  const browser = system.browser;
+  if (rows === null || browser === undefined) return null;
+  const root = browser.running_as_root ? ' · running as root' : '';
+  return (
+    <Panel
+      title="Browsers and sandbox"
+      info={
+        <>
+          <p>
+            The browsers on this machine that sessions can use, and whether each runs inside
+            Chromium's sandbox. The sandbox keeps a compromised page from reaching the rest of the
+            machine.
+          </p>
+          <p>
+            With <code>sandbox=auto</code> each browser is checked on its first launch and falls
+            back to no sandbox where the machine does not allow it. <code>browserhive doctor</code>{' '}
+            explains why and how to fix it.
+          </p>
+        </>
+      }
+      infoDocs="security"
+      description={`Default ${browser.default_channel} · ${SANDBOX_MODE_NOTE[browser.sandbox_mode] ?? browser.sandbox_mode}${root}`}
+      padding="none"
+    >
+      <ul aria-label="Browsers" className="flex flex-col border-t">
+        {rows.map((r) => (
+          <li
+            key={r.channel}
+            className="flex flex-col gap-1 border-b px-5 py-3 last:border-b-0 sm:flex-row sm:items-start sm:gap-4"
+          >
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="font-medium">{r.label}</span>
+                <span className="font-mono text-sm text-muted-foreground">{r.channel}</span>
+                {r.isDefault ? (
+                  <TonePill entry={{ label: 'default', tone: 'accent' }} iconless />
+                ) : null}
+                {r.installed ? (
+                  <span className="text-sm text-muted-foreground">
+                    {r.source === 'bundled' ? 'bundled' : 'installed'}
+                    {r.version !== null ? (
+                      <>
+                        {' · '}
+                        <span className="font-mono tabular-nums">{r.version}</span>
+                      </>
+                    ) : null}
+                  </span>
+                ) : (
+                  <span className="text-sm text-muted-foreground">not installed</span>
+                )}
+              </div>
+              {r.path !== null ? (
+                <span className="font-mono text-sm text-subtle-foreground [overflow-wrap:anywhere]">
+                  {r.path}
+                </span>
+              ) : null}
+              {r.reason !== null ? (
+                <span className="text-sm text-warn-text [overflow-wrap:anywhere]">{r.reason}</span>
+              ) : null}
+            </div>
+            {r.sandbox !== null ? (
+              <span className="shrink-0">
+                <StatusDot entry={r.sandbox} className="text-sm" />
+              </span>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </Panel>
   );
 }
 
@@ -450,6 +539,7 @@ export function StatusSection({
       ))}
       <Kpis system={system} />
       <HealthRuntimePanel system={system} health={health} query={healthQuery} />
+      <BrowsersPanel system={system} />
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
         <StoragePanel system={system} />
         <div className="flex min-w-0 flex-col gap-6">

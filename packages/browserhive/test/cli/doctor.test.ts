@@ -1,7 +1,15 @@
 /** @module test/cli/doctor — `browserhive doctor`: every check with injected probes, exit 0/1/2, `--json` shape */
 import { describe, expect, it } from 'bun:test';
 import { z } from 'zod';
-import { cliHarness, DATA_DIR, MemoryFs, probeState, storageState } from './helpers.ts';
+import {
+  cliHarness,
+  DATA_DIR,
+  detected,
+  MemoryFs,
+  probeState,
+  sandboxEnvironment,
+  storageState,
+} from './helpers.ts';
 
 const TOKEN = 'ci-runner:0123456789abcdef0123456789abcdef';
 
@@ -32,6 +40,12 @@ describe('doctor', () => {
       'config',
       'chromium (playwright)',
       'chromium (patchright)',
+      'chrome',
+      'edge',
+      'default channel',
+      'managed policies',
+      'sandbox (chromium)',
+      'user',
       'data dir',
       'port',
       'vault',
@@ -54,7 +68,7 @@ describe('doctor', () => {
     expect(run.stdout).toMatch(/^\s+CHECK\s+DETAIL/m);
     expect(run.stdout).toContain('✓  bun');
     expect(run.stdout).toContain('config: maxSessions=4 (cli) shadows env=2');
-    expect(run.stdout).toContain('12 passed, 0 warnings, 0 failed');
+    expect(run.stdout).toContain('18 passed, 0 warnings, 0 failed');
   });
 
   it.each([
@@ -219,5 +233,183 @@ describe('doctor', () => {
     expect(byName.get('data dir')?.status).toBe('warn');
     expect(byName.get('database')?.status).toBe('warn');
     expect(run.code).toBe(2);
+  });
+});
+
+describe('doctor: browsers and the sandbox', () => {
+  const ubuntu = sandboxEnvironment({
+    distro: 'Ubuntu 24.04.1 LTS',
+    apparmorRestrictsUserns: true,
+  });
+  const unavailable = { state: 'unavailable', reason: 'No usable sandbox!' } as const;
+  const works = { state: 'works', version: '154.0.8037.57' } as const;
+
+  it('defaultChannel=chrome with Chrome missing is a failure (no longer a false ✓)', async () => {
+    const { byName, run } = await doctorJson({
+      argv: ['--defaultChannel', 'chrome'],
+      fs: healthyFs(),
+    });
+    expect(byName.get('default channel')).toEqual({
+      check: 'default channel',
+      status: 'fail',
+      detail:
+        "defaultChannel=chrome but Google Chrome is not installed; 'browserhive init --installChrome', or set defaultChannel=chromium",
+    });
+    expect(run.code).toBe(1);
+  });
+
+  it('an installed Chrome is listed with version and path, and the configured channel passes', async () => {
+    const { byName } = await doctorJson({
+      argv: ['--defaultChannel', 'chrome'],
+      fs: healthyFs(),
+      probes: probeState({
+        browsers: [detected('chromium'), detected('chrome', { installed: true }), detected('edge')],
+        sandbox: { chromium: works, chrome: works },
+      }),
+    });
+    expect(byName.get('chrome')?.detail).toBe(
+      'Google Chrome 154.0.8037.57 · /opt/google/chrome/chrome',
+    );
+    expect(byName.get('default channel')).toMatchObject({
+      status: 'ok',
+      detail: 'chrome · Google Chrome 154.0.8037.57',
+    });
+    expect(byName.get('version drift')?.status).toBe('ok');
+    expect(byName.get('sandbox (chrome)')?.status).toBe('ok');
+  });
+
+  it('version drift warns only for the channel in use', async () => {
+    const ahead = detected('chrome', { installed: true, version: '156.0.1.2' });
+    const inUse = await doctorJson({
+      argv: ['--defaultChannel', 'chrome'],
+      fs: healthyFs(),
+      probes: probeState({ browsers: [detected('chromium'), ahead, detected('edge')] }),
+    });
+    expect(inUse.byName.get('version drift')?.status).toBe('warn');
+    expect(inUse.byName.get('version drift')?.detail).toContain(
+      'Google Chrome 156 is more than one major version ahead of the Chromium 153',
+    );
+    const notInUse = await doctorJson({
+      argv: [],
+      fs: healthyFs(),
+      probes: probeState({ browsers: [detected('chromium'), ahead, detected('edge')] }),
+    });
+    expect(notInUse.byName.get('version drift')).toMatchObject({ status: 'ok' });
+    expect(notInUse.byName.get('version drift')?.detail).toContain('(not in use)');
+  });
+
+  it('a managed policy blocking automation fails for the configured channel, warns otherwise', async () => {
+    const managed = detected('chrome', {
+      installed: true,
+      policies: {
+        location: '/etc/opt/chrome/policies/managed',
+        names: ['HomepageLocation', 'RemoteDebuggingAllowed'],
+        blocking: ['RemoteDebuggingAllowed=false'],
+      },
+    });
+    const probes = probeState({ browsers: [detected('chromium'), managed, detected('edge')] });
+    const configured = await doctorJson({
+      argv: ['--defaultChannel', 'chrome'],
+      fs: healthyFs(),
+      probes,
+    });
+    expect(configured.byName.get('managed policies')).toMatchObject({
+      status: 'fail',
+      detail:
+        'Google Chrome: RemoteDebuggingAllowed=false blocks automation (/etc/opt/chrome/policies/managed)',
+    });
+    const other = await doctorJson({ argv: [], fs: healthyFs(), probes });
+    expect(other.byName.get('managed policies')?.status).toBe('warn');
+  });
+
+  it('sandbox rows: probed once per installed channel; the verdict is judged by the mode', async () => {
+    const probes = probeState({
+      browsers: [detected('chromium'), detected('chrome', { installed: true }), detected('edge')],
+      sandbox: { chromium: unavailable, chrome: works },
+      environment: ubuntu,
+      apparmorCovered: false,
+    });
+    const auto = await doctorJson({ argv: [], fs: healthyFs(), probes });
+    expect(probes.probed).toEqual(['chromium', 'chrome']);
+    expect(auto.run.code).toBe(0);
+    expect(auto.byName.get('sandbox (chromium)')).toMatchObject({
+      status: 'ok',
+      detail:
+        'cannot run sandboxed here, falls back to no sandbox (sandbox=auto): No usable sandbox!',
+    });
+    expect(auto.byName.get('sandbox (chrome)')).toMatchObject({
+      status: 'ok',
+      detail: 'runs sandboxed (sandbox=auto)',
+    });
+    const off = await doctorJson({ argv: ['--sandbox', 'off'], fs: healthyFs(), probes });
+    expect(off.byName.get('sandbox (chromium)')).toMatchObject({
+      status: 'ok',
+      detail: 'sandbox=off; cannot run sandboxed here: No usable sandbox!',
+    });
+    const on = await doctorJson({ argv: ['--sandbox', 'on'], fs: healthyFs(), probes });
+    expect(on.byName.get('sandbox (chromium)')?.status).toBe('fail');
+    expect(on.run.code).toBe(1);
+    const onChrome = await doctorJson({
+      argv: ['--sandbox', 'on', '--defaultChannel', 'chrome'],
+      fs: healthyFs(),
+      probes,
+    });
+    expect(onChrome.byName.get('sandbox (chromium)')?.status).toBe('warn');
+    expect(onChrome.byName.get('sandbox (chrome)')?.status).toBe('ok');
+  });
+
+  it('text mode prints the guidance for the configured channel: working browser first, AppArmor next', async () => {
+    const run = await cliHarness({
+      argv: ['doctor'],
+      fs: healthyFs(),
+      probes: probeState({
+        browsers: [detected('chromium'), detected('chrome', { installed: true }), detected('edge')],
+        sandbox: { chromium: unavailable, chrome: works },
+        environment: ubuntu,
+        apparmorCovered: false,
+      }),
+    });
+    const text = run.stdout;
+    expect(text).toContain(
+      "The configured browser (chromium) cannot run with Chromium's sandbox on this host.",
+    );
+    expect(text).toContain("  reason    No usable sandbox! (Chrome's own message)");
+    expect(text).toContain(
+      'cause     Ubuntu 24.04.1 LTS restricts unprivileged user namespaces to programs with an',
+    );
+    const first = text.indexOf('1. Use the installed Google Chrome.');
+    const second = text.indexOf('2. Keep the bundled browser and give it an AppArmor profile');
+    expect(first).toBeGreaterThan(0);
+    expect(second).toBeGreaterThan(first);
+    expect(text).toContain('browserhive --sandbox on --defaultChannel chrome');
+    expect(text).toContain(
+      'browserhive doctor --printApparmorProfile | sudo tee /etc/apparmor.d/browserhive-chromium',
+    );
+  });
+
+  it('as root the sandbox is not probed and the rows explain why', async () => {
+    const probes = probeState({ environment: sandboxEnvironment({ root: true, container: true }) });
+    const { byName } = await doctorJson({ argv: [], fs: healthyFs(), probes });
+    expect(probes.probed).toEqual([]);
+    expect(byName.get('sandbox')?.detail).toContain('running as root');
+    expect(byName.get('user')?.detail).toContain('running as root in a container');
+  });
+
+  it('--printApparmorProfile prints the profile for the bundled browser and exits 0', async () => {
+    const run = await cliHarness({ argv: ['doctor', '--printApparmorProfile'], fs: healthyFs() });
+    expect(run.code).toBe(0);
+    expect(run.stdout).toContain(
+      'profile browserhive-chromium /cache/chromium-1243/chrome flags=(unconfined) {',
+    );
+    expect(run.stdout).toContain('  userns,');
+  });
+
+  it('--printApparmorProfile refuses when the configured browser is not installed', async () => {
+    const run = await cliHarness({
+      argv: ['doctor', '--printApparmorProfile', '--defaultChannel', 'edge'],
+      fs: healthyFs(),
+    });
+    expect(run.code).toBe(1);
+    expect(run.stderr).toContain("no Microsoft Edge is installed for channel 'edge'");
   });
 });

@@ -57,6 +57,11 @@ FLAGS — sessions
   --defaultChannel <chromium|chrome|edge>
                                     Default browser channel; launch_session channel overrides per
                                     session. default: chromium
+  --sandbox <auto|on|off>           Chromium's sandbox. auto runs each browser sandboxed where it
+                                    can and falls back where it cannot (warned once); on requires
+                                    it: the server refuses to start (exit 3) and a session fails
+                                    with SANDBOX_UNAVAILABLE when a browser cannot provide it; off
+                                    never uses it. default: auto
   --maxSessions <n|unbounded>       Maximum concurrent browser sessions, or unbounded. Derived from
                                     available RAM when unset (min(floor(GiB / 1.5), 20); on Linux,
                                     host RAM capped by the cgroup memory limit). default: derived

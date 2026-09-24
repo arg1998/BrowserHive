@@ -224,6 +224,54 @@ jobs:
       - if: env.RUN == 'true'
         run: bun run test:integration
 
+  sandbox-matrix:
+    # Cross-OS sandbox and stealth smoke check: launches sessions through BrowserHive under each
+    # `sandbox` setting (off, auto, on) and with an agent's `chromiumSandbox: true`, for the bundled
+    # Chromium and the Google Chrome and Microsoft Edge the runner images ship. The job summary shows
+    # whether each browser runs sandboxed and the page-visible stealth signals; --strict fails the
+    # job when a launched session misses a stealth check or sandbox on/off signals differ. Not a
+    # required check; a channel the runner lacks is reported as skipped.
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: 'bun-${{ runner.os }}-${{ hashFiles(''bun.lock'') }}'
+      - run: bun install --frozen-lockfile
+      - id: pw
+        shell: bash
+        run: echo "version=$(bun -e "console.log(require('playwright-core/package.json').version)")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: pw-cache
+        with:
+          path: |
+            ~/.cache/ms-playwright
+            ~/Library/Caches/ms-playwright
+            ~\AppData\Local\ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+      - if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: bunx playwright install chromium --with-deps
+      - name: Measure
+        shell: bash
+        run: bun packages/browserhive/scripts/stealth-matrix.ts --sandbox config:off,config:auto,config:on,session --strict --out "matrix-${{ matrix.os }}.json" --summary "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: sandbox-matrix-${{ matrix.os }}
+          path: matrix-${{ matrix.os }}.json
+          retention-days: 14
+
   e2e:
     runs-on: ubuntu-latest
     needs: build

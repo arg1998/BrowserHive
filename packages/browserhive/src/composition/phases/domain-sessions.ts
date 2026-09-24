@@ -1,8 +1,8 @@
-/** @module composition/phases/domain-sessions — browser driver (Patchright resolution per `stealthDriver`), identity/proxy resolvers, blocklist (+ watcher), auth-state store, session service and lease sweeper. */
+/** @module composition/phases/domain-sessions — browser driver (Patchright resolution per `stealthDriver`), the sandbox policy and its `sandbox=on` preflight, identity/proxy resolvers, blocklist (+ watcher), auth-state store, session service and lease sweeper. */
 
 import { watch } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import type { ServerConfig } from '@browserhive/contracts/config';
+import type { Provenance, ServerConfig } from '@browserhive/contracts/config';
 import type { Clock, DomainEvents, EventBus, IdGenerator, Logger } from '@browserhive/core/runtime';
 import { isAppError, serializeError } from '@browserhive/core/runtime';
 import type {
@@ -25,6 +25,7 @@ import {
   SessionService,
 } from '@browserhive/core/server';
 import type { DegradationRelay } from '../adapters/degradation-relay.ts';
+import { buildSandbox, type SandboxHost, type SandboxWiring } from '../sandbox.ts';
 
 /** Inputs of {@link buildSessions}. */
 export interface SessionsInput {
@@ -35,6 +36,11 @@ export interface SessionsInput {
   readonly logger: Logger;
   readonly bus: EventBus<DomainEvents>;
   readonly relay: DegradationRelay;
+  /** Where each key came from (the `sandbox=on` refusal quotes how it was set). */
+  readonly provenance: Provenance;
+  readonly configFilePath: string | undefined;
+  /** Test seam for the sandbox probes. */
+  readonly sandboxHost?: SandboxHost;
 }
 
 /** Built session-side services. */
@@ -48,6 +54,7 @@ export interface SessionsParts {
   readonly authStates: AuthStateStore;
   readonly sessions: SessionService;
   readonly sweeper: LeaseSweeper;
+  readonly sandbox: SandboxWiring;
 }
 
 /** `fs.watch` adapter for the blocklist hot reload (D-22). */
@@ -93,12 +100,23 @@ export async function buildSessions(input: SessionsInput): Promise<SessionsParts
   const { config, clock, ids, logger, bus, host } = input;
   const resolver = new DriverResolver({ logger });
   const browserInstalled = probeBrowser(resolver, input);
+  // Under sandbox=on this refuses to start (SANDBOX_UNAVAILABLE, exit code 3) before anything opens.
+  const sandbox = await buildSandbox({
+    config,
+    provenance: input.provenance,
+    configFilePath: input.configFilePath,
+    resolver,
+    logger,
+    clock,
+    ...(input.sandboxHost !== undefined && { host: input.sandboxHost }),
+  });
   const driver = new PlaywrightBrowserDriver({
     logger,
     clock,
     host,
     stealthDriver: config.stealthDriver,
     driverResolver: resolver,
+    sandbox: sandbox.policy,
   });
   // The System page's runtime row: the build the driver actually launches (Patchright's or
   // Playwright's bundled Chromium), not a system-wide browser.
@@ -184,5 +202,6 @@ export async function buildSessions(input: SessionsInput): Promise<SessionsParts
     authStates,
     sessions,
     sweeper,
+    sandbox,
   };
 }

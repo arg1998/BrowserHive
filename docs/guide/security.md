@@ -101,13 +101,49 @@ The data directory is `0700` and secret files are `0600`. Saved logins (`auth-st
 
 `--blocklist` stops navigations at the tool boundary and aborts document requests in the browser. Subresources still load, and an agent with `evaluate` can `fetch()` a blocked URL. Use it to keep agents off pages, not to contain them.
 
+## The browser sandbox
+
+Chromium's sandbox keeps a page that exploits a browser bug from getting the rights of the user running BrowserHive. The `sandbox` setting (`--sandbox`, `BROWSERHIVE_SANDBOX`) decides whether sessions use it:
+
+| `--sandbox` | Behaviour |
+|---|---|
+| `auto` (default) | Each browser runs sandboxed where this machine allows it. The first session on a browser tries the sandbox; if the browser cannot use it here, that browser runs without it from then on, with one warning in the log. A session never fails because of the sandbox. |
+| `on` | The sandbox is required. Before the server opens its port it launches the configured browser once with the sandbox on; if that fails, it refuses to start (exit code 3) and prints what to do on this machine. A session on a browser that cannot sandbox fails with [`SANDBOX_UNAVAILABLE`](../reference/errors.md#SANDBOX_UNAVAILABLE), `retryable: never`. |
+| `off` | Never sandboxed, as in versions before this setting existed. |
+
+Where it works:
+
+| Machine | Sandbox under `auto` |
+|---|---|
+| macOS, Windows | on, for every browser |
+| Linux without restrictions | on |
+| Ubuntu 23.10+ (and derivatives), Google Chrome from Google's package | on (Ubuntu ships an AppArmor profile for it) |
+| Ubuntu 23.10+, the bundled Chromium | off: no AppArmor profile covers Playwright's download path |
+| Running as root, or Docker's default settings | off: Chrome refuses the sandbox as root; Docker's default seccomp profile blocks it |
+
+Ubuntu 23.10 and later only let programs with an AppArmor profile create the user namespaces the sandbox needs (`kernel.apparmor_restrict_unprivileged_userns=1`). Two ways to get the sandbox there:
+
+1. **Use the installed Google Chrome**: `browserhive init --channel chrome --yes`, or `--defaultChannel chrome`. `browserhive init` can install it for you.
+2. **Give the bundled browser a profile** (one-time, needs `sudo`; redo it after a BrowserHive update that downloads a new browser build):
+
+   ```bash
+   browserhive doctor --printApparmorProfile | sudo tee /etc/apparmor.d/browserhive-chromium
+   sudo apparmor_parser -r /etc/apparmor.d/browserhive-chromium
+   ```
+
+   The profile has the same shape as the one Ubuntu ships for Google Chrome. BrowserHive only prints it; it never installs anything.
+
+`browserhive doctor` shows, per installed browser, whether it can run sandboxed here and, when your configured browser cannot, the options for your machine. The dashboard's System page lists the browsers and each one's sandbox state, and a session's Details tab shows whether that session runs sandboxed.
+
+An agent can ask for the sandbox for one session (`launch_options: { chromiumSandbox: true }`); if the browser cannot provide it, the launch fails with `SANDBOX_UNAVAILABLE` instead of starting unsandboxed. An agent can never turn the sandbox off: `chromiumSandbox: false` is refused.
+
 ## Takeover is full control
 
 During an open attention request, an operator's mouse and keyboard input goes straight to the agent's browser. Input is re-checked against the open request on every message and refused otherwise.
 
 ## Other limits
 
-- Browser processes run without Chromium's sandbox (`--no-sandbox`, Playwright's default). A page that exploits a Chromium bug gets the privileges of the user running BrowserHive, so run it as a user with access only to what it needs, and keep BrowserHive updated: each version pins its Chromium build.
+- Where the sandbox cannot run (see [above](#the-browser-sandbox)), a page that exploits a Chromium bug gets the privileges of the user running BrowserHive. Run it as a user with access only to what it needs, and keep BrowserHive (and an installed Chrome) updated: each BrowserHive version pins its Chromium build.
 - WebAuthn and passkeys cannot be replayed from saved state.
 - Telemetry is off by default. Nothing leaves the host unless you set `--otel`, and then only to the endpoint you configure.
 

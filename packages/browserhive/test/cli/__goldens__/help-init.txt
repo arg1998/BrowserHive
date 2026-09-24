@@ -4,8 +4,10 @@ USAGE
   browserhive init [flags]
 
 Creates the data directory (0700), installs Chromium for Playwright (and Patchright when
-stealthDriver is auto or patchright), creates and migrates the database, then prints the next steps.
-Safe to re-run.
+stealthDriver is auto or patchright), reports the browsers on this host and whether each can run
+sandboxed, lets you pick the default browser on a terminal (Enter keeps the current one), creates
+and migrates the database, then prints the next steps. Safe to re-run; never prompts without a
+terminal, in CI or in a container.
 
 FLAGS
   --browsers <chromium>             Browsers to install. chrome and edge are branded channels
@@ -13,6 +15,11 @@ FLAGS
   --force                           Re-download browsers even when installed.
   --skipBrowsers                    Skip the browser download (data directory and database only).
   --writeSchema                     Write browserhive.schema.json next to the config file in use.
+  --channel <chromium|chrome|edge>  Make this the default browser (defaultChannel) and save it to
+                                    the config file. Without a terminal it needs --yes.
+  --installChrome                   Install Google Chrome with Google's installer (playwright
+                                    install chrome; needs administrator rights).
+  --yes                             Save the --channel choice without asking.
   --dataDir <path>                  Data directory (database, sessions, auth states, uploads,
                                     backups). Defaults to the OS data dir. default: OS data
                                     directory

@@ -1,9 +1,15 @@
 /** @module test/cli/helpers — fake `CliDeps` for the CLI suites: in-memory filesystem and config fs, scripted probes, fake storage, captured streams */
 import { dirname } from 'node:path';
+import type { Channel } from '@browserhive/contracts/enums';
 import type { ConfigFs } from '@browserhive/core/config';
 import type { FileStat, FileSystem } from '@browserhive/core/ports/file-system';
 import type { HostEnvironment } from '@browserhive/core/ports/host-environment';
 import type { ProcessRunner, ProcessRunResult } from '@browserhive/core/ports/process-runner';
+import type {
+  DetectedBrowser,
+  SandboxEnvironment,
+  SandboxProbeResult,
+} from '@browserhive/core/server';
 import type {
   BrowserInstall,
   CliDeps,
@@ -107,9 +113,10 @@ export class MemoryFs implements FileSystem {
     return entry.data;
   }
 
-  async writeFile(path: string, data: string): Promise<void> {
+  async writeFile(path: string, data: string, options?: { readonly mode?: number }): Promise<void> {
     this.writes.push(`write ${path}`);
-    this.put(path, data);
+    // Like the node adapter: the mode applies to a new file only.
+    this.put(path, data, this.entries.get(path)?.mode ?? options?.mode ?? 0o644);
   }
 
   /** The synchronous `ConfigFs` view of the same tree. */
@@ -261,6 +268,59 @@ export interface ProbeState {
   diskFree: number | null;
   modes: Record<string, number>;
   otlp: { ok: boolean; detail: string };
+  /** Detected channels (bundled Chromium first). */
+  browsers: DetectedBrowser[];
+  /** Sandbox probe verdict per channel; missing channels answer `not-installed`. */
+  sandbox: Partial<Record<Channel, SandboxProbeResult>>;
+  environment: SandboxEnvironment;
+  apparmorCovered: boolean | null;
+  /** Channels whose sandbox was probed, in order. */
+  probed: Channel[];
+}
+
+const NO_POLICIES = { location: null, names: [], blocking: [] };
+
+/** A detected browser for the probe fakes. */
+export function detected(
+  channel: Channel,
+  overrides: Partial<DetectedBrowser> = {},
+): DetectedBrowser {
+  const label = { chromium: 'Chrome for Testing', chrome: 'Google Chrome', edge: 'Microsoft Edge' }[
+    channel
+  ];
+  const installed = overrides.installed ?? channel === 'chromium';
+  return {
+    channel,
+    label,
+    source: channel === 'chromium' ? 'bundled' : 'installed',
+    installed,
+    executablePath: installed
+      ? channel === 'chromium'
+        ? '/cache/chromium-1243/chrome'
+        : channel === 'chrome'
+          ? '/opt/google/chrome/chrome'
+          : '/opt/microsoft/msedge/msedge'
+      : null,
+    version: installed ? (channel === 'chromium' ? '153.0.8010.12' : '154.0.8037.57') : null,
+    policies: NO_POLICIES,
+    ...overrides,
+  };
+}
+
+/** A normal-user Linux host without restrictions. */
+export function sandboxEnvironment(
+  overrides: Partial<SandboxEnvironment> = {},
+): SandboxEnvironment {
+  return {
+    platform: 'linux',
+    distro: 'Ubuntu 24.04.1 LTS',
+    root: false,
+    container: false,
+    apparmorRestrictsUserns: false,
+    usernsCloneDisabled: false,
+    userNamespacesDisabled: false,
+    ...overrides,
+  };
 }
 
 /** Default probe answers: everything healthy. */
@@ -283,6 +343,11 @@ export function probeState(overrides: Partial<ProbeState> = {}): ProbeState {
     diskFree: 50 * 1000 ** 3,
     modes: {},
     otlp: { ok: true, detail: 'HTTP 405' },
+    browsers: [detected('chromium'), detected('chrome'), detected('edge')],
+    sandbox: { chromium: { state: 'works', version: '153.0.8010.12' } },
+    environment: sandboxEnvironment(),
+    apparmorCovered: null,
+    probed: [],
     ...overrides,
   };
 }
@@ -299,6 +364,13 @@ function fakeProbes(state: ProbeState): HostProbes {
     pathMode: async (path) => state.modes[path] ?? 0o700,
     installCommand: (driver) => ({ command: '/usr/bin/bun', args: [`/pkg/${driver}/cli.js`] }),
     httpReachable: async () => state.otlp,
+    browsers: async () => state.browsers,
+    sandbox: async (channel) => {
+      state.probed.push(channel);
+      return state.sandbox[channel] ?? { state: 'not-installed' };
+    },
+    sandboxEnvironment: async () => state.environment,
+    apparmorCovers: async () => state.apparmorCovered,
   };
 }
 

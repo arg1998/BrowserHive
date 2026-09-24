@@ -70,6 +70,7 @@ export async function wireObserversPhase(ctx: BootContext): Promise<PhaseHandle>
         humanize: config.humanize,
         captcha: config.captcha,
       },
+      browser: { snapshot: () => domain.sandbox.describe() },
       vault: {
         enabled: domain.vaultBackend !== 'off',
         backend: domain.vaultBackend === 'off' ? null : domain.vaultBackend,

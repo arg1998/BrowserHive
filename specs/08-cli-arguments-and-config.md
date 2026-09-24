@@ -17,7 +17,7 @@ related:
 > RFC 2119 when they appear in uppercase. `D-NN` identifiers refer to entries in the
 > [decision log](00-decisions.md). Terminology follows the [specification index](README.md#conventions).
 
-Governing decisions: D-06 (ladder and naming), D-02 (single port), D-08 (telemetry knobs), D-18 (`init`/`doctor`), D-19 (toolchain), D-24 (data dir).
+Governing decisions: D-06 (ladder and naming), D-02 (single port), D-08 (telemetry knobs), D-18 (`init`/`doctor`), D-19 (toolchain), D-24 (data dir), D-26 (browser choice), D-27 (sandbox), D-28 (`init` writes the config file).
 
 ---
 
@@ -134,6 +134,7 @@ All configuration failures are detected before any port is bound, any browser is
 | Empty value | 64 | `browserhive: BROWSERHIVE_PORT is set but empty. Unset it or provide a value.` |
 | Cross-field violation | 64 | one of the exact texts below |
 | Policy refusal (security guard) | 3 | `browserhive: [INSECURE_BIND_REFUSED] Refusing to bind 0.0.0.0 without authentication. Set auth=token, or set allowInsecureBind=true to accept the risk.` |
+| `sandbox=on` and the configured browser cannot sandbox (boot preflight, §5.6) | 3 | `browserhive: [SANDBOX_UNAVAILABLE] The sandbox is required (--sandbox on) but the configured browser cannot run sandboxed.` followed by the guidance block |
 | Config file unreadable / invalid JSON | 64 | `browserhive: cannot read /path/browserhive.config.json: <reason>` |
 | Missing subcommand argument | 64 | `browserhive: 'db restore' requires a file argument.` |
 
@@ -184,6 +185,7 @@ Columns: key · type / grammar · default · validation · consumer · boot/runt
 | `persistence` | enum `memory` \| `persistent` \| `storage-state` | `memory` | default mode; per-session `persistence_mode` overrides | session service | boot |
 | `defaultHeadless` | boolean | `true` | per-session `headless` overrides | session service | boot |
 | `defaultChannel` | enum `chromium` \| `chrome` \| `edge` | `chromium` | per-session `channel` overrides | session service | boot |
+| `sandbox` | enum `auto` \| `on` \| `off` | `auto` | Chromium's sandbox (§5.6, D-27): `auto` sandboxes each browser where it can and falls back where it cannot, warned once per executable; `on` requires it: the boot preflight refuses to start (`SANDBOX_UNAVAILABLE`, exit 3) and a session whose browser cannot sandbox fails with the same code, `retryable: never`; `off` never uses it (the behaviour before the key existed). An agent's `launch_options.chromiumSandbox: true` makes the sandbox required for that session | sandbox policy | boot |
 | `maxSessions` | integer ≥ 1 \| `unbounded` | derived: `min(floor(ramGiB / 1.5), 20)`, min 1, where `ramGiB` is host RAM capped by the smallest cgroup memory limit on the process's cgroup and its ancestors (v2 `memory.max`, v1 `memory.limit_in_bytes`; Linux only) — a container or a systemd `MemoryMax=` slice would otherwise admit sessions for memory it can never get | provenance `derived` (`derivedFrom: hostMemory`); `unbounded` accepted, discouraged in `doctor` | admission policy | boot |
 | `sessionLease` | duration ≥ `1m` | `2h` | sliding inactivity lease | lease | boot |
 | `attentionTimeout` | duration ≥ `1m` | `6h` | server cap on `request_attention` | operator-request broker | boot |
@@ -235,10 +237,23 @@ Only the mechanical names of §2 are accepted. Some other spellings are common e
 | kebab-case or snake_case flags and file keys (`--max-sessions`, `--dry-run`, `max_sessions`) | converted to camelCase and, when that matches a key or command flag case-insensitively, `Did you mean '--maxSessions'?` |
 | `--pretty-logs`, `--log-pretty`, `BROWSERHIVE_LOG_PRETTY` | `Did you mean '--logFormat'?` (or the env / JSON spelling for that source) |
 | `BROWSERHIVE_DISABLE_PATCHRIGHT` | `Did you mean 'BROWSERHIVE_STEALTH_DRIVER'?` |
+| `--no-sandbox`, `BROWSERHIVE_NO_SANDBOX` (Chrome's own flag) | `Did you mean '--sandbox'?` (the equivalent is `--sandbox off`) |
 | `--admin-bind`, `--admin-port`, `BROWSERHIVE_ADMIN_BIND`, `BROWSERHIVE_ADMIN_PORT` | no equivalent key; the hint states that the dashboard shares `--host` and `--port` (D-02) |
 | anything else | Damerau-Levenshtein suggestions per §4 |
 
 Because `serve`, `config validate` and `doctor` all run the same resolver, they report these identically. `NODE_ENV` is not read: the log renderer is chosen only by `logFormat`.
+
+### 5.6 The sandbox (`sandbox`)
+
+Playwright launches Chromium with `--no-sandbox` unless told otherwise; `sandbox` decides (D-27, spec 11 §4.1).
+
+| Value | Behaviour |
+|---|---|
+| `auto` (default) | Each browser executable is tried with the sandbox on its first real launch. If that launch fails and the same browser then starts without it, the verdict "cannot sandbox here" is cached for the process lifetime and sessions on that browser run unsandboxed, with one `warn` log `sandbox fell back` (fields `channel`, `executable`, `reason`). A launch never fails because of the sandbox. As root the sandbox is not attempted (Chrome refuses it). |
+| `on` | A guarantee kept at startup. During `build-domain`, before any listener opens, the configured `defaultChannel` browser is launched once, headless, with the sandbox forced on (about 0.3 s when it fails). If it cannot sandbox (or is not installed), every other installed browser is probed, and the server refuses to start with `SANDBOX_UNAVAILABLE`, exit code 3, printing on stderr: the first line (which stands alone, for harnesses that show only that), then the browser, Chrome's own reason, the OS cause, and the ways out for this OS and these browsers, working ones first (a browser that was checked to sandbox, an AppArmor profile via `doctor --printApparmorProfile`, running as a normal user, the `sysctl` to change, installing Chrome, `--sandbox auto`, `--sandbox off`). A later `launch_session` for a browser that cannot sandbox fails with the same code, `retryable: never`, naming the channels that work; the verdict is cached, so repeats fail in milliseconds. |
+| `off` | Never sandboxed: the behaviour before the key existed. |
+
+An agent's `launch_options.chromiumSandbox: true` makes the sandbox required for that session in every mode; `chromiumSandbox: false` is refused (spec 11 §4).
 
 ## 6. How the schema drives everything
 
@@ -277,7 +292,7 @@ Generation from the schema: `--help` (§7.2), `browserhive config schema` (JSON 
 
 ```
 browserhive [serve] [flags]            start the server (default command)
-browserhive init [flags]               install browsers, create the data dir, verify the host
+browserhive init [flags]               install browsers, choose the default one, create the data dir
 browserhive doctor [flags]             diagnose the host and configuration
 browserhive purge [flags]              delete local state (inventory, then confirmation)
 browserhive config show|schema|validate
@@ -294,9 +309,11 @@ Positional rules: the first argument is the command if it is a known command wor
 
 **`serve`** — resolves config, runs the composition root (`01-overall-architecture.md` §6), prints the banner (§8), waits for a signal. All keys in §5 apply.
 
-**`init`** — the one-time setup that replaces any `postinstall` (D-18). Steps, each idempotent and reported with ✓/✗: create the data dir (0700) and subdirectories; run `playwright install chromium` (respecting `PLAYWRIGHT_BROWSERS_PATH`); if `stealthDriver` is `auto`/`patchright`, run `patchright install chromium`; open/create the database and apply migrations; write `browserhive.schema.json` next to a discovered config file if `--writeSchema`; print next steps (`browserhive`, `browserhive --admin`, docs link). Flags: `--browsers chromium` (only member today; `chrome`/`edge` are branded channels installed by the OS), `--force` (re-download), `--dataDir`, `--config`, `--stealthDriver`. Network is required only for the browser download; a missing browser at first `launch_session` later produces `BROWSER_NOT_INSTALLED` naming `browserhive init`.
+**`init`** — the one-time setup that replaces any `postinstall` (D-18). Steps, each idempotent and reported with ✓/✗ (– for "not present"): create the data dir (0700) and subdirectories; run `playwright install chromium` (respecting `PLAYWRIGHT_BROWSERS_PATH`); if `stealthDriver` is `auto`/`patchright`, run `patchright install chromium`; report the browsers (D-26): one line per channel (the bundled Chromium "always kept", the installed Chrome and Edge with version and path, or "not installed") and a `sandbox` line with each installed browser's verdict under the current `sandbox` setting (probed with one headless launch each, skipped as root); choose the default browser (below); open/create the database and apply migrations; write `browserhive.schema.json` next to a discovered config file if `--writeSchema`; print next steps (`browserhive`, `browserhive --admin`, docs link). Flags: `--browsers chromium` (only member today; `chrome`/`edge` are branded channels installed by the OS), `--force` (re-download), `--channel <chromium|chrome|edge>` (make it the default and save it), `--installChrome` (run Google's installer through `playwright install chrome`; needs administrator rights), `--yes` (save without asking), `--dataDir`, `--config`, `--stealthDriver`. Network is required only for the downloads; a missing browser at first `launch_session` later produces `BROWSER_NOT_INSTALLED` naming the install command.
 
-**`doctor`** — prints a table and exits 0 (all ✓), 1 (any ✗), or 2 (warnings only). Checks: Bun version ≥ 1.4; Chromium present for the resolved `stealthDriver` (Playwright and Patchright paths, exact versions); data dir exists, owner-only permissions, free disk; config file found and valid (runs the full resolver and prints shadow lines); port free on the resolved host; `bw` CLI on PATH when `vault=bitwarden`; unrecognised data files in the data dir (check `unrecognised data files`, warning: "unrecognised data file 'events.db' found; BrowserHive does not read or migrate it"); database opens, `user_version`, `min_reader_version`, pending migrations, last backup; OTLP endpoint reachable when `otel=true` (HEAD request, 2 s timeout, warning only); `maxSessions` vs available RAM sanity; `authTokens` supplied via a config file with mode broader than 0600 (warning). `--json` emits the same as an array of `{ check, status, detail }`.
+*Choosing the default browser.* On a terminal (stdin is a TTY, `CI` is unset, not in a container) and without `--channel`, `init` prints a menu of the installed channels plus, when Chrome is missing and Google ships a build for the platform, "Install Google Chrome (needs administrator rights)". Each entry lists pros and cons computed from what was detected (sandbox verdicts, the version the bundled build reports against the installed Chrome, how far an installed browser is ahead of the tested build, managed policies, Edge's stealth incoherence), never fixed prose. The current value is marked `← current` and is the default answer: pressing Enter changes nothing and writes nothing. Chrome is labelled "recommended for stealth" but never pre-selected. A different choice asks `Save defaultChannel=<channel> to <path>? [Y/n]` and merges the one key into the config file in use (other keys, their order and `$schema` kept) or, with none, creates `<data-dir>/browserhive.config.json` with mode 0600 (D-28). Without a terminal nothing is asked: `--channel` without `--yes` fails the step and writes nothing; a channel that is not installed fails without changing anything (no silent switch); `--installChrome` installs without changing the default unless `--channel chrome` is also given. When an env var or flag still overrides the saved value, `init` says so.
+
+**`doctor`** — prints a table and exits 0 (all ✓), 1 (any ✗), or 2 (warnings only). Checks: Bun version ≥ 1.4; Chromium present for the resolved `stealthDriver` (Playwright and Patchright paths, exact versions); Google Chrome and Microsoft Edge (version and path, or "not installed", which is fine); the configured `defaultChannel` installed (✗ when it is not, naming the install command); version drift (! when the installed browser in use is more than one major version ahead of the tested Chromium); managed policies (✗ when a policy such as `RemoteDebuggingAllowed=false` blocks automation of the configured channel, ! for another channel); the sandbox per installed browser, probed with one headless launch (✓ sandboxes; under `auto` ✓ with "falls back to no sandbox" and the reason, since sessions still launch; under `on` ✗ for the configured channel and ! for others; under `off` ✓ with the verdict as information); running as root or in a container (! only under `sandbox=on`); in text mode, when the configured browser cannot sandbox, the same guidance block as the `sandbox=on` refusal is printed under the table; data dir exists, owner-only permissions, free disk; config file found and valid (runs the full resolver and prints shadow lines); port free on the resolved host; `bw` CLI on PATH when `vault=bitwarden`; unrecognised data files in the data dir (check `unrecognised data files`, warning: "unrecognised data file 'events.db' found; BrowserHive does not read or migrate it"); database opens, `user_version`, `min_reader_version`, pending migrations, last backup; OTLP endpoint reachable when `otel=true` (HEAD request, 2 s timeout, warning only); `maxSessions` vs available RAM sanity; `authTokens` supplied via a config file with mode broader than 0600 (warning). `--json` emits the same as an array of `{ check, status, detail }`. `--printApparmorProfile` prints an AppArmor profile for the configured channel's browser (shaped like Ubuntu's own `/etc/apparmor.d/chrome`: `flags=(unconfined)` plus `userns`) and exits; it never installs anything. `--print-apparmor-profile` is an unsupported spelling (§2).
 
 **`purge`** — resolves only `dataDir` (so a broken config file can never prevent starting over); prints an inventory (row counts per table via a read-only, non-migrating connection; directory sizes; absolute paths; total); default targets are the database (+ WAL/SHM) and `sessions/`; `--all` adds auth states, uploads, backups and admin credentials; the vault policy tables live in the database and are dropped with it, so the inventory states that vault bindings are lost; requires typing `YES`; `--all` asks a second `YES`; `--dryRun` prints and exits 0; `--yes` skips prompts; without a TTY and without `--yes` it refuses (exit 1); warns when open sessions exist in the DB. `--dry-run` is an unsupported spelling answered with a hint naming `--dryRun` (§5.5).
 
@@ -357,7 +374,7 @@ Colour (picocolors): command and flag names bold, types dim, defaults cyan, env 
 | 0 | success; clean shutdown after a signal |
 | 1 | fatal runtime error (boot phase failure after config, unhandled corruption, `purge` failure, `doctor` failure) |
 | 2 | `doctor` warnings only |
-| 3 | policy refusal at startup (`INSECURE_BIND_REFUSED`, `ADMIN_REQUIRES_HTTP`, `BLOCKLIST_LOAD_FAILED`, `PORT_IN_USE`, `DB_NEWER_THAN_BINARY`) — printed as `[CODE] message` |
+| 3 | policy refusal at startup (`INSECURE_BIND_REFUSED`, `ADMIN_REQUIRES_HTTP`, `BLOCKLIST_LOAD_FAILED`, `PORT_IN_USE`, `DB_NEWER_THAN_BINARY`, `SANDBOX_UNAVAILABLE`) — printed as `[CODE] message`; `SANDBOX_UNAVAILABLE` adds its guidance lines instead of the hint |
 | 64 | usage error (unknown flag/key, invalid value, cross-field violation, missing argument) |
 | 130 | terminated by a second SIGINT before graceful shutdown completed |
 

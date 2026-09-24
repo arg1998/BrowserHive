@@ -135,6 +135,12 @@ export function toSessionSummary(session: Session, now: number): SessionSummary 
     humanize: request.humanize,
     stealth_recorded: request.stealth && session.identity !== null,
     identity: identityJson(session),
+    ...(session.handle?.browserInfo !== undefined && {
+      browser: {
+        version: session.handle.browserInfo.version,
+        sandboxed: session.handle.browserInfo.sandboxed,
+      },
+    }),
     proxy_label: session.proxyLabel,
     counts: {
       tool_calls: session.counts.toolCalls,

@@ -2,7 +2,7 @@
 
 # Configuration reference
 
-Every configuration key of BrowserHive (51 keys), generated from the zod schema in `@browserhive/contracts/config`. For a guided introduction see [the configuration guide](../guide/configuration.md).
+Every configuration key of BrowserHive (52 keys), generated from the zod schema in `@browserhive/contracts/config`. For a guided introduction see [the configuration guide](../guide/configuration.md).
 
 ## Precedence
 
@@ -290,6 +290,7 @@ Per-session close and trace-finalize cap.
 | [`persistence`](#persistence) | `--persistence` | `BROWSERHIVE_PERSISTENCE` | `memory` |
 | [`defaultHeadless`](#defaultHeadless) | `--defaultHeadless` | `BROWSERHIVE_DEFAULT_HEADLESS` | `true` |
 | [`defaultChannel`](#defaultChannel) | `--defaultChannel` | `BROWSERHIVE_DEFAULT_CHANNEL` | `chromium` |
+| [`sandbox`](#sandbox) | `--sandbox` | `BROWSERHIVE_SANDBOX` | `auto` |
 | [`maxSessions`](#maxSessions) | `--maxSessions` | `BROWSERHIVE_MAX_SESSIONS` | derived (hostMemory) |
 | [`sessionLease`](#sessionLease) | `--sessionLease` | `BROWSERHIVE_SESSION_LEASE` | `2h` |
 | [`attentionTimeout`](#attentionTimeout) | `--attentionTimeout` | `BROWSERHIVE_ATTENTION_TIMEOUT` | `6h` |
@@ -339,6 +340,20 @@ Default browser channel; launch_session channel overrides per session.
 | Config file | `"defaultChannel"` |
 | Type | one of: chromium, chrome, edge |
 | Default | `chromium` |
+| Notes | restart required |
+
+<a id="sandbox"></a>
+### `sandbox`
+
+Chromium's sandbox. auto runs each browser sandboxed where it can and falls back where it cannot (warned once); on requires it: the server refuses to start (exit 3) and a session fails with SANDBOX_UNAVAILABLE when a browser cannot provide it; off never uses it.
+
+| Property | Value |
+|---|---|
+| CLI flag | `--sandbox` |
+| Environment | `BROWSERHIVE_SANDBOX` |
+| Config file | `"sandbox"` |
+| Type | one of: auto, on, off |
+| Default | `auto` |
 | Notes | restart required |
 
 <a id="maxSessions"></a>

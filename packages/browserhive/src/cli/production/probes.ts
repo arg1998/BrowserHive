@@ -1,9 +1,10 @@
 /** @module cli/production/probes — real host probes for `doctor`, `init` and `version`: Bun and SQLite versions, Chromium installs per driver, port, PATH lookup, disk, file modes, OTLP reachability */
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { stat, statfs } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
 import { dirname, join } from 'node:path';
+import type { Channel } from '@browserhive/contracts/enums';
 import type { Logger } from '@browserhive/core/runtime';
 import { z } from 'zod';
 import type { BrowserInstall, HostProbes } from '../deps.ts';
@@ -50,6 +51,67 @@ async function browserInstall(
   } catch {
     return { packageVersion: version, executablePath: null, installed: false };
   }
+}
+
+function readText(path: string): string | null {
+  try {
+    return readFileSync(path, 'utf8');
+  } catch {
+    return null;
+  }
+}
+
+function listDir(path: string): readonly string[] {
+  try {
+    return readdirSync(path);
+  } catch {
+    return [];
+  }
+}
+
+/** Playwright's `channel` for a public channel name. */
+const PLAYWRIGHT_CHANNEL: Readonly<Record<Channel, string>> = {
+  chromium: 'chromium',
+  chrome: 'chrome',
+  edge: 'msedge',
+};
+
+/** A helper command with a short ceiling; a spawn failure reads as a failed command. */
+async function runHelper(
+  command: string,
+  args: readonly string[],
+): Promise<{ readonly code: number | null; readonly stdout: string }> {
+  try {
+    const child = Bun.spawn([command, ...args], { stdout: 'pipe', stderr: 'ignore' });
+    const timer = setTimeout(() => child.kill(), 10_000);
+    const stdout = await new Response(child.stdout).text();
+    const code = await child.exited;
+    clearTimeout(timer);
+    return { code, stdout };
+  } catch {
+    return { code: null, stdout: '' };
+  }
+}
+
+async function detect(logger: Logger) {
+  const server = await import('@browserhive/core/server');
+  const resolver = new server.DriverResolver({ logger });
+  let bundledPath: string | null = null;
+  try {
+    const path = resolver.stock().executablePath();
+    bundledPath = path !== '' && existsSync(path) ? path : null;
+  } catch {
+    bundledPath = null;
+  }
+  return server.detectBrowsers({
+    platform: process.platform,
+    env: process.env,
+    exists: existsSync,
+    readFile: readText,
+    listDir,
+    run: runHelper,
+    bundled: { executablePath: bundledPath, version: server.bundledChromiumVersion('playwright') },
+  });
 }
 
 /**
@@ -105,6 +167,31 @@ export function createHostProbes(options: {
     sqliteVersion: async () => {
       sqlite ??= await readSqliteVersion(options);
       return sqlite;
+    },
+    browsers: () => detect(options.logger),
+    sandbox: async (channel) => {
+      const server = await import('@browserhive/core/server');
+      const resolver = new server.DriverResolver({ logger: options.logger });
+      return server.probeSandbox(resolver.stock(), {
+        playwrightChannel: PLAYWRIGHT_CHANNEL[channel],
+      });
+    },
+    sandboxEnvironment: async () => {
+      const server = await import('@browserhive/core/server');
+      return server.inspectSandboxEnvironment({
+        platform: process.platform,
+        uid: typeof process.getuid === 'function' ? process.getuid() : null,
+        exists: existsSync,
+        readFile: readText,
+      });
+    },
+    apparmorCovers: async (path) => {
+      const server = await import('@browserhive/core/server');
+      return server.apparmorProfileCovers(path, {
+        platform: process.platform,
+        listDir,
+        readFile: readText,
+      });
     },
     httpReachable: async (url, timeoutMs) => {
       try {

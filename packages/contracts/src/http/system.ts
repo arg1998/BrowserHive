@@ -1,6 +1,13 @@
 /** @module contracts/http/system — system info, config provenance, realtime, log level, degradations (spec 03 §4.7) */
 import { z } from 'zod';
-import { AuthMode, DegradationSeverity, ProvenanceSource, Transport } from '../enums/index.ts';
+import {
+  AuthMode,
+  Channel,
+  DegradationSeverity,
+  ProvenanceSource,
+  SandboxMode,
+  Transport,
+} from '../enums/index.ts';
 import { ConnectionId, SessionId } from '../ids/index.ts';
 import { Bytes, Count, csv, DurationMs, EpochMs, listQuery, page, sortable } from './common.ts';
 
@@ -77,6 +84,36 @@ export const RuntimeVersions = z.object({
 /** Runtime versions. */
 export type RuntimeVersions = z.infer<typeof RuntimeVersions>;
 
+/** One browser channel as the server sees it: where it is, its version, and its sandbox verdict. */
+export const SystemBrowserChannel = z.object({
+  channel: Channel,
+  /** `Chrome for Testing`, `Google Chrome` or `Microsoft Edge`. */
+  label: z.string(),
+  /** `bundled` (downloaded by `browserhive init`, pinned) or `installed` (the OS's, updates itself). */
+  source: z.enum(['bundled', 'installed']),
+  installed: z.boolean(),
+  version: z.string().nullable(),
+  executable: z.string().nullable(),
+  /** `sandboxed` / `unavailable` once a launch or the boot check decided; `unknown` before. */
+  sandbox: z.enum(['sandboxed', 'unavailable', 'unknown']),
+  /** Chrome's own reason when `unavailable`. */
+  sandbox_reason: z.string().nullable(),
+});
+/** One browser channel on `/system`. */
+export type SystemBrowserChannel = z.infer<typeof SystemBrowserChannel>;
+
+/** Browser choice and sandbox state (`GET /system`). */
+export const SystemBrowser = z.object({
+  default_channel: Channel,
+  /** The `sandbox` setting. */
+  sandbox_mode: SandboxMode,
+  /** Chrome refuses the sandbox as root; under `auto` it is not attempted. */
+  running_as_root: z.boolean(),
+  channels: z.array(SystemBrowserChannel),
+});
+/** Browser choice and sandbox state. */
+export type SystemBrowser = z.infer<typeof SystemBrowser>;
+
 /** `GET /system` body. */
 export const SystemInfo = z.object({
   version: z.string(),
@@ -104,6 +141,8 @@ export const SystemInfo = z.object({
     humanize: z.boolean(),
     captcha: z.string(),
   }),
+  /** Browsers on this host and the sandbox state; absent from servers older than this field. */
+  browser: SystemBrowser.optional(),
   vault: z.object({ enabled: z.boolean(), backend: z.string().nullable() }),
   blocklist: z.object({ configured: z.boolean(), path: z.string().nullable(), patterns: Count }),
   retention: RetentionStatus,

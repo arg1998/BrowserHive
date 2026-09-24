@@ -2,6 +2,7 @@
 
 import { describe, expect, it } from 'bun:test';
 import { textOf } from '../helpers/fake-transport.ts';
+import { integrationChannel } from '../helpers/integration-channel.ts';
 import { useMcpStack } from './mcp-fixture.ts';
 
 describe('core tools end-to-end (real Chromium)', () => {
@@ -11,7 +12,7 @@ describe('core tools end-to-end (real Chromium)', () => {
     const h = state.harness;
     const id = await h.launch({
       slug: 'demo',
-      channel: 'chromium',
+      channel: integrationChannel(),
       incognito: false,
       headless: true,
     });

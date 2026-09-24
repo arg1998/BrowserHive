@@ -180,6 +180,7 @@
               "CONFIG_INVALID",
               "CONFIG_UNKNOWN_KEY",
               "BLOCKLIST_LOAD_FAILED",
+              "SANDBOX_UNAVAILABLE",
               "DATA_DIR_UNWRITABLE",
               "DATA_DIR_LOCKED",
               "DB_OPEN_FAILED",
@@ -856,6 +857,24 @@
                   ],
                   "additionalProperties": {}
                 },
+                "browser": {
+                  "type": "object",
+                  "properties": {
+                    "version": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "sandboxed": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "version",
+                    "sandboxed"
+                  ]
+                },
                 "proxy_label": {
                   "type": [
                     "string",
@@ -1417,6 +1436,24 @@
                   "null"
                 ],
                 "additionalProperties": {}
+              },
+              "browser": {
+                "type": "object",
+                "properties": {
+                  "version": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "sandboxed": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "version",
+                  "sandboxed"
+                ]
               },
               "proxy_label": {
                 "type": [
@@ -7246,6 +7283,101 @@
               "fingerprint",
               "humanize",
               "captcha"
+            ]
+          },
+          "browser": {
+            "type": "object",
+            "properties": {
+              "default_channel": {
+                "type": "string",
+                "enum": [
+                  "chromium",
+                  "chrome",
+                  "edge"
+                ]
+              },
+              "sandbox_mode": {
+                "type": "string",
+                "enum": [
+                  "auto",
+                  "on",
+                  "off"
+                ]
+              },
+              "running_as_root": {
+                "type": "boolean"
+              },
+              "channels": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "channel": {
+                      "type": "string",
+                      "enum": [
+                        "chromium",
+                        "chrome",
+                        "edge"
+                      ]
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "source": {
+                      "type": "string",
+                      "enum": [
+                        "bundled",
+                        "installed"
+                      ]
+                    },
+                    "installed": {
+                      "type": "boolean"
+                    },
+                    "version": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "executable": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "sandbox": {
+                      "type": "string",
+                      "enum": [
+                        "sandboxed",
+                        "unavailable",
+                        "unknown"
+                      ]
+                    },
+                    "sandbox_reason": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "channel",
+                    "label",
+                    "source",
+                    "installed",
+                    "version",
+                    "executable",
+                    "sandbox",
+                    "sandbox_reason"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "default_channel",
+              "sandbox_mode",
+              "running_as_root",
+              "channels"
             ]
           },
           "vault": {

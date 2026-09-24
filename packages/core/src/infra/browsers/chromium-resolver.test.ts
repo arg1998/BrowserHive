@@ -20,7 +20,9 @@ describe('installCommandFor', () => {
     expect(installCommandFor('chromium', '1.63.0')).toBe(
       'browserhive init  (runs: npx playwright install chromium@1.63.0)',
     );
-    expect(installCommandFor('chrome', '1.63.0')).toContain('Google Chrome');
+    expect(installCommandFor('chrome', '1.63.0')).toBe(
+      'browserhive init --installChrome  (runs: npx playwright install chrome, needs administrator rights)',
+    );
     expect(installCommandFor('edge', '1.63.0')).toContain('Microsoft Edge');
   });
 

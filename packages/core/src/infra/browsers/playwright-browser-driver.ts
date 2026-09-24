@@ -16,6 +16,7 @@ import type {
 import type { Clock } from '../../ports/clock.ts';
 import type { Logger } from '../../ports/logger.ts';
 import { ATTR, SPAN, withSpan } from '../telemetry/spans.ts';
+import { channelExecutable, playwrightChannelExecutable } from './browser-detection.ts';
 import { launchKwargsForChannel } from './channel.ts';
 import {
   assertChromiumInstalled,
@@ -28,6 +29,8 @@ import type { HostFacts } from './host-facts.ts';
 import { IdentityApplier } from './identity-applier.ts';
 import { buildLaunchOptions, executablePathWarning } from './launch-args.ts';
 import { installNativeGetters, mergeNativeGetterPayloads } from './native-getter.ts';
+import { sandboxUnavailable } from './sandbox-error.ts';
+import { SandboxPolicy } from './sandbox-policy.ts';
 import { PlaywrightSessionHandle } from './session-handle.ts';
 import { deviceMemoryPayload } from './stealth-identity.ts';
 import { PlaywrightTracingHandle, traceStartWarning } from './tracing.ts';
@@ -43,6 +46,35 @@ export interface PlaywrightBrowserDriverDeps {
   readonly driverResolver?: DriverResolver;
   /** Test seam for the binary pre-check. */
   readonly chromium?: Omit<ChromiumResolverDeps, 'env'>;
+  /** The `sandbox` setting; defaults to `off` (today's launches, byte for byte). */
+  readonly sandbox?: SandboxPolicy;
+  /** Test seam: the executable a branded channel launches (Playwright's own lookup by default). */
+  readonly locateChannel?: (playwrightChannel: 'chrome' | 'msedge') => string | null;
+}
+
+/** What an agent is told when nothing better is known about this host. */
+export const ASK_OPERATOR_GUIDANCE: readonly string[] = [
+  "Ask the operator to run 'browserhive doctor' for the options on this host.",
+  'Or launch without launch_options.chromiumSandbox.',
+];
+
+/** The `off` policy used when none is configured: required sandboxes still fail typed. */
+function defaultSandboxPolicy(deps: PlaywrightBrowserDriverDeps): SandboxPolicy {
+  return new SandboxPolicy({
+    mode: 'off',
+    root: false,
+    logger: deps.logger,
+    clock: deps.clock,
+    unavailable: ({ target, reason, requiredBy, err }) =>
+      sandboxUnavailable({
+        channel: target.channel,
+        reason,
+        requiredBy,
+        alternatives: [],
+        guidance: [...ASK_OPERATOR_GUIDANCE],
+        ...(err !== undefined && { err }),
+      }),
+  });
 }
 
 /**
@@ -57,6 +89,8 @@ export class PlaywrightBrowserDriver implements BrowserDriver {
   private readonly mode: StealthDriver;
   private readonly resolver: DriverResolver;
   private readonly chromiumDeps: ChromiumResolverDeps;
+  private readonly sandbox: SandboxPolicy;
+  private readonly locateChannel: (playwrightChannel: 'chrome' | 'msedge') => string | null;
 
   constructor(deps: PlaywrightBrowserDriverDeps) {
     this.logger = deps.logger.child({ module: 'browsers.launcher' });
@@ -65,6 +99,24 @@ export class PlaywrightBrowserDriver implements BrowserDriver {
     this.mode = deps.stealthDriver;
     this.resolver = deps.driverResolver ?? new DriverResolver({ logger: deps.logger });
     this.chromiumDeps = { env: deps.host.env, ...deps.chromium };
+    this.sandbox = deps.sandbox ?? defaultSandboxPolicy(deps);
+    this.locateChannel = deps.locateChannel ?? playwrightChannelExecutable;
+  }
+
+  /** The executable a channel launches, the sandbox policy's cache key (null when unknown). */
+  private executableFor(browserType: BrowserType, channel: LaunchSpec['channel']): string | null {
+    return channelExecutable(
+      channel,
+      () => {
+        try {
+          const path = browserType.executablePath();
+          return path === '' ? null : path;
+        } catch {
+          return null;
+        }
+      },
+      this.locateChannel,
+    );
   }
 
   stealthDriverName(): 'patchright' | 'playwright' {
@@ -147,45 +199,86 @@ export class PlaywrightBrowserDriver implements BrowserDriver {
         )
       : null;
 
-    let browser: Browser | null = null;
-    let context: BrowserContext;
-    let page: Page;
-    try {
-      if (spec.persistenceMode === 'persistent') {
-        if (spec.userDataDir === undefined) {
-          throw new AppError(
-            'INTERNAL_ERROR',
-            { ref: 'persistent-user-data-dir' },
-            { message: 'persistent mode requires a resolved userDataDir (internal invariant)' },
-          );
-        }
+    if (spec.persistenceMode === 'persistent' && spec.userDataDir === undefined) {
+      throw new AppError(
+        'INTERNAL_ERROR',
+        { ref: 'persistent-user-data-dir' },
+        { message: 'persistent mode requires a resolved userDataDir (internal invariant)' },
+      );
+    }
+    const userDataDir = spec.userDataDir;
+    // One launch of this session's browser with or without Chromium's sandbox; the policy decides
+    // which (spec 11 §4.1): `off` never, `on` always, `auto` where this executable can.
+    const open = async (
+      sandboxed: boolean,
+    ): Promise<{ browser: Browser | null; context: BrowserContext; page: Page }> => {
+      const { chromiumSandbox: _requested, ...rest } = launch.options;
+      const options = sandboxed ? { ...rest, chromiumSandbox: true } : rest;
+      if (spec.persistenceMode === 'persistent' && userDataDir !== undefined) {
         // `launchPersistentContext` takes launch AND context options in one bag and returns the
         // context directly (its browser is torn down when the context closes). The managed
         // `userDataDir` is resolved upstream; a user-supplied one is rejected there.
-        context = await browserType.launchPersistentContext(spec.userDataDir, {
-          ...launch.options,
+        const context = await browserType.launchPersistentContext(userDataDir, {
+          ...options,
           ...contextOptions,
         });
-        // Chromium has already opened `pages()[0]` here, but it sits at `about:blank` — no navigation
-        // has happened, so a context-level init script still lands before any page script runs.
-        if (scriptPayload !== null)
-          await context.addInitScript(installNativeGetters, scriptPayload);
-        page = context.pages()[0] ?? (await context.newPage());
-        browser = context.browser();
-      } else {
-        // `memory` and `storage-state` share the same mechanics: launch a browser, then open a
-        // context. For `storage-state`, the snapshot rides through `storageState`.
-        browser = await browserType.launch(launch.options);
-        context = await browser.newContext(contextOptions);
+        try {
+          // Chromium has already opened `pages()[0]` here, but it sits at `about:blank` — no
+          // navigation has happened, so a context-level init script still lands before any page
+          // script runs.
+          if (scriptPayload !== null)
+            await context.addInitScript(installNativeGetters, scriptPayload);
+          const page = context.pages()[0] ?? (await context.newPage());
+          return { browser: context.browser(), context, page };
+        } catch (err) {
+          // Never leave a half-opened browser behind (it would also hold the profile lock).
+          await context.close().catch(() => undefined);
+          throw err;
+        }
+      }
+      // `memory` and `storage-state` share the same mechanics: launch a browser, then open a
+      // context. For `storage-state`, the snapshot rides through `storageState`.
+      const browser = await browserType.launch(options);
+      try {
+        const context = await browser.newContext(contextOptions);
         // Before `newPage()`, so the first tab is covered like every later one.
         if (scriptPayload !== null)
           await context.addInitScript(installNativeGetters, scriptPayload);
-        page = await context.newPage();
+        const page = await context.newPage();
+        return { browser, context, page };
+      } catch (err) {
+        await browser.close().catch(() => undefined);
+        throw err;
       }
+    };
+
+    let browser: Browser | null = null;
+    let context: BrowserContext;
+    let page: Page;
+    let sandboxed = false;
+    try {
+      const target = {
+        channel: spec.channel,
+        executablePath: executablePath ?? this.executableFor(browserType, spec.channel),
+      };
+      const opened = await this.sandbox.launch(
+        target,
+        spec.launchOptions?.chromiumSandbox === true,
+        open,
+        // A launch made only to prove the sandbox was the cause is closed again at once.
+        async (proof) => {
+          await proof.context.close().catch(() => undefined);
+          await proof.browser?.close().catch(() => undefined);
+        },
+      );
+      ({ browser, context, page } = opened.value);
+      sandboxed = opened.sandboxed;
     } catch (err) {
       if (isAppError(err)) throw err;
       const notInstalled = browserNotInstalledFromLaunchError(err, spec.channel, this.chromiumDeps);
       if (notInstalled !== null) throw notInstalled;
+      // Sandbox failures of a sandboxed attempt were already typed by the policy
+      // (SANDBOX_UNAVAILABLE, never INTERNAL_ERROR); what reaches here is an unsandboxed launch.
       throw new AppError(
         'INTERNAL_ERROR',
         { ref: 'browser-launch' },
@@ -260,6 +353,7 @@ export class PlaywrightBrowserDriver implements BrowserDriver {
       channel: spec.channel,
       headless: spec.headless,
       stealth: spec.stealth,
+      sandboxed,
       persistence_mode: spec.persistenceMode,
       warnings: warnings.map((w) => w.code),
       launched_at: this.clock.now(),
@@ -277,6 +371,7 @@ export class PlaywrightBrowserDriver implements BrowserDriver {
       tracing,
       applier,
       logger: this.logger,
+      browserInfo: { version: browser?.version() ?? null, sandboxed },
     });
   }
 }

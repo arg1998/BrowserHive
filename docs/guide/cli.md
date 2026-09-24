@@ -2,7 +2,7 @@
 
 ```
 browserhive [serve] [flags]            start the server (default command)
-browserhive init [flags]               install browsers, create the data dir, verify the host
+browserhive init [flags]               install browsers, choose the default one, create the data dir
 browserhive doctor [flags]             diagnose the host and configuration
 browserhive purge [flags]              delete local state (inventory, then confirmation)
 browserhive config show|schema|validate
@@ -49,8 +49,9 @@ One-time setup, safe to re-run:
 1. Create the data directory (`0700`) and subdirectories.
 2. Install Chromium for Playwright (honours `PLAYWRIGHT_BROWSERS_PATH`).
 3. Install Patchright's Chromium when `stealthDriver` is `auto` or `patchright`.
-4. Create or migrate the database.
-5. Print next steps.
+4. Report the browsers on this machine (bundled Chromium, installed Google Chrome and Microsoft Edge) and whether each can run inside Chromium's sandbox; on a terminal, offer the default-browser menu (Enter keeps the current one). See [Installation: choosing the browser](installation.md#choosing-the-browser).
+5. Create or migrate the database.
+6. Print next steps.
 
 | Flag | Meaning |
 |---|---|
@@ -59,12 +60,17 @@ One-time setup, safe to re-run:
 | `--dataDir <path>`, `--config <path>` | Where state and configuration live. |
 | `--stealthDriver <auto\|patchright\|playwright>` | `playwright` skips the Patchright download. |
 | `--writeSchema` | Write `browserhive.schema.json` next to a discovered config file. |
+| `--channel <chromium\|chrome\|edge>` | Make this the default browser and save `defaultChannel` to the config file. Without a terminal it needs `--yes`. |
+| `--installChrome` | Install Google Chrome with Google's installer (`playwright install chrome`; needs administrator rights). |
+| `--yes` | Save the `--channel` choice without asking. |
+
+`init` never asks anything without a terminal, in CI (`CI` set) or in a container.
 
 ## `doctor`
 
-Checks Bun, browsers, data directory permissions and disk space, configuration, port availability, `bw` when the vault is on, the database and pending migrations, the OTLP endpoint when telemetry is on, `maxSessions` against RAM, and config-file permissions when it holds secrets. It also warns when the data directory contains an unrecognised data file, which BrowserHive neither reads nor migrates.
+Checks Bun, browsers (the bundled Chromium, installed Chrome and Edge, that the configured `defaultChannel` is installed, version drift, managed policies that block automation), Chromium's sandbox for each installed browser (each is launched once), running as root or in a container, data directory permissions and disk space, configuration, port availability, `bw` when the vault is on, the database and pending migrations, the OTLP endpoint when telemetry is on, `maxSessions` against RAM, and config-file permissions when it holds secrets. It also warns when the data directory contains an unrecognised data file, which BrowserHive neither reads nor migrates.
 
-`--json` prints `[{ check, status, detail }]`. Exit codes: `0` all good, `2` warnings only, `1` a check failed.
+`--json` prints `[{ check, status, detail }]`. Exit codes: `0` all good, `2` warnings only, `1` a check failed. When the configured browser cannot run sandboxed, the text output ends with what to do on this machine. `--printApparmorProfile` prints an AppArmor profile for the configured browser (for Ubuntu 23.10+) and exits; install it yourself with `sudo tee /etc/apparmor.d/<name>` and `sudo apparmor_parser -r`.
 
 ## `purge`
 
@@ -124,6 +130,6 @@ browserhive 0.1.0 (bun 1.4.2, sqlite 3.53.2, playwright 1.63.0, patchright 1.63.
 | `0` | Success, or clean shutdown after a signal. |
 | `1` | Fatal runtime error (a boot phase failed after configuration, storage corruption, `purge` or `doctor` failure). |
 | `2` | `doctor` found warnings only. |
-| `3` | Policy refusal at startup: [`INSECURE_BIND_REFUSED`](../reference/errors.md#INSECURE_BIND_REFUSED), [`ADMIN_REQUIRES_HTTP`](../reference/errors.md#ADMIN_REQUIRES_HTTP), [`BLOCKLIST_LOAD_FAILED`](../reference/errors.md#BLOCKLIST_LOAD_FAILED), [`PORT_IN_USE`](../reference/errors.md#PORT_IN_USE), [`DB_NEWER_THAN_BINARY`](../reference/errors.md#DB_NEWER_THAN_BINARY). Printed as `[CODE] message`. |
+| `3` | Policy refusal at startup: [`INSECURE_BIND_REFUSED`](../reference/errors.md#INSECURE_BIND_REFUSED), [`ADMIN_REQUIRES_HTTP`](../reference/errors.md#ADMIN_REQUIRES_HTTP), [`BLOCKLIST_LOAD_FAILED`](../reference/errors.md#BLOCKLIST_LOAD_FAILED), [`PORT_IN_USE`](../reference/errors.md#PORT_IN_USE), [`DB_NEWER_THAN_BINARY`](../reference/errors.md#DB_NEWER_THAN_BINARY), [`SANDBOX_UNAVAILABLE`](../reference/errors.md#SANDBOX_UNAVAILABLE) (`--sandbox on`). Printed as `[CODE] message`. |
 | `64` | Usage error: unknown flag or key, invalid value, conflicting settings, missing argument. |
 | `130` | A second interrupt arrived before graceful shutdown finished. |

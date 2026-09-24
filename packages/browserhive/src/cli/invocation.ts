@@ -1,4 +1,5 @@
 /** @module cli/invocation — `CliPlan`: the pure decision `planCli` reaches from argv before any side effect (spec 09 §3.3) */
+import type { Channel } from '@browserhive/contracts/enums';
 import type { ConfigFailure, ResolvedConfigBundle } from '@browserhive/core/config';
 import type { ColorMode } from './output/style.ts';
 import type { CommandName } from './registry.ts';
@@ -37,10 +38,15 @@ export type Invocation =
       readonly force: boolean;
       readonly skipBrowsers: boolean;
       readonly writeSchema: boolean;
+      readonly channel: Channel | null;
+      readonly installChrome: boolean;
+      readonly yes: boolean;
     }
   | {
       readonly command: 'doctor';
       readonly json: boolean;
+      /** `--printApparmorProfile`: print the profile for the configured browser and exit. */
+      readonly printApparmorProfile: boolean;
       /** The resolver outcome; a failure is a ✗ check, not a usage error. */
       readonly resolution:
         | { readonly ok: true; readonly value: ResolvedConfigBundle }

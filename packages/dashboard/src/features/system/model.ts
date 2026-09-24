@@ -333,3 +333,56 @@ export function systemNotices(
     });
   return out;
 }
+
+/** One browser channel on the System page. */
+export interface BrowserRow {
+  readonly channel: string;
+  readonly label: string;
+  readonly isDefault: boolean;
+  readonly installed: boolean;
+  /** `bundled` or `installed`. */
+  readonly source: string;
+  readonly version: string | null;
+  readonly path: string | null;
+  /** Sandbox verdict for an installed browser, or null when it is not installed. */
+  readonly sandbox: { readonly label: string; readonly tone: Tone } | null;
+  /** Chrome's own reason when the sandbox is unavailable. */
+  readonly reason: string | null;
+}
+
+/**
+ * The browsers the daemon found and each one's sandbox verdict. `unknown` becomes "not checked yet"
+ * under `auto` (decided on the first launch) and "sandbox off" under `off`.
+ *
+ * @returns Rows (default channel first), or null for a daemon that does not report browsers.
+ */
+export function browserRows(s: SystemInfo): readonly BrowserRow[] | null {
+  const b = s.browser;
+  if (b === undefined) return null;
+  const rows = b.channels.map((c): BrowserRow => {
+    let sandbox: BrowserRow['sandbox'] = null;
+    if (c.installed) {
+      if (c.sandbox === 'sandboxed') sandbox = { label: 'sandboxed', tone: 'success' };
+      else if (c.sandbox === 'unavailable')
+        sandbox = {
+          label: b.sandbox_mode === 'auto' ? 'falls back: no sandbox' : 'cannot sandbox here',
+          tone: 'warn',
+        };
+      else if (b.running_as_root) sandbox = { label: 'no sandbox as root', tone: 'warn' };
+      else if (b.sandbox_mode === 'off') sandbox = { label: 'sandbox off', tone: 'muted' };
+      else sandbox = { label: 'not checked yet', tone: 'muted' };
+    }
+    return {
+      channel: c.channel,
+      label: c.label,
+      isDefault: c.channel === b.default_channel,
+      installed: c.installed,
+      source: c.source,
+      version: c.version,
+      path: c.executable,
+      sandbox,
+      reason: c.sandbox_reason,
+    };
+  });
+  return [...rows].sort((x, y) => Number(y.isDefault) - Number(x.isDefault));
+}

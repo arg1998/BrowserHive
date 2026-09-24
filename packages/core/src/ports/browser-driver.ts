@@ -159,6 +159,12 @@ export interface EngineCapabilities {
   readonly isolatedEvaluate: boolean;
 }
 
+/** Facts about the running browser that are not part of the presented identity. */
+export interface SessionBrowserInfo {
+  readonly version: string | null;
+  readonly sandboxed: boolean;
+}
+
 /** Non-fatal launch finding surfaced as a `SessionWarning`. */
 export interface LaunchWarning {
   readonly code: string;
@@ -192,6 +198,8 @@ export interface SessionHandle {
   readonly driver: 'patchright' | 'playwright';
   /** The identity applied after launch, or `null` when stealth is off or `applyIdentity` failed. */
   readonly identity: AppliedIdentity | null;
+  /** The engine's real version (null for a persistent context) and whether it runs sandboxed. Absent in fakes. */
+  readonly browserInfo?: SessionBrowserInfo;
   readonly warnings: readonly LaunchWarning[];
   readonly tracing: TracingHandle | null;
   /** Applies the UA/UA-CH override to a page and resolves when it is in effect (new tabs await this). */

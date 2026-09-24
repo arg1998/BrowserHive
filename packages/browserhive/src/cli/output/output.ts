@@ -29,7 +29,7 @@ export interface OutputOptions {
 }
 
 /** Status marker of one line. */
-export type StatusKind = 'ok' | 'fail' | 'warn';
+export type StatusKind = 'ok' | 'fail' | 'warn' | 'skip';
 
 /** The CLI output surface. Primary output → stdout, diagnostics → stderr. */
 export interface Output {
@@ -45,7 +45,7 @@ export interface Output {
   diagnostic(text: string): void;
   /** Pretty-printed JSON on stdout (2-space indent). */
   json(value: unknown): void;
-  /** `✓ label  detail` / `✗ …` / `! …`. */
+  /** `✓ label  detail` / `✗ …` / `! …` / `– …` (not present, nothing to do). */
   status(kind: StatusKind, label: string, detail?: string): void;
   /** Aligned table on stdout. */
   table(columns: readonly TableColumn[], rows: readonly (readonly string[])[]): void;
@@ -60,6 +60,7 @@ export const STATUS_GLYPH: Readonly<Record<StatusKind, string>> = {
   ok: '✓',
   fail: '✗',
   warn: '!',
+  skip: '–',
 };
 
 /**
@@ -81,6 +82,8 @@ export function createOutput(options: OutputOptions): Output {
         return style.red(STATUS_GLYPH.fail);
       case 'warn':
         return style.yellow(STATUS_GLYPH.warn);
+      case 'skip':
+        return style.dim(STATUS_GLYPH.skip);
     }
   };
 

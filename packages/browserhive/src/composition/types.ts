@@ -3,6 +3,7 @@
 import type { Readable, Writable } from 'node:stream';
 import type { ResolvedConfigBundle } from '@browserhive/core/config';
 import type { HostEnvironment, LogSink } from '@browserhive/core/runtime';
+import type { SandboxHost } from './sandbox.ts';
 
 /**
  * Human output channels. Each call receives ONE line without its trailing newline; the sink
@@ -27,6 +28,8 @@ export interface BootInput {
   readonly logSink?: LogSink;
   /** stdio transport streams (default `process.stdin` / `process.stdout`). */
   readonly stdio?: { readonly stdin: Readable; readonly stdout: Writable };
+  /** Test seam: the sandbox probes and browser detection (no real launches). */
+  readonly sandboxHost?: SandboxHost;
 }
 
 /** A running server. */

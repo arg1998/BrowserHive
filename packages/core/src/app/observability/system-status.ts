@@ -63,6 +63,8 @@ export interface SystemStatusSources {
   /** WS hub counters; absent under stdio. */
   readonly realtime?: { connections(): number; activeScreencasts(): number };
   readonly stealth: SystemInfo['stealth'];
+  /** Browsers on this host and the sandbox state (detected once, verdicts live). */
+  readonly browser?: { snapshot(): Promise<NonNullable<SystemInfo['browser']>> };
   readonly vault: SystemInfo['vault'];
   readonly blocklist?: {
     readonly configured: boolean;
@@ -172,10 +174,11 @@ export class SystemStatusService {
     const s = this.deps.sources;
     const now = this.deps.clock.now();
     const server = s.sessions.serverStatus();
-    const [dbBytes, migrations, degradations] = await Promise.all([
+    const [dbBytes, migrations, degradations, browser] = await Promise.all([
       s.storage.databaseSize(),
       s.storage.migrations(),
       s.degradations.open(),
+      s.browser?.snapshot(),
     ]);
     const info: SystemInfo = {
       version: s.version,
@@ -196,6 +199,7 @@ export class SystemStatusService {
       allow_evaluate: s.allowEvaluate,
       persistence_mode: server.persistenceMode,
       stealth: { ...s.stealth, driver: server.driver },
+      ...(browser !== undefined && { browser }),
       vault: s.vault,
       blocklist: {
         configured: s.blocklist?.configured ?? false,

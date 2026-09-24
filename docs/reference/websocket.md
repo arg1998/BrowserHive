@@ -150,14 +150,14 @@ Payloads of `kind: "event"` frames, discriminated on `type`. DTO fields (`sessio
 
 | Field | Type | Required | Constraints |
 |---|---|---|---|
-| `session` | `object` | yes | keys `session_id`, `slug`, `owner`, `tenant_id`, `channel`, `engine`, `headless`, `incognito`, `persistence_mode`, `current_url`, `created_at`, `last_activity_at`, `closed_at`, `closed_reason`, `archived_at`, `lease_expires_at`, `lease_paused_at`, `lease_remaining_ms`, `state`, `live`, `disable_evaluate`, `vault_enabled`, `stealth`, `fingerprint`, `humanize`, `stealth_recorded`, `identity`, `proxy_label`, `counts`, `has_live_viewers`, `client` |
+| `session` | `object` | yes | keys `session_id`, `slug`, `owner`, `tenant_id`, `channel`, `engine`, `headless`, `incognito`, `persistence_mode`, `current_url`, `created_at`, `last_activity_at`, `closed_at`, `closed_reason`, `archived_at`, `lease_expires_at`, `lease_paused_at`, `lease_remaining_ms`, `state`, `live`, `disable_evaluate`, `vault_enabled`, `stealth`, `fingerprint`, `humanize`, `stealth_recorded`, `identity`, `browser`, `proxy_label`, `counts`, `has_live_viewers`, `client` |
 
 <a id="event-session-updated"></a>
 ### `session.updated`
 
 | Field | Type | Required | Constraints |
 |---|---|---|---|
-| `session` | `object` | yes | keys `session_id`, `slug`, `owner`, `tenant_id`, `channel`, `engine`, `headless`, `incognito`, `persistence_mode`, `current_url`, `created_at`, `last_activity_at`, `closed_at`, `closed_reason`, `archived_at`, `lease_expires_at`, `lease_paused_at`, `lease_remaining_ms`, `state`, `live`, `disable_evaluate`, `vault_enabled`, `stealth`, `fingerprint`, `humanize`, `stealth_recorded`, `identity`, `proxy_label`, `counts`, `has_live_viewers`, `client` |
+| `session` | `object` | yes | keys `session_id`, `slug`, `owner`, `tenant_id`, `channel`, `engine`, `headless`, `incognito`, `persistence_mode`, `current_url`, `created_at`, `last_activity_at`, `closed_at`, `closed_reason`, `archived_at`, `lease_expires_at`, `lease_paused_at`, `lease_remaining_ms`, `state`, `live`, `disable_evaluate`, `vault_enabled`, `stealth`, `fingerprint`, `humanize`, `stealth_recorded`, `identity`, `browser`, `proxy_label`, `counts`, `has_live_viewers`, `client` |
 
 <a id="event-session-closed"></a>
 ### `session.closed`

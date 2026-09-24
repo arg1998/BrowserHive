@@ -1,6 +1,7 @@
 /** @module cli/plan — `planCli`: pure argv → `CliPlan` with the precedence help > version > unknown flags (64) > command > stray flags (64) > config (64) > policy guards (3) > run (spec 08 §7, spec 09 §3.3) */
 import { isAbsolute, resolve as resolvePath } from 'node:path';
 import { lookupKey } from '@browserhive/contracts/config';
+import { Channel } from '@browserhive/contracts/enums';
 import type { ConfigFailure, ConfigFs, ResolvedConfigBundle } from '@browserhive/core/config';
 import { keyKind, resolveConfig } from '@browserhive/core/config';
 import type { HostEnvironment } from '@browserhive/core/ports/host-environment';
@@ -242,21 +243,37 @@ function planInvocation(name: string, input: PlanInput): CliPlan {
       const force = reader.bool('force');
       const skipBrowsers = reader.bool('skipBrowsers');
       const writeSchema = reader.bool('writeSchema');
+      const channel = reader.oneOf('channel', Channel.options);
+      const installChrome = reader.bool('installChrome');
+      const yes = reader.bool('yes');
       if (reader.problems.length > 0) return usage(reader.problems);
       const resolved = resolveFull(input);
       if (!resolved.ok) return failurePlan(resolved.error);
       return run(
-        { command: 'init', resolved: resolved.value, force, skipBrowsers, writeSchema },
+        {
+          command: 'init',
+          resolved: resolved.value,
+          force,
+          skipBrowsers,
+          writeSchema,
+          channel: Channel.safeParse(channel).data ?? null,
+          installChrome,
+          yes,
+        },
         colorOf(resolved.value, color),
       );
     }
     case 'doctor': {
       const json = reader.bool('json');
+      const printApparmorProfile = reader.bool('printApparmorProfile');
       if (reader.problems.length > 0) return usage(reader.problems);
       const resolution = resolveFull(input);
       const scoped = resolution.ok ? resolution : resolveDataDir(input);
       const dir = scoped.ok ? scoped.value.config.dataDir : fallbackDataDir(input);
-      return run({ command: 'doctor', json, resolution, dataDir: dir }, color);
+      return run(
+        { command: 'doctor', json, printApparmorProfile, resolution, dataDir: dir },
+        color,
+      );
     }
     case 'config show':
     case 'config validate': {

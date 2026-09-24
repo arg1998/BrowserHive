@@ -7,6 +7,7 @@ import type {
   AppliedIdentity,
   EngineCapabilities,
   LaunchWarning,
+  SessionBrowserInfo,
   SessionHandle,
 } from '../../ports/browser-driver.ts';
 import type { Logger } from '../../ports/logger.ts';
@@ -22,6 +23,7 @@ export interface SessionHandleInput {
   readonly capabilities: EngineCapabilities;
   readonly driver: 'patchright' | 'playwright';
   readonly identity: AppliedIdentity | null;
+  readonly browserInfo: SessionBrowserInfo;
   readonly warnings: readonly LaunchWarning[];
   readonly tracing: PlaywrightTracingHandle | null;
   readonly applier: IdentityApplier | null;
@@ -41,6 +43,7 @@ export class PlaywrightSessionHandle implements SessionHandle {
   readonly capabilities: EngineCapabilities;
   readonly driver: 'patchright' | 'playwright';
   readonly identity: AppliedIdentity | null;
+  readonly browserInfo: SessionBrowserInfo;
   readonly warnings: readonly LaunchWarning[];
   readonly tracing: PlaywrightTracingHandle | null;
 
@@ -58,6 +61,7 @@ export class PlaywrightSessionHandle implements SessionHandle {
     this.capabilities = input.capabilities;
     this.driver = input.driver;
     this.identity = input.identity;
+    this.browserInfo = input.browserInfo;
     this.warnings = input.warnings;
     this.tracing = input.tracing;
     this.applier = input.applier;

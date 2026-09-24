@@ -529,3 +529,47 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 **Decision.** Not built: managed proxy pool and rotation; foreign fingerprint identities; profile blueprints (named, versioned, encrypted); local vault, TOTP, 1Password; extensions registry; external notification channels; security-intercept rule engine; resource governor and eviction; CAPTCHA detection and solving; Web Bot Auth; Tor egress; benchmark harness; multi-user, organisations and OIDC; Firefox and WebKit engines; standalone binaries. Each has a named seam in `01-overall-architecture.md` §9.
 
 **Consequences.** Reserved enum values and config values for these features fail fast with a clear message rather than silently doing nothing.
+
+## D-26 Browser choice: bundled by default, installed browsers by choice, never a silent switch
+
+**Status:** Accepted
+
+**Context.** Every session used Playwright's bundled Chrome for Testing build (channel `chromium`). It is the same everywhere and needs no admin rights, but it reports a pinned full version that real users do not run (measured: `153.0.8010.12`, a beta-only build, while stable was `154.0.8037.57`), and on Ubuntu 23.10+ it cannot use Chromium's sandbox (D-27). Operators who want the browser real users run, and Patchright itself, recommend the installed Google Chrome. The `chrome` and `edge` channels already existed, but nothing told an operator they were there, `doctor` checked only the bundled browser (a configured `chrome` that was not installed showed ✓), and choosing one meant knowing the `defaultChannel` key.
+
+**Decision.**
+- `chromium` (bundled, pinned, always installed by `browserhive init`) stays the default and is never removed. `chrome` and `edge` use the browser installed on the host, which updates itself.
+- Detection of `chrome`/`edge` reuses Playwright's own executable lookup (`registry.findExecutable(name).executablePath()` in the pinned `playwright-core`, pinned by a test), so detection and launch can never disagree about which binary a channel means. Versions come from `--version` (or, on Windows, the version-named directory beside the executable); managed policies from `/etc/opt/{chrome,edge}/policies/managed`, macOS managed preferences and the Windows policy keys. `RemoteDebuggingAllowed=false` blocks automation.
+- `browserhive init` reports the browsers, their versions and whether each can run sandboxed, and on a terminal offers a menu whose pros and cons are computed for the host. Google Chrome is labelled "recommended for stealth" but never pre-selected: Enter keeps the current value. It can install Google Chrome with Google's installer (`playwright install chrome`) when the operator picks it or passes `--installChrome`; never automatically.
+- A configured channel whose browser is missing fails with `BROWSER_NOT_INSTALLED` naming the install command. BrowserHive never launches a different browser than the one asked for.
+- The version a page sees is always the real engine's (`fullVersionList` from `Browser.getVersion`); BrowserHive never invents or pins a fake version.
+
+**Consequences.** `doctor` fails when the configured channel is missing and warns when the installed browser in use is more than one major version ahead of the tested build. Installed browsers can drift ahead of what a release was tested with; a weekly CI job runs the integration suite against current stable Chrome (spec 06). Edge under stealth is presented with Google Chrome brands while its user agent says `Edg/` (a known ceiling, spec 11 §14), so Chrome, not Edge, is the recommended channel.
+
+**Alternatives considered.** Making `chrome` the default: rejected, since it would fail on every host without Chrome and break CI, Docker and admin-less installs. Falling back to the bundled browser when the configured one is missing: rejected, since a silent switch changes the identity and the sandbox posture behind the operator's back. Pinning or faking the reported version: rejected, since a fabricated version is itself a fingerprint and contradicts the "assert nothing rather than assert wrong" posture (D-13).
+
+## D-27 The Chromium sandbox: `auto` by default, `on` as a guarantee kept at startup
+
+**Status:** Accepted
+
+**Context.** Playwright adds `--no-sandbox` unless `chromiumSandbox: true`, and BrowserHive never set it, so every session ran without Chromium's sandbox: a compromised renderer had the server process's privileges. Turning it on unconditionally is not possible: on Ubuntu 23.10+ (`kernel.apparmor_restrict_unprivileged_userns=1`) a browser without an AppArmor profile, which includes Playwright's download, cannot create the user namespaces the sandbox needs, Chrome refuses the sandbox as root, and Docker's default seccomp profile blocks it. Measured in CI through BrowserHive (plan Phase 0): macOS and Windows sandbox every channel; Ubuntu sandboxes Google Chrome (Ubuntu ships its profile) and not the bundled browser or, on the runner, Edge. The only route before was an agent's `launch_options.chromiumSandbox: true`, which on such a host returned `INTERNAL_ERROR` with `retryable: backoff`.
+
+**Decision.** A config key `sandbox: auto | on | off`, default `auto`.
+- `auto` runs each browser sandboxed where it can. The first real launch of each executable tries the sandbox; if that fails and the same browser then starts without it, the sandbox is the cause: the verdict is cached for the process lifetime and sessions fall back with one `warn` log (`sandbox fell back`), a `/system` line and a `doctor` note. It never fails a launch because of the sandbox, never retries it per session, and does not attempt it as root.
+- `on` is a guarantee kept at startup: before the listeners open, the configured browser is launched once with the sandbox forced on; if it cannot sandbox, every other installed browser is probed and the server refuses to start with `SANDBOX_UNAVAILABLE` (exit code 3) and guidance computed for this OS and these browsers, working options first. A later `launch_session` for a browser that cannot sandbox fails immediately with the same code, `retryable: never`, naming the channels that work.
+- `off` is the behaviour before the key existed.
+- An agent may still request `launch_options.chromiumSandbox: true` (it only strengthens the posture); it makes the sandbox a requirement for that session. `chromiumSandbox: false` stays refused (D-12, spec 11 §4).
+- A launch failure caused by the sandbox is `SANDBOX_UNAVAILABLE` in every mode, never `INTERNAL_ERROR`. When the failure text is not one BrowserHive recognises, it is proven the way the probe proves it: the same browser starting without the sandbox (Edge's SUID-helper message on Ubuntu was the first such case the cross-OS job found; it is now recognised too).
+
+**Consequences.** On macOS, Windows, most Linux hosts and with Google Chrome on Ubuntu, sessions now run sandboxed without configuration. On Ubuntu with the bundled browser the first session of a process pays one failed launch (about 0.3 s) and runs unsandboxed, as before; `doctor --printApparmorProfile` prints (never installs) a profile that fixes it. Page-visible signals are identical with and without the sandbox (measured on all three OSes). `doctor` reports the fallback with its fix but as ✓, not a warning: sessions still launch, and a `doctor` that started exiting 2 would break healthchecks that passed before; under `on` the same verdict is a failure.
+
+**Alternatives considered.** Default `on`: rejected, since it would refuse to start on every Ubuntu 23.10+ host with the bundled browser, a new failure for operators who asked for nothing. Default `off`: kept only until the cross-OS measurement showed `auto` never breaks a launch. Probing every browser at boot under `auto`: rejected, since it adds a browser launch to every start (and to every test boot) for information the first real launch provides. Installing an AppArmor profile or a setuid helper automatically: rejected, since it needs root and changes the host's security policy (plan §10).
+
+## D-28 `init` may write the configuration file, and never asks without a terminal
+
+**Status:** Accepted
+
+**Context.** `browserhive init` never wrote a config file, so a browser chosen in its menu would be forgotten, while silently rewriting an operator's file, or prompting in CI, would be worse.
+
+**Decision.** `init` saves a chosen `defaultChannel` only after asking (`Save defaultChannel=chrome to <path>? [Y/n]`), or with `--yes`. It merges the one key into the config file in use, keeping every other key, their order and `$schema`; with no file in use it creates `<data-dir>/browserhive.config.json` (0600), the discovery candidate that is always found (spec 08 §3). It never prompts without a terminal on stdin, under `CI`, or in a container; there `--channel` selects, `--yes` accepts the save (without it the step fails and nothing is written) and `--installChrome` installs. Pressing Enter at the menu keeps the current value and writes nothing.
+
+**Consequences.** Non-interactive runs are deterministic. A flag or environment variable that still overrides the file is pointed out after saving.

@@ -17,6 +17,16 @@ export { OperatorRequestBroker } from '../domain/operator-requests/broker.ts';
 export { VaultBroker } from '../domain/vault/broker.ts';
 export { VaultRedaction } from '../domain/vault/redaction.ts';
 export { installBlocklistRoute } from '../infra/browsers/blocklist-route.ts';
+export {
+  type BrowserDetectionDeps,
+  CHANNEL_LABEL,
+  type CommandOutput,
+  channelExecutable,
+  type DetectedBrowser,
+  detectBrowsers,
+  type ManagedPolicies,
+  playwrightChannelExecutable,
+} from '../infra/browsers/browser-detection.ts';
 export { bundledChromiumVersion } from '../infra/browsers/bundled-chromium.ts';
 export {
   assertChromiumInstalled,
@@ -30,6 +40,32 @@ export { resolveIdentity } from '../infra/browsers/identity-resolver.ts';
 export { createPlaywrightPageActions } from '../infra/browsers/page-actions.ts';
 export { PlaywrightBrowserDriver } from '../infra/browsers/playwright-browser-driver.ts';
 export { PassThroughProxyResolver } from '../infra/browsers/proxy.ts';
+export {
+  APPARMOR_PROFILE_NAME,
+  apparmorProfile,
+  apparmorProfileCovers,
+  inspectSandboxEnvironment,
+  probeSandbox,
+  type SandboxEnvironment,
+  type SandboxProbeResult,
+} from '../infra/browsers/sandbox.ts';
+export { sandboxUnavailable } from '../infra/browsers/sandbox-error.ts';
+export {
+  type GuidanceAlternative,
+  type GuidanceTarget,
+  renderSandboxGuidance,
+  type SandboxGuidance,
+  type SandboxGuidanceInput,
+  sandboxGuidance,
+  shortSandboxGuidance,
+} from '../infra/browsers/sandbox-guidance.ts';
+export {
+  SandboxPolicy,
+  type SandboxRequirement,
+  type SandboxStatusEntry,
+  type SandboxTarget,
+  type SandboxUnavailableFactory,
+} from '../infra/browsers/sandbox-policy.ts';
 export { createBunDesktop } from '../infra/desktop/bun-desktop.ts';
 export { createArtifactFiles } from '../infra/static/artifact-files.ts';
 export { createBunStaticAssets } from '../infra/static/bun-static-assets.ts';

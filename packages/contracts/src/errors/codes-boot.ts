@@ -107,6 +107,30 @@ export const BOOT_ERRORS = {
     cause: 'The configured blocklist file is missing, unreadable or over the entry cap.',
     resolution: 'Fix the file; a configured-but-unreadable blocklist is fatal by design.',
   }),
+  SANDBOX_UNAVAILABLE: defineError({
+    code: 'SANDBOX_UNAVAILABLE',
+    httpStatus: 503,
+    category: 'boot',
+    retryable: 'never',
+    title: 'Sandbox unavailable',
+    message: "Channel '{channel}' cannot run with Chromium's sandbox on this host: {reason}",
+    hint: "Retrying will not help. Use a browser that can run sandboxed here, or change the sandbox setting; 'browserhive doctor' lists the options for this host.",
+    details: z.object({
+      channel: z.string(),
+      reason: z.string(),
+      required_by: z.enum(['config', 'launch_options']),
+      executable: z.string().optional(),
+      cause: z.string().optional(),
+      alternatives: z.array(z.string()),
+      guidance: z.array(z.string()),
+    }),
+    docs: true,
+    exitCode: 3,
+    cause:
+      "The sandbox was required, by `sandbox=on` or by an agent's `launch_options.chromiumSandbox: true`, and the browser could not start with it. Typical hosts: Ubuntu 23.10+ with the bundled browser (AppArmor restricts user namespaces to programs with a profile), running as root (Chrome refuses), Docker's default seccomp profile, or a kernel with unprivileged user namespaces disabled. With `sandbox=on` the server refuses to start (exit code 3); a `launch_session` fails with this code and `retryable: never`. Under `sandbox=auto` it is never raised: the session falls back.",
+    resolution:
+      'Run `browserhive doctor`: it probes every installed browser and prints the ways out for this host, easiest first (a browser that sandboxes here, an AppArmor profile via `browserhive doctor --printApparmorProfile`, running as a normal user, `sandbox=auto` or `sandbox=off`).',
+  }),
   DATA_DIR_UNWRITABLE: defineError({
     code: 'DATA_DIR_UNWRITABLE',
     httpStatus: 500,
