@@ -54,6 +54,14 @@ export class FakeAnalytics implements AnalyticsQueries {
     };
   }
 
+  async harnessMetrics(_window: { readonly since: number; readonly until: number }) {
+    return [
+      { harness: 'claude-code', sessions: 2, sessionsLive: 1, toolCalls: 5, errors: 1 },
+      { harness: 'nightly-scraper', sessions: 1, sessionsLive: 0, toolCalls: 2, errors: 0 },
+      { harness: 'unknown', sessions: 1, sessionsLive: 0, toolCalls: 0, errors: 0 },
+    ];
+  }
+
   async toolMetrics(_query: ToolMetricsQuery) {
     return [
       {

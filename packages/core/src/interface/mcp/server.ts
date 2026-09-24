@@ -5,11 +5,19 @@ import {
   CallToolRequestSchema,
   type CallToolResult,
   ErrorCode,
+  InitializeRequestSchema,
+  type InitializeResult,
   McpError,
 } from '@modelcontextprotocol/sdk/types.js';
-import { type DeclaredClient, sessionClientOf } from './client-info.ts';
 import type { RuntimeFacts } from './context.ts';
 import type { DispatchCall, ToolDispatcher } from './dispatcher.ts';
+import {
+  type ConnectionIdentity,
+  clientOfIdentity,
+  headerBag,
+  type InitializeSignals,
+  type RequestSignals,
+} from './identity.ts';
 import { principalFromAuthInfo } from './principal.ts';
 
 /** Server name advertised in `serverInfo` (overridable only through the programmatic API). */
@@ -23,8 +31,11 @@ export interface CreateMcpServerOptions {
   readonly name?: string;
   /** Maps the transport's MCP session id to its `connections` record id (http); `null` otherwise. */
   readonly connectionIdOf?: (mcpSessionId: string | undefined) => string | null;
-  /** The `X-BH-*` headers of the `initialize` request (http); merged with `clientInfo` per call. */
-  readonly declaredClient?: DeclaredClient;
+  /**
+   * The connection's identity (spec 02 §1.4): told what `initialize` revealed and resolved again
+   * for every tool call from the call's own headers, URL and `_meta`. Absent: calls carry no client.
+   */
+  readonly identity?: ConnectionIdentity;
 }
 
 /** The additive server-level instructions (spec 02 §1.1). */
@@ -39,6 +50,32 @@ export function serverInstructions(runtime: RuntimeFacts): string {
     lines.push(`The operator requires a minimum attention wait of ${floorSeconds}s.`);
   }
   return lines.join(' ');
+}
+
+function initializeSignalsOf(params: {
+  readonly clientInfo?:
+    | {
+        readonly name?: string | undefined;
+        readonly version?: string | undefined;
+        readonly title?: string | undefined;
+      }
+    | undefined;
+  readonly protocolVersion?: string | undefined;
+  readonly capabilities?: Readonly<Record<string, unknown>> | undefined;
+  readonly _meta?: Readonly<Record<string, unknown>> | undefined;
+}): InitializeSignals {
+  return {
+    ...(params.clientInfo !== undefined && {
+      clientInfo: {
+        ...(params.clientInfo.name !== undefined && { name: params.clientInfo.name }),
+        ...(params.clientInfo.version !== undefined && { version: params.clientInfo.version }),
+        ...(params.clientInfo.title !== undefined && { title: params.clientInfo.title }),
+      },
+    }),
+    ...(params.protocolVersion !== undefined && { protocolVersion: params.protocolVersion }),
+    ...(params.capabilities !== undefined && { capabilities: params.capabilities }),
+    ...(params._meta !== undefined && { meta: params._meta }),
+  };
 }
 
 function progressTokenOf(
@@ -81,6 +118,18 @@ export function createMcpServer(options: CreateMcpServerOptions): McpServer {
       async () => ({ content: [] }),
     );
   }
+  const identity = options.identity;
+  if (identity !== undefined) {
+    // The SDK keeps `clientInfo` and capabilities but not the `initialize` `_meta` or the requested
+    // protocol version, so the handler is wrapped (both transports) and then defers to the SDK's.
+    const sdk = server.server as unknown as {
+      _oninitialize(request: unknown): Promise<InitializeResult>;
+    };
+    server.server.setRequestHandler(InitializeRequestSchema, async (request) => {
+      identity.initialize(initializeSignalsOf(request.params));
+      return sdk._oninitialize(request);
+    });
+  }
   server.server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     const name = request.params.name;
     if (!dispatcher.has(name)) {
@@ -88,11 +137,21 @@ export function createMcpServer(options: CreateMcpServerOptions): McpServer {
     }
     const meta: Readonly<Record<string, unknown>> | undefined = request.params._meta;
     const progressToken = progressTokenOf(meta);
+    // Identity is resolved per request (02 §1.4): this call's headers, URL and `_meta` over the
+    // connection's, so a stateless MCP revision without `initialize` keeps working.
+    const signals: RequestSignals = {
+      ...(extra.requestInfo !== undefined && {
+        headers: headerBag(extra.requestInfo.headers),
+        ...(extra.requestInfo.url !== undefined && { url: extra.requestInfo.url }),
+      }),
+      ...(meta !== undefined && { meta }),
+    };
+    const resolved = identity?.resolve(signals);
     const call: DispatchCall = {
       principal: principalFromAuthInfo(extra.authInfo),
       connectionId: options.connectionIdOf?.(extra.sessionId) ?? null,
-      // `clientInfo` as the SDK recorded it at `initialize`, the same for both transports.
-      client: sessionClientOf(server.server.getClientVersion(), options.declaredClient),
+      client: resolved === undefined ? null : clientOfIdentity(resolved),
+      ...(resolved !== undefined && { identity: resolved }),
       signal: extra.signal,
       ...(meta !== undefined && { meta }),
       ...(progressToken !== undefined && {

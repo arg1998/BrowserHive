@@ -40,6 +40,7 @@ function observation(overrides: Partial<ToolObservation> = {}): ToolObservation 
     eventId: EID,
     sessionId: SID,
     connectionId: null,
+    harness: 'unknown',
     tool: 'navigate',
     tabId: null,
     args: { url: 'https://example.com', password: 'hunter2secret' },

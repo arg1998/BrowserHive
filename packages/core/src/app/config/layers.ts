@@ -5,6 +5,8 @@ import {
   type ConfigKey,
   ENV_PREFIX,
   type EnvLookup,
+  IDENTITY_ENV_VARS,
+  isIdentityEnvVar,
   keyMeta,
   lookupKey,
   namesFor,
@@ -18,7 +20,7 @@ import { interpolateJson } from './interpolate.ts';
 import type { JsonValue } from './json-parse.ts';
 import { keyKind } from './kinds.ts';
 import { emptyAfterMessage, refProblemMessage } from './ref-messages.ts';
-import { suggestKey } from './suggest.ts';
+import { suggest, suggestKey } from './suggest.ts';
 
 /** One raw value for one key from one source, before parsing. */
 export interface RawEntry {
@@ -61,9 +63,16 @@ export function collectEnvLayer(env: Readonly<Record<string, string | undefined>
     if (!name.startsWith(ENV_PREFIX)) continue;
     const value = env[name];
     if (value === undefined) continue;
+    // Per-process client identity, not configuration (08 §2.2, D-30).
+    if (isIdentityEnvVar(name)) continue;
     const found = lookupKey('env', name);
     if (found.kind === 'unknown') {
-      const { suggestions, removed } = suggestKey(name, 'env', CONFIG_KEYS);
+      const keyed = suggestKey(name, 'env', CONFIG_KEYS);
+      const removed = keyed.removed;
+      // A misspelt identity variable deserves the same "did you mean" as a config key.
+      const suggestions = removed
+        ? keyed.suggestions
+        : [...keyed.suggestions, ...suggest(name, IDENTITY_ENV_VARS)];
       const base = `unknown environment variable '${name}'.`;
       problems.push({
         code: 'CONFIG_UNKNOWN_KEY',

@@ -59,6 +59,7 @@ describe('ToolDispatcher invariants', () => {
         'errorCode',
         'errorMessage',
         'eventId',
+        'harness',
         'ok',
         'principal',
         'resultSizeBytes',
@@ -78,6 +79,7 @@ describe('ToolDispatcher invariants', () => {
       ok: true,
       principal: 'local',
       seq: 2,
+      harness: 'unknown',
     });
   });
 

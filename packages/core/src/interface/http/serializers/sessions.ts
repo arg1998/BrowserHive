@@ -1,5 +1,6 @@
 /** @module interface/http/serializers/sessions — session rows/aggregates → `SessionSummary`, session list query → repository query (spec 03 §4.2). */
 
+import { UNKNOWN_HARNESS } from '@browserhive/contracts/harness';
 import type { SessionFacets, SessionSummary, SessionsQuery } from '@browserhive/contracts/http';
 import type { z } from 'zod';
 import { toWireClient } from '../../../app/sessions/metadata.ts';
@@ -54,6 +55,7 @@ export function sessionRowToSummary(
     proxy_label: row.proxyLabel,
     counts: countsOf(row),
     has_live_viewers: hasLiveViewers,
+    harness: row.harness ?? UNKNOWN_HARNESS,
     client: toWireClient(row.client),
   };
 }
@@ -99,6 +101,7 @@ export function sessionsQueryToRepo(query: z.output<typeof SessionsQuery>): Sess
     ...(query.owner !== undefined && { owner: query.owner }),
     ...(query.channel !== undefined && { channels: query.channel }),
     ...(query.persistence_mode !== undefined && { persistenceModes: query.persistence_mode }),
+    ...(query.harness !== undefined && { harnesses: query.harness }),
     ...(query.q !== undefined && { q: query.q }),
     ...(query.since !== undefined && { since: query.since }),
     ...(query.until !== undefined && { until: query.until }),
@@ -113,5 +116,6 @@ export function facetsToWire(facets: RepoFacets): z.input<typeof SessionFacets> 
     channels: map(facets.channels),
     persistence_modes: map(facets.persistenceModes),
     states: map(facets.states),
+    harnesses: map(facets.harnesses),
   };
 }

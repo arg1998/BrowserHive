@@ -3,9 +3,14 @@
 import { AppError } from '../../src/kernel/errors/app-error.ts';
 import type { ClosedReason } from '../../src/ports/persistence/enums.ts';
 import type { EventLogRepository } from '../../src/ports/persistence/event-log.ts';
+import type {
+  McpConnectionPatch,
+  McpConnectionRepository,
+} from '../../src/ports/persistence/operations.ts';
 import type { Page, SessionFacets, SessionListQuery } from '../../src/ports/persistence/queries.ts';
 import type {
   EventRecord,
+  McpConnectionRecord,
   NewEvent,
   SessionListRow,
   SessionPatch,
@@ -102,6 +107,12 @@ export class InMemorySessionRepository implements SessionRepository {
         if (query.view === 'closed') return r.closedAt !== null;
         return true;
       })
+      .filter(
+        (r) =>
+          query.harnesses === undefined ||
+          query.harnesses.length === 0 ||
+          query.harnesses.includes(r.harness ?? 'unknown'),
+      )
       .sort((a, b) => b.createdAt - a.createdAt);
     return pageOf(
       rows.map((r) => this.row(r)),
@@ -110,7 +121,20 @@ export class InMemorySessionRepository implements SessionRepository {
   }
 
   async facets(_query: SessionListQuery): Promise<SessionFacets> {
-    return { owners: [], channels: [], persistenceModes: [], states: [] };
+    const harnesses = new Map<string, number>();
+    for (const row of this.rows.values()) {
+      const harness = row.harness ?? 'unknown';
+      harnesses.set(harness, (harnesses.get(harness) ?? 0) + 1);
+    }
+    return {
+      owners: [],
+      channels: [],
+      persistenceModes: [],
+      states: [],
+      harnesses: [...harnesses.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([value, count]) => ({ value, count })),
+    };
   }
 
   async markClosed(sessionId: string, at: number, reason: ClosedReason): Promise<boolean> {
@@ -167,6 +191,58 @@ export class InMemorySessionRepository implements SessionRepository {
   }
 }
 
+/** `mcp_connections` in memory. */
+export class InMemoryMcpConnectionRepository implements McpConnectionRepository {
+  readonly rows = new Map<string, McpConnectionRecord>();
+
+  constructor(private readonly sessionsOf: (connectionId: string) => number) {}
+
+  async insert(record: McpConnectionRecord): Promise<void> {
+    if (!this.rows.has(record.connectionId)) this.rows.set(record.connectionId, record);
+  }
+
+  async update(connectionId: string, patch: McpConnectionPatch): Promise<boolean> {
+    const row = this.rows.get(connectionId);
+    if (row === undefined) return false;
+    this.rows.set(connectionId, { ...row, ...patch });
+    return true;
+  }
+
+  async get(connectionId: string): Promise<McpConnectionRecord | null> {
+    return this.rows.get(connectionId) ?? null;
+  }
+
+  async listOpen(): Promise<readonly McpConnectionRecord[]> {
+    return [...this.rows.values()]
+      .filter((r) => r.closedAt === null)
+      .sort((a, b) => b.lastSeenAt - a.lastSeenAt);
+  }
+
+  async listRecent(limit: number) {
+    const rows = [...this.rows.values()]
+      .sort(
+        (a, b) =>
+          Number(b.closedAt === null) - Number(a.closedAt === null) ||
+          b.lastSeenAt - a.lastSeenAt ||
+          b.connectionId.localeCompare(a.connectionId),
+      )
+      .slice(0, limit)
+      .map((r) => ({ ...r, sessions: this.sessionsOf(r.connectionId) }));
+    return { rows, live: [...this.rows.values()].filter((r) => r.closedAt === null).length };
+  }
+
+  async closeAll(at: number): Promise<number> {
+    let n = 0;
+    for (const [id, row] of this.rows) {
+      if (row.closedAt === null) {
+        this.rows.set(id, { ...row, closedAt: at });
+        n += 1;
+      }
+    }
+    return n;
+  }
+}
+
 /** `events` in memory (append-only with `seq`). */
 export class InMemoryEventLogRepository implements EventLogRepository {
   readonly rows: EventRecord[] = [];
@@ -217,7 +293,9 @@ export class InMemoryRepositories implements Repositories {
   readonly idempotency = notImplemented<Repositories['idempotency']>('idempotency');
   readonly logs = notImplemented<Repositories['logs']>('logs');
   readonly artifactOutbox = notImplemented<Repositories['artifactOutbox']>('artifactOutbox');
-  readonly mcpConnections = notImplemented<Repositories['mcpConnections']>('mcpConnections');
+  readonly mcpConnections = new InMemoryMcpConnectionRepository(
+    (id) => [...this.sessions.rows.values()].filter((r) => r.connectionId === id).length,
+  );
   readonly schemaMigrations = notImplemented<Repositories['schemaMigrations']>('schemaMigrations');
 
   constructor() {

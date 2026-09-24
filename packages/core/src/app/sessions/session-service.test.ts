@@ -269,6 +269,7 @@ describe('SessionService live counters', () => {
         eventId: EID,
         sessionId,
         connectionId: null,
+        harness: 'unknown',
         tool: 'click',
         tabId: null,
         args: {},

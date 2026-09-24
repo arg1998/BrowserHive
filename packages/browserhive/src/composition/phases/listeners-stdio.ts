@@ -2,7 +2,12 @@
 
 import type { Readable, Writable } from 'node:stream';
 import { serializeError } from '@browserhive/core/runtime';
-import { createMcpServer, startStdio } from '@browserhive/core/server';
+import {
+  ConnectionIdentity,
+  connectionPatchOf,
+  createMcpServer,
+  startStdio,
+} from '@browserhive/core/server';
 import { type BootContext, part } from '../context.ts';
 import type { PhaseHandle } from '../unwind.ts';
 
@@ -16,7 +21,24 @@ export async function openStdioListener(ctx: BootContext): Promise<PhaseHandle> 
   const stdout: Writable = ctx.input.stdio?.stdout ?? process.stdout;
   const connectionId = `c-${domain.ids.opaque(10)}`;
   const now = ctx.clock.now();
-  await storage.uow.repos.mcpConnections
+  // Identity (spec 02 §1.4): the environment the harness gave this process is the only stdio
+  // channel besides `initialize` and `_meta` (BROWSERHIVE_HARNESS/MODEL/WORKSPACE, CLAUDECODE, …).
+  let inserted: Promise<void> | undefined;
+  const identity = new ConnectionIdentity({
+    connectionId,
+    logger,
+    signals: { transport: 'stdio', env: ctx.input.env },
+    persist: (patch) =>
+      inserted?.then(() =>
+        storage.uow.repos.mcpConnections.update(connectionId, {
+          ...patch,
+          lastSeenAt: ctx.clock.now(),
+        }),
+      ),
+  });
+  const resolved = identity.current;
+  const columns = connectionPatchOf(resolved);
+  inserted = storage.uow.repos.mcpConnections
     .insert({
       connectionId,
       principalId: 'local',
@@ -24,11 +46,17 @@ export async function openStdioListener(ctx: BootContext): Promise<PhaseHandle> 
       mcpSessionId: null,
       clientName: null,
       clientVersion: null,
+      clientTitle: null,
       protocolVersion: null,
       capabilities: null,
-      agentName: null,
-      model: null,
-      harness: null,
+      workspace: resolved.workspace,
+      agentName: resolved.workspace,
+      model: resolved.model,
+      modelSource: resolved.modelSource,
+      harness: resolved.harness,
+      harnessSource: resolved.harnessSource,
+      conflicts: columns.conflicts ?? [],
+      meta: resolved.meta,
       ip: null,
       userAgent: null,
       connectedAt: now,
@@ -36,24 +64,19 @@ export async function openStdioListener(ctx: BootContext): Promise<PhaseHandle> 
       closedAt: null,
     })
     .catch((err: unknown) => log.warn('connection row failed', { err: serializeError(err) }));
+  log.debug('stdio client identity', {
+    harness: resolved.harness,
+    source: resolved.harnessSource,
+  });
 
+  // `initialize` (clientInfo, protocol version, capabilities, `_meta`) reaches the identity through
+  // the server's initialize hook, which re-resolves and updates the row (spec 02 §1.4).
   const server = createMcpServer({
     runtime: domain.runtime,
     dispatcher: domain.dispatcher,
     connectionIdOf: () => connectionId,
+    identity,
   });
-  // The row is written before the client speaks; fill in what `initialize` revealed (spec 02 §1.4).
-  server.server.oninitialized = () => {
-    const info = server.server.getClientVersion();
-    storage.uow.repos.mcpConnections
-      .update(connectionId, {
-        clientName: info?.name ?? null,
-        clientVersion: info?.version ?? null,
-        capabilities: server.server.getClientCapabilities() ?? null,
-        lastSeenAt: ctx.clock.now(),
-      })
-      .catch((err: unknown) => log.warn('connection row failed', { err: serializeError(err) }));
-  };
   let closing = false;
   const clientGone = (): void => {
     if (closing) return;

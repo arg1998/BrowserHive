@@ -83,7 +83,7 @@ describe('harnessFromUserAgent', () => {
   ];
   for (const [ua, slug] of rows) {
     it(`${JSON.stringify(ua)} → ${slug}`, () => {
-      expect(harnessFromUserAgent(ua)).toBe(slug);
+      expect<string | null>(harnessFromUserAgent(ua)).toBe(slug);
     });
   }
 });

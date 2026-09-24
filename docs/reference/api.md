@@ -2,7 +2,7 @@
 
 # REST API reference
 
-The admin REST API served under `/api/v1` on the same port as MCP and the dashboard when `--admin` is on (84 operations), generated from `HTTP_ENDPOINTS` in `@browserhive/contracts/http`. Request and response schemas are in the OpenAPI 3.1 document the server serves at `/api/v1/openapi.json`, with an interactive reference UI at `/api/v1/docs`.
+The admin REST API served under `/api/v1` on the same port as MCP and the dashboard when `--admin` is on (86 operations), generated from `HTTP_ENDPOINTS` in `@browserhive/contracts/http`. Request and response schemas are in the OpenAPI 3.1 document the server serves at `/api/v1/openapi.json`, with an interactive reference UI at `/api/v1/docs`.
 
 Summaries come from `packages/contracts/generated/openapi.json`.
 
@@ -77,6 +77,7 @@ Summaries come from `packages/contracts/generated/openapi.json`.
 | GET | `/api/v1/tool-calls` | `listToolCalls` | `sessions:read` | cookie, bearer | Tool calls across sessions (live feed seed, fleet error views). |
 | GET | `/api/v1/activity` | `getActivity` | `sessions:read` | cookie, bearer | Gap-filled activity buckets (≤ 720) and headline counters. |
 | GET | `/api/v1/metrics/tools` | `getToolMetrics` | `sessions:read` | cookie, bearer | Per-tool call counts, error rate and latency percentiles. |
+| GET | `/api/v1/metrics/harnesses` | `getHarnessMetrics` | `sessions:read` | cookie, bearer | Sessions and tool calls per agent harness over a window (self-reported identity, D-30). |
 
 ## Websites (pages)
 
@@ -132,6 +133,7 @@ Summaries come from `packages/contracts/generated/openapi.json`.
 | GET | `/api/v1/system` | `getSystem` | `system:read` | cookie, bearer | Server facts, runtime, capacity, retention, storage, telemetry and open degradations. |
 | GET | `/api/v1/system/config` | `getSystemConfig` | `system:read` | cookie, bearer | Every config key with its value, source and shadowed values (secrets redacted). |
 | GET | `/api/v1/system/realtime` | `getSystemRealtime` | `system:read` | cookie, bearer | Open realtime connections with topics, screencasts and backpressure counters. |
+| GET | `/api/v1/system/mcp/connections` | `listMcpConnections` | `system:read` | cookie, bearer | MCP connections with their self-reported identity: live ones first, then recent (D-30). |
 | PATCH | `/api/v1/system/log-level` | `setLogLevel` | `system:write` | cookie, bearer | Change the log level spec at runtime (`info,sessions=debug`). |
 | GET | `/api/v1/system/events` | `listSystemEvents` | `system:read` | cookie, bearer | Degradations (`resolved=open` by default). |
 

@@ -75,6 +75,14 @@ const ROWS: readonly ErrorRow[] = [
       "browserhive: unknown environment variable 'BROWSERHIVE_DISABLE_PATCHRIGHT'. Did you mean 'BROWSERHIVE_STEALTH_DRIVER'?",
   },
   {
+    name: 'misspelt identity variable suggests the identity name (08 §2.2)',
+    env: { BROWSERHIVE_HARNES: 'codex' },
+    exitCode: 64,
+    code: 'CONFIG_UNKNOWN_KEY',
+    rendered:
+      "browserhive: unknown environment variable 'BROWSERHIVE_HARNES'. Did you mean 'BROWSERHIVE_HARNESS'?",
+  },
+  {
     name: 'unknown key in the config file',
     file: '{"maxSession": 3}',
     exitCode: 64,

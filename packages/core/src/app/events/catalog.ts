@@ -60,6 +60,11 @@ export interface ToolObservation {
   readonly durationMs: number;
   readonly ts: number;
   readonly principal: string;
+  /**
+   * The harness resolved for this call (spec 02 §1.4; `unknown` when none), so consumers such as
+   * notification producers can branch on it without a query. Self-reported: never a decision input.
+   */
+  readonly harness: string;
   readonly traceId: string | null;
   readonly spanId: string | null;
   /** Per-session ordinal assigned by the dispatcher (`tool_calls.seq`). */

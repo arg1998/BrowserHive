@@ -13,6 +13,7 @@
       "ts": 1699999980000,
       "trace_id": null,
       "has_screenshot": false,
+      "harness": "unknown",
       "session_slug": "shop"
     },
     {
@@ -28,6 +29,7 @@
       "ts": 1699999970000,
       "trace_id": null,
       "has_screenshot": true,
+      "harness": "unknown",
       "session_slug": "shop"
     }
   ],

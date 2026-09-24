@@ -199,6 +199,7 @@ function fullSummary() {
     proxy_label: null,
     counts: { tool_calls: 0, errors: 0, pages: 0, blocked: 0, attention_open: 0, vault_access: 0 },
     has_live_viewers: false,
+    harness: 'unknown',
     client: null,
   };
 }

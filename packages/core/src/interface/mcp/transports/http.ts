@@ -10,9 +10,9 @@ import type { IdGenerator } from '../../../ports/id-generator.ts';
 import type { Logger } from '../../../ports/logger.ts';
 import type { McpConnectionRepository } from '../../../ports/persistence/operations.ts';
 import { hostnameOf, isHostAllowed } from '../../http/middleware/host-guard.ts';
-import { declaredClientOf } from '../client-info.ts';
 import type { RuntimeFacts } from '../context.ts';
 import type { ToolDispatcher } from '../dispatcher.ts';
+import { ConnectionIdentity, connectionPatchOf, headerBag } from '../identity.ts';
 import { authInfoFor } from '../principal.ts';
 import { createMcpServer } from '../server.ts';
 import { InMemoryEventStore } from './event-store.ts';
@@ -52,10 +52,20 @@ export interface McpHttpOptions {
   readonly onSessionClosed?: (closed: McpSessionClosed) => void;
 }
 
+/** Request facts the HTTP layer resolved before `/mcp` (03 §2). */
+export interface McpRequestContext {
+  /** The client IP (the peer, or the right-most untrusted `X-Forwarded-For` hop behind `trustedProxies`). */
+  readonly clientIp?: string | null;
+}
+
 /** The `/mcp` handler the HTTP layer mounts. */
 export interface McpHttpHandler {
   /** Handles `POST/GET/DELETE /mcp` for an already-authenticated principal. */
-  handleMcpRequest(request: Request, principal: RequestPrincipal): Promise<Response>;
+  handleMcpRequest(
+    request: Request,
+    principal: RequestPrincipal,
+    context?: McpRequestContext,
+  ): Promise<Response>;
   /** The connection record id of an MCP session, or `null`. */
   connectionIdOf(mcpSessionId: string | undefined): string | null;
   /** Live MCP sessions. */
@@ -74,9 +84,14 @@ interface Entry {
 const InitializeParams = z.looseObject({
   protocolVersion: z.string().optional(),
   clientInfo: z
-    .looseObject({ name: z.string().optional(), version: z.string().optional() })
+    .looseObject({
+      name: z.string().optional(),
+      version: z.string().optional(),
+      title: z.string().optional(),
+    })
     .optional(),
   capabilities: z.record(z.string(), z.unknown()).optional(),
+  _meta: z.record(z.string(), z.unknown()).optional(),
 });
 
 function jsonRpcError(status: number, code: number, message: string): Response {
@@ -139,11 +154,39 @@ export function createMcpHttpHandler(options: McpHttpOptions): McpHttpHandler {
     request: Request,
     body: unknown,
     principal: RequestPrincipal,
+    context: McpRequestContext,
   ): Promise<Response> => {
     const connectionId = `c-${options.ids.opaque(10)}`;
     const params = initializeParams(body);
-    const declared = declaredClientOf(request.headers);
     let entry: Entry | undefined;
+    const identity = new ConnectionIdentity({
+      connectionId,
+      logger: options.logger,
+      signals: {
+        transport: 'http',
+        request: { headers: headerBag(request.headers), url: request.url },
+        initialize: {
+          ...(params.clientInfo !== undefined && {
+            clientInfo: {
+              ...(params.clientInfo.name !== undefined && { name: params.clientInfo.name }),
+              ...(params.clientInfo.version !== undefined && {
+                version: params.clientInfo.version,
+              }),
+              ...(params.clientInfo.title !== undefined && { title: params.clientInfo.title }),
+            },
+          }),
+          ...(params.protocolVersion !== undefined && {
+            protocolVersion: params.protocolVersion,
+          }),
+          ...(params.capabilities !== undefined && { capabilities: params.capabilities }),
+          ...(params._meta !== undefined && { meta: params._meta }),
+        },
+        ip: context.clientIp ?? null,
+      },
+      // The row exists once the SDK assigns the session id; until then there is nothing to update.
+      persist: (patch) =>
+        entry === undefined ? undefined : options.connections?.update(connectionId, patch),
+    });
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: () => `m-${options.ids.opaque(16)}`,
       enableJsonResponse: false,
@@ -156,6 +199,8 @@ export function createMcpHttpHandler(options: McpHttpOptions): McpHttpHandler {
         entry = { transport, connectionId, subject: principal.subject, closed: false };
         sessions.set(sessionId, entry);
         const now = options.clock.now();
+        const resolved = identity.current;
+        const columns = connectionPatchOf(resolved);
         record(
           'insert',
           options.connections?.insert({
@@ -163,15 +208,21 @@ export function createMcpHttpHandler(options: McpHttpOptions): McpHttpHandler {
             principalId: principal.subject,
             transport: 'http',
             mcpSessionId: sessionId,
-            clientName: params.clientInfo?.name ?? null,
-            clientVersion: params.clientInfo?.version ?? null,
-            protocolVersion: params.protocolVersion ?? null,
-            capabilities: params.capabilities ?? null,
-            agentName: declared.agentName,
-            model: declared.model,
-            harness: declared.harness,
-            ip: null,
-            userAgent: request.headers.get('user-agent'),
+            clientName: resolved.clientName,
+            clientVersion: resolved.clientVersion,
+            clientTitle: resolved.clientTitle,
+            protocolVersion: resolved.protocolVersion,
+            capabilities: resolved.capabilities,
+            workspace: resolved.workspace,
+            agentName: resolved.workspace,
+            model: resolved.model,
+            modelSource: resolved.modelSource,
+            harness: resolved.harness,
+            harnessSource: resolved.harnessSource,
+            conflicts: columns.conflicts ?? [],
+            meta: resolved.meta,
+            ip: resolved.ip,
+            userAgent: resolved.userAgent,
             connectedAt: now,
             lastSeenAt: now,
             closedAt: null,
@@ -187,7 +238,7 @@ export function createMcpHttpHandler(options: McpHttpOptions): McpHttpHandler {
       runtime: options.runtime,
       dispatcher: options.dispatcher,
       connectionIdOf: () => connectionId,
-      declaredClient: declared,
+      identity,
     });
     await server.connect(transport);
     return transport.handleRequest(request, { parsedBody: body, authInfo: authInfoFor(principal) });
@@ -200,7 +251,7 @@ export function createMcpHttpHandler(options: McpHttpOptions): McpHttpHandler {
     connectionIdOf(mcpSessionId) {
       return mcpSessionId === undefined ? null : (sessions.get(mcpSessionId)?.connectionId ?? null);
     },
-    async handleMcpRequest(request, principal) {
+    async handleMcpRequest(request, principal, context = {}) {
       // DNS-rebinding defense, identical to `hostGuard` (spec 03 §2), so `/mcp` and the dashboard
       // can never disagree about a Host. The HTTP layer checks first; this covers embedders.
       const host = request.headers.get('host') ?? new URL(request.url).host;
@@ -233,7 +284,7 @@ export function createMcpHttpHandler(options: McpHttpOptions): McpHttpHandler {
       if (!hasInitialize(body)) {
         return jsonRpcError(400, -32000, 'Bad Request: No valid session ID provided');
       }
-      return initialize(request, body, principal);
+      return initialize(request, body, principal, context);
     },
     async closeAll() {
       const entries = [...sessions.entries()];

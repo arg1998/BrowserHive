@@ -53,6 +53,7 @@ const call = {
   seq: 7,
   sessionSlug: 'shop',
   hasScreenshot: true,
+  harness: 'codex',
 };
 
 describe('serializers', () => {

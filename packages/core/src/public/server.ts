@@ -82,6 +82,12 @@ export type {
   PreferencesPort,
 } from '../interface/http/services.ts';
 export { ToolDispatcher } from '../interface/mcp/dispatcher.ts';
+export {
+  ConnectionIdentity,
+  type ConnectionSignals,
+  connectionPatchOf,
+  type ResolvedIdentity,
+} from '../interface/mcp/identity.ts';
 export { createToolRegistry } from '../interface/mcp/registry.ts';
 export type { RuntimeFacts } from '../interface/mcp/runtime.ts';
 export { createMcpServer } from '../interface/mcp/server.ts';

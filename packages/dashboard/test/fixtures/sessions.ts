@@ -57,7 +57,14 @@ export function sessionSummary(i: number, patch: Partial<SessionSummary> = {}): 
     proxy_label: null,
     counts: { tool_calls: 12, errors: 1, pages: 3, blocked: 0, attention_open: 0, vault_access: 0 },
     has_live_viewers: false,
-    client: { name: 'claude-code', version: '1.0.0' },
+    harness: 'claude-code',
+    client: {
+      name: 'claude-code',
+      version: '1.0.0',
+      harness: 'claude-code',
+      harness_label: 'Claude Code',
+      harness_source: 'client_info',
+    },
     ...patch,
   };
 }
@@ -74,6 +81,7 @@ export function sessionsPage(
     meta: { now: T0 },
     facets: {
       owners: [{ value: 'claude', count: rows.length }],
+      harnesses: [{ value: 'claude-code', count: rows.length }],
       channels: [
         { value: 'chromium', count: rows.length },
         { value: 'chrome', count: 0 },

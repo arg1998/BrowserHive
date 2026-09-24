@@ -22,6 +22,7 @@ import { createPlaywrightPageActions } from '../../src/infra/browsers/page-actio
 import { OffVaultBackend } from '../../src/infra/vault-backends/off.ts';
 import type { RuntimeFacts } from '../../src/interface/mcp/context.ts';
 import { ToolDispatcher } from '../../src/interface/mcp/dispatcher.ts';
+import { ConnectionIdentity } from '../../src/interface/mcp/identity.ts';
 import { authInfoFor } from '../../src/interface/mcp/principal.ts';
 import { createToolRegistry } from '../../src/interface/mcp/registry.ts';
 import { createMcpServer } from '../../src/interface/mcp/server.ts';
@@ -62,6 +63,8 @@ export interface ToolHarnessOptions {
     | FakeClock
     | { now(): number; sleep(ms: number, signal?: AbortSignal): Promise<void> };
   readonly ids?: FakeIdGenerator | ToolServices['ids'];
+  /** When set, every connection resolves its identity (spec 02 §1.4) as a stdio process with this environment. */
+  readonly identityEnv?: Readonly<Record<string, string>>;
 }
 
 /** A connected in-process MCP client over the real server + dispatcher. */
@@ -241,7 +244,19 @@ export async function createToolHarness(options: ToolHarnessOptions = {}): Promi
 
   const clients: Client[] = [];
   const connect = async (principal: RequestPrincipal): Promise<Client> => {
-    const server = createMcpServer({ runtime, dispatcher, connectionIdOf: () => null });
+    const identityEnv = options.identityEnv;
+    const server = createMcpServer({
+      runtime,
+      dispatcher,
+      connectionIdOf: () => null,
+      ...(identityEnv !== undefined && {
+        identity: new ConnectionIdentity({
+          connectionId: `c-harness${clients.length}`,
+          logger,
+          signals: { transport: 'stdio', env: identityEnv },
+        }),
+      }),
+    });
     const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
     const send = clientSide.send.bind(clientSide);
     // The SDK client never attaches authInfo; the harness plays the authenticated HTTP edge.

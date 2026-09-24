@@ -66,7 +66,57 @@ export async function seedDataset(
   files: FakeFiles,
   dirs: SessionDirLayout,
 ): Promise<void> {
-  await repos.sessions.insert(sessionRecord());
+  await repos.mcpConnections.insert({
+    connectionId: 'c-seed000001',
+    principalId: 'local',
+    transport: 'http',
+    mcpSessionId: 'm-seed000000000001',
+    clientName: 'claude-code',
+    clientVersion: '2.1.281',
+    clientTitle: null,
+    protocolVersion: '2025-06-18',
+    capabilities: { roots: { listChanged: true } },
+    workspace: 'checkout',
+    agentName: 'checkout',
+    model: 'claude-opus-5',
+    modelSource: 'header',
+    harness: 'claude-code',
+    harnessSource: 'client_info',
+    conflicts: [],
+    meta: { team: 'growth' },
+    ip: '127.0.0.1',
+    userAgent: 'claude-code/2.1.281 (cli)',
+    connectedAt: NOW - 120_000,
+    lastSeenAt: NOW - 5_000,
+    closedAt: null,
+  });
+  await repos.mcpConnections.insert({
+    connectionId: 'c-seed000002',
+    principalId: 'local',
+    transport: 'stdio',
+    mcpSessionId: null,
+    clientName: 'mcp',
+    clientVersion: '0.1.0',
+    clientTitle: null,
+    protocolVersion: '2025-06-18',
+    capabilities: {},
+    workspace: null,
+    agentName: null,
+    model: null,
+    modelSource: null,
+    harness: 'unknown',
+    harnessSource: 'none',
+    conflicts: [],
+    meta: {},
+    ip: null,
+    userAgent: null,
+    connectedAt: NOW - 600_000,
+    lastSeenAt: NOW - 500_000,
+    closedAt: NOW - 400_000,
+  });
+  await repos.sessions.insert(
+    sessionRecord({ connectionId: 'c-seed000001', harness: 'claude-code' }),
+  );
   await repos.sessions.insert(
     sessionRecord({
       sessionId: ARCHIVED_ID,
