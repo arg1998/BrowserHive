@@ -15,6 +15,7 @@ import {
   type ToolHarnessOptions,
 } from '../helpers/fake-transport.ts';
 import { type FixtureServer, startFixtureServer } from '../helpers/fixture-server.ts';
+import { integrationChannel } from '../helpers/integration-channel.ts';
 import { HOST } from './driver-fixture.ts';
 
 /** Per-test state populated by {@link useMcpStack}. */
@@ -47,6 +48,7 @@ export async function createRealHarness(options: ToolHarnessOptions = {}): Promi
     pageActions: createPlaywrightPageActions({ clock }),
     clock,
     ids: createNanoidIdGenerator({ clock }),
+    defaultChannel: integrationChannel(),
     ...options,
   });
 }

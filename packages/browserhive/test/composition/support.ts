@@ -60,7 +60,17 @@ export function bootInputFor(
 ): BootInput & { readonly output: CapturedOutput } {
   const env = {};
   return {
-    resolved: resolvedFor({ port: 0, dataDir, logLevel: 'warn', ...overrides }, env),
+    resolved: resolvedFor(
+      {
+        port: 0,
+        dataDir,
+        logLevel: 'warn',
+        // The weekly drift job runs the real-browser suites against the installed Chrome.
+        ...(process.env['BHDEV_TEST_CHANNEL'] === 'chrome' && { defaultChannel: 'chrome' }),
+        ...overrides,
+      },
+      env,
+    ),
     host: buildHostEnvironment({ env, totalMemoryBytes: 8 * 1024 ** 3 }),
     output,
     env,

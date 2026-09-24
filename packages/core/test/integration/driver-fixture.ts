@@ -15,6 +15,7 @@ import { createSystemClock } from '../../src/infra/clock/system-clock.ts';
 import { createCollectingLogger } from '../../src/infra/logging/collecting-logger.ts';
 import type { LaunchSpec, SessionHandle } from '../../src/ports/browser-driver.ts';
 import { type FixtureServer, startFixtureServer } from '../helpers/fixture-server.ts';
+import { integrationChannel } from '../helpers/integration-channel.ts';
 
 /** The injected host facts for the suite: real platform/arch/release, real env (LC_ALL/LANG). */
 export const HOST = { platform: platform(), arch: arch(), release: release(), env: process.env };
@@ -108,7 +109,7 @@ export function useDriverFixtures(): { state: IntegrationState } {
         : null;
       const spec: LaunchSpec = {
         sessionId,
-        channel: 'chromium',
+        channel: integrationChannel(),
         incognito: false,
         headless,
         persistenceMode: request.persistenceMode ?? 'memory',

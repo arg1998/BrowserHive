@@ -1,0 +1,66 @@
+name: real-chrome
+
+# Weekly drift check: the installed Google Chrome updates itself and can move ahead of the Chromium
+# build a BrowserHive release was tested with. This runs the real-browser integration suite with
+# sessions on the runner's current stable Chrome (BHDEV_TEST_CHANNEL=chrome) plus the stealth and
+# sandbox matrix for it, and opens (or comments on) an issue when either fails. It never gates a
+# pull request.
+
+on:
+  schedule:
+    - cron: '0 7 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: real-chrome
+  cancel-in-progress: false
+
+jobs:
+  real-chrome:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - run: bun install --frozen-lockfile
+      # The bundled Chromium is still needed: some suites test the chromium channel on purpose.
+      - run: bunx playwright install chromium --with-deps
+      # The runner image ships Chrome, but not always the newest stable: update it first.
+      - name: Update Google Chrome to current stable
+        run: bunx playwright install chrome
+      - name: Chrome version
+        id: chrome
+        run: echo "version=$(google-chrome --version)" >> "$GITHUB_OUTPUT"
+      - name: Integration suite on Google Chrome
+        env:
+          BHDEV_TEST_CHANNEL: chrome
+        run: bun run test:integration
+      - name: Stealth and sandbox matrix on Google Chrome
+        run: bun packages/browserhive/scripts/stealth-matrix.ts --channels chrome --sandbox config:off,config:auto,config:on --strict --summary "$GITHUB_STEP_SUMMARY"
+      - name: Open or update the drift issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CHROME: ${{ steps.chrome.outputs.version }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Weekly real-Chrome check failed"
+          body="The weekly run against the runner's current stable Chrome failed.
+
+          - Chrome: ${CHROME:-unknown}
+          - Run: $RUN_URL
+
+          Installed Chrome may have moved ahead of the Chromium build this release was tested with. The bundled \`chromium\` channel is unaffected; see the run for the failing suite or stealth check."
+          existing="$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number')"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body"
+          fi
