@@ -30,6 +30,11 @@ const ROOT_ERROR = new Error(`launch: Target page, context or browser has been c
 Call log:
   - [pid=7][err] [7:7:0101/000000.000:ERROR:zygote_host_impl_linux.cc(100)] Running as root without --no-sandbox is not supported. See https://crbug.com/638180.`);
 
+/** Microsoft Edge on GitHub's Ubuntu 24.04 runner (measured by the sandbox-matrix job). */
+const EDGE_ERROR = new Error(`launch: Target page, context or browser has been closed
+Browser logs:
+[pid=7357][err] [7357:7357:0924/170055.917038:FATAL:sandbox/linux/suid/client/setuid_sandbox_host.cc:166] The SUID sandbox helper binary was found, but is not configured correctly. Rather than run without sandboxing I'm aborting now. You need to make sure that /opt/microsoft/msedge/msedge-sandbox is owned by root and has mode 4755.`);
+
 const DOCKER_ERROR = new Error(`launch: Target page, context or browser has been closed
 Call log:
   - [pid=9][err] Failed to move to new namespace: PID namespaces supported, Network namespace supported, but failed: errno = Operation not permitted
@@ -40,6 +45,7 @@ describe('sandbox failure recognition', () => {
     expect(isSandboxFailure(UBUNTU_ERROR)).toBe(true);
     expect(isSandboxFailure(ROOT_ERROR)).toBe(true);
     expect(isSandboxFailure(DOCKER_ERROR)).toBe(true);
+    expect(isSandboxFailure(EDGE_ERROR)).toBe(true);
     expect(isSandboxFailure(new Error("Executable doesn't exist at /x"))).toBe(false);
     expect(isSandboxFailure(new Error('Timeout 30000ms exceeded'))).toBe(false);
     expect(isSandboxFailure('No usable sandbox')).toBe(false);
@@ -58,6 +64,9 @@ describe('sandbox failure recognition', () => {
         new Error('x\n  - [err] [1:1:0101/0:FATAL:foo.cc(1)] Something broke. More.'),
       ),
     ).toBe('Something broke.');
+    expect(sandboxFailureReason(EDGE_ERROR)).toBe(
+      'The SUID sandbox helper binary was found, but is not configured correctly.',
+    );
     expect(sandboxFailureReason(new Error('boom\nmore'))).toBe('boom');
   });
 });

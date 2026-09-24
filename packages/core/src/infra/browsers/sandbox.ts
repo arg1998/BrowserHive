@@ -5,10 +5,11 @@ import type { BrowserType, LaunchOptions } from 'playwright';
 /**
  * Chrome's and Playwright's markers of a sandbox that could not start. Playwright rewrites the first
  * three into "Chromium sandboxing failed!"; the namespace and zygote lines are what Chrome prints
- * under Docker's default seccomp profile, which Playwright does not rewrite.
+ * under Docker's default seccomp profile, and the SUID lines what Microsoft Edge prints on Ubuntu
+ * 23.10+; Playwright rewrites neither. Anything else is proven by an unsandboxed launch instead.
  */
 const SANDBOX_FAILURE_RE =
-  /Chromium sandboxing failed!|No usable sandbox|crbug\.com\/638180|crbug\.com\/357670|Failed to move to new namespace|zygote_host_impl_linux|setuid sandbox|sandbox_linux|credentials\.cc/;
+  /Chromium sandboxing failed!|No usable sandbox|crbug\.com\/638180|crbug\.com\/357670|Failed to move to new namespace|zygote_host_impl_linux|setuid_sandbox_host|SUID sandbox helper|sandbox_linux|credentials\.cc/;
 
 /** Whether a launch error says the sandbox could not start. */
 export function isSandboxFailure(err: unknown): boolean {
@@ -20,7 +21,8 @@ const REASONS: readonly RegExp[] = [
   /No usable sandbox!/,
   /Running as root without --no-sandbox is not supported\./,
   /Failed to move to new namespace:[^\n]*/,
-  /The SUID sandbox helper binary[^\n]*/,
+  // Microsoft Edge on Ubuntu 23.10+ (its helper is not setuid root, and user namespaces are restricted).
+  /The SUID sandbox helper binary was found, but is not configured correctly\./,
 ];
 
 /**

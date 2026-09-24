@@ -167,7 +167,7 @@ Playwright adds `--no-sandbox` unless `chromiumSandbox: true`. The `sandbox` key
 | Configured channel not installed | `BROWSER_NOT_INSTALLED` (no silent switch) | refuses to start: not installed, how to install | `BROWSER_NOT_INSTALLED` |
 
 Facts behind it (measured through BrowserHive on GitHub's runners and an AppArmor-restricted Ubuntu 24.04 derivative):
-- Ubuntu 23.10+ sets `kernel.apparmor_restrict_unprivileged_userns=1`: only programs with an AppArmor profile may create the user namespaces the sandbox uses. Ubuntu ships profiles for `/opt/google/chrome/chrome` (and `msedge`, `brave`, `opera`), none for `~/.cache/ms-playwright/…`, and the bundled `chrome_sandbox` helper is not setuid root. Chrome aborts with `No usable sandbox!`. Edge on the Ubuntu runner also failed, with a message that does not name the sandbox.
+- Ubuntu 23.10+ sets `kernel.apparmor_restrict_unprivileged_userns=1`: only programs with an AppArmor profile may create the user namespaces the sandbox uses. Ubuntu ships profiles for `/opt/google/chrome/chrome` (and `msedge`, `brave`, `opera`), none for `~/.cache/ms-playwright/…`, and the bundled `chrome_sandbox` helper is not setuid root. Chrome aborts with `No usable sandbox!`. Edge on the Ubuntu runner also failed: its `msedge-sandbox` helper is not setuid root there, so with namespaces restricted it aborts with `The SUID sandbox helper binary was found, but is not configured correctly.`
 - Chrome refuses the sandbox as root (`Running as root without --no-sandbox is not supported`); Docker's default seccomp profile blocks namespace creation.
 - macOS (Seatbelt) and Windows (restricted tokens, job objects) sandbox every channel with no extra rights.
 

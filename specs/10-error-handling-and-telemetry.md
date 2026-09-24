@@ -196,7 +196,7 @@ Process level (installed by the CLI, not by core): `unhandledRejection`/`uncaugh
 | `/Download.*(failed|canceled)/i` | DOWNLOAD_FAILED |
 | `setInputFiles` failures | UPLOAD_FAILED |
 | `/Executable doesn't exist/i` | BROWSER_NOT_INSTALLED (`details.install_command = 'browserhive init'`) |
-| a launch whose sandbox could not start: Chrome's or Playwright's markers (`Chromium sandboxing failed!`, `No usable sandbox`, `crbug.com/638180`, `crbug.com/357670`, `Failed to move to new namespace`, `zygote_host_impl_linux`, …), or any other failure of a sandboxed launch after which the same browser starts without the sandbox | SANDBOX_UNAVAILABLE (`retryable: never`) when the sandbox was required; under `sandbox=auto` the session falls back instead. **Never `INTERNAL_ERROR`**: the failure is a property of the host, and `backoff` would make an agent retry forever |
+| a launch whose sandbox could not start: Chrome's or Playwright's markers (`Chromium sandboxing failed!`, `No usable sandbox`, `crbug.com/638180`, `crbug.com/357670`, `Failed to move to new namespace`, `zygote_host_impl_linux`, `The SUID sandbox helper binary was found, but is not configured correctly` (Edge on Ubuntu), …), or any other failure of a sandboxed launch after which the same browser starts without the sandbox | SANDBOX_UNAVAILABLE (`retryable: never`) when the sandbox was required; under `sandbox=auto` the session falls back instead. **Never `INTERNAL_ERROR`**: the failure is a property of the host, and `backoff` would make an agent retry forever |
 | anything else | INTERNAL_ERROR (private message keeps the Playwright text) |
 
 The first line of the driver message (≤ 160 chars, redacted) is stored in `details.detail`; the public message is the registry text.
