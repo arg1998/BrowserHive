@@ -4,11 +4,15 @@ USAGE
   browserhive doctor [flags]
 
 Runs every host check and prints a table. Exit 0 when all checks pass, 1 when any fails, 2 for
-warnings only. Accepts the server flags so the checks see the configuration serve would use.
+warnings only. Accepts the server flags so the checks see the configuration serve would use. Checks
+launch each installed browser once to test the sandbox.
 
 FLAGS
-  --json          Print machine-readable JSON instead of text.
-  <server flags>  Every flag of 'browserhive serve' (see 'browserhive serve --help').
+  --json                  Print machine-readable JSON instead of text.
+  --printApparmorProfile  Print an AppArmor profile that lets the configured browser sandbox on
+                          Ubuntu 23.10+, then exit. Install it with sudo tee /etc/apparmor.d/<name>;
+                          nothing is installed for you.
+  <server flags>          Every flag of 'browserhive serve' (see 'browserhive serve --help').
 
 GLOBAL FLAGS
   -h, --help     Show help.

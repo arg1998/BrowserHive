@@ -166,8 +166,16 @@ export const COMMANDS: readonly CommandDescriptor[] = [
     name: 'doctor',
     summary: 'Check the host, browsers, and configuration',
     description:
-      'Runs every host check and prints a table. Exit 0 when all checks pass, 1 when any fails, 2 for warnings only. Accepts the server flags so the checks see the configuration serve would use.',
-    flags: [json],
+      'Runs every host check and prints a table. Exit 0 when all checks pass, 1 when any fails, 2 for warnings only. Accepts the server flags so the checks see the configuration serve would use. Checks launch each installed browser once to test the sandbox.',
+    flags: [
+      json,
+      {
+        name: 'printApparmorProfile',
+        kind: 'boolean',
+        describe:
+          'Print an AppArmor profile that lets the configured browser sandbox on Ubuntu 23.10+, then exit. Install it with sudo tee /etc/apparmor.d/<name>; nothing is installed for you.',
+      },
+    ],
     configKeys: CONFIG_KEYS,
     subcommands: [],
     defaultSubcommand: null,

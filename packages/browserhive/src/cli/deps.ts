@@ -1,8 +1,14 @@
 /** @module cli/deps — `CliDeps`: every effect the CLI performs, injected (process facts, filesystem, child processes, storage, server boot, probes) so the suites never touch the real host */
+import type { Channel } from '@browserhive/contracts/enums';
 import type { ConfigFs, ResolvedConfigBundle } from '@browserhive/core/config';
 import type { FileSystem } from '@browserhive/core/ports/file-system';
 import type { HostEnvironment } from '@browserhive/core/ports/host-environment';
 import type { ProcessRunner } from '@browserhive/core/ports/process-runner';
+import type {
+  DetectedBrowser,
+  SandboxEnvironment,
+  SandboxProbeResult,
+} from '@browserhive/core/server';
 import type { CliOutputSinks, Output } from './output/output.ts';
 import type { Prompter } from './output/process-io.ts';
 
@@ -162,6 +168,14 @@ export interface HostProbes {
   installCommand(
     driver: 'playwright' | 'patchright',
   ): { readonly command: string; readonly args: readonly string[] } | null;
+  /** Every channel on this host: the bundled Chromium, then the installed Google Chrome and Microsoft Edge. */
+  browsers(): Promise<readonly DetectedBrowser[]>;
+  /** Launches `channel` once with the sandbox forced on (and once without when that fails). */
+  sandbox(channel: Channel): Promise<SandboxProbeResult>;
+  /** Host conditions that decide the sandbox (AppArmor, user namespaces, root, container). */
+  sandboxEnvironment(): Promise<SandboxEnvironment>;
+  /** Whether an installed AppArmor profile names `path` (`null` off Linux or when unreadable). */
+  apparmorCovers(path: string): Promise<boolean | null>;
   /** HEAD request with a timeout; `ok` means any HTTP response arrived. */
   httpReachable(
     url: string,

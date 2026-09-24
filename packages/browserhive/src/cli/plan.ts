@@ -252,11 +252,15 @@ function planInvocation(name: string, input: PlanInput): CliPlan {
     }
     case 'doctor': {
       const json = reader.bool('json');
+      const printApparmorProfile = reader.bool('printApparmorProfile');
       if (reader.problems.length > 0) return usage(reader.problems);
       const resolution = resolveFull(input);
       const scoped = resolution.ok ? resolution : resolveDataDir(input);
       const dir = scoped.ok ? scoped.value.config.dataDir : fallbackDataDir(input);
-      return run({ command: 'doctor', json, resolution, dataDir: dir }, color);
+      return run(
+        { command: 'doctor', json, printApparmorProfile, resolution, dataDir: dir },
+        color,
+      );
     }
     case 'config show':
     case 'config validate': {

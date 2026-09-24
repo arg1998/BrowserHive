@@ -7,6 +7,21 @@ export {
   installBlocklistRoute,
 } from './blocklist-route.ts';
 export {
+  type BrowserDetectionDeps,
+  type BrowserSource,
+  CHANNEL_LABEL,
+  type CommandOutput,
+  channelExecutable,
+  type DetectedBrowser,
+  detectBrowsers,
+  type ManagedPolicies,
+  managedPolicies,
+  parseBrowserVersion,
+  parseRegQuery,
+  playwrightChannelExecutable,
+  playwrightExecutable,
+} from './browser-detection.ts';
+export {
   isChannel,
   type LaunchKwargs,
   launchKwargsForChannel,
@@ -103,6 +118,32 @@ export {
   type PlaywrightBrowserDriverDeps,
 } from './playwright-browser-driver.ts';
 export { FORCED_PROXY_BYPASS, mergeBypass, PassThroughProxyResolver } from './proxy.ts';
+export {
+  APPARMOR_DIR,
+  APPARMOR_PROFILE_NAME,
+  apparmorProfile,
+  apparmorProfileCovers,
+  inspectSandboxEnvironment,
+  isSandboxFailure,
+  probeSandbox,
+  SANDBOX_PROBE_TIMEOUT_MS,
+  type SandboxEnvironment,
+  type SandboxEnvironmentDeps,
+  type SandboxProbeResult,
+  type SandboxProbeTarget,
+  sandboxFailureReason,
+} from './sandbox.ts';
+export {
+  type GuidanceAlternative,
+  type GuidanceOption,
+  type GuidanceTarget,
+  renderSandboxGuidance,
+  type SandboxGuidance,
+  type SandboxGuidanceInput,
+  sandboxGuidance,
+  shortSandboxGuidance,
+  wrap,
+} from './sandbox-guidance.ts';
 export { PlaywrightSessionHandle, type SessionHandleInput } from './session-handle.ts';
 export {
   archFor,

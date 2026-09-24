@@ -41,6 +41,8 @@ export type Invocation =
   | {
       readonly command: 'doctor';
       readonly json: boolean;
+      /** `--printApparmorProfile`: print the profile for the configured browser and exit. */
+      readonly printApparmorProfile: boolean;
       /** The resolver outcome; a failure is a ✗ check, not a usage error. */
       readonly resolution:
         | { readonly ok: true; readonly value: ResolvedConfigBundle }
