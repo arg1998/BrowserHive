@@ -265,8 +265,9 @@ export function reportBrowsers(
   for (const browser of host.browsers) {
     const label = browser.channel.padEnd(10);
     if (!browser.installed) {
+      // Informational here: the download step above owns the ✗ for a missing bundled browser.
       out.status(
-        browser.source === 'bundled' ? 'fail' : 'skip',
+        browser.source === 'bundled' ? 'warn' : 'skip',
         label,
         browser.source === 'bundled' ? "not installed; run 'browserhive init'" : 'not installed',
       );
