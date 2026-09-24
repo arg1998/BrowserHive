@@ -1,4 +1,4 @@
-/** @module features/system/config/ConfigTable — effective configuration with provenance: 14px keys, 13px mono values that wrap, where each value came from (cli › file › env › default) and the lower-precedence values it overrode; secrets shown as `redacted`; filter by key, value or source, optionally only values that differ from the defaults (D-06) */
+/** @module features/system/config/ConfigTable — effective configuration with provenance: 14px keys, 13px mono values that wrap, where each value came from (cli › file › env › default), the environment variables behind config-file references (`$NAME` chips, spec 08 §3.1) and the lower-precedence values it overrode; secrets shown as `redacted`; filter by key, value, source or variable, optionally only values that differ from the defaults or only values from references (D-06, D-29) */
 import type { ProvenanceSource } from '@browserhive/contracts/enums';
 import { REDACTED, type SystemConfigKey } from '@browserhive/contracts/http';
 import { useId, useState } from 'react';
@@ -19,6 +19,7 @@ import { formatNumber } from '@/lib/format/bytes.ts';
 import { ICONS } from '@/lib/icons.ts';
 import type { Tone } from '@/lib/status-registry.ts';
 import { cn } from '@/lib/utils.ts';
+import { RefChip, rowRefs } from './RefChip.tsx';
 
 /** How each provenance source reads, most precedent first. */
 export const SOURCE_INFO: {
@@ -40,31 +41,69 @@ export function configDisplay(value: unknown, secret: boolean): string {
   return JSON.stringify(value);
 }
 
-/** Rows matching the filter (key, displayed value or source, case-insensitive). */
+/** Whether a row's value, or a value it overrode, came through config-file references. */
+export function usesRefs(key: SystemConfigKey): boolean {
+  return (key.refs?.length ?? 0) > 0 || key.shadowed.some((s) => (s.refs?.length ?? 0) > 0);
+}
+
+function refNames(key: SystemConfigKey): readonly string[] {
+  return [...(key.refs ?? []), ...key.shadowed.flatMap((s) => s.refs ?? [])].map((r) =>
+    r.ref.toLowerCase(),
+  );
+}
+
+/**
+ * Rows matching the filter: key, displayed value, source or variable name (with or without `$`),
+ * case-insensitive; optionally only values changed from the defaults, only values from references.
+ */
 export function filterConfig(
   keys: readonly SystemConfigKey[],
   needle: string,
   changedOnly: boolean,
+  refsOnly = false,
 ): readonly SystemConfigKey[] {
   const q = needle.trim().toLowerCase();
+  const variable = q.startsWith('$') ? q.slice(1) : q;
   return keys.filter((k) => {
     if (changedOnly && k.source === 'default') return false;
+    if (refsOnly && !usesRefs(k)) return false;
     if (q === '') return true;
     return (
       k.key.toLowerCase().includes(q) ||
       k.source.includes(q) ||
+      (variable !== '' && refNames(k).some((name) => name.includes(variable))) ||
       (!k.secret && configDisplay(k.value, false).toLowerCase().includes(q))
     );
   });
 }
 
-function Source({ source }: { readonly source: ProvenanceSource }) {
-  const info = SOURCE_INFO[source];
+function Source({ row }: { readonly row: SystemConfigKey }) {
+  const info = SOURCE_INFO[row.source];
+  const refs = rowRefs(row.refs);
   return (
-    <Chip tone={info.tone} className="font-mono">
-      {source}
-      <span className="sr-only">: {info.hint}</span>
-    </Chip>
+    <div className="flex min-w-0 flex-col items-start gap-1">
+      <Chip tone={info.tone} className="font-mono">
+        {row.source}
+        <span className="sr-only">: {info.hint}</span>
+      </Chip>
+      {refs.length > 0 ? (
+        <ul
+          aria-label={`Environment variables ${row.key} reads`}
+          className="flex max-w-full flex-col items-start gap-1"
+        >
+          {refs.map((ref) => (
+            <li key={ref.name} className="max-w-full">
+              <RefChip
+                configKey={row.key}
+                refInfo={ref}
+                template={row.template}
+                secret={row.secret}
+              />
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
   );
 }
 
@@ -81,9 +120,12 @@ export function ConfigTable({ keys, filter, onFilterChange }: ConfigTableProps) 
   const inputId = useId();
   const switchId = useId();
   const [draft, setDraft] = useDebouncedSearch(filter ?? '', onFilterChange, 150);
+  const refsSwitchId = useId();
   const [changedOnly, setChangedOnly] = useState(false);
-  const rows = filterConfig(keys, draft, changedOnly);
+  const [refsOnly, setRefsOnly] = useState(false);
+  const rows = filterConfig(keys, draft, changedOnly, refsOnly);
   const changed = keys.filter((k) => k.source !== 'default').length;
+  const fromRefs = keys.filter(usesRefs).length;
   const Search = ICONS.search;
   return (
     <div className="flex flex-col">
@@ -99,7 +141,11 @@ export function ConfigTable({ keys, filter, onFilterChange }: ConfigTableProps) 
           <Input
             id={inputId}
             type="search"
-            placeholder="Filter by key, value or source…"
+            placeholder={
+              fromRefs > 0
+                ? 'Filter by key, value, source or $VARIABLE…'
+                : 'Filter by key, value or source…'
+            }
             className="pl-9"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
@@ -110,6 +156,13 @@ export function ConfigTable({ keys, filter, onFilterChange }: ConfigTableProps) 
           Only changed from defaults
           <span className="text-muted-foreground tabular-nums">({formatNumber(changed)})</span>
         </label>
+        {fromRefs > 0 ? (
+          <label htmlFor={refsSwitchId} className="flex items-center gap-2 text-sm">
+            <Switch id={refsSwitchId} size="sm" checked={refsOnly} onCheckedChange={setRefsOnly} />
+            Only values from references
+            <span className="text-muted-foreground tabular-nums">({formatNumber(fromRefs)})</span>
+          </label>
+        ) : null}
         <span className="ml-auto text-sm text-muted-foreground tabular-nums">
           {formatNumber(rows.length)} of {formatNumber(keys.length)}
         </span>
@@ -121,6 +174,7 @@ export function ConfigTable({ keys, filter, onFilterChange }: ConfigTableProps) 
           onClear={() => {
             setDraft('');
             setChangedOnly(false);
+            setRefsOnly(false);
           }}
           size="sm"
           className="border-t"
@@ -131,7 +185,8 @@ export function ConfigTable({ keys, filter, onFilterChange }: ConfigTableProps) 
             <colgroup>
               <col className="w-[34%] sm:w-[30%]" />
               <col />
-              <col className="w-24 sm:w-28" />
+              {/* Wider when a `$VARIABLE` chip sits under the source chip. */}
+              <col className={keys.some(usesRefs) ? 'w-28 sm:w-44' : 'w-24 sm:w-28'} />
             </colgroup>
             <TableHeader>
               <TableRow>
@@ -176,9 +231,10 @@ export function ConfigTable({ keys, filter, onFilterChange }: ConfigTableProps) 
                           aria-label={`Values ${row.key} overrides`}
                           className="flex flex-col gap-0.5 text-sm text-muted-foreground"
                         >
-                          {row.shadowed.map((s) => (
+                          {row.shadowed.map((s, index) => (
                             <li
-                              key={s.source}
+                              // biome-ignore lint/suspicious/noArrayIndexKey: positional (highest precedence first); a source may repeat
+                              key={`${s.source}:${index}`}
                               className="flex min-w-0 flex-wrap items-baseline gap-x-1.5"
                             >
                               <span>overrides</span>
@@ -186,6 +242,16 @@ export function ConfigTable({ keys, filter, onFilterChange }: ConfigTableProps) 
                               <code className="min-w-0 font-mono [overflow-wrap:anywhere] line-through decoration-muted-foreground/60">
                                 {configDisplay(s.value, row.secret)}
                               </code>
+                              {rowRefs(s.refs).length > 0 ? (
+                                <span>
+                                  via{' '}
+                                  <span className={cn('font-mono', 'text-vault-text')}>
+                                    {rowRefs(s.refs)
+                                      .map((ref) => `$${ref.name}`)
+                                      .join(', ')}
+                                  </span>
+                                </span>
+                              ) : null}
                             </li>
                           ))}
                         </ul>
@@ -193,7 +259,7 @@ export function ConfigTable({ keys, filter, onFilterChange }: ConfigTableProps) 
                     </div>
                   </TableCell>
                   <TableCell className="py-2.5 align-top">
-                    <Source source={row.source} />
+                    <Source row={row} />
                   </TableCell>
                 </TableRow>
               ))}

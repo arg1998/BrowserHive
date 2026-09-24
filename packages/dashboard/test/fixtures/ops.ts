@@ -197,7 +197,37 @@ export function systemConfig(): SystemConfigResponse {
         shadowed: [{ source: 'env', value: 9000 }],
         secret: false,
       },
+      {
+        key: 'maxSessions',
+        value: 8,
+        source: 'cli',
+        shadowed: [
+          {
+            source: 'file',
+            value: '4',
+            refs: [{ scheme: 'env', ref: 'MAX_SESSIONS', from: 'default' }],
+          },
+        ],
+        secret: false,
+      },
       { key: 'authTokens', value: '[REDACTED]', source: 'file', shadowed: [], secret: true },
+      {
+        key: 'otelEndpoint',
+        value: 'http://collector.internal:4318',
+        source: 'file',
+        refs: [{ scheme: 'env', ref: 'OTLP_HOST', from: 'value' }],
+        template: 'http://{env:OTLP_HOST}:4318',
+        shadowed: [{ source: 'env', value: 'http://127.0.0.1:4318' }],
+        secret: false,
+      },
+      {
+        key: 'otelHeaders',
+        value: '[REDACTED]',
+        source: 'file',
+        refs: [{ scheme: 'env', ref: 'OTLP_TOKEN', from: 'value', at: 'Authorization' }],
+        shadowed: [],
+        secret: true,
+      },
       {
         key: 'logLevel',
         value: { root: 'info', modules: { sessions: 'debug' } },

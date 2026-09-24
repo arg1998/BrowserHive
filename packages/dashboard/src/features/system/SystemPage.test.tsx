@@ -128,13 +128,31 @@ describe('system section mapping', () => {
     expect(configDisplay('[REDACTED]', false)).toBe('redacted');
     expect(configDisplay({ root: 'info' }, false)).toBe('{"root":"info"}');
     const keys = systemConfig().keys;
-    expect(filterConfig(keys, 'cli', false).map((k) => k.key)).toEqual(['port']);
+    expect(filterConfig(keys, 'cli', false).map((k) => k.key)).toEqual(['port', 'maxSessions']);
     expect(filterConfig(keys, '', true).map((k) => k.key)).toEqual([
       'port',
+      'maxSessions',
       'authTokens',
+      'otelEndpoint',
+      'otelHeaders',
       'otelTraceUrlTemplate',
     ]);
     expect(filterConfig(keys, 'hunter', false)).toEqual([]);
+  });
+
+  it('filters by variable name, with or without $, and to values from references', () => {
+    const keys = systemConfig().keys;
+    const names = (rows: readonly { key: string }[]) => rows.map((k) => k.key);
+    expect(names(filterConfig(keys, '', false, true))).toEqual([
+      'maxSessions',
+      'otelEndpoint',
+      'otelHeaders',
+    ]);
+    expect(names(filterConfig(keys, '$otlp', false))).toEqual(['otelEndpoint', 'otelHeaders']);
+    // A secret key is found by its variable's name, never by its value.
+    expect(names(filterConfig(keys, 'OTLP_TOKEN', false))).toEqual(['otelHeaders']);
+    expect(names(filterConfig(keys, 'max_sessions', false))).toEqual(['maxSessions']);
+    expect(names(filterConfig(keys, 'collector', false, true))).toEqual(['otelEndpoint']);
   });
 });
 
@@ -184,6 +202,53 @@ describe('SystemPage', () => {
     expect(region.textContent).not.toContain('[REDACTED]');
     expect(screen.getByText('Bind address')).toBeTruthy();
     await expectNoA11yViolations(view.container);
+  });
+
+  it('names the variable behind a reference; the popover shows the file text unless secret', async () => {
+    const view = mount('/system?tab=config');
+    const region = await screen.findByRole('region', { name: 'Effective configuration' });
+    const row = (key: string) => {
+      const tr = within(region).getByRole('rowheader', { name: key }).closest('tr');
+      if (tr === null) throw new Error(`${key} row missing`);
+      return tr;
+    };
+    const endpoint = row('otelEndpoint');
+    expect(within(endpoint).getByText('http://collector.internal:4318')).toBeTruthy();
+    const chip = within(endpoint).getByRole('button', {
+      name: /^\$OTLP_HOST: environment variable, set/,
+    });
+    await act(async () => {
+      fireEvent.click(chip);
+    });
+    const template = await screen.findByText('In browserhive.config.json');
+    const popover = template.closest('[data-slot="popover-content"]');
+    if (!(popover instanceof HTMLElement)) throw new Error('popover missing');
+    expect(popover.textContent).toContain('http://{env:OTLP_HOST}:4318');
+    const docs = within(popover).getByRole('link', { name: /How references work/ });
+    expect(docs.getAttribute('href')).toBe(
+      'https://browserhive.ai/docs/guide/configuration/#references',
+    );
+    await expectNoA11yViolations(view.container);
+
+    const headers = row('otelHeaders');
+    expect(within(headers).getByText('redacted')).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(within(headers).getByRole('button', { name: /^\$OTLP_TOKEN/ }));
+    });
+    expect(
+      await screen.findByText("The value is secret, so only the variable's name is shown."),
+    ).toBeTruthy();
+    expect(document.body.textContent).not.toContain('{env:OTLP_TOKEN}');
+
+    const overrides = within(row('maxSessions')).getByRole('list', {
+      name: 'Values maxSessions overrides',
+    });
+    expect(overrides.textContent).toContain('via $MAX_SESSIONS');
+    expect(
+      within(row('maxSessions')).queryByRole('list', {
+        name: 'Environment variables maxSessions reads',
+      }),
+    ).toBeNull();
   });
 
   it('shows one page-level 403 instead of an error in every panel', async () => {

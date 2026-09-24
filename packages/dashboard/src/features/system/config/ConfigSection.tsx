@@ -5,6 +5,7 @@ import { DataPanel } from '@/components/shared/DataPanel.tsx';
 import { EmptyState } from '@/components/shared/EmptyState.tsx';
 import { Panel } from '@/components/shared/Section.tsx';
 import { SkeletonKv } from '@/components/shared/Skeletons.tsx';
+import { docsUrl } from '@/lib/links.ts';
 import { SettingsList } from '../components/SettingsList.tsx';
 import { settingsGroups } from '../model.ts';
 import { ConfigTable } from './ConfigTable.tsx';
@@ -53,11 +54,25 @@ export function ConfigSection({ system, config, filter, onFilterChange }: Config
               <code>BROWSERHIVE_*</code> environment variable; the rightmost source wins. Values
               another source overrode are listed as shadowed.
             </p>
+            <p>
+              A value in the file can read an environment variable with <code>{'{env:NAME}'}</code>{' '}
+              or <code>{'{env:NAME:-default}'}</code>, so secrets stay out of the file. The variable
+              appears as a <code>$NAME</code> chip beside the source; select it to see what the file
+              says.{' '}
+              <a
+                href={docsUrl('configurationReferences')}
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-accent-text underline-offset-4 hover:underline focus-ring"
+              >
+                About references
+              </a>
+            </p>
             <p>Unknown keys fail startup instead of being ignored.</p>
           </>
         }
         infoDocs="configurationPrecedence"
-        description="The effective value of every key and where it came from: cli › file › env › default. Secrets are never shown."
+        description="The effective value of every key and where it came from: cli › file › env › default, with the variable behind each {env:…} reference. Secrets are never shown."
         padding="none"
       >
         <DataPanel
