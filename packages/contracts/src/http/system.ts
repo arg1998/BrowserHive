@@ -284,9 +284,10 @@ export const MCP_CONNECTIONS_LIMIT_DEFAULT = 50;
 /** Maximum rows of `GET /system/mcp/connections`. */
 export const MCP_CONNECTIONS_LIMIT_MAX = 200;
 
-/** `GET /system/mcp/connections` query. */
+/** `GET /system/mcp/connections` query: `offset` skips that many rows of the same order (paging). */
 export const McpConnectionsQuery = z.strictObject({
   limit: QueryInt.min(1).max(MCP_CONNECTIONS_LIMIT_MAX).default(MCP_CONNECTIONS_LIMIT_DEFAULT),
+  offset: QueryInt.min(0).default(0),
 });
 /** `GET /system/mcp/connections` query. */
 export type McpConnectionsQuery = z.infer<typeof McpConnectionsQuery>;
@@ -296,6 +297,8 @@ export const McpConnectionsResponse = z.object({
   connections: z.array(McpConnectionRow),
   /** Open connections (all of them, not only those in `connections`). */
   live: Count,
+  /** Every stored connection, open or closed (the length of the full list being paged). */
+  total: Count,
   now: EpochMs,
 });
 /** `GET /system/mcp/connections` body. */

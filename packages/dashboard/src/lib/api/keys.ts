@@ -96,7 +96,8 @@ export const keys = {
     status: () => ['system', 'status'] as const,
     config: () => ['system', 'config'] as const,
     realtime: () => ['system', 'realtime'] as const,
-    mcpConnections: () => ['system', 'mcp-connections'] as const,
+    mcpConnections: (params?: KeyParams) =>
+      ['system', 'mcp-connections', stableParams(params)] as const,
     events: (params?: KeyParams) => ['system', 'events', stableParams(params)] as const,
   },
   logs: {

@@ -227,6 +227,7 @@ describe('System MCP connections', () => {
             }),
           ],
           live: 1,
+          total: 2,
           now: NOW,
         },
       },
@@ -235,6 +236,8 @@ describe('System MCP connections', () => {
     const list = await screen.findByRole('list', { name: 'MCP connections' });
     const rows = within(list).getAllByRole('button');
     expect(rows).toHaveLength(2);
+    // Everything fits on one page: no pager.
+    expect(screen.queryByRole('navigation', { name: 'Pagination' })).toBeNull();
     expect(rows[0]?.getAttribute('aria-label')).toBe('Connection details: Claude Code, live');
     expect(within(list).getByText('conflicting signals')).toBeDefined();
     expect(within(list).getByText('Unknown')).toBeDefined();
@@ -247,6 +250,41 @@ describe('System MCP connections', () => {
     expect(screen.getByText('by header')).toBeDefined();
     expect(screen.getByText('growth')).toBeDefined();
     await expectNoA11yViolations(view.container, { disable: ['aria-hidden-focus'] });
+  });
+
+  it('pages the list 10 at a time and fetches each page from the server', async () => {
+    const pageRows = Array.from({ length: 10 }, (_, i) =>
+      connection({ connection_id: `c-${String(i).padStart(10, '0')}` }),
+    );
+    const view = renderPage({
+      path: '/system',
+      component: SystemPage,
+      validateSearch: (s) => systemSearch.parse(s),
+      routes: {
+        'GET /system': systemInfo(),
+        'GET /system/config': systemConfig(),
+        'GET /system/realtime': { connections: [] },
+        'GET /system/events': envelope([]),
+        'GET /health': HEALTH,
+        'GET /system/mcp/connections': { connections: pageRows, live: 10, total: 23, now: NOW },
+      },
+      url: '/system',
+    });
+    const list = await screen.findByRole('list', { name: 'MCP connections' });
+    expect(within(list).getAllByRole('button')).toHaveLength(10);
+    const lastQuery = () =>
+      view.requests.filter((r) => r.path === '/api/v1/system/mcp/connections').at(-1)?.query;
+    expect(lastQuery()?.get('limit')).toBe('10');
+    expect(lastQuery()?.get('offset')).toBe('0');
+    const pager = screen.getByRole('navigation', { name: 'Pagination' });
+    expect(within(pager).getByText('1–10 of 23')).toBeDefined();
+    expect(within(pager).getByText('1 / 3')).toBeDefined();
+    await act(async () => {
+      fireEvent.click(within(pager).getByRole('button', { name: 'Next page' }));
+    });
+    await waitFor(() => expect(lastQuery()?.get('offset')).toBe('10'));
+    expect(lastQuery()?.get('limit')).toBe('10');
+    await waitFor(() => expect(within(pager).getByText('11–20 of 23')).toBeDefined());
   });
 });
 

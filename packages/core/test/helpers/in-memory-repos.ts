@@ -218,7 +218,7 @@ export class InMemoryMcpConnectionRepository implements McpConnectionRepository 
       .sort((a, b) => b.lastSeenAt - a.lastSeenAt);
   }
 
-  async listRecent(limit: number) {
+  async listRecent(limit: number, offset = 0) {
     const rows = [...this.rows.values()]
       .sort(
         (a, b) =>
@@ -226,9 +226,13 @@ export class InMemoryMcpConnectionRepository implements McpConnectionRepository 
           b.lastSeenAt - a.lastSeenAt ||
           b.connectionId.localeCompare(a.connectionId),
       )
-      .slice(0, limit)
+      .slice(offset, offset + limit)
       .map((r) => ({ ...r, sessions: this.sessionsOf(r.connectionId) }));
-    return { rows, live: [...this.rows.values()].filter((r) => r.closedAt === null).length };
+    return {
+      rows,
+      live: [...this.rows.values()].filter((r) => r.closedAt === null).length,
+      total: this.rows.size,
+    };
   }
 
   async closeAll(at: number): Promise<number> {
