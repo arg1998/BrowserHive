@@ -1,6 +1,6 @@
 {
   "name": "browserhive",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "description": "Local-first stealth browser MCP server: isolated Chromium sessions for LLM agents, vault-backed logins, human takeover, audit trail and an operator dashboard.",
   "type": "module",
   "license": "MIT",

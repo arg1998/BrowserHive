@@ -1,5 +1,12 @@
 # @browserhive/dashboard
 
+## 0.2.0
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @browserhive/contracts@0.2.0
+
 ## 0.1.3
 
 ### Patch Changes
