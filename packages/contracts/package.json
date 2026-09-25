@@ -1,6 +1,6 @@
 {
   "name": "@browserhive/contracts",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "private": true,
   "description": "BrowserHive wire contracts: config schema, error registry, enums, tool schemas, REST DTOs, WS protocol. Platform-neutral.",
   "type": "module",
