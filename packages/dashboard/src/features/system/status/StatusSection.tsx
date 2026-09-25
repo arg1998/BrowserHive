@@ -33,7 +33,10 @@ import { ICONS } from '@/lib/icons.ts';
 import { configKeyDocsUrl } from '@/lib/links.ts';
 import { useServerNow } from '@/lib/server-now.ts';
 import { diskTone, type Tone } from '@/lib/status-registry.ts';
-import { McpConnectionsPanel } from '../../harness/McpConnectionsPanel.tsx';
+import {
+  type McpConnectionsPaging,
+  McpConnectionsPanel,
+} from '../../harness/McpConnectionsPanel.tsx';
 import { SettingsList } from '../components/SettingsList.tsx';
 import {
   browserRows,
@@ -523,6 +526,8 @@ export interface StatusSectionProps {
   >;
   /** `GET /system/mcp/connections`; absent in callers that do not show it. */
   readonly mcpConnections?: UseQueryResult<McpConnectionsResponse, unknown>;
+  /** Page state for {@link mcpConnections}. */
+  readonly mcpPaging?: McpConnectionsPaging;
 }
 
 /** Status section. */
@@ -533,6 +538,7 @@ export function StatusSection({
   events,
   realtime,
   mcpConnections,
+  mcpPaging,
 }: StatusSectionProps) {
   const notices = systemNotices(system, health);
   return (
@@ -545,7 +551,12 @@ export function StatusSection({
       <Kpis system={system} />
       <HealthRuntimePanel system={system} health={health} query={healthQuery} />
       <BrowsersPanel system={system} />
-      {mcpConnections !== undefined ? <McpConnectionsPanel query={mcpConnections} /> : null}
+      {mcpConnections !== undefined ? (
+        <McpConnectionsPanel
+          query={mcpConnections}
+          {...(mcpPaging !== undefined && { paging: mcpPaging })}
+        />
+      ) : null}
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
         <StoragePanel system={system} />
         <div className="flex min-w-0 flex-col gap-6">

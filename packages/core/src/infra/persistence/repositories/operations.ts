@@ -270,9 +270,13 @@ export class SqliteMcpConnectionRepository implements McpConnectionRepository {
     return rows.map(mcpConnectionFromRow);
   }
 
-  async listRecent(limit: number): Promise<{
+  async listRecent(
+    limit: number,
+    offset = 0,
+  ): Promise<{
     readonly rows: readonly (McpConnectionRecord & { readonly sessions: number })[];
     readonly live: number;
+    readonly total: number;
   }> {
     const rows = await this.#db
       .selectFrom('mcp_connections as m')
@@ -286,18 +290,22 @@ export class SqliteMcpConnectionRepository implements McpConnectionRepository {
       .orderBy('m.last_seen_at', 'desc')
       .orderBy('m.connection_id', 'desc')
       .limit(Math.max(1, Math.floor(limit)))
+      .offset(Math.max(0, Math.floor(offset)))
       .execute();
-    const live = await this.#db
+    const counts = await this.#db
       .selectFrom('mcp_connections')
-      .select(sql<number>`COUNT(*)`.as('n'))
-      .where('closed_at', 'is', null)
+      .select([
+        sql<number>`COUNT(*)`.as('total'),
+        sql<number>`COALESCE(SUM(closed_at IS NULL), 0)`.as('live'),
+      ])
       .executeTakeFirst();
     return {
       rows: rows.map(({ session_count, ...row }) => ({
         ...mcpConnectionFromRow(row),
         sessions: asNumber(session_count),
       })),
-      live: asNumber(live?.n),
+      live: asNumber(counts?.live),
+      total: asNumber(counts?.total),
     };
   }
 

@@ -8232,6 +8232,10 @@
             "type": "integer",
             "minimum": 0
           },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          },
           "now": {
             "type": "integer",
             "minimum": 0
@@ -8240,6 +8244,7 @@
         "required": [
           "connections",
           "live",
+          "total",
           "now"
         ]
       },
@@ -18305,6 +18310,19 @@
             },
             "required": false,
             "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0,
+              "default": 0
+            },
+            "required": false,
+            "name": "offset",
             "in": "query"
           }
         ],

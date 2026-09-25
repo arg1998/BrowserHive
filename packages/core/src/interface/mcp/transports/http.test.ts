@@ -34,7 +34,7 @@ class RecordingConnections implements McpConnectionRepository {
   }
   async listRecent(limit: number) {
     const rows = [...this.rows.values()].slice(0, limit).map((r) => ({ ...r, sessions: 0 }));
-    return { rows, live: rows.filter((r) => r.closedAt === null).length };
+    return { rows, live: rows.filter((r) => r.closedAt === null).length, total: this.rows.size };
   }
   async closeAll(): Promise<number> {
     return 0;

@@ -58,10 +58,14 @@ export const SYSTEM_ROUTES = [
     request: { query: McpConnectionsQuery },
     responses: { 200: McpConnectionsResponse },
     async handler({ input, services, ctx }) {
-      const recent = await services.repos.mcpConnections.listRecent(input.query.limit);
+      const recent = await services.repos.mcpConnections.listRecent(
+        input.query.limit,
+        input.query.offset,
+      );
       return reply(200, {
         connections: recent.rows.map(mcpConnectionToWire),
         live: recent.live,
+        total: recent.total,
         now: ctx.now,
       });
     },

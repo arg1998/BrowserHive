@@ -239,6 +239,11 @@ describe('McpConnectionRepository', () => {
       ['c-1', 0],
     ]);
     expect(recent.rows[0]?.ip).toBe('10.0.0.2');
+    expect(recent.total).toBe(2);
     expect((await t.repos.mcpConnections.listRecent(1)).rows).toHaveLength(1);
+    const second = await t.repos.mcpConnections.listRecent(1, 1);
+    expect(second.rows.map((r) => r.connectionId)).toEqual(['c-1']);
+    expect([second.live, second.total]).toEqual([1, 2]);
+    expect((await t.repos.mcpConnections.listRecent(10, 2)).rows).toEqual([]);
   });
 });

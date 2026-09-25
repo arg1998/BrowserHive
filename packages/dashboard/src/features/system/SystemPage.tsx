@@ -1,4 +1,5 @@
 /** @module features/system/SystemPage — `/system` in three URL-addressed sections (`?tab`): Status (live health and metrics), Agent tokens, Configuration (settings in effect and every key with provenance); one page-level 403 for a principal without `system:read`; live via the `system` topic, no polling (spec 04 §12.10) */
+import { useMemo, useState } from 'react';
 import { useTopic } from '@/app/providers/SocketProvider.tsx';
 import { DataPanel } from '@/components/shared/DataPanel.tsx';
 import { ErrorState } from '@/components/shared/ErrorState.tsx';
@@ -7,6 +8,11 @@ import { SkeletonKv, SkeletonTiles } from '@/components/shared/Skeletons.tsx';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs.tsx';
 import { toAppError } from '@/lib/api/errors.ts';
 import { useSearchState } from '@/lib/search/use-search-state.ts';
+import {
+  MCP_CONNECTION_PAGE_SIZE_DEFAULT,
+  type McpConnectionPageSize,
+  type McpConnectionsPaging,
+} from '../harness/McpConnectionsPanel.tsx';
 import {
   isForbiddenError,
   useConfig,
@@ -35,7 +41,23 @@ export function SystemPage() {
   const forbidden = isForbiddenError(system.error);
   const status = tab === 'status' && !forbidden;
   const realtime = useRealtime(status);
-  const mcpConnections = useMcpConnections(status);
+  const [mcpPage, setMcpPage] = useState(1);
+  const [mcpPageSize, setMcpPageSize] = useState<McpConnectionPageSize>(
+    MCP_CONNECTION_PAGE_SIZE_DEFAULT,
+  );
+  const mcpPaging = useMemo<McpConnectionsPaging>(
+    () => ({
+      page: mcpPage,
+      pageSize: mcpPageSize,
+      onPage: setMcpPage,
+      onPageSize: (size) => {
+        setMcpPageSize(size);
+        setMcpPage(1);
+      },
+    }),
+    [mcpPage, mcpPageSize],
+  );
+  const mcpConnections = useMcpConnections(status, { page: mcpPage, pageSize: mcpPageSize });
   const events = useSystemEvents(status);
   const health = useHealth(status);
   const config = useConfig(tab === 'config' && !forbidden);
@@ -125,6 +147,7 @@ export function SystemPage() {
               events={events.data?.data ?? s.degradations}
               realtime={realtime}
               mcpConnections={mcpConnections}
+              mcpPaging={mcpPaging}
             />
           )}
         </DataPanel>

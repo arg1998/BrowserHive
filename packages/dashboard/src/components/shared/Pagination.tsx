@@ -13,15 +13,17 @@ import { ICONS } from '@/lib/icons.ts';
 import { clampPage, PAGE_SIZES, type PageSize } from '@/lib/search/table.ts';
 import { cn } from '@/lib/utils.ts';
 
-/** Props. */
-export interface PaginationProps {
+/** Props. `S` is the page-size union; lists with their own sizes pass `sizes`. */
+export interface PaginationProps<S extends number = PageSize> {
   readonly page: number;
-  readonly pageSize: PageSize;
+  readonly pageSize: S;
   /** Unknown total (cursor-only lists) still allows next when `hasNext`. */
   readonly total?: number;
   readonly hasNext?: boolean;
   readonly onPage: (page: number) => void;
-  readonly onPageSize: (size: PageSize) => void;
+  readonly onPageSize: (size: S) => void;
+  /** Rows-per-page choices (default {@link PAGE_SIZES}). */
+  readonly sizes?: readonly S[];
   /** Render even when a single page fits (default `false`). */
   readonly alwaysShow?: boolean;
   readonly className?: string;
@@ -41,16 +43,18 @@ export function pagerNeeded(
 }
 
 /** Pager. */
-export function Pagination({
+export function Pagination<S extends number = PageSize>({
   page,
   pageSize,
   total,
   hasNext,
   onPage,
   onPageSize,
+  sizes,
   alwaysShow = false,
   className,
-}: PaginationProps) {
+}: PaginationProps<S>) {
+  const choices: readonly number[] = sizes ?? PAGE_SIZES;
   const labelId = useId();
   if (!alwaysShow && !pagerNeeded(page, pageSize, total, hasNext)) return null;
   const current = clampPage(page, total, pageSize);
@@ -74,15 +78,15 @@ export function Pagination({
         <Select
           value={String(pageSize)}
           onValueChange={(value) => {
-            const size = PAGE_SIZES.find((s) => String(s) === value);
-            if (size !== undefined) onPageSize(size);
+            const size = choices.find((s) => String(s) === value);
+            if (size !== undefined) onPageSize(size as S);
           }}
         >
           <SelectTrigger size="sm" className="w-18" aria-labelledby={labelId}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent alignItemWithTrigger={false}>
-            {PAGE_SIZES.map((size) => (
+            {choices.map((size) => (
               <SelectItem key={size} value={String(size)}>
                 {size}
               </SelectItem>

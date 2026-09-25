@@ -1,10 +1,12 @@
-/** @module features/harness/McpConnectionsPanel — System "MCP connections" (spec 04 §12.10, D-30): live connections first, then recent ones; each row is a whole-row button opening a detail popover (harness and how it was recognised, model, workspace, client, protocol, User-Agent, IP, times, conflicting signals, meta) */
+/** @module features/harness/McpConnectionsPanel — System "MCP connections" (spec 04 §12.10, D-30): live connections first, then recent ones, 10 per page by default; each row is a whole-row button opening a detail popover (harness and how it was recognised, model, workspace, client, protocol, User-Agent, IP, times, conflicting signals, meta) */
 import type { McpConnectionRow, McpConnectionsResponse } from '@browserhive/contracts/http';
 import type { UseQueryResult } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import { Chip } from '@/components/shared/Chip.tsx';
 import { DataPanel } from '@/components/shared/DataPanel.tsx';
 import { EmptyState } from '@/components/shared/EmptyState.tsx';
 import { KeyValue, type KeyValueItem } from '@/components/shared/KeyValue.tsx';
+import { Pagination } from '@/components/shared/Pagination.tsx';
 import { RelativeTime } from '@/components/shared/RelativeTime.tsx';
 import { Panel } from '@/components/shared/Section.tsx';
 import { SkeletonKv } from '@/components/shared/Skeletons.tsx';
@@ -181,15 +183,39 @@ function ConnectionRow({ row }: { readonly row: McpConnectionRow }) {
   );
 }
 
+/** Rows-per-page choices for the connections list; the first is the default. */
+export const MCP_CONNECTION_PAGE_SIZES = [10, 25, 50] as const;
+/** One of {@link MCP_CONNECTION_PAGE_SIZES}. */
+export type McpConnectionPageSize = (typeof MCP_CONNECTION_PAGE_SIZES)[number];
+/** Default rows per page. */
+export const MCP_CONNECTION_PAGE_SIZE_DEFAULT: McpConnectionPageSize = 10;
+
+/** Page state, owned by the caller so the query can fetch just that page. */
+export interface McpConnectionsPaging {
+  readonly page: number;
+  readonly pageSize: McpConnectionPageSize;
+  readonly onPage: (page: number) => void;
+  readonly onPageSize: (size: McpConnectionPageSize) => void;
+}
+
 /** Props. */
 export interface McpConnectionsPanelProps {
   readonly query: UseQueryResult<McpConnectionsResponse, unknown>;
+  /** Server paging; without it the panel shows whatever rows the query returned. */
+  readonly paging?: McpConnectionsPaging;
   readonly className?: string;
 }
 
 /** The panel. */
-export function McpConnectionsPanel({ query, className }: McpConnectionsPanelProps) {
+export function McpConnectionsPanel({ query, paging, className }: McpConnectionsPanelProps) {
   const live = query.data?.live;
+  const total = query.data?.total;
+  const shown = query.data?.connections.length;
+  // Rows were pruned or closed under us and this page is now past the end: go to the last page.
+  useEffect(() => {
+    if (paging === undefined || total === undefined || shown !== 0 || total === 0) return;
+    if (paging.page > 1) paging.onPage(Math.max(1, Math.ceil(total / paging.pageSize)));
+  }, [paging, total, shown]);
   return (
     <Panel
       title="MCP connections"
@@ -206,7 +232,7 @@ export function McpConnectionsPanel({ query, className }: McpConnectionsPanelPro
       <DataPanel
         query={query}
         skeleton={<SkeletonKv count={3} />}
-        isEmpty={(d) => d.connections.length === 0}
+        isEmpty={(d) => d.total === 0 || (paging === undefined && d.connections.length === 0)}
         empty={
           <EmptyState
             kind="zero-data"
@@ -228,11 +254,24 @@ export function McpConnectionsPanel({ query, className }: McpConnectionsPanelPro
         }
       >
         {(data) => (
-          <ul aria-label="MCP connections" className="flex flex-col border-t">
-            {data.connections.map((row) => (
-              <ConnectionRow key={row.connection_id} row={row} />
-            ))}
-          </ul>
+          <>
+            <ul aria-label="MCP connections" className="flex flex-col border-t">
+              {data.connections.map((row) => (
+                <ConnectionRow key={row.connection_id} row={row} />
+              ))}
+            </ul>
+            {paging !== undefined ? (
+              <Pagination
+                page={paging.page}
+                pageSize={paging.pageSize}
+                sizes={MCP_CONNECTION_PAGE_SIZES}
+                total={data.total}
+                onPage={paging.onPage}
+                onPageSize={paging.onPageSize}
+                className="border-t px-5 py-3"
+              />
+            ) : null}
+          </>
         )}
       </DataPanel>
     </Panel>
