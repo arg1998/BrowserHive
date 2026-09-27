@@ -17,7 +17,7 @@ related:
 > RFC 2119 when they appear in uppercase. `D-NN` identifiers refer to entries in the
 > [decision log](00-decisions.md). Terminology follows the [specification index](README.md#conventions).
 
-Decisions: D-13 (stealth posture, proxy seam), D-21 (creation pipeline), D-22 (blocklist reload), D-20 (privacy), D-25 (not built), D-26 (browser choice), D-27 (sandbox).
+Decisions: D-13 (stealth posture, proxy seam), D-21 (creation pipeline), D-22 (blocklist reload), D-20 (privacy), D-25 (not built), D-26 (browser choice), D-27 (sandbox), D-31 (per-session sandbox record).
 
 The rule of this spec: **the stealth posture described here is the acceptance bar.** Every mechanism, constant and downgrade rule below is specified exactly; the integration probes in §9 are the regression gate, and §10 lists the invariants a change MUST NOT break.
 
@@ -172,6 +172,8 @@ Facts behind it (measured through BrowserHive on GitHub's runners and an AppArmo
 - macOS (Seatbelt) and Windows (restricted tokens, job objects) sandbox every channel with no extra rights.
 
 Mechanics (`infra/browsers/sandbox-policy.ts`): one verdict per executable for the process lifetime. Under `auto` the first real launch tries the sandbox; if it fails and the same browser then starts without it, the verdict is "unavailable", sessions fall back and one `warn` log `sandbox fell back` names the channel, executable and Chrome's reason; concurrent first launches wait for that one attempt. A failure is blamed on the sandbox only when the unsandboxed launch works, so a browser broken for another reason surfaces its own error. Under `on` the boot preflight (`composition/sandbox.ts`) launches the configured browser once with the sandbox forced on before the listeners open and, if it cannot, probes the other installed browsers and refuses to start; a session for a browser that cannot sandbox fails typed (a proof launch without the sandbox is closed at once, so the session never runs unsandboxed). An agent's `launch_options.chromiumSandbox: true` is a requirement for that session in every mode; `false` is refused (§4). A launch failure caused by the sandbox is `SANDBOX_UNAVAILABLE` in every mode, never `INTERNAL_ERROR`.
+
+What each session actually ran with is recorded, not inferred (D-31): once its browser has launched, the verdict the policy applied (`sandboxed`) and the browser's real version are stored on the session row (`sessions.sandboxed`, `sessions.browser_version`, 03 §7) and served as `SessionSummary.browser` for live and closed sessions alike. Sessions from before schema v4, and sessions whose browser never launched, have no record and read "not recorded", never "not sandboxed".
 
 **Sandbox on and off produce identical page-visible signals.** Measured on all three OSes for `chromium`, `chrome` and `edge` at both stealth levels (plan Phase 0 and the `sandbox-matrix` CI job) and asserted by `packages/browserhive/test/integration/sandbox-stealth.test.ts`.
 
