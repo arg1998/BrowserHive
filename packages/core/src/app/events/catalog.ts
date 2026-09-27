@@ -71,6 +71,21 @@ export interface ToolObservation {
   readonly seq: number;
 }
 
+/** Payload of `notification.channel.changed` (internal; the channel page arrives later). */
+export interface NotificationChannelChangedEvent {
+  readonly type: 'notification.channel.changed';
+  readonly channel_id: string;
+  readonly name: string;
+  readonly kind: string;
+  readonly status: 'active' | 'paused' | 'broken';
+  readonly previous_status: 'active' | 'paused' | 'broken';
+  /** Consecutive failures when the status changed. */
+  readonly failure_count: number;
+  /** Last platform error, already scrubbed. */
+  readonly last_error: string | null;
+  readonly at: number;
+}
+
 /** Payload of the `auth.*` events: the audit row as written (see `app/auth/events.ts`). */
 export type { AuthEventPayload } from '../auth/events.ts';
 
@@ -141,6 +156,8 @@ export type DomainEvents = {
     readonly type: 'notification.dismissed';
     readonly notification: NotificationStatePayload;
   };
+  /** A notification channel's status changed (the breaker opened, D-34). Internal; not on the feed. */
+  readonly 'notification.channel.changed': NotificationChannelChangedEvent;
   // logs
   readonly 'log.record': z.infer<typeof LogRecordEvent>;
 } & AuthEvents; // auth (audit; never on the public feed): `auth.<auth_events.type>`

@@ -231,6 +231,13 @@ export async function seedDataset(
     groupKey: `tool-errors:${CLOSED_ID}`,
     readAt: null,
     dismissedAt: null,
+    kind: 'tool.errors',
+    category: 'problems',
+    severity: 'warn',
+    state: 'open',
+    revision: 1,
+    thread: `tool-errors:${CLOSED_ID}`,
+    messageJson: null,
   });
   await repos.systemEvents.record({
     eventId: 'e-00000000000000000000000009',

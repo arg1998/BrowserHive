@@ -147,6 +147,13 @@ async function seed(): Promise<void> {
     groupKey: null,
     readAt: NOW - 31 * DAY,
     dismissedAt: null,
+    kind: 'system.degraded',
+    category: 'system',
+    severity: 'error',
+    state: 'final',
+    revision: 1,
+    thread: 'notification:n-read',
+    messageJson: null,
   });
   await r.notifications.insert({
     notificationId: 'n-stale',
@@ -163,6 +170,13 @@ async function seed(): Promise<void> {
     groupKey: null,
     readAt: null,
     dismissedAt: null,
+    kind: 'system.degraded',
+    category: 'system',
+    severity: 'error',
+    state: 'final',
+    revision: 1,
+    thread: 'notification:n-stale',
+    messageJson: null,
   });
   await r.notifications.insert({
     notificationId: 'n-keep',
@@ -179,6 +193,13 @@ async function seed(): Promise<void> {
     groupKey: null,
     readAt: null,
     dismissedAt: null,
+    kind: 'system.degraded',
+    category: 'system',
+    severity: 'error',
+    state: 'final',
+    revision: 1,
+    thread: 'notification:n-keep',
+    messageJson: null,
   });
 }
 

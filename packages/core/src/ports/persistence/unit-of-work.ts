@@ -9,6 +9,11 @@ import type {
   GrantRepository,
   PrincipalRepository,
 } from './identity.ts';
+import type {
+  NotificationChannelMessageRepository,
+  NotificationChannelRepository,
+  NotificationDeliveryRepository,
+} from './notification-outbox.ts';
 import type { NotificationRepository, PreferenceRepository } from './notifications.ts';
 import type {
   ArtifactOutboxRepository,
@@ -46,6 +51,9 @@ export interface Repositories {
   readonly vaultBindings: VaultBindingRepository;
   readonly vaultGroupPolicies: VaultGroupPolicyRepository;
   readonly notifications: NotificationRepository;
+  readonly notificationChannels: NotificationChannelRepository;
+  readonly notificationDeliveries: NotificationDeliveryRepository;
+  readonly notificationChannelMessages: NotificationChannelMessageRepository;
   readonly preferences: PreferenceRepository;
   readonly systemEvents: SystemEventRepository;
   readonly idempotency: IdempotencyRepository;

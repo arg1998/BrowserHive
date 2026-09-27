@@ -9,7 +9,12 @@
       },
       "kind": {
         "type": "string",
-        "enum": ["event", "reply", "error", "stream"]
+        "enum": [
+          "event",
+          "reply",
+          "error",
+          "stream"
+        ]
       },
       "seq": {
         "type": "integer",
@@ -32,7 +37,13 @@
       },
       "payload": {}
     },
-    "required": ["v", "kind", "seq", "ts", "payload"],
+    "required": [
+      "v",
+      "kind",
+      "seq",
+      "ts",
+      "payload"
+    ],
     "additionalProperties": false
   },
   "client_commands": {
@@ -51,7 +62,9 @@
             "maxLength": 64
           }
         },
-        "required": ["type"],
+        "required": [
+          "type"
+        ],
         "additionalProperties": false
       },
       {
@@ -76,7 +89,10 @@
             "maxLength": 64
           }
         },
-        "required": ["type", "topic"],
+        "required": [
+          "type",
+          "topic"
+        ],
         "additionalProperties": false
       },
       {
@@ -96,7 +112,10 @@
             "maxLength": 64
           }
         },
-        "required": ["type", "topic"],
+        "required": [
+          "type",
+          "topic"
+        ],
         "additionalProperties": false
       },
       {
@@ -131,7 +150,10 @@
             "maxLength": 64
           }
         },
-        "required": ["type", "session_id"],
+        "required": [
+          "type",
+          "session_id"
+        ],
         "additionalProperties": false
       },
       {
@@ -151,7 +173,10 @@
             "maxLength": 64
           }
         },
-        "required": ["type", "session_id"],
+        "required": [
+          "type",
+          "session_id"
+        ],
         "additionalProperties": false
       },
       {
@@ -181,7 +206,12 @@
             "maxLength": 64
           }
         },
-        "required": ["type", "session_id", "max_width", "max_height"],
+        "required": [
+          "type",
+          "session_id",
+          "max_width",
+          "max_height"
+        ],
         "additionalProperties": false
       },
       {
@@ -206,7 +236,12 @@
                   },
                   "action": {
                     "type": "string",
-                    "enum": ["mouseMoved", "mousePressed", "mouseReleased", "mouseWheel"]
+                    "enum": [
+                      "mouseMoved",
+                      "mousePressed",
+                      "mouseReleased",
+                      "mouseWheel"
+                    ]
                   },
                   "x": {
                     "type": "number",
@@ -220,7 +255,12 @@
                   },
                   "button": {
                     "type": "string",
-                    "enum": ["none", "left", "middle", "right"]
+                    "enum": [
+                      "none",
+                      "left",
+                      "middle",
+                      "right"
+                    ]
                   },
                   "clickCount": {
                     "type": "integer",
@@ -243,7 +283,12 @@
                     "maximum": 15
                   }
                 },
-                "required": ["type", "action", "x", "y"],
+                "required": [
+                  "type",
+                  "action",
+                  "x",
+                  "y"
+                ],
                 "additionalProperties": false
               },
               {
@@ -255,7 +300,12 @@
                   },
                   "action": {
                     "type": "string",
-                    "enum": ["keyDown", "keyUp", "char", "rawKeyDown"]
+                    "enum": [
+                      "keyDown",
+                      "keyUp",
+                      "char",
+                      "rawKeyDown"
+                    ]
                   },
                   "key": {
                     "type": "string",
@@ -280,7 +330,10 @@
                     "maximum": 15
                   }
                 },
-                "required": ["type", "action"],
+                "required": [
+                  "type",
+                  "action"
+                ],
                 "additionalProperties": false
               },
               {
@@ -292,7 +345,12 @@
                   },
                   "action": {
                     "type": "string",
-                    "enum": ["touchStart", "touchEnd", "touchMove", "touchCancel"]
+                    "enum": [
+                      "touchStart",
+                      "touchEnd",
+                      "touchMove",
+                      "touchCancel"
+                    ]
                   },
                   "points": {
                     "maxItems": 10,
@@ -331,7 +389,10 @@
                           "maximum": 32
                         }
                       },
-                      "required": ["x", "y"],
+                      "required": [
+                        "x",
+                        "y"
+                      ],
                       "additionalProperties": false
                     }
                   },
@@ -341,7 +402,11 @@
                     "maximum": 15
                   }
                 },
-                "required": ["type", "action", "points"],
+                "required": [
+                  "type",
+                  "action",
+                  "points"
+                ],
                 "additionalProperties": false
               }
             ]
@@ -352,7 +417,11 @@
             "maxLength": 64
           }
         },
-        "required": ["type", "session_id", "input"],
+        "required": [
+          "type",
+          "session_id",
+          "input"
+        ],
         "additionalProperties": false
       },
       {
@@ -382,7 +451,12 @@
             "maxLength": 64
           }
         },
-        "required": ["type", "session_id", "width", "height"],
+        "required": [
+          "type",
+          "session_id",
+          "width",
+          "height"
+        ],
         "additionalProperties": false
       },
       {
@@ -394,7 +468,13 @@
           },
           "level": {
             "type": "string",
-            "enum": ["error", "warn", "info", "debug", "trace"]
+            "enum": [
+              "error",
+              "warn",
+              "info",
+              "debug",
+              "trace"
+            ]
           },
           "module": {
             "type": "string",
@@ -407,7 +487,9 @@
             "maxLength": 64
           }
         },
-        "required": ["type"],
+        "required": [
+          "type"
+        ],
         "additionalProperties": false
       }
     ]
@@ -468,15 +550,24 @@
                         "type": "string"
                       },
                       "tenant_id": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "channel": {
                         "type": "string",
-                        "enum": ["chromium", "chrome", "edge"]
+                        "enum": [
+                          "chromium",
+                          "chrome",
+                          "edge"
+                        ]
                       },
                       "engine": {
                         "type": "string",
-                        "enum": ["chromium"]
+                        "enum": [
+                          "chromium"
+                        ]
                       },
                       "headless": {
                         "type": "boolean"
@@ -486,10 +577,17 @@
                       },
                       "persistence_mode": {
                         "type": "string",
-                        "enum": ["memory", "persistent", "storage-state"]
+                        "enum": [
+                          "memory",
+                          "persistent",
+                          "storage-state"
+                        ]
                       },
                       "current_url": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "created_at": {
                         "type": "integer",
@@ -617,17 +715,26 @@
                         "type": "object",
                         "properties": {
                           "version": {
-                            "type": ["string", "null"]
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           },
                           "sandboxed": {
                             "type": "boolean"
                           }
                         },
-                        "required": ["version", "sandboxed"],
+                        "required": [
+                          "version",
+                          "sandboxed"
+                        ],
                         "additionalProperties": false
                       },
                       "proxy_label": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "counts": {
                         "type": "object",
@@ -687,10 +794,16 @@
                             "type": "object",
                             "properties": {
                               "name": {
-                                "type": ["string", "null"]
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
                               },
                               "version": {
-                                "type": ["string", "null"]
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
                               },
                               "agent_name": {
                                 "type": "string"
@@ -731,7 +844,10 @@
                                 }
                               }
                             },
-                            "required": ["name", "version"],
+                            "required": [
+                              "name",
+                              "version"
+                            ],
                             "additionalProperties": false
                           },
                           {
@@ -777,7 +893,10 @@
                     "additionalProperties": false
                   }
                 },
-                "required": ["type", "session"],
+                "required": [
+                  "type",
+                  "session"
+                ],
                 "additionalProperties": false
               },
               {
@@ -801,15 +920,24 @@
                         "type": "string"
                       },
                       "tenant_id": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "channel": {
                         "type": "string",
-                        "enum": ["chromium", "chrome", "edge"]
+                        "enum": [
+                          "chromium",
+                          "chrome",
+                          "edge"
+                        ]
                       },
                       "engine": {
                         "type": "string",
-                        "enum": ["chromium"]
+                        "enum": [
+                          "chromium"
+                        ]
                       },
                       "headless": {
                         "type": "boolean"
@@ -819,10 +947,17 @@
                       },
                       "persistence_mode": {
                         "type": "string",
-                        "enum": ["memory", "persistent", "storage-state"]
+                        "enum": [
+                          "memory",
+                          "persistent",
+                          "storage-state"
+                        ]
                       },
                       "current_url": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "created_at": {
                         "type": "integer",
@@ -950,17 +1085,26 @@
                         "type": "object",
                         "properties": {
                           "version": {
-                            "type": ["string", "null"]
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           },
                           "sandboxed": {
                             "type": "boolean"
                           }
                         },
-                        "required": ["version", "sandboxed"],
+                        "required": [
+                          "version",
+                          "sandboxed"
+                        ],
                         "additionalProperties": false
                       },
                       "proxy_label": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "counts": {
                         "type": "object",
@@ -1020,10 +1164,16 @@
                             "type": "object",
                             "properties": {
                               "name": {
-                                "type": ["string", "null"]
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
                               },
                               "version": {
-                                "type": ["string", "null"]
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
                               },
                               "agent_name": {
                                 "type": "string"
@@ -1064,7 +1214,10 @@
                                 }
                               }
                             },
-                            "required": ["name", "version"],
+                            "required": [
+                              "name",
+                              "version"
+                            ],
                             "additionalProperties": false
                           },
                           {
@@ -1110,7 +1263,10 @@
                     "additionalProperties": false
                   }
                 },
-                "required": ["type", "session"],
+                "required": [
+                  "type",
+                  "session"
+                ],
                 "additionalProperties": false
               },
               {
@@ -1142,7 +1298,12 @@
                     ]
                   }
                 },
-                "required": ["type", "session_id", "closed_at", "reason"],
+                "required": [
+                  "type",
+                  "session_id",
+                  "closed_at",
+                  "reason"
+                ],
                 "additionalProperties": false
               },
               {
@@ -1158,7 +1319,11 @@
                   },
                   "action": {
                     "type": "string",
-                    "enum": ["archived", "unarchived", "deleted"]
+                    "enum": [
+                      "archived",
+                      "unarchived",
+                      "deleted"
+                    ]
                   },
                   "at": {
                     "type": "integer",
@@ -1166,7 +1331,12 @@
                     "maximum": 9007199254740991
                   }
                 },
-                "required": ["type", "session_id", "action", "at"],
+                "required": [
+                  "type",
+                  "session_id",
+                  "action",
+                  "at"
+                ],
                 "additionalProperties": false
               },
               {
@@ -1188,7 +1358,12 @@
                   },
                   "details": {}
                 },
-                "required": ["type", "session_id", "code", "message"],
+                "required": [
+                  "type",
+                  "session_id",
+                  "code",
+                  "message"
+                ],
                 "additionalProperties": false
               },
               {
@@ -1236,10 +1411,16 @@
                         "type": "boolean"
                       },
                       "error_code": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "error_message": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "duration_ms": {
                         "type": "integer",
@@ -1257,7 +1438,10 @@
                         "maximum": 9007199254740991
                       },
                       "trace_id": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "has_screenshot": {
                         "type": "boolean"
@@ -1269,7 +1453,10 @@
                       },
                       "args_json": {},
                       "result_text": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       }
                     },
                     "required": [
@@ -1292,7 +1479,11 @@
                     "type": "boolean"
                   }
                 },
-                "required": ["type", "row", "has_detail"],
+                "required": [
+                  "type",
+                  "row",
+                  "has_detail"
+                ],
                 "additionalProperties": false
               },
               {
@@ -1321,14 +1512,23 @@
                         "type": "string"
                       },
                       "title": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "domain": {
                         "type": "string"
                       },
                       "category": {
                         "type": "string",
-                        "enum": ["public", "ip", "local", "ftp", "other"]
+                        "enum": [
+                          "public",
+                          "ip",
+                          "local",
+                          "ftp",
+                          "other"
+                        ]
                       },
                       "ts": {
                         "type": "integer",
@@ -1349,7 +1549,10 @@
                     "additionalProperties": false
                   }
                 },
-                "required": ["type", "row"],
+                "required": [
+                  "type",
+                  "row"
+                ],
                 "additionalProperties": false
               },
               {
@@ -1375,7 +1578,10 @@
                       },
                       "kind": {
                         "type": "string",
-                        "enum": ["tool", "trace"]
+                        "enum": [
+                          "tool",
+                          "trace"
+                        ]
                       },
                       "content_type": {
                         "type": "string"
@@ -1419,7 +1625,10 @@
                     "additionalProperties": false
                   }
                 },
-                "required": ["type", "row"],
+                "required": [
+                  "type",
+                  "row"
+                ],
                 "additionalProperties": false
               },
               {
@@ -1441,7 +1650,10 @@
                         "pattern": "^([a-z][a-z0-9-]{1,31})-([0-9a-z]{8})$"
                       },
                       "session_slug": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "tool_event_id": {
                         "anyOf": [
@@ -1470,10 +1682,19 @@
                       },
                       "result": {
                         "type": "string",
-                        "enum": ["success", "origin_mismatch", "auth_failed", "blocked", "denied"]
+                        "enum": [
+                          "success",
+                          "origin_mismatch",
+                          "auth_failed",
+                          "blocked",
+                          "denied"
+                        ]
                       },
                       "reason": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "evaluate_enabled": {
                         "type": "boolean"
@@ -1483,10 +1704,17 @@
                       },
                       "origin_check": {
                         "type": "string",
-                        "enum": ["pass", "fail", "skipped"]
+                        "enum": [
+                          "pass",
+                          "fail",
+                          "skipped"
+                        ]
                       },
                       "principal_id": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "details": {
                         "anyOf": [
@@ -1521,7 +1749,10 @@
                     "additionalProperties": false
                   }
                 },
-                "required": ["type", "row"],
+                "required": [
+                  "type",
+                  "row"
+                ],
                 "additionalProperties": false
               },
               {
@@ -1550,7 +1781,10 @@
                         ]
                       },
                       "session_slug": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "tool_event_id": {
                         "anyOf": [
@@ -1567,17 +1801,26 @@
                         "type": "string"
                       },
                       "domain": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "pattern": {
                         "type": "string"
                       },
                       "source": {
                         "type": "string",
-                        "enum": ["tool", "request"]
+                        "enum": [
+                          "tool",
+                          "request"
+                        ]
                       },
                       "tool": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "ts": {
                         "type": "integer",
@@ -1600,7 +1843,10 @@
                     "additionalProperties": false
                   }
                 },
-                "required": ["type", "row"],
+                "required": [
+                  "type",
+                  "row"
+                ],
                 "additionalProperties": false
               },
               {
@@ -1619,7 +1865,10 @@
                       },
                       "kind": {
                         "type": "string",
-                        "enum": ["attention", "vault_confirm"]
+                        "enum": [
+                          "attention",
+                          "vault_confirm"
+                        ]
                       },
                       "session_id": {
                         "type": "string",
@@ -1638,7 +1887,10 @@
                         "anyOf": [
                           {
                             "type": "string",
-                            "enum": ["takeover", "notify"]
+                            "enum": [
+                              "takeover",
+                              "notify"
+                            ]
                           },
                           {
                             "type": "null"
@@ -1655,16 +1907,31 @@
                       },
                       "status": {
                         "type": "string",
-                        "enum": ["pending", "resolved", "rejected", "timeout", "cancelled"]
+                        "enum": [
+                          "pending",
+                          "resolved",
+                          "rejected",
+                          "timeout",
+                          "cancelled"
+                        ]
                       },
                       "message": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "resolved_by": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "resolution_reason": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "created_at": {
                         "type": "integer",
@@ -1708,10 +1975,16 @@
                         ]
                       },
                       "page_url": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "tool": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "event_id": {
                         "anyOf": [
@@ -1725,7 +1998,10 @@
                         ]
                       },
                       "entry_name": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       }
                     },
                     "required": [
@@ -1753,7 +2029,10 @@
                     "additionalProperties": false
                   }
                 },
-                "required": ["type", "request"],
+                "required": [
+                  "type",
+                  "request"
+                ],
                 "additionalProperties": false
               },
               {
@@ -1772,7 +2051,10 @@
                       },
                       "kind": {
                         "type": "string",
-                        "enum": ["attention", "vault_confirm"]
+                        "enum": [
+                          "attention",
+                          "vault_confirm"
+                        ]
                       },
                       "session_id": {
                         "type": "string",
@@ -1791,7 +2073,10 @@
                         "anyOf": [
                           {
                             "type": "string",
-                            "enum": ["takeover", "notify"]
+                            "enum": [
+                              "takeover",
+                              "notify"
+                            ]
                           },
                           {
                             "type": "null"
@@ -1808,16 +2093,31 @@
                       },
                       "status": {
                         "type": "string",
-                        "enum": ["pending", "resolved", "rejected", "timeout", "cancelled"]
+                        "enum": [
+                          "pending",
+                          "resolved",
+                          "rejected",
+                          "timeout",
+                          "cancelled"
+                        ]
                       },
                       "message": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "resolved_by": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "resolution_reason": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "created_at": {
                         "type": "integer",
@@ -1861,10 +2161,16 @@
                         ]
                       },
                       "page_url": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "tool": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "event_id": {
                         "anyOf": [
@@ -1878,7 +2184,10 @@
                         ]
                       },
                       "entry_name": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       }
                     },
                     "required": [
@@ -1906,7 +2215,10 @@
                     "additionalProperties": false
                   }
                 },
-                "required": ["type", "request"],
+                "required": [
+                  "type",
+                  "request"
+                ],
                 "additionalProperties": false
               },
               {
@@ -1925,7 +2237,10 @@
                       },
                       "kind": {
                         "type": "string",
-                        "enum": ["attention", "vault_confirm"]
+                        "enum": [
+                          "attention",
+                          "vault_confirm"
+                        ]
                       },
                       "session_id": {
                         "type": "string",
@@ -1944,7 +2259,10 @@
                         "anyOf": [
                           {
                             "type": "string",
-                            "enum": ["takeover", "notify"]
+                            "enum": [
+                              "takeover",
+                              "notify"
+                            ]
                           },
                           {
                             "type": "null"
@@ -1961,16 +2279,31 @@
                       },
                       "status": {
                         "type": "string",
-                        "enum": ["pending", "resolved", "rejected", "timeout", "cancelled"]
+                        "enum": [
+                          "pending",
+                          "resolved",
+                          "rejected",
+                          "timeout",
+                          "cancelled"
+                        ]
                       },
                       "message": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "resolved_by": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "resolution_reason": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "created_at": {
                         "type": "integer",
@@ -2014,10 +2347,16 @@
                         ]
                       },
                       "page_url": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "tool": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "event_id": {
                         "anyOf": [
@@ -2031,7 +2370,10 @@
                         ]
                       },
                       "entry_name": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       }
                     },
                     "required": [
@@ -2059,7 +2401,10 @@
                     "additionalProperties": false
                   }
                 },
-                "required": ["type", "request"],
+                "required": [
+                  "type",
+                  "request"
+                ],
                 "additionalProperties": false
               },
               {
@@ -2078,7 +2423,10 @@
                       },
                       "kind": {
                         "type": "string",
-                        "enum": ["attention", "vault_confirm"]
+                        "enum": [
+                          "attention",
+                          "vault_confirm"
+                        ]
                       },
                       "session_id": {
                         "type": "string",
@@ -2097,7 +2445,10 @@
                         "anyOf": [
                           {
                             "type": "string",
-                            "enum": ["takeover", "notify"]
+                            "enum": [
+                              "takeover",
+                              "notify"
+                            ]
                           },
                           {
                             "type": "null"
@@ -2114,16 +2465,31 @@
                       },
                       "status": {
                         "type": "string",
-                        "enum": ["pending", "resolved", "rejected", "timeout", "cancelled"]
+                        "enum": [
+                          "pending",
+                          "resolved",
+                          "rejected",
+                          "timeout",
+                          "cancelled"
+                        ]
                       },
                       "message": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "resolved_by": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "resolution_reason": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "created_at": {
                         "type": "integer",
@@ -2167,10 +2533,16 @@
                         ]
                       },
                       "page_url": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "tool": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "event_id": {
                         "anyOf": [
@@ -2184,7 +2556,10 @@
                         ]
                       },
                       "entry_name": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       }
                     },
                     "required": [
@@ -2212,7 +2587,10 @@
                     "additionalProperties": false
                   }
                 },
-                "required": ["type", "request"],
+                "required": [
+                  "type",
+                  "request"
+                ],
                 "additionalProperties": false
               },
               {
@@ -2228,10 +2606,18 @@
                   },
                   "action": {
                     "type": "string",
-                    "enum": ["created", "updated", "removed"]
+                    "enum": [
+                      "created",
+                      "updated",
+                      "removed"
+                    ]
                   }
                 },
-                "required": ["type", "handle", "action"],
+                "required": [
+                  "type",
+                  "handle",
+                  "action"
+                ],
                 "additionalProperties": false
               },
               {
@@ -2242,10 +2628,16 @@
                     "const": "vault.policy.changed"
                   },
                   "group_id": {
-                    "type": ["string", "null"]
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   }
                 },
-                "required": ["type", "group_id"],
+                "required": [
+                  "type",
+                  "group_id"
+                ],
                 "additionalProperties": false
               },
               {
@@ -2259,7 +2651,10 @@
                     "type": "boolean"
                   }
                 },
-                "required": ["type", "unlocked"],
+                "required": [
+                  "type",
+                  "unlocked"
+                ],
                 "additionalProperties": false
               },
               {
@@ -2285,7 +2680,12 @@
                     "maximum": 9007199254740991
                   }
                 },
-                "required": ["type", "patterns", "skipped", "loaded_at"],
+                "required": [
+                  "type",
+                  "patterns",
+                  "skipped",
+                  "loaded_at"
+                ],
                 "additionalProperties": false
               },
               {
@@ -2306,7 +2706,11 @@
                       },
                       "severity": {
                         "type": "string",
-                        "enum": ["info", "warn", "error"]
+                        "enum": [
+                          "info",
+                          "warn",
+                          "error"
+                        ]
                       },
                       "message": {
                         "type": "string"
@@ -2361,7 +2765,10 @@
                     "additionalProperties": false
                   }
                 },
-                "required": ["type", "event"],
+                "required": [
+                  "type",
+                  "event"
+                ],
                 "additionalProperties": false
               },
               {
@@ -2382,7 +2789,11 @@
                       },
                       "severity": {
                         "type": "string",
-                        "enum": ["info", "warn", "error"]
+                        "enum": [
+                          "info",
+                          "warn",
+                          "error"
+                        ]
                       },
                       "message": {
                         "type": "string"
@@ -2437,7 +2848,10 @@
                     "additionalProperties": false
                   }
                 },
-                "required": ["type", "event"],
+                "required": [
+                  "type",
+                  "event"
+                ],
                 "additionalProperties": false
               },
               {
@@ -2453,7 +2867,10 @@
                     "maximum": 9007199254740991
                   }
                 },
-                "required": ["type", "now"],
+                "required": [
+                  "type",
+                  "now"
+                ],
                 "additionalProperties": false
               },
               {
@@ -2481,7 +2898,11 @@
                     ]
                   }
                 },
-                "required": ["type", "live", "max"],
+                "required": [
+                  "type",
+                  "live",
+                  "max"
+                ],
                 "additionalProperties": false
               },
               {
@@ -2503,14 +2924,27 @@
                   },
                   "result": {
                     "type": "string",
-                    "enum": ["ok", "partial", "failed"]
+                    "enum": [
+                      "ok",
+                      "partial",
+                      "failed"
+                    ]
                   },
                   "severity": {
                     "type": "string",
-                    "enum": ["info", "warn", "error"]
+                    "enum": [
+                      "info",
+                      "warn",
+                      "error"
+                    ]
                   }
                 },
-                "required": ["type", "at", "pruned_rows", "result"],
+                "required": [
+                  "type",
+                  "at",
+                  "pruned_rows",
+                  "result"
+                ],
                 "additionalProperties": false
               },
               {
@@ -2528,17 +2962,29 @@
                         "pattern": "^n-[A-Za-z0-9_-]{12}$"
                       },
                       "principal_id": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "type": {
                         "type": "string",
-                        "enum": ["attention", "error", "vault", "lifecycle", "system"]
+                        "enum": [
+                          "attention",
+                          "error",
+                          "vault",
+                          "lifecycle",
+                          "system"
+                        ]
                       },
                       "title": {
                         "type": "string"
                       },
                       "body": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "session_id": {
                         "anyOf": [
@@ -2552,13 +2998,22 @@
                         ]
                       },
                       "session_slug": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "target": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "source_event_id": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "created_at": {
                         "type": "integer",
@@ -2598,6 +3053,60 @@
                             "type": "null"
                           }
                         ]
+                      },
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "attention.requested",
+                          "vault.confirm",
+                          "vault.filled",
+                          "session.finished",
+                          "session.crashed",
+                          "session.reaped",
+                          "tool.errors",
+                          "system.degraded",
+                          "channel.broken",
+                          "digest.daily",
+                          "report.anomaly",
+                          "test"
+                        ]
+                      },
+                      "category": {
+                        "type": "string",
+                        "enum": [
+                          "needs-you",
+                          "problems",
+                          "wrap-ups",
+                          "reports",
+                          "system"
+                        ]
+                      },
+                      "severity": {
+                        "type": "string",
+                        "enum": [
+                          "info",
+                          "warn",
+                          "error",
+                          "critical"
+                        ]
+                      },
+                      "state": {
+                        "type": "string",
+                        "enum": [
+                          "open",
+                          "acted",
+                          "resolved",
+                          "expired",
+                          "final"
+                        ]
+                      },
+                      "revision": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 9007199254740991
+                      },
+                      "thread": {
+                        "type": "string"
                       }
                     },
                     "required": [
@@ -2614,12 +3123,21 @@
                       "updated_at",
                       "count",
                       "read_at",
-                      "dismissed_at"
+                      "dismissed_at",
+                      "kind",
+                      "category",
+                      "severity",
+                      "state",
+                      "revision",
+                      "thread"
                     ],
                     "additionalProperties": false
                   }
                 },
-                "required": ["type", "notification"],
+                "required": [
+                  "type",
+                  "notification"
+                ],
                 "additionalProperties": false
               },
               {
@@ -2637,17 +3155,29 @@
                         "pattern": "^n-[A-Za-z0-9_-]{12}$"
                       },
                       "principal_id": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "type": {
                         "type": "string",
-                        "enum": ["attention", "error", "vault", "lifecycle", "system"]
+                        "enum": [
+                          "attention",
+                          "error",
+                          "vault",
+                          "lifecycle",
+                          "system"
+                        ]
                       },
                       "title": {
                         "type": "string"
                       },
                       "body": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "session_id": {
                         "anyOf": [
@@ -2661,13 +3191,22 @@
                         ]
                       },
                       "session_slug": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "target": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "source_event_id": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "created_at": {
                         "type": "integer",
@@ -2707,6 +3246,60 @@
                             "type": "null"
                           }
                         ]
+                      },
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "attention.requested",
+                          "vault.confirm",
+                          "vault.filled",
+                          "session.finished",
+                          "session.crashed",
+                          "session.reaped",
+                          "tool.errors",
+                          "system.degraded",
+                          "channel.broken",
+                          "digest.daily",
+                          "report.anomaly",
+                          "test"
+                        ]
+                      },
+                      "category": {
+                        "type": "string",
+                        "enum": [
+                          "needs-you",
+                          "problems",
+                          "wrap-ups",
+                          "reports",
+                          "system"
+                        ]
+                      },
+                      "severity": {
+                        "type": "string",
+                        "enum": [
+                          "info",
+                          "warn",
+                          "error",
+                          "critical"
+                        ]
+                      },
+                      "state": {
+                        "type": "string",
+                        "enum": [
+                          "open",
+                          "acted",
+                          "resolved",
+                          "expired",
+                          "final"
+                        ]
+                      },
+                      "revision": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 9007199254740991
+                      },
+                      "thread": {
+                        "type": "string"
                       }
                     },
                     "required": [
@@ -2723,12 +3316,21 @@
                       "updated_at",
                       "count",
                       "read_at",
-                      "dismissed_at"
+                      "dismissed_at",
+                      "kind",
+                      "category",
+                      "severity",
+                      "state",
+                      "revision",
+                      "thread"
                     ],
                     "additionalProperties": false
                   }
                 },
-                "required": ["type", "notification"],
+                "required": [
+                  "type",
+                  "notification"
+                ],
                 "additionalProperties": false
               },
               {
@@ -2753,7 +3355,13 @@
                       },
                       "level": {
                         "type": "string",
-                        "enum": ["error", "warn", "info", "debug", "trace"]
+                        "enum": [
+                          "error",
+                          "warn",
+                          "info",
+                          "debug",
+                          "trace"
+                        ]
                       },
                       "msg": {
                         "type": "string"
@@ -2778,7 +3386,12 @@
                       },
                       "transport": {
                         "type": "string",
-                        "enum": ["http", "stdio", "ws", "cli"]
+                        "enum": [
+                          "http",
+                          "stdio",
+                          "ws",
+                          "cli"
+                        ]
                       },
                       "err": {
                         "type": "object",
@@ -2797,21 +3410,40 @@
                           },
                           "cause": {}
                         },
-                        "required": ["name", "message"],
+                        "required": [
+                          "name",
+                          "message"
+                        ],
                         "additionalProperties": false
                       }
                     },
-                    "required": ["seq", "ts", "level", "msg", "module"],
+                    "required": [
+                      "seq",
+                      "ts",
+                      "level",
+                      "msg",
+                      "module"
+                    ],
                     "additionalProperties": {}
                   }
                 },
-                "required": ["type", "record"],
+                "required": [
+                  "type",
+                  "record"
+                ],
                 "additionalProperties": false
               }
             ]
           }
         },
-        "required": ["v", "kind", "seq", "ts", "topic", "payload"],
+        "required": [
+          "v",
+          "kind",
+          "seq",
+          "ts",
+          "topic",
+          "payload"
+        ],
         "additionalProperties": false
       },
       {
@@ -2915,7 +3547,13 @@
                     "type": "boolean"
                   }
                 },
-                "required": ["type", "topic", "from", "to", "complete"],
+                "required": [
+                  "type",
+                  "topic",
+                  "from",
+                  "to",
+                  "complete"
+                ],
                 "additionalProperties": false
               },
               {
@@ -2933,7 +3571,11 @@
                     "type": "boolean"
                   }
                 },
-                "required": ["type", "topic", "ok"],
+                "required": [
+                  "type",
+                  "topic",
+                  "ok"
+                ],
                 "additionalProperties": false
               },
               {
@@ -2949,7 +3591,10 @@
                     "maximum": 9007199254740991
                   }
                 },
-                "required": ["type", "ts"],
+                "required": [
+                  "type",
+                  "ts"
+                ],
                 "additionalProperties": false
               },
               {
@@ -2969,7 +3614,11 @@
                     "maximum": 9007199254740991
                   }
                 },
-                "required": ["type", "topic", "ordinal"],
+                "required": [
+                  "type",
+                  "topic",
+                  "ordinal"
+                ],
                 "additionalProperties": false
               },
               {
@@ -2981,7 +3630,9 @@
                   },
                   "result": {}
                 },
-                "required": ["type"],
+                "required": [
+                  "type"
+                ],
                 "additionalProperties": false
               },
               {
@@ -2997,16 +3648,29 @@
                   },
                   "reason": {
                     "type": "string",
-                    "enum": ["cursor_expired", "epoch_changed", "buffer_overflow"]
+                    "enum": [
+                      "cursor_expired",
+                      "epoch_changed",
+                      "buffer_overflow"
+                    ]
                   }
                 },
-                "required": ["type", "reason"],
+                "required": [
+                  "type",
+                  "reason"
+                ],
                 "additionalProperties": false
               }
             ]
           }
         },
-        "required": ["v", "kind", "seq", "ts", "payload"],
+        "required": [
+          "v",
+          "kind",
+          "seq",
+          "ts",
+          "payload"
+        ],
         "additionalProperties": false
       },
       {
@@ -3050,11 +3714,20 @@
               },
               "details": {}
             },
-            "required": ["code", "title"],
+            "required": [
+              "code",
+              "title"
+            ],
             "additionalProperties": false
           }
         },
-        "required": ["v", "kind", "seq", "ts", "payload"],
+        "required": [
+          "v",
+          "kind",
+          "seq",
+          "ts",
+          "payload"
+        ],
         "additionalProperties": false
       },
       {
@@ -3151,7 +3824,11 @@
                     "maximum": 4294967295
                   }
                 },
-                "required": ["type", "session_id", "ordinal"],
+                "required": [
+                  "type",
+                  "session_id",
+                  "ordinal"
+                ],
                 "additionalProperties": false
               },
               {
@@ -3167,10 +3844,19 @@
                   },
                   "reason": {
                     "type": "string",
-                    "enum": ["stopped", "session_closed", "session_crashed", "connection_closed"]
+                    "enum": [
+                      "stopped",
+                      "session_closed",
+                      "session_crashed",
+                      "connection_closed"
+                    ]
                   }
                 },
-                "required": ["type", "session_id", "reason"],
+                "required": [
+                  "type",
+                  "session_id",
+                  "reason"
+                ],
                 "additionalProperties": false
               },
               {
@@ -3191,13 +3877,24 @@
                     "type": "string"
                   }
                 },
-                "required": ["type", "session_id", "code"],
+                "required": [
+                  "type",
+                  "session_id",
+                  "code"
+                ],
                 "additionalProperties": false
               }
             ]
           }
         },
-        "required": ["v", "kind", "seq", "ts", "topic", "payload"],
+        "required": [
+          "v",
+          "kind",
+          "seq",
+          "ts",
+          "topic",
+          "payload"
+        ],
         "additionalProperties": false
       }
     ]
@@ -3226,15 +3923,24 @@
                 "type": "string"
               },
               "tenant_id": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "channel": {
                 "type": "string",
-                "enum": ["chromium", "chrome", "edge"]
+                "enum": [
+                  "chromium",
+                  "chrome",
+                  "edge"
+                ]
               },
               "engine": {
                 "type": "string",
-                "enum": ["chromium"]
+                "enum": [
+                  "chromium"
+                ]
               },
               "headless": {
                 "type": "boolean"
@@ -3244,10 +3950,17 @@
               },
               "persistence_mode": {
                 "type": "string",
-                "enum": ["memory", "persistent", "storage-state"]
+                "enum": [
+                  "memory",
+                  "persistent",
+                  "storage-state"
+                ]
               },
               "current_url": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "created_at": {
                 "type": "integer",
@@ -3326,7 +4039,15 @@
               },
               "state": {
                 "type": "string",
-                "enum": ["reserved", "launching", "live", "paused", "draining", "closed", "crashed"]
+                "enum": [
+                  "reserved",
+                  "launching",
+                  "live",
+                  "paused",
+                  "draining",
+                  "closed",
+                  "crashed"
+                ]
               },
               "live": {
                 "type": "boolean"
@@ -3367,17 +4088,26 @@
                 "type": "object",
                 "properties": {
                   "version": {
-                    "type": ["string", "null"]
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "sandboxed": {
                     "type": "boolean"
                   }
                 },
-                "required": ["version", "sandboxed"],
+                "required": [
+                  "version",
+                  "sandboxed"
+                ],
                 "additionalProperties": false
               },
               "proxy_label": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "counts": {
                 "type": "object",
@@ -3437,10 +4167,16 @@
                     "type": "object",
                     "properties": {
                       "name": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "version": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "agent_name": {
                         "type": "string"
@@ -3481,7 +4217,10 @@
                         }
                       }
                     },
-                    "required": ["name", "version"],
+                    "required": [
+                      "name",
+                      "version"
+                    ],
                     "additionalProperties": false
                   },
                   {
@@ -3527,7 +4266,10 @@
             "additionalProperties": false
           }
         },
-        "required": ["type", "session"],
+        "required": [
+          "type",
+          "session"
+        ],
         "additionalProperties": false
       },
       {
@@ -3551,15 +4293,24 @@
                 "type": "string"
               },
               "tenant_id": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "channel": {
                 "type": "string",
-                "enum": ["chromium", "chrome", "edge"]
+                "enum": [
+                  "chromium",
+                  "chrome",
+                  "edge"
+                ]
               },
               "engine": {
                 "type": "string",
-                "enum": ["chromium"]
+                "enum": [
+                  "chromium"
+                ]
               },
               "headless": {
                 "type": "boolean"
@@ -3569,10 +4320,17 @@
               },
               "persistence_mode": {
                 "type": "string",
-                "enum": ["memory", "persistent", "storage-state"]
+                "enum": [
+                  "memory",
+                  "persistent",
+                  "storage-state"
+                ]
               },
               "current_url": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "created_at": {
                 "type": "integer",
@@ -3651,7 +4409,15 @@
               },
               "state": {
                 "type": "string",
-                "enum": ["reserved", "launching", "live", "paused", "draining", "closed", "crashed"]
+                "enum": [
+                  "reserved",
+                  "launching",
+                  "live",
+                  "paused",
+                  "draining",
+                  "closed",
+                  "crashed"
+                ]
               },
               "live": {
                 "type": "boolean"
@@ -3692,17 +4458,26 @@
                 "type": "object",
                 "properties": {
                   "version": {
-                    "type": ["string", "null"]
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "sandboxed": {
                     "type": "boolean"
                   }
                 },
-                "required": ["version", "sandboxed"],
+                "required": [
+                  "version",
+                  "sandboxed"
+                ],
                 "additionalProperties": false
               },
               "proxy_label": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "counts": {
                 "type": "object",
@@ -3762,10 +4537,16 @@
                     "type": "object",
                     "properties": {
                       "name": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "version": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "agent_name": {
                         "type": "string"
@@ -3806,7 +4587,10 @@
                         }
                       }
                     },
-                    "required": ["name", "version"],
+                    "required": [
+                      "name",
+                      "version"
+                    ],
                     "additionalProperties": false
                   },
                   {
@@ -3852,7 +4636,10 @@
             "additionalProperties": false
           }
         },
-        "required": ["type", "session"],
+        "required": [
+          "type",
+          "session"
+        ],
         "additionalProperties": false
       },
       {
@@ -3884,7 +4671,12 @@
             ]
           }
         },
-        "required": ["type", "session_id", "closed_at", "reason"],
+        "required": [
+          "type",
+          "session_id",
+          "closed_at",
+          "reason"
+        ],
         "additionalProperties": false
       },
       {
@@ -3900,7 +4692,11 @@
           },
           "action": {
             "type": "string",
-            "enum": ["archived", "unarchived", "deleted"]
+            "enum": [
+              "archived",
+              "unarchived",
+              "deleted"
+            ]
           },
           "at": {
             "type": "integer",
@@ -3908,7 +4704,12 @@
             "maximum": 9007199254740991
           }
         },
-        "required": ["type", "session_id", "action", "at"],
+        "required": [
+          "type",
+          "session_id",
+          "action",
+          "at"
+        ],
         "additionalProperties": false
       },
       {
@@ -3930,7 +4731,12 @@
           },
           "details": {}
         },
-        "required": ["type", "session_id", "code", "message"],
+        "required": [
+          "type",
+          "session_id",
+          "code",
+          "message"
+        ],
         "additionalProperties": false
       },
       {
@@ -3978,10 +4784,16 @@
                 "type": "boolean"
               },
               "error_code": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "error_message": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "duration_ms": {
                 "type": "integer",
@@ -3999,7 +4811,10 @@
                 "maximum": 9007199254740991
               },
               "trace_id": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "has_screenshot": {
                 "type": "boolean"
@@ -4011,7 +4826,10 @@
               },
               "args_json": {},
               "result_text": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               }
             },
             "required": [
@@ -4034,7 +4852,11 @@
             "type": "boolean"
           }
         },
-        "required": ["type", "row", "has_detail"],
+        "required": [
+          "type",
+          "row",
+          "has_detail"
+        ],
         "additionalProperties": false
       },
       {
@@ -4063,14 +4885,23 @@
                 "type": "string"
               },
               "title": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "domain": {
                 "type": "string"
               },
               "category": {
                 "type": "string",
-                "enum": ["public", "ip", "local", "ftp", "other"]
+                "enum": [
+                  "public",
+                  "ip",
+                  "local",
+                  "ftp",
+                  "other"
+                ]
               },
               "ts": {
                 "type": "integer",
@@ -4091,7 +4922,10 @@
             "additionalProperties": false
           }
         },
-        "required": ["type", "row"],
+        "required": [
+          "type",
+          "row"
+        ],
         "additionalProperties": false
       },
       {
@@ -4117,7 +4951,10 @@
               },
               "kind": {
                 "type": "string",
-                "enum": ["tool", "trace"]
+                "enum": [
+                  "tool",
+                  "trace"
+                ]
               },
               "content_type": {
                 "type": "string"
@@ -4161,7 +4998,10 @@
             "additionalProperties": false
           }
         },
-        "required": ["type", "row"],
+        "required": [
+          "type",
+          "row"
+        ],
         "additionalProperties": false
       },
       {
@@ -4183,7 +5023,10 @@
                 "pattern": "^([a-z][a-z0-9-]{1,31})-([0-9a-z]{8})$"
               },
               "session_slug": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "tool_event_id": {
                 "anyOf": [
@@ -4212,10 +5055,19 @@
               },
               "result": {
                 "type": "string",
-                "enum": ["success", "origin_mismatch", "auth_failed", "blocked", "denied"]
+                "enum": [
+                  "success",
+                  "origin_mismatch",
+                  "auth_failed",
+                  "blocked",
+                  "denied"
+                ]
               },
               "reason": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "evaluate_enabled": {
                 "type": "boolean"
@@ -4225,10 +5077,17 @@
               },
               "origin_check": {
                 "type": "string",
-                "enum": ["pass", "fail", "skipped"]
+                "enum": [
+                  "pass",
+                  "fail",
+                  "skipped"
+                ]
               },
               "principal_id": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "details": {
                 "anyOf": [
@@ -4263,7 +5122,10 @@
             "additionalProperties": false
           }
         },
-        "required": ["type", "row"],
+        "required": [
+          "type",
+          "row"
+        ],
         "additionalProperties": false
       },
       {
@@ -4292,7 +5154,10 @@
                 ]
               },
               "session_slug": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "tool_event_id": {
                 "anyOf": [
@@ -4309,17 +5174,26 @@
                 "type": "string"
               },
               "domain": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "pattern": {
                 "type": "string"
               },
               "source": {
                 "type": "string",
-                "enum": ["tool", "request"]
+                "enum": [
+                  "tool",
+                  "request"
+                ]
               },
               "tool": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "ts": {
                 "type": "integer",
@@ -4342,7 +5216,10 @@
             "additionalProperties": false
           }
         },
-        "required": ["type", "row"],
+        "required": [
+          "type",
+          "row"
+        ],
         "additionalProperties": false
       },
       {
@@ -4361,7 +5238,10 @@
               },
               "kind": {
                 "type": "string",
-                "enum": ["attention", "vault_confirm"]
+                "enum": [
+                  "attention",
+                  "vault_confirm"
+                ]
               },
               "session_id": {
                 "type": "string",
@@ -4380,7 +5260,10 @@
                 "anyOf": [
                   {
                     "type": "string",
-                    "enum": ["takeover", "notify"]
+                    "enum": [
+                      "takeover",
+                      "notify"
+                    ]
                   },
                   {
                     "type": "null"
@@ -4397,16 +5280,31 @@
               },
               "status": {
                 "type": "string",
-                "enum": ["pending", "resolved", "rejected", "timeout", "cancelled"]
+                "enum": [
+                  "pending",
+                  "resolved",
+                  "rejected",
+                  "timeout",
+                  "cancelled"
+                ]
               },
               "message": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "resolved_by": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "resolution_reason": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "created_at": {
                 "type": "integer",
@@ -4450,10 +5348,16 @@
                 ]
               },
               "page_url": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "tool": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "event_id": {
                 "anyOf": [
@@ -4467,7 +5371,10 @@
                 ]
               },
               "entry_name": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               }
             },
             "required": [
@@ -4495,7 +5402,10 @@
             "additionalProperties": false
           }
         },
-        "required": ["type", "request"],
+        "required": [
+          "type",
+          "request"
+        ],
         "additionalProperties": false
       },
       {
@@ -4514,7 +5424,10 @@
               },
               "kind": {
                 "type": "string",
-                "enum": ["attention", "vault_confirm"]
+                "enum": [
+                  "attention",
+                  "vault_confirm"
+                ]
               },
               "session_id": {
                 "type": "string",
@@ -4533,7 +5446,10 @@
                 "anyOf": [
                   {
                     "type": "string",
-                    "enum": ["takeover", "notify"]
+                    "enum": [
+                      "takeover",
+                      "notify"
+                    ]
                   },
                   {
                     "type": "null"
@@ -4550,16 +5466,31 @@
               },
               "status": {
                 "type": "string",
-                "enum": ["pending", "resolved", "rejected", "timeout", "cancelled"]
+                "enum": [
+                  "pending",
+                  "resolved",
+                  "rejected",
+                  "timeout",
+                  "cancelled"
+                ]
               },
               "message": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "resolved_by": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "resolution_reason": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "created_at": {
                 "type": "integer",
@@ -4603,10 +5534,16 @@
                 ]
               },
               "page_url": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "tool": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "event_id": {
                 "anyOf": [
@@ -4620,7 +5557,10 @@
                 ]
               },
               "entry_name": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               }
             },
             "required": [
@@ -4648,7 +5588,10 @@
             "additionalProperties": false
           }
         },
-        "required": ["type", "request"],
+        "required": [
+          "type",
+          "request"
+        ],
         "additionalProperties": false
       },
       {
@@ -4667,7 +5610,10 @@
               },
               "kind": {
                 "type": "string",
-                "enum": ["attention", "vault_confirm"]
+                "enum": [
+                  "attention",
+                  "vault_confirm"
+                ]
               },
               "session_id": {
                 "type": "string",
@@ -4686,7 +5632,10 @@
                 "anyOf": [
                   {
                     "type": "string",
-                    "enum": ["takeover", "notify"]
+                    "enum": [
+                      "takeover",
+                      "notify"
+                    ]
                   },
                   {
                     "type": "null"
@@ -4703,16 +5652,31 @@
               },
               "status": {
                 "type": "string",
-                "enum": ["pending", "resolved", "rejected", "timeout", "cancelled"]
+                "enum": [
+                  "pending",
+                  "resolved",
+                  "rejected",
+                  "timeout",
+                  "cancelled"
+                ]
               },
               "message": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "resolved_by": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "resolution_reason": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "created_at": {
                 "type": "integer",
@@ -4756,10 +5720,16 @@
                 ]
               },
               "page_url": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "tool": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "event_id": {
                 "anyOf": [
@@ -4773,7 +5743,10 @@
                 ]
               },
               "entry_name": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               }
             },
             "required": [
@@ -4801,7 +5774,10 @@
             "additionalProperties": false
           }
         },
-        "required": ["type", "request"],
+        "required": [
+          "type",
+          "request"
+        ],
         "additionalProperties": false
       },
       {
@@ -4820,7 +5796,10 @@
               },
               "kind": {
                 "type": "string",
-                "enum": ["attention", "vault_confirm"]
+                "enum": [
+                  "attention",
+                  "vault_confirm"
+                ]
               },
               "session_id": {
                 "type": "string",
@@ -4839,7 +5818,10 @@
                 "anyOf": [
                   {
                     "type": "string",
-                    "enum": ["takeover", "notify"]
+                    "enum": [
+                      "takeover",
+                      "notify"
+                    ]
                   },
                   {
                     "type": "null"
@@ -4856,16 +5838,31 @@
               },
               "status": {
                 "type": "string",
-                "enum": ["pending", "resolved", "rejected", "timeout", "cancelled"]
+                "enum": [
+                  "pending",
+                  "resolved",
+                  "rejected",
+                  "timeout",
+                  "cancelled"
+                ]
               },
               "message": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "resolved_by": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "resolution_reason": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "created_at": {
                 "type": "integer",
@@ -4909,10 +5906,16 @@
                 ]
               },
               "page_url": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "tool": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "event_id": {
                 "anyOf": [
@@ -4926,7 +5929,10 @@
                 ]
               },
               "entry_name": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               }
             },
             "required": [
@@ -4954,7 +5960,10 @@
             "additionalProperties": false
           }
         },
-        "required": ["type", "request"],
+        "required": [
+          "type",
+          "request"
+        ],
         "additionalProperties": false
       },
       {
@@ -4970,10 +5979,18 @@
           },
           "action": {
             "type": "string",
-            "enum": ["created", "updated", "removed"]
+            "enum": [
+              "created",
+              "updated",
+              "removed"
+            ]
           }
         },
-        "required": ["type", "handle", "action"],
+        "required": [
+          "type",
+          "handle",
+          "action"
+        ],
         "additionalProperties": false
       },
       {
@@ -4984,10 +6001,16 @@
             "const": "vault.policy.changed"
           },
           "group_id": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
-        "required": ["type", "group_id"],
+        "required": [
+          "type",
+          "group_id"
+        ],
         "additionalProperties": false
       },
       {
@@ -5001,7 +6024,10 @@
             "type": "boolean"
           }
         },
-        "required": ["type", "unlocked"],
+        "required": [
+          "type",
+          "unlocked"
+        ],
         "additionalProperties": false
       },
       {
@@ -5027,7 +6053,12 @@
             "maximum": 9007199254740991
           }
         },
-        "required": ["type", "patterns", "skipped", "loaded_at"],
+        "required": [
+          "type",
+          "patterns",
+          "skipped",
+          "loaded_at"
+        ],
         "additionalProperties": false
       },
       {
@@ -5048,7 +6079,11 @@
               },
               "severity": {
                 "type": "string",
-                "enum": ["info", "warn", "error"]
+                "enum": [
+                  "info",
+                  "warn",
+                  "error"
+                ]
               },
               "message": {
                 "type": "string"
@@ -5103,7 +6138,10 @@
             "additionalProperties": false
           }
         },
-        "required": ["type", "event"],
+        "required": [
+          "type",
+          "event"
+        ],
         "additionalProperties": false
       },
       {
@@ -5124,7 +6162,11 @@
               },
               "severity": {
                 "type": "string",
-                "enum": ["info", "warn", "error"]
+                "enum": [
+                  "info",
+                  "warn",
+                  "error"
+                ]
               },
               "message": {
                 "type": "string"
@@ -5179,7 +6221,10 @@
             "additionalProperties": false
           }
         },
-        "required": ["type", "event"],
+        "required": [
+          "type",
+          "event"
+        ],
         "additionalProperties": false
       },
       {
@@ -5195,7 +6240,10 @@
             "maximum": 9007199254740991
           }
         },
-        "required": ["type", "now"],
+        "required": [
+          "type",
+          "now"
+        ],
         "additionalProperties": false
       },
       {
@@ -5223,7 +6271,11 @@
             ]
           }
         },
-        "required": ["type", "live", "max"],
+        "required": [
+          "type",
+          "live",
+          "max"
+        ],
         "additionalProperties": false
       },
       {
@@ -5245,14 +6297,27 @@
           },
           "result": {
             "type": "string",
-            "enum": ["ok", "partial", "failed"]
+            "enum": [
+              "ok",
+              "partial",
+              "failed"
+            ]
           },
           "severity": {
             "type": "string",
-            "enum": ["info", "warn", "error"]
+            "enum": [
+              "info",
+              "warn",
+              "error"
+            ]
           }
         },
-        "required": ["type", "at", "pruned_rows", "result"],
+        "required": [
+          "type",
+          "at",
+          "pruned_rows",
+          "result"
+        ],
         "additionalProperties": false
       },
       {
@@ -5270,17 +6335,29 @@
                 "pattern": "^n-[A-Za-z0-9_-]{12}$"
               },
               "principal_id": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "type": {
                 "type": "string",
-                "enum": ["attention", "error", "vault", "lifecycle", "system"]
+                "enum": [
+                  "attention",
+                  "error",
+                  "vault",
+                  "lifecycle",
+                  "system"
+                ]
               },
               "title": {
                 "type": "string"
               },
               "body": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "session_id": {
                 "anyOf": [
@@ -5294,13 +6371,22 @@
                 ]
               },
               "session_slug": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "target": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "source_event_id": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "created_at": {
                 "type": "integer",
@@ -5340,6 +6426,60 @@
                     "type": "null"
                   }
                 ]
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "attention.requested",
+                  "vault.confirm",
+                  "vault.filled",
+                  "session.finished",
+                  "session.crashed",
+                  "session.reaped",
+                  "tool.errors",
+                  "system.degraded",
+                  "channel.broken",
+                  "digest.daily",
+                  "report.anomaly",
+                  "test"
+                ]
+              },
+              "category": {
+                "type": "string",
+                "enum": [
+                  "needs-you",
+                  "problems",
+                  "wrap-ups",
+                  "reports",
+                  "system"
+                ]
+              },
+              "severity": {
+                "type": "string",
+                "enum": [
+                  "info",
+                  "warn",
+                  "error",
+                  "critical"
+                ]
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "acted",
+                  "resolved",
+                  "expired",
+                  "final"
+                ]
+              },
+              "revision": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              "thread": {
+                "type": "string"
               }
             },
             "required": [
@@ -5356,12 +6496,21 @@
               "updated_at",
               "count",
               "read_at",
-              "dismissed_at"
+              "dismissed_at",
+              "kind",
+              "category",
+              "severity",
+              "state",
+              "revision",
+              "thread"
             ],
             "additionalProperties": false
           }
         },
-        "required": ["type", "notification"],
+        "required": [
+          "type",
+          "notification"
+        ],
         "additionalProperties": false
       },
       {
@@ -5379,17 +6528,29 @@
                 "pattern": "^n-[A-Za-z0-9_-]{12}$"
               },
               "principal_id": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "type": {
                 "type": "string",
-                "enum": ["attention", "error", "vault", "lifecycle", "system"]
+                "enum": [
+                  "attention",
+                  "error",
+                  "vault",
+                  "lifecycle",
+                  "system"
+                ]
               },
               "title": {
                 "type": "string"
               },
               "body": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "session_id": {
                 "anyOf": [
@@ -5403,13 +6564,22 @@
                 ]
               },
               "session_slug": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "target": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "source_event_id": {
-                "type": ["string", "null"]
+                "type": [
+                  "string",
+                  "null"
+                ]
               },
               "created_at": {
                 "type": "integer",
@@ -5449,6 +6619,60 @@
                     "type": "null"
                   }
                 ]
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "attention.requested",
+                  "vault.confirm",
+                  "vault.filled",
+                  "session.finished",
+                  "session.crashed",
+                  "session.reaped",
+                  "tool.errors",
+                  "system.degraded",
+                  "channel.broken",
+                  "digest.daily",
+                  "report.anomaly",
+                  "test"
+                ]
+              },
+              "category": {
+                "type": "string",
+                "enum": [
+                  "needs-you",
+                  "problems",
+                  "wrap-ups",
+                  "reports",
+                  "system"
+                ]
+              },
+              "severity": {
+                "type": "string",
+                "enum": [
+                  "info",
+                  "warn",
+                  "error",
+                  "critical"
+                ]
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "acted",
+                  "resolved",
+                  "expired",
+                  "final"
+                ]
+              },
+              "revision": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              "thread": {
+                "type": "string"
               }
             },
             "required": [
@@ -5465,12 +6689,21 @@
               "updated_at",
               "count",
               "read_at",
-              "dismissed_at"
+              "dismissed_at",
+              "kind",
+              "category",
+              "severity",
+              "state",
+              "revision",
+              "thread"
             ],
             "additionalProperties": false
           }
         },
-        "required": ["type", "notification"],
+        "required": [
+          "type",
+          "notification"
+        ],
         "additionalProperties": false
       },
       {
@@ -5495,7 +6728,13 @@
               },
               "level": {
                 "type": "string",
-                "enum": ["error", "warn", "info", "debug", "trace"]
+                "enum": [
+                  "error",
+                  "warn",
+                  "info",
+                  "debug",
+                  "trace"
+                ]
               },
               "msg": {
                 "type": "string"
@@ -5520,7 +6759,12 @@
               },
               "transport": {
                 "type": "string",
-                "enum": ["http", "stdio", "ws", "cli"]
+                "enum": [
+                  "http",
+                  "stdio",
+                  "ws",
+                  "cli"
+                ]
               },
               "err": {
                 "type": "object",
@@ -5539,15 +6783,27 @@
                   },
                   "cause": {}
                 },
-                "required": ["name", "message"],
+                "required": [
+                  "name",
+                  "message"
+                ],
                 "additionalProperties": false
               }
             },
-            "required": ["seq", "ts", "level", "msg", "module"],
+            "required": [
+              "seq",
+              "ts",
+              "level",
+              "msg",
+              "module"
+            ],
             "additionalProperties": {}
           }
         },
-        "required": ["type", "record"],
+        "required": [
+          "type",
+          "record"
+        ],
         "additionalProperties": false
       }
     ]

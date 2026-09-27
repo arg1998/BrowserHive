@@ -10,6 +10,7 @@ import type {
   JsonValue,
   NotificationGroupPatch,
   NotificationRecord,
+  NotificationRevisionPatch,
   PreferenceRecord,
 } from '../../../ports/persistence/records.ts';
 import type { DB } from '../generated/db.d.ts';
@@ -91,10 +92,47 @@ export class SqliteNotificationRepository implements NotificationRepository {
         source_event_id: patch.sourceEventId,
         count: patch.count,
         updated_at: patch.updatedAt,
+        revision: patch.revision,
+        message_json: patch.messageJson,
       })
       .where('notification_id', '=', notificationId)
       .where('read_at', 'is', null)
       .where('dismissed_at', 'is', null)
+      .executeTakeFirst();
+    if (result.numUpdatedRows === 0n) return null;
+    return this.get(notificationId);
+  }
+
+  async findLatestByThread(
+    principalId: string | null,
+    thread: string,
+  ): Promise<NotificationRecord | null> {
+    let qb = this.#db.selectFrom('notifications').selectAll().where('thread', '=', thread);
+    qb =
+      principalId === null
+        ? qb.where('principal_id', 'is', null)
+        : qb.where('principal_id', '=', principalId);
+    const row = await qb
+      .orderBy('created_at', 'desc')
+      .orderBy('notification_id', 'desc')
+      .limit(1)
+      .executeTakeFirst();
+    return row === undefined ? null : notificationFromRow(row);
+  }
+
+  async revise(
+    notificationId: string,
+    patch: NotificationRevisionPatch,
+  ): Promise<NotificationRecord | null> {
+    const result = await this.#db
+      .updateTable('notifications')
+      .set({
+        state: patch.state,
+        severity: patch.severity,
+        revision: patch.revision,
+        ...(patch.messageJson !== null && { message_json: patch.messageJson }),
+      })
+      .where('notification_id', '=', notificationId)
       .executeTakeFirst();
     if (result.numUpdatedRows === 0n) return null;
     return this.get(notificationId);

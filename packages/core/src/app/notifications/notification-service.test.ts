@@ -7,7 +7,6 @@ import { FakeClock } from '../../../test/helpers/fake-clock.ts';
 import { FakeIdGenerator } from '../../../test/helpers/fake-id-generator.ts';
 import { InMemoryNotificationRepository } from '../../../test/helpers/in-memory-repos.ts';
 import { RecordingEventBus } from '../../../test/helpers/recording-event-bus.ts';
-import type { NotificationChannel } from '../../ports/notification-channel.ts';
 import type { DomainEvents } from '../events/catalog.ts';
 import { NotificationService } from './notification-service.ts';
 import { draftFor, type ProducedEvent } from './producers.ts';
@@ -20,7 +19,7 @@ import {
   vaultConfirmCreated,
 } from './test-fixtures.ts';
 
-function setup(channels: NotificationChannel[] = []) {
+function setup() {
   const clock = new FakeClock();
   const repo = new InMemoryNotificationRepository();
   const bus = new RecordingEventBus<DomainEvents>();
@@ -30,7 +29,6 @@ function setup(channels: NotificationChannel[] = []) {
     clock,
     ids: new FakeIdGenerator(),
     logger: new CollectingLogger(),
-    channels,
   });
   return { clock, repo, bus, service };
 }
@@ -233,17 +231,6 @@ describe('NotificationService producers', () => {
     // The group closes 60 min after d was created, so the failure at +60 min starts a new row.
     const rows = [...repo.rows.values()].sort((x, y) => x.createdAt - y.createdAt);
     expect(rows.map((r) => r.count)).toEqual([1, 1, 1, 15, 2]);
-  });
-
-  it('isolates a failing external channel', async () => {
-    const sent: string[] = [];
-    const { repo, service } = setup([
-      { name: 'broken', send: () => Promise.reject(new Error('down')) },
-      { name: 'ok', send: (n) => void sent.push(n.title) },
-    ]);
-    await service.produce(sessionClosed('crash'));
-    expect(repo.rows.size).toBe(1);
-    expect(sent).toEqual(['Session crashed']);
   });
 
   it('fans out to every recipient inbox', async () => {

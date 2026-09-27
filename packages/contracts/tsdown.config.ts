@@ -11,6 +11,7 @@ export default defineConfig({
     tools: 'src/tools/index.ts',
     http: 'src/http/index.ts',
     ws: 'src/ws/index.ts',
+    notifications: 'src/notifications/index.ts',
   },
   format: 'esm',
   platform: 'neutral',

@@ -14,7 +14,8 @@
     "./ids": "./src/ids/index.ts",
     "./tools": "./src/tools/index.ts",
     "./http": "./src/http/index.ts",
-    "./ws": "./src/ws/index.ts"
+    "./ws": "./src/ws/index.ts",
+    "./notifications": "./src/notifications/index.ts"
   },
   "scripts": {
     "build": "tsdown",

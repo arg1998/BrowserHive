@@ -54,6 +54,7 @@ describe('retentionPolicyFromConfig', () => {
       auditRetentionDays: 90,
       notificationSeenDays: 30,
       notificationDays: 90,
+      notificationDeliveryDays: 30,
     });
   });
 });

@@ -12,6 +12,11 @@ import {
 import { SqliteBlocklistAuditRepository } from './blocklist-audit.ts';
 import { SqliteEventLogRepository } from './event-log.ts';
 import { SqliteCredentialRepository, SqlitePrincipalRepository } from './identity.ts';
+import {
+  SqliteNotificationChannelMessageRepository,
+  SqliteNotificationChannelRepository,
+  SqliteNotificationDeliveryRepository,
+} from './notification-outbox.ts';
 import { SqliteNotificationRepository, SqlitePreferenceRepository } from './notifications.ts';
 import {
   SqliteArtifactOutboxRepository,
@@ -52,6 +57,9 @@ export function createRepositories(db: Kysely<DB>): Repositories {
     vaultBindings: new SqliteVaultBindingRepository(db),
     vaultGroupPolicies: new SqliteVaultGroupPolicyRepository(db),
     notifications: new SqliteNotificationRepository(db),
+    notificationChannels: new SqliteNotificationChannelRepository(db),
+    notificationDeliveries: new SqliteNotificationDeliveryRepository(db),
+    notificationChannelMessages: new SqliteNotificationChannelMessageRepository(db),
     preferences: new SqlitePreferenceRepository(db),
     systemEvents: new SqliteSystemEventRepository(db),
     idempotency: new SqliteIdempotencyRepository(db),

@@ -49,8 +49,22 @@ export type { FileSystem } from '../ports/file-system.ts';
 export type { HostEnvironment } from '../ports/host-environment.ts';
 export type { IdGenerator } from '../ports/id-generator.ts';
 export type { LogFields, Logger, LogLevel } from '../ports/logger.ts';
+export {
+  type ChannelCapabilities,
+  type ChannelDelivery,
+  ChannelSendError,
+  type ChannelSendResult,
+  type LinkBuilder,
+  type NotificationChannel,
+  type PlatformMessageRef,
+} from '../ports/notification-channel.ts';
 export type { AnalyticsQueries } from '../ports/persistence/analytics.ts';
 export { AUTH_EVENT_TYPES } from '../ports/persistence/enums.ts';
+export type {
+  NotificationChannelMessageRepository,
+  NotificationChannelRepository,
+  NotificationDeliveryRepository,
+} from '../ports/persistence/notification-outbox.ts';
 export type { NotificationRepository } from '../ports/persistence/notifications.ts';
 export type { Repositories, UnitOfWork } from '../ports/persistence/unit-of-work.ts';
 export type { WriteQueue } from '../ports/persistence/write-queue.ts';

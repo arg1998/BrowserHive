@@ -211,6 +211,13 @@ describe('NotificationRepository and PreferenceRepository', () => {
     groupKey: null,
     readAt: null,
     dismissedAt: null,
+    kind: 'attention.requested',
+    category: 'needs-you',
+    severity: 'warn',
+    state: 'open',
+    revision: 1,
+    thread: 'notification:n-1',
+    messageJson: null,
   };
 
   it('lists inbox, counts unread, marks read and dismisses', async () => {
@@ -270,6 +277,8 @@ describe('NotificationRepository and PreferenceRepository', () => {
       sourceEventId: 'e-2',
       count: 2,
       updatedAt: 9,
+      revision: 2,
+      messageJson: null,
     };
     expect(await t.repos.notifications.updateGroup('n-1', patch)).toMatchObject({
       ...patch,
@@ -417,6 +426,7 @@ describe('SchemaMigrationRepository', () => {
       [2, 'notification-groups'],
       [3, 'harness-identity'],
       [4, 'session-browser'],
+      [5, 'notification-outbox'],
     ]);
     expect(await t.repos.schemaMigrations.currentVersion()).toBe(SCHEMA_VERSION);
   });

@@ -8751,6 +8751,59 @@
                     "null"
                   ],
                   "minimum": 0
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "attention.requested",
+                    "vault.confirm",
+                    "vault.filled",
+                    "session.finished",
+                    "session.crashed",
+                    "session.reaped",
+                    "tool.errors",
+                    "system.degraded",
+                    "channel.broken",
+                    "digest.daily",
+                    "report.anomaly",
+                    "test"
+                  ]
+                },
+                "category": {
+                  "type": "string",
+                  "enum": [
+                    "needs-you",
+                    "problems",
+                    "wrap-ups",
+                    "reports",
+                    "system"
+                  ]
+                },
+                "severity": {
+                  "type": "string",
+                  "enum": [
+                    "info",
+                    "warn",
+                    "error",
+                    "critical"
+                  ]
+                },
+                "state": {
+                  "type": "string",
+                  "enum": [
+                    "open",
+                    "acted",
+                    "resolved",
+                    "expired",
+                    "final"
+                  ]
+                },
+                "revision": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "thread": {
+                  "type": "string"
                 }
               },
               "required": [
@@ -8767,7 +8820,13 @@
                 "updated_at",
                 "count",
                 "read_at",
-                "dismissed_at"
+                "dismissed_at",
+                "kind",
+                "category",
+                "severity",
+                "state",
+                "revision",
+                "thread"
               ]
             }
           },

@@ -156,6 +156,7 @@ describe('DomainEvents catalog', () => {
       'notification.updated',
       'notification.read',
       'notification.dismissed',
+      'notification.channel.changed',
       'auth.login_success',
       'auth.logout',
       'auth.login_failure',

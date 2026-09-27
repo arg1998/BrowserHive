@@ -28,6 +28,15 @@ export type {
   PrincipalRecord,
 } from './records-identity.ts';
 export type {
+  DeliveryFinishPatch,
+  NewNotificationDelivery,
+  NotificationChannelMessageRecord,
+  NotificationChannelRecord,
+  NotificationDeliveryListQuery,
+  NotificationDeliveryRecord,
+  PlatformMessageRef,
+} from './records-notifications.ts';
+export type {
   ArtifactOutboxRecord,
   IdempotencyRecord,
   LogRecordRow,
@@ -35,6 +44,7 @@ export type {
   NewSystemEvent,
   NotificationGroupPatch,
   NotificationRecord,
+  NotificationRevisionPatch,
   PreferenceRecord,
   SystemEventRecord,
 } from './records-operations.ts';

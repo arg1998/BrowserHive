@@ -1,6 +1,13 @@
 /** @module ports/persistence/records-operations — notification, preference, system event, artifact outbox, idempotency and log records. */
 
-import type { ArtifactKind, NotificationType, SystemEventSeverity } from './enums.ts';
+import type { NotificationCategory, NotificationKind } from '@browserhive/contracts/enums';
+import type {
+  ArtifactKind,
+  NotificationSeverity,
+  NotificationState,
+  NotificationType,
+  SystemEventSeverity,
+} from './enums.ts';
 import type { JsonObject, JsonValue } from './json.ts';
 
 // --- notifications, preferences ---------------------------------------------------------------
@@ -24,6 +31,17 @@ export interface NotificationRecord {
   readonly groupKey: string | null;
   readonly readAt: number | null;
   readonly dismissedAt: number | null;
+  /** What the notification is about (D-32). Derived from `type` for rows whose column is NULL. */
+  readonly kind: NotificationKind;
+  readonly category: NotificationCategory;
+  readonly severity: NotificationSeverity;
+  readonly state: NotificationState;
+  /** 1 at creation, +1 per message change. */
+  readonly revision: number;
+  /** Conversation key shared with external channels (`attention:<request_id>`). */
+  readonly thread: string;
+  /** The current `NotificationMessage` as stored JSON; `null` for rows from before schema v5. */
+  readonly messageJson: string | null;
 }
 
 /** What folding one more occurrence into an open group row changes. */
@@ -34,6 +52,21 @@ export interface NotificationGroupPatch {
   readonly sourceEventId: string | null;
   readonly count: number;
   readonly updatedAt: number;
+  /** The next revision and its full message. */
+  readonly revision: number;
+  readonly messageJson: string | null;
+}
+
+/**
+ * A lifecycle revision (a request resolved, a degradation recovered). Never touches the in-app
+ * `title`, `body` or `updated_at`, so the inbox order does not move (spec 03 §9).
+ */
+export interface NotificationRevisionPatch {
+  readonly state: NotificationState;
+  readonly severity: NotificationSeverity;
+  readonly revision: number;
+  /** `null` keeps the stored message (a row from before schema v5 has none). */
+  readonly messageJson: string | null;
 }
 
 /** One preference entry (`preferences`). */

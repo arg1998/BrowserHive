@@ -101,7 +101,17 @@ export class SqliteMaintenanceService implements MaintenanceService {
     await this.#drain();
     const { handle } = this.#o;
     const tables: { table: string; rows: number }[] = [];
+    // `purge` opens a database without migrating it: a file from an older schema lacks the newer
+    // tables, which are simply not listed.
+    const present = new Set(
+      (
+        await sql<{ name: string }>`SELECT name FROM sqlite_master WHERE type = 'table'`.execute(
+          handle.db,
+        )
+      ).rows.map((r) => r.name),
+    );
     for (const table of TABLES) {
+      if (!present.has(table)) continue;
       const result = await sql<{
         n: number;
       }>`SELECT COUNT(*) AS n FROM ${sql.table(table)}`.execute(handle.db);

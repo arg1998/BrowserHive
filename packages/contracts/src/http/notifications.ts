@@ -1,6 +1,12 @@
 /** @module contracts/http/notifications — in-app notifications and operator preferences (spec 03 §4.8, D-16) */
 import { z } from 'zod';
-import { NotificationType } from '../enums/index.ts';
+import {
+  NotificationCategory,
+  NotificationKind,
+  NotificationSeverity,
+  NotificationState,
+  NotificationType,
+} from '../enums/index.ts';
 import { NotificationId, SessionId } from '../ids/index.ts';
 import {
   Count,
@@ -17,7 +23,8 @@ import {
  * One notification row. Read/dismiss state is server-side and survives reloads. Repeated
  * occurrences of the same thing (tool errors of one session) fold into one row: `count` grows,
  * `updated_at`, `title`, `body` and `source_event_id` follow the latest occurrence, and the change
- * is broadcast as `notification.updated`.
+ * is broadcast as `notification.updated`. A lifecycle revision (a request resolved elsewhere) changes
+ * `state` and `revision` only, never `updated_at`.
  */
 export const Notification = z.object({
   notification_id: NotificationId,
@@ -37,6 +44,17 @@ export const Notification = z.object({
   count: z.number().int().min(1),
   read_at: EpochMs.nullable(),
   dismissed_at: EpochMs.nullable(),
+  /** What the notification is about (D-32); rows from before schema v5 read a value derived from `type`. */
+  kind: NotificationKind,
+  /** Coarse group of `kind` (needs-you, problems, wrap-ups, reports, system). */
+  category: NotificationCategory,
+  severity: NotificationSeverity,
+  /** Lifecycle: `open` while it may still need someone; `resolved`/`expired`/`acted` after; `final` for one-shot facts. */
+  state: NotificationState,
+  /** 1 at creation, +1 per change of the notification's message (group growth, resolution). */
+  revision: z.number().int().min(1),
+  /** Conversation key shared with external channels (`attention:<request_id>`, `tool-errors:<session_id>`). */
+  thread: z.string(),
 });
 /** One notification row. */
 export type Notification = z.infer<typeof Notification>;

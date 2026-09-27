@@ -145,6 +145,44 @@ export const NOTIFICATION_TYPES = ['attention', 'error', 'vault', 'lifecycle', '
 /** Element of {@link NOTIFICATION_TYPES}. */
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
+/** Severity of a notification (`notifications.severity`, D-32). */
+export const NOTIFICATION_SEVERITIES = ['info', 'warn', 'error', 'critical'] as const;
+/** Element of {@link NOTIFICATION_SEVERITIES}. */
+export type NotificationSeverity = (typeof NOTIFICATION_SEVERITIES)[number];
+
+/** Lifecycle state of a notification (`notifications.state`, D-32). */
+export const NOTIFICATION_STATES = ['open', 'acted', 'resolved', 'expired', 'final'] as const;
+/** Element of {@link NOTIFICATION_STATES}. */
+export type NotificationState = (typeof NOTIFICATION_STATES)[number];
+
+/** Status of a notification channel (`notification_channels.status`, D-34). */
+export const NOTIFICATION_CHANNEL_STATUSES = ['active', 'paused', 'broken'] as const;
+/** Element of {@link NOTIFICATION_CHANNEL_STATUSES}. */
+export type NotificationChannelStatus = (typeof NOTIFICATION_CHANNEL_STATUSES)[number];
+
+/** Where a notification channel is defined (`notification_channels.source`, D-39). */
+export const NOTIFICATION_CHANNEL_SOURCES = ['db', 'startup'] as const;
+/** Element of {@link NOTIFICATION_CHANNEL_SOURCES}. */
+export type NotificationChannelSource = (typeof NOTIFICATION_CHANNEL_SOURCES)[number];
+
+/** Operation of an outbox job (`notification_deliveries.op`). */
+export const NOTIFICATION_DELIVERY_OPS = ['send', 'edit', 'delete'] as const;
+/** Element of {@link NOTIFICATION_DELIVERY_OPS}. */
+export type NotificationDeliveryOp = (typeof NOTIFICATION_DELIVERY_OPS)[number];
+
+/** Status of an outbox job (`notification_deliveries.status`). */
+export const NOTIFICATION_DELIVERY_STATUSES = [
+  'pending',
+  'sending',
+  'sent',
+  'retrying',
+  'dead',
+  'suppressed',
+  'superseded',
+] as const;
+/** Element of {@link NOTIFICATION_DELIVERY_STATUSES}. */
+export type NotificationDeliveryStatus = (typeof NOTIFICATION_DELIVERY_STATUSES)[number];
+
 /** Severity of a `system_events` row. */
 export const SYSTEM_EVENT_SEVERITIES = ['info', 'warn', 'error'] as const;
 /** Element of {@link SYSTEM_EVENT_SEVERITIES}. */

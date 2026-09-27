@@ -38,7 +38,7 @@ async function buildDomain(
   undo: (() => void | Promise<void>)[],
 ): Promise<PhaseHandle> {
   const { config, clock, transport, relay } = ctx;
-  const { logger, secrets, redactor } = part(ctx.observability, 'observability');
+  const { logger, secrets, redactor, telemetry } = part(ctx.observability, 'observability');
   const storage = part(ctx.storage, 'storage');
   const repos = storage.uow.repos;
   const ids = createNanoidIdGenerator({ clock });
@@ -124,7 +124,14 @@ async function buildDomain(
     logger,
     redactor,
     degradations,
+    uow: storage.uow,
+    env: ctx.input.env,
+    registerSecret: (literal) => secrets.add(literal),
+    dashboardUrl: () => ctx.listeners?.url ?? `http://${config.host}:${config.port}`,
+    deliveryCounter: telemetry.instruments.notificationDeliveries,
   });
+  // Startup channels (--notificationChannel, D-39) arrive with the first platform adapters.
+  await ops.channels.load();
   await reconcile({ repos, clock, logger, degradations, broker: operators.broker });
 
   const tools = buildTools({
@@ -179,6 +186,8 @@ async function buildDomain(
     adminAuthenticator: auth.admin,
     mcpAuthenticator: auth.mcp,
     notifications: ops.notifications,
+    channels: ops.channels,
+    notificationOutbox: ops.notificationOutbox,
     preferences: ops.preferences,
     recorder: ops.recorder,
     retention: ops.retention,

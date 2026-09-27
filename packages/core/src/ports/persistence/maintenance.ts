@@ -12,6 +12,8 @@ export interface RetentionPolicy {
   readonly notificationSeenDays?: number;
   /** Days an untouched notification is kept (default 90). */
   readonly notificationDays?: number;
+  /** Days terminal notification deliveries and settled channel messages are kept (default 30, D-34). */
+  readonly notificationDeliveryDays?: number;
   /** Pages reclaimed per `incremental_vacuum` chunk (default 256). */
   readonly vacuumChunkPages?: number;
 }
