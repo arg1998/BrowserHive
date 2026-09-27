@@ -14,8 +14,9 @@ describe('toast policy', () => {
     expect(toastSettled({ ...open, dismissed_at: 1 })).toBe(true);
     expect(toastSettled({ ...open, state: 'resolved' })).toBe(true);
     expect(toastSettled({ ...open, state: 'expired' })).toBe(true);
-    // A one-shot fact is final from birth: its toast follows the read state only.
-    expect(toastSettled({ ...open, state: 'final' })).toBe(false);
+    // A cancelled request is final and closed; a one-shot fact is final from birth and is not.
+    expect(toastSettled({ ...open, kind: 'attention.requested', state: 'final' })).toBe(true);
+    expect(toastSettled({ ...open, kind: 'session.crashed', state: 'final' })).toBe(false);
   });
 
   it('keeps tool errors in the bell by default and toasts attention', () => {

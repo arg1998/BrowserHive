@@ -372,7 +372,8 @@ export function requestSettled(
   if (f.status === 'pending') return null;
   const waited = f.waitedMs ?? (f.resolvedAt === null ? null : f.resolvedAt - f.createdAt);
   const after = waited === null ? '' : ` after ${formatDuration(waited)}`;
-  const by = f.resolvedBy ?? 'an operator';
+  // Orphan recovery and shutdown settle a request with no actor: the summary names none.
+  const by = f.resolvedBy === null ? '' : ` by ${f.resolvedBy}`;
   const vault = prefix === 'vault';
   const outcome: { state: NotificationState; label: string; summary: string } = (() => {
     switch (f.status) {
@@ -380,13 +381,13 @@ export function requestSettled(
         return {
           state: 'resolved',
           label: vault ? 'approved' : 'resolved',
-          summary: `${vault ? 'Approved' : 'Resolved'} by ${by}${after}`,
+          summary: `${vault ? 'Approved' : 'Resolved'}${by}${after}`,
         };
       case 'rejected':
         return {
           state: 'resolved',
           label: vault ? 'denied' : 'rejected',
-          summary: `${vault ? 'Denied' : 'Rejected'} by ${by}${after}`,
+          summary: `${vault ? 'Denied' : 'Rejected'}${by}${after}`,
         };
       case 'timeout':
         return { state: 'expired', label: 'timed out', summary: `Timed out${after}` };

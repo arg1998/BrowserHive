@@ -154,14 +154,15 @@ export const NOTIFICATION_TYPE: { readonly [K in NotificationType]: StatusEntry 
 
 /**
  * Notification lifecycle (D-32). The inbox shows a pill only once a request's notification is no
- * longer open (`acted`, `resolved`, `expired`); `open` and `final` show nothing.
+ * longer open (`acted`, `resolved`, `expired`, and `final` as "closed" for a cancelled request);
+ * `open` and one-shot `final` facts show nothing.
  */
 export const NOTIFICATION_STATE: { readonly [K in NotificationState]: StatusEntry } = {
   open: { label: 'open', tone: 'warn' },
   acted: { label: 'in progress', tone: 'accent' },
   resolved: { label: 'resolved', tone: 'success', icon: 'check' },
   expired: { label: 'expired', tone: 'muted' },
-  final: { label: 'final', tone: 'neutral' },
+  final: { label: 'closed', tone: 'muted' },
 };
 
 /** Log level registry. */

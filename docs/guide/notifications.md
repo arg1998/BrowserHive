@@ -20,7 +20,7 @@ Routine events are deliberately silent: a session opening, a page visit, a clean
 
 ## A notification has a life
 
-A notification keeps its identity while the thing it announces changes. When you resolve an attention request, reject it, or it times out, the same notification moves to **resolved** or **expired** instead of a second one appearing. The dashboard shows that outcome as a small pill on the row and closes the toast if it is still on screen. The row keeps its place in the list. A growing group of tool errors updates its count in place.
+A notification keeps its identity while the thing it announces changes. When you resolve an attention request, reject it, or it times out, the same notification moves to **resolved** or **expired** instead of a second one appearing. The dashboard shows that outcome as a small pill on the row (**resolved**, **expired**, or **closed** when the agent stopped waiting) and closes the toast if it is still on screen. The row keeps its place in the list. A growing group of tool errors updates its count in place.
 
 Every change is a new **revision** of the notification's message. Each revision is complete, so whoever shows it never has to merge changes. That is also what lets a chat message be edited in place later, silently: only a new notification makes noise.
 

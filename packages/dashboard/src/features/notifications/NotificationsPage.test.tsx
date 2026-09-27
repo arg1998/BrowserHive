@@ -135,10 +135,13 @@ describe('notifications helpers', () => {
   it('shows an outcome only once a request left open', () => {
     const attention = notification(6, { type: 'attention', kind: 'attention.requested' });
     expect(notificationOutcome(attention)).toBeNull();
-    expect(notificationOutcome({ ...attention, state: 'resolved', revision: 2 })).toBe('resolved');
+    expect(notificationOutcome({ ...attention, state: 'resolved' })).toBe('resolved');
     expect(notificationOutcome({ ...attention, state: 'expired' })).toBe('expired');
     expect(notificationOutcome({ ...attention, state: 'acted' })).toBe('acted');
-    expect(notificationOutcome({ ...attention, state: 'final' })).toBeNull();
+    expect(notificationOutcome({ ...attention, state: 'final' })).toBe('final');
+    expect(
+      notificationOutcome({ ...attention, kind: 'session.crashed', state: 'final' }),
+    ).toBeNull();
   });
 
   it('keeps preference keys the form does not edit', () => {

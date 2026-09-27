@@ -4,6 +4,7 @@ import type { Notification } from '@browserhive/contracts/http';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import { createContext, type ReactNode, useContext, useMemo, useRef } from 'react';
+import { notificationOutcome } from '@/features/notifications/notification-meta.ts';
 import { toAppError } from '@/lib/api/errors.ts';
 import { keys } from '@/lib/api/keys.ts';
 import { sessionSlug } from '@/lib/format/ids.ts';
@@ -111,15 +112,15 @@ export function planToast(
 
 /**
  * Whether an updated notification's toast should close: it was read or dismissed, or the request
- * it announced left `open` (resolved, rejected, timed out) somewhere else.
+ * it announced was settled somewhere else (resolved, rejected, timed out, cancelled).
  */
 export function toastSettled(
-  notification: Pick<Notification, 'read_at' | 'dismissed_at' | 'state'>,
+  notification: Pick<Notification, 'read_at' | 'dismissed_at' | 'state' | 'kind'>,
 ): boolean {
   return (
     notification.read_at !== null ||
     notification.dismissed_at !== null ||
-    (notification.state !== 'open' && notification.state !== 'final')
+    notificationOutcome(notification) !== null
   );
 }
 

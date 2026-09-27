@@ -85,4 +85,4 @@ Version, transport, uptime, bind address, sessions live versus the cap, open att
 
 ## Notifications
 
-Persisted notifications for attention requests, tool errors, crashed sessions and pending vault confirmations, grouped by day. Mark as read or dismiss, individually or all at once. Once an attention request or vault confirmation is settled (in the dashboard, by a timeout, or elsewhere), its row keeps its place and shows the outcome as a small pill (**resolved**, **expired**), and a toast still on screen for it closes. See [Notifications](notifications.md).
+Persisted notifications for attention requests, tool errors, crashed sessions and pending vault confirmations, grouped by day. Mark as read or dismiss, individually or all at once. Once an attention request or vault confirmation is settled (in the dashboard, by a timeout, or elsewhere), its row keeps its place and shows the outcome as a small pill (**resolved**, **expired**, or **closed** when the agent stopped waiting), and a toast still on screen for it closes. See [Notifications](notifications.md).
