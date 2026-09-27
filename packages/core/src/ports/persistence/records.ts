@@ -100,7 +100,7 @@ export interface SessionRecord {
    * `null` = not recorded (created before schema v4, or the browser never launched).
    */
   readonly sandboxed: boolean | null;
-  /** The launched browser's real version (D-31); `null` when not recorded or for a persistent context. */
+  /** The launched browser's real version (D-31); `null` when not recorded or not readable. */
   readonly browserVersion: string | null;
 }
 

@@ -76,7 +76,7 @@ describe('migration 0004-session-browser', () => {
         version: '153.0.8010.12',
         sandboxed: false,
       });
-      // A persistent context records its verdict without a version.
+      // A launch without a readable version records its verdict alone.
       await uow.repos.sessions.update('rec-22222222', { sandboxed: true, browserVersion: null });
       const persistent = await uow.repos.sessions.get('rec-22222222');
       if (persistent === null) throw new Error('row missing');

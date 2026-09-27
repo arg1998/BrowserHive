@@ -194,7 +194,7 @@ describe('session metadata projections', () => {
       });
     });
 
-    it('a persistent context records its verdict with a null version', () => {
+    it('a launch without a readable version records its verdict with a null version', () => {
       const { session } = launched({ version: null, sandboxed: true });
       expect(toSessionPatch(session)).toMatchObject({ sandboxed: true, browserVersion: null });
       expect(toSessionSummary(session, T0 + 3).browser).toEqual({ version: null, sandboxed: true });

@@ -103,7 +103,7 @@ export const SessionSummary = z.object({
   stealth_recorded: z.boolean(),
   identity: AppliedIdentity.nullable(),
   /**
-   * The browser's real version (null for a persistent context) and whether it runs sandboxed (D-31):
+   * The browser's real version (null when the driver cannot read it) and whether it runs sandboxed (D-31):
    * from the live browser while it runs, else as recorded at launch (schema v4). Absent = not recorded
    * (sessions from before schema v4, or whose browser never launched), never "not sandboxed".
    */
