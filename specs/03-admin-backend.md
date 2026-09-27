@@ -673,12 +673,12 @@ Deliberately silent (no new notification): `session.opened`, `page.visited`, `se
 Every produced or revised notification also stores its current `NotificationMessage` (`message_json`, `@browserhive/contracts/notifications`, JSON Schema in `docs/reference/notification-message.schema.json`, D-32): `schema: 1`, `id` (= `notification_id`), `revision`, `thread`, `kind`, `category`, `severity`, `state`, `alert` (whether this revision should make noise: true for the first revision, false for lifecycle revisions and group growth), `at {created, updated}`, `title` (≤ 120), `summary` (≤ 240), `blocks` (text, heading, fields, quote, list, table, image, code, divider, footer; inline text, bold, italic, code, dashboard-path link, time), `actions` (≤ 5: `act` with a `command {op, args}` and an `open` fallback, or `open` with a dashboard `path`; act ops `attention.resolve`, `vault.confirm.resolve`, `session.extend_lease`, `session.close`), `entities` (`sessionId`, `sessionSlug`, `harness`, `owner`, `tool`, `errorCode`, `domain`, `requestId`) and `privacy {level, hasImage}`.
 
 - Producers are pure (`buildMessage(draft, …)`); every copied string passes the `Redactor` and URLs pass `sanitizeUrl` before it becomes part of the message. The in-app title and body are the message's `title` and `summary` at creation; lifecycle revisions change the message only.
-- Actions exist only while `state = open`; a revision to any other state carries none: the buttons disappear with a silent edit.
+- Act buttons exist only while `state = open`, and a lifecycle revision out of `open` carries no actions at all: the buttons disappear with a silent edit. A one-shot fact (`final` from its first revision, e.g. a crash) keeps its open links.
 - Links are paths (`/sessions/{id}?live=1`); a `LinkBuilder` port turns them into absolute URLs for external channels (`publicUrl`, D-37). The in-app channel needs none.
 - `restrictContent(message, level)` derives the lower content levels per channel: `titles` keeps title, summary, `fields` and `footer` blocks and the actions; `counts` keeps only a fixed per-kind title (with the group count), the session slug and the actions.
 - `degrade(message, capabilities)` adapts a message to a renderer (D-32); both are pure and tested table-driven.
 
-Rows whose classification columns are NULL (written by an older reader in the compatibility window) are read with values derived from `type` exactly as migration v5 backfills them.
+Rows whose classification columns are NULL (written by an older reader in the compatibility window) are read with values derived from `type` as migration v5 backfills them, except `state`, which reads `open` for tool-error groups and `final` otherwise (`classifyLegacy`).
 
 ### 9.3 Channels and the registry
 

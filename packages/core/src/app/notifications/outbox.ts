@@ -131,7 +131,7 @@ export class NotificationOutbox {
   private readonly tracer: Tracer;
   private cancel: (() => void) | undefined;
   private offRegistry: (() => void) | undefined;
-  private running = false;
+  private current: Promise<OutboxPass> | undefined;
   private again = false;
   private started = false;
 
@@ -195,40 +195,44 @@ export class NotificationOutbox {
   }
 
   /**
-   * One pass: TTL sweep, backlog collapse, then up to `batchSize` due jobs, oldest first. A
-   * concurrent call coalesces into one more pass.
+   * One pass: TTL sweep, backlog collapse, then up to `batchSize` due jobs, oldest first. A call
+   * while a pass runs joins it and makes it loop once more, so the returned promise always covers
+   * work enqueued before the call.
    *
-   * @returns The pass summary, or `undefined` when a pass was already running.
+   * @returns The pass summary.
    */
-  async tick(): Promise<OutboxPass | undefined> {
-    if (this.running) {
+  tick(): Promise<OutboxPass> {
+    if (this.current !== undefined) {
       this.again = true;
-      return undefined;
+      return this.current;
     }
-    this.running = true;
+    const run = this.pass().finally(() => {
+      this.current = undefined;
+    });
+    this.current = run;
+    return run;
+  }
+
+  private async pass(): Promise<OutboxPass> {
     let processed = 0;
     let deletesEnqueued = 0;
     let collapsed = 0;
-    try {
-      do {
-        this.again = false;
-        if (!this.deps.registry.hasChannels()) break;
-        const now = this.deps.clock.now();
-        deletesEnqueued += await this.sweepTtl(now);
-        collapsed += await this.collapseBacklog(now);
-        const jobs = await this.deps.repos.notificationDeliveries.due(now, this.opts.batchSize);
-        for (const job of jobs) {
-          try {
-            await this.process(job);
-          } catch (err) {
-            this.log.error('delivery job failed', { seq: job.seq, err: serializeError(err) });
-          }
-          processed++;
+    do {
+      this.again = false;
+      if (!this.deps.registry.hasChannels()) break;
+      const now = this.deps.clock.now();
+      deletesEnqueued += await this.sweepTtl(now);
+      collapsed += await this.collapseBacklog(now);
+      const jobs = await this.deps.repos.notificationDeliveries.due(now, this.opts.batchSize);
+      for (const job of jobs) {
+        try {
+          await this.process(job);
+        } catch (err) {
+          this.log.error('delivery job failed', { seq: job.seq, err: serializeError(err) });
         }
-      } while (this.again);
-    } finally {
-      this.running = false;
-    }
+        processed++;
+      }
+    } while (this.again);
     return { processed, deletesEnqueued, collapsed };
   }
 

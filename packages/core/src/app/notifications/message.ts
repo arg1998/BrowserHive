@@ -94,8 +94,8 @@ export interface BuildMessageInput extends MessageContent {
 }
 
 /**
- * Builds one full-state revision. Title and summary are clipped to the contract's limits; actions
- * exist only while the state is `open` (spec 03 §9.2).
+ * Builds one full-state revision. Title and summary are clipped to the contract's limits; act
+ * buttons exist only while the state is `open` (a one-shot `final` fact keeps its links, spec 03 §9.2).
  *
  * @returns The message (not yet redacted; see {@link scrubMessage}).
  */
@@ -114,7 +114,8 @@ export function buildMessage(input: BuildMessageInput): NotificationMessage {
     title: clip(input.title, NOTIFICATION_TITLE_MAX),
     summary: clip(input.summary, NOTIFICATION_SUMMARY_MAX),
     blocks: [...input.blocks],
-    actions: input.state === 'open' ? [...input.actions] : [],
+    actions:
+      input.state === 'open' ? [...input.actions] : input.actions.filter((a) => a.kind === 'open'),
     entities: input.entities,
     privacy: { level: 'full', has_image: input.blocks.some((b) => b.type === 'image') },
   };
@@ -210,6 +211,15 @@ const LIMIT_BY_KEY: Readonly<Record<string, number>> = {
   path: 2048,
   ref: 512,
   language: 32,
+  session_id: 128,
+  session_slug: 64,
+  harness: 64,
+  owner: 128,
+  tool: 64,
+  error_code: 64,
+  domain: 253,
+  request_id: 64,
+  decision: 256,
 };
 
 /** Keys whose values are identifiers or enums, never free text. */

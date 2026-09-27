@@ -2,6 +2,7 @@
 
 import { describe, expect, it } from 'bun:test';
 import { Notification } from '@browserhive/contracts/http';
+import { NotificationMessage } from '@browserhive/contracts/notifications';
 import { CollectingLogger } from '../../../test/helpers/collecting-logger.ts';
 import { FakeClock } from '../../../test/helpers/fake-clock.ts';
 import { FakeIdGenerator } from '../../../test/helpers/fake-id-generator.ts';
@@ -12,11 +13,14 @@ import { NotificationService } from './notification-service.ts';
 import { draftFor, type ProducedEvent } from './producers.ts';
 import {
   attentionCreated,
+  attentionResolved,
   SESSION,
   sessionClosed,
   systemDegraded,
+  systemRecovered,
   toolCalled,
   vaultConfirmCreated,
+  vaultConfirmResolved,
 } from './test-fixtures.ts';
 
 function setup() {
@@ -276,5 +280,126 @@ describe('NotificationService inbox', () => {
     const page = await service.list({ read: 'read' });
     expect(page.items).toHaveLength(3);
     expect(page.items.every((n) => Notification.safeParse(n).success)).toBe(true);
+  });
+});
+
+describe('NotificationService contract and revisions', () => {
+  it('stores the first revision of the message with the row and serves the classification', async () => {
+    const { repo, service } = setup();
+    const [dto] = await service.produce(attentionCreated('a-000000000001', 'takeover'));
+    expect(dto).toMatchObject({
+      kind: 'attention.requested',
+      category: 'needs-you',
+      severity: 'warn',
+      state: 'open',
+      revision: 1,
+      thread: 'attention:a-000000000001',
+    });
+    const row = repo.rows.get(dto?.notification_id ?? '');
+    const message = NotificationMessage.parse(JSON.parse(row?.messageJson ?? 'null'));
+    expect(message).toMatchObject({
+      id: dto?.notification_id,
+      revision: 1,
+      alert: true,
+      title: dto?.title,
+    });
+    expect(message.summary).toBe(dto?.body ?? '');
+  });
+
+  it('revises the request notification when it resolves; title, body and updated_at stay', async () => {
+    const { clock, repo, bus, service } = setup();
+    const [created] = await service.produce(attentionCreated('a-000000000001', 'takeover'));
+    await clock.advance(130_000);
+    const [revised] = await service.produce(attentionResolved('a-000000000001', 'resolved'));
+    expect(revised).toMatchObject({
+      notification_id: created?.notification_id,
+      state: 'resolved',
+      revision: 2,
+      title: created?.title,
+      body: created?.body,
+      updated_at: created?.updated_at,
+    });
+    const message = NotificationMessage.parse(
+      JSON.parse(repo.rows.get(created?.notification_id ?? '')?.messageJson ?? 'null'),
+    );
+    expect(message).toMatchObject({ revision: 2, state: 'resolved', alert: false, actions: [] });
+    const updates = bus.published.filter((p) => p.name === 'notification.updated');
+    expect(updates).toHaveLength(1);
+    // A replayed resolution and a later terminal status change nothing.
+    expect(await service.produce(attentionResolved('a-000000000001', 'resolved'))).toEqual([]);
+    expect(await service.produce(attentionResolved('a-000000000001', 'timeout'))).toEqual([]);
+  });
+
+  it('revises vault confirmations and recovered degradations', async () => {
+    const { service } = setup();
+    await service.produce(vaultConfirmCreated('a-000000000003', 'github'));
+    const [vault] = await service.produce(vaultConfirmResolved('a-000000000003', 'rejected'));
+    expect(vault).toMatchObject({ kind: 'vault.confirm', state: 'resolved', revision: 2 });
+    await service.produce(systemDegraded('error'));
+    const [system] = await service.produce(systemRecovered());
+    expect(system).toMatchObject({ kind: 'system.degraded', state: 'resolved', revision: 2 });
+  });
+
+  it('a resolution without a notification (or of a row from before v5) fabricates nothing', async () => {
+    const { repo, service } = setup();
+    expect(await service.produce(attentionResolved('a-000000000009', 'resolved'))).toEqual([]);
+    await repo.insert({
+      notificationId: 'n-legacy000001',
+      principalId: null,
+      type: 'attention',
+      title: 'Attention requested',
+      body: null,
+      sessionId: SESSION,
+      target: null,
+      sourceEventId: 'a-000000000008',
+      createdAt: 1,
+      updatedAt: 1,
+      count: 1,
+      groupKey: null,
+      readAt: null,
+      dismissedAt: null,
+      kind: 'attention.requested',
+      category: 'needs-you',
+      severity: 'warn',
+      state: 'open',
+      revision: 1,
+      thread: 'attention:a-000000000008',
+      messageJson: null,
+    });
+    const [legacy] = await service.produce(attentionResolved('a-000000000008', 'timeout'));
+    expect(legacy).toMatchObject({ state: 'expired', revision: 2 });
+    expect(repo.rows.get('n-legacy000001')?.messageJson).toBeNull();
+  });
+
+  it('grows a tool-error group as silent revisions of one message', async () => {
+    const { clock, repo, service } = setup();
+    const [a] = await service.produce(toolCalled(1, { ok: false }));
+    await clock.advance(1_000);
+    const [b] = await service.produce(toolCalled(2, { ok: false }));
+    expect(b).toMatchObject({ notification_id: a?.notification_id, revision: 2, count: 2 });
+    const message = NotificationMessage.parse(
+      JSON.parse(repo.rows.get(a?.notification_id ?? '')?.messageJson ?? 'null'),
+    );
+    expect(message).toMatchObject({ revision: 2, alert: false, title: 'shop · 2 tool errors' });
+  });
+
+  it('the breaker notice is an in-app system notification', async () => {
+    const { service } = setup();
+    const [notice] = await service.produce({
+      name: 'notification.channel.changed',
+      at: 1,
+      payload: {
+        type: 'notification.channel.changed',
+        channel_id: 'nc-1',
+        name: 'phone',
+        kind: 'telegram',
+        status: 'broken',
+        previous_status: 'active',
+        failure_count: 5,
+        last_error: 'unavailable: down',
+        at: 1,
+      },
+    });
+    expect(notice).toMatchObject({ type: 'system', kind: 'channel.broken', severity: 'error' });
   });
 });

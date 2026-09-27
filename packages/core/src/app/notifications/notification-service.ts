@@ -222,7 +222,7 @@ export class NotificationService {
   ): Promise<Notification> {
     const now = this.deps.clock.now();
     const notificationId = `n-${this.deps.ids.opaque(12)}`;
-    const message = scrubMessage(
+    const message = this.seal(
       buildMessage({
         id: notificationId,
         revision: 1,
@@ -237,7 +237,6 @@ export class NotificationService {
         summary: draft.body ?? '',
         ...draft.content(1),
       }),
-      this.redactor,
     );
     const record: NotificationRecord = {
       notificationId,
@@ -404,7 +403,7 @@ export class NotificationService {
     const count = open.count + 1;
     const updatedAt = Math.max(now, open.updatedAt);
     const revision = open.revision + 1;
-    const message = scrubMessage(
+    const message = this.seal(
       buildMessage({
         id: open.notificationId,
         revision,
@@ -419,7 +418,6 @@ export class NotificationService {
         summary: draft.body ?? '',
         ...draft.content(count),
       }),
-      this.redactor,
     );
     const jobs = primary ? this.plan(message, now) : [];
     const result: { row: NotificationRecord | null } = { row: null };
@@ -467,9 +465,7 @@ export class NotificationService {
       const now = this.deps.clock.now();
       const previous = decodeMessage(row.messageJson);
       const message =
-        previous === null
-          ? null
-          : scrubMessage(reviseMessage(previous, revision.change, now), this.redactor);
+        previous === null ? null : this.seal(reviseMessage(previous, revision.change, now));
       const next = row.revision + 1;
       const jobs = isPrimary && message !== null ? this.plan(message, now) : [];
       const result: { row: NotificationRecord | null } = { row: null };
@@ -494,6 +490,19 @@ export class NotificationService {
       out.push(dto);
     }
     return out;
+  }
+
+  /**
+   * Redacts a message and validates it against the contract. A message that still fails (a
+   * producer bug) loses its blocks, actions and entities rather than the notification itself.
+   */
+  private seal(message: NotificationMessage): NotificationMessage {
+    try {
+      return scrubMessage(message, this.redactor);
+    } catch (err) {
+      this.log.error('message build failed', { kind: message.kind, err: serializeError(err) });
+      return scrubMessage({ ...message, blocks: [], actions: [], entities: {} }, this.redactor);
+    }
   }
 
   /** Outbox rows for a change; none without an outbox, or when there is no unit of work. */

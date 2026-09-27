@@ -305,6 +305,96 @@ describe('retentionSweep', () => {
     expect(left.map((row) => row.connection_id)).toEqual(['c-fresh', 'c-open', 'c-referenced']);
   });
 
+  it('prunes settled outbox history after 30 days and keeps channels, pending work and pending TTLs', async () => {
+    const r = t.repos;
+    const old = NOW - 31 * DAY;
+    await r.notifications.insert({
+      notificationId: 'n-outbox00001',
+      principalId: null,
+      type: 'system',
+      title: 't',
+      body: null,
+      sessionId: null,
+      target: null,
+      sourceEventId: null,
+      createdAt: NOW - DAY,
+      updatedAt: NOW - DAY,
+      count: 1,
+      groupKey: null,
+      readAt: null,
+      dismissedAt: null,
+      kind: 'system.degraded',
+      category: 'system',
+      severity: 'error',
+      state: 'open',
+      revision: 1,
+      thread: 'system:x',
+      messageJson: null,
+    });
+    const channel = {
+      channelId: 'nc-1',
+      name: 'phone',
+      kind: 'telegram',
+      mode: null,
+      source: 'db' as const,
+      status: 'active' as const,
+      target: {},
+      secretRefs: {},
+      rules: {},
+      failureCount: 0,
+      lastError: null,
+      lastOkAt: null,
+      lastFailureAt: null,
+      createdAt: old,
+      updatedAt: old,
+    };
+    await r.notificationChannels.upsert(channel);
+    await r.notificationChannels.upsert({ ...channel, channelId: 'nc-2', name: 'team' });
+    const job = (channelId: string, revision: number, status: 'pending' | 'suppressed') => ({
+      channelId,
+      notificationId: 'n-outbox00001',
+      revision,
+      op: 'send' as const,
+      status,
+      reason: null,
+      nextAttemptAt: old,
+      createdAt: old,
+    });
+    // Old terminal, old pending (still work), and a fresh terminal row.
+    await r.notificationDeliveries.enqueue([
+      job('nc-1', 1, 'suppressed'),
+      job('nc-1', 2, 'pending'),
+    ]);
+    await r.notificationDeliveries.enqueue([{ ...job('nc-2', 1, 'suppressed'), createdAt: NOW }]);
+    const message = {
+      notificationId: 'n-outbox00001',
+      thread: 'system:x',
+      messageRef: { id: 1 },
+      lastRevision: 1,
+      sentAt: old,
+      updatedAt: old,
+      deletedAt: null,
+    };
+    await r.notificationChannelMessages.upsert({ ...message, channelId: 'nc-1', expiresAt: null });
+    await r.notificationChannelMessages.upsert({
+      ...message,
+      channelId: 'nc-2',
+      expiresAt: NOW + DAY,
+    });
+    const result = await maintenance.retentionSweep(policy);
+    expect(result.failures).toEqual([]);
+    expect(result.prunedRows['notification_deliveries']).toBe(1);
+    expect(result.prunedRows['notification_channel_messages']).toBe(1);
+    expect(
+      (await r.notificationDeliveries.list({})).map((d) => [d.channelId, d.revision, d.status]),
+    ).toEqual([
+      ['nc-2', 1, 'suppressed'],
+      ['nc-1', 2, 'pending'],
+    ]);
+    expect(await r.notificationChannelMessages.get('nc-2', 'n-outbox00001')).not.toBeNull();
+    expect((await r.notificationChannels.list()).map((c) => c.name)).toEqual(['phone', 'team']);
+  });
+
   it('enforces the byte cap by pruning progressively older telemetry', async () => {
     for (let i = 0; i < 300; i++) {
       await t.repos.toolCalls.insert(
