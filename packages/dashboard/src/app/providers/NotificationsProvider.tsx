@@ -1,4 +1,4 @@
-/** @module app/providers/NotificationsProvider — server-backed notifications: unread count query, `notifications` topic, toasts only from `notification.created` with a per-type policy: no tool-error toasts by default, titles name the session, a growing group updates its toast in place (spec 04 §4.3, D-16) */
+/** @module app/providers/NotificationsProvider — server-backed notifications: unread count query, `notifications` topic, toasts only from `notification.created` with a per-type policy: no tool-error toasts by default, titles name the session, a growing group updates its toast in place, a settled request closes it (spec 04 §4.3, D-16) */
 import { NotificationType } from '@browserhive/contracts/enums';
 import type { Notification } from '@browserhive/contracts/http';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -109,6 +109,20 @@ export function planToast(
   };
 }
 
+/**
+ * Whether an updated notification's toast should close: it was read or dismissed, or the request
+ * it announced left `open` (resolved, rejected, timed out) somewhere else.
+ */
+export function toastSettled(
+  notification: Pick<Notification, 'read_at' | 'dismissed_at' | 'state'>,
+): boolean {
+  return (
+    notification.read_at !== null ||
+    notification.dismissed_at !== null ||
+    (notification.state !== 'open' && notification.state !== 'final')
+  );
+}
+
 /** Is the operator already looking at `target` (same path, or a sub-path of it)? */
 export function isAlreadyAt(pathname: string, target: string): boolean {
   const path = target.split(/[?#]/)[0] ?? target;
@@ -159,9 +173,9 @@ export function NotificationsProvider({ children }: { readonly children: ReactNo
     const id = notificationToastId(notification);
     if (event.type === 'notification.updated') {
       // A growing group updates its toast in place while it is still shown; read or dismissed
-      // elsewhere (bell, another tab) closes it. Never a new toast.
+      // elsewhere (bell, another tab), or a request settled elsewhere, closes it. Never a new toast.
       if (!toasted.current.has(notification.notification_id)) return;
-      if (notification.read_at !== null || notification.dismissed_at !== null) toast.close(id);
+      if (toastSettled(notification)) toast.close(id);
       else
         toast.update(id, {
           title: withSession(notification.title, slugOf(notification)),

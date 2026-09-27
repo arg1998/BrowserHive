@@ -37,6 +37,7 @@ export const DOCS_PAGES = {
   dashboardSystem: { page: 'guide/dashboard', anchor: 'system' },
   dashboardNotifications: { page: 'guide/dashboard', anchor: 'notifications' },
   attention: { page: 'guide/attention' },
+  notifications: { page: 'guide/notifications' },
   attentionOperator: { page: 'guide/attention', anchor: 'the-operators-side' },
   vault: { page: 'guide/vault' },
   vaultPolicies: { page: 'guide/vault', anchor: 'folder-policies' },

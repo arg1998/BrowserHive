@@ -1,6 +1,7 @@
-/** @module features/notifications/components/NotificationRow — one notification as a whole-row link to its target (opening marks it read): type icon, title (semibold + accent dot while unread), body, a meta line naming the session (and when a folded group started), and the time at the right edge with Mark read / Dismiss revealed over it on hover or focus */
+/** @module features/notifications/components/NotificationRow — one notification as a whole-row link to its target (opening marks it read): type icon, title (semibold + accent dot while unread), body, a meta line naming the outcome (once a request is settled), the session (and when a folded group started), and the time at the right edge with Mark read / Dismiss revealed over it on hover or focus */
 import type { Notification } from '@browserhive/contracts/http';
 import { RelativeTime } from '@/components/shared/RelativeTime.tsx';
+import { StatusBadge } from '@/components/shared/StatusBadge.tsx';
 import { TONE_CLASSES } from '@/components/shared/tones.ts';
 import { Button } from '@/components/ui/button.tsx';
 import { Hint } from '@/components/ui/tooltip.tsx';
@@ -8,7 +9,11 @@ import { LinkRow } from '@/features/overview/components/LinkList.tsx';
 import { ICONS } from '@/lib/icons.ts';
 import { NOTIFICATION_TYPE } from '@/lib/status-registry.ts';
 import { cn } from '@/lib/utils.ts';
-import { notificationMeta, notificationSession } from '../notification-meta.ts';
+import {
+  notificationMeta,
+  notificationOutcome,
+  notificationSession,
+} from '../notification-meta.ts';
 
 /** Props. */
 export interface NotificationRowProps {
@@ -33,6 +38,7 @@ export function NotificationRow({
   const Check = ICONS.check;
   const verb = n.type === 'vault' ? 'Review' : 'Open';
   const meta = notificationMeta(n);
+  const outcome = notificationOutcome(n);
   const slug = notificationSession(n);
   const leadsWithSlug = slug !== null && n.title.startsWith(`${slug} ·`);
   return (
@@ -73,12 +79,23 @@ export function NotificationRow({
           {n.body !== null ? (
             <p className="line-clamp-2 text-sm break-words text-muted-foreground">{n.body}</p>
           ) : null}
-          {meta.length > 0 ? (
+          {meta.length > 0 || outcome !== null ? (
             <p className="flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground">
+              {outcome !== null ? (
+                <StatusBadge
+                  domain="notificationState"
+                  value={outcome}
+                  variant="pill"
+                  iconless
+                  className="shrink-0"
+                />
+              ) : null}
               {slug !== null && !leadsWithSlug ? (
                 <Session aria-hidden="true" className="size-3.5 shrink-0" />
               ) : null}
-              <span className="min-w-0 truncate">{meta.join(' · ')}</span>
+              {meta.length > 0 ? (
+                <span className="min-w-0 truncate">{meta.join(' · ')}</span>
+              ) : null}
             </p>
           ) : null}
         </div>

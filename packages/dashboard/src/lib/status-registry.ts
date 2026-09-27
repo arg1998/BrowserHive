@@ -3,6 +3,7 @@ import type {
   BlockedSource,
   ClosedReason,
   LogLevel,
+  NotificationState,
   NotificationType,
   OperatorRequestStatus,
   SessionStatus,
@@ -151,6 +152,18 @@ export const NOTIFICATION_TYPE: { readonly [K in NotificationType]: StatusEntry 
   system: { label: 'system', tone: 'info', icon: 'system' },
 };
 
+/**
+ * Notification lifecycle (D-32). The inbox shows a pill only once a request's notification is no
+ * longer open (`acted`, `resolved`, `expired`); `open` and `final` show nothing.
+ */
+export const NOTIFICATION_STATE: { readonly [K in NotificationState]: StatusEntry } = {
+  open: { label: 'open', tone: 'warn' },
+  acted: { label: 'in progress', tone: 'accent' },
+  resolved: { label: 'resolved', tone: 'success', icon: 'check' },
+  expired: { label: 'expired', tone: 'muted' },
+  final: { label: 'final', tone: 'neutral' },
+};
+
 /** Log level registry. */
 export const LOG_LEVEL: { readonly [K in LogLevel]: StatusEntry } = {
   error: { label: 'error', tone: 'danger' },
@@ -200,6 +213,7 @@ export const REGISTRIES = {
   urlCategory: URL_CATEGORY,
   blockedSource: BLOCKED_SOURCE,
   notification: NOTIFICATION_TYPE,
+  notificationState: NOTIFICATION_STATE,
   logLevel: LOG_LEVEL,
   socket: SOCKET_STATE,
 } as const;

@@ -5,6 +5,7 @@ import {
   BlockedSource,
   ClosedReason,
   LogLevel,
+  NotificationState,
   NotificationType,
   OperatorRequestStatus,
   SessionStatus,
@@ -16,6 +17,7 @@ import {
   CLOSED_REASON_STATE,
   LOG_LEVEL,
   leaseTone,
+  NOTIFICATION_STATE,
   NOTIFICATION_TYPE,
   ORIGIN_CHECK,
   REQUEST_STATUS,
@@ -49,6 +51,7 @@ describe('status registry', () => {
     expectCovers(URL_CATEGORY, UrlCategory.options);
     expectCovers(BLOCKED_SOURCE, BlockedSource.options);
     expectCovers(NOTIFICATION_TYPE, NotificationType.options);
+    expectCovers(NOTIFICATION_STATE, NotificationState.options);
     expectCovers(LOG_LEVEL, LogLevel.options);
     for (const reason of ClosedReason.options)
       expect(SESSION_STATE[CLOSED_REASON_STATE[reason]]).toBeDefined();
