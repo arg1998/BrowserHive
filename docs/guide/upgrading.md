@@ -27,6 +27,8 @@ browserhive db migrate
 
 **The browser sandbox is on by default since the release that added `--sandbox`.** Sessions now run inside Chromium's sandbox wherever the machine allows it (`sandbox=auto`). Where it cannot (Ubuntu 23.10+ with the bundled browser, root, Docker), sessions run as before and `browserhive doctor` explains why and how to fix it (still exit code 0). `--sandbox off` restores the previous behaviour exactly. See [Security: the browser sandbox](security.md#the-browser-sandbox).
 
+**Each session records whether it ran sandboxed (schema v4).** From 0.2 on, the database stores each session's sandbox state and browser version when its browser launches, so closed sessions keep showing them. The migration only adds columns: an older release still opens the database. Sessions from before the upgrade show "not recorded"; nothing is guessed for them.
+
 Prereleases are published under the `next` tag: `bun add -g browserhive@next`.
 
 ## Downgrade
