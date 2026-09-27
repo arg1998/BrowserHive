@@ -194,6 +194,31 @@ describe('SessionPage', () => {
     expect(screen.getByText('Identity & coherence')).toBeDefined();
   });
 
+  it('shows the sandbox of a closed session as recorded, and "not recorded" without a record', async () => {
+    const closed = {
+      live: false,
+      state: 'closed',
+      closed_at: 1_000,
+      closed_reason: 'user',
+    } as const;
+    const recorded = mount(`/sessions/${ID}?tab=details`, {
+      detail: sessionDetail({ ...closed, browser: { version: '154.0.8037.57', sandboxed: true } }),
+    });
+    expect(await screen.findByText('chromium 154.0.8037.57 · headless')).toBeDefined();
+    expect(screen.getByText('sandboxed')).toBeDefined();
+    recorded.unmount();
+    const off = mount(`/sessions/${ID}?tab=details`, {
+      detail: sessionDetail({ ...closed, browser: { version: '153.0.8010.12', sandboxed: false } }),
+    });
+    expect(await screen.findByText('not sandboxed')).toBeDefined();
+    off.unmount();
+    mount(`/sessions/${ID}?tab=details`, { detail: sessionDetail(closed) });
+    expect(await screen.findByText('not recorded')).toBeDefined();
+    expect(screen.queryByText('not sandboxed')).toBeNull();
+    // The explainer (popover) says why; its content is covered by the visual check.
+    expect(screen.getByRole('button', { name: 'Why the sandbox is not recorded' })).toBeDefined();
+  });
+
   it('shows a page-level "Session not found" for 404', async () => {
     renderPage({
       path: '/sessions/$id',

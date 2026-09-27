@@ -5,10 +5,25 @@ import {
   closedReasonNote,
   closedReasonText,
   coarseDuration,
+  sandboxRecord,
   sessionEnded,
 } from './session-format.ts';
 
 describe('session format', () => {
+  it('words the sandbox record, never "not sandboxed" without one (D-31)', () => {
+    const closed = { state: 'closed', closed_reason: 'user' };
+    expect(sandboxRecord({ ...closed, browser: { sandboxed: true } })).toBe('sandboxed');
+    expect(sandboxRecord({ ...closed, browser: { sandboxed: false } })).toBe('not sandboxed');
+    expect(
+      sandboxRecord({ state: 'live', closed_reason: null, browser: { sandboxed: true } }),
+    ).toBe('sandboxed');
+    expect(sandboxRecord(closed)).toBe('not recorded');
+    expect(sandboxRecord({ state: 'crashed', closed_reason: 'crash' })).toBe('not recorded');
+    expect(sandboxRecord({ state: 'closed', closed_reason: 'launch_failed' })).toBe('not launched');
+    expect(sandboxRecord({ state: 'launching', closed_reason: null })).toBe('not launched');
+    expect(sandboxRecord({ state: 'reserved', closed_reason: null })).toBe('not launched');
+  });
+
   it('says who or what closed a session', () => {
     expect(closedReasonText('user')).toBe('Closed by the agent');
     expect(closedReasonText('operator')).toBe('Closed from the dashboard');

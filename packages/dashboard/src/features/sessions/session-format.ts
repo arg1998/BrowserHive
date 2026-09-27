@@ -13,6 +13,31 @@ export function browserLabel(session: {
   return parts.length === 0 ? null : parts.join(' · ');
 }
 
+/** What the Details panel says about Chromium's sandbox for one session (D-31). */
+export type SandboxRecord = 'sandboxed' | 'not sandboxed' | 'not launched' | 'not recorded';
+
+/**
+ * The session's sandbox state as recorded: from `browser` (live, or recorded at launch) when present;
+ * without it, "not launched" when the browser never started, else "not recorded" (a session from
+ * before the record existed). Never "not sandboxed" without a record.
+ */
+export function sandboxRecord(session: {
+  readonly browser?: { readonly sandboxed: boolean } | undefined;
+  readonly state: string;
+  readonly closed_reason: string | null;
+}): SandboxRecord {
+  if (session.browser !== undefined)
+    return session.browser.sandboxed ? 'sandboxed' : 'not sandboxed';
+  if (
+    session.state === 'reserved' ||
+    session.state === 'launching' ||
+    session.closed_reason === 'launch_failed'
+  ) {
+    return 'not launched';
+  }
+  return 'not recorded';
+}
+
 /** Why a session closed, as a sentence fragment ("Closed by the agent"). */
 export function closedReasonText(reason: string | null): string {
   switch (reason) {
