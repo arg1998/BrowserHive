@@ -1,6 +1,7 @@
-/** @module features/sessions/detail/DetailsPanel — Details tab: a compact counts strip that links into Activity with filters, the session record (owner, browser, persistence, lease, lifetime, URL), the self-reported client (harness, model, workspace, meta), identity & coherence, and "Resize the agent's browser" while live; zero-noise counts (vault fills only with the vault on) and a worded closed reason */
+/** @module features/sessions/detail/DetailsPanel — Details tab: a compact counts strip that links into Activity with filters, the session record (owner, browser, sandbox — live or recorded at launch, persistence, lease, lifetime, URL), the self-reported client (harness, model, workspace, meta), identity & coherence, and "Resize the agent's browser" while live; zero-noise counts (vault fills only with the vault on) and a worded closed reason */
 import type { SessionDetail, TimelineKind } from '@browserhive/contracts/http';
 import { Link } from '@tanstack/react-router';
+import { InfoDot } from '@/components/shared/InfoDot.tsx';
 import { KeyValue, type KeyValueItem } from '@/components/shared/KeyValue.tsx';
 import { LeaseBar } from '@/components/shared/lease-bar.tsx';
 import { RelativeTime } from '@/components/shared/RelativeTime.tsx';
@@ -15,7 +16,7 @@ import { sessionDisplayState } from '@/lib/status-registry.ts';
 import { cn } from '@/lib/utils.ts';
 import { ClientPanel } from '../../harness/ClientPanel.tsx';
 import { useSessionMutations, useVaultEnabled } from '../api.ts';
-import { closedReasonNote } from '../session-format.ts';
+import { closedReasonNote, sandboxRecord } from '../session-format.ts';
 import { IdentityCard } from './IdentityCard.tsx';
 import { ViewportForm } from './ViewportForm.tsx';
 
@@ -100,6 +101,27 @@ function CountsStrip({
   );
 }
 
+/** The Sandbox row: a success pill, or a muted word that never reads as "no" without a record (D-31). */
+function SandboxValue({ session }: { readonly session: SessionDetail['session'] }) {
+  const record = sandboxRecord(session);
+  if (record === 'sandboxed') {
+    return <TonePill entry={{ label: 'sandboxed', tone: 'success', icon: 'check' }} />;
+  }
+  if (record !== 'not recorded') return <span className="text-muted-foreground">{record}</span>;
+  return (
+    <span className="inline-flex items-center gap-1 align-middle">
+      <span className="text-muted-foreground">not recorded</span>
+      <InfoDot label="Why the sandbox is not recorded" title="Not recorded" docs="securitySandbox">
+        <p>Recorded for sessions launched with BrowserHive 0.2 or later.</p>
+        <p>
+          This session started before that, so whether its browser ran inside Chromium's sandbox is
+          unknown. It does not mean the sandbox was off.
+        </p>
+      </InfoDot>
+    </span>
+  );
+}
+
 function SessionRecord({ detail }: { readonly detail: SessionDetail }) {
   const { session } = detail;
   const now = useServerNow();
@@ -132,19 +154,8 @@ function SessionRecord({ detail }: { readonly detail: SessionDetail }) {
         .filter((v) => v !== null)
         .join(' · '),
     },
-    // Live sessions only: whether Chromium's sandbox is on for this browser process.
-    ...(session.browser !== undefined
-      ? [
-          {
-            key: 'Sandbox',
-            value: session.browser.sandboxed ? (
-              <TonePill entry={{ label: 'sandboxed', tone: 'success', icon: 'check' }} />
-            ) : (
-              <span className="text-muted-foreground">not sandboxed</span>
-            ),
-          },
-        ]
-      : []),
+    // Whether Chromium's sandbox was on for this session's browser: live, or as recorded at launch.
+    { key: 'Sandbox', value: <SandboxValue session={session} /> },
     { key: 'Persistence', value: session.persistence_mode },
     { key: 'Started', value: <RelativeTime at={session.created_at} mode="both" /> },
   );

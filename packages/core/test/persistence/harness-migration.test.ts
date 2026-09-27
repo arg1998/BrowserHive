@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'bun:test';
 import { copyFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { SCHEMA_VERSION } from '../../src/infra/persistence/migrations/index.ts';
 import { openDatabase } from '../../src/infra/persistence/open.ts';
 import { SqliteUnitOfWork } from '../../src/infra/persistence/unit-of-work.ts';
 import { FakeClock, FakeLogger, tempDir } from './helpers.ts';
@@ -33,7 +34,8 @@ describe('migration 0003-harness-identity', () => {
   it('upgrades a v2 database: old sessions read unknown and stay listed', async () => {
     const { dir, handle, uow } = await openV2Copy();
     try {
-      expect(handle.schemaVersion).toBe(3);
+      // Upgrades through v3 to head.
+      expect(handle.schemaVersion).toBe(SCHEMA_VERSION);
       const page = await uow.repos.sessions.list({ limit: 50 });
       expect(page.items.length).toBeGreaterThan(0);
       for (const row of page.items) expect(row.harness).toBeNull();

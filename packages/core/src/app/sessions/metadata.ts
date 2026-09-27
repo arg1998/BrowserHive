@@ -126,6 +126,26 @@ export function launchHarnessOf(client: SessionClientInfo | null): string | null
   return client?.harness ?? null;
 }
 
+/**
+ * `SessionSummary.browser` of an aggregate (D-31): the live handle's facts while the browser runs,
+ * else what its launch recorded (kept after teardown); absent when nothing was recorded.
+ */
+function browserOf(session: Session): Pick<SessionSummary, 'browser'> {
+  const info = session.handle?.browserInfo ?? session.browserInfo;
+  return info === undefined || info === null
+    ? {}
+    : { browser: { version: info.version, sandboxed: info.sandboxed } };
+}
+
+/** The recorded launch facts as columns: both `null` until a browser that reports them launched. */
+function launchColumns(session: Session): Pick<SessionRecord, 'sandboxed' | 'browserVersion'> {
+  const info = session.browserInfo;
+  return {
+    sandboxed: info?.sandboxed ?? null,
+    browserVersion: info?.version ?? null,
+  };
+}
+
 /** The one HTTP/WS shape (spec 03 §4.2). `has_live_viewers` is enriched by the interface layer. */
 export function toSessionSummary(session: Session, now: number): SessionSummary {
   const request = session.request;
@@ -157,12 +177,7 @@ export function toSessionSummary(session: Session, now: number): SessionSummary 
     humanize: request.humanize,
     stealth_recorded: request.stealth && session.identity !== null,
     identity: identityJson(session),
-    ...(session.handle?.browserInfo !== undefined && {
-      browser: {
-        version: session.handle.browserInfo.version,
-        sandboxed: session.handle.browserInfo.sandboxed,
-      },
-    }),
+    ...browserOf(session),
     proxy_label: session.proxyLabel,
     counts: {
       tool_calls: session.counts.toolCalls,
@@ -235,6 +250,7 @@ export function toSessionRecord(session: Session): SessionRecord {
     launchMs: session.launchMs,
     config: configJson(session),
     harness: launchHarnessOf(request.client),
+    ...launchColumns(session),
   };
 }
 
@@ -252,5 +268,7 @@ export function toSessionPatch(session: Session): SessionPatch {
     launchMs: session.launchMs,
     closedAt: session.closedAt,
     closedReason: session.closedReason,
+    // Only once a launch recorded them, so no patch ever clears a stored record (D-31).
+    ...(session.browserInfo !== null && launchColumns(session)),
   };
 }

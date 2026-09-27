@@ -97,7 +97,14 @@ export async function seedFixture(uow: SqliteUnitOfWork): Promise<void> {
       lastSeenAt: at,
       closedAt: null,
     });
-    await r.sessions.insert(sessionRecord({ connectionId: 'c-1', harness: 'claude-code' }));
+    await r.sessions.insert(
+      sessionRecord({
+        connectionId: 'c-1',
+        harness: 'claude-code',
+        sandboxed: true,
+        browserVersion: '154.0.8037.57',
+      }),
+    );
     await r.sessions.insert(
       sessionRecord({
         sessionId: 'old-11111111',

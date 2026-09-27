@@ -5,6 +5,7 @@ import type {
   AppliedIdentity,
   EngineCapabilities,
   LaunchWarning,
+  SessionBrowserInfo,
   SessionHandle,
   TracingHandle,
 } from '../../src/ports/browser-driver.ts';
@@ -141,6 +142,8 @@ export interface FakeSessionHandleOptions {
   readonly closeWarnings?: readonly LaunchWarning[];
   /** `null` mimics a persistent context (no separate browser). */
   readonly browser?: Browser | null;
+  /** The launch facts a real driver reports (D-31); absent by default, like other fakes. */
+  readonly browserInfo?: SessionBrowserInfo;
 }
 
 /** Recorded `close()` invocation. */
@@ -169,6 +172,7 @@ export class FakeSessionHandle implements SessionHandle {
   readonly capabilities: EngineCapabilities;
   readonly driver: 'patchright' | 'playwright';
   readonly identity: AppliedIdentity | null;
+  readonly browserInfo?: SessionBrowserInfo;
   readonly warnings: readonly LaunchWarning[];
   readonly tracing: FakeTracingHandle | null;
   /** Pages `ensureIdentityForPage` was called with. */
@@ -188,6 +192,7 @@ export class FakeSessionHandle implements SessionHandle {
     this.capabilities = { ...DEFAULT_CAPABILITIES, ...options.capabilities };
     this.driver = options.driver ?? 'playwright';
     this.identity = options.identity ?? null;
+    if (options.browserInfo !== undefined) this.browserInfo = options.browserInfo;
     this.warnings = options.warnings ?? [];
     this.tracing =
       options.tracing === undefined || options.tracing === false

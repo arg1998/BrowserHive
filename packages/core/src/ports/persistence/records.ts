@@ -95,6 +95,13 @@ export interface SessionRecord {
   readonly config: JsonObject;
   /** The launch harness (spec 02 §1.4), written once; `null` for sessions created before schema v3. */
   readonly harness: string | null;
+  /**
+   * Whether the session's browser ran inside Chromium's sandbox, recorded once it launched (D-31);
+   * `null` = not recorded (created before schema v4, or the browser never launched).
+   */
+  readonly sandboxed: boolean | null;
+  /** The launched browser's real version (D-31); `null` when not recorded or not readable. */
+  readonly browserVersion: string | null;
 }
 
 /** Mutable subset of {@link SessionRecord} accepted by `SessionRepository.update`. */
@@ -113,6 +120,8 @@ export type SessionPatch = Partial<
     | 'launchMs'
     | 'closedAt'
     | 'closedReason'
+    | 'sandboxed'
+    | 'browserVersion'
   >
 >;
 

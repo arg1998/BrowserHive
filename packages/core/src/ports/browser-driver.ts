@@ -198,7 +198,7 @@ export interface SessionHandle {
   readonly driver: 'patchright' | 'playwright';
   /** The identity applied after launch, or `null` when stealth is off or `applyIdentity` failed. */
   readonly identity: AppliedIdentity | null;
-  /** The engine's real version (null for a persistent context) and whether it runs sandboxed. Absent in fakes. */
+  /** The engine's real version (null when no `Browser` can be read; Chromium persistent contexts expose one) and whether it runs sandboxed. Absent in fakes. */
   readonly browserInfo?: SessionBrowserInfo;
   readonly warnings: readonly LaunchWarning[];
   readonly tracing: TracingHandle | null;

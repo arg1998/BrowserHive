@@ -55,6 +55,8 @@ export function sessionFromRow(row: Selectable<Sessions>): SessionRecord {
     launchMs: row.launch_ms,
     config: parseJsonObject(row.config_json, where),
     harness: row.harness,
+    sandboxed: row.sandboxed === null ? null : intToBool(row.sandboxed),
+    browserVersion: row.browser_version,
   };
 }
 
@@ -91,6 +93,8 @@ export function sessionToRow(record: SessionRecord): Selectable<Sessions> {
     launch_ms: record.launchMs,
     config_json: toJson(record.config),
     harness: record.harness,
+    sandboxed: record.sandboxed === null ? null : boolToInt(record.sandboxed),
+    browser_version: record.browserVersion,
   };
 }
 
@@ -109,5 +113,9 @@ export function sessionPatchToRow(patch: SessionPatch): Updateable<Sessions> {
     ...(patch.launchMs !== undefined && { launch_ms: patch.launchMs }),
     ...(patch.closedAt !== undefined && { closed_at: patch.closedAt }),
     ...(patch.closedReason !== undefined && { closed_reason: patch.closedReason }),
+    ...(patch.sandboxed !== undefined && {
+      sandboxed: patch.sandboxed === null ? null : boolToInt(patch.sandboxed),
+    }),
+    ...(patch.browserVersion !== undefined && { browser_version: patch.browserVersion }),
   };
 }

@@ -47,6 +47,7 @@ export const DOCS_PAGES = {
   stealthLevels: { page: 'guide/stealth', anchor: 'levels' },
   security: { page: 'guide/security' },
   securityRecorded: { page: 'guide/security', anchor: 'what-is-recorded' },
+  securitySandbox: { page: 'guide/security', anchor: 'the-browser-sandbox' },
   securityBlocklist: { page: 'guide/security', anchor: 'the-blocklist-is-not-an-egress-firewall' },
   securityAuth: { page: 'guide/security', anchor: 'authentication' },
   telemetry: { page: 'guide/telemetry' },

@@ -416,6 +416,7 @@ describe('SchemaMigrationRepository', () => {
       [1, 'initial'],
       [2, 'notification-groups'],
       [3, 'harness-identity'],
+      [4, 'session-browser'],
     ]);
     expect(await t.repos.schemaMigrations.currentVersion()).toBe(SCHEMA_VERSION);
   });

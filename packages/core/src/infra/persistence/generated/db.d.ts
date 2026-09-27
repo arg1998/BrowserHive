@@ -253,6 +253,7 @@ export interface Screenshots {
 
 export interface Sessions {
   archived_at: number | null;
+  browser_version: string | null;
   channel: string;
   closed_at: number | null;
   closed_reason: string | null;
@@ -276,6 +277,7 @@ export interface Sessions {
   owner: string;
   persistence_mode: string;
   proxy_label: string | null;
+  sandboxed: number | null;
   session_id: string;
   slug: string;
   state: string;
