@@ -136,7 +136,7 @@ An injectable class (constructed in `SocketProvider`, replaceable in tests) expo
 
 Server-backed (D-16): `useQuery` for the page and the bell's unread count; the WS `notifications` topic patches both through the bridge (§5). Toast policy (`planToast`, pure and tested):
 
-- Only `notification.created` raises a toast. `notification.updated` (a growing group, or read/dismiss elsewhere) updates a toast this tab raised, in place, or closes it once the row is read or dismissed; it never raises a new one.
+- Only `notification.created` raises a toast. `notification.updated` (a growing group, a lifecycle revision, or read/dismiss elsewhere) updates a toast this tab raised, in place, or closes it once the row is read or dismissed or its `state` has left `open` (an attention request or vault confirmation resolved elsewhere); it never raises a new one.
 - Types that toast come from `/me/preferences` `notifications.types`; with none stored, `DEFAULT_TOAST_TYPES` applies, which excludes `error` (tool errors go to the bell only). `notifications.toasts === false` silences all.
 - An `error` for the session the operator is already viewing never toasts. The title is prefixed with `session_slug` unless it already contains it.
 - Only `attention` toasts persist; the rest auto-dismiss. "Open session" / "Review in vault" is omitted when the operator is already at the target (`isAlreadyAt`).
@@ -203,7 +203,7 @@ Never: module-level mutable singletons holding server state.
   - Right: a search field-button ("Search sessions, pages…" + `Ctrl K`/`⌘K` by platform) that opens the palette (an icon button under 768 px), `HealthPill`, `NotificationBell`, `ThemeMenu`, `PrincipalMenu` (display name, Change password, Keyboard shortcuts, Log out).
   - `document.title` = `${title} · BrowserHive`.
 - `HealthPill` is a ghost `Button` opening a popover with Realtime (WS `connected | connecting | offline` + reason), REST, and daemon version.
-- `NotificationBell`: badge anchored top-right, capped at "9+"; rows show the session slug (unless the title has it), `updated_at`, and "first …" for grouped rows; "View all" → `/notifications`.
+- `NotificationBell`: badge anchored top-right, capped at "9+"; rows show the session slug (unless the title has it), `updated_at`, "first …" for grouped rows and the same outcome pill as the inbox (§12.11); "View all" → `/notifications`.
 - 404 (`NotFoundPage`) renders inside `AuthGate` and the shell and sets its title ("Page not found · BrowserHive").
 
 ### 6.2 Route table as data
@@ -562,7 +562,7 @@ Search: `read` (`all|unread|read`, default `all`), `type` (csv), `range` (`24h|7
 
 - Header: accent "N unread" pill, description, Dismiss all (ghost, confirm), Mark all read.
 - `FilterBar`: labelled "Show" segmented control + "Period" range in the first row, type chips (no counts) in the second, "N matching" + Clear all.
-- List: day groups ("Today", "Yesterday", `Mon D`) of `Panel`s with `LinkRow`s ordered and grouped by `updated_at`. **The whole row is a real link to its target and opening it (including middle/ctrl-click) marks it read.** Row: tinted type icon (type also in sr-only text), title (semibold + accent dot while unread), 2-line body, meta (session slug with a session icon unless the title leads with it; "first <time>" for grouped rows), time at the right edge. Mark read / Dismiss (32 px, labels include the title) fade in over the time on hover-capable devices and stay visible on touch.
+- List: day groups ("Today", "Yesterday", `Mon D`) of `Panel`s with `LinkRow`s ordered and grouped by `updated_at`. **The whole row is a real link to its target and opening it (including middle/ctrl-click) marks it read.** Row: tinted type icon (type also in sr-only text), title (semibold + accent dot while unread), 2-line body, meta (session slug with a session icon unless the title leads with it; "first <time>" for grouped rows; a muted outcome pill once a request's notification is no longer open: "resolved", "expired", "in progress" for `acted`; nothing for `final` or `open`), time at the right edge. Mark read / Dismiss (32 px, labels include the title) fade in over the time on hover-capable devices and stay visible on touch.
 - Live inserts and group updates hold while reading (`useLiveHold` with `getVersion = updated_at`).
 - **Toast preferences** panel (mounted after the list loads): pop-up toasts switch, "Toast for" type checkboxes (default `DEFAULT_TOAST_TYPES`, disabled while toasts are off), Save enabled only with changes; other stored preference keys are preserved.
 

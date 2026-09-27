@@ -287,7 +287,7 @@ Standard `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_HEADERS`, `OTEL_EXPO
 
 ### 5.4 Reserved keys (rejected if set)
 
-These names are registered so that typos and premature use fail fast with the reserved-key message. They have no behavior: `proxy`, `proxies`, `proxyRotation`, `notifications`, `notificationChannels`, `otelMetricsInterval`, `captchaSolver`, `extensions`, `profiles`, `resourceBudget`, `tenant`. Reserved enum members: `vault=local|onepassword|http`, `captcha=solver`, `persistence=blueprint`, `transport=ws`.
+These names are registered so that typos and premature use fail fast with the reserved-key message. They have no behavior: `proxy`, `proxies`, `proxyRotation`, `notifications`, `notificationChannels` (channels are configured in the dashboard, or with the flag-only `--notificationChannel` of §5.7), `otelMetricsInterval`, `captchaSolver`, `extensions`, `profiles`, `resourceBudget`, `tenant`. Reserved enum members: `vault=local|onepassword|http`, `captcha=solver`, `persistence=blueprint`, `transport=ws`.
 
 ### 5.5 Unsupported spellings
 
@@ -315,6 +315,23 @@ Playwright launches Chromium with `--no-sandbox` unless told otherwise; `sandbox
 | `off` | Never sandboxed: the behaviour before the key existed. |
 
 An agent's `launch_options.chromiumSandbox: true` makes the sandbox required for that session in every mode; `chromiumSandbox: false` is refused (spec 11 §4).
+
+### 5.7 Startup notification channels (`--notificationChannel`)
+
+A repeatable flag that declares a notification channel for this run (D-39, 03 §9.3). It is **flag-only**: unlike `cliOnly` keys such as `config`, it has no environment variable and no config-file key (`BROWSERHIVE_NOTIFICATION_CHANNEL` and a `notificationChannel` file key are unknown-key usage errors whose hint names the flag). `notifications` and `notificationChannels` stay reserved (§5.4). It is a boot key and never appears in `config show` values beyond the channel names.
+
+```
+--notificationChannel "<kind>:<param>=<value>,<param>=<value>…"      (repeat the flag for several channels)
+--notificationChannel "telegram:name=phone,token=env:BH_TG_TOKEN,chat=123456"
+--notificationChannel "discord:name=team,webhook=env:BH_DISCORD_WEBHOOK,categories=needs-you+problems"
+--notificationChannel "ntfy:name=pager,server=https://ntfy.example.net,topic=bh-alerts,token=env:BH_NTFY_TOKEN,min=error"
+--notificationChannel "webhook:name=ops,url=https://hooks.example.net/bh,secret=env:BH_HOOK_SECRET"
+```
+
+- **Grammar.** `kind` is a `NotificationChannelKind` with a startup adapter (`telegram`, `discord`, `ntfy`, `webhook` in the first release). Parameters are `name=value` pairs separated by `,`; a list value joins its items with `+`; a value cannot contain `,` (percent-encode it as `%2C`). `name` is required, `[a-z0-9][a-z0-9-]{0,31}`, and unique across all startup channels.
+- **Secrets are environment variable names.** Every secret-bearing parameter (`token`, `webhook`, `secret`, `password`, and a Discord bot `token`) takes `env:NAME`, where `NAME` matches `[A-Za-z_][A-Za-z0-9_]*` and does not start with `BROWSERHIVE_`. An inline value is a usage error, exit 64, and the message never echoes the value: `browserhive: --notificationChannel 'phone': token must name an environment variable (token=env:NAME), never contain the secret: other users of this machine can read process arguments.` A referenced variable that is unset or empty is a usage error naming the variable. An ntfy `topic` on a public server acts as a credential too; a literal topic is accepted with a `warn` recommending `topic=env:NAME`.
+- **Rules.** Optional parameters mirror the channel rules of the dashboard: `categories` (`needs-you+problems+wrap-ups+reports+system`), `min` (`info|warn|error|critical`), `sessions` (slug globs), `content` (`counts|titles|full`, default `titles`), `quiet` (`HH:MM-HH:MM`) with `tz` (IANA name, default the host's), `ttl.<category>` (a duration; default never, D-35), `deleteWhenResolved` (`true|false`, default `false`). Unknown parameters are usage errors with a "did you mean".
+- **Read-only.** A startup channel is projected into `notification_channels` with `source = 'startup'` at each start; the dashboard and API show it with a "from startup" badge and refuse to edit or delete it; pausing and resuming are allowed, and a pause survives restarts like the breaker state. A startup channel whose `name` a dashboard channel already uses stops startup with `CONFIG_INVALID` (exit 64): `browserhive: notification channel 'phone' is defined by --notificationChannel and in the dashboard. Rename one of them.`
 
 ## 6. How the schema drives everything
 

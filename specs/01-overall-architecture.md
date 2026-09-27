@@ -163,7 +163,7 @@ PR → Changeset → merge to `main` → Changesets bot opens "Version Packages"
 | `VaultBackend` + `capabilities` | ports | local vault, 1Password, HTTP vault, TOTP |
 | `OperatorRequestBroker.kind` | domain | security intercept, approval gates, CAPTCHA takeover |
 | `AuthenticationProvider` chain, `Authorizer`, `tenant_id` | app/auth | better-auth, RBAC, orgs, OIDC/SAML |
-| `NotificationChannel.send` | ports | webhook, ntfy, Telegram, Slack, email |
+| `NotificationChannel` (`send`/`edit`/`delete`, capabilities) + `LinkBuilder`, fed by the notification outbox (D-34) | ports / app/notifications | Telegram, Discord, ntfy, webhook (next), Slack, Pushover, Teams, Apprise, email (later) |
 | `AdmissionPolicy` in the create pipeline | domain | resource governor, queueing, eviction |
 | `InterceptionChain` (blocklist route is the first handler) | domain | security rules, egress firewall, Web Bot Auth signing |
 | `ToolPack` registry with `requires` | interface/mcp | profile tools, proxy tools, captcha tools |
