@@ -3,12 +3,18 @@
 import { initial } from './0001-initial.ts';
 import { notificationGroups } from './0002-notification-groups.ts';
 import { harnessIdentity } from './0003-harness-identity.ts';
+import { sessionBrowser } from './0004-session-browser.ts';
 import type { Migration } from './migration.ts';
 
 export type { Migration } from './migration.ts';
 
 /** Every migration in apply order. Append only; never edit a shipped entry. */
-export const MIGRATIONS: readonly Migration[] = [initial, notificationGroups, harnessIdentity];
+export const MIGRATIONS: readonly Migration[] = [
+  initial,
+  notificationGroups,
+  harnessIdentity,
+  sessionBrowser,
+];
 
 /** The schema version this binary writes. */
 export const SCHEMA_VERSION: number = MIGRATIONS[MIGRATIONS.length - 1]?.version ?? 0;

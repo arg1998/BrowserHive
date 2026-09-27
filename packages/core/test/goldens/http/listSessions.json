@@ -28,6 +28,10 @@
       "humanize": false,
       "stealth_recorded": false,
       "identity": null,
+      "browser": {
+        "version": "154.0.8037.57",
+        "sandboxed": true
+      },
       "proxy_label": null,
       "counts": {
         "tool_calls": 2,

@@ -55,6 +55,8 @@ export function sessionRecord(overrides: Partial<SessionRecord> = {}): SessionRe
     launchMs: 1000,
     config: {},
     harness: null,
+    sandboxed: null,
+    browserVersion: null,
     ...overrides,
   };
 }
@@ -115,7 +117,12 @@ export async function seedDataset(
     closedAt: NOW - 400_000,
   });
   await repos.sessions.insert(
-    sessionRecord({ connectionId: 'c-seed000001', harness: 'claude-code' }),
+    sessionRecord({
+      connectionId: 'c-seed000001',
+      harness: 'claude-code',
+      sandboxed: true,
+      browserVersion: '154.0.8037.57',
+    }),
   );
   await repos.sessions.insert(
     sessionRecord({

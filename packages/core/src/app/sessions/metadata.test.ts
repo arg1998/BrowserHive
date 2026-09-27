@@ -2,8 +2,15 @@
 import { describe, expect, it } from 'bun:test';
 import { SessionSummary } from '@browserhive/contracts/http';
 import { SessionMetadata } from '@browserhive/contracts/tools';
-import type { AppliedIdentity } from '../../ports/browser-driver.ts';
-import { configJson, toSessionMetadata, toSessionRecord, toSessionSummary } from './metadata.ts';
+import { FakeSessionHandle } from '../../../test/helpers/fake-session-handle.ts';
+import type { AppliedIdentity, SessionBrowserInfo } from '../../ports/browser-driver.ts';
+import {
+  configJson,
+  toSessionMetadata,
+  toSessionPatch,
+  toSessionRecord,
+  toSessionSummary,
+} from './metadata.ts';
 import { testSession } from './test-support.ts';
 
 const T0 = 1_700_000_000_000;
@@ -120,5 +127,83 @@ describe('session metadata projections', () => {
     const closed = toSessionRecord(session);
     expect(closed.closedReason).toBe('user');
     expect(closed.closedAt).toBe(T0 + 6);
+  });
+
+  describe('the launch record of the browser (D-31)', () => {
+    function launched(info?: SessionBrowserInfo) {
+      const session = testSession();
+      session.apply({ type: 'launch', phase: 'launch', at: T0 + 1 });
+      const handle = new FakeSessionHandle(session.id, {
+        ...(info !== undefined && { browserInfo: info }),
+      });
+      session.attach({ handle, driver: 'playwright', launchedAt: T0 + 2, launchMs: 2 });
+      session.apply({ type: 'launched', at: T0 + 2 });
+      return { session, handle };
+    }
+
+    it('a reserved session records nothing and its patch leaves the columns alone', () => {
+      const session = testSession();
+      const record = toSessionRecord(session);
+      expect(record.sandboxed).toBeNull();
+      expect(record.browserVersion).toBeNull();
+      expect(toSessionPatch(session)).not.toHaveProperty('sandboxed');
+      expect(toSessionPatch(session)).not.toHaveProperty('browserVersion');
+      expect(toSessionSummary(session, T0)).not.toHaveProperty('browser');
+    });
+
+    it('a launched session writes what the handle reported and serves it', () => {
+      const { session } = launched({ version: '154.0.8037.57', sandboxed: true });
+      expect(toSessionPatch(session)).toMatchObject({
+        sandboxed: true,
+        browserVersion: '154.0.8037.57',
+      });
+      const summary = toSessionSummary(session, T0 + 3);
+      expect(summary.browser).toEqual({ version: '154.0.8037.57', sandboxed: true });
+      expect(SessionSummary.parse(summary)).toEqual(summary);
+    });
+
+    it('keeps the record after teardown, so a closed aggregate still serves it', () => {
+      const { session } = launched({ version: '153.0.8010.12', sandboxed: false });
+      session.apply({ type: 'drain', reason: 'user', at: T0 + 5 });
+      session.apply({ type: 'closed', at: T0 + 6 });
+      session.detach();
+      expect(session.handle).toBeNull();
+      expect(toSessionSummary(session, T0 + 7).browser).toEqual({
+        version: '153.0.8010.12',
+        sandboxed: false,
+      });
+      expect(toSessionPatch(session)).toMatchObject({
+        sandboxed: false,
+        browserVersion: '153.0.8010.12',
+      });
+    });
+
+    it('the latest launch wins', () => {
+      const { session } = launched({ version: '153.0.8010.12', sandboxed: false });
+      session.attach({
+        handle: new FakeSessionHandle(session.id, {
+          browserInfo: { version: '154.0.8037.57', sandboxed: true },
+        }),
+        driver: 'playwright',
+        launchedAt: T0 + 9,
+        launchMs: 9,
+      });
+      expect(toSessionPatch(session)).toMatchObject({
+        sandboxed: true,
+        browserVersion: '154.0.8037.57',
+      });
+    });
+
+    it('a persistent context records its verdict with a null version', () => {
+      const { session } = launched({ version: null, sandboxed: true });
+      expect(toSessionPatch(session)).toMatchObject({ sandboxed: true, browserVersion: null });
+      expect(toSessionSummary(session, T0 + 3).browser).toEqual({ version: null, sandboxed: true });
+    });
+
+    it('a driver that reports nothing records nothing', () => {
+      const { session } = launched();
+      expect(toSessionPatch(session)).not.toHaveProperty('sandboxed');
+      expect(toSessionSummary(session, T0 + 3)).not.toHaveProperty('browser');
+    });
   });
 });

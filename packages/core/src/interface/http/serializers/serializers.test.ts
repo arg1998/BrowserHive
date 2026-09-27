@@ -28,7 +28,7 @@ import {
   toolCallToWire,
 } from './facts.ts';
 import { envelope } from './page.ts';
-import { sessionRowToSummary, sessionsQueryToRepo } from './sessions.ts';
+import { overlayLive, sessionRowToSummary, sessionsQueryToRepo } from './sessions.ts';
 import { configKeysToWire, notificationToWire, systemEventToWire } from './system.ts';
 import { timelineItemToWire } from './timeline.ts';
 import { bindingInputFromWire, bindingToWire, overviewToWire, policyToWire } from './vault.ts';
@@ -57,6 +57,38 @@ const call = {
 };
 
 describe('serializers', () => {
+  it('session rows serve the browser recorded at launch, and omit it when not recorded (D-31)', () => {
+    const recorded = {
+      ...sessionRecord({ sandboxed: false, browserVersion: '153.0.8010.12' }),
+      counts,
+      client: null,
+    };
+    expect(SessionSummary.parse(sessionRowToSummary(recorded, NOW, false)).browser).toEqual({
+      version: '153.0.8010.12',
+      sandboxed: false,
+    });
+    const unrecorded = { ...sessionRecord(), counts, client: null };
+    const wire = sessionRowToSummary(unrecorded, NOW, false);
+    expect(wire).not.toHaveProperty('browser');
+    expect(SessionSummary.parse(wire)).not.toHaveProperty('browser');
+    // The live aggregate's value wins; without one the row's record fills in.
+    const live = SessionSummary.parse({ ...wire, live: true, state: 'live' });
+    const withLive = SessionSummary.parse({
+      ...live,
+      browser: { version: '154.0.8037.57', sandboxed: true },
+    });
+    expect(overlayLive(withLive, recorded, false).browser).toEqual({
+      version: '154.0.8037.57',
+      sandboxed: true,
+    });
+    expect(overlayLive(live, recorded, false).browser).toEqual({
+      version: '153.0.8010.12',
+      sandboxed: false,
+    });
+    expect(overlayLive(live, unrecorded, false)).not.toHaveProperty('browser');
+    expect(overlayLive(live, null, false)).not.toHaveProperty('browser');
+  });
+
   it('session rows', () => {
     const wire = sessionRowToSummary({ ...sessionRecord(), counts, client: null }, NOW, true);
     const parsed = SessionSummary.parse(wire);

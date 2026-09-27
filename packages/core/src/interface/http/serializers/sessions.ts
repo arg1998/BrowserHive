@@ -52,12 +52,22 @@ export function sessionRowToSummary(
     humanize: row.humanize,
     stealth_recorded: row.stealth && row.identity !== null,
     identity: row.identity === null ? null : { ...row.identity },
+    ...recordedBrowser(row),
     proxy_label: row.proxyLabel,
     counts: countsOf(row),
     has_live_viewers: hasLiveViewers,
     harness: row.harness ?? UNKNOWN_HARNESS,
     client: toWireClient(row.client),
   };
+}
+
+/**
+ * `browser` as recorded at launch (D-31): present only when the row holds a verdict, so a session from
+ * before schema v4, or whose browser never launched, reads "not recorded" rather than "not sandboxed".
+ */
+export function recordedBrowser(row: SessionListRow | null): Pick<WireSessionSummary, 'browser'> {
+  if (row === null || row.sandboxed === null) return {};
+  return { browser: { version: row.browserVersion, sandboxed: row.sandboxed } };
 }
 
 /** Per-session counters of a row. */
@@ -73,8 +83,9 @@ export function countsOf(row: SessionListRow): WireSessionSummary['counts'] {
 }
 
 /**
- * Overlays the live aggregate's summary on a stored row: live state, URL, lease and counters win;
- * the row supplies `archived_at` (the aggregate never knows it).
+ * Overlays the live aggregate's summary on a stored row: live state, URL, lease, counters and the live
+ * `browser` win; the row supplies `archived_at` (the aggregate never knows it) and, when the aggregate
+ * has no launch facts, the `browser` recorded at launch.
  */
 export function overlayLive(
   live: z.output<typeof SessionSummary>,
@@ -82,6 +93,7 @@ export function overlayLive(
   hasLiveViewers: boolean,
 ): WireSessionSummary {
   return {
+    ...recordedBrowser(row),
     ...live,
     archived_at: row?.archivedAt ?? live.archived_at,
     // Both come from the same connection; the row covers a session whose aggregate predates it.

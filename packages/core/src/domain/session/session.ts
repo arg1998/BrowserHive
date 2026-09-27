@@ -3,7 +3,11 @@
 import type { ClosedReason, StealthDriverName } from '@browserhive/contracts/enums';
 import { AppError } from '../../kernel/errors/app-error.ts';
 import type { Result } from '../../kernel/result.ts';
-import type { AppliedIdentity, SessionHandle } from '../../ports/browser-driver.ts';
+import type {
+  AppliedIdentity,
+  SessionBrowserInfo,
+  SessionHandle,
+} from '../../ports/browser-driver.ts';
 import type { CreateSessionRequest } from './create-request.ts';
 import {
   isLeaseExpired,
@@ -82,6 +86,7 @@ export class Session {
   private currentState: SessionState;
   private currentLease: Lease;
   private attachment: LaunchAttachment | null = null;
+  private launchBrowser: SessionBrowserInfo | null = null;
   private appliedIdentity: AppliedIdentity | null = null;
   private label: string | null = null;
   private restoredSeed: string | null = null;
@@ -126,6 +131,15 @@ export class Session {
   /** Which driver launched the browser, once known. */
   get driver(): StealthDriverName | null {
     return this.attachment?.driver ?? null;
+  }
+
+  /**
+   * What the latest launch reported about the browser (real version, sandbox verdict), kept after
+   * teardown so a closed session still knows what it ran with (D-31). `null` until a browser that
+   * reports it has launched.
+   */
+  get browserInfo(): SessionBrowserInfo | null {
+    return this.launchBrowser;
   }
 
   /** Epoch ms the browser became usable, once known. */
@@ -261,6 +275,10 @@ export class Session {
   attach(attachment: LaunchAttachment): void {
     this.attachment = attachment;
     this.appliedIdentity = attachment.handle.identity;
+    // The latest launch wins (D-31); `detach` keeps it.
+    const info = attachment.handle.browserInfo;
+    this.launchBrowser =
+      info === undefined ? null : { version: info.version, sandboxed: info.sandboxed };
   }
 
   /** Drops the driver handle after teardown so nothing can drive a closed browser. */
