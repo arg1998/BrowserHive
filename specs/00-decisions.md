@@ -640,7 +640,7 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 **Context.** Notifications are about to leave the machine: Telegram, Discord, ntfy and a generic webhook first, more later (D-16). Each platform renders differently, some can edit a sent message and some cannot, and a user may build their own consumer from the webhook. If every adapter read domain events or the database, each would re-derive what happened, re-decide what may leave the machine, and break whenever the core changes. The in-app row (`Notification`) was designed for the inbox and carries neither severity, lifecycle, structure nor links.
 
 **Decision.**
-- BrowserHive owns one message contract, `NotificationMessage` (`@browserhive/contracts/notifications`): zod-first, JSON-serialisable, `schema: 1`, with a JSON Schema published at `docs/reference/notification-message.schema.json` and regenerated in CI like the other references. It carries `id`, `revision`, `thread`, `kind`, `category`, `severity`, `state`, `alert`, `at`, `title`, `summary`, semantic `blocks` (a tiny inline AST, never a markdown string), up to 5 `actions` (`act` commands with an `open` fallback, or `open` dashboard paths), routing `entities` and the `privacy` already applied.
+- BrowserHive owns one message contract, `NotificationMessage` (`@browserhive/contracts/notifications`): zod-first, JSON-serialisable, `schema: 1`, with a JSON Schema published at `docs/reference/notification-message.schema.json` and regenerated in CI like the other references. It carries `id`, `revision`, `thread`, `kind`, `category`, `severity`, `state`, `alert`, `at`, `title`, `summary`, semantic `blocks` (a tiny inline AST, never a markdown string), up to 5 `actions` (`act` commands with an `open` fallback, or `open` dashboard paths), routing `entities` and the `privacy` already applied. Field names are snake_case like every other wire shape (D-05).
 - **Producers own it; consumers only render it.** Producers are pure, table-driven functions from observed bus events (spec 03 §9). A platform adapter receives the contract and nothing else: it never reads domain events or the database. **Agents never author notifications**: every message derives from facts BrowserHive observed (D-09, D-12); there is no `notify` tool.
 - **Full-state revisions.** A notification keeps its `id` for life; every state change is `revision + 1` and the message is complete at every revision, so a re-send or re-edit is always correct and adapters are idempotent.
 - **Redaction happens before the contract** (spec 10 §9): every string a producer copies from an event goes through the `Redactor` (registered secrets and credential patterns) and URLs through `sanitizeUrl`. Content levels (`counts` < `titles` < `full`) are applied by the core per channel, never by an adapter.
@@ -707,7 +707,7 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 
 **Status:** Accepted
 
-**Implementation:** with the first external channels (N1); the contract's `image` block and `privacy.hasImage` exist since N0.
+**Implementation:** with the first external channels (N1); the contract's `image` block and `privacy.has_image` exist since N0.
 
 **Context.** A screenshot is the most useful and the most dangerous thing a notification can carry: a logged-in page, an inbox, a balance, or a credential being typed.
 
