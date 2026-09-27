@@ -44,6 +44,11 @@ export interface NotificationRepository {
     notificationId: string,
     patch: NotificationRevisionPatch,
   ): Promise<NotificationRecord | null>;
+  /**
+   * Rows still `open`/`acted` whose kind is one of `kinds`, oldest first (the startup catch-up of
+   * requests settled while no subscriber listened).
+   */
+  listUnsettled(kinds: readonly string[], limit: number): Promise<readonly NotificationRecord[]>;
   /** Lists notifications newest first (by `query.sort`, default `updated_at`). */
   list(query: NotificationListQuery): Promise<Page<NotificationRecord>>;
   /** Unread, undismissed count for a principal (or the anonymous inbox when `null`). */

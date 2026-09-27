@@ -133,6 +133,11 @@ async function buildDomain(
   // Startup channels (--notificationChannel, D-39) arrive with the first platform adapters.
   await ops.channels.load();
   await reconcile({ repos, clock, logger, degradations, broker: operators.broker });
+  // Requests settled while nothing listened (the last shutdown, the orphan recovery above) revise
+  // their notifications now; the producers subscribe later, in wire-observers.
+  await ops.notifications
+    .reconcileRequests(repos.operatorRequests)
+    .catch((err: unknown) => logger.warn('catch-up failed', { err: serializeError(err) }));
 
   const tools = buildTools({
     config,

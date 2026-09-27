@@ -132,6 +132,24 @@ for (const [name, open] of adapters) {
       ).toBeNull();
     });
 
+    it('lists unsettled request notifications, oldest first', async () => {
+      await r.notifications.insert(
+        notification({ notificationId: 'n-000000000002', createdAt: 5, state: 'acted' }),
+      );
+      await r.notifications.insert(
+        notification({ notificationId: 'n-000000000003', createdAt: 1, state: 'resolved' }),
+      );
+      await r.notifications.insert(
+        notification({ notificationId: 'n-000000000004', kind: 'tool.errors', createdAt: 2 }),
+      );
+      expect(
+        (await r.notifications.listUnsettled(['attention.requested'], 10)).map(
+          (n) => n.notificationId,
+        ),
+      ).toEqual(['n-000000000002', 'n-000000000001']);
+      expect(await r.notifications.listUnsettled([], 10)).toEqual([]);
+    });
+
     it('channels: upsert keeps status and counters, breaker counters, status, name clash', async () => {
       expect(await r.notificationChannels.recordFailure('nc-000000000001', 5, 'down')).toBe(1);
       expect(await r.notificationChannels.recordFailure('nc-000000000001', 6, 'down again')).toBe(

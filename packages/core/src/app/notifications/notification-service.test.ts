@@ -403,3 +403,49 @@ describe('NotificationService contract and revisions', () => {
     expect(notice).toMatchObject({ type: 'system', kind: 'channel.broken', severity: 'error' });
   });
 });
+
+describe('NotificationService startup catch-up', () => {
+  it('revises notifications of requests settled while nothing listened', async () => {
+    const { repo, service } = setup();
+    const [attention] = await service.produce(attentionCreated('a-000000000001', 'takeover'));
+    const [vault] = await service.produce(vaultConfirmCreated('a-000000000002', 'github'));
+    await service.produce(attentionCreated('a-000000000003', 'notify'));
+    const settled = new Map([
+      [
+        'a-000000000001',
+        {
+          status: 'rejected' as const,
+          resolvedBy: 'system',
+          createdAt: 1,
+          resolvedAt: 61_001,
+          waitedMs: 61_000,
+        },
+      ],
+      [
+        'a-000000000002',
+        { status: 'timeout' as const, resolvedBy: null, createdAt: 1, resolvedAt: 5, waitedMs: 4 },
+      ],
+      [
+        'a-000000000003',
+        {
+          status: 'pending' as const,
+          resolvedBy: null,
+          createdAt: 1,
+          resolvedAt: null,
+          waitedMs: null,
+        },
+      ],
+    ]);
+    expect(await service.reconcileRequests({ get: async (id) => settled.get(id) ?? null })).toBe(2);
+    expect(repo.rows.get(attention?.notification_id ?? '')).toMatchObject({
+      state: 'resolved',
+      revision: 2,
+    });
+    expect(repo.rows.get(vault?.notification_id ?? '')).toMatchObject({
+      state: 'expired',
+      revision: 2,
+    });
+    // Already settled rows are left alone on the next start.
+    expect(await service.reconcileRequests({ get: async (id) => settled.get(id) ?? null })).toBe(0);
+  });
+});

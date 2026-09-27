@@ -35,7 +35,9 @@ import {
   type NotificationDraft,
   type NotificationGroup,
   type ProducedEvent,
+  requestSettled,
   revisionFor,
+  type SettledRequestFacts,
   type ThreadRevision,
 } from './producers.ts';
 
@@ -47,6 +49,8 @@ export const NOTIFICATION_DAYS = 90;
 export const DEDUP_WINDOW = 2000;
 /** Rows touched by one bulk read/dismiss (the repository does the update; events go per row). */
 const BULK_EVENT_LIMIT = 500;
+/** Kinds whose notification follows an operator request (the startup catch-up). */
+const RECONCILED_KINDS = ['attention.requested', 'vault.confirm'] as const;
 /** The in-app channel needs no absolute links. */
 const INBOX_LINKS: LinkBuilder = { local: true, url: (path) => path };
 
@@ -271,6 +275,43 @@ export class NotificationService {
     await this.inbox('send', dto, message);
     this.kick(jobs);
     return dto;
+  }
+
+  /**
+   * Startup catch-up (spec 03 §9.1): an attention request or vault confirmation settled while no
+   * subscriber listened (rejected by the previous shutdown, or by the orphan recovery of this
+   * start) revises its notification now, exactly as the live `*.resolved` event would have.
+   * Composition runs it after the startup reconcile.
+   *
+   * @returns The number of notifications revised.
+   */
+  async reconcileRequests(requests: {
+    get(requestId: string): Promise<{
+      readonly status: SettledRequestFacts['status'];
+      readonly resolvedBy: string | null;
+      readonly createdAt: number;
+      readonly resolvedAt: number | null;
+      readonly waitedMs: number | null;
+    } | null>;
+  }): Promise<number> {
+    let revised = 0;
+    const rows = await this.deps.repo.listUnsettled(RECONCILED_KINDS, BULK_EVENT_LIMIT);
+    for (const row of rows) {
+      if (row.sourceEventId === null) continue;
+      const request = await requests.get(row.sourceEventId);
+      if (request === null) continue;
+      const revision = requestSettled(row.kind === 'vault.confirm' ? 'vault' : 'attention', {
+        requestId: row.sourceEventId,
+        status: request.status,
+        resolvedBy: request.resolvedBy,
+        createdAt: request.createdAt,
+        resolvedAt: request.resolvedAt,
+        waitedMs: request.waitedMs,
+      });
+      if (revision !== null) revised += (await this.revise(revision)).length;
+    }
+    if (revised > 0) this.log.info('notifications caught up', { revised });
+    return revised;
   }
 
   /** Inbox page, newest first. */

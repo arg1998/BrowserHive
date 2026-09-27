@@ -138,6 +138,22 @@ export class SqliteNotificationRepository implements NotificationRepository {
     return this.get(notificationId);
   }
 
+  async listUnsettled(
+    kinds: readonly string[],
+    limit: number,
+  ): Promise<readonly NotificationRecord[]> {
+    if (kinds.length === 0) return [];
+    const rows = await this.#db
+      .selectFrom('notifications')
+      .selectAll()
+      .where('state', 'in', ['open', 'acted'])
+      .where('kind', 'in', [...kinds])
+      .orderBy('created_at')
+      .limit(Math.max(1, limit))
+      .execute();
+    return rows.map(notificationFromRow);
+  }
+
   async list(query: NotificationListQuery): Promise<Page<NotificationRecord>> {
     const limit = clampLimit(query.limit);
     const dir = query.dir ?? 'desc';

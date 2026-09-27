@@ -142,6 +142,16 @@ export class InMemoryNotificationRepository implements NotificationRepository {
     return next;
   }
 
+  async listUnsettled(
+    kinds: readonly string[],
+    limit: number,
+  ): Promise<readonly NotificationRecord[]> {
+    return [...this.rows.values()]
+      .filter((r) => (r.state === 'open' || r.state === 'acted') && kinds.includes(r.kind))
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .slice(0, Math.max(1, limit));
+  }
+
   async list(query: NotificationListQuery): Promise<Page<NotificationRecord>> {
     const key = query.sort ?? 'updated_at';
     const at = (r: NotificationRecord) => (key === 'updated_at' ? r.updatedAt : r.createdAt);

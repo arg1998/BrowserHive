@@ -55,7 +55,9 @@ export {
   PRODUCED_EVENTS,
   type ProducedEvent,
   type ProducedEventName,
+  requestSettled,
   revisionFor,
+  type SettledRequestFacts,
   type ThreadRevision,
   toolErrorsTitle,
 } from './producers.ts';

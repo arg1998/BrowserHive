@@ -161,9 +161,9 @@ export function draftFor(event: ProducedEvent): NotificationDraft | null {
 export function revisionFor(event: ProducedEvent): ThreadRevision | null {
   switch (event.name) {
     case 'attention.resolved':
-      return requestResolved('attention', event.payload.request);
+      return requestSettled('attention', factsOf(event.payload.request));
     case 'vault.confirm.resolved':
-      return requestResolved('vault', event.payload.request);
+      return requestSettled('vault', factsOf(event.payload.request));
     case 'system.recovered': {
       const e = event.payload.event;
       return {
@@ -337,21 +337,45 @@ function vaultConfirmCreated(payload: DomainEvents['vault.confirm.created']): No
   };
 }
 
+/** What the revision of a settled operator request is built from (a wire row or a stored record). */
+export interface SettledRequestFacts {
+  readonly requestId: string;
+  readonly status: OperatorRequestRow['status'];
+  readonly resolvedBy: string | null;
+  readonly createdAt: number;
+  readonly resolvedAt: number | null;
+  readonly waitedMs: number | null;
+}
+
+function factsOf(d: OperatorRequestRow): SettledRequestFacts {
+  return {
+    requestId: d.request_id,
+    status: d.status,
+    resolvedBy: d.resolved_by,
+    createdAt: d.created_at,
+    resolvedAt: d.resolved_at,
+    waitedMs: d.waited_ms,
+  };
+}
+
 /**
  * Outcome of a settled operator request as a lifecycle change: resolved/approved and
- * rejected/denied → `resolved`, a timeout → `expired`, cancelled → `final`.
+ * rejected/denied → `resolved`, a timeout → `expired`, cancelled → `final`. Serves the live
+ * `*.resolved` events and the startup catch-up of requests settled while nothing listened.
+ *
+ * @returns The revision of the request's thread, or `null` while it is pending.
  */
-function requestResolved(
+export function requestSettled(
   prefix: 'attention' | 'vault',
-  d: OperatorRequestRow,
+  f: SettledRequestFacts,
 ): ThreadRevision | null {
-  if (d.status === 'pending') return null;
-  const waited = d.waited_ms ?? (d.resolved_at === null ? null : d.resolved_at - d.created_at);
+  if (f.status === 'pending') return null;
+  const waited = f.waitedMs ?? (f.resolvedAt === null ? null : f.resolvedAt - f.createdAt);
   const after = waited === null ? '' : ` after ${formatDuration(waited)}`;
-  const by = d.resolved_by ?? 'an operator';
+  const by = f.resolvedBy ?? 'an operator';
   const vault = prefix === 'vault';
   const outcome: { state: NotificationState; label: string; summary: string } = (() => {
-    switch (d.status) {
+    switch (f.status) {
       case 'resolved':
         return {
           state: 'resolved',
@@ -375,14 +399,14 @@ function requestResolved(
     }
   })();
   return {
-    thread: `${prefix}:${d.request_id}`,
-    dedupKey: `${prefix}-res:${d.request_id}`,
+    thread: `${prefix}:${f.requestId}`,
+    dedupKey: `${prefix}-res:${f.requestId}`,
     change: {
       state: outcome.state,
       summary: outcome.summary,
       fields: [
         { label: 'Outcome', value: [text(outcome.label)] },
-        ...(d.resolved_at === null ? [] : [{ label: 'Settled', value: [time(d.resolved_at)] }]),
+        ...(f.resolvedAt === null ? [] : [{ label: 'Settled', value: [time(f.resolvedAt)] }]),
       ],
     },
   };
