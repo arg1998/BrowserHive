@@ -41,6 +41,7 @@ export {
   TELEGRAM_CAPTION_MAX,
   TELEGRAM_TEXT_MAX,
   type TelegramChannelDeps,
+  telegramAcceptsUrl,
   telegramRenderer,
 } from './telegram.ts';
 export { createTelegramSetup, type TelegramSetupOptions } from './telegram-setup.ts';

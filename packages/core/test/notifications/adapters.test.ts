@@ -11,6 +11,8 @@ import {
   DISCORD_WEBHOOK_CAPABILITIES,
   NTFY_CAPABILITIES,
   TELEGRAM_CAPABILITIES,
+  telegramAcceptsUrl,
+  telegramRenderer,
   WEBHOOK_CAPABILITIES,
 } from '../../src/infra/notifications/index.ts';
 import { ChannelSendError } from '../../src/ports/notification-channel.ts';
@@ -274,6 +276,27 @@ describe('discord (webhook mode)', () => {
         images: SAMPLE_IMAGES,
       }),
     ).toThrow(/bot mode/);
+  });
+});
+
+describe('telegram button URLs', () => {
+  it('accepts domains and IPv4, refuses dotless hosts and IPv6 literals (Bot API behaviour)', () => {
+    expect(telegramAcceptsUrl('https://bh.example.net/x')).toBe(true);
+    expect(telegramAcceptsUrl('http://100.101.102.103:9876/x')).toBe(true);
+    expect(telegramAcceptsUrl('http://127.0.0.1:9876/x')).toBe(true);
+    expect(telegramAcceptsUrl('http://localhost:9876/x')).toBe(false);
+    expect(telegramAcceptsUrl('http://mybox:9876/x')).toBe(false);
+    expect(telegramAcceptsUrl('http://[::1]:9876/x')).toBe(false);
+  });
+
+  it('puts links in the text when publicUrl is a host Telegram refuses', () => {
+    const links = { local: false, url: (path: string) => `http://localhost:9876${path}` };
+    const [request] = telegramRenderer.render(
+      { ...delivery('test', TELEGRAM_CAPABILITIES), links },
+      { mode: null, target: { chat_id: '1' }, op: 'send', ref: null, actToken: () => 'x' },
+    );
+    expect(request?.body['reply_markup']).toBeUndefined();
+    expect(String(request?.body['text'])).toContain('🔗 Links');
   });
 });
 
