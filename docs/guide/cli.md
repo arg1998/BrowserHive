@@ -23,21 +23,22 @@ Help text is generated from the configuration schema, so `browserhive --help` al
 Resolves the configuration, opens storage (migrating the database if needed), starts the listener and prints the banner:
 
 ```
- BrowserHive 0.1.0  ·  bun 1.4.2  ·  patchright 1.63.0
+ BrowserHive 0.2.0  ·  bun 1.4.2  ·  patchright 1.63.0
  MCP        http://127.0.0.1:9876/mcp            (auth: token)
  Dashboard  http://127.0.0.1:9876/               (admin)
- Data dir   /home/me/.local/share/browserhive     (db v1, 12 MiB, 3 backups)
+ Data dir   /home/me/.local/share/browserhive     (db v6, 12 MiB, 3 backups)
  Config     env:2  file:/home/me/browserhive.config.json:9  cli:1
  Sessions   cap 8 (derived from 12 GiB RAM) · lease 2h · persistence memory
  Stealth    standard · patchright · humanize on · fingerprint off
  Telemetry  otel → http://127.0.0.1:4318 (http/protobuf)
  Vault      bitwarden (locked)
+ Notify     2 channels (1 from startup) · links → https://browserhive.example.net
 
  config: maxSessions=8 (cli) shadows config-file=4
  Press Ctrl-C to stop.
 ```
 
-The first-run dashboard password and the first agent token are printed once in this banner and never logged. `Ctrl-C` (or `SIGTERM`) stops gracefully within `--shutdownTimeout`: listeners, then sessions (traces are finalized), then storage. A second `Ctrl-C` exits immediately with code 130.
+The **Notify** row appears once a [notification channel](notifications.md#channels) or [`publicUrl`](notifications.md#public-address) is set. The first-run dashboard password and the first agent token are printed once in this banner and never logged. `Ctrl-C` (or `SIGTERM`) stops gracefully within `--shutdownTimeout`: listeners, then sessions (traces are finalized), then storage. A second `Ctrl-C` exits immediately with code 130.
 
 Output streams: under `--transport stdio`, stdout carries only MCP frames and everything else goes to stderr. Under HTTP, the banner and pretty logs go to stdout on a terminal, and JSON logs go to stderr, so `browserhive 2> logs.jsonl` captures them. Colour is on for terminals; `NO_COLOR` or `--color never` disables it.
 
@@ -149,7 +150,7 @@ They talk to the running server: `--url` defaults to the configured host and por
 ## `version`
 
 ```
-browserhive 0.1.0 (bun 1.4.2, sqlite 3.53.2, playwright 1.63.0, patchright 1.63.0)
+browserhive 0.2.0 (bun 1.4.2, sqlite 3.53.2, playwright 1.63.0, patchright 1.63.0)
 ```
 
 `--json` for scripts.

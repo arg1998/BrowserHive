@@ -25,7 +25,7 @@ browserhive --admin
 The dashboard, REST API and WebSocket share the same port. On the first start the server prints a one-time password:
 
 ```
- BrowserHive 0.1.0  ·  bun 1.4.2  ·  patchright 1.63.0
+ BrowserHive 0.2.0  ·  bun 1.4.2  ·  patchright 1.63.0
  MCP        http://127.0.0.1:9876/mcp            (auth: off)
  Dashboard  http://127.0.0.1:9876/               (admin)
  ...
