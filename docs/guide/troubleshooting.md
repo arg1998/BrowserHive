@@ -96,6 +96,20 @@ Check the session's Identity tab. Make sure `browserhive init` installed Patchri
 
 **Takeover input is ignored** — input is only accepted while an attention request is open for that session ([`INPUT_NOT_PERMITTED`](../reference/errors.md#INPUT_NOT_PERMITTED)).
 
+## Notifications
+
+**A notification did not reach my phone** — open **Notifications → Delivery log**: every row that was not delivered says why in a sentence (filtered by the channel's rules, quiet hours, the channel was paused, the platform refused the token, …). `browserhive channels test <name>` sends a real test message and prints the platform's answer. See [the delivery log](notifications.md#delivery-log).
+
+**The channel shows a variable as missing, or `doctor` says it is not set** — a channel stores only the name of the environment variable that holds its token. Set it in the environment of the process that runs BrowserHive (the shell, a systemd `Environment=` line, `docker run -e`) and restart. See [Channels](notifications.md#channels).
+
+**A channel is marked broken** — five sends in a row failed, so its deliveries paused. Fix the cause shown on the card and in the delivery log, then resume the channel.
+
+**Links in a notification do not open on my phone** — they point at this computer until you set `publicUrl`. The System page and `browserhive doctor` check whether it reaches this BrowserHive. See [Public address](notifications.md#public-address).
+
+**Discord buttons say "This interaction failed", or the bot is offline** — see [Troubleshooting Discord bot mode](notifications.md#troubleshooting-discord-bot-mode).
+
+**No digest arrived** — a period with no activity sends nothing, and the delivery log says *nothing happened in the period*. If BrowserHive was off at the scheduled time, only the most recent missed digest is sent when it starts, marked late. See [Daily digests and anomaly alerts](notifications.md#daily-digests-and-anomaly-alerts).
+
 ## MCP clients
 
 **401 on `/mcp`** — `--auth token` is on and the client sent no token or a revoked one. See [MCP clients](mcp-clients.md#authentication-tokens).

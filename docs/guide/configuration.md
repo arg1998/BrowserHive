@@ -159,6 +159,8 @@ Secrets stay hidden. For `authTokens` and `otelHeaders`, BrowserHive shows the v
 | [`defaultChannel`](../reference/configuration.md#defaultChannel) | `chromium` | the browser sessions use: the bundled `chromium`, or the installed `chrome` or `edge` ([choosing the browser](installation.md#choosing-the-browser)) |
 | [`sandbox`](../reference/configuration.md#sandbox) | `auto` | Chromium's sandbox: `auto` wherever the machine allows it, `on` required (refuses to start otherwise), `off` never ([security](security.md#the-browser-sandbox)) |
 | [`maxSessions`](../reference/configuration.md#maxSessions) | derived from RAM | concurrent session cap, or `unbounded` |
+| [`publicUrl`](../reference/configuration.md#publicUrl) | unset | the address where you reach the dashboard from elsewhere (a Tailscale name, a reverse proxy, a tunnel); notification links use it ([public address](notifications.md#public-address)) |
+| [`allowedHosts`](../reference/configuration.md#allowedHosts) | none | extra `Host` names to accept, such as the name a reverse proxy forwards |
 | [`sessionLease`](../reference/configuration.md#sessionLease) | `2h` | idle sessions are closed after this long |
 | [`blocklist`](../reference/configuration.md#blocklist) | unset | URL blocklist file |
 | [`dataDir`](../reference/configuration.md#dataDir) | OS default | where state lives |

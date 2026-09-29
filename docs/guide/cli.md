@@ -77,6 +77,7 @@ One-time setup, safe to re-run:
 |---|---|
 | `--browsers chromium` | Browsers to install (only `chromium` today; Chrome and Edge channels use the OS installation). |
 | `--force` | Re-download even if present. |
+| `--skipBrowsers` | Skip the browser downloads (data directory and database only). |
 | `--dataDir <path>`, `--config <path>` | Where state and configuration live. |
 | `--stealthDriver <auto\|patchright\|playwright>` | `playwright` skips the Patchright download. |
 | `--writeSchema` | Write `browserhive.schema.json` next to a discovered config file. |
