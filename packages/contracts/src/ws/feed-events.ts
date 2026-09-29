@@ -4,6 +4,7 @@ import { ClosedReason, DegradationSeverity } from '../enums/index.ts';
 import { ScreenshotRow } from '../http/artifacts.ts';
 import { OperatorRequestRow } from '../http/attention.ts';
 import { BlockedRequestRow } from '../http/blocklist.ts';
+import { ChannelView, DeliveryRow } from '../http/channels.ts';
 import { Count, EpochMs } from '../http/common.ts';
 import { LogRecord } from '../http/logs.ts';
 import { Notification } from '../http/notifications.ts';
@@ -144,6 +145,17 @@ export const NotificationUpdatedEvent = z.object({
   notification: Notification,
 });
 
+// channels ---------------------------------------------------------------------------------------
+/** A notification channel was created, edited, paused, resumed or broken, or its stats moved. */
+export const ChannelChangedEvent = z.object({ ...ev('channel.changed'), channel: ChannelView });
+/** A notification channel was deleted. */
+export const ChannelRemovedEvent = z.object({
+  ...ev('channel.removed'),
+  channel_id: z.string(),
+});
+/** A delivery job was enqueued or changed status (the live delivery log). */
+export const DeliveryUpdatedEvent = z.object({ ...ev('delivery.updated'), delivery: DeliveryRow });
+
 // logs -------------------------------------------------------------------------------------------
 /** One log record from the ring buffer (droppable under backpressure). */
 export const LogRecordEvent = z.object({ ...ev('log.record'), record: LogRecord });
@@ -175,6 +187,9 @@ export const WsFeedEvent = z.discriminatedUnion('type', [
   RetentionCompletedEvent,
   NotificationCreatedEvent,
   NotificationUpdatedEvent,
+  ChannelChangedEvent,
+  ChannelRemovedEvent,
+  DeliveryUpdatedEvent,
   LogRecordEvent,
 ]);
 /** Every feed event payload. */
@@ -200,6 +215,7 @@ export const WS_TOPIC_EVENTS: { readonly [T in WsStaticTopic]: readonly WsFeedEv
   ],
   logs: ['log.record'],
   notifications: ['notification.created', 'notification.updated'],
+  channels: ['channel.changed', 'channel.removed', 'delivery.updated'],
 };
 
 /** Event types published on `session:<id>` topics. */

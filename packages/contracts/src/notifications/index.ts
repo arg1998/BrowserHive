@@ -53,6 +53,28 @@ export {
   TextBlock,
 } from './message.ts';
 export {
+  AVAILABLE_CHANNEL_KINDS,
+  AVAILABLE_DISCORD_MODES,
+  AvailableChannelKind,
+  CHANNEL_KIND_SPECS,
+  CHANNEL_PRESETS,
+  type ChannelConfigProblem,
+  type ChannelKindSpec,
+  checkChannelConfig,
+  DELIVERY_REASON_TEXT,
+  DISCORD_MODES,
+  deliveryReasonText,
+  looksLikeSecretValue,
+  NTFY_DEFAULT_SERVER,
+  PREVIEW_SAMPLE_LABEL,
+  PREVIEW_SAMPLES,
+  PreviewSample,
+  type SecretParamSpec,
+  type TargetKeySpec,
+  TELEGRAM_DELETE_WINDOW_MS,
+  TELEGRAM_TTL_MAX_MS,
+} from './platforms.ts';
+export {
   classifyLegacy,
   IN_APP_ONLY_KINDS,
   KIND_CATEGORY,

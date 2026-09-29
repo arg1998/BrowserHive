@@ -3,7 +3,16 @@ import type { z } from 'zod';
 import { AuthMode } from '../enums/auth-mode.ts';
 import { isIPv4, isIPv6, zHost } from './host.ts';
 import { derived, key } from './key.ts';
-import { zBool, zDuration, zEnumOf, zList, zPath, zPort, zReservedEnum } from './parsers.ts';
+import {
+  zBool,
+  zDuration,
+  zEnumOf,
+  zList,
+  zPath,
+  zPort,
+  zPublicUrl,
+  zReservedEnum,
+} from './parsers.ts';
 
 const AUTH_TOKEN_ITEM_RE = /^[^:\s]+:.{32,}$/;
 
@@ -96,6 +105,13 @@ export const SERVER_KEYS = {
     describe:
       'Extra Host names to accept besides loopback and the bound host, such as the name a reverse proxy forwards. Ports are ignored.',
     examples: ['browserhive.example.com'],
+  }),
+  publicUrl: key(zPublicUrl, {
+    optional: true,
+    group: 'server',
+    describe:
+      'Address where you made the dashboard reachable (reverse proxy, tunnel, Tailscale name). Notification links use it, and its host is trusted like allowedHosts.',
+    examples: ['https://browserhive.example.net'],
   }),
   admin: key(zBool, {
     default: false,

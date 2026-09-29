@@ -226,6 +226,11 @@ export const HealthResponse = z.object({
   phase: BootPhase,
   version: z.string(),
   uptime_ms: DurationMs,
+  /**
+   * Random per start: the `publicUrl` check compares it to tell this BrowserHive from another
+   * server behind the same address (spec 08 §5.8). Absent from servers older than the field.
+   */
+  instance_id: z.string().optional(),
   checks: z.object({
     db: HealthCheckState,
     browser: HealthCheckState,

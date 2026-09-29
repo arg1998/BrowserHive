@@ -64,6 +64,11 @@ export const NotificationChannelRules = z.object({
   content: NotificationContentLevel.optional(),
   /** Screenshots per category (D-36); absent = off. */
   images: PerCategory(z.boolean()).optional(),
+  /**
+   * Screenshots for this channel have their form fields masked (Playwright `mask`); absent = off.
+   * A stored frame (a crash's last screenshot) cannot be masked, so such a channel gets none.
+   */
+  mask_images: z.boolean().optional(),
   /** Message TTL per category in milliseconds (D-35); absent = never. */
   ttl_ms: PerCategory(z.number().int().positive()).optional(),
   /** Delete the message once its notification is resolved, per category; absent = off. */

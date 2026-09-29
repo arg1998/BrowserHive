@@ -88,8 +88,8 @@ Decisions: D-07 (error model), D-08 (telemetry), D-20 (privacy).
 | CHANNEL_NOT_FOUND | 404 | domain | never | `{channel_id}` |
 | CHANNEL_NAME_TAKEN | 409 | domain | different_args | `{name}` |
 | CHANNEL_READ_ONLY | 409 | domain | never | `{channel_id, name}` (a startup channel: edit its `--notificationChannel` flag) |
-| CHANNEL_NOT_READY | 409 | domain | after_operator | `{channel_id?, missing[]}` (the environment variables that are unset; names only) |
-| CHANNEL_KIND_UNAVAILABLE | 400 | domain | different_args | `{kind, mode?}` |
+| CHANNEL_NOT_READY | 409 | domain | after_operator | `{channel_id?, problem, missing[]}` (the environment variables that are unset; names only) |
+| CHANNEL_KIND_UNAVAILABLE | 400 | domain | different_args | `{kind, mode?, mode_text}` |
 | CHANNEL_PLATFORM_ERROR | 502 | domain | backoff | `{kind, code, detail}` (the classified platform failure, scrubbed) |
 | DELIVERY_NOT_FOUND | 404 | domain | never | `{seq}` |
 | INPUT_NOT_PERMITTED | 409 | domain | after_operator | `{session_id}` |

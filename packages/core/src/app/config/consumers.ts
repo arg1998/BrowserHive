@@ -18,6 +18,7 @@ export const CONSUMED_KEYS: Readonly<Record<ConfigKey, string>> = {
   allowInsecureBind: 'app/config/resolve',
   trustedProxies: 'interface/http/middleware/forwarded',
   allowedHosts: 'interface/http/middleware/host-guard',
+  publicUrl: 'app/notifications/links',
   admin: 'browserhive/composition',
   dataDir: 'browserhive/composition/phases/open-storage',
   shutdownTimeout: 'browserhive/composition',
