@@ -724,12 +724,15 @@ export class ChannelService {
       secretRefs[param] ??
       spec.secrets.find((s) => s.param === param)?.suggestedEnv ??
       param.toUpperCase();
+    // A secret parameter appears as `{secret:<param>}` (a path, an ntfy topic); show its variable.
+    const named = (text: string) =>
+      text.replace(/\{secret:([a-z_]+)\}/g, (_m, param: string) => `{${envOf(param)}}`);
     const requests: PlatformRequest[] = rendered.map((r) => ({
       method: r.method,
-      path: r.path.replace(/\{secret:([a-z_]+)\}/g, (_m, param: string) => `{${envOf(param)}}`),
+      path: named(r.path),
       encoding: r.encoding,
-      body: { ...r.body },
-      headers: { ...r.headers },
+      body: JSON.parse(named(JSON.stringify(r.body))) as Record<string, unknown>,
+      headers: JSON.parse(named(JSON.stringify(r.headers))) as Record<string, string>,
       file: r.file === null ? null : { name: r.file.name, content_type: r.file.content_type },
     }));
     return {
