@@ -655,7 +655,7 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 
 **Status:** Accepted
 
-**Implementation:** binding on every channel; the storage (`secret_refs_json`) exists since the notification foundations (N0), the checks arrive with the first channels (N1).
+**Implementation:** binding on every channel; the storage (`secret_refs_json`) since the notification foundations (N0); the checks (API validation, the exit-64 flag refusal, the set/missing check that never shows a value) since the first channels (N1).
 
 **Context.** BrowserHive is local-first. A relay, a shared bot or a hosted callback would make BrowserHive a service with an operator, an uptime and a data-protection story, and would see every user's messages. Channel credentials (bot tokens, webhook URLs, access tokens) are live secrets; the database is backed up (`db backup`) and copied around.
 
@@ -672,7 +672,7 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 
 **Status:** Accepted
 
-**Implementation:** the notification foundations (N0): tables, worker, breaker, retention, metrics; platform adapters follow (N1).
+**Implementation:** the notification foundations (N0): tables, worker, breaker, retention, metrics; the Telegram, Discord webhook, ntfy and generic webhook adapters since N1.
 
 **Context.** An external platform can be down, rate-limited or misconfigured, and BrowserHive can stop at any moment. A delivery made from an in-memory callback is lost on restart, and the producer's in-memory de-duplication set does not survive one either. A channel failure reported as a system degradation would itself produce a notification, delivered through the failing channel: a feedback loop.
 
@@ -695,7 +695,7 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 
 **Status:** Accepted
 
-**Implementation:** `expires_at` and the sweeper exist since the notification foundations (N0); rules, platform deletes and the wizard arrive with the channels (N1).
+**Implementation:** `expires_at` and the sweeper since the notification foundations (N0); the rules, platform deletes, the 47 h Telegram cap and the wizard since the first channels (N1).
 
 **Context.** Users want notifications that clean themselves up. No platform offers a per-message timer to bots; Telegram's auto-delete timer is a whole-chat setting chosen by the user, and a bot may delete its own messages only within 48 hours of sending them.
 
@@ -707,7 +707,7 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 
 **Status:** Accepted
 
-**Implementation:** with the first external channels (N1); the contract's `image` block and `privacy.has_image` exist since N0.
+**Implementation:** implemented with the first external channels (N1): capture at attention, vault-confirm and crash, per-channel variant selection, masking (spec 03 §9.5); the contract's `image` block and `privacy.has_image` since N0.
 
 **Context.** A screenshot is the most useful and the most dangerous thing a notification can carry: a logged-in page, an inbox, a balance, or a credential being typed.
 
@@ -717,7 +717,7 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 
 **Status:** Accepted
 
-**Implementation:** with the first external channels (N1); the `LinkBuilder` port exists since N0.
+**Implementation:** implemented in N1: the config key (08 §5.8), the link builder, host and origin trust, the `/health` `instance_id` check in `doctor` and on the System page; the `LinkBuilder` port since N0.
 
 **Context.** "Open session" in a notification is a link, and a `127.0.0.1` link does nothing on a phone. Users who reach their dashboard remotely do it through their own reverse proxy, Cloudflare, Caddy, nginx or a Tailscale name, which today also needs `allowedHosts` and can fail the origin check when a proxy rewrites `Host`.
 
@@ -727,7 +727,7 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 
 **Status:** Accepted
 
-**Implementation:** webhook mode with the first external channels (N1), bot mode with act buttons (N2); `notification_channels.mode` exists since N0.
+**Implementation:** webhook mode implemented in N1 (the renderer already draws bot mode for the setup's comparison); bot mode with act buttons in N2; `notification_channels.mode` since N0.
 
 **Context.** A Discord webhook takes 30 seconds to create and needs no connection, but its messages cannot carry interactive buttons. A bot needs a Developer Portal application and a gateway connection, and is the only way to receive button presses without a public endpoint (an Interactions Endpoint URL and the gateway are mutually exclusive).
 
@@ -737,10 +737,26 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 
 **Status:** Accepted
 
-**Implementation:** the registry merge and clash rule since the notification foundations (N0); the flag and its parser with the first external channels (N1).
+**Implementation:** the registry merge and clash rule since the notification foundations (N0); the flag, its parser and the read-only dashboard rows implemented in N1.
 
 **Context.** Some users want a channel that exists from the first start (a server, a container) without clicking through the dashboard. Nested per-channel rules do not fit the flat config grammar (spec 08 §2), and a second copy of a channel in the config file and the database would be two truths. Process arguments are visible to other users of the machine (`ps`).
 
 **Decision.** Startup channels are declared only with a repeatable `--notificationChannel` flag (spec 08 §5.7): not in the config file and not in the environment. A startup channel references secrets by environment variable **name** (`token=env:BH_TG_TOKEN`); an inline secret is a usage error (exit 64). At each start the startup channels are projected into `notification_channels` with `source = 'startup'` (their configuration columns rewritten from the flags, their status and failure counters kept), so deliveries keep their foreign keys and the breaker state survives restarts; a startup channel no longer passed is removed with its delivery log. The dashboard and API show them read-only with a "from startup" badge. A startup channel whose name matches a dashboard channel stops startup with `CONFIG_INVALID` (exit 64); neither silently shadows the other.
 
 **Alternatives considered.** *A `notificationChannels` config key with a URI grammar* (the research's P1): secrets would sit in a file that gets committed, and per-channel rules would need a grammar the config ladder does not have. *Seeding the database from config on first run*: friendlier once, but the file would then lie about what is configured.
+
+## D-40 Platform message formats: Telegram HTML messages, Discord embeds
+
+**Status:** Accepted
+
+**Implementation:** the first external channels (N1).
+
+**Context.** The plan preferred Telegram's Rich Messages (`sendRichMessage`, Bot API 10.1, June 2026) and left Discord's Components V2 against embeds to a spike. Rich Messages add headings, tables and footers, but they are three months old, their rendering on older Telegram clients is unverified, and no real bot was available to the first channels' build to check them on phones. Discord's documentation states that a webhook message with `IS_COMPONENTS_V2` may carry only components: `content`, `embeds` and `files[n]` fail with 400, so a V2 webhook message cannot upload a screenshot.
+
+**Decision.**
+- Telegram channels send classic messages: `sendMessage`/`sendPhoto` with `parse_mode: HTML` (escaping only `<`, `>`, `&`), an inline keyboard for links, `editMessageText`/`editMessageCaption` for revisions. `degrade` already turns tables into lists and headings into bold text for this renderer (`richBlocks: false`, `tables: false`). Rich Messages stay a later, opt-in renderer once they are verified on real clients; the contract needs no change for it.
+- Discord webhooks send one embed (colour by severity, fields, image as `attachment://`) plus an action row of link buttons (`with_components=true`), not Components V2.
+
+**Consequences.** Every Telegram client renders the messages; tables arrive as lists. The Telegram renderer is swappable per channel later without touching producers or the outbox.
+
+**Alternatives considered.** *Rich Messages first*: better structure, unverifiable here, and a formatting mistake would fail every send with a 400. *Discord Components V2*: no screenshots through a webhook.

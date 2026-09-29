@@ -85,6 +85,13 @@ Decisions: D-07 (error model), D-08 (telemetry), D-20 (privacy).
 | ATTENTION_REQUIRES_HTTP | 400 | domain | never | `{tool}` |
 | ATTENTION_NOT_OPEN | 409 | domain | never | `{request_id, status}` |
 | CONFIRM_NOT_OPEN | 409 | domain | never | `{request_id, status}` |
+| CHANNEL_NOT_FOUND | 404 | domain | never | `{channel_id}` |
+| CHANNEL_NAME_TAKEN | 409 | domain | different_args | `{name}` |
+| CHANNEL_READ_ONLY | 409 | domain | never | `{channel_id, name}` (a startup channel: edit its `--notificationChannel` flag) |
+| CHANNEL_NOT_READY | 409 | domain | after_operator | `{channel_id?, missing[]}` (the environment variables that are unset; names only) |
+| CHANNEL_KIND_UNAVAILABLE | 400 | domain | different_args | `{kind, mode?}` |
+| CHANNEL_PLATFORM_ERROR | 502 | domain | backoff | `{kind, code, detail}` (the classified platform failure, scrubbed) |
+| DELIVERY_NOT_FOUND | 404 | domain | never | `{seq}` |
 | INPUT_NOT_PERMITTED | 409 | domain | after_operator | `{session_id}` |
 | SCREENCAST_FAILED | 502 | domain | backoff | `{session_id, reason}` |
 | TOOL_NOT_AVAILABLE | 400 | domain | never | `{tool, requires}` |
@@ -383,8 +390,8 @@ The same registry backs `/api/v1/system` figures; with `--otel` off, the in-proc
 - References in config files (D-29, 08 §3.1): the variable *name* is always shown (it is the operator's coordinate); the value and the file's text around a reference never are on a secret key (no `template`, problem messages name the variable only). The key-name heuristics above also apply to reference names: a value that came through `{env:GRAFANA_API_TOKEN}` renders `<redacted>` on every surface even on a key that is not flagged secret, `GET /api/v1/system/config` marks that key `secret: true` for this run, and the values such references produced are registered as always-on entries in the `observability` phase. Over-redaction is the accepted failure direction.
 - Error projections run through `toWire` too, so an error message that echoes a typed value cannot carry a secret past the redaction window.
 - `--screenshotTrace` skips frames while a session's secret window is open; `vault_fill` is excluded from screenshot tracing.
-- Notifications are a sink (D-32): producers pass every string they copy from an event (attention reason and message, tool name, error message, entry name, degradation message, URLs) through the `Redactor` and `sanitizeUrl` before it becomes part of the stored `NotificationMessage`, the in-app row or a delivery; adapters and the delivery log only ever see that result, and `last_error` of a delivery is scrubbed too. Channel secrets are never in the database (only environment variable names, D-33).
-- Property test: for every sink (log line, DB row, WS frame, MCP result, problem+json, OTLP payload, export stream, notification message, in-app notification row, delivery log) inject a sentinel secret through every documented path and assert the sentinel never appears.
+- Notifications are a sink (D-32): producers pass every string they copy from an event (attention reason and message, tool name, error message, entry name, degradation message, URLs) through the `Redactor` and `sanitizeUrl` before it becomes part of the stored `NotificationMessage`, the in-app row or a delivery; adapters and the delivery log only ever see that result, and `last_error` of a delivery is scrubbed too. Channel secrets are never in the database (only environment variable names, D-33). The adapter factories read the variables through `ctx.secret(name)`, which registers each value as an always-on `SecretRegistry` entry before it is used, so a token inside a platform URL (`/bot<token>/…`, a Discord webhook path) is scrubbed from span attributes, log lines and `last_error`. Every renderer output (the platform request bodies and paths), the preview (`POST /channels/preview` replaces a secret in a path by its variable name) and the generic webhook body are sinks of the sentinel test. Screenshots (D-36) are never taken while the session's secret window is open, never when `recordToolResults=none`, and reach a channel only at content level `full` with `images[category]` on; masking uses Playwright's `mask` over form fields.
+- Property test: for every sink (log line, DB row, WS frame, MCP result, problem+json, OTLP payload, export stream, notification message, in-app notification row, delivery log, each platform renderer's request and the generic webhook body) inject a sentinel secret through every documented path and assert the sentinel never appears.
 
 ---
 
