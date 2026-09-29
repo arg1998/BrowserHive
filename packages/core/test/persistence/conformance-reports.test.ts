@@ -2,6 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { createReportFacts } from '../../src/app/notifications/report-facts.ts';
+import type { VaultAccessResult } from '../../src/ports/persistence/enums.ts';
 import type { OperatorRequestRepository } from '../../src/ports/persistence/operator-requests.ts';
 import type { NewOperatorRequest } from '../../src/ports/persistence/records.ts';
 import type { VaultAuditRepository } from '../../src/ports/persistence/vault-audit.ts';
@@ -75,7 +76,7 @@ async function seedVault(repo: VaultAuditRepository): Promise<void> {
   }
 }
 
-const EXPECTED_VAULT = [
+const EXPECTED_VAULT: { result: VaultAccessResult; count: number }[] = [
   { result: 'success', count: 2 },
   { result: 'origin_mismatch', count: 1 },
 ];

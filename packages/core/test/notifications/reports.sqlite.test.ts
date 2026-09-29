@@ -106,7 +106,7 @@ async function episode(w: Awaited<ReturnType<typeof wire>>): Promise<string[][]>
   t.clock.advance(5_000);
   await w.outbox.tick();
   const log = await t.repos.notificationDeliveries.list({});
-  return log.reverse().map((d) => [d.op, String(d.revision), d.status, d.reason ?? '']);
+  return [...log].reverse().map((d) => [d.op, String(d.revision), d.status, d.reason ?? '']);
 }
 
 const calls = (requests: readonly RecordedRequest[]) =>

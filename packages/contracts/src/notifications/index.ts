@@ -98,6 +98,19 @@ export {
   TELEGRAM_TTL_MAX_MS,
 } from './platforms.ts';
 export {
+  digestWindow,
+  nextHour,
+  nextOccurrence,
+  occurrencesBetween,
+  parseClock,
+  periodMs,
+  previousOccurrence,
+  scheduleKey,
+  type WallTime,
+  wallTime,
+  zonedInstant,
+} from './schedule.ts';
+export {
   classifyLegacy,
   IN_APP_ONLY_KINDS,
   KIND_CATEGORY,
