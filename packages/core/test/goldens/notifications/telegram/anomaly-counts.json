@@ -1,0 +1,33 @@
+{
+  "kind": "telegram",
+  "variant": "anomaly-counts",
+  "mode": null,
+  "requests": [
+    {
+      "method": "POST",
+      "path": "sendRichMessage",
+      "encoding": "json",
+      "body": {
+        "chat_id": "-1001234567890",
+        "rich_message": {
+          "html": "<h3>⚠️ Something looks off: 2 checks</h3><p>34% of tool calls failed in the last hour · An attention request has waited 47 min</p><table bordered striped compact><tr><th>Check</th><th>Now</th><th>Threshold</th><th>Since</th></tr><tr><td>Tool-call error rate <b>new</b></td><td>34%</td><td>≥ 20%</td><td>16:13</td></tr><tr><td>Attention waiting <b>new</b></td><td>47 min</td><td>≥ 30 min</td><td>16:13</td></tr></table><footer>Checked 15:13–16:13 · Europe/Berlin</footer>",
+          "skip_entity_detection": true
+        },
+        "disable_notification": false,
+        "reply_markup": {
+          "inline_keyboard": [
+            [
+              {
+                "text": "Open Overview",
+                "url": "https://bh.example.net/overview?range=24h",
+                "style": "primary"
+              }
+            ]
+          ]
+        }
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}

@@ -23,21 +23,22 @@ Help text is generated from the configuration schema, so `browserhive --help` al
 Resolves the configuration, opens storage (migrating the database if needed), starts the listener and prints the banner:
 
 ```
- BrowserHive 0.1.0  ·  bun 1.4.2  ·  patchright 1.63.0
+ BrowserHive 0.2.0  ·  bun 1.4.2  ·  patchright 1.63.0
  MCP        http://127.0.0.1:9876/mcp            (auth: token)
  Dashboard  http://127.0.0.1:9876/               (admin)
- Data dir   /home/me/.local/share/browserhive     (db v1, 12 MiB, 3 backups)
+ Data dir   /home/me/.local/share/browserhive     (db v6, 12 MiB, 3 backups)
  Config     env:2  file:/home/me/browserhive.config.json:9  cli:1
  Sessions   cap 8 (derived from 12 GiB RAM) · lease 2h · persistence memory
  Stealth    standard · patchright · humanize on · fingerprint off
  Telemetry  otel → http://127.0.0.1:4318 (http/protobuf)
  Vault      bitwarden (locked)
+ Notify     2 channels (1 from startup) · links → https://browserhive.example.net
 
  config: maxSessions=8 (cli) shadows config-file=4
  Press Ctrl-C to stop.
 ```
 
-The first-run dashboard password and the first agent token are printed once in this banner and never logged. `Ctrl-C` (or `SIGTERM`) stops gracefully within `--shutdownTimeout`: listeners, then sessions (traces are finalized), then storage. A second `Ctrl-C` exits immediately with code 130.
+The **Notify** row appears once a [notification channel](notifications.md#channels) or [`publicUrl`](notifications.md#public-address) is set. The first-run dashboard password and the first agent token are printed once in this banner and never logged. `Ctrl-C` (or `SIGTERM`) stops gracefully within `--shutdownTimeout`: listeners, then sessions (traces are finalized), then storage. A second `Ctrl-C` exits immediately with code 130.
 
 Output streams: under `--transport stdio`, stdout carries only MCP frames and everything else goes to stderr. Under HTTP, the banner and pretty logs go to stdout on a terminal, and JSON logs go to stderr, so `browserhive 2> logs.jsonl` captures them. Colour is on for terminals; `NO_COLOR` or `--color never` disables it.
 
@@ -60,7 +61,7 @@ A list value joins its items with `+`; a value cannot contain `,` (write `%2C`).
 | `ntfy` | `name`, `topic` (a topic, or `env:NAME`), optional `server` (default `https://ntfy.sh`), `token=env:NAME`, `reply` (the [reply topic](notifications.md#ntfy-a-second-topic-for-answers) for act buttons, or `env:NAME`), `replyToken=env:NAME` |
 | `webhook` | `name`, `url` (a URL, or `env:NAME`), optional `secret=env:NAME` (the signing key) |
 
-Rules, all optional: `categories` (`needs-you+problems+wrap-ups+reports+system`), `min` (`info`, `warn`, `error`, `critical`), `sessions` (session name patterns such as `shop-*`), `harness`, `content` (`counts`, `titles`, `full`), `quiet=22:00-07:00` with `tz=Europe/Berlin`, `ttl.<category>=2h` (Telegram at most `47h`), `deleteWhenResolved` (`true`, or a `+` list of categories), `images` (a `+` list of categories; needs `content=full`), `maskImages=true`, `actButtons=true` ([answer from your phone](notifications.md#answer-from-your-phone); Telegram, Discord bot mode, ntfy with `reply`, webhook) and `allow` (a `+` list of Telegram or Discord user ids allowed to press them; not for ntfy).
+Rules, all optional: `categories` (`needs-you+problems+wrap-ups+reports+system`), `min` (`info`, `warn`, `error`, `critical`), `sessions` (session name patterns such as `shop-*`), `harness`, `content` (`counts`, `titles`, `full`), `quiet=22:00-07:00`, `tz=Europe/Berlin` (the channel's time zone, for quiet hours and reports; default BrowserHive's), `digest` (`daily@09:00`, `daily:weekdays@09:00` for Monday to Friday, `weekly:fri@17:00`; the day and time may be left out: `daily` is every day at 09:00, `weekly` is Friday at 17:00), `anomaly=on` with `anomaly.errorRate` (percent or `off`), `anomaly.minCalls`, `anomaly.attention` (minutes or `off`), `anomaly.blocked` (the spike factor or `off`), `anomaly.blockedMin`, `anomaly.capacity` and `anomaly.degraded` (`on`/`off`) ([daily digests and anomaly alerts](notifications.md#daily-digests-and-anomaly-alerts)), `ttl.<category>=2h` (Telegram at most `47h`), `deleteWhenResolved` (`true`, or a `+` list of categories), `images` (a `+` list of categories; needs `content=full`), `maskImages=true`, `actButtons=true` ([answer from your phone](notifications.md#answer-from-your-phone); Telegram, Discord bot mode, ntfy with `reply`, webhook) and `allow` (a `+` list of Telegram or Discord user ids allowed to press them; not for ntfy).
 
 ## `init`
 
@@ -77,6 +78,7 @@ One-time setup, safe to re-run:
 |---|---|
 | `--browsers chromium` | Browsers to install (only `chromium` today; Chrome and Edge channels use the OS installation). |
 | `--force` | Re-download even if present. |
+| `--skipBrowsers` | Skip the browser downloads (data directory and database only). |
 | `--dataDir <path>`, `--config <path>` | Where state and configuration live. |
 | `--stealthDriver <auto\|patchright\|playwright>` | `playwright` skips the Patchright download. |
 | `--writeSchema` | Write `browserhive.schema.json` next to a discovered config file. |
@@ -139,16 +141,16 @@ Token commands work on the database directly when the server is stopped, or thro
 
 | Command | Meaning |
 |---|---|
-| `channels list [--json]` | Every notification channel: platform (with the Discord mode), status (and "from startup"), where it sends, whether its variables are set, whether chat answers reach BrowserHive (`connected`, `reconnecting`, `offline (reason)`, or `—` when act buttons are off), the last delivery and the last 24 hours. |
+| `channels list [--json]` | Every notification channel: platform (with the Discord mode), status (and "from startup"), where it sends, whether its variables are set, whether chat answers reach BrowserHive (`connected`, `reconnecting`, `offline (reason)`, or `—` when act buttons are off), the last delivery and the last 24 hours; under the table, each channel's next digest in its time zone and its anomaly state. |
 | `channels test <name> [--json]` | Sends a real test message. Exit `0` when the platform accepted it, `1` with the reason when it did not. |
-| `channels preview <name> [--sample <kind>] [--json]` | Prints the platform request a send would make (secrets shown as variable names); sends nothing. Samples: `attention` (default), `attention-resolved`, `vault-confirm`, `tool-errors`, `crash`, `degraded`, `test`. |
+| `channels preview <name> [--sample <kind>] [--json]` | Prints the platform request a send would make (secrets shown as variable names); sends nothing. Samples: `attention` (default), `attention-resolved`, `vault-confirm`, `tool-errors`, `crash`, `degraded`, `test`, `digest`, `anomaly` (the report samples follow the channel's schedule, zone and content level). |
 
 They talk to the running server: `--url` defaults to the configured host and port, and `--token` (an operator API token) or `--cookie` authenticates. See [Notifications](notifications.md).
 
 ## `version`
 
 ```
-browserhive 0.1.0 (bun 1.4.2, sqlite 3.53.2, playwright 1.63.0, patchright 1.63.0)
+browserhive 0.2.0 (bun 1.4.2, sqlite 3.53.2, playwright 1.63.0, patchright 1.63.0)
 ```
 
 `--json` for scripts.

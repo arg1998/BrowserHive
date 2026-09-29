@@ -334,6 +334,10 @@ export class InMemoryRepositories implements Repositories {
     this.screenshots = new InMemoryScreenshotRepository(this.toolCalls);
     this.vaultAudit = new InMemoryVaultAuditRepository(slugOf);
     this.blocklistAudit = new InMemoryBlocklistAuditRepository(slugOf);
+    this.notifications.join = {
+      deliveries: () => this.notificationDeliveries.rows,
+      channel: (id) => this.notificationChannels.rows.get(id),
+    };
   }
 
   private countsFor(sessionId: string): SessionListRow['counts'] {

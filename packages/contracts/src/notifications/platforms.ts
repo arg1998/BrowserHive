@@ -2,7 +2,7 @@
 
 import { z } from 'zod';
 import type { NotificationCategory } from '../enums/notification-category.ts';
-import { type NotificationChannelRules, RESERVED_ENV_PREFIX } from './channel.ts';
+import { isValidTimeZone, type NotificationChannelRules, RESERVED_ENV_PREFIX } from './channel.ts';
 
 /** Platforms that have an adapter (N1). The other `NotificationChannelKind` members are reserved. */
 export const AVAILABLE_CHANNEL_KINDS = ['telegram', 'discord', 'ntfy', 'webhook'] as const;
@@ -469,6 +469,43 @@ export function hasPresserIdentity(kind: string): boolean {
   return kind === 'telegram' || kind === 'discord';
 }
 
+function zoneProblem(field: string, zone: string): { field: string; message: string } {
+  return {
+    field,
+    message: `'${zone.slice(0, 64)}' is not a time zone; use an IANA name such as Europe/Berlin.`,
+  };
+}
+
+/**
+ * Checks the report rules shared by a channel and the in-app settings (D-43, D-45): a known time
+ * zone, a weekday only for a weekly digest, weekdays only only for a daily one.
+ *
+ * @returns Every problem, its field prefixed with `prefix` (`rules.` for a channel).
+ */
+export function checkReportRules(
+  rules: Pick<NotificationChannelRules, 'time_zone' | 'digest'>,
+  prefix = '',
+): readonly { readonly field: string; readonly message: string }[] {
+  const problems: { field: string; message: string }[] = [];
+  if (rules.time_zone !== undefined && !isValidTimeZone(rules.time_zone)) {
+    problems.push(zoneProblem(`${prefix}time_zone`, rules.time_zone));
+  }
+  const digest = rules.digest;
+  if (digest !== undefined && digest.every === 'day' && digest.day !== undefined) {
+    problems.push({
+      field: `${prefix}digest.day`,
+      message: 'a weekday applies to a weekly digest only.',
+    });
+  }
+  if (digest !== undefined && digest.every === 'week' && digest.weekdays_only !== undefined) {
+    problems.push({
+      field: `${prefix}digest.weekdays_only`,
+      message: 'weekdays only applies to a daily digest.',
+    });
+  }
+  return problems;
+}
+
 /**
  * Checks the act-button rules of a channel (D-41): the switch only where presses can arrive, and
  * an allow-list of numeric platform user ids only where pressers are identified. Shared by the
@@ -495,6 +532,11 @@ export function checkChannelRules(input: {
             : `${input.kind} cannot receive button presses.`,
     });
   }
+  const quietZone = input.rules.quiet_hours?.time_zone;
+  if (quietZone !== undefined && !isValidTimeZone(quietZone)) {
+    problems.push(zoneProblem('rules.quiet_hours.time_zone', quietZone));
+  }
+  problems.push(...checkReportRules(input.rules, 'rules.'));
   const allow = input.rules.allow_list ?? [];
   if (allow.length > 0 && !hasPresserIdentity(input.kind)) {
     problems.push({
@@ -535,6 +577,8 @@ export const PREVIEW_SAMPLES = [
   'crash',
   'degraded',
   'test',
+  'digest',
+  'anomaly',
 ] as const;
 /** A preview sample. */
 export const PreviewSample = z.enum(PREVIEW_SAMPLES);
@@ -550,6 +594,8 @@ export const PREVIEW_SAMPLE_LABEL: { readonly [S in PreviewSample]: string } = {
   crash: 'Session crashed',
   degraded: 'System degraded',
   test: 'Test message',
+  digest: 'Daily digest',
+  anomaly: 'Something looks off',
 };
 
 /** Presets of the setup wizard (spec 04 §12.11.1). */
@@ -558,6 +604,8 @@ export const CHANNEL_PRESETS: readonly {
   readonly label: string;
   readonly describe: string;
   readonly categories: readonly NotificationCategory[] | null;
+  /** Switches the scheduled reports on (the daily digest and the anomaly alerts, D-43, D-44). */
+  readonly reports?: true;
 }[] = [
   {
     id: 'needs-me',
@@ -583,7 +631,34 @@ export const CHANNEL_PRESETS: readonly {
     describe: 'Every notification BrowserHive produces.',
     categories: null,
   },
+  {
+    id: 'daily-digest',
+    label: 'Daily digest',
+    describe: 'A summary every morning and a heads-up when something looks off; nothing instant.',
+    categories: ['reports'],
+    reports: true,
+  },
 ];
+
+/** The anomaly checks (D-44), in the order reports list them. */
+export const ANOMALY_CHECKS = [
+  'error_rate',
+  'attention',
+  'capacity',
+  'blocked',
+  'degraded',
+] as const;
+/** One anomaly check. */
+export type AnomalyCheck = (typeof ANOMALY_CHECKS)[number];
+
+/** What each anomaly check watches, in plain words. */
+export const ANOMALY_CHECK_TEXT: { readonly [C in AnomalyCheck]: string } = {
+  error_rate: 'Many tool calls failing',
+  attention: 'An attention request waiting too long',
+  capacity: 'Sessions at the limit (maxSessions)',
+  blocked: 'A spike in blocked requests',
+  degraded: 'BrowserHive itself degraded',
+};
 
 /**
  * What a delivery-log reason means, in one sentence (the "why wasn't this sent?" view). Dynamic
@@ -617,6 +692,8 @@ export const DELIVERY_REASON_TEXT: Readonly<Record<string, string>> = {
   auth: 'The platform refused the credentials (a wrong or revoked token or URL).',
   rejected: 'The platform refused the message.',
   test: 'A test message sent from the dashboard or the CLI.',
+  empty: 'Nothing happened in the period of this digest, so nothing was sent.',
+  manual: 'A digest sent on demand ("Send a digest now").',
 };
 
 /**

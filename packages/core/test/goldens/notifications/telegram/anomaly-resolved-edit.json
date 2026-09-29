@@ -1,0 +1,25 @@
+{
+  "kind": "telegram",
+  "variant": "anomaly-resolved-edit",
+  "mode": null,
+  "requests": [
+    {
+      "method": "POST",
+      "path": "editMessageText",
+      "encoding": "json",
+      "body": {
+        "chat_id": -1001234567890,
+        "message_id": 101,
+        "rich_message": {
+          "html": "<h3>✅ Back to normal</h3><p>Every check is back under its threshold since 16:13 · it lasted 2h 05m.</p><footer>Checked 15:13–16:13 · Europe/Berlin</footer>",
+          "skip_entity_detection": true
+        },
+        "reply_markup": {
+          "inline_keyboard": []
+        }
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}

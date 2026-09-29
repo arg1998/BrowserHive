@@ -1,6 +1,6 @@
 /** @module ports/persistence/notifications — notifications inbox and per-principal preferences (D-16). */
 
-import type { NotificationListQuery, Page } from './queries.ts';
+import type { NotificationListQuery, Page, ReportListQuery } from './queries.ts';
 import type {
   JsonValue,
   NotificationGroupPatch,
@@ -51,6 +51,18 @@ export interface NotificationRepository {
   listUnsettled(kinds: readonly string[], limit: number): Promise<readonly NotificationRecord[]>;
   /** Lists notifications newest first (by `query.sort`, default `updated_at`). */
   list(query: NotificationListQuery): Promise<Page<NotificationRecord>>;
+  /**
+   * The in-app report copies (D-45: category `reports`, thread `report:…`), newest first by
+   * `created_at`, whatever their read and dismissed state.
+   */
+  listReports(query: ReportListQuery): Promise<Page<NotificationRecord>>;
+  /**
+   * The channels each in-app report copy reached: the delivery rows of the channel copies that
+   * name it (`source_event_id`), the latest per channel, oldest channel first.
+   */
+  reportChannels(
+    reportIds: readonly string[],
+  ): Promise<ReadonlyMap<string, readonly ReportChannelRow[]>>;
   /** Unread, undismissed count for a principal (or the anonymous inbox when `null`). */
   unreadCount(principalId: string | null): Promise<number>;
   /** Marks one notification read; returns false when unknown or already read. */
@@ -61,6 +73,15 @@ export interface NotificationRepository {
   dismiss(notificationId: string, at: number): Promise<boolean>;
   /** Dismisses every undismissed notification of the principal; returns the count. */
   dismissAll(principalId: string | null, at: number): Promise<number>;
+}
+
+/** A channel a report reached, with its latest delivery status. */
+export interface ReportChannelRow {
+  readonly channelId: string;
+  readonly name: string;
+  readonly kind: string;
+  readonly status: string;
+  readonly reason: string | null;
 }
 
 /** Repository over `preferences`. */

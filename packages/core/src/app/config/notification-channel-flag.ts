@@ -7,18 +7,22 @@ import {
   NotificationSeverity,
 } from '@browserhive/contracts/enums';
 import {
+  type AnomalyRule,
   AVAILABLE_CHANNEL_KINDS,
   AvailableChannelKind,
   CHANNEL_KIND_SPECS,
   type ChannelKindSpec,
   checkChannelConfig,
   checkChannelRules,
+  DEFAULT_DIGEST_DAY,
+  defaultDigest,
   NotificationChannelName,
   type NotificationChannelRules,
   NTFY_DEFAULT_SERVER,
   RESERVED_ENV_PREFIX,
   StartupNotificationChannel,
   TELEGRAM_TTL_MAX_MS,
+  WEEKDAYS,
 } from '@browserhive/contracts/notifications';
 import { withSuggestion } from './failure.ts';
 import { suggest } from './suggest.ts';
@@ -49,6 +53,15 @@ const RULE_PARAMS = [
   'maskImages',
   'actButtons',
   'allow',
+  'digest',
+  'anomaly',
+  'anomaly.errorRate',
+  'anomaly.minCalls',
+  'anomaly.attention',
+  'anomaly.blocked',
+  'anomaly.blockedMin',
+  'anomaly.capacity',
+  'anomaly.degraded',
 ] as const;
 
 /** Secret parameters that must be `env:NAME` (topics and url may also be literal). */
@@ -102,8 +115,8 @@ function validZone(zone: string): boolean {
 
 function parseBool(value: string): boolean | null {
   const v = value.toLowerCase();
-  if (v === 'true' || v === '1' || v === 'yes') return true;
-  if (v === 'false' || v === '0' || v === 'no') return false;
+  if (v === 'true' || v === '1' || v === 'yes' || v === 'on') return true;
+  if (v === 'false' || v === '0' || v === 'no' || v === 'off') return false;
   return null;
 }
 
@@ -341,6 +354,98 @@ function categoriesOf(
   return items.filter(isCategory);
 }
 
+const DIGEST_RE =
+  /^(daily|weekly)(?::(mon|tue|wed|thu|fri|sat|sun|weekdays))?(?:@([01]\d|2[0-3]):([0-5]\d))?$/;
+
+const ANOMALY_NUMBERS = [
+  { param: 'anomaly.errorRate', key: 'error_rate', min: 1, max: 100, off: true, int: false },
+  { param: 'anomaly.minCalls', key: 'min_calls', min: 1, max: 100_000, off: false, int: true },
+  {
+    param: 'anomaly.attention',
+    key: 'attention_minutes',
+    min: 1,
+    max: 10_080,
+    off: true,
+    int: true,
+  },
+  { param: 'anomaly.blocked', key: 'blocked_spike', min: 1.5, max: 1000, off: true, int: false },
+  {
+    param: 'anomaly.blockedMin',
+    key: 'blocked_min',
+    min: 1,
+    max: 1_000_000,
+    off: false,
+    int: true,
+  },
+] as const;
+
+/** `digest`, `anomaly` and `anomaly.*` (spec 08 §5.7, D-43, D-44). */
+function parseReports(
+  params: ReadonlyMap<string, string>,
+  label: string,
+  rules: { -readonly [K in keyof NotificationChannelRules]: NotificationChannelRules[K] },
+  problems: string[],
+): void {
+  const digest = params.get('digest');
+  if (digest !== undefined) {
+    const m = DIGEST_RE.exec(digest.toLowerCase());
+    if (m === null) {
+      problems.push(
+        `${label}: digest must be daily@HH:MM, daily:weekdays@HH:MM or weekly:<mon…sun>@HH:MM, like daily@09:00 or weekly:fri@17:00.`,
+      );
+    } else if (m[1] === 'daily' && m[2] !== undefined && m[2] !== 'weekdays') {
+      problems.push(`${label}: a weekday applies to a weekly digest only (weekly:${m[2]}@…).`);
+    } else if (m[1] === 'weekly' && m[2] === 'weekdays') {
+      problems.push(`${label}: weekdays applies to a daily digest only (daily:weekdays@…).`);
+    } else {
+      const every = m[1] === 'weekly' ? 'week' : 'day';
+      const base = defaultDigest(every);
+      const at = m[3] === undefined ? base.at : `${m[3]}:${m[4]}`;
+      rules.digest =
+        every === 'week'
+          ? { every, at, day: WEEKDAYS.find((d) => d === m[2]) ?? DEFAULT_DIGEST_DAY }
+          : { every, at, ...(m[2] === 'weekdays' && { weekdays_only: true }) };
+    }
+  }
+  const anomaly = params.get('anomaly');
+  const on = anomaly === undefined ? null : parseBool(anomaly);
+  if (anomaly !== undefined && on === null) problems.push(`${label}: anomaly must be on or off.`);
+  const tuned = [...params.keys()].filter((k) => k.startsWith('anomaly.'));
+  if (tuned.length > 0 && on !== true) {
+    problems.push(`${label}: ${tuned[0]} needs anomaly=on.`);
+    return;
+  }
+  if (on !== true) return;
+  const rule: { -readonly [K in keyof AnomalyRule]: AnomalyRule[K] } = {};
+  for (const spec of ANOMALY_NUMBERS) {
+    const value = params.get(spec.param);
+    if (value === undefined) continue;
+    if (spec.off && ['off', 'false', 'no'].includes(value.toLowerCase())) {
+      Object.assign(rule, { [spec.key]: null });
+      continue;
+    }
+    const n = Number(value);
+    if (!Number.isFinite(n) || n < spec.min || n > spec.max || (spec.int && !Number.isInteger(n))) {
+      problems.push(
+        `${label}: ${spec.param} must be ${spec.int ? 'a whole number' : 'a number'} from ${spec.min} to ${spec.max}${spec.off ? ', or off' : ''}.`,
+      );
+      continue;
+    }
+    Object.assign(rule, { [spec.key]: n });
+  }
+  for (const [param, key] of [
+    ['anomaly.capacity', 'capacity'],
+    ['anomaly.degraded', 'degraded'],
+  ] as const) {
+    const value = params.get(param);
+    if (value === undefined) continue;
+    const flag = parseBool(value);
+    if (flag === null) problems.push(`${label}: ${param} must be on or off.`);
+    else rule[key] = flag;
+  }
+  rules.anomaly = rule;
+}
+
 function parseRules(
   params: ReadonlyMap<string, string>,
   label: string,
@@ -380,17 +485,18 @@ function parseRules(
     const m = QUIET_RE.exec(quiet);
     if (m === null) problems.push(`${label}: quiet must be HH:MM-HH:MM, like 22:00-07:30.`);
     else {
-      rules.quiet_hours = {
-        start: `${m[1]}:${m[2]}`,
-        end: `${m[3]}:${m[4]}`,
-        ...(tz !== undefined && { time_zone: tz }),
-      };
+      rules.quiet_hours = { start: `${m[1]}:${m[2]}`, end: `${m[3]}:${m[4]}` };
     }
   }
   if (tz !== undefined) {
-    if (quiet === undefined) problems.push(`${label}: tz applies to quiet hours; set quiet too.`);
-    else if (!validZone(tz)) problems.push(`${label}: tz '${tz}' is not an IANA time zone.`);
+    // The channel's zone: its quiet hours and its reports (D-43).
+    if (validZone(tz)) rules.time_zone = tz;
+    else
+      problems.push(
+        `${label}: tz '${tz.slice(0, 64)}' is not an IANA time zone (like Europe/Berlin).`,
+      );
   }
+  parseReports(params, label, rules, problems);
   const ttl: Partial<Record<NotificationCategory, number>> = {};
   for (const [key, value] of params) {
     if (!key.startsWith('ttl.')) continue;

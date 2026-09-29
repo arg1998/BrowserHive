@@ -75,7 +75,8 @@ describe('parseNotificationChannelFlags', () => {
         sessions: ['shop-*', 'scrape-*'],
         harness: ['claude-code'],
         content: 'full',
-        quiet_hours: { start: '22:00', end: '07:30', time_zone: 'Europe/Berlin' },
+        quiet_hours: { start: '22:00', end: '07:30' },
+        time_zone: 'Europe/Berlin',
         ttl_ms: { 'needs-you': 7_200_000, problems: 86_400_000 },
         delete_when_resolved: { 'needs-you': true },
         images: { 'needs-you': true },
@@ -217,5 +218,75 @@ describe('parseNotificationChannelFlags', () => {
     expect(parse('ntfy:name=a,topic=env:BH_NTFY_TOKEN').channels[0]?.secret_refs).toEqual({
       topic: 'BH_NTFY_TOKEN',
     });
+  });
+
+  it('parses digests, the channel time zone and anomaly thresholds (D-43, D-44)', () => {
+    const base = 'telegram:name=morning,token=env:BH_TG_TOKEN,chat=1';
+    const rules = (extra: string) => parse(`${base},${extra}`).channels[0]?.rules;
+    expect(rules('digest=daily@08:30,tz=Europe/Berlin')).toEqual({
+      digest: { every: 'day', at: '08:30' },
+      time_zone: 'Europe/Berlin',
+    });
+    expect(rules('digest=daily')).toEqual({ digest: { every: 'day', at: '09:00' } });
+    expect(rules('digest=weekly:fri@17:00')).toEqual({
+      digest: { every: 'week', at: '17:00', day: 'fri' },
+    });
+    // Weekly defaults to Friday 17:00; each part can be given alone (D-43).
+    expect(rules('digest=weekly')).toEqual({ digest: { every: 'week', at: '17:00', day: 'fri' } });
+    expect(rules('digest=weekly:mon')).toEqual({
+      digest: { every: 'week', at: '17:00', day: 'mon' },
+    });
+    expect(rules('digest=weekly@08:00')).toEqual({
+      digest: { every: 'week', at: '08:00', day: 'fri' },
+    });
+    expect(rules('digest=daily:weekdays')).toEqual({
+      digest: { every: 'day', at: '09:00', weekdays_only: true },
+    });
+    expect(rules('digest=daily:weekdays@07:30')).toEqual({
+      digest: { every: 'day', at: '07:30', weekdays_only: true },
+    });
+    expect(rules('anomaly=on')).toEqual({ anomaly: {} });
+    expect(rules('anomaly=off')).toEqual({});
+    expect(
+      rules(
+        'anomaly=on,anomaly.errorRate=10,anomaly.minCalls=5,anomaly.attention=off,anomaly.blocked=2.5,anomaly.blockedMin=10,anomaly.capacity=off,anomaly.degraded=on',
+      ),
+    ).toEqual({
+      anomaly: {
+        error_rate: 10,
+        min_calls: 5,
+        attention_minutes: null,
+        blocked_spike: 2.5,
+        blocked_min: 10,
+        capacity: false,
+        degraded: true,
+      },
+    });
+  });
+
+  it('refuses bad digest, zone and anomaly values with plain texts', () => {
+    const base = 'telegram:name=morning,token=env:BH_TG_TOKEN,chat=1';
+    const problems = (extra: string) => parse(`${base},${extra}`).problems;
+    expect(problems('digest=hourly')).toEqual([
+      "--notificationChannel 'morning': digest must be daily@HH:MM, daily:weekdays@HH:MM or weekly:<mon…sun>@HH:MM, like daily@09:00 or weekly:fri@17:00.",
+    ]);
+    expect(problems('digest=weekly:weekdays')).toEqual([
+      "--notificationChannel 'morning': weekdays applies to a daily digest only (daily:weekdays@…).",
+    ]);
+    expect(problems('digest=daily:mon@09:00')).toEqual([
+      "--notificationChannel 'morning': a weekday applies to a weekly digest only (weekly:mon@…).",
+    ]);
+    expect(problems('tz=Mars/Olympus')).toEqual([
+      "--notificationChannel 'morning': tz 'Mars/Olympus' is not an IANA time zone (like Europe/Berlin).",
+    ]);
+    expect(problems('anomaly.errorRate=10')).toEqual([
+      "--notificationChannel 'morning': anomaly.errorRate needs anomaly=on.",
+    ]);
+    expect(problems('anomaly=on,anomaly.errorRate=0')).toEqual([
+      "--notificationChannel 'morning': anomaly.errorRate must be a number from 1 to 100, or off.",
+    ]);
+    expect(problems('anomaly=maybe')).toEqual([
+      "--notificationChannel 'morning': anomaly must be on or off.",
+    ]);
   });
 });

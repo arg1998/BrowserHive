@@ -8,7 +8,7 @@ import {
 } from '@browserhive/contracts/notifications';
 import { capabilities } from '../../../test/helpers/fake-channel.ts';
 import { restrictContent } from './content-level.ts';
-import { degrade, OPEN_IN_BROWSERHIVE } from './degrade.ts';
+import { degrade, OPEN_IN_BROWSERHIVE, sparkline } from './degrade.ts';
 import { buildMessage, code, link, text } from './message.ts';
 
 const TABLE: Block = {
@@ -101,7 +101,7 @@ describe('degrade', () => {
   it('turns a table into a list of column: value rows', () => {
     const out = degrade(message({ blocks: [TABLE] }), capabilities({ tables: false }));
     expect(out.blocks[0]).toMatchObject({ type: 'list', ordered: false });
-    expect(JSON.stringify(out.blocks[0])).toContain('Tool: ');
+    expect(JSON.stringify(out.blocks[0])).toContain('"Tool:"');
     expect(out.blocks[0]?.type === 'list' && out.blocks[0].items).toHaveLength(2);
   });
 
@@ -143,7 +143,7 @@ describe('degrade', () => {
       capabilities({ richBlocks: false }),
     );
     expect(out.blocks.every((b) => b.type === 'text')).toBe(true);
-    expect(JSON.stringify(out.blocks)).toContain('Session: ');
+    expect(JSON.stringify(out.blocks)).toContain('"Session:"');
   });
 
   it('moves the first link into a footer where link buttons are unsupported', () => {
@@ -211,5 +211,54 @@ describe('restrictContent', () => {
   it('never raises a message above the level it already has', () => {
     const counts = restrictContent(message(), 'counts');
     expect(restrictContent(counts, 'full')).toEqual(counts);
+  });
+});
+
+describe('charts (D-32, spec 03 §9.2)', () => {
+  const CHART: Block = {
+    type: 'chart',
+    label: 'Tool calls per hour',
+    values: [0, 2, 4, 8],
+    start: 0,
+    step_ms: 3_600_000,
+    unit: 'calls',
+  };
+
+  it('scales text bars against the largest value; all zero is flat', () => {
+    expect(sparkline([0, 2, 4, 8])).toBe('▁▃▅█');
+    expect(sparkline([0, 0, 0])).toBe('▁▁▁');
+    expect(sparkline([5])).toBe('█');
+  });
+
+  it('turns a chart into one paragraph where charts are not a capability', () => {
+    const out = degrade(message({ blocks: [CHART] }), capabilities({ charts: false }));
+    expect(out.blocks).toEqual([
+      {
+        type: 'text',
+        content: [
+          { type: 'bold', text: 'Tool calls per hour' },
+          { type: 'text', text: ' ' },
+          { type: 'code', text: '▁▃▅█' },
+          { type: 'text', text: ' peak\u00a08\u00a0calls' },
+        ],
+      },
+    ]);
+    expect(NotificationMessage.safeParse(out).success).toBe(true);
+  });
+
+  it('keeps a chart where charts render natively (the generic webhook)', () => {
+    const out = degrade(message({ blocks: [CHART] }), capabilities({ charts: true }));
+    expect(out.blocks).toEqual([CHART]);
+  });
+});
+
+describe('restrictContent of a report built at its level', () => {
+  it('returns a message already at the target level unchanged (tables kept at titles)', () => {
+    const built = {
+      ...message({ blocks: [TABLE] }),
+      privacy: { level: 'titles', has_image: false },
+    };
+    expect(restrictContent(built as Message, 'titles')).toBe(built as Message);
+    expect(restrictContent(built as Message, 'counts').blocks).toEqual([]);
   });
 });

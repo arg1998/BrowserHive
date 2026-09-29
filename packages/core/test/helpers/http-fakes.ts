@@ -20,9 +20,13 @@ import type { Desktop, RevealResult } from '../../src/ports/desktop.ts';
 import type {
   ActivityQuery,
   AnalyticsQueries,
+  ReportWindow,
   TimelineItem,
   TimelineQuery,
+  ToolLatencyRow,
   ToolMetricsQuery,
+  TopErrorRow,
+  WindowCounts,
 } from '../../src/ports/persistence/analytics.ts';
 import type { Page } from '../../src/ports/persistence/queries.ts';
 import type { IdempotencyRecord } from '../../src/ports/persistence/records.ts';
@@ -110,6 +114,65 @@ export class FakeAnalytics implements AnalyticsQueries {
 
   async topDomains() {
     return this.repos.pages.topDomains({});
+  }
+
+  async windowCounts(window: ReportWindow): Promise<WindowCounts> {
+    const inside = (ts: number) => ts >= window.since && ts < window.until;
+    const calls = [...this.repos.toolCalls.rows.values()].filter((r) => inside(r.ts));
+    return {
+      sessionsStarted: [...this.repos.sessions.rows.values()].filter((r) => inside(r.createdAt))
+        .length,
+      toolCalls: calls.length,
+      errors: calls.filter((r) => r.errorCode !== null).length,
+      blocked: [...this.repos.blocklistAudit.rows.values()].filter((r) => inside(r.ts)).length,
+      attention: 0,
+      vaultAccess: [...this.repos.vaultAudit.rows.values()].filter((r) => inside(r.ts)).length,
+    };
+  }
+
+  async toolLatency(window: ReportWindow): Promise<readonly ToolLatencyRow[]> {
+    const byTool = new Map<string, { durations: number[]; errors: number }>();
+    for (const r of this.repos.toolCalls.rows.values()) {
+      if (r.ts < window.since || r.ts >= window.until) continue;
+      const entry = byTool.get(r.tool) ?? { durations: [], errors: 0 };
+      entry.durations.push(r.durationMs);
+      if (r.errorCode !== null) entry.errors += 1;
+      byTool.set(r.tool, entry);
+    }
+    return [...byTool.entries()].map(([tool, e]) => {
+      const sorted = [...e.durations].sort((a, b) => a - b);
+      const index = Math.max(0, Math.ceil(0.95 * sorted.length) - 1);
+      return { tool, calls: sorted.length, errors: e.errors, p95Ms: sorted[index] ?? 0 };
+    });
+  }
+
+  async topErrors(window: ReportWindow, limit: number): Promise<readonly TopErrorRow[]> {
+    const groups = new Map<
+      string,
+      { errorCode: string; tool: string; count: number; sessions: Set<string> }
+    >();
+    for (const r of this.repos.toolCalls.rows.values()) {
+      if (r.errorCode === null || r.ts < window.since || r.ts >= window.until) continue;
+      const key = `${r.errorCode}::${r.tool}`;
+      const g = groups.get(key) ?? {
+        errorCode: r.errorCode,
+        tool: r.tool,
+        count: 0,
+        sessions: new Set(),
+      };
+      g.count += 1;
+      if (r.sessionId !== null) g.sessions.add(r.sessionId);
+      groups.set(key, g);
+    }
+    return [...groups.values()]
+      .sort((a, b) => b.count - a.count || a.errorCode.localeCompare(b.errorCode))
+      .slice(0, limit)
+      .map((g) => ({
+        errorCode: g.errorCode,
+        tool: g.tool,
+        count: g.count,
+        sessions: g.sessions.size,
+      }));
   }
 }
 

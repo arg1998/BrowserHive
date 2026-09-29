@@ -134,6 +134,10 @@ export const HTTP_ENDPOINTS: readonly HttpEndpoint[] = [
   ep('markAllNotificationsRead', 'post', '/notifications/read-all', 'notifications:write'),
   ep('dismissNotification', 'delete', '/notifications/{notification_id}', 'notifications:write'),
   ep('dismissAllNotifications', 'post', '/notifications/dismiss-all', 'notifications:write'),
+  ep('listReports', 'get', '/notifications/reports', 'notifications:read'),
+  ep('getReport', 'get', '/notifications/reports/{notification_id}', 'notifications:read'),
+  ep('getReportSettings', 'get', '/notifications/report-settings', 'notifications:read'),
+  ep('putReportSettings', 'put', '/notifications/report-settings', 'channels:write'),
   // §4.8.1 notification channels
   ep('listChannels', 'get', '/channels', 'channels:read'),
   ep('createChannel', 'post', '/channels', 'channels:write'),
@@ -154,6 +158,7 @@ export const HTTP_ENDPOINTS: readonly HttpEndpoint[] = [
   ep('pauseChannel', 'post', '/channels/{channel_id}/pause', 'channels:write'),
   ep('resumeChannel', 'post', '/channels/{channel_id}/resume', 'channels:write'),
   ep('testChannel', 'post', '/channels/{channel_id}/test', 'channels:write'),
+  ep('sendChannelDigest', 'post', '/channels/{channel_id}/digest', 'channels:write'),
   ep('getPreferences', 'get', '/me/preferences', null),
   ep('putPreferences', 'put', '/me/preferences', 'preferences:write'),
   ep('search', 'get', '/search', 'sessions:read'),

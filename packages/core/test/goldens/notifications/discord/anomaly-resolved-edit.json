@@ -1,0 +1,33 @@
+{
+  "kind": "discord",
+  "variant": "anomaly-resolved-edit",
+  "mode": "webhook",
+  "requests": [
+    {
+      "method": "PATCH",
+      "path": "{secret:webhook}/messages/1101?with_components=true",
+      "encoding": "json",
+      "body": {
+        "content": null,
+        "allowed_mentions": {
+          "parse": []
+        },
+        "components": [],
+        "embeds": [
+          {
+            "title": "✅ Back to normal",
+            "description": "Every check is back under its threshold since 16:13 · it lasted 2h 05m.\n\n-# Checked 15:13–16:13 · Europe/Berlin",
+            "color": 2278750,
+            "footer": {
+              "text": "BrowserHive"
+            },
+            "timestamp": "2026-09-21T14:13:20.000Z"
+          }
+        ],
+        "attachments": []
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}

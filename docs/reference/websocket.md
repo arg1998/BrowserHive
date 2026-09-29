@@ -341,7 +341,7 @@ Payloads of `kind: "event"` frames, discriminated on `type`. DTO fields (`sessio
 
 | Field | Type | Required | Constraints |
 |---|---|---|---|
-| `channel` | `object` | yes | keys `channel_id`, `name`, `kind`, `mode`, `source`, `status`, `target`, `target_hint`, `secret_refs`, `secrets`, `rules`, `capabilities`, `ready`, `problem`, `failure_count`, `last_error`, `last_ok_at`, `last_failure_at`, `created_at`, `updated_at`, `stats`, `connection` |
+| `channel` | `object` | yes | keys `channel_id`, `name`, `kind`, `mode`, `source`, `status`, `target`, `target_hint`, `secret_refs`, `secrets`, `rules`, `capabilities`, `ready`, `problem`, `failure_count`, `last_error`, `last_ok_at`, `last_failure_at`, `created_at`, `updated_at`, `stats`, `connection`, `reports` |
 
 <a id="event-channel-removed"></a>
 ### `channel.removed`
@@ -355,7 +355,7 @@ Payloads of `kind: "event"` frames, discriminated on `type`. DTO fields (`sessio
 
 | Field | Type | Required | Constraints |
 |---|---|---|---|
-| `delivery` | `object` | yes | keys `seq`, `channel_id`, `channel_name`, `channel_kind`, `notification_id`, `notification_kind`, `notification_title`, `revision`, `op`, `status`, `reason`, `attempts`, `next_attempt_at`, `last_error`, `duration_ms`, `message_ref`, `created_at`, `updated_at` |
+| `delivery` | `object` | yes | keys `seq`, `channel_id`, `channel_name`, `channel_kind`, `notification_id`, `notification_kind`, `notification_title`, `revision`, `op`, `status`, `reason`, `attempts`, `next_attempt_at`, `last_error`, `duration_ms`, `message_ref`, `created_at`, `updated_at`, `report` |
 
 <a id="event-action-recorded"></a>
 ### `action.recorded`

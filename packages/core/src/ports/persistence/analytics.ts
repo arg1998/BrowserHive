@@ -77,6 +77,41 @@ export interface HarnessMetricsRow {
   readonly errors: number;
 }
 
+/** A half-open window `[since, until)` of the report queries. */
+export interface ReportWindow {
+  readonly since: number;
+  readonly until: number;
+}
+
+/** Headline counts of one window (`windowCounts`, spec 03 §9.7). */
+export interface WindowCounts {
+  readonly sessionsStarted: number;
+  readonly toolCalls: number;
+  readonly errors: number;
+  readonly blocked: number;
+  /** Attention requests created. */
+  readonly attention: number;
+  readonly vaultAccess: number;
+}
+
+/** Latency of one tool over a window (`toolLatency`). */
+export interface ToolLatencyRow {
+  readonly tool: string;
+  readonly calls: number;
+  readonly errors: number;
+  /** Same rank as `toolMetrics`: the smallest duration at or above the 95th percentile. */
+  readonly p95Ms: number;
+}
+
+/** One error code of one tool over a window (`topErrors`). */
+export interface TopErrorRow {
+  readonly errorCode: string;
+  readonly tool: string;
+  readonly count: number;
+  /** Distinct sessions that saw it (session-less calls count as none). */
+  readonly sessions: number;
+}
+
 /** Timeline item kinds. */
 export type TimelineKind = 'tool' | 'page' | 'attention' | 'vault' | 'blocked';
 
@@ -145,4 +180,10 @@ export interface AnalyticsQueries {
   databaseSize(): Promise<number>;
   /** Most visited domains (`GET /pages/domains`). */
   topDomains(query: TopDomainsQuery): Promise<readonly DomainCount[]>;
+  /** Headline counts of `[since, until)` in one statement (the reports, 03 §9.7). */
+  windowCounts(window: ReportWindow): Promise<WindowCounts>;
+  /** Per-tool calls, errors and p95 over `[since, until)`, computed in the database. */
+  toolLatency(window: ReportWindow): Promise<readonly ToolLatencyRow[]>;
+  /** The most frequent error codes (with their tool) over `[since, until)`, most first. */
+  topErrors(window: ReportWindow, limit: number): Promise<readonly TopErrorRow[]>;
 }

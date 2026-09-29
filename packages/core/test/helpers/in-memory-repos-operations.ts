@@ -1,10 +1,14 @@
 /** @module test/helpers/in-memory-repos-operations — Map-backed system_events and notifications repositories for app tests. */
 
-import type { NotificationRepository } from '../../src/ports/persistence/notifications.ts';
+import type {
+  NotificationRepository,
+  ReportChannelRow,
+} from '../../src/ports/persistence/notifications.ts';
 import type { SystemEventRepository } from '../../src/ports/persistence/operations.ts';
 import type {
   NotificationListQuery,
   Page,
+  ReportListQuery,
   SystemEventListQuery,
 } from '../../src/ports/persistence/queries.ts';
 import type {
@@ -75,8 +79,22 @@ export class InMemorySystemEventRepository implements SystemEventRepository {
 }
 
 /** `notifications` in memory. */
+/** What `reportChannels` joins: the delivery rows and the channels (set by the bundle). */
+export interface ReportJoin {
+  deliveries(): readonly {
+    readonly seq: number;
+    readonly channelId: string;
+    readonly notificationId: string;
+    readonly status: string;
+    readonly reason: string | null;
+  }[];
+  channel(channelId: string): { readonly name: string; readonly kind: string } | undefined;
+}
+
 export class InMemoryNotificationRepository implements NotificationRepository {
   readonly rows = new Map<string, NotificationRecord>();
+  /** Set by `InMemoryRepositories`; without it no report reached a channel. */
+  join: ReportJoin | undefined;
 
   async insert(record: NotificationRecord): Promise<void> {
     if (!this.rows.has(record.notificationId)) this.rows.set(record.notificationId, record);
@@ -160,13 +178,71 @@ export class InMemoryNotificationRepository implements NotificationRepository {
       query,
     )
       .filter((r) => query.principalId === undefined || r.principalId === query.principalId)
-      .filter((r) => query.types === undefined || query.types.includes(r.type))
+      .filter((r) => {
+        const types = query.types ?? [];
+        const categories = query.categories ?? [];
+        if (types.length === 0 && categories.length === 0) return true;
+        return types.includes(r.type) || categories.includes(r.category);
+      })
       .filter(
         (r) => (query.read ?? 'all') === 'all' || (query.read === 'read') === (r.readAt !== null),
       )
       .sort((a, b) => b.ts - a.ts)
       .map(({ ts: _ts, ...rest }) => rest);
     return pageOf(rows, query);
+  }
+
+  async listReports(query: ReportListQuery): Promise<Page<NotificationRecord>> {
+    const copies = (id: string) =>
+      [...this.rows.values()].filter((c) => c.category === 'reports' && c.sourceEventId === id);
+    const reached = (id: string) => {
+      const ids = new Set(copies(id).map((c) => c.notificationId));
+      return (this.join?.deliveries() ?? []).filter((d) => ids.has(d.notificationId));
+    };
+    const rows = inWindow(
+      [...this.rows.values()].map((r) => ({ ...r, ts: r.createdAt })),
+      query,
+    )
+      .filter((r) => r.category === 'reports' && (r.thread ?? '').startsWith('report:'))
+      .filter((r) => query.kinds === undefined || query.kinds.includes(r.kind))
+      .filter(
+        (r) =>
+          query.channelId === undefined ||
+          reached(r.notificationId).some((d) => d.channelId === query.channelId),
+      )
+      .filter((r) => query.inAppOnly !== true || copies(r.notificationId).length === 0)
+      .sort((a, b) => b.ts - a.ts || b.notificationId.localeCompare(a.notificationId))
+      .map(({ ts: _ts, ...rest }) => rest);
+    return pageOf(rows, query);
+  }
+
+  async reportChannels(
+    reportIds: readonly string[],
+  ): Promise<ReadonlyMap<string, readonly ReportChannelRow[]>> {
+    const out = new Map<string, ReportChannelRow[]>();
+    const deliveries = [...(this.join?.deliveries() ?? [])].sort((a, b) => a.seq - b.seq);
+    for (const id of reportIds) {
+      const ids = new Set(
+        [...this.rows.values()]
+          .filter((c) => c.category === 'reports' && c.sourceEventId === id)
+          .map((c) => c.notificationId),
+      );
+      const byChannel = new Map<string, ReportChannelRow>();
+      for (const d of deliveries) {
+        if (!ids.has(d.notificationId)) continue;
+        const channel = this.join?.channel(d.channelId);
+        if (channel === undefined) continue;
+        byChannel.set(d.channelId, {
+          channelId: d.channelId,
+          name: channel.name,
+          kind: channel.kind,
+          status: d.status,
+          reason: d.reason,
+        });
+      }
+      if (byChannel.size > 0) out.set(id, [...byChannel.values()]);
+    }
+    return out;
   }
 
   async unreadCount(principalId: string | null): Promise<number> {

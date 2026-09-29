@@ -104,12 +104,62 @@ export {
   publicUrlOrigin,
 } from './public-url.ts';
 export {
+  createReportFacts,
+  type ReportFacts,
+  type ReportFactsDeps,
+} from './report-facts.ts';
+export {
+  anomalyCursorKey,
+  channelCursorKeys,
+  digestCursorKey,
+  digestPeriodThread,
+  forgetChannelCursors,
+  IN_APP_REPORT_THREAD,
+  IN_APP_SCHEDULE,
+  LATE_AFTER_MS,
+  manualPeriodThread,
+  REPORT_TICK_MS,
+  type ReportCounter,
+  type ReportPass,
+  ReportScheduler,
+  type ReportSchedulerDeps,
+  type ReportSettingsSource,
+  reportPath,
+  reportsView,
+  watchKey,
+} from './report-scheduler.ts';
+export {
+  isInAppReport,
+  ReportService,
+  type ReportServiceDeps,
+} from './report-service.ts';
+export {
+  REPORT_SETTINGS_KEY,
+  ReportSettingsStore,
+  schedulesReports,
+} from './report-settings.ts';
+export {
+  type ActiveCheck,
+  type AnomalyFacts,
+  type AnomalyState,
+  anomalyThresholds,
+  buildAnomaly,
+  buildDigest,
+  type DigestFacts,
+  evaluateAnomalies,
+  isEmptyDigest,
+  type ReportContent,
+  type ReportContext,
+  reportMessage,
+} from './reports.ts';
+export {
   contentLevelOf,
   deleteWhenResolved,
   expiryFor,
   inQuietHours,
   localMinutes,
   planDeliveries,
+  quietHoursOf,
   type RoutableChannel,
   type RouteDecision,
   route,
@@ -119,6 +169,23 @@ export {
   SAMPLE_NOTIFICATION_ID,
   SAMPLE_NOW,
   SAMPLE_SESSION_ID,
+  SAMPLE_ZONE,
   type SampleOptions,
+  sampleAnomalyFacts,
+  sampleDigestFacts,
   sampleMessage,
 } from './samples.ts';
+export {
+  digestWindow,
+  formatClock,
+  formatDay,
+  nextHour,
+  nextOccurrence,
+  occurrencesBetween,
+  previousOccurrence,
+  runtimeZone,
+  scheduleKey,
+  usableZone,
+  wallTime,
+  zonedInstant,
+} from './schedule.ts';

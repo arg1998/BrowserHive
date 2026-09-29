@@ -4,6 +4,7 @@ import type {
   BlockedRequestListRow,
   BlocklistAuditRepository,
 } from '../../src/ports/persistence/blocklist-audit.ts';
+import type { VaultAccessResult } from '../../src/ports/persistence/enums.ts';
 import type {
   DomainCount,
   PageFacets,
@@ -41,6 +42,8 @@ import type {
   VaultAccessListRow,
   VaultAuditRepository,
 } from '../../src/ports/persistence/vault-audit.ts';
+
+import { countResults } from './in-memory-vault-repos.ts';
 
 /** Pages a whole list (no cursor support: tests read everything). */
 export function pageOf<T>(items: readonly T[], query: PageQuery): Page<T> {
@@ -222,6 +225,13 @@ export class InMemoryVaultAuditRepository implements VaultAuditRepository {
       rows.map((r) => ({ ...r, sessionSlug: this.slugOf(r.sessionId) })),
       query,
     );
+  }
+
+  async countByResult(window: {
+    readonly since: number;
+    readonly until: number;
+  }): Promise<readonly { readonly result: VaultAccessResult; readonly count: number }[]> {
+    return countResults(this.rows.values(), window);
   }
 }
 

@@ -19,6 +19,8 @@ export interface ChannelCapabilities {
   readonly richBlocks: boolean;
   /** Tables render natively (otherwise they become lists). */
   readonly tables: boolean;
+  /** Charts render natively (otherwise they become a line of text bars). */
+  readonly charts: boolean;
   /** Images can be attached (otherwise dropped, or a link to their dashboard page). */
   readonly images: boolean;
   /** Act buttons can be pressed in the chat (otherwise they become their `open` fallback). */

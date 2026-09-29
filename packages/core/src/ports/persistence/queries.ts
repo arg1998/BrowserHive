@@ -1,5 +1,6 @@
 /** @module ports/persistence/queries — list query and page shapes shared by the repositories (spec 03 §4–5). */
 
+import type { NotificationCategory } from '@browserhive/contracts/enums';
 import type {
   AttentionMode,
   BlockSource,
@@ -185,6 +186,17 @@ export interface NotificationListQuery extends PageQuery, TimeWindow {
   readonly principalId?: string | null;
   readonly read?: 'all' | 'unread' | 'read';
   readonly types?: readonly NotificationType[];
+  /** With `types`, one facet: a row matches its type or its category (D-45). */
+  readonly categories?: readonly NotificationCategory[];
+}
+
+/** Filters of `GET /notifications/reports` (on `created_at`, newest first). */
+export interface ReportListQuery extends PageQuery, TimeWindow {
+  readonly kinds?: readonly string[];
+  /** Reports with a delivery to this channel. */
+  readonly channelId?: string;
+  /** Reports that reached no channel. */
+  readonly inAppOnly?: boolean;
 }
 
 /** Filters of `GET /system/events`. */

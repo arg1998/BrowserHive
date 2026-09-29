@@ -178,6 +178,30 @@ async function seed(): Promise<void> {
     thread: 'notification:n-stale',
     messageJson: null,
   });
+  // A report read and dismissed 40 days ago stays in the Reports tab's history (D-45).
+  await r.notifications.insert({
+    notificationId: 'n-report',
+    principalId: null,
+    type: 'lifecycle',
+    title: 'Daily digest',
+    body: null,
+    sessionId: null,
+    target: null,
+    sourceEventId: null,
+    createdAt: NOW - 40 * DAY,
+    updatedAt: NOW - 40 * DAY,
+    count: 1,
+    groupKey: null,
+    readAt: NOW - 40 * DAY,
+    dismissedAt: NOW - 40 * DAY,
+    kind: 'digest.daily',
+    category: 'reports',
+    severity: 'info',
+    state: 'final',
+    revision: 1,
+    thread: 'report:digest:day@09:00@UTC:1:2',
+    messageJson: null,
+  });
   await r.notifications.insert({
     notificationId: 'n-keep',
     principalId: null,
@@ -235,6 +259,7 @@ describe('retentionSweep', () => {
     expect(
       (await r.notifications.list({ principalId: null })).items.map((n) => n.notificationId),
     ).toEqual(['n-keep']);
+    expect(await r.notifications.get('n-report')).not.toBeNull();
     const outbox = await r.artifactOutbox.pending(10);
     expect(outbox.map((a) => [a.kind, a.path])).toEqual([
       ['screenshot', 'sessions/old-00000001/screenshots/tc-old.jpg'],

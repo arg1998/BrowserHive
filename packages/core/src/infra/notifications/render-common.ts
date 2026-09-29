@@ -8,9 +8,12 @@ export const LOCAL_LINKS_LABEL = 'Open on this computer';
 /** Wire name of an attached screenshot. */
 export const SCREENSHOT_FILENAME = 'screenshot.jpg';
 
-/** The leading mark of a message: its outcome once settled, else its severity. */
-export function severityMark(message: Pick<NotificationMessage, 'severity' | 'state'>): string {
+/** The leading mark of a message: its outcome once settled, a chart for a digest, else its severity. */
+export function severityMark(
+  message: Pick<NotificationMessage, 'severity' | 'state'> & { readonly kind?: string },
+): string {
   if (message.state === 'resolved') return '✅';
+  if (message.kind?.startsWith('digest.') === true) return '📊';
   if (message.state === 'expired') return '⌛';
   if (message.state === 'acted') return '👤';
   switch (message.severity) {

@@ -113,12 +113,14 @@ browserhive doctor
 - Chromium's sandbox, per installed browser: each one is launched once to find out (under the default `--sandbox auto` a browser that falls back is reported, not counted as a warning). When the configured browser cannot sandbox, the guidance under the table says why and what to do. See [Security: the browser sandbox](security.md#the-browser-sandbox).
 - Whether BrowserHive runs as root or in a container, which rules out the sandbox.
 - The data directory exists, has owner-only permissions and has free disk space.
-- The configuration is valid. It runs the full resolver and prints any shadow lines.
+- The configuration is valid. It runs the full resolver and prints any shadow lines, counts the values that came from [references](configuration.md#references), and warns about each referenced variable that was not set.
 - The port is free on the configured host.
 - `bw` is on `PATH` when `vault=bitwarden`.
 - The database opens, with its schema version, pending migrations and last backup.
 - The OTLP endpoint is reachable when `otel=true` (a warning only).
 - `maxSessions` makes sense for the host's RAM.
+- `publicUrl`, when set, reaches this BrowserHive ([public address](notifications.md#public-address)).
+- Every `--notificationChannel` parses and every variable a notification channel names is set ([notifications](notifications.md#startup-channels)).
 - A config file that contains `authTokens` is not readable by other users.
 
 Exit code `0` means every check passed, `2` means warnings only, `1` means at least one check failed. `browserhive doctor --json` prints the same data as an array of `{ check, status, detail }`. `browserhive doctor --printApparmorProfile` prints an AppArmor profile that lets the configured browser sandbox on Ubuntu 23.10+; it installs nothing.

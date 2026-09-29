@@ -1,0 +1,34 @@
+{
+  "kind": "telegram-classic",
+  "variant": "anomaly",
+  "mode": null,
+  "requests": [
+    {
+      "method": "POST",
+      "path": "sendMessage",
+      "encoding": "json",
+      "body": {
+        "chat_id": "-1001234567890",
+        "parse_mode": "HTML",
+        "disable_notification": false,
+        "reply_markup": {
+          "inline_keyboard": [
+            [
+              {
+                "text": "Open Overview",
+                "url": "https://bh.example.net/overview?range=24h",
+                "style": "primary"
+              }
+            ]
+          ]
+        },
+        "text": "⚠️ <b>Something looks off: 2 checks</b>\n34% of tool calls failed in the last hour · An attention request has waited 47 min\n\n• Check: Tool-call error rate new · Now: 34% · Threshold: ≥ 20% · Since: 16:13\n• Check: Attention waiting new · Now: 47 min · Threshold: ≥ 30 min · Since: 16:13\n\nWaiting: <code>checkout</code>\n\n<i>Checked 15:13–16:13 · Europe/Berlin</i>",
+        "link_preview_options": {
+          "is_disabled": true
+        }
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}

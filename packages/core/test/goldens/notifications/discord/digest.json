@@ -1,0 +1,45 @@
+{
+  "kind": "discord",
+  "variant": "digest",
+  "mode": "webhook",
+  "requests": [
+    {
+      "method": "POST",
+      "path": "{secret:webhook}?wait=true&with_components=true",
+      "encoding": "json",
+      "body": {
+        "content": null,
+        "allowed_mentions": {
+          "parse": []
+        },
+        "components": [
+          {
+            "type": 1,
+            "components": [
+              {
+                "type": 2,
+                "style": 5,
+                "label": "Open Overview",
+                "url": "https://bh.example.net/overview?since=1789913600000&until=1790000000000"
+              }
+            ]
+          }
+        ],
+        "embeds": [
+          {
+            "title": "📊 Daily digest · Mon 21 Sep",
+            "description": "12 sessions \\(2 live\\) · 3,412 tool calls · 68 errors \\(2%\\)\n\n**Sessions:** 12 started · 2 live now\n**Tool calls:** 3,412 · 68 errors \\(2%\\) · was 1.2%\n**Attention:** 4 requests · 3 answered \\(median 1m 36s\\) · 1 timed out\n**Vault fills:** 9 · 8 ok · 1 origin mismatch\n**Blocked requests:** 27 · top `*.doubleclick.net` \\(19\\)\n**Slowest tool \\(p95\\):** `navigate` 4.2 s \\(was 2.9 s\\)\n**Open problems:** `RETENTION_FAILED` since 21 Sep 10:13\n\n**Tool calls per hour** `▁▁▁▁▁▁▁▁▃▅▆▆▄▅▇█▇▅▄▃▂▂▂▁` peak 412 calls\n\n**Top errors**\n\n- **Error:** `NAVIGATION_TIMEOUT` · **Tool:** `navigate` · **Count:** 31 · **Sessions:** 4\n- **Error:** `ELEMENT_NOT_FOUND` · **Tool:** `click` · **Count:** 22 · **Sessions:** 6\n- **Error:** `CAPTCHA_DETECTED` · **Tool:** `navigate` · **Count:** 15 · **Sessions:** 2\n\n**By harness**\n\n- **Harness:** Claude Code · **Sessions:** 8 · **Tool calls:** 2,410 · **Errors:** 51\n- **Harness:** Cursor · **Sessions:** 3 · **Tool calls:** 880 · **Errors:** 15\n- **Harness:** Unknown · **Sessions:** 1 · **Tool calls:** 122 · **Errors:** 2\n\n-# 20 Sep 16:13 → 21 Sep 16:13 · Europe/Berlin",
+            "url": "https://bh.example.net/overview?since=1789913600000&until=1790000000000",
+            "color": 3900150,
+            "footer": {
+              "text": "BrowserHive"
+            },
+            "timestamp": "2026-09-21T14:13:20.000Z"
+          }
+        ]
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}

@@ -161,6 +161,27 @@ export const NOTIFICATION_TYPE: { readonly [K in NotificationType]: StatusEntry 
   system: { label: 'system', tone: 'info', icon: 'system' },
 };
 
+/** Report kinds shown with their own icon and tone in the inbox, the bell and the Reports tab (D-45). */
+export const REPORT_KIND: {
+  readonly 'digest.daily': StatusEntry;
+  readonly 'digest.weekly': StatusEntry;
+  readonly 'report.anomaly': StatusEntry;
+} = {
+  'digest.daily': { label: 'daily digest', tone: 'accent', icon: 'digest' },
+  'digest.weekly': { label: 'weekly digest', tone: 'accent', icon: 'digest' },
+  'report.anomaly': { label: 'anomaly alert', tone: 'warn', icon: 'anomaly' },
+};
+
+/** The entry a notification row shows: its report kind's, else its type's. */
+export function notificationEntry(n: {
+  readonly type: NotificationType;
+  readonly kind: string;
+}): StatusEntry {
+  return n.kind in REPORT_KIND
+    ? REPORT_KIND[n.kind as keyof typeof REPORT_KIND]
+    : NOTIFICATION_TYPE[n.type];
+}
+
 /**
  * Notification lifecycle (D-32). The inbox shows a pill only once a request's notification is no
  * longer open (`acted`, `resolved`, `expired`, and `final` as "closed" for a cancelled request);

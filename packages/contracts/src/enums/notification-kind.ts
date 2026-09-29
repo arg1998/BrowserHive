@@ -16,6 +16,7 @@ export const NotificationKind = z.enum([
   'system.degraded',
   'channel.broken',
   'digest.daily',
+  'digest.weekly',
   'report.anomaly',
   'test',
 ]);

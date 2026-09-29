@@ -1,10 +1,10 @@
 /** @module features/notifications/channels/ChannelsPage.test — channel cards from captured API responses: startup badge (read-only, no menu), a broken channel with Resume and retry, a missing variable (never a value), Send test with the result inline, delete confirm, the publicUrl hint, live `channel.changed` / `channel.removed`, the empty state, axe clean */
 import { describe, expect, it } from 'bun:test';
 import type { ChannelView } from '@browserhive/contracts/http';
-import { ChannelsResponse, PublicUrlStatus } from '@browserhive/contracts/http';
+import { ChannelPreview, ChannelsResponse, PublicUrlStatus } from '@browserhive/contracts/http';
 import { CAPTURED } from '../../../../test/fixtures/channels.ts';
 import { expectNoA11yViolations } from '../../../../test/helpers/axe.ts';
-import { renderPage } from '../../../../test/helpers/page-harness.tsx';
+import { type RecordedRequest, renderPage } from '../../../../test/helpers/page-harness.tsx';
 import { act, fireEvent, screen, waitFor, within } from '../../../../test/helpers/render.tsx';
 import { ChannelsPage, sortChannels } from './ChannelsPage.tsx';
 
@@ -114,6 +114,66 @@ describe('ChannelsPage', () => {
     fireEvent.click(within(card('family')).getByRole('button', { name: /Send test/ }));
     expect(await within(card('family')).findByText(/Test failed/)).toBeDefined();
     expect(within(card('family')).getByText('Telegram refused the token (401)')).toBeDefined();
+  });
+
+  it('shows the next digest and the anomaly state, and sends a digest now (D-43, D-44)', async () => {
+    const family = byName('family');
+    const withReports: ChannelView = {
+      ...family,
+      rules: { ...family.rules, digest: { every: 'day', at: '09:00' }, anomaly: {} },
+      reports: {
+        time_zone: 'Asia/Tokyo',
+        host_zone: false,
+        digest: {
+          every: 'day',
+          at: '09:00',
+          day: null,
+          weekdays_only: false,
+          next_at: Date.UTC(2026, 8, 30, 0),
+          last_until: null,
+        },
+        anomaly: {
+          next_check_at: Date.UTC(2026, 8, 29, 13),
+          active: [{ check: 'error_rate', since: 1, value: 34, threshold: 20 }],
+        },
+      },
+    };
+    const preview = ChannelPreview.parse({ ...CAPTURED.previews.telegramPhoto, sample: 'digest' });
+    const window = { since: Date.UTC(2026, 8, 28, 12), until: Date.UTC(2026, 8, 29, 12) };
+    const view = mount({
+      'GET /channels': {
+        ...LIST,
+        data: LIST.data.map((c) => (c.name === 'family' ? withReports : c)),
+      },
+      [`POST /channels/${family.channel_id}/digest`]: (req: RecordedRequest) =>
+        (req.body as { send: boolean }).send
+          ? {
+              preview,
+              window,
+              empty: false,
+              sent: true,
+              ok: true,
+              delivery: { ...CAPTURED.deliveries.data[0], duration_ms: 312 },
+              error: null,
+            }
+          : { preview, window, empty: true, sent: false, ok: true, delivery: null, error: null },
+    });
+    await until(() => findCard('family') !== null);
+    const c = card('family');
+    expect(within(c).getByText('Daily digest')).toBeDefined();
+    expect(within(c).getByText(/next Wed 30 Sep, 09:00 \(Asia\/Tokyo\)/)).toBeDefined();
+    expect(within(c).getByText(/error rate 34%/)).toBeDefined();
+    await act(async () => {
+      fireEvent.click(within(c).getByRole('button', { name: 'Send now' }));
+    });
+    expect(await screen.findByRole('heading', { name: 'Send a digest now' })).toBeDefined();
+    expect(await screen.findByText('Nothing happened in this period')).toBeDefined();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Send now/ }));
+    });
+    expect(await screen.findByText(/Digest sent/)).toBeDefined();
+    const posts = view.requests.filter((r) => r.path.endsWith('/digest'));
+    expect(posts.map((r) => (r.body as { send: boolean }).send)).toEqual([false, true]);
   });
 
   it('asks before deleting and removes the card', async () => {

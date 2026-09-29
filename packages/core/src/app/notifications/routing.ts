@@ -73,6 +73,19 @@ export function inQuietHours(now: number, hours: QuietHours): boolean {
 }
 
 /**
+ * A channel's quiet hours in its zone: `quiet_hours.time_zone`, else the channel's `time_zone`
+ * (D-43), else the host's.
+ *
+ * @returns The hours with their zone, or `null` without quiet hours.
+ */
+export function quietHoursOf(rules: NotificationChannelRules): QuietHours | null {
+  const hours = rules.quiet_hours;
+  if (hours === undefined) return null;
+  const zone = hours.time_zone ?? rules.time_zone;
+  return zone === undefined ? hours : { ...hours, time_zone: zone };
+}
+
+/**
  * Applies a channel's rules to a message. Category, minimum severity, session globs and harness
  * filter everything; quiet hours hold back only alerting revisions below `critical` (a silent
  * edit is never held).
@@ -105,11 +118,12 @@ export function route(
       return { deliver: false, reason: 'filtered' };
     }
   }
+  const quiet = quietHoursOf(rules);
   if (
-    rules.quiet_hours !== undefined &&
+    quiet !== null &&
     message.alert &&
     message.severity !== 'critical' &&
-    inQuietHours(now, rules.quiet_hours)
+    inQuietHours(now, quiet)
   ) {
     return { deliver: false, reason: 'quiet_hours' };
   }
@@ -153,7 +167,9 @@ export function contentLevelOf(rules: NotificationChannelRules) {
  * The outbox rows for one notification change (spec 03 §9.4): per external channel, a pending
  * `send` (first revision, or an alerting revision on a platform that cannot edit), a pending
  * `edit` (later revisions), or a `suppressed` row with its reason. In-app-only kinds produce no
- * rows at all (the D-34 loop cut). Pure: the caller writes the rows in the notification's
+ * rows at all (the D-34 loop cut). An **addressed** notification (a scheduled report, spec 03 §9.7)
+ * is planned for its one channel only, and that channel's filters and quiet hours do not apply
+ * (the schedule is the opt-in, D-43). Pure: the caller writes the rows in the notification's
  * transaction.
  *
  * @returns The rows to enqueue (empty with no external channel).
@@ -162,10 +178,15 @@ export function planDeliveries(
   message: NotificationMessage,
   channels: readonly RoutableChannel[],
   now: number,
+  addressedTo?: string,
 ): NewNotificationDelivery[] {
   if (channels.length === 0 || IN_APP_ONLY_KINDS.has(message.kind)) return [];
   const rows: NewNotificationDelivery[] = [];
-  for (const { record, capabilities } of channels) {
+  const targets =
+    addressedTo === undefined
+      ? channels
+      : channels.filter((c) => c.record.channelId === addressedTo);
+  for (const { record, capabilities } of targets) {
     const first = message.revision === 1;
     const base = {
       channelId: record.channelId,
@@ -185,7 +206,8 @@ export function planDeliveries(
       suppressed(op, 'no_adapter');
       continue;
     }
-    const decision = route(record.rules, message, now);
+    const decision: RouteDecision =
+      addressedTo === undefined ? route(record.rules, message, now) : { deliver: true };
     if (!decision.deliver) {
       suppressed(op, decision.reason);
       continue;

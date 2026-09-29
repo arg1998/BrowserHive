@@ -1,7 +1,7 @@
 /** @module test/notifications/helpers — deliveries built from the preview samples through the real pipeline (content level, degrade), link builders and an in-memory screenshot reader for the adapter suites. */
 
 import type { NotificationContentLevel } from '@browserhive/contracts/enums';
-import type { PreviewSample } from '@browserhive/contracts/notifications';
+import type { DigestRule, PreviewSample } from '@browserhive/contracts/notifications';
 import { restrictContent } from '../../src/app/notifications/content-level.ts';
 import { degrade } from '../../src/app/notifications/degrade.ts';
 import { SAMPLE_IMAGE_REF, sampleMessage } from '../../src/app/notifications/samples.ts';
@@ -43,6 +43,10 @@ export interface DeliveryOptions {
   readonly level?: NotificationContentLevel;
   readonly links?: LinkBuilder;
   readonly replyTo?: PlatformMessageRef | null;
+  /** Report samples: the digest schedule, a late send, the anomaly's resolved revision. */
+  readonly digest?: DigestRule;
+  readonly late?: { readonly skipped: number };
+  readonly resolved?: boolean;
 }
 
 /**
@@ -55,7 +59,13 @@ export function delivery(
   capabilities: ChannelCapabilities,
   options: DeliveryOptions = {},
 ): ChannelDelivery {
-  const message = sampleMessage(sample, { image: options.image ?? 'none' });
+  const message = sampleMessage(sample, {
+    image: options.image ?? 'none',
+    ...(options.level !== undefined && { level: options.level }),
+    ...(options.digest !== undefined && { digest: options.digest }),
+    ...(options.late !== undefined && { late: options.late }),
+    ...(options.resolved === true && { resolved: true }),
+  });
   return {
     message: degrade(restrictContent(message, options.level ?? 'full'), capabilities),
     links: options.links ?? PUBLIC_LINKS,

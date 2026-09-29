@@ -39,6 +39,7 @@ export const DOCS_PAGES = {
   attention: { page: 'guide/attention' },
   notifications: { page: 'guide/notifications' },
   notificationChannels: { page: 'guide/notifications', anchor: 'channels' },
+  notificationReports: { page: 'guide/notifications', anchor: 'reports-in-browserhive' },
   channelTelegram: { page: 'guide/notifications', anchor: 'telegram' },
   channelDiscord: { page: 'guide/notifications', anchor: 'discord' },
   discordBotTroubleshooting: {

@@ -8,6 +8,7 @@ import type {
   OperatorRequestListRow,
   OperatorRequestRepository,
   OperatorRequestResolution,
+  OperatorRequestWindowStats,
 } from '../../../ports/persistence/operator-requests.ts';
 import type {
   AuditListQuery,
@@ -213,6 +214,52 @@ export class SqliteOperatorRequestRepository implements OperatorRequestRepositor
     if (kind !== undefined) qb = qb.where('kind', '=', kind);
     return asNumber((await qb.executeTakeFirst())?.n);
   }
+
+  async windowStats(
+    kind: OperatorRequestKind,
+    window: { readonly since: number; readonly until: number },
+  ): Promise<OperatorRequestWindowStats> {
+    // One indexed read (kind, created_at): the status and wait of every request in the window.
+    const rows = await this.#db
+      .selectFrom('operator_requests')
+      .select(['status', sql<number | null>`resolved_at - created_at`.as('waited')])
+      .where('kind', '=', kind)
+      .where('created_at', '>=', window.since)
+      .where('created_at', '<', window.until)
+      .execute();
+    return windowStatsOf(rows.map((r) => ({ status: r.status, waited: r.waited })));
+  }
+}
+
+/**
+ * Folds request rows into their window outcomes (shared with the in-memory double).
+ *
+ * @returns The counts and the median wait of the answered requests.
+ */
+export function windowStatsOf(
+  rows: readonly { readonly status: string; readonly waited: number | null }[],
+): OperatorRequestWindowStats {
+  const count = (status: string) => rows.filter((r) => r.status === status).length;
+  const waits = rows
+    .filter((r) => (r.status === 'resolved' || r.status === 'rejected') && r.waited !== null)
+    .map((r) => Math.max(0, asNumber(r.waited)))
+    .sort((a, b) => a - b);
+  const mid = Math.floor(waits.length / 2);
+  const medianWaitMs =
+    waits.length === 0
+      ? null
+      : waits.length % 2 === 1
+        ? (waits[mid] ?? 0)
+        : Math.round(((waits[mid - 1] ?? 0) + (waits[mid] ?? 0)) / 2);
+  return {
+    created: rows.length,
+    resolved: count('resolved'),
+    rejected: count('rejected'),
+    timedOut: count('timeout'),
+    cancelled: count('cancelled'),
+    pending: count('pending'),
+    medianWaitMs,
+  };
 }
 
 const ACTIONS = 'operator_actions';

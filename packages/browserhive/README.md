@@ -1,6 +1,6 @@
 # browserhive
 
-Isolated, stealthy Chromium sessions for AI agents over the Model Context Protocol, with vault-backed logins the model never sees, human takeover, an audit trail with trace replay, and an operator dashboard. Local-first: nothing leaves your machine unless you enable telemetry.
+Isolated, stealthy Chromium sessions for AI agents over the Model Context Protocol, with vault-backed logins the model never sees, human takeover, an audit trail with trace replay, an operator dashboard, and notifications on your phone that you can answer from. Local-first: nothing leaves your machine unless you enable telemetry or a notification channel.
 
 ## Requirements
 
@@ -44,11 +44,13 @@ Or run it over stdio:
 ## Features
 
 - One Chromium process and context per session; persistent profiles and saved logins
+- The bundled Chromium or your installed Google Chrome or Microsoft Edge, inside Chromium's sandbox wherever the machine allows it
 - Stealth: full Chromium, Patchright, host-coherent identity, optional fingerprint and human-like input
 - `vault_fill`: Bitwarden credentials typed into the page after origin and policy checks, never returned to the model
 - `request_attention`: block the agent and take over its browser from the dashboard
 - SQLite audit trail and Playwright trace replay
-- Dashboard, REST API and WebSocket on the same port as MCP
+- Dashboard, REST API and WebSocket on the same port as MCP; sessions and tool calls per agent (Claude Code, Codex, Cursor, …)
+- Notifications through your own Telegram bot, Discord webhook or bot, ntfy topic or webhook: answer from the chat, daily or weekly digests and anomaly alerts
 - Opt-in OpenTelemetry export of traces, metrics and logs
 
 ## Programmatic use
@@ -69,6 +71,7 @@ await server.stop();
 - [Connecting MCP clients](https://github.com/arg1998/BrowserHive/blob/main/docs/guide/mcp-clients.md)
 - [Security model](https://github.com/arg1998/BrowserHive/blob/main/docs/guide/security.md)
 - [Vault](https://github.com/arg1998/BrowserHive/blob/main/docs/guide/vault.md)
+- [Notifications](https://github.com/arg1998/BrowserHive/blob/main/docs/guide/notifications.md)
 - [Configuration](https://github.com/arg1998/BrowserHive/blob/main/docs/guide/configuration.md)
 - [CLI](https://github.com/arg1998/BrowserHive/blob/main/docs/guide/cli.md)
 - [Tool reference](https://github.com/arg1998/BrowserHive/blob/main/docs/reference/tools.md)

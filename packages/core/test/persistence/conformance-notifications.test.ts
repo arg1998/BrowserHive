@@ -399,6 +399,113 @@ for (const [name, open] of adapters) {
       expect(await r.notificationChannelMessages.dueForDelete(100, 10)).toEqual([]);
     });
 
+    it('lists the in-app report copies with the channels they reached (D-45)', async () => {
+      const report = (id: string, overrides: Partial<NotificationRecord> = {}) =>
+        notification({
+          notificationId: id,
+          type: 'lifecycle',
+          kind: 'digest.daily',
+          category: 'reports',
+          severity: 'info',
+          state: 'final',
+          sourceEventId: null,
+          ...overrides,
+        });
+      await r.notificationChannels.upsert(
+        channelRecord({ channelId: 'nc-000000000002', name: 'team' }),
+      );
+      // Two in-app copies: one reached both channels, one reached none.
+      await r.notifications.insert(
+        report('n-inapp000001', { thread: 'report:digest:a:1:2', createdAt: 20, readAt: 20 }),
+      );
+      await r.notifications.insert(
+        report('n-inapp000002', {
+          thread: 'report:anomaly:x:3',
+          kind: 'report.anomaly',
+          type: 'system',
+          createdAt: 30,
+          dismissedAt: 31,
+        }),
+      );
+      // The channel copies name the first one.
+      for (const [id, channel] of [
+        ['n-copy0000001', 'nc-000000000001'],
+        ['n-copy0000002', 'nc-000000000002'],
+      ] as const) {
+        await r.notifications.insert(
+          report(id, {
+            thread: `digest:${channel}:2`,
+            sourceEventId: 'n-inapp000001',
+            readAt: 20,
+            dismissedAt: 20,
+          }),
+        );
+        await r.notificationDeliveries.enqueue([
+          job({ channelId: channel, notificationId: id, status: 'pending' }),
+        ]);
+      }
+      await r.notificationDeliveries.enqueue([
+        job({
+          channelId: 'nc-000000000002',
+          notificationId: 'n-copy0000002',
+          revision: 2,
+          op: 'edit',
+          status: 'suppressed',
+          reason: 'quiet_hours',
+        }),
+      ]);
+      const ids = async (q: Parameters<Repos['notifications']['listReports']>[0]) =>
+        (await r.notifications.listReports(q)).items.map((n) => n.notificationId);
+      // Dismissed or not, newest first; channel copies never listed.
+      expect(await ids({ limit: 10 })).toEqual(['n-inapp000002', 'n-inapp000001']);
+      expect(await ids({ limit: 10, kinds: ['report.anomaly'] })).toEqual(['n-inapp000002']);
+      expect(await ids({ limit: 10, channelId: 'nc-000000000002' })).toEqual(['n-inapp000001']);
+      expect(await ids({ limit: 10, inAppOnly: true })).toEqual(['n-inapp000002']);
+      expect(await ids({ limit: 10, since: 25 })).toEqual(['n-inapp000002']);
+      const page = await r.notifications.listReports({ limit: 1, total: true });
+      expect(page.total).toBe(2);
+      const channels = await r.notifications.reportChannels(['n-inapp000001', 'n-inapp000002']);
+      expect(channels.get('n-inapp000001')).toEqual([
+        {
+          channelId: 'nc-000000000001',
+          name: 'phone',
+          kind: 'fake',
+          status: 'pending',
+          reason: null,
+        },
+        {
+          channelId: 'nc-000000000002',
+          name: 'team',
+          kind: 'fake',
+          status: 'suppressed',
+          reason: 'quiet_hours',
+        },
+      ]);
+      expect(channels.get('n-inapp000002')).toBeUndefined();
+    });
+
+    it('treats type and category as one facet (D-45)', async () => {
+      await r.notifications.insert(
+        notification({
+          notificationId: 'n-inapp000001',
+          type: 'lifecycle',
+          kind: 'digest.daily',
+          category: 'reports',
+          thread: 'report:digest:a:1:2',
+          createdAt: 20,
+          updatedAt: 20,
+        }),
+      );
+      const ids = async (q: Parameters<Repos['notifications']['list']>[0]) =>
+        (await r.notifications.list(q)).items.map((n) => n.notificationId).sort();
+      expect(await ids({ categories: ['reports'] })).toEqual(['n-inapp000001']);
+      expect(await ids({ types: ['attention'], categories: ['reports'] })).toEqual([
+        'n-000000000001',
+        'n-inapp000001',
+      ]);
+      expect(await ids({ types: ['attention'] })).toEqual(['n-000000000001']);
+    });
+
     it('removing a channel removes its deliveries and messages', async () => {
       await r.notificationDeliveries.enqueue([job()]);
       await r.notificationChannelMessages.upsert({

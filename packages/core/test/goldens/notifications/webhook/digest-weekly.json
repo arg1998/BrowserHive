@@ -1,0 +1,378 @@
+{
+  "kind": "webhook",
+  "variant": "digest-weekly",
+  "mode": null,
+  "requests": [
+    {
+      "method": "POST",
+      "path": "https://hooks.example.net/bh",
+      "encoding": "json",
+      "body": {
+        "schema": 1,
+        "event": "notification",
+        "op": "send",
+        "delivered_at": 1790000000000,
+        "channel": null,
+        "links": {
+          "overview": "https://bh.example.net/overview?since=1789395200000&until=1790000000000"
+        },
+        "local_links": false,
+        "message": {
+          "schema": 1,
+          "id": "n-sample000001",
+          "revision": 1,
+          "thread": "digest:sample:1790000000000",
+          "kind": "digest.weekly",
+          "category": "reports",
+          "severity": "info",
+          "state": "final",
+          "alert": true,
+          "at": {
+            "created": 1790000000000,
+            "updated": 1790000000000
+          },
+          "title": "Weekly digest · 14–21 Sep",
+          "summary": "84 sessions (2 live) · 23,884 tool calls · 476 errors (2%)",
+          "blocks": [
+            {
+              "type": "fields",
+              "items": [
+                {
+                  "label": "Sessions",
+                  "value": [
+                    {
+                      "type": "text",
+                      "text": "84 started · 2 live now"
+                    }
+                  ]
+                },
+                {
+                  "label": "Tool calls",
+                  "value": [
+                    {
+                      "type": "text",
+                      "text": "23,884 · 476 errors (2%)"
+                    },
+                    {
+                      "type": "text",
+                      "text": " · was 1.2%"
+                    }
+                  ]
+                },
+                {
+                  "label": "Attention",
+                  "value": [
+                    {
+                      "type": "text",
+                      "text": "28 requests · 21 answered (median 1m 36s) · 7 timed out"
+                    }
+                  ]
+                },
+                {
+                  "label": "Vault fills",
+                  "value": [
+                    {
+                      "type": "text",
+                      "text": "63 · 56 ok · 7 origin mismatch"
+                    }
+                  ]
+                },
+                {
+                  "label": "Blocked requests",
+                  "value": [
+                    {
+                      "type": "text",
+                      "text": "189"
+                    },
+                    {
+                      "type": "text",
+                      "text": " · top "
+                    },
+                    {
+                      "type": "code",
+                      "text": "*.doubleclick.net"
+                    },
+                    {
+                      "type": "text",
+                      "text": " (133)"
+                    }
+                  ]
+                },
+                {
+                  "label": "Slowest tool (p95)",
+                  "value": [
+                    {
+                      "type": "code",
+                      "text": "navigate"
+                    },
+                    {
+                      "type": "text",
+                      "text": " 4.2 s (was 2.9 s)"
+                    }
+                  ]
+                },
+                {
+                  "label": "Open problems",
+                  "value": [
+                    {
+                      "type": "code",
+                      "text": "RETENTION_FAILED"
+                    },
+                    {
+                      "type": "text",
+                      "text": " since 21 Sep 10:13"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "chart",
+              "label": "Tool calls per 12 hours",
+              "values": [
+                10,
+                5,
+                0,
+                0,
+                0,
+                5,
+                20,
+                90,
+                480,
+                1060,
+                1525,
+                1400,
+                950,
+                1200
+              ],
+              "start": 1789395200000,
+              "step_ms": 43200000,
+              "unit": "calls"
+            },
+            {
+              "type": "heading",
+              "text": "Top errors"
+            },
+            {
+              "type": "table",
+              "columns": [
+                "Error",
+                "Tool",
+                "Count",
+                "Sessions"
+              ],
+              "rows": [
+                [
+                  [
+                    {
+                      "type": "code",
+                      "text": "NAVIGATION_TIMEOUT"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "code",
+                      "text": "navigate"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "text",
+                      "text": "217"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "text",
+                      "text": "4"
+                    }
+                  ]
+                ],
+                [
+                  [
+                    {
+                      "type": "code",
+                      "text": "ELEMENT_NOT_FOUND"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "code",
+                      "text": "click"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "text",
+                      "text": "154"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "text",
+                      "text": "6"
+                    }
+                  ]
+                ],
+                [
+                  [
+                    {
+                      "type": "code",
+                      "text": "CAPTCHA_DETECTED"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "code",
+                      "text": "navigate"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "text",
+                      "text": "105"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "text",
+                      "text": "2"
+                    }
+                  ]
+                ]
+              ]
+            },
+            {
+              "type": "heading",
+              "text": "By harness"
+            },
+            {
+              "type": "table",
+              "columns": [
+                "Harness",
+                "Sessions",
+                "Tool calls",
+                "Errors"
+              ],
+              "rows": [
+                [
+                  [
+                    {
+                      "type": "text",
+                      "text": "Claude Code"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "text",
+                      "text": "56"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "text",
+                      "text": "16,870"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "text",
+                      "text": "357"
+                    }
+                  ]
+                ],
+                [
+                  [
+                    {
+                      "type": "text",
+                      "text": "Cursor"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "text",
+                      "text": "21"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "text",
+                      "text": "6,160"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "text",
+                      "text": "105"
+                    }
+                  ]
+                ],
+                [
+                  [
+                    {
+                      "type": "text",
+                      "text": "Unknown"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "text",
+                      "text": "7"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "text",
+                      "text": "854"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "text",
+                      "text": "14"
+                    }
+                  ]
+                ]
+              ]
+            },
+            {
+              "type": "footer",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "14 Sep 16:13 → 21 Sep 16:13 · Europe/Berlin"
+                }
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "kind": "open",
+              "id": "overview",
+              "label": "Open Overview",
+              "style": "primary",
+              "path": "/overview?since=1789395200000&until=1790000000000"
+            }
+          ],
+          "entities": {},
+          "privacy": {
+            "level": "titles",
+            "has_image": false
+          },
+          "report": {
+            "window": {
+              "since": 1789395200000,
+              "until": 1790000000000
+            },
+            "time_zone": "Europe/Berlin",
+            "late": false,
+            "skipped": 0,
+            "manual": false
+          }
+        }
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}

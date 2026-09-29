@@ -26,6 +26,7 @@ export const TIMESTAMP_HEADER = 'X-BrowserHive-Timestamp';
 export const WEBHOOK_CAPABILITIES: ChannelCapabilities = {
   richBlocks: true,
   tables: true,
+  charts: true,
   images: false,
   actButtons: false,
   openLinks: true,

@@ -8,7 +8,7 @@ import type {
   OpenAction,
 } from '@browserhive/contracts/notifications';
 import type { ChannelCapabilities } from '../../ports/notification-channel.ts';
-import { bold, clip, link, text } from './message.ts';
+import { bold, clip, code, formatCount, link, text } from './message.ts';
 
 /** Label of the link that replaces cut content and actions a channel cannot show. */
 export const OPEN_IN_BROWSERHIVE = 'Open in BrowserHive';
@@ -45,7 +45,46 @@ function blockLength(block: Block): number {
       return block.alt.length;
     case 'divider':
       return 0;
+    case 'chart':
+      return block.label.length + block.values.length + 16;
   }
+}
+
+/** Eighth-block characters, lowest first. */
+const BARS = '▁▂▃▄▅▆▇█';
+
+/**
+ * Text bars for a series (`▁▂▅▇█▃`): each value scaled against the largest; all zero is all `▁`.
+ *
+ * @returns One character per value.
+ */
+export function sparkline(values: readonly number[]): string {
+  const max = Math.max(0, ...values);
+  if (max <= 0) return BARS[0]?.repeat(values.length) ?? '';
+  return values
+    .map(
+      (v) =>
+        BARS[Math.min(BARS.length - 1, Math.round((Math.max(0, v) / max) * (BARS.length - 1)))],
+    )
+    .join('');
+}
+
+/** No-break space: "peak 1,525 calls" wraps as one piece on a narrow phone. */
+const NBSP = '\u00a0';
+
+/** A chart as one paragraph: its label, the bars in monospace and the peak. */
+function chartToText(block: Extract<Block, { type: 'chart' }>): Block {
+  const peak = Math.max(0, ...block.values);
+  const unit = block.unit === null ? '' : `${NBSP}${block.unit}`;
+  return {
+    type: 'text',
+    content: [
+      bold(block.label),
+      text(' '),
+      code(sparkline(block.values)),
+      text(` peak${NBSP}${formatCount(peak)}${unit}`),
+    ],
+  };
 }
 
 /** A table as a list: one item per row, `column: value` pairs joined with `·`. */
@@ -56,7 +95,8 @@ function tableToList(block: Extract<Block, { type: 'table' }>): Block[] {
     row.forEach((cell, i) => {
       if (i > 0) out.push(text(' · '));
       const column = block.columns[i];
-      if (column !== undefined) out.push(bold(`${column}: `));
+      // The space stays outside the bold run: `**Tool:** x`, which every markdown renders.
+      if (column !== undefined) out.push(bold(`${column}:`), text(' '));
       out.push(...cell);
     });
     return out;
@@ -72,7 +112,7 @@ function toPlain(block: Block): Block[] {
     case 'fields':
       return block.items.map((i) => ({
         type: 'text',
-        content: [bold(`${i.label}: `), ...i.value],
+        content: [bold(`${i.label}:`), text(' '), ...i.value],
       }));
     case 'quote':
       return [{ type: 'text', content: [text('“'), ...block.content, text('”')] }];
@@ -102,6 +142,10 @@ function adaptBlocks(blocks: readonly Block[], caps: ChannelCapabilities): Block
     }
     if (block.type === 'table' && !caps.tables) {
       out.push(...tableToList(block));
+      continue;
+    }
+    if (block.type === 'chart' && !caps.charts) {
+      out.push(chartToText(block));
       continue;
     }
     out.push(block);
@@ -159,7 +203,8 @@ function openFooter(path: string, prefix = ''): Block {
 /**
  * Adapts a message to a renderer's capabilities (D-32):
  * - images are dropped, or become a "View screenshot" link to their dashboard page;
- * - tables become lists, and without rich blocks every block becomes plain paragraphs;
+ * - tables become lists, charts a line of text bars, and without rich blocks every block becomes
+ *   plain paragraphs;
  * - act buttons become their `open` fallback where the channel cannot act, and never survive a
  *   state other than `open`; duplicate links go; at most `maxButtons` remain; without link buttons
  *   the first link becomes an "Open in BrowserHive" footer;

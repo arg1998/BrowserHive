@@ -44,6 +44,7 @@ export const NTFY_ACTIONS_MAX = 3;
 export const NTFY_CAPABILITIES: ChannelCapabilities = {
   richBlocks: true,
   tables: false,
+  charts: false,
   images: true,
   actButtons: false,
   openLinks: true,
@@ -86,9 +87,12 @@ export function ntfyPriority(message: Pick<NotificationMessage, 'severity' | 'al
   }
 }
 
-/** ntfy tags (emoji short codes): the outcome once settled, else the severity. */
-export function ntfyTags(message: Pick<NotificationMessage, 'severity' | 'state'>): string[] {
+/** ntfy tags (emoji short codes): the outcome once settled, a chart for a digest, else the severity. */
+export function ntfyTags(
+  message: Pick<NotificationMessage, 'severity' | 'state'> & { readonly kind?: string },
+): string[] {
   if (message.state === 'resolved') return ['white_check_mark'];
+  if (message.kind?.startsWith('digest.') === true) return ['bar_chart'];
   if (message.state === 'expired') return ['hourglass'];
   switch (message.severity) {
     case 'info':
@@ -122,6 +126,7 @@ function blockText(b: Block): string {
     case 'table':
     case 'image':
     case 'divider':
+    case 'chart':
       return '';
   }
 }

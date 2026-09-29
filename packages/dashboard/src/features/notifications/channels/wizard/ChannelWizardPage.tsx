@@ -26,6 +26,7 @@ import {
   useCreateChannel,
   useUpdateChannel,
 } from '../api.ts';
+import { DigestNowDialog } from '../DigestNowDialog.tsx';
 import {
   type ChannelDraft,
   channelWhere,
@@ -154,6 +155,8 @@ interface WizardProps {
   readonly title: ReactNode;
   readonly headerActions?: ReactNode;
   readonly notice?: ReactNode;
+  /** The zone BrowserHive runs in (`GET /channels` `host_time_zone`), once known. */
+  readonly hostZone?: string | undefined;
 }
 
 function Wizard({
@@ -171,6 +174,7 @@ function Wizard({
   title,
   headerActions,
   notice,
+  hostZone,
 }: WizardProps) {
   const [attempted, setAttempted] = useState<ReadonlySet<WizardStep>>(new Set());
   const names = draftEnvNames(draft);
@@ -284,6 +288,7 @@ function Wizard({
             onRules={(rules: NotificationChannelRules) => setDraft((d) => ({ ...d, rules }))}
             connection={channel?.connection ?? null}
             onStep={onStep}
+            {...(hostZone !== undefined && { hostZone })}
           />
         );
       case 'preview':
@@ -450,6 +455,7 @@ export function NewChannelPage() {
   const hasDraft = draft.kind !== null;
   return (
     <Wizard
+      hostZone={channels.data?.host_time_zone}
       draft={draft}
       setDraft={setDraft}
       step={step}
@@ -501,6 +507,7 @@ export function EditChannelPage() {
   const update = useUpdateChannel(channelId);
   const actions = useChannelActions();
   const [saved, setSaved] = useState(false);
+  const [digestOpen, setDigestOpen] = useState(false);
 
   useEffect(() => {
     if (channel !== null && draft === null) setDraftState(draftFromChannel(channel));
@@ -538,62 +545,75 @@ export function EditChannelPage() {
     .map((c) => c.name);
   const Pause = ICONS.pause;
   const Play = ICONS.play;
+  const Digest = ICONS.digest;
   return (
-    <Wizard
-      draft={draft}
-      setDraft={setDraft}
-      step={step}
-      onStep={onStep}
-      taken={taken}
-      channel={channel}
-      readOnly={readOnly}
-      saving={update.isPending}
-      saveError={update.error}
-      onSave={() => update.mutate(draftToPatch(draft), { onSuccess: () => setSaved(true) })}
-      savedId={null}
-      title={
-        <span className="inline-flex items-center gap-3">
-          <PlatformMark kind={channel.kind} size="sm" />
-          {channel.name}
-          <StatusDot entry={CHANNEL_STATUS[channel.status]} className="text-sm font-normal" />
-        </span>
-      }
-      headerActions={
-        channel.status === 'active' ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => actions.pause.mutate(channel.channel_id)}
-          >
-            <Pause aria-hidden="true" />
-            Pause
-          </Button>
-        ) : (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => actions.resume.mutate(channel.channel_id)}
-          >
-            <Play aria-hidden="true" />
-            Resume
-          </Button>
-        )
-      }
-      notice={
-        readOnly ? (
-          <Callout tone="info" title="This channel comes from the command line">
-            It was declared with <code className="font-mono">--notificationChannel</code> when
-            BrowserHive started, so it is read-only here: change the flag and restart to edit it.
-            You can still preview it, send a test and pause it.
-          </Callout>
-        ) : saved ? (
-          <Callout tone="success" title="Changes saved">
-            They apply to the next notification.
-          </Callout>
-        ) : undefined
-      }
-    />
+    <>
+      <Wizard
+        hostZone={channels.data?.host_time_zone}
+        draft={draft}
+        setDraft={setDraft}
+        step={step}
+        onStep={onStep}
+        taken={taken}
+        channel={channel}
+        readOnly={readOnly}
+        saving={update.isPending}
+        saveError={update.error}
+        onSave={() => update.mutate(draftToPatch(draft), { onSuccess: () => setSaved(true) })}
+        savedId={null}
+        title={
+          <span className="inline-flex items-center gap-3">
+            <PlatformMark kind={channel.kind} size="sm" />
+            {channel.name}
+            <StatusDot entry={CHANNEL_STATUS[channel.status]} className="text-sm font-normal" />
+          </span>
+        }
+        headerActions={
+          <>
+            {channel.reports.digest !== null ? (
+              <Button type="button" variant="outline" size="sm" onClick={() => setDigestOpen(true)}>
+                <Digest aria-hidden="true" />
+                Send a digest now
+              </Button>
+            ) : null}
+            {channel.status === 'active' ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => actions.pause.mutate(channel.channel_id)}
+              >
+                <Pause aria-hidden="true" />
+                Pause
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => actions.resume.mutate(channel.channel_id)}
+              >
+                <Play aria-hidden="true" />
+                Resume
+              </Button>
+            )}
+          </>
+        }
+        notice={
+          readOnly ? (
+            <Callout tone="info" title="This channel comes from the command line">
+              It was declared with <code className="font-mono">--notificationChannel</code> when
+              BrowserHive started, so it is read-only here: change the flag and restart to edit it.
+              You can still preview it, send a test and pause it.
+            </Callout>
+          ) : saved ? (
+            <Callout tone="success" title="Changes saved">
+              They apply to the next notification.
+            </Callout>
+          ) : undefined
+        }
+      />
+      <DigestNowDialog channel={channel} open={digestOpen} onOpenChange={setDigestOpen} />
+    </>
   );
 }

@@ -164,8 +164,8 @@ export class NotificationOutbox {
    *
    * @returns The rows (empty without external channels).
    */
-  plan(message: NotificationMessage, now: number): NewNotificationDelivery[] {
-    return planDeliveries(message, this.deps.registry.channels(), now);
+  plan(message: NotificationMessage, now: number, addressedTo?: string): NewNotificationDelivery[] {
+    return planDeliveries(message, this.deps.registry.channels(), now, addressedTo);
   }
 
   /** Wakes the worker after a commit that enqueued work. No-op without channels. */

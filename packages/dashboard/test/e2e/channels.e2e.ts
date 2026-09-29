@@ -1,4 +1,4 @@
-/** @module dashboard/test/e2e/channels.e2e — the notification channels journey against a running daemon: add a webhook channel through the wizard (pointed at a receiver this test starts, answering from the chat switched on), preview it, save, send a real test and see it arrive, find it in the delivery log, the empty Actions audit, delete it; skips cleanly without a daemon */
+/** @module dashboard/test/e2e/channels.e2e — the notification channels journey against a running daemon: add a webhook channel through the wizard (pointed at a receiver this test starts, answering from the chat switched on), preview it, save, send a real test and see it arrive, find it in the delivery log, the empty Actions audit, delete it; a digest sent on demand found again through the inbox's Reports chip, its report page and the Overview of its period; the in-app report settings saved and switched off (D-45); skips cleanly without a daemon */
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { expect, type Page, test } from '@playwright/test';
@@ -121,6 +121,115 @@ test.describe('notification channels', () => {
       // Delete the channel.
       await page.goto('/notifications/channels');
       await expect(card).toBeVisible();
+      await card.getByRole('button', { name: `More actions for ${name}` }).click();
+      await page.getByRole('menuitem', { name: /Delete/ }).click();
+      await page.getByRole('button', { name: 'Delete channel' }).click();
+      await expect(page.getByRole('heading', { name })).toHaveCount(0);
+    } finally {
+      await new Promise<void>((resolve) => receiver.server.close(() => resolve()));
+    }
+  });
+
+  test('reports in BrowserHive: a weekly digest on Friday at 17:00, saved, then off', async ({
+    page,
+  }) => {
+    await signIn(page);
+    // Start from the default (off), whatever an earlier project left.
+    const reset = await page.request.put('/api/v1/notifications/report-settings', {
+      data: { settings: {} },
+      headers: { origin: baseUrl ?? '' },
+    });
+    expect(reset.ok()).toBe(true);
+    await page.goto('/notifications/reports');
+    const form = page.getByRole('form', { name: 'Reports in BrowserHive' });
+    await expect(form.getByRole('button', { name: 'Off' })).toHaveAttribute('aria-pressed', 'true');
+    await form.getByRole('button', { name: 'Every week' }).click();
+    await expect(form.getByLabel('At')).toHaveValue('17:00');
+    await expect(form.getByText(/Next digest: Fri /)).toBeVisible();
+    await form.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByRole('heading', { name: 'Reports in BrowserHive saved' })).toBeVisible();
+    await page.reload();
+    await expect(form.getByRole('button', { name: 'Every week' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await form.getByRole('button', { name: 'Off' }).click();
+    await form.getByRole('button', { name: 'Save' }).click();
+    await expect(form.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
+  test('schedule a daily digest in a time zone, send one now, see it in the log', async ({
+    page,
+  }, testInfo) => {
+    const receiver = await startReceiver();
+    const name = `e2e-digest-${testInfo.project.name}`.slice(0, 32);
+    try {
+      await signIn(page);
+      await page.goto('/notifications/channels/new');
+      await page.locator('label').filter({ hasText: 'POSTs the notification' }).click();
+      await page.getByRole('button', { name: 'Continue' }).click();
+      await page.getByRole('button', { name: 'Continue' }).click();
+      await page.getByLabel('URL', { exact: true }).fill(receiver.url);
+      await page.getByRole('button', { name: 'Continue' }).click();
+      // 4. What to send: the Daily digest preset switches the digest and the anomaly alerts on.
+      await page.getByLabel('Name', { exact: true }).fill(name);
+      await page.locator('label').filter({ hasText: 'A summary every morning' }).click();
+      await expect(page.getByRole('button', { name: 'Every day' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      await expect(page.getByText('Next digest:')).toBeVisible();
+      await expect(
+        page.getByRole('switch', { name: 'Tell me when something looks off' }),
+      ).toBeChecked();
+      // A zone of its own: type to search.
+      const zone = page.getByLabel(/Time zone/);
+      await zone.fill('Tokyo');
+      await page.getByRole('option', { name: 'Asia/Tokyo' }).click();
+      await expect(page.getByText(/in Asia\/Tokyo/)).toBeVisible();
+      await page.getByRole('button', { name: 'Continue' }).click();
+      await page.getByRole('button', { name: 'Save channel' }).click();
+      await expect(page.getByText(`${name} is saved`)).toBeVisible();
+
+      // The card shows the next digest and sends one on demand.
+      await page.goto('/notifications/channels');
+      const card = page.locator('article').filter({ has: page.getByRole('heading', { name }) });
+      await expect(card.getByText('Daily digest', { exact: true }).last()).toBeVisible();
+      await expect(card.getByText(/\(Asia\/Tokyo\)/)).toBeVisible();
+      await expect(card.getByText('Watching for anomalies')).toBeVisible();
+      await card.getByRole('button', { name: 'Send now' }).click();
+      const dialog = page.getByRole('dialog', { name: 'Send a digest now' });
+      await expect(dialog.locator('[data-platform="webhook"]')).toBeVisible();
+      await dialog.getByRole('button', { name: /Send now/ }).click();
+      await expect(dialog.getByText(/Digest sent/)).toBeVisible();
+      await expect.poll(() => receiver.bodies.length).toBeGreaterThan(0);
+      const body = receiver.bodies.at(-1) as {
+        message?: { kind?: string; report?: { manual?: boolean; time_zone?: string } };
+      };
+      expect(body.message?.kind).toBe('digest.daily');
+      expect(body.message?.report).toMatchObject({ manual: true, time_zone: 'Asia/Tokyo' });
+      await dialog.getByRole('button', { name: 'Done' }).click();
+
+      // The delivery log marks it as sent on demand.
+      await page.goto('/notifications/log');
+      await expect(page.getByText('on demand').first()).toBeVisible();
+
+      // The inbox has its in-app copy (D-45): the Reports chip, the report page, the Overview.
+      await page.goto('/notifications');
+      await page.getByRole('button', { name: 'Reports', exact: true }).click();
+      await expect(page).toHaveURL(/category=reports/);
+      const row = page.getByRole('link', { name: /^Open: Daily digest/ }).first();
+      await expect(row).toBeVisible();
+      await row.click();
+      await expect(page).toHaveURL(/\/notifications\/reports\/n-/);
+      await expect(page.getByRole('heading', { level: 2, name: /Daily digest/ })).toBeVisible();
+      await expect(page.getByText('on demand').first()).toBeVisible();
+      await expect(page.getByText(/Asia\/Tokyo/).first()).toBeVisible();
+      await expect(page.getByRole('img', { name: /Tool calls per hour/ })).toBeVisible();
+      await page.getByRole('link', { name: 'Open Overview for this period' }).click();
+      await expect(page).toHaveURL(/\/overview\?.*since=\d+.*until=\d+/);
+
+      await page.goto('/notifications/channels');
       await card.getByRole('button', { name: `More actions for ${name}` }).click();
       await page.getByRole('menuitem', { name: /Delete/ }).click();
       await page.getByRole('button', { name: 'Delete channel' }).click();

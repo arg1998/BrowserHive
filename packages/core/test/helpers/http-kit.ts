@@ -13,6 +13,10 @@ import { ChannelRegistry } from '../../src/app/notifications/channel-registry.ts
 import { ChannelService } from '../../src/app/notifications/channel-service.ts';
 import { createLocalLinkBuilder } from '../../src/app/notifications/links.ts';
 import { PublicUrlChecker } from '../../src/app/notifications/public-url.ts';
+import { ReportScheduler } from '../../src/app/notifications/report-scheduler.ts';
+import { ReportService } from '../../src/app/notifications/report-service.ts';
+import { ReportSettingsStore } from '../../src/app/notifications/report-settings.ts';
+import { sampleAnomalyFacts, sampleDigestFacts } from '../../src/app/notifications/samples.ts';
 import { sessionDirLayout } from '../../src/app/sessions/profile-dir.ts';
 import { SessionService } from '../../src/app/sessions/session-service.ts';
 import { FakeSessionDirFs, testConfig } from '../../src/app/sessions/test-support.ts';
@@ -154,7 +158,26 @@ export async function createHttpKit(options: HttpKitOptions = {}) {
     }),
   });
   await channelRegistry.load();
+  const reportSettings = new ReportSettingsStore(repos.notificationCursors);
+  const reports = new ReportScheduler({
+    settings: reportSettings,
+    registry: channelRegistry,
+    facts: {
+      digest: async (window, rule) => sampleDigestFacts(window.until, rule),
+      anomaly: async (now) => sampleAnomalyFacts(now),
+    },
+    uow: new InMemoryUnitOfWork(repos),
+    repos,
+    outbox: { plan: () => [], kick: () => undefined },
+    clock,
+    ids: auth.ids,
+    logger,
+    hostZone: () => 'UTC',
+  });
   const channels = new ChannelService({
+    reports,
+    cursors: repos.notificationCursors,
+    hostZone: () => 'UTC',
     repos,
     uow: new InMemoryUnitOfWork(repos),
     registry: channelRegistry,
@@ -200,6 +223,12 @@ export async function createHttpKit(options: HttpKitOptions = {}) {
     auth: authService,
     blocklist,
     notifications: fakeNotifications(repos.notifications),
+    reports: new ReportService({
+      repo: repos.notifications,
+      settings: reportSettings,
+      scheduler: reports,
+      clock,
+    }),
     preferences: fakePreferences(),
     logs,
     logLevel: { set: (spec) => spec },

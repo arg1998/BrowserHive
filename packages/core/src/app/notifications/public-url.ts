@@ -135,6 +135,16 @@ export function classifyPublicUrlProbe(
       browserhive: true,
     };
   }
+  if (status === 502 || status === 503 || status === 504) {
+    // A proxy answered for an upstream it cannot reach (often an error page in HTML): the address
+    // is set up, but BrowserHive is not behind it right now.
+    return {
+      outcome: 'unreachable',
+      detail: `It answers HTTP ${status}: something in front of BrowserHive (a proxy or tunnel) cannot reach it.`,
+      statusCode: status,
+      browserhive: false,
+    };
+  }
   if ((result.contentType ?? '').includes('text/html')) {
     return {
       outcome: 'login',

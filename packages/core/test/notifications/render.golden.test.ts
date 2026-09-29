@@ -4,7 +4,11 @@ import { describe, expect, it } from 'bun:test';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { NotificationContentLevel } from '@browserhive/contracts/enums';
-import { PREVIEW_SAMPLES, type PreviewSample } from '@browserhive/contracts/notifications';
+import {
+  type DigestRule,
+  PREVIEW_SAMPLES,
+  type PreviewSample,
+} from '@browserhive/contracts/notifications';
 import { CHANNEL_RENDERERS, telegramClassicRenderer } from '../../src/infra/notifications/index.ts';
 import type {
   ChannelRenderer,
@@ -68,6 +72,10 @@ interface Variant {
   readonly edit?: boolean;
   /** Act buttons on (D-41). */
   readonly act?: boolean;
+  /** Report samples (D-43, D-44). */
+  readonly digest?: DigestRule;
+  readonly late?: { readonly skipped: number };
+  readonly resolved?: boolean;
 }
 
 function variants(kind: string): Variant[] {
@@ -84,6 +92,14 @@ function variants(kind: string): Variant[] {
       image: 'masked',
       edit: true,
     },
+  );
+  out.push(
+    { name: 'digest-weekly', sample: 'digest', digest: { every: 'week', at: '09:00', day: 'mon' } },
+    { name: 'digest-late', sample: 'digest', late: { skipped: 2 } },
+    { name: 'digest-counts', sample: 'digest', level: 'counts' },
+    { name: 'digest-full', sample: 'digest', level: 'full' },
+    { name: 'anomaly-counts', sample: 'anomaly', level: 'counts' },
+    { name: 'anomaly-resolved-edit', sample: 'anomaly', resolved: true, edit: true },
   );
   out.push(
     { name: 'attention-act', sample: 'attention', act: true },
@@ -131,6 +147,9 @@ describe('renderer goldens', () => {
           ...(v.image !== undefined && { image: v.image }),
           links: v.links ?? PUBLIC_LINKS,
           ...(v.level !== undefined && { level: v.level }),
+          ...(v.digest !== undefined && { digest: v.digest }),
+          ...(v.late !== undefined && { late: v.late }),
+          ...(v.resolved === true && { resolved: true }),
         });
         const context: RenderContext = {
           mode,

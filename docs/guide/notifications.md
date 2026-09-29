@@ -6,6 +6,7 @@ BrowserHive can also put them on your phone: through your own Telegram bot, a Di
 
 - [Channels: set one up in two minutes](#channels)
 - [Answer from your phone](#answer-from-your-phone): act buttons on Telegram, Discord and ntfy
+- [Daily digests and anomaly alerts](#daily-digests-and-anomaly-alerts): a summary on your schedule, and a heads-up when something is off
 - [Public address: links that open on your phone](#public-address)
 - [Screenshots](#screenshots), [self-destruct](#self-destruct), [startup channels](#startup-channels), [the delivery log](#delivery-log)
 - [What leaves your machine](#what-leaves-your-machine)
@@ -21,6 +22,8 @@ BrowserHive can also put them on your phone: through your own Telegram bot, a Di
 | Tools failed (grouped per session: "shop · 12 tool errors") | `tool.errors` | problems | warn |
 | A subsystem is degraded (for example the retention sweep failed) | `system.degraded` | system | error |
 | A notification channel keeps failing | `channel.broken` | system | error |
+| A channel's scheduled digest is due ([digests](#daily-digests-and-anomaly-alerts)) | `digest.daily`, `digest.weekly` | reports | info |
+| A channel's hourly check found something off | `report.anomaly` | reports | warn (error while degraded or at capacity) |
 
 Routine events are deliberately silent: a session opening, a page visit, a clean close. Agents cannot send notifications themselves: every notification comes from something BrowserHive observed. The `request_attention` tool is how an agent reaches you.
 
@@ -59,7 +62,7 @@ A channel is one place notifications go: a Telegram chat, a Discord channel, an 
 1. **Platform.** Telegram, Discord, ntfy or Webhook.
 2. **Credentials.** Pick the name of an environment variable that will hold the token, such as `BH_TELEGRAM_TOKEN` (any name that does not start with `BROWSERHIVE_`, which configuration keys use). The wizard shows the exact line for how you run BrowserHive (a shell, systemd, Docker) and a live **set ✓ / missing ✗** check. Set the variable and restart BrowserHive; the wizard keeps your draft across the restart.
 3. **Connect.** The platform-specific part, below.
-4. **What to send.** Pick a preset (*Needs me now*, *Problems*, *Wrap-ups* or *Everything*) or open **Advanced** for minimum severity, session name patterns, harness, quiet hours with a time zone, the [content level](#what-leaves-your-machine), [screenshots](#screenshots) and [self-destruct](#self-destruct).
+4. **What to send.** Pick a preset (*Needs me now*, *Problems*, *Wrap-ups*, *Everything* or *Daily digest*), set up [reports](#daily-digests-and-anomaly-alerts) (a digest, the time zone, anomaly alerts), or open **Advanced** for minimum severity, session name patterns, harness, quiet hours, the [content level](#what-leaves-your-machine), [screenshots](#screenshots) and [self-destruct](#self-destruct).
 5. **Preview and test.** See the message exactly as it will look (drawn from the same code that sends it), save, then **Send test**. The test message has an **Open dashboard** button: tap it on your phone to check that links reach you ([public address](#public-address)).
 
 Each channel card shows its status, the last delivery and the last 24 hours (sent, failed, filtered). You can pause, resume, edit, duplicate, delete and test it there. There is no limit on channels; every matching channel gets its own copy.
@@ -227,6 +230,72 @@ The host of `publicUrl` is trusted automatically: you do not need to add it to `
 
 The final proof is the **Open dashboard** button of a test message, tapped on your phone.
 
+## Daily digests and anomaly alerts
+
+A channel can also get **reports**: a summary on a schedule you pick, and a heads-up when something looks off. Set them in the wizard's **What to send** step, under **Reports**, or pick the **Daily digest** preset (a digest every morning at 09:00 and anomaly alerts, nothing instant). A channel receives its reports whatever its categories: the schedule is how you ask for them. BrowserHive itself keeps every report too, and can make them with no channel at all: see [Reports in BrowserHive](#reports-in-browserhive).
+
+### The digest
+
+**Every day** (09:00 unless you pick another time) or **every week** (Friday at 17:00 unless you pick another day and time), on the 24-hour clock. "Every day" includes the weekend; tick **Weekdays only** to get it Monday to Friday, and Monday's digest then covers the whole weekend. The digest covers the period that ends at its time: the last 24 hours, or the last seven days, weekend included. It says, in numbers:
+
+- sessions started and live now; tool calls, errors and the error rate (with the previous period's rate);
+- attention requests: how many, how many were answered and the median wait, how many timed out, how many wait now;
+- vault fills and how many failed; blocked requests and the most blocked pattern;
+- the slowest tool (its p95, against the previous period), the top errors, and open problems;
+- tool calls per hour as a small chart (text bars in chats; the numbers themselves in the webhook payload), and a table per harness;
+- a link to the **Overview** for exactly that period.
+
+**Nothing happened, nothing sent.** A period with no session, tool call, attention request, vault fill, blocked request or open problem sends no digest. The delivery log still records it, as *not sent · nothing happened in the period*, so you can tell a quiet day from a broken channel.
+
+**Send a digest now.** The channel card (and the channel page) has **Send now**: a preview of the real digest for the period that ends now, drawn exactly as your phone will show it, and a button to send it on demand. The schedule is not touched. `POST /api/v1/channels/{id}/digest` does the same.
+
+### Time zones
+
+Each channel has a **time zone**, and it is BrowserHive's own zone unless you pick another (the picker is searchable: type a city). Digest times and [quiet hours](#channels) both follow it, so "09:00" means 09:00 on your wall clock, before and after daylight saving time. On the night the clocks go forward, a time that does not exist (02:30 on some nights) fires at the same wall time an hour later; on the night they go back, a time that happens twice fires once. The days around a change are 23 or 25 hours long, and the digest covers them whole.
+
+If you move BrowserHive to another machine, a channel without a zone of its own follows the new machine's zone.
+
+### Late digests
+
+BrowserHive is often a daemon on a laptop, so it may be off at 09:00. When it starts again, it sends the **most recent** digest it missed, marked **late** ("Sent late: BrowserHive was not running at 09:00"), and says how many earlier digests it skipped ("2 earlier digests were skipped while BrowserHive was off"). It sends only that one: a long weekend does not arrive as a burst of stale messages, and the Overview covers the rest. The delivery log shows a **late** pill on such a digest. Each window is sent once, even across crashes and restarts; changing a digest's time starts the new schedule from the change, so an edit never causes a late digest.
+
+That one late digest is the whole catch-up: the skipped periods are never sent later, and they are not folded into the next digest.
+
+**Quiet hours.** A digest is sent at the time you chose even if it falls inside the channel's quiet hours, but **silently** there (no sound or vibration).
+
+### Anomaly alerts
+
+**Tell me when something looks off** checks every hour, on the last hour of activity, and stays silent unless a check crosses its threshold:
+
+| Check | Alerts when (default) | Clears when |
+|---|---|---|
+| Many tool calls failing | 20 % or more of tool calls failed, with at least 20 calls | below 10 %, or under 10 calls |
+| An attention request waiting too long | a request has waited 30 minutes | no request waits that long |
+| Sessions at the limit | live sessions reach `maxSessions` | below 90 % of it (at least one below) |
+| A spike in blocked requests | 3× the usual hourly count of the day before, and at least 50 | below half of both |
+| BrowserHive itself degraded | an error-level problem is open on the System page | it is resolved |
+
+A crossing sends one alert listing every check that is off, the new ones first. When a check clears while others stay, the same message is updated silently; when everything is back under its threshold, it becomes **Back to normal**, silently by design: good news edits the alert in place and rings nothing. Because each check clears only well below where it fires, a value hovering around a threshold does not flap. During the channel's quiet hours no check runs; the first check after them tells you what is still off. Each threshold can be changed, or a check switched off, in **Advanced → Anomaly checks** (`anomaly.*` on a [startup channel](#startup-channels)).
+
+### What a report contains, per content level
+
+| Level | Digest | Anomaly alert |
+|---|---|---|
+| `counts` | Numbers only: sessions, calls, errors, attention, vault fills (with how many failed), blocked requests, open problems (how many), the chart | The checks, their values and thresholds |
+| `titles` (default) | Adds tool names, error codes, harnesses, vault results, degradation codes, the top blocklist pattern and the tables | Adds the degradation codes and the sessions whose requests wait |
+| `full` | Adds degradation messages and the most blocked domain | Adds the degradation messages |
+
+Everything in a report passes the same redaction as any notification.
+
+### Reports in BrowserHive
+
+Every report also lands in BrowserHive, **once per period**, in full (the dashboard is your own screen, so it is not cut to a channel's content level):
+
+- **In the bell and the inbox.** A digest arrives quietly: already read, so it never raises the badge, and it never pops up. An anomaly alert counts toward the badge and pops up like a **System** notification (switch System off in the toast preferences to keep them in the bell only); its "Back to normal" edit is silent and closes the pop-up. The inbox's **Reports** chip shows only digests and anomaly alerts; a report opens its report page.
+- **Once, not once per channel.** Channels on the same schedule share one copy: same frequency, weekday, time and time zone, covering the same window. Two channels at 09:00 Berlin get one copy; a channel at 09:00 Berlin and one at 08:00 London get two, because each is written in its own zone. A digest you send with **Send now** has its own copy. An empty period has none.
+- **Notifications → Reports** keeps the history: every digest and anomaly alert, even after you dismiss it from the inbox, for 90 days. Filter by kind, by where it went (a channel, or **BrowserHive only**) and by period. A report page draws the digest natively (facts, the chart, tables), says which window it covers and in which zone, marks it **late** or **on demand**, lists the channels it reached and how each delivery went, and has **Open Overview for this period**.
+- **Without any channel.** At the top of the Reports tab, **Reports in BrowserHive** has its own digest (off by default; every day, optionally weekdays only, or every week; a time; a time zone, BrowserHive's own unless you pick one) and **Tell me when something looks off** (off by default, with the default thresholds). They follow the same rules as a channel's (late once, never empty) and share periods with channels on the same schedule. Changing them needs the `channels:write` permission.
+
 ## Screenshots
 
 A notification can carry a screenshot of what the agent was looking at. Screenshots are **off** by default and switched on per channel and category (in the wizard's **Advanced** step). They are taken for three things only:
@@ -258,19 +327,20 @@ browserhive --admin \
 ```
 
 - Secrets are always written `env:NAME`. A token typed into the flag is refused (exit 64), because other users of the machine can read process arguments.
-- Rules use the same names as the dashboard: `categories`, `min`, `sessions`, `harness`, `content`, `quiet=22:00-07:00` with `tz`, `ttl.needs-you=2h`, `deleteWhenResolved`, `images`, `maskImages`, `actButtons=true` and `allow=123456+789012` (the Telegram or Discord user ids allowed to answer; a startup channel has no setup flow, so name them here). A Discord bot is `discord:name=ops,mode=bot,token=env:BH_DISCORD_BOT_TOKEN,channel=<channel id>`; an ntfy reply topic is `reply=…`. Every parameter is listed in the [command-line guide](cli.md#notification-channels).
+- Rules use the same names as the dashboard: `categories`, `min`, `sessions`, `harness`, `content`, `quiet=22:00-07:00`, `tz` (the channel's time zone), `digest=daily@09:00`, `digest=daily:weekdays` or `digest=weekly` (Friday at 17:00; `weekly:mon@08:30` for another day and time), `anomaly=on` with `anomaly.errorRate=10` and the other `anomaly.*` thresholds, `ttl.needs-you=2h`, `deleteWhenResolved`, `images`, `maskImages`, `actButtons=true` and `allow=123456+789012` (the Telegram or Discord user ids allowed to answer; a startup channel has no setup flow, so name them here). A Discord bot is `discord:name=ops,mode=bot,token=env:BH_DISCORD_BOT_TOKEN,channel=<channel id>`; an ntfy reply topic is `reply=…`. Every parameter is listed in the [command-line guide](cli.md#notification-channels).
 - The flag has no environment-variable or config-file spelling. Startup channels appear in the dashboard with a **from startup** badge. You can pause them there, but you edit them by changing the flag and restarting. A startup channel whose name a dashboard channel already uses stops the start with an error, so neither silently wins.
 
 ## Delivery log
 
-**Notifications → Delivery log** lists every send, edit and delete, live: time, channel, notification, revision, status, attempts and how long the platform took. Filter by channel, status, operation or kind. Open a row to see the notification's journey on every channel and the message exactly as that channel was shown it. Every row that was not delivered says why in a sentence: filtered by the channel's rules, quiet hours, the channel was paused, the platform refused the token, the message had been deleted in the chat, and so on. The same answers are in `GET /api/v1/channels/deliveries`.
+**Notifications → Delivery log** lists every send, edit and delete, live: time, channel, notification, revision, status, attempts and how long the platform took. A digest or anomaly alert also shows the period it covers, and a **late** or **on demand** pill. Filter by channel, status, operation or kind. Open a row to see the notification's journey on every channel and the message exactly as that channel was shown it. Every row that was not delivered says why in a sentence: filtered by the channel's rules, quiet hours, the channel was paused, the platform refused the token, the message had been deleted in the chat, and so on. The same answers are in `GET /api/v1/channels/deliveries`.
 
 From a terminal:
 
 ```sh
-browserhive channels list                     # status, target, variables, answers, last delivery, 24 h counts
+browserhive channels list                     # status, target, variables, answers, next digest, last delivery, 24 h counts
 browserhive channels test phone               # a real test message; exit 1 when the platform refused it
 browserhive channels preview phone --sample vault-confirm   # the request a send would make; sends nothing
+browserhive channels preview phone --sample digest          # a sample digest at the channel's level and zone
 ```
 
 These talk to the running server (`--url`, with `--token` for an operator API token or `--cookie`), like `browserhive admin tokens --url`.
@@ -289,4 +359,4 @@ At every level, BrowserHive first removes registered secrets and credential-shap
 
 ## Retention
 
-Read or dismissed notifications are kept for 30 days, others for 90. Delivery history is kept for 30 days. The act-button audit is kept like the other audit records (`auditRetentionDays`, 90 days by default); used or expired button tokens are removed a day after they expire. Configured channels are never pruned; `browserhive purge` lists them with everything else in the database.
+Read or dismissed notifications are kept for 30 days, others for 90. Reports (digests and anomaly alerts) are kept for 90 days whether or not they were read or dismissed, so the Reports tab keeps its history. Delivery history is kept for 30 days. The act-button audit is kept for 90 days, like the other audit records; used or expired button tokens are removed a day after they expire. Configured channels are never pruned; `browserhive purge` lists them with everything else in the database.

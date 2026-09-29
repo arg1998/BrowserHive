@@ -1,6 +1,7 @@
 /** @module infra/persistence/repositories/vault-audit — SQLite `VaultAuditRepository`. */
 
 import { type Kysely, sql } from 'kysely';
+import type { VaultAccessResult } from '../../../ports/persistence/enums.ts';
 import type { Page, VaultAccessListQuery } from '../../../ports/persistence/queries.ts';
 import type { VaultAccessRecord } from '../../../ports/persistence/records.ts';
 import type {
@@ -125,5 +126,21 @@ export class SqliteVaultAuditRepository implements VaultAuditRepository {
       (row) => ({ key: sortValue(row, sortName), id: row.event_id }),
       total,
     );
+  }
+
+  async countByResult(window: {
+    readonly since: number;
+    readonly until: number;
+  }): Promise<readonly { readonly result: VaultAccessResult; readonly count: number }[]> {
+    const rows = await this.#db
+      .selectFrom('vault_access')
+      .select(['result', sql<number>`COUNT(*)`.as('n')])
+      .where('ts', '>=', window.since)
+      .where('ts', '<', window.until)
+      .groupBy('result')
+      .execute();
+    return rows
+      .map((r) => ({ result: r.result as VaultAccessResult, count: asNumber(r.n) }))
+      .sort((a, b) => b.count - a.count || a.result.localeCompare(b.result));
   }
 }

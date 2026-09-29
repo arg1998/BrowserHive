@@ -30,6 +30,18 @@ export interface OperatorRequestFacets {
   readonly modes: readonly FacetCount[];
 }
 
+/** Outcomes of the requests of one kind created in a window (`windowStats`, spec 03 §9.7). */
+export interface OperatorRequestWindowStats {
+  readonly created: number;
+  readonly resolved: number;
+  readonly rejected: number;
+  readonly timedOut: number;
+  readonly cancelled: number;
+  readonly pending: number;
+  /** Median `resolved_at - created_at` of the resolved and rejected ones; `null` without any. */
+  readonly medianWaitMs: number | null;
+}
+
 /** Repository over `operator_requests`. */
 export interface OperatorRequestRepository {
   /** Inserts a `pending` request; a duplicate id or `(session, idempotency_key)` is ignored. */
@@ -48,4 +60,9 @@ export interface OperatorRequestRepository {
   facets(query: OperatorRequestListQuery): Promise<OperatorRequestFacets>;
   /** Number of pending requests, optionally of one kind. */
   countOpen(kind?: OperatorRequestKind): Promise<number>;
+  /** Outcomes of the requests of `kind` created in `[since, until)`. */
+  windowStats(
+    kind: OperatorRequestKind,
+    window: { readonly since: number; readonly until: number },
+  ): Promise<OperatorRequestWindowStats>;
 }

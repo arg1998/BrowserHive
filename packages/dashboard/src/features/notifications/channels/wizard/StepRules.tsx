@@ -1,11 +1,11 @@
-/** @module features/notifications/channels/wizard/StepRules — step 4: the channel's name and what it sends: preset cards (Needs me now, Problems, Wrap-ups, Everything) and an Advanced disclosure with categories, minimum severity, session globs, harness, quiet hours with a time zone, content level, screenshots per category with masking (need Full; the ntfy.sh warning), self-destruct per category (Never by default, Telegram at most 47 h) and delete-when-resolved (off by default) (D-35, D-36) */
+/** @module features/notifications/channels/wizard/StepRules — step 4: the channel's name and what it sends: preset cards (Needs me now, Problems, Wrap-ups, Everything, Daily digest), the Reports section (digest, time zone, anomaly alerts; D-43, D-44), Answer from the chat, and an Advanced disclosure with categories, minimum severity, session globs, harness, quiet hours in the channel's zone, content level, the anomaly thresholds, screenshots per category with masking (need Full; the ntfy.sh warning), self-destruct per category (Never by default, Telegram at most 47 h) and delete-when-resolved (off by default) (D-35, D-36) */
 import type { NotificationCategory, NotificationContentLevel } from '@browserhive/contracts/enums';
 import type { ChannelConnection } from '@browserhive/contracts/http';
 import {
   CHANNEL_PRESETS,
   type NotificationChannelRules,
 } from '@browserhive/contracts/notifications';
-import { useId, useMemo, useState } from 'react';
+import { useId, useState } from 'react';
 import { Callout } from '@/components/shared/Callout.tsx';
 import { Checkbox } from '@/components/ui/checkbox.tsx';
 import { Input } from '@/components/ui/input.tsx';
@@ -15,15 +15,21 @@ import { docsUrl } from '@/lib/links.ts';
 import { cn } from '@/lib/utils.ts';
 import {
   applyPreset,
+  browserZone,
   CATEGORIES,
   type ChannelDraft,
   isPublicNtfy,
   presetOf,
   ttlChoices,
+  zoneLabel,
 } from '../model.ts';
 import { ActButtonsSection } from './ActButtonsSection.tsx';
 import { Field, SwitchField } from './fields.tsx';
+import { AnomalyThresholds, ReportsSection } from './ReportsSection.tsx';
 import { RadioCard } from './StepPlatform.tsx';
+
+/** The categories that arrive as they happen (reports come on their schedule, D-43). */
+const INSTANT = CATEGORIES.filter((c) => c.id !== 'reports');
 
 const SEVERITIES = [
   { value: 'info', label: 'Everything (info and up)' },
@@ -54,14 +60,6 @@ const CONTENT: readonly {
   },
 ];
 
-function timeZones(): readonly string[] {
-  try {
-    return Intl.supportedValuesOf('timeZone');
-  } catch {
-    return ['UTC'];
-  }
-}
-
 /** Props. */
 export interface StepRulesProps {
   readonly draft: ChannelDraft;
@@ -73,6 +71,8 @@ export interface StepRulesProps {
   readonly connection?: ChannelConnection | null;
   /** Opens another wizard step (the act-button blockers point at Platform or Connect). */
   readonly onStep?: (step: 'platform' | 'connect') => void;
+  /** The zone BrowserHive runs in (`GET /channels` `host_time_zone`); default the browser's. */
+  readonly hostZone?: string;
 }
 
 function PerCategorySwitches({
@@ -123,13 +123,20 @@ export function StepRules({
   readOnly,
   connection = null,
   onStep,
+  hostZone = browserZone(),
 }: StepRulesProps) {
   const rules = draft.rules;
   const preset = presetOf(rules);
   const [advanced, setAdvanced] = useState(
     preset === null ||
       Object.keys(rules).some(
-        (k) => k !== 'categories' && k !== 'act_buttons' && k !== 'allow_list',
+        (k) =>
+          k !== 'categories' &&
+          k !== 'act_buttons' &&
+          k !== 'allow_list' &&
+          k !== 'digest' &&
+          k !== 'anomaly' &&
+          k !== 'time_zone',
       ),
   );
   const nameId = useId();
@@ -138,8 +145,7 @@ export function StepRules({
   const harnessId = useId();
   const severityId = useId();
   const tzId = useId();
-  const zones = useMemo(timeZones, []);
-  const hostZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const zone = rules.quiet_hours?.time_zone ?? rules.time_zone ?? hostZone;
   const set = (patch: Partial<NotificationChannelRules>) => onRules({ ...rules, ...patch });
   const Chevron = advanced ? ICONS.chevronUp : ICONS.chevronDown;
   const content = rules.content ?? 'titles';
@@ -190,6 +196,14 @@ export function StepRules({
         ) : null}
       </fieldset>
 
+      <ReportsSection
+        rules={rules}
+        onRules={onRules}
+        hostZone={hostZone}
+        readOnly={readOnly}
+        errors={errors}
+      />
+
       <ActButtonsSection
         draft={draft}
         onRules={onRules}
@@ -209,7 +223,8 @@ export function StepRules({
           <span className="flex flex-col">
             <span className="text-base font-medium">Advanced</span>
             <span className="text-sm text-muted-foreground">
-              Severity, sessions, quiet hours, content, screenshots and self-destruct.
+              Severity, sessions, quiet hours, content, screenshots, self-destruct
+              {rules.anomaly !== undefined ? ' and the anomaly checks' : ''}.
             </span>
           </span>
           <Chevron aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
@@ -218,8 +233,12 @@ export function StepRules({
           <div className="flex flex-col divide-y border-t px-4 [&>*]:py-6">
             <fieldset className="flex flex-col gap-2">
               <legend className="text-base font-medium">Categories</legend>
+              <p className="-mt-1 text-sm text-muted-foreground">
+                The notifications that arrive as they happen. Reports follow their own schedule
+                above.
+              </p>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {CATEGORIES.map((c) => {
+                {INSTANT.map((c) => {
                   const on = rules.categories === undefined || rules.categories.includes(c.id);
                   return (
                     <div
@@ -236,7 +255,11 @@ export function StepRules({
                           const next = checked
                             ? [...new Set([...current, c.id])]
                             : current.filter((x) => x !== c.id);
-                          set({ categories: next.length === CATEGORIES.length ? undefined : next });
+                          set({
+                            categories: INSTANT.every((x) => next.includes(x.id))
+                              ? undefined
+                              : next,
+                          });
                         }}
                       />
                       <label
@@ -314,14 +337,12 @@ export function StepRules({
                 disabled={readOnly}
                 onChange={(checked) =>
                   set({
-                    quiet_hours: checked
-                      ? { start: '22:00', end: '07:00', time_zone: hostZone }
-                      : undefined,
+                    quiet_hours: checked ? { start: '22:00', end: '07:00' } : undefined,
                   })
                 }
               >
                 Hold back new alerts during these hours (critical ones still come through; silent
-                updates always do)
+                updates always do; a digest due then arrives silently)
               </SwitchField>
               {rules.quiet_hours !== undefined ? (
                 <div className="flex flex-wrap items-end gap-3">
@@ -351,18 +372,12 @@ export function StepRules({
                       }
                     />
                   </Field>
-                  <Field label="Time zone" htmlFor={tzId} className="min-w-56 flex-1">
-                    <SimpleSelect
-                      id={tzId}
-                      value={rules.quiet_hours.time_zone ?? hostZone}
-                      disabled={readOnly}
-                      options={zones.map((z) => ({ value: z, label: z.replaceAll('_', ' ') }))}
-                      onValueChange={(v) =>
-                        rules.quiet_hours !== undefined &&
-                        set({ quiet_hours: { ...rules.quiet_hours, time_zone: v } })
-                      }
-                    />
-                  </Field>
+                  <p className="pb-2 text-sm text-muted-foreground">
+                    In {zoneLabel(zone)}
+                    {rules.quiet_hours.time_zone === undefined
+                      ? ' (the channel’s time zone, under Reports)'
+                      : ''}
+                  </p>
                 </div>
               ) : null}
             </fieldset>
@@ -491,6 +506,14 @@ export function StepRules({
                   </p>
                 ))}
             </fieldset>
+
+            {rules.anomaly !== undefined ? (
+              <AnomalyThresholds
+                rule={rules.anomaly}
+                readOnly={readOnly}
+                onChange={(anomaly) => set({ anomaly })}
+              />
+            ) : null}
 
             <PerCategorySwitches
               label="Delete when resolved"

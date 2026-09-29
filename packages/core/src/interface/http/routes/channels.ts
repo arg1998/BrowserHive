@@ -3,6 +3,8 @@
 import {
   ActionsPage,
   ActionsQuery,
+  ChannelDigestRequest,
+  ChannelDigestResponse,
   ChannelEnvQuery,
   ChannelEnvResponse,
   ChannelIdParams,
@@ -46,7 +48,11 @@ export const CHANNEL_ROUTES = [
     request: {},
     responses: { 200: ChannelsResponse },
     async handler({ services, ctx }) {
-      return reply(200, { data: [...(await services.channels.list())], now: ctx.now });
+      return reply(200, {
+        data: [...(await services.channels.list())],
+        now: ctx.now,
+        host_time_zone: services.channels.hostTimeZone(),
+      });
     },
   }),
   defineRoute({
@@ -292,6 +298,19 @@ export const CHANNEL_ROUTES = [
     rateLimit: { limit: 10, windowMs: 60_000, key: 'principal' },
     async handler({ input, services }) {
       return reply(200, await services.channels.test(input.params.channel_id));
+    },
+  }),
+  defineRoute({
+    operationId: 'sendChannelDigest',
+    tags,
+    summary:
+      "Preview the channel's digest of the period that ends now, or also send it now (D-43).",
+    request: { params: ChannelIdParams, body: ChannelDigestRequest },
+    responses: { 200: ChannelDigestResponse },
+    errors: ['CHANNEL_NOT_FOUND', 'CHANNEL_NOT_READY'],
+    rateLimit: { limit: 12, windowMs: 60_000, key: 'principal' },
+    async handler({ input, services }) {
+      return reply(200, await services.channels.digest(input.params.channel_id, input.body.send));
     },
   }),
 ];

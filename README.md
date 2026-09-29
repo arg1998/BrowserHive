@@ -11,9 +11,9 @@
 
 </div>
 
-BrowserHive is a local [Model Context Protocol](https://modelcontextprotocol.io) server that gives any agent harness (Claude Code, Claude Desktop, Cursor, VS Code, your own) many parallel browser sessions. Each session is its own Chromium process with its own cookies, storage and service workers. Agents log in through your password manager without ever handling the password, hand the page to a human when they get stuck, and leave a replayable audit trail you can inspect on a built-in dashboard.
+BrowserHive is a local [Model Context Protocol](https://modelcontextprotocol.io) server that gives any agent harness (Claude Code, Claude Desktop, Cursor, VS Code, your own) many parallel browser sessions. Each session is its own Chromium process with its own cookies, storage and service workers. Agents log in through your password manager without ever handling the password, hand the page to a human when they get stuck, and leave a replayable audit trail you can inspect on a built-in dashboard. When an agent needs you, BrowserHive can tell you on Telegram, Discord or ntfy, and you can answer from there.
 
-Everything runs on your machine. Nothing leaves it unless you turn telemetry on.
+Everything runs on your machine. Nothing leaves it unless you turn on telemetry or a notification channel, and then only to the endpoint or chat you chose.
 
 ## Why
 
@@ -30,11 +30,13 @@ BrowserHive handles all of that behind 43 MCP tools and a best in class admin da
 ## Features
 
 - **Isolated sessions.** One Chromium process and context per session: separate cookies, local storage, IndexedDB and service workers. In-memory by default, persistent profiles on request, saved logins you can restore.
+- **Your choice of browser, sandboxed.** Run sessions in the bundled Chromium or in the Google Chrome or Microsoft Edge installed on the machine (`browserhive init` shows what it found and lets you pick). Sessions run inside Chromium's sandbox wherever the machine allows it, and `--sandbox on` makes that a guarantee.
 - **Stealth, honestly scoped.** Full Chromium in new-headless mode, Patchright, automation flags removed, a coherent user agent and client hints derived from your real host, optional display fingerprint and human-like input. No invented OS, GPU or location, and [the limits are documented](docs/guide/stealth.md#ceilings).
 - **Vault credential injection the model never sees.** The agent names a Bitwarden entry and the form fields. BrowserHive checks the origin, session and principal, optionally asks you to confirm, types the credential and returns only a status. Tool results are redacted and Playwright traces exclude the keystrokes.
 - **Human takeover.** `request_attention` blocks the agent while you watch its browser live and drive it with your own mouse and keyboard, then resolve with a message back.
 - **Audit trail and trace replay.** Every tool call, navigation, vault access and blocked URL goes to SQLite, and every session can record a Playwright trace you open in the built-in Trace Viewer.
-- **Operator dashboard.** Overview, sessions with live view and timeline, attention queue, visited websites, blocklist, vault policies and log, server logs, system status and effective configuration with provenance.
+- **Notifications on your phone.** Your own Telegram bot, a Discord webhook or bot, an ntfy topic or a webhook of yours get a message when an agent needs you or something breaks. Approve, reject or resolve right in the chat, get a daily or weekly digest and anomaly alerts in your time zone, with optional screenshots, self-destructing messages and links that open on your phone.
+- **Operator dashboard.** Overview, sessions with live view and timeline, attention queue, visited websites, blocklist, vault policies and log, notifications, channels and reports, server logs, system status and effective configuration with provenance. It recognises which agent (Claude Code, Codex, Cursor, …) ran each session and counts sessions and tool calls per agent.
 - **OpenTelemetry.** Opt-in OTLP export of traces (one per tool call), metrics and logs to Grafana, Jaeger, Honeycomb, Datadog or any collector, with deep links from the dashboard.
 - **One port.** MCP, REST API, WebSocket and dashboard share `127.0.0.1:9876`, with one bind rule and one authentication surface. Non-loopback binds require bearer tokens.
 - **Guardrails.** URL blocklist with hot reload, launch-argument deny-list, per-session ownership, configurable result recording and retention.
@@ -96,7 +98,7 @@ Exposing BrowserHive beyond localhost, bearer tokens and client-specific setup a
 | | |
 |---|---|
 | **Start** | [Installation](docs/guide/installation.md) · [Quick start](docs/guide/quick-start.md) · [MCP clients](docs/guide/mcp-clients.md) |
-| **Use** | [Dashboard](docs/guide/dashboard.md) · [Vault](docs/guide/vault.md) · [Human takeover](docs/guide/attention.md) · [Stealth](docs/guide/stealth.md) · [Telemetry](docs/guide/telemetry.md) |
+| **Use** | [Dashboard](docs/guide/dashboard.md) · [Vault](docs/guide/vault.md) · [Human takeover](docs/guide/attention.md) · [Notifications](docs/guide/notifications.md) · [Stealth](docs/guide/stealth.md) · [Telemetry](docs/guide/telemetry.md) |
 | **Operate** | [Configuration](docs/guide/configuration.md) · [Security model](docs/guide/security.md) · [CLI](docs/guide/cli.md) · [Upgrading](docs/guide/upgrading.md) · [Troubleshooting](docs/guide/troubleshooting.md) · [FAQ](docs/guide/faq.md) |
 | **Embed** | [Programmatic API](docs/guide/programmatic-api.md) |
 | **Reference** | [Tools](docs/reference/tools.md) · [Configuration keys](docs/reference/configuration.md) · [Errors](docs/reference/errors.md) · [REST API](docs/reference/api.md) · [WebSocket](docs/reference/websocket.md) |
@@ -105,7 +107,7 @@ Exposing BrowserHive beyond localhost, bearer tokens and client-specific setup a
 
 - **Bun ≥ 1.4.** Bun is the only supported runtime; installing with npm or pnpm is fine.
 - **macOS, Linux or Windows.**
-- **Chromium**, installed by `browserhive init` (never during package install).
+- **A browser:** the bundled Chromium, installed by `browserhive init` (never during package install), or the Google Chrome or Microsoft Edge installed on the machine.
 - **Bitwarden CLI** (`bw`), only for the vault.
 
 ## Contributing

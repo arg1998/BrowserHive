@@ -1,0 +1,45 @@
+{
+  "kind": "discord",
+  "variant": "anomaly",
+  "mode": "webhook",
+  "requests": [
+    {
+      "method": "POST",
+      "path": "{secret:webhook}?wait=true&with_components=true",
+      "encoding": "json",
+      "body": {
+        "content": null,
+        "allowed_mentions": {
+          "parse": []
+        },
+        "components": [
+          {
+            "type": 1,
+            "components": [
+              {
+                "type": 2,
+                "style": 5,
+                "label": "Open Overview",
+                "url": "https://bh.example.net/overview?range=24h"
+              }
+            ]
+          }
+        ],
+        "embeds": [
+          {
+            "title": "⚠️ Something looks off: 2 checks",
+            "description": "34% of tool calls failed in the last hour · An attention request has waited 47 min\n\n- **Check:** Tool-call error rate **new** · **Now:** 34% · **Threshold:** ≥ 20% · **Since:** 16:13\n- **Check:** Attention waiting **new** · **Now:** 47 min · **Threshold:** ≥ 30 min · **Since:** 16:13\n\nWaiting: `checkout`\n\n-# Checked 15:13–16:13 · Europe/Berlin",
+            "url": "https://bh.example.net/overview?range=24h",
+            "color": 16096779,
+            "footer": {
+              "text": "BrowserHive"
+            },
+            "timestamp": "2026-09-21T14:13:20.000Z"
+          }
+        ]
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}

@@ -10,6 +10,7 @@ import {
   inQuietHours,
   localMinutes,
   planDeliveries,
+  quietHoursOf,
   type RoutableChannel,
   route,
 } from './routing.ts';
@@ -220,5 +221,75 @@ describe('planDeliveries', () => {
       op: 'send',
       status: 'pending',
     });
+  });
+});
+
+describe('addressed reports (D-43, spec 03 §9.4)', () => {
+  const report = message({
+    kind: 'digest.daily',
+    severity: 'info',
+    state: 'final',
+    thread: 'digest:nc-a:1',
+    entities: {},
+  });
+  const channels: RoutableChannel[] = [
+    {
+      record: channelRecord({
+        channelId: 'nc-a',
+        rules: {
+          categories: ['needs-you'],
+          min_severity: 'error',
+          sessions: ['shop-*'],
+          quiet_hours: { start: '00:00', end: '23:59' },
+        },
+      }),
+      capabilities: capabilities(),
+    },
+    { record: channelRecord({ channelId: 'nc-b' }), capabilities: capabilities() },
+    {
+      record: channelRecord({ channelId: 'nc-c', status: 'paused' }),
+      capabilities: capabilities(),
+    },
+  ];
+
+  it('plans only the channel it is addressed to, bypassing its filters and quiet hours', () => {
+    const rows = planDeliveries(report, channels, NOW, 'nc-a');
+    expect(rows.map((r) => [r.channelId, r.status, r.op])).toEqual([['nc-a', 'pending', 'send']]);
+  });
+
+  it('still honours a paused channel', () => {
+    const rows = planDeliveries(report, channels, NOW, 'nc-c');
+    expect(rows.map((r) => [r.status, r.reason])).toEqual([['suppressed', 'channel_paused']]);
+  });
+
+  it('without an address, the same report is filtered like any notification', () => {
+    const rows = planDeliveries(report, channels, NOW);
+    expect(rows.find((r) => r.channelId === 'nc-a')?.reason).toBe('filtered');
+  });
+});
+
+describe('quietHoursOf', () => {
+  it('uses the channel time zone unless the quiet hours name their own', () => {
+    expect(
+      quietHoursOf({ quiet_hours: { start: '22:00', end: '07:00' }, time_zone: 'Asia/Tokyo' }),
+    ).toEqual({
+      start: '22:00',
+      end: '07:00',
+      time_zone: 'Asia/Tokyo',
+    });
+    expect(
+      quietHoursOf({
+        quiet_hours: { start: '22:00', end: '07:00', time_zone: 'Europe/Berlin' },
+        time_zone: 'Asia/Tokyo',
+      })?.time_zone,
+    ).toBe('Europe/Berlin');
+    expect(quietHoursOf({ time_zone: 'Asia/Tokyo' })).toBeNull();
+  });
+
+  it('applies the channel zone to route()', () => {
+    // 12:00 UTC is 21:00 in Tokyo: inside 20:00–23:00 there, outside it in UTC.
+    const rules = { quiet_hours: { start: '20:00', end: '23:00' }, time_zone: 'Asia/Tokyo' };
+    expect(route(rules, message(), NOW)).toEqual({ deliver: false, reason: 'quiet_hours' });
+    expect(route({ quiet_hours: rules.quiet_hours }, message(), NOW)).toEqual({ deliver: true });
   });
 });

@@ -25,15 +25,21 @@ browserhive db migrate --dryRun   # list what would run
 browserhive db migrate
 ```
 
-**The browser sandbox is on by default since the release that added `--sandbox`.** Sessions now run inside Chromium's sandbox wherever the machine allows it (`sandbox=auto`). Where it cannot (Ubuntu 23.10+ with the bundled browser, root, Docker), sessions run as before and `browserhive doctor` explains why and how to fix it (still exit code 0). `--sandbox off` restores the previous behaviour exactly. See [Security: the browser sandbox](security.md#the-browser-sandbox).
-
-**Each session records whether it ran sandboxed (schema v4).** From 0.2 on, the database stores each session's sandbox state and browser version when its browser launches, so closed sessions keep showing them. The migration only adds columns: an older release still opens the database. Sessions from before the upgrade show "not recorded"; nothing is guessed for them.
-
-**Answering from your phone (schema v6).** Three tables are added: the act-button tokens (hashes only), the audit of button presses, and where each chat connection resumes. Nothing is backfilled and an older release still opens the database. Telegram channels now send Rich Messages; messages sent before the upgrade keep being edited in their old format. See [Answer from your phone](notifications.md#answer-from-your-phone).
-
-**Notifications gain a message contract (schema v5).** The database adds the notification contract's fields to every notification (kind, category, severity, state, revision, thread) and three tables for delivery to chat apps (channels, the delivery outbox and the sent-message index). Existing notifications are classified from what they already recorded; an attention request's notification reads as resolved or expired when the request was. The migration only adds columns and tables: an older release still opens the database. See [Notifications](notifications.md).
-
 Prereleases are published under the `next` tag: `bun add -g browserhive@next`.
+
+### From 0.1.x to 0.2
+
+The first start of 0.2 migrates the database from schema v2 to v6, after writing the backup. Every step only adds tables or columns, so a 0.1.x release can still open the upgraded database, and nothing is invented for existing rows:
+
+- **Harness identity (schema v3).** Sessions and MCP connections record which agent was connected ([harness identity](mcp-clients.md#harness-identity)). Sessions from before the upgrade read **Unknown**.
+- **The browser and its sandbox per session (schema v4).** Each session stores whether it ran inside Chromium's sandbox and the browser's real version when its browser launches, so closed sessions keep showing them. Sessions from before the upgrade show "not recorded", which does not mean the sandbox was off.
+- **Notifications gain a message contract (schema v5).** Every notification gets the contract's fields (kind, category, severity, state, revision, thread), and three tables hold delivery to chat apps (channels, the delivery outbox and the sent-message index). Existing notifications are classified from what they already recorded; an attention request's notification reads as resolved or expired when the request was. See [Notifications](notifications.md).
+- **Answering from your phone (schema v6).** Three tables are added: the act-button tokens (hashes only), the audit of button presses, and where each chat connection resumes. See [Answer from your phone](notifications.md#answer-from-your-phone). Daily digests, anomaly alerts and the Reports tab need no further migration.
+
+Two behaviour changes to know about:
+
+- **The browser sandbox is on by default.** Sessions now run inside Chromium's sandbox wherever the machine allows it (`--sandbox auto`). Where it cannot (Ubuntu 23.10+ with the bundled browser, root, Docker), sessions run as before and `browserhive doctor` explains why and how to fix it (still exit code 0). `--sandbox off` restores the previous behaviour exactly. See [Security: the browser sandbox](security.md#the-browser-sandbox).
+- **Environment variables in the config file.** A string in `browserhive.config.json` that contains `{env:NAME}` is now read as a [reference](configuration.md#references) to that variable, and `${env:NAME}`, `{ENV:NAME}` or `{file:…}` stop startup with a hint. Other braces, such as `{trace_id}` in `otelTraceUrlTemplate`, are left alone; write `{{…}}` to keep text that looks like a reference literal.
 
 ## Downgrade
 

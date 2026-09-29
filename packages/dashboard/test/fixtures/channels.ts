@@ -9,6 +9,7 @@ export const CAPTURED = {
       capabilities: {
         rich_blocks: true,
         tables: false,
+        charts: false,
         images: true,
         act_buttons: false,
         open_links: true,
@@ -170,6 +171,7 @@ export const CAPTURED = {
       capabilities: {
         rich_blocks: true,
         tables: false,
+        charts: false,
         images: true,
         act_buttons: false,
         open_links: true,
@@ -314,6 +316,7 @@ export const CAPTURED = {
       capabilities: {
         rich_blocks: true,
         tables: false,
+        charts: false,
         images: true,
         act_buttons: false,
         open_links: true,
@@ -525,6 +528,7 @@ export const CAPTURED = {
       capabilities: {
         rich_blocks: true,
         tables: false,
+        charts: false,
         images: true,
         act_buttons: true,
         open_links: true,
@@ -750,6 +754,7 @@ export const CAPTURED = {
       capabilities: {
         rich_blocks: true,
         tables: false,
+        charts: false,
         images: true,
         act_buttons: false,
         open_links: true,
@@ -882,6 +887,7 @@ export const CAPTURED = {
       capabilities: {
         rich_blocks: true,
         tables: false,
+        charts: false,
         images: true,
         act_buttons: false,
         open_links: true,
@@ -1060,6 +1066,7 @@ export const CAPTURED = {
       capabilities: {
         rich_blocks: true,
         tables: true,
+        charts: true,
         images: false,
         act_buttons: false,
         open_links: true,
@@ -1243,6 +1250,7 @@ export const CAPTURED = {
         capabilities: {
           rich_blocks: true,
           tables: false,
+          charts: false,
           images: true,
           act_buttons: false,
           open_links: true,
@@ -1271,6 +1279,7 @@ export const CAPTURED = {
           last_status: 'dead',
         },
         connection: null,
+        reports: { time_zone: 'Europe/Berlin', host_zone: true, digest: null, anomaly: null },
       },
       {
         channel_id: 'nc-y8ZbVpnQBhd4',
@@ -1312,6 +1321,7 @@ export const CAPTURED = {
           last_status: null,
         },
         connection: null,
+        reports: { time_zone: 'Europe/Berlin', host_zone: true, digest: null, anomaly: null },
       },
       {
         channel_id: 'nc-pN3x-pHacQLB',
@@ -1330,6 +1340,7 @@ export const CAPTURED = {
         capabilities: {
           rich_blocks: true,
           tables: true,
+          charts: true,
           images: false,
           act_buttons: false,
           open_links: true,
@@ -1360,6 +1371,7 @@ export const CAPTURED = {
           last_status: 'dead',
         },
         connection: null,
+        reports: { time_zone: 'Europe/Berlin', host_zone: true, digest: null, anomaly: null },
       },
       {
         channel_id: 'nc-wSL3LAc8pVPI',
@@ -1381,6 +1393,7 @@ export const CAPTURED = {
         capabilities: {
           rich_blocks: true,
           tables: false,
+          charts: false,
           images: true,
           act_buttons: false,
           open_links: true,
@@ -1409,6 +1422,7 @@ export const CAPTURED = {
           last_status: 'sent',
         },
         connection: null,
+        reports: { time_zone: 'Europe/Berlin', host_zone: true, digest: null, anomaly: null },
       },
       {
         channel_id: 'nc-hEYoKcho1yzA',
@@ -1443,6 +1457,7 @@ export const CAPTURED = {
         capabilities: {
           rich_blocks: true,
           tables: false,
+          charts: false,
           images: true,
           act_buttons: false,
           open_links: true,
@@ -1471,6 +1486,7 @@ export const CAPTURED = {
           last_status: 'sent',
         },
         connection: null,
+        reports: { time_zone: 'Europe/Berlin', host_zone: true, digest: null, anomaly: null },
       },
       {
         channel_id: 'nc-iK652M_vsrPO',
@@ -1492,6 +1508,7 @@ export const CAPTURED = {
         capabilities: {
           rich_blocks: true,
           tables: false,
+          charts: false,
           images: true,
           act_buttons: false,
           open_links: true,
@@ -1520,6 +1537,7 @@ export const CAPTURED = {
           last_status: 'sent',
         },
         connection: null,
+        reports: { time_zone: 'Europe/Berlin', host_zone: true, digest: null, anomaly: null },
       },
       {
         channel_id: 'nc-R5_-8E_3n2IM',
@@ -1547,6 +1565,7 @@ export const CAPTURED = {
         capabilities: {
           rich_blocks: true,
           tables: false,
+          charts: false,
           images: true,
           act_buttons: false,
           open_links: true,
@@ -1575,9 +1594,11 @@ export const CAPTURED = {
           last_status: 'dead',
         },
         connection: null,
+        reports: { time_zone: 'Europe/Berlin', host_zone: true, digest: null, anomaly: null },
       },
     ],
     now: 1790643735409,
+    host_time_zone: 'Europe/Berlin',
   },
   deliveries: {
     data: [
@@ -1603,6 +1624,7 @@ export const CAPTURED = {
         },
         created_at: 1790643709288,
         updated_at: 1790643709295,
+        report: null,
       },
       {
         seq: 39,
@@ -1623,6 +1645,7 @@ export const CAPTURED = {
         message_ref: null,
         created_at: 1790643373695,
         updated_at: 1790643373695,
+        report: null,
       },
       {
         seq: 38,
@@ -1643,6 +1666,7 @@ export const CAPTURED = {
         message_ref: null,
         created_at: 1790643373695,
         updated_at: 1790643373708,
+        report: null,
       },
       {
         seq: 37,
@@ -1666,6 +1690,7 @@ export const CAPTURED = {
         },
         created_at: 1790643373695,
         updated_at: 1790643373706,
+        report: null,
       },
       {
         seq: 36,
@@ -1686,6 +1711,7 @@ export const CAPTURED = {
         message_ref: null,
         created_at: 1790643373695,
         updated_at: 1790643373695,
+        report: null,
       },
       {
         seq: 35,
@@ -1706,6 +1732,7 @@ export const CAPTURED = {
         message_ref: null,
         created_at: 1790643373695,
         updated_at: 1790643373695,
+        report: null,
       },
       {
         seq: 34,
@@ -1726,6 +1753,7 @@ export const CAPTURED = {
         message_ref: null,
         created_at: 1790643373695,
         updated_at: 1790643373701,
+        report: null,
       },
       {
         seq: 33,
@@ -1746,6 +1774,7 @@ export const CAPTURED = {
         message_ref: null,
         created_at: 1790643354651,
         updated_at: 1790643359110,
+        report: null,
       },
       {
         seq: 32,
@@ -1766,6 +1795,7 @@ export const CAPTURED = {
         message_ref: null,
         created_at: 1790643354651,
         updated_at: 1790643354651,
+        report: null,
       },
       {
         seq: 31,
@@ -1789,6 +1819,7 @@ export const CAPTURED = {
         },
         created_at: 1790643354651,
         updated_at: 1790643354962,
+        report: null,
       },
       {
         seq: 30,
@@ -1810,6 +1841,7 @@ export const CAPTURED = {
         message_ref: null,
         created_at: 1790643354651,
         updated_at: 1790643358081,
+        report: null,
       },
       {
         seq: 29,
@@ -1830,6 +1862,7 @@ export const CAPTURED = {
         message_ref: null,
         created_at: 1790643354651,
         updated_at: 1790643354651,
+        report: null,
       },
     ],
     page: {

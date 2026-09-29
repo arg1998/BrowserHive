@@ -1,13 +1,15 @@
 /** @module test/helpers/in-memory-vault-repos — Map-backed repositories for the vault and operator-request ports (spec 09 §4). */
 
+import { windowStatsOf } from '../../src/infra/persistence/repositories/operator-requests.ts';
 import { AppError } from '../../src/kernel/errors/app-error.ts';
-import type { OperatorRequestKind } from '../../src/ports/persistence/enums.ts';
+import type { OperatorRequestKind, VaultAccessResult } from '../../src/ports/persistence/enums.ts';
 import type { OperatorActionRepository } from '../../src/ports/persistence/operations.ts';
 import type {
   OperatorRequestFacets,
   OperatorRequestListRow,
   OperatorRequestRepository,
   OperatorRequestResolution,
+  OperatorRequestWindowStats,
 } from '../../src/ports/persistence/operator-requests.ts';
 import type {
   AuditListQuery,
@@ -167,6 +169,13 @@ export class InMemoryVaultAuditRepository implements VaultAuditRepository {
     return Promise.resolve(page(items));
   }
 
+  countByResult(window: {
+    readonly since: number;
+    readonly until: number;
+  }): Promise<readonly { readonly result: VaultAccessResult; readonly count: number }[]> {
+    return Promise.resolve(countResults(this.rows, window));
+  }
+
   /** Rows for one session. */
   forSession(sessionId: string): VaultAccessRecord[] {
     return this.rows.filter((r) => r.sessionId === sessionId);
@@ -268,6 +277,38 @@ export class InMemoryOperatorRequestRepository implements OperatorRequestReposit
   countOpen(kind?: OperatorRequestKind): Promise<number> {
     return this.open(kind).then((rows) => rows.length);
   }
+
+  windowStats(
+    kind: OperatorRequestKind,
+    window: { readonly since: number; readonly until: number },
+  ): Promise<OperatorRequestWindowStats> {
+    const rows = [...this.rows.values()]
+      .filter((r) => r.kind === kind && r.createdAt >= window.since && r.createdAt < window.until)
+      .map((r) => ({
+        status: r.status,
+        waited: r.resolvedAt === null ? null : r.resolvedAt - r.createdAt,
+      }));
+    return Promise.resolve(windowStatsOf(rows));
+  }
+}
+
+/**
+ * Vault accesses by result over `[since, until)`, most first (shared by the in-memory doubles).
+ *
+ * @returns The counts.
+ */
+export function countResults(
+  rows: Iterable<VaultAccessRecord>,
+  window: { readonly since: number; readonly until: number },
+): { result: VaultAccessResult; count: number }[] {
+  const counts = new Map<VaultAccessResult, number>();
+  for (const r of rows) {
+    if (r.ts >= window.since && r.ts < window.until)
+      counts.set(r.result, (counts.get(r.result) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([result, count]) => ({ result, count }))
+    .sort((a, b) => b.count - a.count || a.result.localeCompare(b.result));
 }
 
 function toRow(r: OperatorRequestRecord): OperatorRequestListRow {

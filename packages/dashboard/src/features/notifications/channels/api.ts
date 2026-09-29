@@ -107,6 +107,24 @@ export function useChannelActions() {
   return { pause, resume, remove };
 }
 
+/**
+ * `POST /channels/{id}/digest` (D-43): the digest of the period that ends now, previewed
+ * (`send: false`, pure) or also sent at once (`send: true`, a manual report in the delivery log).
+ */
+export function useChannelDigest() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, send }: { readonly id: string; readonly send: boolean }) =>
+      api.sendChannelDigest({ params: { channel_id: id }, body: { send } }),
+    onSettled: (_result, _error, input) => {
+      if (!input.send) return;
+      void queryClient.invalidateQueries({ queryKey: keys.channels.list() });
+      void queryClient.invalidateQueries({ queryKey: keys.channels.deliveryLists() });
+    },
+  });
+}
+
 /** `POST /channels/{id}/test`: sends a real message now and returns the delivery row. */
 export function useTestChannel() {
   const api = useApi();

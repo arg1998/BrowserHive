@@ -71,6 +71,8 @@ export const NotificationsQuery = listQuery({
   filters: {
     read: z.enum(['all', 'unread', 'read']).default('all'),
     type: csv(NotificationType),
+    /** With `type`, one facet: a row matches when its type or its category is selected (D-45). */
+    category: csv(NotificationCategory),
     ...windowQuery,
   },
 });

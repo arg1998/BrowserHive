@@ -71,6 +71,30 @@ export function formatDuration(ms: number): string {
   return `${h}h ${String(m % 60).padStart(2, '0')}m`;
 }
 
+const COUNT_FORMAT = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
+const PERCENT_FORMAT = new Intl.NumberFormat('en-US', {
+  style: 'percent',
+  maximumFractionDigits: 1,
+});
+
+/**
+ * A count with thousands separators, like the dashboard (`3,412`; at most one decimal).
+ *
+ * @returns The formatted number.
+ */
+export function formatCount(value: number): string {
+  return COUNT_FORMAT.format(value);
+}
+
+/**
+ * A ratio (0–1) as a percentage with at most one decimal (`2.1%`).
+ *
+ * @returns The formatted percentage.
+ */
+export function formatPercent(ratio: number): string {
+  return PERCENT_FORMAT.format(ratio);
+}
+
 /** Everything the first revision of a message is built from (the producer's facts). */
 export interface MessageContent {
   readonly blocks: readonly Block[];
@@ -220,6 +244,8 @@ const LIMIT_BY_KEY: Readonly<Record<string, number>> = {
   domain: 253,
   request_id: 64,
   decision: 256,
+  unit: 24,
+  time_zone: 64,
 };
 
 /** Keys whose values are identifiers or enums, never free text. */

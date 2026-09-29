@@ -55,6 +55,40 @@ describe('toast policy', () => {
     expect(planToast(error, { pathname: '/overview', preferences: { toasts: false } })).toBeNull();
   });
 
+  it('never toasts a digest; an anomaly alert follows the System preference (D-45)', () => {
+    const digest = notification(4, {
+      type: 'lifecycle',
+      kind: 'digest.daily',
+      category: 'reports',
+      title: 'Daily digest · Tue 29 Sep',
+      target: '/notifications/reports/n-000000000004',
+    });
+    expect(planToast(digest, { pathname: '/overview', preferences: undefined })).toBeNull();
+    expect(
+      planToast(digest, { pathname: '/overview', preferences: { types: ['lifecycle'] } }),
+    ).toBeNull();
+    const alert = notification(5, {
+      type: 'system',
+      kind: 'report.anomaly',
+      category: 'reports',
+      severity: 'warn',
+      title: 'Something looks off: error rate 34 %',
+      target: '/notifications/reports/n-000000000005',
+    });
+    expect(planToast(alert, { pathname: '/overview', preferences: undefined })).toMatchObject({
+      tone: 'warning',
+      persist: false,
+      target: '/notifications/reports/n-000000000005',
+      actionLabel: 'Open report',
+    });
+    // An operator who switched System toasts off gets it in the bell only.
+    expect(
+      planToast(alert, { pathname: '/overview', preferences: { types: ['attention'] } }),
+    ).toBeNull();
+    // Its "back to normal" closes the toast.
+    expect(toastSettled({ ...alert, state: 'resolved' })).toBe(true);
+  });
+
   it('caps the bell badge at 9+', () => {
     expect(bellBadge(3)).toBe('3');
     expect(bellBadge(9)).toBe('9');

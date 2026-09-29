@@ -17,9 +17,10 @@ import {
   NotificationChannelSecretRefs,
   NotificationChannelTarget,
   SecretEnvName,
+  WEEKDAYS,
 } from '../notifications/channel.ts';
-import { NotificationMessage } from '../notifications/message.ts';
-import { AvailableChannelKind, PreviewSample } from '../notifications/platforms.ts';
+import { NotificationMessage, NotificationReport } from '../notifications/message.ts';
+import { ANOMALY_CHECKS, AvailableChannelKind, PreviewSample } from '../notifications/platforms.ts';
 import { Count, Cursor, csv, DurationMs, EpochMs, limitQuery, page } from './common.ts';
 
 /** Channel id (`nc-…`). */
@@ -31,6 +32,8 @@ export type ChannelId = z.infer<typeof ChannelId>;
 export const ChannelCapabilitiesDto = z.object({
   rich_blocks: z.boolean(),
   tables: z.boolean(),
+  /** Charts are drawn natively (only the generic webhook); elsewhere they arrive as text bars. */
+  charts: z.boolean(),
   images: z.boolean(),
   act_buttons: z.boolean(),
   open_links: z.boolean(),
@@ -79,6 +82,48 @@ export const ChannelConnection = z.object({
 /** Press listener state. */
 export type ChannelConnection = z.infer<typeof ChannelConnection>;
 
+/** One active anomaly check of a channel (D-44). */
+export const ChannelAnomalyState = z.object({
+  check: z.enum(ANOMALY_CHECKS),
+  /** When it became active. */
+  since: EpochMs,
+  /** The measured value (percent, minutes, sessions, requests, events). */
+  value: z.number(),
+  threshold: z.number(),
+});
+/** One active anomaly check. */
+export type ChannelAnomalyState = z.infer<typeof ChannelAnomalyState>;
+
+/** A channel's scheduled reports (D-43, D-44), as the cards and the CLI show them. */
+export const ChannelReports = z.object({
+  /** The effective IANA zone: `rules.time_zone`, or the host's. */
+  time_zone: z.string(),
+  /** The zone is the host's (no `rules.time_zone`). */
+  host_zone: z.boolean(),
+  digest: z
+    .object({
+      every: z.enum(['day', 'week']),
+      at: z.string(),
+      day: z.enum(WEEKDAYS).nullable(),
+      /** A daily digest that runs Monday to Friday only. */
+      weekdays_only: z.boolean(),
+      /** The next scheduled time. */
+      next_at: EpochMs,
+      /** End of the last window handled, or `null` before the first. */
+      last_until: EpochMs.nullable(),
+    })
+    .nullable(),
+  anomaly: z
+    .object({
+      /** The next hourly check. */
+      next_check_at: EpochMs,
+      active: z.array(ChannelAnomalyState),
+    })
+    .nullable(),
+});
+/** A channel's scheduled reports. */
+export type ChannelReports = z.infer<typeof ChannelReports>;
+
 /** One configured channel as the API shows it. Never carries a secret value. */
 export const ChannelView = z.object({
   channel_id: ChannelId,
@@ -109,6 +154,8 @@ export const ChannelView = z.object({
   stats: ChannelStats,
   /** The press listener, or `null` when the channel receives no presses (act buttons off). */
   connection: ChannelConnection.nullable(),
+  /** The scheduled reports and their next run (D-43, D-44). */
+  reports: ChannelReports,
 });
 /** One configured channel. */
 export type ChannelView = z.infer<typeof ChannelView>;
@@ -143,7 +190,12 @@ export const ChannelPatch = z.strictObject({
 export type ChannelPatch = z.infer<typeof ChannelPatch>;
 
 /** `GET /channels` body. */
-export const ChannelsResponse = z.object({ data: z.array(ChannelView), now: EpochMs });
+export const ChannelsResponse = z.object({
+  data: z.array(ChannelView),
+  now: EpochMs,
+  /** The zone a channel without `rules.time_zone` uses (the host's). */
+  host_time_zone: z.string(),
+});
 /** `GET /channels` body. */
 export type ChannelsResponse = z.infer<typeof ChannelsResponse>;
 
@@ -174,6 +226,8 @@ export const DeliveryRow = z.object({
   message_ref: z.record(z.string(), z.union([z.string(), z.number()])).nullable(),
   created_at: EpochMs,
   updated_at: EpochMs,
+  /** A report's window and late marker (digests and anomaly alerts), else `null`. */
+  report: NotificationReport.nullable(),
 });
 /** One delivery log row. */
 export type DeliveryRow = z.infer<typeof DeliveryRow>;
@@ -273,6 +327,28 @@ export const ChannelPreview = z.object({
 });
 /** `POST /channels/preview` response. */
 export type ChannelPreview = z.infer<typeof ChannelPreview>;
+
+/** `POST /channels/{id}/digest` body. */
+export const ChannelDigestRequest = z.strictObject({
+  /** `false` (default) previews the digest only; `true` also sends it now. */
+  send: z.boolean().default(false),
+});
+/** `POST /channels/{id}/digest` body. */
+export type ChannelDigestRequest = z.infer<typeof ChannelDigestRequest>;
+
+/** `POST /channels/{id}/digest` response. */
+export const ChannelDigestResponse = z.object({
+  preview: ChannelPreview,
+  window: z.object({ since: EpochMs, until: EpochMs }),
+  /** Nothing happened in the period (a scheduled digest would not be sent). */
+  empty: z.boolean(),
+  sent: z.boolean(),
+  ok: z.boolean(),
+  delivery: DeliveryRow.nullable(),
+  error: z.object({ code: z.string(), message: z.string() }).nullable(),
+});
+/** `POST /channels/{id}/digest` response. */
+export type ChannelDigestResponse = z.infer<typeof ChannelDigestResponse>;
 
 /** `GET /channels/env` query. */
 export const ChannelEnvQuery = z.strictObject({

@@ -23,6 +23,7 @@ export const METRIC = {
   RETENTION_PRUNED_ROWS: 'browserhive.retention.pruned_rows',
   NOTIFICATION_DELIVERIES: 'browserhive.notifications.deliveries',
   NOTIFICATION_ACTIONS: 'browserhive.notifications.actions',
+  NOTIFICATION_REPORTS: 'browserhive.notifications.reports',
   PROCESS_RSS_BYTES: 'browserhive.process.rss_bytes',
   PROCESS_HEAP_BYTES: 'browserhive.process.heap_bytes',
   PROCESS_EVENT_LOOP_LAG: 'browserhive.process.event_loop_lag',
@@ -54,6 +55,8 @@ export interface Instruments {
   readonly notificationDeliveries: Counter;
   /** Act-button presses by `channel_kind` and `outcome` (D-41). */
   readonly notificationActions: Counter;
+  /** Scheduled report decisions by `kind` and `outcome` (D-43, D-44). */
+  readonly notificationReports: Counter;
   readonly processRssBytes: ObservableGauge;
   readonly processHeapBytes: ObservableGauge;
   readonly processEventLoopLag: ObservableGauge;
@@ -198,6 +201,13 @@ export function createInstruments(meter: Meter): Instruments {
       return lazy(METRIC.NOTIFICATION_ACTIONS, () =>
         meter.createCounter(METRIC.NOTIFICATION_ACTIONS, {
           description: 'Act-button presses by channel_kind and outcome',
+        }),
+      );
+    },
+    get notificationReports() {
+      return lazy(METRIC.NOTIFICATION_REPORTS, () =>
+        meter.createCounter(METRIC.NOTIFICATION_REPORTS, {
+          description: 'Scheduled report decisions by kind and outcome',
         }),
       );
     },

@@ -6,11 +6,15 @@ export type {
   ActivityResult,
   ActivitySummary,
   AnalyticsQueries,
+  ReportWindow,
   TimelineItem,
   TimelineKind,
   TimelineQuery,
+  ToolLatencyRow,
   ToolMetricsQuery,
   ToolMetricsRow,
+  TopErrorRow,
+  WindowCounts,
 } from './analytics.ts';
 export type { BlockedRequestListRow, BlocklistAuditRepository } from './blocklist-audit.ts';
 export type {
@@ -107,7 +111,11 @@ export type {
   NotificationChannelRepository,
   NotificationDeliveryRepository,
 } from './notification-outbox.ts';
-export type { NotificationRepository, PreferenceRepository } from './notifications.ts';
+export type {
+  NotificationRepository,
+  PreferenceRepository,
+  ReportChannelRow,
+} from './notifications.ts';
 export type {
   ArtifactOutboxRepository,
   IdempotencyRepository,
@@ -134,6 +142,7 @@ export type {
   Page,
   PageListQuery,
   PageQuery,
+  ReportListQuery,
   ScreenshotListQuery,
   SessionFacets,
   SessionListQuery,

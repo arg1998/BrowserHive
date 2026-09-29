@@ -74,8 +74,11 @@ export {
   ActionRow,
   ActionsPage,
   ActionsQuery,
+  ChannelAnomalyState,
   ChannelCapabilitiesDto,
   ChannelConnection,
+  ChannelDigestRequest,
+  ChannelDigestResponse,
   ChannelEnvQuery,
   ChannelEnvResponse,
   ChannelId,
@@ -84,6 +87,7 @@ export {
   ChannelPatch,
   ChannelPreview,
   ChannelPreviewRequest,
+  ChannelReports,
   ChannelResponse,
   ChannelSecretState,
   ChannelStats,
@@ -210,6 +214,18 @@ export {
   SessionPagesPage,
   SessionPagesQuery,
 } from './pages.ts';
+export {
+  PutReportSettingsRequest,
+  REPORTS_IN_APP_ONLY,
+  ReportChannel,
+  ReportDetailResponse,
+  ReportIdParams,
+  ReportItem,
+  ReportKind,
+  ReportSettingsResponse,
+  ReportsPage,
+  ReportsQuery,
+} from './reports.ts';
 export { ClientErrorReport, SearchQuery, SearchResponse } from './search.ts';
 export {
   ArchiveSessionResponse,

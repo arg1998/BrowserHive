@@ -12,7 +12,13 @@ import {
 } from '../../../test/helpers/page-harness.tsx';
 import { fireEvent, screen, waitFor, within } from '../../../test/helpers/render.tsx';
 import { mergePreferences } from './components/PreferencesForm.tsx';
-import { groupByDay, NotificationsPage, visibleNotifications } from './NotificationsPage.tsx';
+import {
+  groupByDay,
+  NotificationsPage,
+  splitTypeChips,
+  typeChips,
+  visibleNotifications,
+} from './NotificationsPage.tsx';
 import { notificationMeta, notificationOutcome } from './notification-meta.ts';
 import { notificationsSearch } from './search.ts';
 
@@ -144,6 +150,27 @@ describe('notifications helpers', () => {
     ).toBeNull();
   });
 
+  it('marks an on-demand digest in the meta line', () => {
+    const manual = notification(8, {
+      kind: 'digest.daily',
+      category: 'reports',
+      thread: 'report:digest:now:Europe/Berlin:1:2',
+    });
+    expect(notificationMeta(manual)).toContain('on demand');
+    expect(
+      notificationMeta({ ...manual, thread: 'report:digest:day@09:00@UTC:1:2' }),
+    ).not.toContain('on demand');
+  });
+
+  it('splits the Type facet into types and the Reports category', () => {
+    expect(typeChips({ type: ['error'], category: ['reports'] })).toEqual(['error', 'reports']);
+    expect(splitTypeChips(['reports', 'vault'])).toEqual({
+      type: ['vault'],
+      category: ['reports'],
+    });
+    expect(splitTypeChips([])).toEqual({ type: undefined, category: undefined });
+  });
+
   it('keeps preference keys the form does not edit', () => {
     const merged = mergePreferences(
       { saved_views: [], page_defaults: { sessions: { ps: 50 } } },
@@ -249,6 +276,33 @@ describe('NotificationsPage', () => {
     });
     const review = screen.getByRole('link', { name: 'Review: Vault fill awaiting confirm' });
     expect(review.getAttribute('href')).toBe('/vault');
+  });
+
+  it('adds a Reports chip that asks for category=reports with the types (D-45)', async () => {
+    const digest = notification(7, {
+      type: 'lifecycle',
+      kind: 'digest.daily',
+      category: 'reports',
+      title: 'Daily digest · Tue 29 Sep',
+      read_at: NOW,
+      target: '/notifications/reports/n-000000000007',
+    });
+    const view = mount('/notifications', { extra: [digest] });
+    const row = await screen.findByRole('link', { name: 'Open: Daily digest · Tue 29 Sep' });
+    expect(row.getAttribute('href')).toBe('/notifications/reports/n-000000000007');
+    fireEvent.click(screen.getByRole('button', { name: 'Reports' }));
+    await waitFor(() =>
+      expect(view.router.state.location.search).toMatchObject({ category: ['reports'] }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Error' }));
+    await waitFor(() => {
+      const last = view.requests.filter((r) => r.path === '/api/v1/notifications').at(-1);
+      expect(last?.query.get('category')).toBe('reports');
+      expect(last?.query.get('type')).toBe('error');
+    });
+    expect(screen.getByRole('button', { name: 'Reports' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
   });
 
   it('holds live notifications behind a pill while the list is being read', async () => {

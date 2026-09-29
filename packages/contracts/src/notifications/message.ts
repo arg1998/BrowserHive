@@ -124,6 +124,25 @@ export const CodeBlock = z.object({
 });
 /** A separator. */
 export const DividerBlock = z.object({ type: z.literal('divider') });
+/** Most bars in a `chart` block. */
+export const NOTIFICATION_CHART_POINTS_MAX = 48;
+
+/**
+ * Bars over equal steps from `start` (a digest's tool calls per hour). No platform draws charts
+ * natively: `degrade` turns one into a line of text bars wherever `charts` is not a capability.
+ */
+export const ChartBlock = z.object({
+  type: z.literal('chart'),
+  label: Label,
+  values: z.array(z.number().nonnegative()).min(1).max(NOTIFICATION_CHART_POINTS_MAX),
+  /** Start of the first bar. */
+  start: EpochMs,
+  /** Width of one bar. */
+  step_ms: z.number().int().positive(),
+  /** Unit of the values (`calls`), or `null`. */
+  unit: z.string().max(24).nullable(),
+});
+
 /** Small print at the end (the "Open in BrowserHive" link, a "you missed N" note). */
 export const FooterBlock = z.object({ type: z.literal('footer'), content: InlineRun });
 
@@ -139,6 +158,7 @@ export const Block = z.discriminatedUnion('type', [
   CodeBlock,
   DividerBlock,
   FooterBlock,
+  ChartBlock,
 ]);
 /** One block. */
 export type Block = z.infer<typeof Block>;
@@ -219,6 +239,24 @@ export const NotificationPrivacy = z.object({
 export type NotificationPrivacy = z.infer<typeof NotificationPrivacy>;
 
 /**
+ * What a scheduled report covers (D-43, D-44): its window, the time zone its dates are written in,
+ * and whether it was sent late (after downtime), with earlier windows skipped, or on demand.
+ */
+export const NotificationReport = z.object({
+  window: z.object({ since: EpochMs, until: EpochMs }),
+  /** IANA zone the report's dates and times are written in. */
+  time_zone: z.string().min(1).max(64),
+  /** Produced more than 5 minutes after its scheduled time (BrowserHive was not running). */
+  late: z.boolean(),
+  /** Earlier scheduled windows skipped while BrowserHive was off. */
+  skipped: z.number().int().nonnegative(),
+  /** Sent on demand ("Send a digest now"), outside the schedule. */
+  manual: z.boolean(),
+});
+/** What a report covers. */
+export type NotificationReport = z.infer<typeof NotificationReport>;
+
+/**
  * The notification contract (D-32). Every revision is the complete state: consumers always render
  * the whole message and never merge revisions. Consumers MUST ignore kinds, blocks, inlines and
  * actions they do not know.
@@ -244,6 +282,8 @@ export const NotificationMessage = z.object({
   actions: z.array(NotificationAction).max(NOTIFICATION_ACTIONS_MAX),
   entities: NotificationEntities,
   privacy: NotificationPrivacy,
+  /** Present on scheduled reports only (`digest.*`, `report.anomaly`). */
+  report: NotificationReport.optional(),
 });
 /** The notification contract. */
 export type NotificationMessage = z.infer<typeof NotificationMessage>;

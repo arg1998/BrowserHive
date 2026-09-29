@@ -19,6 +19,7 @@ import { DELIVERY_STATUS } from '@/lib/status-registry.ts';
 import { cn } from '@/lib/utils.ts';
 import { NotificationsNav } from '../../NotificationsNav.tsx';
 import { useChannels, useDeliveries } from '../api.ts';
+import { formatInZone } from '../model.ts';
 import { PlatformMark } from '../platforms.tsx';
 import type { DeliveryLogSearch } from '../search.ts';
 import { DeliveryDetailSheet } from './DeliveryDetailSheet.tsx';
@@ -36,6 +37,9 @@ const KIND_OPTIONS: readonly NotificationKind[] = [
   'session.crashed',
   'session.reaped',
   'system.degraded',
+  'digest.daily',
+  'digest.weekly',
+  'report.anomaly',
   'test',
 ];
 const KIND_LABEL: Readonly<Record<string, string>> = {
@@ -45,8 +49,41 @@ const KIND_LABEL: Readonly<Record<string, string>> = {
   'session.crashed': 'Crash',
   'session.reaped': 'Reaped',
   'system.degraded': 'System',
+  'digest.daily': 'Daily digest',
+  'digest.weekly': 'Weekly digest',
+  'report.anomaly': 'Anomaly alert',
   test: 'Test',
 };
+
+/** A report's window, and whether it went out late or on demand (D-43). */
+export function ReportMarks({ report }: { readonly report: NonNullable<DeliveryRow['report']> }) {
+  const zone = report.time_zone;
+  return (
+    <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+      <span className="truncate">
+        {formatInZone(report.window.since, zone)} → {formatInZone(report.window.until, zone)}
+      </span>
+      {report.late ? (
+        <TonePill
+          entry={{
+            label: 'late',
+            tone: 'warn',
+            icon: 'clock',
+            hint:
+              report.skipped > 0
+                ? `Sent after BrowserHive started again; ${report.skipped} earlier ${report.skipped === 1 ? 'window was' : 'windows were'} skipped.`
+                : 'Sent after BrowserHive started again: it was not running at the scheduled time.',
+          }}
+        />
+      ) : null}
+      {report.manual ? (
+        <TonePill
+          entry={{ label: 'on demand', tone: 'info', hint: 'Sent with "Send a digest now".' }}
+        />
+      ) : null}
+    </span>
+  );
+}
 
 function Row({ row, onOpen }: { readonly row: DeliveryRow; readonly onOpen: () => void }) {
   const entry = DELIVERY_STATUS[row.status];
@@ -76,6 +113,7 @@ function Row({ row, onOpen }: { readonly row: DeliveryRow; readonly onOpen: () =
               ? ` · ${KIND_LABEL[row.notification_kind] ?? row.notification_kind}`
               : ''}
           </span>
+          {row.report !== null ? <ReportMarks report={row.report} /> : null}
         </span>
         <span className="order-2 flex min-w-0 flex-col items-end gap-0.5 lg:order-none lg:items-start">
           <TonePill entry={entry} />

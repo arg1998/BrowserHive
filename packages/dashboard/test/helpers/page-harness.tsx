@@ -1,4 +1,5 @@
 /** @module dashboard/test/helpers/page-harness — render a page route inside the real provider tree (auth, confirm, router, socket, notifications) with a scripted fetch and a FakeSocket store */
+import { Scope } from '@browserhive/contracts/enums';
 import '../setup.ts';
 import {
   type AnyRoute,
@@ -48,15 +49,18 @@ export function problem(status: number, code: string, title = code) {
   return { status, body: { type: 'about:blank', title, status, code, retryable: 'never' } };
 }
 
-const ME = {
-  principal: {
-    subject: 'operator',
-    kind: 'operator',
-    display: 'admin',
-    scopes: [],
-    must_change_password: false,
-  },
-};
+/** The signed-in operator: every scope, like the single operator of a real install (D-09). */
+function me(scopes: readonly string[] = Scope.options) {
+  return {
+    principal: {
+      subject: 'operator',
+      kind: 'operator',
+      display: 'admin',
+      scopes: [...scopes],
+      must_change_password: false,
+    },
+  };
+}
 
 /** An empty collection envelope. */
 export function envelope<T>(data: readonly T[], extra: Record<string, unknown> = {}) {
@@ -70,7 +74,7 @@ export function envelope<T>(data: readonly T[], extra: Record<string, unknown> =
 }
 
 /** Scripted fetch: routes keyed by `METHOD path`; unknown routes 404 and are recorded. */
-export function fakeFetch(routes: Record<string, FakeRoute>) {
+export function fakeFetch(routes: Record<string, FakeRoute>, scopes?: readonly string[]) {
   const requests: RecordedRequest[] = [];
   const fetchImpl: FetchLike = async (input, init) => {
     const url = new URL(String(input), 'http://localhost:9876');
@@ -78,7 +82,7 @@ export function fakeFetch(routes: Record<string, FakeRoute>) {
     const body = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined;
     const request = { method, path: url.pathname, query: url.searchParams, body };
     requests.push(request);
-    if (url.pathname.endsWith('/auth/me')) return json(ME);
+    if (url.pathname.endsWith('/auth/me')) return json(me(scopes));
     const key = `${method} ${url.pathname.replace(/^\/api\/v1/, '')}`;
     if (!(key in routes)) return json(problem(404, 'NOT_FOUND').body, 404);
     const route = routes[key];
@@ -106,13 +110,15 @@ export interface PageHarnessOptions {
   readonly url: string;
   /** Extra routes (e.g. a redirect route under test). */
   readonly extra?: (root: AnyRoute) => AnyRoute[];
+  /** The principal's scopes; default every scope. */
+  readonly scopes?: readonly string[];
 }
 
 /** Render a page; returns the router, sockets, recorded requests and helpers to push feed events. */
 export function renderPage(options: PageHarnessOptions) {
   const sockets: FakeSocket[] = [];
   const timers = new FakeTimers();
-  const { fetchImpl, requests } = fakeFetch(options.routes);
+  const { fetchImpl, requests } = fakeFetch(options.routes, options.scopes);
   const createStore = (storeOptions: ConstructorParameters<typeof SocketStore>[0]) =>
     new SocketStore({
       ...storeOptions,
