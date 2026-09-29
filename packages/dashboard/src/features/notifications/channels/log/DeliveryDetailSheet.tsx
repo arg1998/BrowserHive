@@ -17,6 +17,7 @@ import { formatAbsolute, formatMs } from '@/lib/format/time.ts';
 import { DELIVERY_STATUS } from '@/lib/status-registry.ts';
 import { cn } from '@/lib/utils.ts';
 import { useDelivery, useNotificationDeliveries } from '../api.ts';
+import { formatInZone, zoneLabel } from '../model.ts';
 import { PlatformMark } from '../platforms.tsx';
 
 /** "sent", "not sent: quiet hours", … as one sentence for the timeline. */
@@ -129,6 +130,28 @@ export function DeliveryDetailSheet({ seq, onClose }: DeliveryDetailSheetProps) 
                   key: 'Latency',
                   value: row.duration_ms === null ? '—' : formatMs(row.duration_ms),
                 },
+                ...(row.report !== null
+                  ? [
+                      {
+                        key: 'Covers',
+                        value: (
+                          <span className="flex flex-col gap-1">
+                            <span>
+                              {formatInZone(row.report.window.since, row.report.time_zone)} →{' '}
+                              {formatInZone(row.report.window.until, row.report.time_zone)}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {zoneLabel(row.report.time_zone)}
+                              {row.report.late
+                                ? ` · sent late${row.report.skipped > 0 ? `, ${row.report.skipped} earlier skipped` : ''}`
+                                : ''}
+                              {row.report.manual ? ' · sent on demand' : ''}
+                            </span>
+                          </span>
+                        ),
+                      },
+                    ]
+                  : []),
                 { key: 'Queued', value: formatAbsolute(row.created_at) },
                 { key: 'Updated', value: formatAbsolute(row.updated_at) },
                 ...(row.next_attempt_at !== null &&

@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils.ts';
 import { NotificationsNav } from '../NotificationsNav.tsx';
 import { useChannelActions, useChannels, useTestChannel } from './api.ts';
 import { ChannelCard, type TestState } from './ChannelCard.tsx';
+import { DigestNowDialog } from './DigestNowDialog.tsx';
 import { PLATFORMS, PlatformMark } from './platforms.tsx';
 
 /** The channels, sorted: dashboard channels and startup channels by name. */
@@ -82,6 +83,7 @@ export function ChannelsPage() {
   const navigate = useNavigate();
   const now = useServerNow(30_000);
   const [tests, setTests] = useState<Readonly<Record<string, TestState>>>({});
+  const [digestFor, setDigestFor] = useState<string | null>(null);
   useTopic('channels');
   const Plus = ICONS.plus;
 
@@ -186,6 +188,7 @@ export function ChannelsPage() {
                       })
                     }
                     onDelete={() => void remove(channel)}
+                    onDigestNow={() => setDigestFor(channel.channel_id)}
                   />
                 </li>
               );
@@ -193,6 +196,18 @@ export function ChannelsPage() {
           </ul>
         )}
       </DataPanel>
+      {(() => {
+        const channel = channels.data?.data.find((c) => c.channel_id === digestFor);
+        return channel === undefined ? null : (
+          <DigestNowDialog
+            channel={channel}
+            open={digestFor !== null}
+            onOpenChange={(open) => {
+              if (!open) setDigestFor(null);
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }

@@ -185,7 +185,15 @@ function renderNode(node: TgNode, k: string, ctx: RenderCtx): ReactNode {
             node.bordered === true && 'border border-tg-muted/30',
           )}
         >
-          <table className="w-full border-collapse text-[0.84rem]">
+          <table
+            className={cn(
+              'w-full border-collapse text-[0.84rem]',
+              // A bordered table keeps its first column off the border; a fields table is flush.
+              node.bordered === true
+                ? '[&_td:first-child]:pl-2 [&_tr:nth-child(even)]:bg-tg-muted/[0.06]'
+                : '',
+            )}
+          >
             <tbody>{children}</tbody>
           </table>
         </span>

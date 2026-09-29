@@ -209,6 +209,15 @@ export function useAuth(): AuthApi {
   return value;
 }
 
+/**
+ * Whether the signed-in principal holds `scope` (a control that needs it is disabled with the
+ * reason instead of failing with a 403 after the click). Unknown principal: `false`.
+ */
+export function useHasScope(scope: string): boolean {
+  const { state } = useAuth();
+  return state.principal?.scopes.some((s) => s === scope) ?? false;
+}
+
 /** The typed API client. */
 export function useApi(): ApiClient {
   const value = useContext(ApiContext);

@@ -2,6 +2,8 @@
 import type { ActionRow, ChannelView } from '@browserhive/contracts/http';
 import { ACTION_OUTCOME_TEXT } from '@browserhive/contracts/notifications';
 import { Link } from '@tanstack/react-router';
+import { useId } from 'react';
+import { useHasScope } from '@/app/providers/AuthProvider.tsx';
 import { useConfirm } from '@/app/providers/ConfirmProvider.tsx';
 import { useTopic } from '@/app/providers/SocketProvider.tsx';
 import { useToast } from '@/app/providers/ToastProvider.tsx';
@@ -87,6 +89,8 @@ function AllowButton({
   const confirm = useConfirm();
   const toast = useToast();
   const allow = useAllowPresser();
+  const canWrite = useHasScope('channels:write');
+  const reasonId = useId();
   if (id === null || channel === undefined) return null;
   const who = row.actor_name ?? id;
   const Check = ICONS.check;
@@ -119,23 +123,36 @@ function AllowButton({
       },
     );
   };
+  const why = startup
+    ? `${channel.name} comes from --notificationChannel: add allow=${id} to its flag and restart.`
+    : !canWrite
+      ? 'Needs the channels:write permission.'
+      : null;
   return (
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      className="relative z-10 h-7 w-fit"
-      disabled={startup || allow.isPending}
-      title={
-        startup
-          ? `${channel.name} comes from --notificationChannel: add allow=${id} to its flag and restart.`
-          : undefined
-      }
-      onClick={() => void onClick()}
-    >
-      <UserCheck aria-hidden="true" />
-      Allow this person
-    </Button>
+    <span className="relative z-10 flex w-fit flex-col gap-1">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="h-7 w-fit"
+        disabled={startup || !canWrite || allow.isPending}
+        title={why ?? undefined}
+        aria-describedby={why !== null ? reasonId : undefined}
+        onClick={() => void onClick()}
+      >
+        <UserCheck aria-hidden="true" />
+        Allow this person
+      </Button>
+      {why !== null && !startup ? (
+        <span id={reasonId} className="text-xs text-muted-foreground">
+          {why}
+        </span>
+      ) : why !== null ? (
+        <span id={reasonId} className="sr-only">
+          {why}
+        </span>
+      ) : null}
+    </span>
   );
 }
 

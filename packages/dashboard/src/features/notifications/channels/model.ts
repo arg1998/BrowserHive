@@ -8,10 +8,14 @@ import {
   type ChannelConfigProblem,
   checkChannelConfig,
   checkChannelRules,
+  DEFAULT_DIGEST_AT,
+  type DigestRule,
   type NotificationChannelRules,
   NTFY_DEFAULT_SERVER,
+  nextOccurrence,
   type SecretParamSpec,
   TELEGRAM_TTL_MAX_MS,
+  type Weekday,
 } from '@browserhive/contracts/notifications';
 import { readStorage, removeStorage, writeStorage } from '@/lib/storage.ts';
 
@@ -99,7 +103,10 @@ export function presetOf(rules: NotificationChannelRules): string | null {
   return null;
 }
 
-/** Rules with the preset's categories (other settings kept). */
+/**
+ * Rules with the preset's categories (other settings kept). The Daily digest preset also switches
+ * on the daily digest at 09:00 and the anomaly alerts when they are off (D-43, D-44).
+ */
 export function applyPreset(
   rules: NotificationChannelRules,
   presetId: string,
@@ -107,7 +114,85 @@ export function applyPreset(
   const preset = CHANNEL_PRESETS.find((p) => p.id === presetId);
   if (preset === undefined) return rules;
   const { categories: _categories, ...rest } = rules;
-  return preset.categories === null ? rest : { ...rest, categories: [...preset.categories] };
+  const next = preset.categories === null ? rest : { ...rest, categories: [...preset.categories] };
+  if (preset.reports !== true) return next;
+  return {
+    ...next,
+    digest: next.digest ?? { every: 'day', at: DEFAULT_DIGEST_AT },
+    anomaly: next.anomaly ?? {},
+  };
+}
+
+/** Short weekday names of a weekly digest. */
+export const WEEKDAY_LABEL: { readonly [D in Weekday]: string } = {
+  mon: 'Monday',
+  tue: 'Tuesday',
+  wed: 'Wednesday',
+  thu: 'Thursday',
+  fri: 'Friday',
+  sat: 'Saturday',
+  sun: 'Sunday',
+};
+
+/** The digest schedule in words ("daily at 09:00", "Mondays at 08:30"). */
+export function digestText(rule: DigestRule): string {
+  return rule.every === 'week'
+    ? `${WEEKDAY_LABEL[rule.day ?? 'mon']}s at ${rule.at}`
+    : `daily at ${rule.at}`;
+}
+
+/**
+ * A time in a zone for the setup and the cards: `Wed 30 Sep, 09:00`, with the year when it is not
+ * this year's.
+ *
+ * @returns The text.
+ */
+export function formatInZone(at: number, zone: string): string {
+  const options: Intl.DateTimeFormatOptions = {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  };
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = new Intl.DateTimeFormat('en-GB', { ...options, timeZone: zone }).formatToParts(at);
+  } catch {
+    parts = new Intl.DateTimeFormat('en-GB', options).formatToParts(at);
+  }
+  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value;
+  const month = (get('month') ?? '').replace('Sept', 'Sep');
+  return `${get('weekday')} ${get('day')} ${month}, ${get('hour')}:${get('minute')}`;
+}
+
+/** The next digest of a draft or channel, from its rule and zone (the server's own calendar maths). */
+export function nextDigestAt(rule: DigestRule, zone: string, now: number): number {
+  return nextOccurrence(rule, zone, now);
+}
+
+/** The browser's IANA zone. */
+export function browserZone(): string {
+  try {
+    return new Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    return 'UTC';
+  }
+}
+
+/** Every IANA zone the browser knows (for the time zone picker). */
+export function timeZones(): readonly string[] {
+  try {
+    return Intl.supportedValuesOf('timeZone');
+  } catch {
+    return ['UTC'];
+  }
+}
+
+/** A zone as people read it (`America/New York`). */
+export function zoneLabel(zone: string): string {
+  return zone.replaceAll('_', ' ');
 }
 
 /** One-line summary of what a channel sends ("Needs you, Problems · warn and up · quiet 22:00–07:00"). */
@@ -132,6 +217,11 @@ export function rulesSummary(rules: NotificationChannelRules): string {
   const ttls = Object.values(rules.ttl_ms ?? {}).filter((v): v is number => typeof v === 'number');
   if (ttls.length > 0) parts.push(`self-destruct ${formatTtl(Math.min(...ttls))}`);
   if (rules.act_buttons === true) parts.push('answer from the chat');
+  if (rules.digest !== undefined && presetOf(rules) !== 'daily-digest') {
+    parts.push(rules.digest.every === 'week' ? 'weekly digest' : 'daily digest');
+  }
+  if (rules.anomaly !== undefined && presetOf(rules) !== 'daily-digest')
+    parts.push('anomaly alerts');
   return parts.join(' · ');
 }
 
@@ -385,6 +475,12 @@ export function cleanRules(rules: NotificationChannelRules): NotificationChannel
   for (const [key, value] of Object.entries(rules)) {
     if (value === undefined) continue;
     if (Array.isArray(value) && value.length === 0 && key !== 'categories') continue;
+    if (key === 'digest' || key === 'anomaly') {
+      // A schedule is kept even when empty (`anomaly: {}` = every check at its default), and a
+      // check switched off (`capacity: false`, `error_rate: null`) keeps its value.
+      out[key] = Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined));
+      continue;
+    }
     if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
       const entries = Object.entries(value).filter(([, v]) => v !== undefined && v !== false);
       if (key !== 'quiet_hours' && entries.length === 0) continue;

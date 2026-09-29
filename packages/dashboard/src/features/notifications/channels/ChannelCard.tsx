@@ -1,4 +1,4 @@
-/** @module features/notifications/channels/ChannelCard — one channel as a whole-card link: platform mark, name, status, where it sends, what it sends, whether answers from the chat reach BrowserHive (the press listener's state, D-41), secret variables (set / missing, never values), last delivery and 24 h counts; Send test (result inline), Pause/Resume, and Edit / Duplicate / Delete in a menu (not for startup channels, which are read-only; D-39) */
+/** @module features/notifications/channels/ChannelCard — one channel as a whole-card link: platform mark, name, status, where it sends, what it sends, whether answers from the chat reach BrowserHive (the press listener's state, D-41), the next digest and the anomaly alerts with "Send now" (D-43, D-44), secret variables (set / missing, never values), last delivery and 24 h counts; Send test (result inline), Pause/Resume, and Edit / Duplicate / Delete in a menu (not for startup channels, which are read-only; D-39) */
 import type { ChannelTestResponse, ChannelView } from '@browserhive/contracts/http';
 import { deliveryReasonText } from '@browserhive/contracts/notifications';
 import { isPlainClick, useHrefNavigate } from '@/components/shared/DataTableBody.tsx';
@@ -18,7 +18,7 @@ import { formatMs } from '@/lib/format/time.ts';
 import { ICONS } from '@/lib/icons.ts';
 import { CHANNEL_STATUS, DELIVERY_STATUS, LISTENER_STATE } from '@/lib/status-registry.ts';
 import { cn } from '@/lib/utils.ts';
-import { channelWhere, rulesSummary } from './model.ts';
+import { browserZone, channelWhere, formatInZone, rulesSummary, zoneLabel } from './model.ts';
 import { PlatformMark, platformOf } from './platforms.tsx';
 
 /** The outcome of the last test send of a card. */
@@ -40,7 +40,92 @@ export interface ChannelCardProps {
   readonly onDuplicate: () => void;
   readonly onDelete: () => void;
   readonly onEdit: () => void;
+  /** Opens "Send a digest now" (channels with a digest). */
+  readonly onDigestNow?: () => void;
   readonly busy?: boolean;
+}
+
+/**
+ * "Reports": the next digest in the channel's zone (named only when it is not the browser's) and
+ * the anomaly alerts, watching or with the checks that are off now (D-43, D-44).
+ */
+function ReportsLine({
+  channel,
+  onDigestNow,
+}: {
+  readonly channel: ChannelView;
+  readonly onDigestNow?: (() => void) | undefined;
+}) {
+  const r = channel.reports;
+  if (r.digest === null && r.anomaly === null) return null;
+  const Digest = ICONS.digest;
+  const Radar = ICONS.anomaly;
+  const Warn = ICONS.warn;
+  const zone = r.time_zone === browserZone() ? '' : ` (${zoneLabel(r.time_zone)})`;
+  const active = r.anomaly?.active ?? [];
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5 rounded-md bg-muted/60 px-3 py-2 text-sm dark:bg-white/[0.03]">
+      {r.digest !== null ? (
+        <div className="flex min-w-0 items-start gap-2">
+          <Digest aria-hidden="true" className="mt-0.5 size-4 shrink-0 opacity-80" />
+          <p className="min-w-0 flex-1">
+            <span className="font-medium">
+              {r.digest.every === 'week' ? 'Weekly digest' : 'Daily digest'}
+            </span>{' '}
+            <span className="text-muted-foreground">
+              · next {formatInZone(r.digest.next_at, r.time_zone)}
+              {zone}
+            </span>
+          </p>
+          {onDigestNow !== undefined ? (
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              className="relative z-10 -my-0.5 h-auto shrink-0 p-0"
+              onClick={onDigestNow}
+            >
+              Send now
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+      {r.anomaly !== null ? (
+        active.length === 0 ? (
+          <p className="flex min-w-0 items-center gap-2 text-muted-foreground">
+            <Radar aria-hidden="true" className="size-4 shrink-0 opacity-80" />
+            Watching for anomalies
+          </p>
+        ) : (
+          <p className="flex min-w-0 items-start gap-2 text-warn-text">
+            <Warn aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+            <span className="min-w-0">
+              <span className="font-medium">Something looks off:</span>{' '}
+              {active.map((a) => anomalyText(a.check, a.value)).join(', ')}
+            </span>
+          </p>
+        )
+      ) : null}
+    </div>
+  );
+}
+
+/** One active anomaly check in a few words ("error rate 34%"). */
+function anomalyText(check: string, value: number): string {
+  switch (check) {
+    case 'error_rate':
+      return `error rate ${formatNumber(value)}%`;
+    case 'attention':
+      return `a request waiting ${formatNumber(value)} min`;
+    case 'capacity':
+      return `${formatNumber(value)} sessions, at the limit`;
+    case 'blocked':
+      return `${formatNumber(value)} blocked in an hour`;
+    case 'degraded':
+      return 'BrowserHive degraded';
+    default:
+      return check;
+  }
 }
 
 /** "Answers from the chat": whether presses reach BrowserHive (only with act buttons on). */
@@ -152,6 +237,7 @@ export function ChannelCard({
   onDuplicate,
   onDelete,
   onEdit,
+  onDigestNow,
   busy = false,
 }: ChannelCardProps) {
   const go = useHrefNavigate();
@@ -292,6 +378,10 @@ export function ChannelCard({
           </p>
         ) : null}
         <AnswersLine channel={channel} now={now} />
+        <ReportsLine
+          channel={channel}
+          onDigestNow={channel.reports.digest !== null ? onDigestNow : undefined}
+        />
         <ul aria-label="Environment variables" className="flex flex-wrap gap-1.5">
           {channel.secrets.map((s) => (
             <li

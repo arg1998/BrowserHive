@@ -25,6 +25,7 @@ const OPERATIONS = [
   'startDiscordConnect',
   'getDiscordConnect',
   'listChannelActions',
+  'sendChannelDigest',
 ] as const;
 
 function sources(dir: string): string[] {

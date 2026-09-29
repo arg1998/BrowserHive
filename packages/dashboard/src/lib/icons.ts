@@ -16,6 +16,7 @@ import {
   BookOpen,
   Braces,
   Bug,
+  CalendarClock,
   Camera,
   Check,
   CheckCheck,
@@ -94,6 +95,7 @@ import {
   Power,
   Proportions,
   QrCode,
+  Radar,
   RefreshCw,
   Reply,
   Rocket,
@@ -185,6 +187,9 @@ export const ICONS = {
   quietHours: MoonStar,
   attachment: Paperclip,
   deliveryLog: ListTree,
+  // Reports (N3)
+  digest: CalendarClock,
+  anomaly: Radar,
   // Act buttons (N2)
   actions: MousePointerClick,
   allowList: UserCheck,

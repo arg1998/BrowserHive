@@ -5,6 +5,7 @@ import {
   applyPreset,
   channelWhere,
   cleanRules,
+  digestText,
   draftForKind,
   draftForMode,
   draftProblems,
@@ -12,8 +13,10 @@ import {
   draftToPatch,
   EMPTY_DRAFT,
   envSnippet,
+  formatInZone,
   isPrivateUrl,
   isPublicNtfy,
+  nextDigestAt,
   ntfyLinks,
   presetOf,
   randomReplyTopic,
@@ -22,6 +25,7 @@ import {
   stepProblems,
   suggestName,
   ttlChoices,
+  zoneLabel,
 } from './model.ts';
 
 describe('presets', () => {
@@ -218,5 +222,53 @@ describe('act buttons and Discord modes', () => {
     expect(channelWhere({ kind: 'ntfy', mode: null, target: {}, target_hint: 'ntfy.sh/x' })).toBe(
       'ntfy.sh/x',
     );
+  });
+});
+
+describe('reports (D-43, D-44)', () => {
+  it('switches the digest and the anomaly alerts on with the Daily digest preset', () => {
+    const rules = applyPreset({ categories: ['needs-you'] }, 'daily-digest');
+    expect(rules).toEqual({
+      categories: ['reports'],
+      digest: { every: 'day', at: '09:00' },
+      anomaly: {},
+    });
+    expect(presetOf(rules)).toBe('daily-digest');
+    // A schedule already set is kept; other presets leave schedules alone.
+    expect(applyPreset({ digest: { every: 'week', at: '07:00' } }, 'daily-digest').digest).toEqual({
+      every: 'week',
+      at: '07:00',
+    });
+    expect(applyPreset(rules, 'needs-me').digest).toEqual({ every: 'day', at: '09:00' });
+  });
+
+  it('keeps schedules and switched-off checks in the API body', () => {
+    expect(
+      cleanRules({ anomaly: {}, digest: { every: 'day', at: '09:00', day: undefined } }),
+    ).toEqual({ anomaly: {}, digest: { every: 'day', at: '09:00' } });
+    expect(cleanRules({ anomaly: { capacity: false, error_rate: null } })).toEqual({
+      anomaly: { capacity: false, error_rate: null },
+    });
+  });
+
+  it('writes schedules, times and zones for people', () => {
+    expect(digestText({ every: 'day', at: '09:00' })).toBe('daily at 09:00');
+    expect(digestText({ every: 'week', at: '08:30', day: 'fri' })).toBe('Fridays at 08:30');
+    expect(formatInZone(Date.UTC(2026, 8, 29, 7), 'Europe/Berlin')).toBe('Tue 29 Sep, 09:00');
+    expect(zoneLabel('America/New_York')).toBe('America/New York');
+    expect(
+      nextDigestAt({ every: 'day', at: '09:00' }, 'Europe/Berlin', Date.UTC(2026, 8, 29, 8)),
+    ).toBe(Date.UTC(2026, 8, 30, 7));
+  });
+
+  it('summarises schedules outside the Daily digest preset', () => {
+    expect(
+      rulesSummary({
+        categories: ['needs-you'],
+        digest: { every: 'day', at: '09:00' },
+        anomaly: {},
+      }),
+    ).toBe('Needs me now · daily digest · anomaly alerts');
+    expect(rulesSummary(applyPreset({}, 'daily-digest'))).toBe('Daily digest');
   });
 });

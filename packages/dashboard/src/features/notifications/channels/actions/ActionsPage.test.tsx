@@ -64,8 +64,14 @@ const REFUSED_STARTUP = row({
   outcome: 'not_allowed',
 });
 
-function mount(rows: readonly ActionRow[], routes: Record<string, unknown> = {}, url = '/') {
+function mount(
+  rows: readonly ActionRow[],
+  routes: Record<string, unknown> = {},
+  url = '/',
+  scopes?: readonly string[],
+) {
   return renderPage({
+    ...(scopes !== undefined && { scopes }),
     path: '/',
     component: ActionsPage,
     validateSearch: (s) => actionsSearch.parse(s),
@@ -134,6 +140,16 @@ describe('ActionsPage', () => {
     );
     expect((await screen.findAllByText('Sam can now answer on family')).length).toBeGreaterThan(0);
     expect(await screen.findByText('Allowed now')).toBeDefined();
+  });
+
+  it('explains, instead of failing with a 403, when channels:write is missing', async () => {
+    mount([REFUSED], {}, '/', ['channels:read']);
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: /Allow this person/ }).hasAttribute('disabled'),
+      ).toBe(true),
+    );
+    expect(screen.getByText('Needs the channels:write permission.')).toBeDefined();
   });
 
   it('points a startup channel to its allow= parameter', async () => {
