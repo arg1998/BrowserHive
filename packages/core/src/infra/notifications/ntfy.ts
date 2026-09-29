@@ -31,9 +31,13 @@ export const NTFY_MESSAGE_MAX_BYTES = 4000;
 /** ntfy allows three action buttons. */
 export const NTFY_ACTIONS_MAX = 3;
 
-/** What the ntfy renderer supports: plain text, a screenshot, three `view` actions, replace and delete. */
+/**
+ * What the ntfy renderer supports: a screenshot, three `view` actions, replace and delete. Rich
+ * blocks arrive as blocks and the renderer writes them as plain text itself (fields one per line,
+ * quotes in quotation marks), which reads better than `degrade`'s generic flattening.
+ */
 export const NTFY_CAPABILITIES: ChannelCapabilities = {
-  richBlocks: false,
+  richBlocks: true,
   tables: false,
   images: true,
   actButtons: false,

@@ -1,0 +1,37 @@
+{
+  "kind": "telegram",
+  "variant": "attention-counts",
+  "mode": null,
+  "requests": [
+    {
+      "method": "POST",
+      "path": "sendMessage",
+      "encoding": "json",
+      "body": {
+        "chat_id": "-1001234567890",
+        "parse_mode": "HTML",
+        "disable_notification": false,
+        "reply_markup": {
+          "inline_keyboard": [
+            [
+              {
+                "text": "Take over",
+                "url": "https://bh.example.net/sessions/checkout-a1b2c3d4?live=1&takeover=1"
+              },
+              {
+                "text": "Open in BrowserHive",
+                "url": "https://bh.example.net/sessions/checkout-a1b2c3d4?live=1"
+              }
+            ]
+          ]
+        },
+        "text": "⚠️ <b>Attention requested</b>\nSession checkout",
+        "link_preview_options": {
+          "is_disabled": true
+        }
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}

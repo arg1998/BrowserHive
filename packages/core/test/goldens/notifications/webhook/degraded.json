@@ -1,0 +1,84 @@
+{
+  "kind": "webhook",
+  "variant": "degraded",
+  "mode": null,
+  "requests": [
+    {
+      "method": "POST",
+      "path": "https://hooks.example.net/bh",
+      "encoding": "json",
+      "body": {
+        "schema": 1,
+        "event": "notification",
+        "op": "send",
+        "delivered_at": 1790000000000,
+        "channel": null,
+        "links": {
+          "open-system": "https://bh.example.net/system"
+        },
+        "local_links": false,
+        "message": {
+          "schema": 1,
+          "id": "n-sample000001",
+          "revision": 1,
+          "thread": "system:e-00000000000000000000000009",
+          "kind": "system.degraded",
+          "category": "system",
+          "severity": "error",
+          "state": "open",
+          "alert": true,
+          "at": {
+            "created": 1790000000000,
+            "updated": 1790000000000
+          },
+          "title": "The retention sweep failed: database is locked",
+          "summary": "RETENTION_FAILED",
+          "blocks": [
+            {
+              "type": "fields",
+              "items": [
+                {
+                  "label": "Code",
+                  "value": [
+                    {
+                      "type": "code",
+                      "text": "RETENTION_FAILED"
+                    }
+                  ]
+                },
+                {
+                  "label": "Since",
+                  "value": [
+                    {
+                      "type": "time",
+                      "at": 1790000000000,
+                      "style": "absolute"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "kind": "open",
+              "id": "open-system",
+              "label": "Open System",
+              "style": "primary",
+              "path": "/system"
+            }
+          ],
+          "entities": {
+            "error_code": "RETENTION_FAILED"
+          },
+          "privacy": {
+            "level": "full",
+            "has_image": false
+          }
+        }
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}

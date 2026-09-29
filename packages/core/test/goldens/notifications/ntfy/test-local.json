@@ -1,0 +1,34 @@
+{
+  "kind": "ntfy",
+  "variant": "test-local",
+  "mode": null,
+  "requests": [
+    {
+      "method": "POST",
+      "path": "/",
+      "encoding": "json",
+      "body": {
+        "topic": "bh-alerts",
+        "title": "BrowserHive test message",
+        "message": "This channel works. Tap \"Open dashboard\" on your phone to check that links reach BrowserHive.\n\nSent: 14:13 UTC\nKind: test",
+        "priority": 3,
+        "tags": [
+          "information_source"
+        ],
+        "click": "http://127.0.0.1:9876/notifications/channels",
+        "actions": [
+          {
+            "action": "view",
+            "label": "Open on this computer",
+            "url": "http://127.0.0.1:9876/notifications/channels",
+            "clear": false
+          }
+        ],
+        "markdown": false,
+        "sequence_id": "n-sample000001"
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}

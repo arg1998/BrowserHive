@@ -1,5 +1,6 @@
 /** @module infra/notifications/http — the one HTTP helper of the platform adapters (spec 03 §9.5): timeouts, JSON/multipart/binary bodies, manual redirects for operator-supplied URLs, and the classification of every failure into a `ChannelSendError` that never carries a secret. */
 
+import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import { ChannelSendError } from '../../ports/notification-channel.ts';
 
 /** The `fetch` the adapters call; injectable for fakes. */
@@ -178,7 +179,7 @@ async function once(call: PlatformCall, url: string, options: CallOptions): Prom
     if (isAbort(err)) {
       throw new ChannelSendError('timeout', `${options.platform} did not answer in time`);
     }
-    const raw = err instanceof Error ? err.message : String(err);
+    const raw = serializeError(err).message;
     throw new ChannelSendError(
       'unavailable',
       `${options.platform} unreachable: ${scrubDetail(raw.replace(/https?:\/\/\S+/g, '<url>'), options.secrets)}`,

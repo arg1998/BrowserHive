@@ -1,0 +1,136 @@
+{
+  "kind": "webhook",
+  "variant": "attention-resolved",
+  "mode": null,
+  "requests": [
+    {
+      "method": "POST",
+      "path": "https://hooks.example.net/bh",
+      "encoding": "json",
+      "body": {
+        "schema": 1,
+        "event": "notification",
+        "op": "send",
+        "delivered_at": 1790000130000,
+        "channel": null,
+        "links": {},
+        "local_links": false,
+        "message": {
+          "schema": 1,
+          "id": "n-sample000001",
+          "revision": 2,
+          "thread": "attention:a-sample000001",
+          "kind": "attention.requested",
+          "category": "needs-you",
+          "severity": "warn",
+          "state": "resolved",
+          "alert": false,
+          "at": {
+            "created": 1790000000000,
+            "updated": 1790000130000
+          },
+          "title": "Attention requested",
+          "summary": "Resolved by admin after 2m 10s",
+          "blocks": [
+            {
+              "type": "quote",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "CAPTCHA on the checkout page: please solve it, then resume"
+                }
+              ],
+              "collapsible": true
+            },
+            {
+              "type": "fields",
+              "items": [
+                {
+                  "label": "Mode",
+                  "value": [
+                    {
+                      "type": "text",
+                      "text": "takeover"
+                    }
+                  ]
+                },
+                {
+                  "label": "Session",
+                  "value": [
+                    {
+                      "type": "link",
+                      "text": "checkout",
+                      "path": "/sessions/checkout-a1b2c3d4"
+                    }
+                  ]
+                },
+                {
+                  "label": "Page",
+                  "value": [
+                    {
+                      "type": "code",
+                      "text": "https://shop.example.com/checkout/payment"
+                    }
+                  ]
+                },
+                {
+                  "label": "Tool",
+                  "value": [
+                    {
+                      "type": "code",
+                      "text": "click"
+                    }
+                  ]
+                },
+                {
+                  "label": "Waiting since",
+                  "value": [
+                    {
+                      "type": "time",
+                      "at": 1790000000000,
+                      "style": "absolute"
+                    }
+                  ]
+                },
+                {
+                  "label": "Outcome",
+                  "value": [
+                    {
+                      "type": "text",
+                      "text": "resolved"
+                    }
+                  ]
+                },
+                {
+                  "label": "Settled",
+                  "value": [
+                    {
+                      "type": "time",
+                      "at": 1790000130000,
+                      "style": "absolute"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "actions": [],
+          "entities": {
+            "session_id": "checkout-a1b2c3d4",
+            "session_slug": "checkout",
+            "owner": "local",
+            "tool": "click",
+            "domain": "shop.example.com",
+            "request_id": "a-sample000001"
+          },
+          "privacy": {
+            "level": "full",
+            "has_image": false
+          }
+        }
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}

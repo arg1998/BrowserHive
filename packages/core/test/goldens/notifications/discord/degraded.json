@@ -1,0 +1,57 @@
+{
+  "kind": "discord",
+  "variant": "degraded",
+  "mode": "webhook",
+  "requests": [
+    {
+      "method": "POST",
+      "path": "{secret:webhook}?wait=true&with_components=true",
+      "encoding": "json",
+      "body": {
+        "content": null,
+        "allowed_mentions": {
+          "parse": []
+        },
+        "components": [
+          {
+            "type": 1,
+            "components": [
+              {
+                "type": 2,
+                "style": 5,
+                "label": "Open System",
+                "url": "https://bh.example.net/system"
+              }
+            ]
+          }
+        ],
+        "embeds": [
+          {
+            "title": "🔴 The retention sweep failed: database is locked",
+            "description": "RETENTION\\_FAILED",
+            "url": "https://bh.example.net/system",
+            "color": 15680580,
+            "fields": [
+              {
+                "name": "Code",
+                "value": "`RETENTION_FAILED`",
+                "inline": true
+              },
+              {
+                "name": "Since",
+                "value": "<t:1790000000:t>",
+                "inline": true
+              }
+            ],
+            "footer": {
+              "text": "BrowserHive"
+            },
+            "timestamp": "2026-09-21T14:13:20.000Z"
+          }
+        ]
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}

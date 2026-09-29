@@ -1,5 +1,6 @@
 /** @module infra/notifications/url-probe — one GET without following redirects, for the `publicUrl` check (spec 08 §5.8). */
 
+import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { UrlProbe, UrlProbeResult } from '../../ports/notification-channel.ts';
 import type { FetchFn } from './http.ts';
 
@@ -60,9 +61,7 @@ export function createUrlProbe(options: UrlProbeOptions = {}): UrlProbe {
       const detail =
         name === 'TimeoutError' || name === 'AbortError'
           ? `no answer within ${Math.round(timeoutMs / 1000)} s`
-          : err instanceof Error
-            ? err.message.replace(/https?:\/\/\S+/g, '<url>')
-            : String(err);
+          : serializeError(err).message.replace(/https?:\/\/\S+/g, '<url>');
       return { kind: 'error', detail };
     }
   };

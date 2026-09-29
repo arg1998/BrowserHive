@@ -1,0 +1,106 @@
+{
+  "kind": "webhook",
+  "variant": "tool-errors",
+  "mode": null,
+  "requests": [
+    {
+      "method": "POST",
+      "path": "https://hooks.example.net/bh",
+      "encoding": "json",
+      "body": {
+        "schema": 1,
+        "event": "notification",
+        "op": "send",
+        "delivered_at": 1790000040000,
+        "channel": null,
+        "links": {
+          "open-errors": "https://bh.example.net/sessions/checkout-a1b2c3d4?kinds=tool&errors_only=1"
+        },
+        "local_links": false,
+        "message": {
+          "schema": 1,
+          "id": "n-sample000001",
+          "revision": 3,
+          "thread": "tool-errors:checkout-a1b2c3d4",
+          "kind": "tool.errors",
+          "category": "problems",
+          "severity": "warn",
+          "state": "open",
+          "alert": false,
+          "at": {
+            "created": 1790000000000,
+            "updated": 1790000040000
+          },
+          "title": "checkout · 3 tool errors",
+          "summary": "navigate · NAVIGATION_TIMEOUT (30000 ms)",
+          "blocks": [
+            {
+              "type": "fields",
+              "items": [
+                {
+                  "label": "Session",
+                  "value": [
+                    {
+                      "type": "link",
+                      "text": "checkout",
+                      "path": "/sessions/checkout-a1b2c3d4"
+                    }
+                  ]
+                },
+                {
+                  "label": "Errors",
+                  "value": [
+                    {
+                      "type": "text",
+                      "text": "3"
+                    }
+                  ]
+                },
+                {
+                  "label": "Latest",
+                  "value": [
+                    {
+                      "type": "code",
+                      "text": "navigate · NAVIGATION_TIMEOUT"
+                    }
+                  ]
+                },
+                {
+                  "label": "Duration",
+                  "value": [
+                    {
+                      "type": "text",
+                      "text": "30 s"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "kind": "open",
+              "id": "open-errors",
+              "label": "Open errors",
+              "style": "primary",
+              "path": "/sessions/checkout-a1b2c3d4?kinds=tool&errors_only=1"
+            }
+          ],
+          "entities": {
+            "session_id": "checkout-a1b2c3d4",
+            "session_slug": "checkout",
+            "harness": "claude-code",
+            "tool": "navigate",
+            "error_code": "NAVIGATION_TIMEOUT"
+          },
+          "privacy": {
+            "level": "full",
+            "has_image": false
+          }
+        }
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}
