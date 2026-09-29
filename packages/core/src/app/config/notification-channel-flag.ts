@@ -175,11 +175,15 @@ function parseOne(
     const value = eq < 0 ? '' : part.slice(eq + 1).trim();
     const known = allowed.includes(key) || /^ttl\.[a-z-]+$/.test(key);
     if (!known) {
+      // A pasted secret without its `name=` is a "key": never echo anything that is not name-like.
+      const nameLike = /^[A-Za-z][A-Za-z.-]{0,31}$/.test(key);
       problems.push(
-        withSuggestion(
-          `${nth}: unknown parameter '${key}' for ${spec.label}.`,
-          suggest(key, allowed),
-        ),
+        nameLike
+          ? withSuggestion(
+              `${nth}: unknown parameter '${key}' for ${spec.label}.`,
+              suggest(key, allowed),
+            )
+          : `${nth}: a parameter is not written as name=value (not shown: it may be a secret).`,
       );
       continue;
     }

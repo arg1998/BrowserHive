@@ -168,6 +168,8 @@ class BotPoller {
     let offset = stored !== null && stored !== undefined ? Number(stored) : undefined;
     if (offset !== undefined && !Number.isSafeInteger(offset)) offset = undefined;
     let delay = this.opts.backoffMs.min;
+    // The first poll does not wait, so the card shows "connected" as soon as Telegram answers.
+    let first = true;
     while (!abort.signal.aborted && (this.wanted() || this.lingerTimer !== null)) {
       let updates: unknown[];
       try {
@@ -178,7 +180,7 @@ class BotPoller {
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({
               ...(offset !== undefined && { offset }),
-              timeout: this.opts.pollSeconds,
+              timeout: first ? 0 : this.opts.pollSeconds,
               allowed_updates: TELEGRAM_ALLOWED_UPDATES,
             }),
             timeoutMs: (this.opts.pollSeconds + 10) * 1000,
@@ -194,6 +196,7 @@ class BotPoller {
         const result = obj(answer.json)?.['result'];
         updates = Array.isArray(result) ? result : [];
         this.setStatus('connected', null);
+        first = false;
         delay = this.opts.backoffMs.min;
       } catch (err) {
         if (abort.signal.aborted) break;

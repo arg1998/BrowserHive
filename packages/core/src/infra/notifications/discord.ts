@@ -390,8 +390,39 @@ export const refineDiscord: FailureRefiner = (answer) => {
       : null;
   if (code === 10015) return new ChannelSendError('auth', 'Discord: the webhook no longer exists');
   if (code === 10008) return new ChannelSendError('message_gone', `Discord: ${answer.detail}`);
+  if (code === 50035) {
+    // "Invalid Form Body": name the first field Discord refused (it never holds a secret).
+    const where = firstFormError(
+      answer.json !== null && typeof answer.json === 'object'
+        ? Reflect.get(answer.json, 'errors')
+        : null,
+      [],
+    );
+    if (where !== null) {
+      return new ChannelSendError(
+        'rejected',
+        `Discord ${answer.status}: ${answer.detail} (${where})`,
+      );
+    }
+  }
   return null;
 };
+
+/** The first `path: message` of a Discord form-error tree (`{components: {0: {_errors: […]}}}`). */
+function firstFormError(node: unknown, path: readonly string[]): string | null {
+  if (node === null || typeof node !== 'object') return null;
+  const errors = Reflect.get(node, '_errors');
+  if (Array.isArray(errors) && errors.length > 0) {
+    const message = Reflect.get(errors[0] as object, 'message');
+    return `${path.join('.') || 'body'}: ${typeof message === 'string' ? message.slice(0, 120) : 'invalid'}`;
+  }
+  for (const [key, value] of Object.entries(node)) {
+    if (key === '_errors') continue;
+    const found = firstFormError(value, [...path, key]);
+    if (found !== null) return found;
+  }
+  return null;
+}
 
 /** What the Discord transport needs besides the channel row. */
 export interface DiscordChannelDeps {

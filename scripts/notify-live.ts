@@ -104,7 +104,7 @@ async function telegram(): Promise<Outcome> {
   const withTokens = (d: ChannelDelivery): ChannelDelivery => ({
     ...d,
     actTokens: new Map(
-      d.message.actions.filter((a) => a.kind === 'act').map((a) => [a.id, 'bh1:LIVECHECK00']),
+      d.message.actions.filter((a) => a.kind === 'act').map((a, i) => [a.id, `bh1:LIVECHECK0${i}`]),
     ),
   });
   const photo = await channel.send(withTokens(deliveryOf(channel, 'attention', true)));
@@ -200,16 +200,52 @@ async function discordBot(): Promise<Outcome> {
     const { ref } = await channel.send({
       ...d,
       actTokens: new Map(
-        d.message.actions.filter((a) => a.kind === 'act').map((a) => [a.id, 'bh1:LIVECHECK00']),
+        d.message.actions
+          .filter((a) => a.kind === 'act')
+          .map((a, i) => [a.id, `bh1:LIVECHECK0${i}`]),
       ),
     });
+    // Read back through the bot API (needs Read Message History).
+    const read = async () => {
+      const response = await fetch(
+        `https://discord.com/api/v10/channels/${channelId}/messages/${ref['message_id']}`,
+        { headers: { authorization: `Bot ${token}` } },
+      );
+      return {
+        status: response.status,
+        body: (await response.json().catch(() => null)) as {
+          embeds?: { title?: string; image?: { url?: string } }[];
+          components?: { components?: { custom_id?: string }[] }[];
+        } | null,
+      };
+    };
+    const onCdn = (url: string | undefined) =>
+      /^https:\/\/(cdn|media)\.discordapp\.(com|net)\//.test(url ?? '') &&
+      (url ?? '').includes('screenshot.jpg');
+    let back = await read();
+    check(back.status === 200, 'the bot can read its message back');
+    check(onCdn(back.body?.embeds?.[0]?.image?.url), 'the screenshot in the embed');
+    const ids = (back.body?.components ?? [])
+      .flatMap((r) => r.components ?? [])
+      .map((c) => c.custom_id);
+    check(
+      ids.includes('bh1:LIVECHECK00') && ids.includes('bh1:LIVECHECK01'),
+      'the interactive buttons',
+    );
     await channel.edit?.(ref, deliveryOf(channel, 'attention-resolved', true));
+    back = await read();
+    check((back.body?.embeds?.[0]?.title ?? '').startsWith('✅'), 'the edited embed');
+    check((back.body?.components ?? []).length === 0, 'the buttons removed by the edit');
+    check(onCdn(back.body?.embeds?.[0]?.image?.url), 'the screenshot kept by the edit');
     await channel.delete?.(ref);
+    back = await read();
+    check(back.status === 404, 'the message is gone after delete');
     stop?.();
     return {
       platform: 'Discord bot',
       status: 'passed',
-      detail: 'gateway Ready; send with interactive buttons, edit (buttons removed), delete',
+      detail:
+        'gateway Ready (intents 0); send with screenshot and interactive buttons, read back, edit (buttons removed, screenshot kept), delete',
     };
   } finally {
     gateway.stop();

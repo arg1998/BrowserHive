@@ -134,6 +134,13 @@ describe('parseNotificationChannelFlags', () => {
     ]);
   });
 
+  it('never echoes a pasted secret written without its name', () => {
+    const pasted = `1234:${'z'.repeat(35)}`;
+    const problems = parse(`telegram:name=a,chat=1,${pasted}`).problems;
+    expect(problems.join(' ')).not.toContain(pasted);
+    expect(problems[0]).toContain('not written as name=value');
+  });
+
   it('refuses duplicate names and repeated parameters', () => {
     expect(parse('ntfy:name=a,topic=t1', 'ntfy:name=a,topic=t2').problems[0]).toContain(
       "the name 'a' is used by two channels",

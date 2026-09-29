@@ -767,7 +767,14 @@ export class ChannelService {
       message: shown,
       requests,
       local_links: this.deps.links.local,
-      notes: this.notes(parsedKind.data, rules, capabilities, plain.category, request.sample),
+      notes: this.notes(
+        parsedKind.data,
+        rules,
+        capabilities,
+        plain.category,
+        request.sample,
+        target,
+      ),
     };
   }
 
@@ -777,6 +784,7 @@ export class ChannelService {
     caps: ChannelCapabilities,
     category: NotificationCategory,
     sample: PreviewSample,
+    target: Readonly<Record<string, string>>,
   ): string[] {
     const notes: string[] = [];
     if (this.deps.links.local) {
@@ -801,8 +809,8 @@ export class ChannelService {
     if (rules.images?.[category] === true && !wantsImages(rules, category)) {
       notes.push('Screenshots are on, but they need the content level "full".');
     }
-    if (kind === 'ntfy' && wantsImages(rules, category)) {
-      const server = NTFY_DEFAULT_SERVER;
+    const server = (target['server'] ?? NTFY_DEFAULT_SERVER).replace(/\/+$/, '');
+    if (kind === 'ntfy' && wantsImages(rules, category) && server === NTFY_DEFAULT_SERVER) {
       notes.push(
         `On ${server.replace('https://', '')} attachments are stored on the public server for 3 hours; a self-hosted ntfy keeps screenshots private.`,
       );

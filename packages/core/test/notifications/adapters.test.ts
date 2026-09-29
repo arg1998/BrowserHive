@@ -449,6 +449,29 @@ describe('discord (bot mode)', () => {
     ]);
   });
 
+  it('names the field of an Invalid Form Body', async () => {
+    fakes.script('discord-bot:POST channels', {
+      status: 400,
+      body: {
+        message: 'Invalid Form Body',
+        code: 50035,
+        errors: {
+          components: {
+            '0': {
+              components: {
+                '1': { custom_id: { _errors: [{ code: 'X', message: 'Duplicate custom_id' }] } },
+              },
+            },
+          },
+        },
+      },
+    });
+    const err = await failure(bot().send(delivery('crash', DISCORD_WEBHOOK_CAPABILITIES)));
+    expect(err.message).toBe(
+      'Discord 400: Invalid Form Body (components.0.components.1.custom_id: Duplicate custom_id)',
+    );
+  });
+
   it('keeps act buttons as links while they are off, and never leaks the bot token', async () => {
     const channel = bot();
     expect(channel.capabilities.actButtons).toBe(false);
