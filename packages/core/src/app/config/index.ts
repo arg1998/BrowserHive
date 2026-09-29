@@ -36,7 +36,17 @@ export {
 } from './failure.ts';
 export { isJsonObject, type JsonParseError, type JsonValue, parseJson } from './json-parse.ts';
 export { type KeyKind, keyKind, PATH_KEYS, quoteRaw, REDACTED_TEXT, renderValue } from './kinds.ts';
-export { type ConfigOverrides, OTEL_ENV_KEYS, UNSUPPORTED_HINT } from './layers.ts';
+export {
+  type ConfigOverrides,
+  FLAG_ONLY_HINT,
+  OTEL_ENV_KEYS,
+  UNSUPPORTED_HINT,
+} from './layers.ts';
+export {
+  NOTIFICATION_CHANNEL_FLAG,
+  type NotificationChannelFlagResult,
+  parseNotificationChannelFlags,
+} from './notification-channel-flag.ts';
 export {
   type ConfigShowRow,
   type ConfigView,

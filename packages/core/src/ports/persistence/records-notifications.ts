@@ -91,9 +91,28 @@ export interface NotificationDeliveryListQuery {
   readonly channelId?: string;
   readonly notificationId?: string;
   readonly statuses?: readonly NotificationDeliveryStatus[];
+  readonly ops?: readonly NotificationDeliveryOp[];
+  /** Notification kinds (`attention.requested`, …). */
+  readonly kinds?: readonly string[];
   /** Only rows with `seq` below this (the next page). */
   readonly beforeSeq?: number;
   readonly limit?: number;
+}
+
+/** Delivery counts of one channel (the channel cards, spec 03 §4.8.1). */
+export interface ChannelDeliveryStats {
+  readonly channelId: string;
+  /** `sent` jobs updated since the window start. */
+  readonly sent: number;
+  /** `dead` jobs updated since the window start. */
+  readonly failed: number;
+  /** `suppressed` jobs updated since the window start. */
+  readonly suppressed: number;
+  /** `pending`, `retrying` and `sending` jobs now. */
+  readonly pending: number;
+  /** When the last `sent` or `dead` job finished. */
+  readonly lastAt: number | null;
+  readonly lastStatus: NotificationDeliveryStatus | null;
 }
 
 /** The platform message a notification became on a channel (`notification_channel_messages`). */

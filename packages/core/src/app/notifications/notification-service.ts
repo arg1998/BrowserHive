@@ -1,16 +1,26 @@
 /** @module app/notifications/notification-service — server-side notification producer + inbox API (D-16, D-32, D-34, spec 03 §4.8/§9): bus rules → rows with their contract message → in-app channel inline and external channels through the outbox; lifecycle revisions; read/dismiss state with `notification.*` events. */
 
+import type { NotificationCategory } from '@browserhive/contracts/enums';
 import type { Notification } from '@browserhive/contracts/http';
 import { Notification as NotificationSchema } from '@browserhive/contracts/http';
 import { parseSessionId } from '@browserhive/contracts/ids';
-import type { NotificationMessage } from '@browserhive/contracts/notifications';
+import {
+  type Block,
+  KIND_CATEGORY,
+  type NotificationMessage,
+} from '@browserhive/contracts/notifications';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import { createRedactor, type Redactor } from '../../kernel/redact.ts';
 import type { Clock } from '../../ports/clock.ts';
 import type { EventBus } from '../../ports/event-bus.ts';
 import type { IdGenerator } from '../../ports/id-generator.ts';
 import type { Logger } from '../../ports/logger.ts';
-import type { LinkBuilder, NotificationChannel } from '../../ports/notification-channel.ts';
+import type {
+  CapturedImage,
+  LinkBuilder,
+  NotificationChannel,
+  NotificationSnapshots,
+} from '../../ports/notification-channel.ts';
 import type { NotificationRepository } from '../../ports/persistence/notifications.ts';
 import type { NotificationListQuery, Page } from '../../ports/persistence/queries.ts';
 import type {
@@ -19,6 +29,7 @@ import type {
 } from '../../ports/persistence/records.ts';
 import type { Repositories, UnitOfWork } from '../../ports/persistence/unit-of-work.ts';
 import type { DomainEvents } from '../events/catalog.ts';
+import type { ImageVariants } from './images.ts';
 import { createInAppChannel } from './in-app-channel.ts';
 import {
   buildMessage,
@@ -30,6 +41,7 @@ import {
 import type { NotificationOutbox } from './outbox.ts';
 import {
   draftFor,
+  type ImageRequest,
   NOTIFICATION_GROUP_IDLE_MS,
   NOTIFICATION_GROUP_MAX_AGE_MS,
   type NotificationDraft,
@@ -79,7 +91,27 @@ export interface NotificationServiceDeps {
   readonly groupIdleMs?: number;
   /** Age after which a group row stops growing; default {@link NOTIFICATION_GROUP_MAX_AGE_MS}. */
   readonly groupMaxAgeMs?: number;
+  /**
+   * Screenshots for notifications (D-36). Absent, or with `enabled: false` (`recordToolResults`
+   * is `none`), nothing is ever captured.
+   */
+  readonly screenshots?: NotificationScreenshots;
+  /** Called after jobs were enqueued for a notification (the live delivery log). */
+  readonly onDeliveryChange?: (notificationId: string) => void;
 }
+
+/** How the service takes screenshots (spec 03 §9.5). */
+export interface NotificationScreenshots {
+  readonly enabled: boolean;
+  readonly snapshots: NotificationSnapshots;
+  /** The variants the active channels want for a category (from the channel registry). */
+  readonly variants: (category: NotificationCategory) => ImageVariants;
+  /** Longest wait for one capture; default 4 s. */
+  readonly timeoutMs?: number;
+}
+
+/** Default capture budget. */
+const CAPTURE_TIMEOUT_MS = 4_000;
 
 /**
  * Wire projection of a row (`Notification` DTO), validated so branded ids are honest.
@@ -224,8 +256,10 @@ export class NotificationService {
     principalId: string | null,
     primary = true,
   ): Promise<Notification> {
+    const images = primary && draft.image !== undefined ? await this.capture(draft) : [];
     const now = this.deps.clock.now();
     const notificationId = `n-${this.deps.ids.opaque(12)}`;
+    const content = draft.content(1);
     const message = this.seal(
       buildMessage({
         id: notificationId,
@@ -239,7 +273,8 @@ export class NotificationService {
         updatedAt: now,
         title: draft.title,
         summary: draft.body ?? '',
-        ...draft.content(1),
+        ...content,
+        blocks: withImages(content.blocks, images),
       }),
     );
     const record: NotificationRecord = {
@@ -588,6 +623,92 @@ export class NotificationService {
 
   /** Wakes the outbox when work was enqueued. */
   private kick(jobs: readonly NewNotificationDelivery[]): void {
+    const first = jobs[0];
+    if (first !== undefined) {
+      try {
+        this.deps.onDeliveryChange?.(first.notificationId);
+      } catch (err) {
+        this.log.warn('delivery feed failed', { err: serializeError(err) });
+      }
+    }
     if (jobs.some((j) => j.status === 'pending')) this.deps.outbox?.kick();
   }
+
+  /**
+   * The screenshots a new notification carries (D-36): nothing unless screenshots are enabled and
+   * an active channel wants this category; a masked and/or unmasked capture of the live page, or
+   * the session's last stored frame for a crash (never masked). Failures and timeouts yield none.
+   */
+  private async capture(draft: NotificationDraft): Promise<ImageBlockInput[]> {
+    const shots = this.deps.screenshots;
+    const request: ImageRequest | undefined = draft.image;
+    if (shots === undefined || !shots.enabled || request === undefined) return [];
+    const variants = shots.variants(KIND_CATEGORY[draft.kind]);
+    if (!variants.masked && !variants.unmasked) return [];
+    const timeout = shots.timeoutMs ?? CAPTURE_TIMEOUT_MS;
+    const out: ImageBlockInput[] = [];
+    const take = async (masked: boolean, run: () => Promise<CapturedImage | null>) => {
+      try {
+        const shot = await withTimeout(run(), timeout);
+        if (shot !== null) out.push({ shot, masked, request });
+      } catch (err) {
+        this.log.warn('screenshot failed', { kind: draft.kind, err: serializeError(err) });
+      }
+    };
+    if (request.source === 'last') {
+      await take(false, () => shots.snapshots.lastFrame(request.sessionId));
+      return out;
+    }
+    if (variants.unmasked) {
+      await take(false, () => shots.snapshots.capture(request.sessionId, { masked: false }));
+    }
+    if (variants.masked) {
+      await take(true, () => shots.snapshots.capture(request.sessionId, { masked: true }));
+    }
+    return out;
+  }
+}
+
+/** A captured screenshot on its way into a message. */
+interface ImageBlockInput {
+  readonly shot: CapturedImage;
+  readonly masked: boolean;
+  readonly request: ImageRequest;
+}
+
+/** Adds image blocks before the footer (or at the end). */
+function withImages(
+  blocks: readonly Block[],
+  images: readonly ImageBlockInput[],
+): readonly Block[] {
+  if (images.length === 0) return blocks;
+  const imageBlocks: Block[] = images.map((i) => ({
+    type: 'image',
+    ref: i.shot.ref,
+    alt: i.request.alt,
+    captured_at: i.shot.capturedAt,
+    masked: i.masked,
+    path: i.request.path,
+  }));
+  const footer = blocks.findIndex((b) => b.type === 'footer');
+  return footer < 0
+    ? [...blocks, ...imageBlocks]
+    : [...blocks.slice(0, footer), ...imageBlocks, ...blocks.slice(footer)];
+}
+
+/** Resolves with `null` when `promise` takes longer than `ms`. */
+function withTimeout<T>(promise: Promise<T | null>, ms: number): Promise<T | null> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => resolve(null), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err: unknown) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
 }

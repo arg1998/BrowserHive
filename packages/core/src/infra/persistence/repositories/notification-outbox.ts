@@ -11,6 +11,7 @@ import type {
   NotificationDeliveryRepository,
 } from '../../../ports/persistence/notification-outbox.ts';
 import type {
+  ChannelDeliveryStats,
   DeliveryFinishPatch,
   NewNotificationDelivery,
   NotificationChannelMessageRecord,
@@ -294,12 +295,71 @@ export class SqliteNotificationDeliveryRepository implements NotificationDeliver
       qb = qb.where('notification_id', '=', query.notificationId);
     if (query.statuses !== undefined && query.statuses.length > 0)
       qb = qb.where('status', 'in', [...query.statuses]);
+    if (query.ops !== undefined && query.ops.length > 0) qb = qb.where('op', 'in', [...query.ops]);
+    if (query.kinds !== undefined && query.kinds.length > 0) {
+      const kinds = [...query.kinds];
+      qb = qb.where('notification_id', 'in', (eb) =>
+        eb.selectFrom('notifications').select('notification_id').where('kind', 'in', kinds),
+      );
+    }
     if (query.beforeSeq !== undefined) qb = qb.where('seq', '<', query.beforeSeq);
     const rows = await qb
       .orderBy('seq', 'desc')
       .limit(Math.min(Math.max(1, query.limit ?? 100), 1000))
       .execute();
     return rows.map(deliveryFromRow);
+  }
+
+  async stats(since: number): Promise<readonly ChannelDeliveryStats[]> {
+    const rows = await this.#db
+      .selectFrom('notification_deliveries')
+      .select([
+        'channel_id',
+        sql<number>`SUM(CASE WHEN status = 'sent' AND updated_at >= ${since} THEN 1 ELSE 0 END)`.as(
+          'sent',
+        ),
+        sql<number>`SUM(CASE WHEN status = 'dead' AND updated_at >= ${since} THEN 1 ELSE 0 END)`.as(
+          'failed',
+        ),
+        sql<number>`SUM(CASE WHEN status = 'suppressed' AND updated_at >= ${since} THEN 1 ELSE 0 END)`.as(
+          'suppressed',
+        ),
+        sql<number>`SUM(CASE WHEN status IN ('pending', 'retrying', 'sending') THEN 1 ELSE 0 END)`.as(
+          'pending',
+        ),
+        sql<number | null>`MAX(CASE WHEN status IN ('sent', 'dead') THEN updated_at END)`.as(
+          'last_at',
+        ),
+      ])
+      .groupBy('channel_id')
+      .execute();
+    const out: ChannelDeliveryStats[] = [];
+    for (const row of rows) {
+      const lastAt = row.last_at === null ? null : asNumber(row.last_at);
+      let lastStatus: NotificationDeliveryStatus | null = null;
+      if (lastAt !== null) {
+        const last = await this.#db
+          .selectFrom('notification_deliveries')
+          .select('status')
+          .where('channel_id', '=', row.channel_id)
+          .where('status', 'in', ['sent', 'dead'])
+          .orderBy('updated_at', 'desc')
+          .orderBy('seq', 'desc')
+          .limit(1)
+          .executeTakeFirst();
+        lastStatus = last === undefined ? null : (last.status as NotificationDeliveryStatus);
+      }
+      out.push({
+        channelId: row.channel_id,
+        sent: asNumber(row.sent),
+        failed: asNumber(row.failed),
+        suppressed: asNumber(row.suppressed),
+        pending: asNumber(row.pending),
+        lastAt,
+        lastStatus,
+      });
+    }
+    return out;
   }
 }
 

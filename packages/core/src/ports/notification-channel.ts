@@ -241,3 +241,22 @@ export type UrlProbeResult =
 
 /** Fetches a URL once without following redirects (the `publicUrl` check). */
 export type UrlProbe = (url: string, timeoutMs: number) => Promise<UrlProbeResult>;
+
+/** One captured or stored screenshot, as the notification stores it. */
+export interface CapturedImage {
+  /** Image store ref (`nimg-…`). */
+  readonly ref: string;
+  readonly capturedAt: number;
+}
+
+/**
+ * Takes the screenshots of D-36 for notifications. Implementations refuse (return `null`) while
+ * the session's secret window is open, when it has no page, or when the capture fails; they never
+ * throw.
+ */
+export interface NotificationSnapshots {
+  /** A JPEG of the session's active page now, form fields masked when `masked`. */
+  capture(sessionId: string, options: { readonly masked: boolean }): Promise<CapturedImage | null>;
+  /** The session's last stored screenshot (a crashed session has no page to capture). */
+  lastFrame(sessionId: string): Promise<CapturedImage | null>;
+}

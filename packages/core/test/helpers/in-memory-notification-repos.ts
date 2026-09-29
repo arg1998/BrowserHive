@@ -10,6 +10,7 @@ import type {
   NotificationDeliveryRepository,
 } from '../../src/ports/persistence/notification-outbox.ts';
 import type {
+  ChannelDeliveryStats,
   DeliveryFinishPatch,
   NewNotificationDelivery,
   NotificationChannelMessageRecord,
@@ -193,9 +194,40 @@ export class InMemoryNotificationDeliveryRepository implements NotificationDeliv
           query.statuses.length === 0 ||
           query.statuses.includes(r.status),
       )
+      .filter((r) => query.ops === undefined || query.ops.length === 0 || query.ops.includes(r.op))
+      .filter((r) => {
+        if (query.kinds === undefined || query.kinds.length === 0) return true;
+        const kind = this.notificationOf(r.notificationId)?.kind;
+        return kind !== undefined && query.kinds.includes(kind);
+      })
       .filter((r) => query.beforeSeq === undefined || r.seq < query.beforeSeq)
       .sort((a, b) => b.seq - a.seq)
       .slice(0, Math.min(Math.max(1, query.limit ?? 100), 1000));
+  }
+
+  async stats(since: number): Promise<readonly ChannelDeliveryStats[]> {
+    const byChannel = new Map<string, NotificationDeliveryRecord[]>();
+    for (const r of this.rows)
+      byChannel.set(r.channelId, [...(byChannel.get(r.channelId) ?? []), r]);
+    return [...byChannel.entries()].map(([channelId, rows]) => {
+      const recent = (status: NotificationDeliveryStatus) =>
+        rows.filter((r) => r.status === status && r.updatedAt >= since).length;
+      const finished = rows
+        .filter((r) => r.status === 'sent' || r.status === 'dead')
+        .sort((a, b) => b.updatedAt - a.updatedAt || b.seq - a.seq);
+      const last = finished[0];
+      return {
+        channelId,
+        sent: recent('sent'),
+        failed: recent('dead'),
+        suppressed: recent('suppressed'),
+        pending: rows.filter(
+          (r) => r.status === 'pending' || r.status === 'retrying' || r.status === 'sending',
+        ).length,
+        lastAt: last?.updatedAt ?? null,
+        lastStatus: last?.status ?? null,
+      };
+    });
   }
 
   /** Drops every job of a channel (the FK cascade). */
