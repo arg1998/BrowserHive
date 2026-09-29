@@ -360,7 +360,7 @@ export const COMMANDS: readonly CommandDescriptor[] = [
             kind: 'value',
             placeholder: '<kind>',
             describe:
-              'Sample notification: attention, attention-resolved, vault-confirm, tool-errors, crash, degraded or test.',
+              'Sample notification: attention, attention-resolved, vault-confirm, tool-errors, crash, degraded, test, digest or anomaly.',
             defaultText: 'attention',
           },
           ...remoteFlags,

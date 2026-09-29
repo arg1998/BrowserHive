@@ -208,6 +208,11 @@ async function buildDomain(
     actionCounter: telemetry.instruments.notificationActions,
     probe: createUrlProbe(),
     instanceId,
+    capacity: () => {
+      const status = sessions.serverStatus();
+      return { live: status.count, max: status.limit ?? 0 };
+    },
+    reportCounter: telemetry.instruments.notificationReports,
     snapshots: createNotificationSnapshots({
       sessions,
       screenshots: repos.screenshots,
@@ -296,6 +301,7 @@ async function buildDomain(
     notificationOutbox: ops.notificationOutbox,
     channelService: ops.channelService,
     actionListeners: ops.actionListeners,
+    reports: ops.reports,
     publicUrl: ops.publicUrl,
     instanceId,
     preferences: ops.preferences,

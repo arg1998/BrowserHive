@@ -42,6 +42,7 @@ import type {
   PreferenceService,
   PublicUrlChecker,
   Recorder,
+  ReportScheduler,
   RuntimeFacts,
   SessionService,
   SystemStatusService,
@@ -120,6 +121,8 @@ export interface DomainPart {
   readonly channelService: ChannelService;
   /** Act-button press listeners (Telegram poller, Discord gateway, ntfy reply topic; D-41). */
   readonly actionListeners: NotificationActionListeners;
+  /** Digests and anomaly alerts (D-43, D-44). */
+  readonly reports: ReportScheduler;
   /** The `publicUrl` check (spec 08 §5.8). */
   readonly publicUrl: PublicUrlChecker;
   /** Random per start; `GET /health` reports it (D-37). */

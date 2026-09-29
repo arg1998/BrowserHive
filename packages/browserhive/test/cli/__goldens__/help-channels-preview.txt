@@ -13,7 +13,8 @@ ARGUMENTS
 FLAGS
   --json                       Print machine-readable JSON instead of text.
   --sample <kind>              Sample notification: attention, attention-resolved, vault-confirm,
-                               tool-errors, crash, degraded or test. default: attention
+                               tool-errors, crash, degraded, test, digest or anomaly.
+                               default: attention
   --url <url>                  Talk to a running server over its REST API instead of opening the
                                database (http://127.0.0.1:9876).
   --token <bearer>             Operator bearer token for --url (bh_operator_…).

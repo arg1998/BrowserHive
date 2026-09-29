@@ -54,6 +54,46 @@ function answersText(channel: ChannelView): string {
   return c.state === 'offline' && c.detail !== null ? `offline (${c.detail})` : c.state;
 }
 
+/** A time in a zone: `Wed 30 Sep 09:00`. */
+function inZone(at: number, zone: string): string {
+  const options: Intl.DateTimeFormatOptions = {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  };
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = new Intl.DateTimeFormat('en-US', { ...options, timeZone: zone }).formatToParts(at);
+  } catch {
+    parts = new Intl.DateTimeFormat('en-US', options).formatToParts(at);
+  }
+  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value;
+  return `${get('weekday')} ${get('day')} ${get('month')} ${get('hour')}:${get('minute')}`;
+}
+
+/** The scheduled reports of a channel (D-43, D-44), or `null` without any. */
+export function reportsText(channel: ChannelView): string | null {
+  const r = channel.reports;
+  const parts: string[] = [];
+  if (r.digest !== null) {
+    const every = r.digest.every === 'week' ? `weekly ${r.digest.day ?? 'mon'}` : 'daily';
+    parts.push(
+      `${every} digest ${r.digest.at} → next ${inZone(r.digest.next_at, r.time_zone)} ${r.time_zone}`,
+    );
+  }
+  if (r.anomaly !== null) {
+    parts.push(
+      r.anomaly.active.length === 0
+        ? 'anomaly alerts on'
+        : `something looks off: ${r.anomaly.active.map((a) => a.check.replace('_', ' ')).join(', ')}`,
+    );
+  }
+  return parts.length === 0 ? null : parts.join(' · ');
+}
+
 function secretsText(channel: ChannelView): string {
   if (channel.secrets.length === 0) return '—';
   return channel.secrets.map((s) => `${s.env} ${s.set ? '✓' : '✗'}`).join(', ');
@@ -107,6 +147,8 @@ export async function runChannelsList(
     ]),
   );
   for (const c of channels) {
+    const reports = reportsText(c);
+    if (reports !== null) out.line(`  ${out.style.dim(`${c.name}:`)} ${reports}`);
     if (c.problem !== null) out.line(`  ${out.style.dim(`${c.name}:`)} ${c.problem}`);
   }
   return EXIT.ok;

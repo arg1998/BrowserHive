@@ -37,7 +37,9 @@ import {
   type ChannelAdapterFactory,
   ChannelRegistry,
   ChannelService,
+  createReportFacts,
   type DeliveryCounter,
+  forgetChannelCursors,
   imageVariants,
   linkBuilderFor,
   NotificationActionListeners,
@@ -47,6 +49,9 @@ import {
   PreferenceService,
   PublicUrlChecker,
   Recorder,
+  type ReportCounter,
+  ReportScheduler,
+  runtimeZone,
 } from '@browserhive/core/server';
 
 /** Inputs of {@link buildOps}. */
@@ -90,6 +95,12 @@ export interface OpsInput {
   readonly probe: UrlProbe;
   /** Random per start (`GET /health`). */
   readonly instanceId: string;
+  /** Live sessions and `maxSessions` now (the anomaly check's capacity, D-44). */
+  readonly capacity: () => { readonly live: number; readonly max: number };
+  /** Counts scheduled report decisions (spec 10 §7). */
+  readonly reportCounter?: ReportCounter;
+  /** The host's IANA zone (the default of every channel's reports); default the runtime's. */
+  readonly hostZone?: () => string;
 }
 
 /** Built operations services (not started; `wire-observers` starts them). */
@@ -106,6 +117,8 @@ export interface OpsParts {
   readonly actions: NotificationActionService;
   /** The press listeners (started by `wire-observers`). */
   readonly actionListeners: NotificationActionListeners;
+  /** Digests and anomaly alerts (started by `wire-observers`, D-43, D-44). */
+  readonly reports: ReportScheduler;
   /** The `publicUrl` check (spec 08 §5.8). */
   readonly publicUrl: PublicUrlChecker;
   readonly preferences: PreferenceService;
@@ -126,6 +139,7 @@ export function buildOps(input: OpsInput): OpsParts {
     env: (name) => input.env[name],
     registerSecret: input.registerSecret,
     ...(input.channelFactories !== undefined && { factories: input.channelFactories }),
+    onRemoved: (channelId) => forgetChannelCursors(repos.notificationCursors, channelId),
   });
   const links = linkBuilderFor(config.publicUrl, input.dashboardUrl);
   // The feed is late-bound: the channel service is built after the outbox that reports to it.
@@ -162,6 +176,21 @@ export function buildOps(input: OpsInput): OpsParts {
       feed?.onDeliveryChange(notificationId, channelId),
     actions,
   });
+  const hostZone = input.hostZone ?? runtimeZone;
+  const reports = new ReportScheduler({
+    registry: channels,
+    facts: createReportFacts({ analytics: input.analytics, repos, capacity: input.capacity }),
+    uow: input.uow,
+    repos,
+    outbox: notificationOutbox,
+    clock,
+    ids,
+    logger,
+    hostZone,
+    redactor: input.redactor,
+    ...(input.reportCounter !== undefined && { counter: input.reportCounter }),
+    onDeliveryChange: (notificationId) => feed?.onDeliveryChange(notificationId),
+  });
   const channelService = new ChannelService({
     repos,
     uow: input.uow,
@@ -179,6 +208,9 @@ export function buildOps(input: OpsInput): OpsParts {
     ...(input.discord !== undefined && { discord: input.discord }),
     connection: (channelId) => actionListeners.status(channelId),
     actions,
+    reports,
+    cursors: repos.notificationCursors,
+    hostZone,
   });
   feed = channelService;
   const publicUrl = new PublicUrlChecker({
@@ -226,6 +258,7 @@ export function buildOps(input: OpsInput): OpsParts {
     channelService,
     actions,
     actionListeners,
+    reports,
     publicUrl,
     preferences: new PreferenceService({ repo: repos.preferences, clock, logger }),
     retention: new RetentionScheduler({

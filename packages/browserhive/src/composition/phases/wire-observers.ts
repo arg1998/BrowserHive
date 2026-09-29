@@ -103,6 +103,10 @@ export async function wireObserversPhase(ctx: BootContext): Promise<PhaseHandle>
   domain.notifications.start();
   domain.notificationOutbox.start();
   domain.actionListeners.start();
+  void domain.reports
+    .load()
+    .catch((err: unknown) => logger.warn('report cursors failed', { err: serializeError(err) }))
+    .finally(() => domain.reports.start());
   status.start();
   domain.retention.start();
   domain.outbox.start();
@@ -127,6 +131,7 @@ export async function wireObserversPhase(ctx: BootContext): Promise<PhaseHandle>
       domain.outbox.stop();
       domain.retention.stop();
       status.stop();
+      domain.reports.stop();
       domain.actionListeners.stop();
       domain.notificationOutbox.stop();
       domain.notifications.stop();
