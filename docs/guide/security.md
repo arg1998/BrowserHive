@@ -11,7 +11,7 @@ Binding a non-loopback address (for example `--host 0.0.0.0`) is **refused** unl
 - `--auth token` is set, or
 - `--allowInsecureBind` is set, which you should only do on a network you fully control. The startup banner then shows a red warning.
 
-The refusal is [`INSECURE_BIND_REFUSED`](../reference/errors.md#INSECURE_BIND_REFUSED) with exit code 3. BrowserHive does not terminate TLS; for remote access, put a reverse proxy with TLS in front and list it in `--trustedProxies` so client addresses and `X-Forwarded-Proto` are honoured. Requests whose `Host` header names anything other than loopback, the bind address or an entry of `--allowedHosts` are rejected (DNS rebinding), so add the public name the proxy forwards, for example `--allowedHosts browserhive.example.com`. The port is never compared.
+The refusal is [`INSECURE_BIND_REFUSED`](../reference/errors.md#INSECURE_BIND_REFUSED) with exit code 3. BrowserHive does not terminate TLS; for remote access, put a reverse proxy with TLS in front and list it in `--trustedProxies` so client addresses and `X-Forwarded-Proto` are honoured. Requests whose `Host` header names anything other than loopback, the bind address or an entry of `--allowedHosts` are rejected (DNS rebinding), so add the public name the proxy forwards, for example `--allowedHosts browserhive.example.com`. The port is never compared. Setting `--publicUrl` (the address you reach the dashboard at, used for [notification links](notifications.md#public-address)) trusts its host the same way and also accepts its origin in the CSRF check, which a proxy that rewrites `Host` needs.
 
 ## Authentication
 
@@ -71,6 +71,7 @@ Failures are returned as a status and reason (`origin_mismatch`, `not_authorized
 - **Pixels are not redacted.** The live view and screenshots show exactly what the browser shows. Screenshot tracing skips frames while a redaction window is open, but operators are trusted with the live view.
 - Every secret BrowserHive creates or handles (seed password, tokens, cookies, vault session tokens, OTLP headers) is registered with a redactor that scrubs logs, database rows, WebSocket frames, MCP results and OTLP exports. That includes secrets the config file reads from environment variables (`{env:CI_TOKEN}`, see [References](configuration.md#references)): the variable's name is shown so you know what to set, never its value or the file's text around it.
 - **Notifications are redacted before they are stored or sent.** Every text a notification copies from an event (an agent's attention reason, a page address, an error) goes through the same redactor, and URLs lose their query strings. A notification channel keeps its tokens in environment variables; BrowserHive stores only the variable names, so a database backup never contains one. See [Notifications](notifications.md).
+- **Channels send only what you allow.** Each channel has a content level (counts, titles or full); screenshots are off by default, need `full`, are never taken during a vault fill and can mask form fields; the webhook channel can sign its requests. Links in notifications never carry a token. See [what leaves your machine](notifications.md#what-leaves-your-machine).
 
 ## What is recorded
 
