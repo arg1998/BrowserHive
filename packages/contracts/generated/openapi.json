@@ -9657,6 +9657,38 @@
                     "last_delivery_at",
                     "last_status"
                   ]
+                },
+                "connection": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "properties": {
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "connecting",
+                        "connected",
+                        "reconnecting",
+                        "offline"
+                      ]
+                    },
+                    "since": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "detail": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "since",
+                    "detail"
+                  ]
                 }
               },
               "required": [
@@ -9680,7 +9712,8 @@
                 "last_failure_at",
                 "created_at",
                 "updated_at",
-                "stats"
+                "stats",
+                "connection"
               ]
             }
           },
@@ -10095,6 +10128,38 @@
                   "last_delivery_at",
                   "last_status"
                 ]
+              },
+              "connection": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "connecting",
+                      "connected",
+                      "reconnecting",
+                      "offline"
+                    ]
+                  },
+                  "since": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "detail": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "state",
+                  "since",
+                  "detail"
+                ]
               }
             },
             "required": [
@@ -10118,7 +10183,8 @@
               "last_failure_at",
               "created_at",
               "updated_at",
-              "stats"
+              "stats",
+              "connection"
             ]
           }
         },
@@ -14062,6 +14128,417 @@
           "user",
           "error",
           "expires_at"
+        ]
+      },
+      "DiscordBotInfo": {
+        "type": "object",
+        "properties": {
+          "application_id": {
+            "type": "string"
+          },
+          "bot_id": {
+            "type": "string"
+          },
+          "bot_username": {
+            "type": "string"
+          },
+          "invite_url": {
+            "type": "string"
+          },
+          "guilds": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ]
+            }
+          }
+        },
+        "required": [
+          "application_id",
+          "bot_id",
+          "bot_username",
+          "invite_url",
+          "guilds"
+        ]
+      },
+      "DiscordBotRequest": {
+        "type": "object",
+        "properties": {
+          "token_env": {
+            "type": "string",
+            "maxLength": 128,
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+          }
+        },
+        "required": [
+          "token_env"
+        ],
+        "additionalProperties": false
+      },
+      "DiscordChannelsResponse": {
+        "type": "object",
+        "properties": {
+          "channels": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "text",
+                    "announcement"
+                  ]
+                },
+                "category": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "type",
+                "category"
+              ]
+            }
+          }
+        },
+        "required": [
+          "channels"
+        ]
+      },
+      "DiscordChannelsRequest": {
+        "type": "object",
+        "properties": {
+          "token_env": {
+            "type": "string",
+            "maxLength": 128,
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+          },
+          "guild_id": {
+            "type": "string",
+            "pattern": "^\\d{15,21}$"
+          }
+        },
+        "required": [
+          "token_env",
+          "guild_id"
+        ],
+        "additionalProperties": false
+      },
+      "DiscordConnectResponse": {
+        "type": "object",
+        "properties": {
+          "connect_id": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "connect_id",
+          "expires_at"
+        ]
+      },
+      "DiscordConnectRequest": {
+        "type": "object",
+        "properties": {
+          "token_env": {
+            "type": "string",
+            "maxLength": 128,
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+          },
+          "channel_id": {
+            "type": "string",
+            "pattern": "^\\d{15,21}$"
+          }
+        },
+        "required": [
+          "token_env",
+          "channel_id"
+        ],
+        "additionalProperties": false
+      },
+      "DiscordConnectStatus": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "waiting",
+              "connected",
+              "expired",
+              "failed"
+            ]
+          },
+          "user": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ]
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "expires_at": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "status",
+          "user",
+          "error",
+          "expires_at"
+        ]
+      },
+      "ActionsPage": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "seq": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                "at": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "channel_id": {
+                  "type": "string"
+                },
+                "channel_name": {
+                  "type": "string"
+                },
+                "channel_kind": {
+                  "type": "string"
+                },
+                "notification_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "notification_title": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "action_id": {
+                  "type": "string"
+                },
+                "action_label": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "op": {
+                  "type": "string"
+                },
+                "actor": {
+                  "type": "string"
+                },
+                "actor_name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "outcome": {
+                  "type": "string",
+                  "enum": [
+                    "done",
+                    "failed",
+                    "not_allowed",
+                    "used",
+                    "expired",
+                    "stale",
+                    "wrong_channel",
+                    "disabled"
+                  ]
+                },
+                "detail": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "seq",
+                "at",
+                "channel_id",
+                "channel_name",
+                "channel_kind",
+                "notification_id",
+                "notification_title",
+                "action_id",
+                "action_label",
+                "op",
+                "actor",
+                "actor_name",
+                "outcome",
+                "detail"
+              ]
+            }
+          },
+          "page": {
+            "type": "object",
+            "properties": {
+              "next_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "prev_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "limit": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "total": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "next_cursor",
+              "limit"
+            ]
+          },
+          "facets": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "value": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "count": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "value",
+                  "count"
+                ]
+              }
+            }
+          },
+          "applied": {
+            "type": "object",
+            "properties": {
+              "filters": {
+                "type": "object",
+                "additionalProperties": {}
+              },
+              "sort": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  },
+                  "dir": {
+                    "type": "string",
+                    "enum": [
+                      "asc",
+                      "desc"
+                    ]
+                  }
+                },
+                "required": [
+                  "key",
+                  "dir"
+                ]
+              }
+            },
+            "required": [
+              "filters",
+              "sort"
+            ]
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "now": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "now"
+            ]
+          }
+        },
+        "required": [
+          "data",
+          "page",
+          "applied",
+          "meta"
         ]
       },
       "ChannelPatch": {
@@ -26021,6 +26498,604 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/TelegramConnectStatus"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, PASSWORD_CHANGE_REQUIRED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/channels/discord/bot": {
+      "post": {
+        "operationId": "getDiscordBot",
+        "tags": [
+          "channels"
+        ],
+        "summary": "Who the Discord bot is, its invite link (minimal permissions) and the servers it is in.",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-browserhive-scope": "channels:write",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscordBotRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Who the Discord bot is, its invite link (minimal permissions) and the servers it is in.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscordBotInfo"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, PASSWORD_CHANGE_REQUIRED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "CHANNEL_NOT_READY",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "PAYLOAD_TOO_LARGE",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "CHANNEL_PLATFORM_ERROR",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/channels/discord/channels": {
+      "post": {
+        "operationId": "listDiscordChannels",
+        "tags": [
+          "channels"
+        ],
+        "summary": "The text channels of one of the Discord bot's servers (the channel picker).",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-browserhive-scope": "channels:write",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscordChannelsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The text channels of one of the Discord bot's servers (the channel picker).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscordChannelsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, PASSWORD_CHANGE_REQUIRED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "CHANNEL_NOT_READY",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "PAYLOAD_TOO_LARGE",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "CHANNEL_PLATFORM_ERROR",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/channels/discord/connect": {
+      "post": {
+        "operationId": "startDiscordConnect",
+        "tags": [
+          "channels"
+        ],
+        "summary": "Link your Discord account: the bot posts a \"This is me\" button and waits 2 minutes for it.",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-browserhive-scope": "channels:write",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscordConnectRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Link your Discord account: the bot posts a \"This is me\" button and waits 2 minutes for it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscordConnectResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, PASSWORD_CHANGE_REQUIRED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "CHANNEL_NOT_READY",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "PAYLOAD_TOO_LARGE",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "CHANNEL_PLATFORM_ERROR",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/channels/discord/connect/{connect_id}": {
+      "get": {
+        "operationId": "getDiscordConnect",
+        "tags": [
+          "channels"
+        ],
+        "summary": "State of a Discord account link: waiting, connected (with the user), expired, failed.",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-browserhive-scope": "channels:read",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{8,64}$"
+            },
+            "required": true,
+            "name": "connect_id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "State of a Discord account link: waiting, connected (with the user), expired, failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscordConnectStatus"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, PASSWORD_CHANGE_REQUIRED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/channels/actions": {
+      "get": {
+        "operationId": "listChannelActions",
+        "tags": [
+          "channels"
+        ],
+        "summary": "The act-button audit newest first: who pressed what, from which chat, and the outcome.",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-browserhive-scope": "channels:read",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^nc-[A-Za-z0-9_-]{4,64}$"
+            },
+            "required": false,
+            "name": "channel_id",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^n-[A-Za-z0-9_-]{12}$"
+            },
+            "required": false,
+            "name": "notification_id",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "string",
+                "enum": [
+                  "done",
+                  "failed",
+                  "not_allowed",
+                  "used",
+                  "expired",
+                  "stale",
+                  "wrong_channel",
+                  "disabled"
+                ]
+              },
+              "minItems": 1
+            },
+            "required": false,
+            "name": "outcome",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The act-button audit newest first: who pressed what, from which chat, and the outcome.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionsPage"
                 }
               }
             }

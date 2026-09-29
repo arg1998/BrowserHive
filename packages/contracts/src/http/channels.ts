@@ -1,12 +1,14 @@
 /** @module contracts/http/channels — notification channels: CRUD, test send, preview, the delivery log, the environment check and the Telegram connect flow (spec 03 §4.8.1, D-33, D-37, D-38, D-39) */
 import { z } from 'zod';
 import {
+  NotificationActionOutcome,
   NotificationChannelKind,
   NotificationChannelSource,
   NotificationChannelStatus,
   NotificationDeliveryOp,
   NotificationDeliveryStatus,
   NotificationKind,
+  NotificationListenerState,
 } from '../enums/index.ts';
 import { NotificationId } from '../ids/index.ts';
 import {
@@ -66,6 +68,17 @@ export const ChannelStats = z.object({
 /** Delivery counts of one channel. */
 export type ChannelStats = z.infer<typeof ChannelStats>;
 
+/** State of a channel's press listener (Telegram poller, Discord gateway, ntfy reply subscription; D-41). */
+export const ChannelConnection = z.object({
+  state: NotificationListenerState,
+  /** When the listener entered this state. */
+  since: EpochMs,
+  /** Why it is offline or reconnecting ("the token was refused"); `null` when connected. */
+  detail: z.string().nullable(),
+});
+/** Press listener state. */
+export type ChannelConnection = z.infer<typeof ChannelConnection>;
+
 /** One configured channel as the API shows it. Never carries a secret value. */
 export const ChannelView = z.object({
   channel_id: ChannelId,
@@ -94,6 +107,8 @@ export const ChannelView = z.object({
   created_at: EpochMs,
   updated_at: EpochMs,
   stats: ChannelStats,
+  /** The press listener, or `null` when the channel receives no presses (act buttons off). */
+  connection: ChannelConnection.nullable(),
 });
 /** One configured channel. */
 export type ChannelView = z.infer<typeof ChannelView>;
@@ -107,7 +122,7 @@ export type ChannelIdParams = z.infer<typeof ChannelIdParams>;
 export const ChannelInput = z.strictObject({
   name: NotificationChannelName,
   kind: AvailableChannelKind,
-  /** Discord: `webhook` (default) or `bot` (not available yet, D-38). */
+  /** Discord: `webhook` (default) or `bot` (D-38). */
   mode: z.string().max(32).nullable().optional(),
   target: NotificationChannelTarget.default({}),
   secret_refs: z.record(z.string().max(64), z.string().max(256)).default({}),
@@ -317,3 +332,116 @@ export const TelegramConnectStatus = z.object({
 });
 /** `GET /channels/telegram/connect/{connect_id}` response. */
 export type TelegramConnectStatus = z.infer<typeof TelegramConnectStatus>;
+
+/** One act-button press (the audit, D-41). Never carries a token. */
+export const ActionRow = z.object({
+  seq: z.number().int().positive(),
+  at: EpochMs,
+  channel_id: z.string(),
+  channel_name: z.string(),
+  channel_kind: z.string(),
+  notification_id: z.string().nullable(),
+  notification_title: z.string().nullable(),
+  action_id: z.string(),
+  action_label: z.string().nullable(),
+  op: z.string(),
+  /** `telegram:<user id>`, `discord:<user id>` or `ntfy:topic-b`. */
+  actor: z.string(),
+  actor_name: z.string().nullable(),
+  outcome: NotificationActionOutcome,
+  /** The answer shown to the presser, or the failure. */
+  detail: z.string().nullable(),
+});
+/** One act-button press. */
+export type ActionRow = z.infer<typeof ActionRow>;
+
+/** `GET /channels/actions` query (keyset on `seq`, newest first). */
+export const ActionsQuery = z.strictObject({
+  cursor: Cursor.optional(),
+  limit: limitQuery(200, 50),
+  channel_id: ChannelId.optional(),
+  notification_id: NotificationId.optional(),
+  outcome: csv(NotificationActionOutcome),
+});
+/** `GET /channels/actions` query. */
+export type ActionsQuery = z.infer<typeof ActionsQuery>;
+
+/** `GET /channels/actions` body. */
+export const ActionsPage = page(ActionRow);
+/** `GET /channels/actions` body. */
+export type ActionsPage = z.infer<typeof ActionsPage>;
+
+/** `POST /channels/discord/bot` body. */
+export const DiscordBotRequest = z.strictObject({ token_env: SecretEnvName });
+/** `POST /channels/discord/bot` body. */
+export type DiscordBotRequest = z.infer<typeof DiscordBotRequest>;
+
+/** A Discord server the bot is in. */
+export const DiscordGuild = z.object({ id: z.string(), name: z.string() });
+/** A Discord server. */
+export type DiscordGuild = z.infer<typeof DiscordGuild>;
+
+/** `POST /channels/discord/bot` response: who the bot is, its invite link and its servers. */
+export const DiscordBotInfo = z.object({
+  application_id: z.string(),
+  bot_id: z.string(),
+  bot_username: z.string(),
+  /** Adds the bot to a server with the minimal permissions (D-38). */
+  invite_url: z.string(),
+  guilds: z.array(DiscordGuild),
+});
+/** `POST /channels/discord/bot` response. */
+export type DiscordBotInfo = z.infer<typeof DiscordBotInfo>;
+
+/** `POST /channels/discord/channels` body. */
+export const DiscordChannelsRequest = z.strictObject({
+  token_env: SecretEnvName,
+  guild_id: z.string().regex(/^\d{15,21}$/, 'a Discord id'),
+});
+/** `POST /channels/discord/channels` body. */
+export type DiscordChannelsRequest = z.infer<typeof DiscordChannelsRequest>;
+
+/** A text channel of a Discord server. */
+export const DiscordTextChannel = z.object({
+  id: z.string(),
+  name: z.string(),
+  type: z.enum(['text', 'announcement']),
+  /** The category it is listed under, if any. */
+  category: z.string().nullable(),
+});
+/** A text channel. */
+export type DiscordTextChannel = z.infer<typeof DiscordTextChannel>;
+
+/** `POST /channels/discord/channels` response. */
+export const DiscordChannelsResponse = z.object({ channels: z.array(DiscordTextChannel) });
+/** `POST /channels/discord/channels` response. */
+export type DiscordChannelsResponse = z.infer<typeof DiscordChannelsResponse>;
+
+/** `POST /channels/discord/connect` body. */
+export const DiscordConnectRequest = z.strictObject({
+  token_env: SecretEnvName,
+  channel_id: z.string().regex(/^\d{15,21}$/, 'a Discord id'),
+});
+/** `POST /channels/discord/connect` body. */
+export type DiscordConnectRequest = z.infer<typeof DiscordConnectRequest>;
+
+/** `POST /channels/discord/connect` response. */
+export const DiscordConnectResponse = z.object({ connect_id: z.string(), expires_at: EpochMs });
+/** `POST /channels/discord/connect` response. */
+export type DiscordConnectResponse = z.infer<typeof DiscordConnectResponse>;
+
+/** Path params `{connect_id}` of the Discord connect flow. */
+export const DiscordConnectParams = z.strictObject({
+  connect_id: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/),
+});
+
+/** `GET /channels/discord/connect/{connect_id}` response. */
+export const DiscordConnectStatus = z.object({
+  status: z.enum(['waiting', 'connected', 'expired', 'failed']),
+  /** Who pressed "This is me" (the first allow-list entry). */
+  user: z.object({ id: z.string(), name: z.string() }).nullable(),
+  error: z.string().nullable(),
+  expires_at: EpochMs,
+});
+/** `GET /channels/discord/connect/{connect_id}` response. */
+export type DiscordConnectStatus = z.infer<typeof DiscordConnectStatus>;

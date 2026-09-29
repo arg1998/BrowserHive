@@ -2,7 +2,7 @@
 
 import { z } from 'zod';
 import type { NotificationCategory } from '../enums/notification-category.ts';
-import { RESERVED_ENV_PREFIX } from './channel.ts';
+import { type NotificationChannelRules, RESERVED_ENV_PREFIX } from './channel.ts';
 
 /** Platforms that have an adapter (N1). The other `NotificationChannelKind` members are reserved. */
 export const AVAILABLE_CHANNEL_KINDS = ['telegram', 'discord', 'ntfy', 'webhook'] as const;
@@ -11,10 +11,35 @@ export const AvailableChannelKind = z.enum(AVAILABLE_CHANNEL_KINDS);
 /** A platform with an adapter. */
 export type AvailableChannelKind = z.infer<typeof AvailableChannelKind>;
 
-/** Discord channel modes (D-38). `bot` is reserved until act buttons ship (N2). */
+/** Discord channel modes (D-38): one per channel. */
 export const DISCORD_MODES = ['webhook', 'bot'] as const;
-/** Discord modes a channel may be saved with today. */
-export const AVAILABLE_DISCORD_MODES: readonly string[] = ['webhook'];
+/** Discord modes a channel may be saved with. */
+export const AVAILABLE_DISCORD_MODES: readonly string[] = DISCORD_MODES;
+
+/**
+ * Permissions the Discord bot's invite link asks for (D-38): View Channel (1 << 10), Send Messages
+ * (1 << 11), Embed Links (1 << 14) and Attach Files (1 << 15). Nothing else is needed: a bot edits
+ * and deletes its own messages, and interactions need no permission.
+ */
+export const DISCORD_BOT_PERMISSIONS = 52_224;
+
+/**
+ * The invite link that adds a bot to a server with {@link DISCORD_BOT_PERMISSIONS}.
+ *
+ * @returns `https://discord.com/oauth2/authorize?…`.
+ */
+export function discordInviteUrl(applicationId: string): string {
+  return `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(applicationId)}&scope=bot&permissions=${DISCORD_BOT_PERMISSIONS}`;
+}
+
+/** Prefix of the payload an act button carries (`bh1:<token>`, D-41). */
+export const ACTION_TOKEN_PREFIX = 'bh1:';
+/** Characters of a command token (URL-safe, 6 bits each: 66 random bits). */
+export const ACTION_TOKEN_LENGTH = 11;
+/** A command token expires this long after it was minted (Telegram keeps presses 24 h). */
+export const ACTION_TOKEN_TTL_MS = 24 * 60 * 60_000;
+/** A button payload: `bh1:` and the token. */
+export const ACTION_PAYLOAD_RE = /^bh1:([A-Za-z0-9_-]{11})$/;
 
 /** Telegram lets a bot delete its own messages for 48 hours; setups cap TTLs one hour below (D-35). */
 export const TELEGRAM_TTL_MAX_MS = 47 * 60 * 60_000;
@@ -31,11 +56,17 @@ export interface TargetKeySpec {
   readonly param: string;
   readonly required: boolean;
   readonly describe: string;
+  /** The key belongs to this mode only (Discord); `required` applies in that mode. */
+  readonly mode?: string;
 }
 
 /** One secret parameter of a platform: stored as an environment variable name (D-33). */
 export interface SecretParamSpec {
   readonly param: string;
+  /** Startup flag parameter when it differs from `param` (`reply` for `reply_topic`). */
+  readonly flag?: string;
+  /** The parameter belongs to this mode only (Discord); `required` applies in that mode. */
+  readonly mode?: string;
   readonly required: boolean;
   /** Variable name the setup suggests (never `BROWSERHIVE_*`). */
   readonly suggestedEnv: string;
@@ -96,13 +127,44 @@ export const CHANNEL_KIND_SPECS: { readonly [K in AvailableChannelKind]: Channel
     label: 'Discord',
     modes: DISCORD_MODES,
     defaultMode: 'webhook',
-    target: [],
+    target: [
+      {
+        key: 'channel_id',
+        param: 'channel',
+        required: true,
+        mode: 'bot',
+        describe: 'Channel id the bot posts in.',
+      },
+      { key: 'guild_id', param: 'guild', required: false, mode: 'bot', describe: 'Server id.' },
+      {
+        key: 'guild_name',
+        param: 'guildName',
+        required: false,
+        mode: 'bot',
+        describe: 'Name of the server.',
+      },
+      {
+        key: 'channel_name',
+        param: 'channelName',
+        required: false,
+        mode: 'bot',
+        describe: 'Name of the channel.',
+      },
+    ],
     secrets: [
       {
         param: 'webhook',
+        mode: 'webhook',
         required: true,
         suggestedEnv: 'BH_DISCORD_WEBHOOK',
         describe: 'The webhook URL (Channel settings → Integrations → Webhooks).',
+      },
+      {
+        param: 'token',
+        mode: 'bot',
+        required: true,
+        suggestedEnv: 'BH_DISCORD_BOT_TOKEN',
+        describe: 'The bot token (Developer Portal → your application → Bot → Reset Token).',
       },
     ],
     eitherTargetOrSecret: [],
@@ -125,6 +187,12 @@ export const CHANNEL_KIND_SPECS: { readonly [K in AvailableChannelKind]: Channel
         required: false,
         describe: 'Topic name. On a public server the topic acts as a password.',
       },
+      {
+        key: 'reply_topic',
+        param: 'reply',
+        required: false,
+        describe: 'Reply topic that act buttons post to (answer from the notification).',
+      },
     ],
     secrets: [
       {
@@ -138,6 +206,20 @@ export const CHANNEL_KIND_SPECS: { readonly [K in AvailableChannelKind]: Channel
         required: false,
         suggestedEnv: 'BH_NTFY_TOPIC',
         describe: 'Topic name kept in a variable instead of the database.',
+      },
+      {
+        param: 'reply_topic',
+        flag: 'reply',
+        required: false,
+        suggestedEnv: 'BH_NTFY_REPLY_TOPIC',
+        describe: 'Reply topic kept in a variable instead of the database.',
+      },
+      {
+        param: 'reply_token',
+        flag: 'replyToken',
+        required: false,
+        suggestedEnv: 'BH_NTFY_REPLY_TOKEN',
+        describe: 'Access token that reads the reply topic (default: the channel token).',
       },
     ],
     eitherTargetOrSecret: ['topic'],
@@ -171,6 +253,8 @@ const HTTP_RE = /^https?:\/\/[^\s/?#@]+(?::\d{1,5})?(?:\/[^\s?#]*)?$/i;
 const TOPIC_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const CHAT_RE = /^-?\d{1,20}$|^@[A-Za-z0-9_]{5,32}$/;
 const THREAD_RE = /^\d{1,12}$/;
+const SNOWFLAKE_RE = /^\d{15,21}$/;
+const USER_ID_RE = /^\d{1,21}$/;
 
 /**
  * Whether `value` could be a secret value typed where a variable name belongs: anything that is
@@ -212,10 +296,22 @@ export function checkChannelConfig(input: {
   } else if (input.mode !== null && !spec.modes.includes(input.mode)) {
     problems.push({ field: 'mode', message: `mode must be one of: ${spec.modes.join(', ')}.` });
   }
+  const requested = input.mode ?? spec.defaultMode;
+  // An invalid mode is reported once; the per-mode checks then do not apply.
+  const mode = requested !== null && spec.modes?.includes(requested) ? requested : null;
+  const inMode = (owner: string | undefined) =>
+    owner === undefined || mode === null || owner === mode;
   const targetKeys = new Set(spec.target.map((t) => t.key));
   for (const key of Object.keys(input.target)) {
     if (!targetKeys.has(key)) {
       problems.push({ field: `target.${key}`, message: `unknown ${spec.label} setting '${key}'.` });
+    }
+    const owner = spec.target.find((t) => t.key === key)?.mode;
+    if (!inMode(owner) && (input.target[key] ?? '') !== '') {
+      problems.push({
+        field: `target.${key}`,
+        message: `${key} belongs to ${owner} mode; remove it in ${mode} mode.`,
+      });
     }
   }
   const secretParams = new Set(spec.secrets.map((s) => s.param));
@@ -224,6 +320,14 @@ export function checkChannelConfig(input: {
       problems.push({
         field: `secret_refs.${param}`,
         message: `unknown ${spec.label} secret '${param}'.`,
+      });
+      continue;
+    }
+    const owner = spec.secrets.find((s) => s.param === param)?.mode;
+    if (!inMode(owner)) {
+      problems.push({
+        field: `secret_refs.${param}`,
+        message: `${param} belongs to ${owner} mode; remove it in ${mode} mode.`,
       });
       continue;
     }
@@ -240,12 +344,20 @@ export function checkChannelConfig(input: {
     }
   }
   for (const t of spec.target) {
-    if (t.required && (input.target[t.key] ?? '') === '') {
+    if (
+      t.required &&
+      (t.mode === undefined || t.mode === mode) &&
+      (input.target[t.key] ?? '') === ''
+    ) {
       problems.push({ field: `target.${t.key}`, message: `${t.key} is required.` });
     }
   }
   for (const s of spec.secrets) {
-    if (s.required && input.secretRefs[s.param] === undefined) {
+    if (
+      s.required &&
+      (s.mode === undefined || s.mode === mode) &&
+      input.secretRefs[s.param] === undefined
+    ) {
       problems.push({
         field: `secret_refs.${s.param}`,
         message: `${s.param} is required (the name of the variable that holds it).`,
@@ -276,14 +388,41 @@ export function checkChannelConfig(input: {
       problems.push({ field: 'target.thread_id', message: 'thread_id must be a number.' });
     }
   }
+  if (parsed.data === 'discord') {
+    for (const key of ['channel_id', 'guild_id']) {
+      const value = t[key];
+      if (value !== undefined && value !== '' && !SNOWFLAKE_RE.test(value)) {
+        problems.push({ field: `target.${key}`, message: `${key} must be a Discord id (digits).` });
+      }
+    }
+  }
   if (parsed.data === 'ntfy') {
     if (t['server'] !== undefined && !HTTP_RE.test(t['server'])) {
       problems.push({ field: 'target.server', message: 'server must be an absolute http(s) URL.' });
     }
-    if (t['topic'] !== undefined && t['topic'] !== '' && !TOPIC_RE.test(t['topic'])) {
+    for (const key of ['topic', 'reply_topic']) {
+      const value = t[key];
+      if (value !== undefined && value !== '' && !TOPIC_RE.test(value)) {
+        problems.push({
+          field: `target.${key}`,
+          message: `${key} may contain letters, digits, _ and - (up to 64).`,
+        });
+      }
+    }
+    if (t['reply_topic'] !== undefined && input.secretRefs['reply_topic'] !== undefined) {
       problems.push({
-        field: 'target.topic',
-        message: 'topic may contain letters, digits, _ and - (up to 64).',
+        field: 'target.reply_topic',
+        message: 'reply_topic is given both literally and as a variable; keep one.',
+      });
+    }
+    if (
+      t['reply_topic'] !== undefined &&
+      t['reply_topic'] !== '' &&
+      t['reply_topic'] === t['topic']
+    ) {
+      problems.push({
+        field: 'target.reply_topic',
+        message: 'the reply topic must differ from the topic notifications are sent to.',
       });
     }
   }
@@ -296,6 +435,96 @@ export function checkChannelConfig(input: {
   }
   return problems;
 }
+
+/**
+ * Whether a channel's setup can receive act-button presses (D-41, D-42): Telegram always, Discord in
+ * bot mode, ntfy with a reply topic (literal or from a variable), the generic webhook (it carries the
+ * `act` actions without tokens). The rules' `act_buttons` switch decides whether they are used.
+ *
+ * @returns True when act buttons can be switched on.
+ */
+export function supportsActButtons(input: {
+  readonly kind: string;
+  readonly mode: string | null;
+  readonly target: Readonly<Record<string, string>>;
+  readonly secretRefs: Readonly<Record<string, string>>;
+}): boolean {
+  switch (input.kind) {
+    case 'telegram':
+    case 'webhook':
+      return true;
+    case 'discord':
+      return (input.mode ?? 'webhook') === 'bot';
+    case 'ntfy':
+      return (
+        (input.target['reply_topic'] ?? '') !== '' || input.secretRefs['reply_topic'] !== undefined
+      );
+    default:
+      return false;
+  }
+}
+
+/** Whether presses are made by identified platform users (Telegram and Discord), so an allow-list applies. */
+export function hasPresserIdentity(kind: string): boolean {
+  return kind === 'telegram' || kind === 'discord';
+}
+
+/**
+ * Checks the act-button rules of a channel (D-41): the switch only where presses can arrive, and
+ * an allow-list of numeric platform user ids only where pressers are identified. Shared by the
+ * API, the startup flag parser and the dashboard.
+ *
+ * @returns Every problem (empty when valid).
+ */
+export function checkChannelRules(input: {
+  readonly kind: string;
+  readonly mode: string | null;
+  readonly target: Readonly<Record<string, string>>;
+  readonly secretRefs: Readonly<Record<string, string>>;
+  readonly rules: NotificationChannelRules;
+}): ChannelConfigProblem[] {
+  const problems: ChannelConfigProblem[] = [];
+  if (input.rules.act_buttons === true && !supportsActButtons(input)) {
+    problems.push({
+      field: 'rules.act_buttons',
+      message:
+        input.kind === 'discord'
+          ? 'act buttons need Discord bot mode; webhook messages can only carry links.'
+          : input.kind === 'ntfy'
+            ? 'act buttons on ntfy need a reply topic for the buttons to post to.'
+            : `${input.kind} cannot receive button presses.`,
+    });
+  }
+  const allow = input.rules.allow_list ?? [];
+  if (allow.length > 0 && !hasPresserIdentity(input.kind)) {
+    problems.push({
+      field: 'rules.allow_list',
+      message: `${input.kind} presses carry no user identity, so an allow-list does not apply.`,
+    });
+  } else {
+    for (const id of allow) {
+      if (!USER_ID_RE.test(id)) {
+        problems.push({
+          field: 'rules.allow_list',
+          message: `'${id.slice(0, 24)}' is not a user id (digits only).`,
+        });
+      }
+    }
+  }
+  return problems;
+}
+
+/** What an act-button outcome means, in one sentence (the Actions view, D-41). */
+export const ACTION_OUTCOME_TEXT: Readonly<Record<string, string>> = {
+  done: 'The command ran.',
+  failed: 'The command ran and failed.',
+  not_allowed: "The person who pressed is not on the channel's allow-list.",
+  used: 'The button had already been used.',
+  expired: 'The button had expired (buttons work for 24 hours).',
+  stale: 'The request was no longer waiting (answered, timed out or cancelled).',
+  wrong_channel: 'The button was pressed somewhere other than the channel it was sent to.',
+  disabled: 'Act buttons were off, or the channel was paused, when it was pressed.',
+};
 
 /** Sample notifications the preview renders (spec 03 §4.8.1). */
 export const PREVIEW_SAMPLES = [
