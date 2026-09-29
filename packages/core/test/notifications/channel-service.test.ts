@@ -286,7 +286,7 @@ describe('ChannelService test send, preview and the delivery log', () => {
     const { service } = await kit();
     const draft = service.preview({ kind: 'discord', sample: 'attention' });
     expect(draft.requests[0]?.path).toContain('{BH_DISCORD_WEBHOOK}');
-    expect(draft.notes.some((n) => n.includes('act buttons'))).toBe(true);
+    expect(draft.notes.some((n) => n.includes('Approve and Reject open BrowserHive'))).toBe(true);
     const saved = await service.create({
       name: 'pager',
       kind: 'ntfy',

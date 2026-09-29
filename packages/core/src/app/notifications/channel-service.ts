@@ -757,13 +757,11 @@ export class ChannelService {
     const notes: string[] = [];
     if (this.deps.links.local) {
       notes.push(
-        'publicUrl is not set: links point at this computer and will not open on a phone.',
+        'Links open only on this computer. To open them from your phone, set publicUrl to the address where you reach this dashboard.',
       );
     }
     if (!caps.actButtons && (sample === 'attention' || sample === 'vault-confirm')) {
-      notes.push(
-        'Approve/Reject buttons arrive with act buttons; until then they open BrowserHive.',
-      );
+      notes.push('Approve and Reject open BrowserHive, where you answer the request.');
     }
     if (rules.images?.[category] === true && !wantsImages(rules, category)) {
       notes.push('Screenshots are on, but they need the content level "full".');

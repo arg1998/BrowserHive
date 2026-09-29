@@ -1,6 +1,6 @@
 /** @module features/notifications/channels/preview/PlatformPreview — renders a `ChannelPreview` as the platform would show it (Telegram, Discord, ntfy mocks, the webhook request), with the renderer's notes and a disclosure of the exact request(s); everything is drawn from `requests`, the same output a real send uses (spec 04 §12.11.1) */
 import type { ChannelPreview, PlatformRequest } from '@browserhive/contracts/http';
-import { useId, useState } from 'react';
+import { type ReactNode, useId, useState } from 'react';
 import { JsonView } from '@/components/shared/JsonView.tsx';
 import { ICONS } from '@/lib/icons.ts';
 import { cn } from '@/lib/utils.ts';
@@ -53,6 +53,20 @@ export interface PlatformPreviewProps {
 }
 
 /** One platform mock for a preview. */
+
+/** A note with the config key `publicUrl` (when present) rendered as code. */
+function withCodeTerms(note: string): ReactNode {
+  const at = note.indexOf('publicUrl');
+  if (at < 0) return note;
+  return (
+    <>
+      {note.slice(0, at)}
+      <code className="font-mono">publicUrl</code>
+      {note.slice(at + 'publicUrl'.length)}
+    </>
+  );
+}
+
 export function PlatformPreview({
   preview,
   chatTitle,
@@ -94,21 +108,12 @@ export function PlatformPreview({
       ) : (
         <WebhookMock request={request} />
       )}
-      {!compact && (preview.notes.length > 0 || preview.local_links) ? (
+      {!compact && preview.notes.length > 0 ? (
         <ul className="flex flex-col gap-1 text-sm text-muted-foreground">
-          {preview.local_links && !preview.notes.some((n) => n.includes('publicUrl')) ? (
-            <li className="flex gap-2">
-              <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-              <span>
-                Links point at this computer because <code className="font-mono">publicUrl</code> is
-                not set; on a phone they will not open.
-              </span>
-            </li>
-          ) : null}
           {preview.notes.map((note) => (
             <li key={note} className="flex gap-2">
               <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-              <span>{note}</span>
+              <span>{withCodeTerms(note)}</span>
             </li>
           ))}
         </ul>

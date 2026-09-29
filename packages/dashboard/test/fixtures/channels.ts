@@ -159,8 +159,8 @@ export const CAPTURED = {
       ],
       local_links: true,
       notes: [
-        'publicUrl is not set: links point at this computer and will not open on a phone.',
-        'Approve/Reject buttons arrive with act buttons; until then they open BrowserHive.',
+        'Links open only on this computer. To open them from your phone, set publicUrl to the address where you reach this dashboard.',
+        'Approve and Reject open BrowserHive, where you answer the request.',
       ],
     },
     telegramResolved: {
@@ -303,7 +303,9 @@ export const CAPTURED = {
         },
       ],
       local_links: true,
-      notes: ['publicUrl is not set: links point at this computer and will not open on a phone.'],
+      notes: [
+        'Links open only on this computer. To open them from your phone, set publicUrl to the address where you reach this dashboard.',
+      ],
     },
     discord: {
       kind: 'discord',
@@ -512,8 +514,8 @@ export const CAPTURED = {
       ],
       local_links: true,
       notes: [
-        'publicUrl is not set: links point at this computer and will not open on a phone.',
-        'Approve/Reject buttons arrive with act buttons; until then they open BrowserHive.',
+        'Links open only on this computer. To open them from your phone, set publicUrl to the address where you reach this dashboard.',
+        'Approve and Reject open BrowserHive, where you answer the request.',
       ],
     },
     discordBot: {
@@ -737,7 +739,9 @@ export const CAPTURED = {
         },
       ],
       local_links: true,
-      notes: ['publicUrl is not set: links point at this computer and will not open on a phone.'],
+      notes: [
+        'Links open only on this computer. To open them from your phone, set publicUrl to the address where you reach this dashboard.',
+      ],
     },
     ntfy: {
       kind: 'ntfy',
@@ -867,7 +871,9 @@ export const CAPTURED = {
         },
       ],
       local_links: true,
-      notes: ['publicUrl is not set: links point at this computer and will not open on a phone.'],
+      notes: [
+        'Links open only on this computer. To open them from your phone, set publicUrl to the address where you reach this dashboard.',
+      ],
     },
     ntfyImage: {
       kind: 'ntfy',
@@ -1042,8 +1048,8 @@ export const CAPTURED = {
       ],
       local_links: true,
       notes: [
-        'publicUrl is not set: links point at this computer and will not open on a phone.',
-        'Approve/Reject buttons arrive with act buttons; until then they open BrowserHive.',
+        'Links open only on this computer. To open them from your phone, set publicUrl to the address where you reach this dashboard.',
+        'Approve and Reject open BrowserHive, where you answer the request.',
         'On ntfy.sh attachments are stored on the public server for 3 hours; a self-hosted ntfy keeps screenshots private.',
       ],
     },
@@ -1202,7 +1208,9 @@ export const CAPTURED = {
         },
       ],
       local_links: true,
-      notes: ['publicUrl is not set: links point at this computer and will not open on a phone.'],
+      notes: [
+        'Links open only on this computer. To open them from your phone, set publicUrl to the address where you reach this dashboard.',
+      ],
     },
   },
   channels: {
