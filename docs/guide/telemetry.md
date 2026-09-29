@@ -40,30 +40,35 @@ If the MCP client sends a W3C `traceparent` in the tool call's `_meta`, the tool
 
 ### Metrics
 
-| Instrument | Type | Attributes |
-|---|---|---|
-| `browserhive.tool_calls` | counter | `tool`, `ok`, `error_code`, `harness` |
-| `browserhive.tool_call.duration` | histogram (ms) | `tool` |
-| `browserhive.sessions.active` | up-down counter | `harness` |
-| `browserhive.session.launch.duration` | histogram (ms) | `channel`, `stealth` |
-| `browserhive.session.lifetime` | histogram (ms) | `closed_reason` |
-| `browserhive.ws.connections` | up-down counter | |
-| `browserhive.ws.buffered_bytes` | gauge | `connection_id` |
-| `browserhive.ws.frames_dropped` | counter | `channel` |
-| `browserhive.db.write_queue.depth` | gauge | |
-| `browserhive.db.dropped_writes` | counter | `table` |
-| `browserhive.db.size_bytes` | gauge | |
-| `browserhive.browser.rss_bytes` | gauge | `session_id` |
-| `browserhive.attention.open` | up-down counter | `kind` |
-| `browserhive.attention.wait` | histogram (ms) | `status` |
-| `browserhive.vault.fills` | counter | `result` |
-| `browserhive.blocklist.hits` | counter | `source` |
-| `browserhive.retention.pruned_rows` | counter | `table` |
-| `browserhive.process.*` | gauges | rss, heap, event-loop lag |
+| Instrument | Type | Unit | Attributes | What it measures |
+|---|---|---|---|---|
+| `browserhive.tool_calls` | counter | `{call}` | `tool`, `ok`, `error_code` (failed calls only), `harness` | Tool calls. |
+| `browserhive.tool_call.duration` | histogram | `ms` | `tool` | How long each tool call took. |
+| `browserhive.sessions.active` | up-down counter | `{session}` | `harness` | Live sessions. |
+| `browserhive.session.launch.duration` | histogram | `ms` | `channel`, `stealth` | From the create request until the browser is up, per successful launch. |
+| `browserhive.session.lifetime` | histogram | `ms` | `closed_reason` | How long each closed session lived. |
+| `browserhive.ws.connections` | up-down counter | `{connection}` | | Open dashboard WebSocket connections. |
+| `browserhive.ws.buffered_bytes` | gauge | `By` | `connection_id` | Bytes waiting to be sent, for the 50 most backed-up connections. |
+| `browserhive.ws.frames_dropped` | counter | `{frame}` | `channel` (`screencast`, `logs`, `feed`) | Frames not delivered because a connection was congested. |
+| `browserhive.db.write_queue.depth` | gauge | `{write}` | | Writes waiting to be saved. |
+| `browserhive.db.dropped_writes` | counter | `{write}` | `table` | Writes lost because the queue was full or the write failed. |
+| `browserhive.db.size_bytes` | gauge | `By` | | Database size. |
+| `browserhive.browser.rss_bytes` | gauge | `By` | `session_id` | Memory of each session's browser, all its processes together, sampled every 10 seconds. Linux and macOS only. |
+| `browserhive.attention.open` | up-down counter | `{request}` | `kind` (`attention`, `vault_confirm`) | Operator requests waiting for an answer. |
+| `browserhive.attention.wait` | histogram | `ms` | `status` | How long each attention request waited until it was answered, timed out or cancelled. |
+| `browserhive.vault.fills` | counter | `{fill}` | `result` | Vault fills. |
+| `browserhive.blocklist.hits` | counter | `{hit}` | `source` | Blocked requests. |
+| `browserhive.retention.pruned_rows` | counter | `{row}` | `table` | Rows removed by retention. |
+| `browserhive.notifications.deliveries` | counter | `{delivery}` | `channel_kind`, `status` | Notification deliveries by outcome: `sent`, `retrying`, `dead`, `suppressed`, `superseded`. |
+| `browserhive.notifications.reports` | counter | `{report}` | `kind`, `outcome` | Digest and anomaly-alert decisions: `sent`, `late`, `empty`, `skipped`, `manual`, `resolved`, `in_app`. |
+| `browserhive.notifications.actions` | counter | `{press}` | `channel_kind`, `outcome` | Presses of act buttons in Telegram, Discord and ntfy, by outcome (`unknown` for buttons BrowserHive did not create). |
+| `browserhive.process.rss_bytes` | gauge | `By` | | Memory of the BrowserHive process. |
+| `browserhive.process.heap_bytes` | gauge | `By` | | JavaScript heap in use. |
+| `browserhive.process.event_loop_lag` | gauge | `ms` | | Event-loop delay (99th percentile since the previous export). |
 
 `harness` on metrics is one of the known harness names, `unknown` or `other` (every name BrowserHive doesn't know is folded into `other`), so it adds a bounded number of series. The model, workspace and extra labels are never metric attributes.
 
-Metrics are exported every 30 seconds.
+Metrics are exported every 30 seconds. Gauges and the WebSocket and write-queue totals are read at export time; with telemetry off nothing is measured.
 
 ### Logs
 
