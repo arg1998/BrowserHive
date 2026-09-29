@@ -166,7 +166,7 @@ test.describe('notification channels', () => {
       // The card shows the next digest and sends one on demand.
       await page.goto('/notifications/channels');
       const card = page.locator('article').filter({ has: page.getByRole('heading', { name }) });
-      await expect(card.getByText('Daily digest', { exact: true })).toBeVisible();
+      await expect(card.getByText('Daily digest', { exact: true }).last()).toBeVisible();
       await expect(card.getByText(/\(Asia\/Tokyo\)/)).toBeVisible();
       await expect(card.getByText('Watching for anomalies')).toBeVisible();
       await card.getByRole('button', { name: 'Send now' }).click();
