@@ -27,6 +27,13 @@ interface PartProps {
   readonly onConnectedUser: (user: { readonly id: string; readonly name: string } | null) => void;
 }
 
+/** An API error as one readable line (the platform's own detail when there is one). */
+function describeError(error: unknown): string {
+  const e = toAppError(error);
+  const detail = e.details['detail'];
+  return typeof detail === 'string' && detail !== '' ? `${e.title}: ${detail}` : e.message;
+}
+
 function Countdown({ until }: { readonly until: number }) {
   const now = useServerNow(1000);
   const left = Math.max(0, Math.round((until - now) / 1000));
@@ -51,7 +58,7 @@ function TelegramConnect({ draft, onTarget, envState, readOnly, onConnectedUser 
   const Send = ICONS.platformTelegram;
   const Ok = ICONS.success;
   const Retry = ICONS.retry;
-  const Group = ICONS.sessions;
+  const Group = ICONS.user;
 
   // Applied once per connection; onTarget/onConnectedUser are stable wizard setters.
   // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the connection outcome only
@@ -129,7 +136,9 @@ function TelegramConnect({ draft, onTarget, envState, readOnly, onConnectedUser 
                 {state.error ?? 'Telegram refused the request.'}
               </p>
             ) : start.isError ? (
-              <p className="text-sm text-danger-text">{toAppError(start.error).message}</p>
+              <p className="text-sm text-danger-text [overflow-wrap:anywhere]">
+                {describeError(start.error)}
+              </p>
             ) : null}
             <Button type="button" onClick={begin} disabled={start.isPending}>
               {start.isPending ? (
@@ -328,7 +337,7 @@ function NtfyConnect({
       {!fromEnv && topic !== '' ? (
         <div className="flex flex-col gap-4 rounded-xl border p-4 sm:flex-row sm:items-center">
           <QrCode
-            value={links.app}
+            value={links.web}
             label="QR code that subscribes the ntfy app to this topic"
             className="size-36 shrink-0 self-center"
           />

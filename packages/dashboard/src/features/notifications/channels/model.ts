@@ -258,9 +258,17 @@ export function randomTopic(random: () => number = Math.random): string {
   return out;
 }
 
+/** First name suggestions per platform. */
+const NAME_SUGGESTION: Readonly<Record<string, string>> = {
+  telegram: 'phone',
+  discord: 'team',
+  ntfy: 'push',
+  webhook: 'hook',
+};
+
 /** A name not used by `taken` (`telegram`, `telegram-2`, …). */
 export function suggestName(kind: string, taken: readonly string[]): string {
-  const base = kind === 'telegram' ? 'phone' : kind;
+  const base = NAME_SUGGESTION[kind] ?? kind;
   if (!taken.includes(base)) return base;
   for (let i = 2; i < 100; i++) if (!taken.includes(`${base}-${i}`)) return `${base}-${i}`;
   return `${base}-${Date.now() % 1000}`;

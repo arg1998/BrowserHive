@@ -188,7 +188,7 @@ export function StepRules({ draft, onName, onRules, errors, readOnly }: StepRule
           <Chevron aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
         </button>
         {advanced ? (
-          <div className="flex flex-col gap-7 border-t px-4 pt-5 pb-5">
+          <div className="flex flex-col divide-y border-t px-4 [&>*]:py-6">
             <fieldset className="flex flex-col gap-2">
               <legend className="text-base font-medium">Categories</legend>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">

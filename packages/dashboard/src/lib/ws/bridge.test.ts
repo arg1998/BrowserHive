@@ -414,3 +414,22 @@ describe('bridge', () => {
     expect(canPrependWindowed({ since: 1, until: 10 }, ['ts'], 10)).toBe(false);
   });
 });
+
+describe('channels topic', () => {
+  it('judges delivery-log membership by the list filters', async () => {
+    const { deliveryMembership } = await import('./bridge.ts');
+    const row = {
+      channel_id: 'nc-a',
+      notification_id: 'n-1',
+      status: 'sent',
+      op: 'send',
+      notification_kind: 'test',
+    };
+    expect(deliveryMembership({ limit: 50 }, row)).toBe('member');
+    expect(deliveryMembership({ channel_id: 'nc-b' }, row)).toBe('not-member');
+    expect(deliveryMembership({ status: ['dead'] }, row)).toBe('not-member');
+    expect(deliveryMembership({ status: ['sent'], op: ['send'], kind: ['test'] }, row)).toBe(
+      'member',
+    );
+  });
+});

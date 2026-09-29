@@ -58,3 +58,22 @@ describe('tg-time', () => {
     expect(node?.type === 'el' && node.unix).toBe(1_700_000_000);
   });
 });
+
+describe('discord timestamps', () => {
+  it('parses <t:unix:style> as a time token', async () => {
+    const { parseInline } = await import('./discord-markdown.tsx');
+    expect(parseInline('since <t:1700000000:t> ok')).toEqual([
+      { t: 'text', v: 'since ' },
+      { t: 'time', unix: 1_700_000_000, style: 't' },
+      { t: 'text', v: ' ok' },
+    ]);
+    expect(parseInline('**b** `c` [x](https://a.b) \\*')).toEqual([
+      { t: 'b', c: [{ t: 'text', v: 'b' }] },
+      { t: 'text', v: ' ' },
+      { t: 'code', v: 'c' },
+      { t: 'text', v: ' ' },
+      { t: 'link', label: [{ t: 'text', v: 'x' }], href: 'https://a.b' },
+      { t: 'text', v: ' *' },
+    ]);
+  });
+});

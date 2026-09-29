@@ -117,12 +117,13 @@ export function ChannelCard({
   const Missing = ICONS.close;
   const Lock = ICONS.lock;
   const Warn = ICONS.warn;
+  const Info = ICONS.info;
   return (
     <article
       data-row-link-scope=""
       aria-labelledby={`channel-${channel.channel_id}`}
       className={cn(
-        'group/card relative flex min-w-0 flex-col rounded-xl border bg-card text-card-foreground shadow-xs transition-[border-color,box-shadow] duration-(--duration-fast) hover:border-border-strong hover:shadow-sm has-[[data-row-link]:focus-visible]:border-ring dark:shadow-none',
+        'group/card relative flex w-full min-w-0 flex-col rounded-xl border bg-card text-card-foreground shadow-xs transition-[border-color,box-shadow] duration-(--duration-fast) hover:border-border-strong hover:shadow-sm has-[[data-row-link]:focus-visible]:border-ring dark:shadow-none',
         channel.status === 'broken' && 'border-danger-border hover:border-danger-border',
       )}
     >
@@ -142,12 +143,12 @@ export function ChannelCard({
         <PlatformMark kind={channel.kind} />
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-            <h3
+            <h2
               id={`channel-${channel.channel_id}`}
               className="min-w-0 truncate text-md font-semibold group-hover/card:underline group-hover/card:underline-offset-4"
             >
               {channel.name}
-            </h3>
+            </h2>
             {startup ? (
               <TonePill
                 entry={{
@@ -215,9 +216,20 @@ export function ChannelCard({
             <span className="font-medium">Paused after {channel.failure_count} failures.</span>{' '}
             {channel.last_error}
           </p>
-        ) : !channel.ready && channel.problem !== null ? (
-          <p className="flex gap-2 rounded-md bg-warn-bg px-3 py-2 text-sm text-warn-text [overflow-wrap:anywhere]">
-            <Warn aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+        ) : channel.problem !== null ? (
+          <p
+            className={cn(
+              'flex gap-2 rounded-md px-3 py-2 text-sm [overflow-wrap:anywhere]',
+              channel.ready
+                ? 'bg-muted text-muted-foreground dark:bg-white/[0.05]'
+                : 'bg-warn-bg text-warn-text',
+            )}
+          >
+            {channel.ready ? (
+              <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+            ) : (
+              <Warn aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+            )}
             {channel.problem}
           </p>
         ) : null}
@@ -273,7 +285,7 @@ export function ChannelCard({
               <RelativeTime at={stats.last_delivery_at} now={now} />
             </>
           ) : (
-            <span>No deliveries yet</span>
+            <span>Nothing sent yet</span>
           )}
           {stats.pending > 0 ? <span>· {formatNumber(stats.pending)} waiting</span> : null}
         </p>

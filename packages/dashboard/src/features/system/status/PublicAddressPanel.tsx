@@ -34,12 +34,20 @@ export const OUTCOME_TEXT: { readonly [K in PublicUrlStatus['outcome']]: string 
   elsewhere:
     'Another server answered at this address. Links in notifications would open something else: check the proxy or tunnel target.',
   login:
-    'The address answers, but a login or an access gate is in front of it (Cloudflare Access, a proxy login), so it cannot be confirmed from here. That is often fine: send a test and tap Open dashboard on your phone.',
+    'The address answers, but a login or an access gate is in front of it (Cloudflare Access, a proxy login), so it cannot be confirmed from here. That is often fine.',
   unreachable:
-    'This machine cannot reach the address. It may still work from outside (routers often do not loop back): send a test and tap Open dashboard on your phone.',
+    'This machine cannot reach the address. It may still work from outside (routers often do not loop back).',
   unset:
     'Links in notifications point at this computer and only open here. Set publicUrl to the address where you reach this dashboard (a reverse proxy, a tunnel or a Tailscale name) so they open on your phone.',
 };
+
+/** The sentence under the address: the server's own detail, else the generic one for the outcome. */
+export function outcomeSentence(status: PublicUrlStatus): string {
+  if (status.outcome === 'unset' || status.detail === '') return OUTCOME_TEXT[status.outcome];
+  return status.status_code !== null && !status.detail.includes(String(status.status_code))
+    ? `${status.detail} (HTTP ${status.status_code})`
+    : status.detail;
+}
 
 /** The public-address panel. */
 export function PublicAddressPanel() {
@@ -100,14 +108,16 @@ export function PublicAddressPanel() {
               ) : (
                 <span className="text-base font-medium">Not set</span>
               )}
-              <StatusDot entry={PUBLIC_URL_OUTCOME[data.outcome]} className="text-sm" />
+              {data.outcome !== 'unset' ? (
+                <StatusDot entry={PUBLIC_URL_OUTCOME[data.outcome]} className="text-sm" />
+              ) : null}
             </div>
             <p className="max-w-prose text-sm text-muted-foreground">
-              {OUTCOME_TEXT[data.outcome]}
-              {data.detail !== '' && data.outcome !== 'unset' ? (
-                <span className="mt-1 block font-mono text-xs text-subtle-foreground [overflow-wrap:anywhere]">
-                  {data.detail}
-                  {data.status_code !== null ? ` (HTTP ${data.status_code})` : ''}
+              {outcomeSentence(data)}
+              {data.outcome === 'login' || data.outcome === 'unreachable' ? (
+                <span className="mt-1 block">
+                  To confirm from outside, send a test to a channel and tap Open dashboard on your
+                  phone.
                 </span>
               ) : null}
             </p>

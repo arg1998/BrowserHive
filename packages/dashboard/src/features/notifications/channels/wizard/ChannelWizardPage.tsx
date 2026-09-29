@@ -95,7 +95,7 @@ function StepRail({
       <ol className="hidden flex-col gap-1 lg:flex">
         {WIZARD_STEPS.map((s, i) => {
           const current = s === step;
-          const complete = done(s) && !current;
+          const complete = done(s) && i < index;
           const enabled = reachable(s);
           return (
             <li key={s}>
@@ -289,7 +289,11 @@ function Wizard({
     <div className="flex flex-col gap-6">
       <PageHeader
         title={title}
-        description={STEP_HINT[step]}
+        description={
+          channel === null
+            ? 'BrowserHive sends notifications through your own bot, webhook or topic.'
+            : `${platformOf(channel.kind).label} channel · ${channel.target_hint}`
+        }
         learnMore="Channels deliver notifications to the platforms you choose. Secrets stay in environment variables; everything else is set here and kept in the database."
         learnMoreDocs={draft.kind === null ? 'notificationChannels' : platformOf(draft.kind).docs}
         actions={headerActions}
@@ -316,7 +320,11 @@ function Wizard({
           {serverErrors !== null && step === 'preview' ? (
             <div className="px-5 pb-4">
               <Callout tone="danger" title={serverErrors.title}>
-                {serverErrors.message}
+                {serverErrors.code === 'CHANNEL_NAME_TAKEN'
+                  ? `Another channel is already called ${draft.name}. Go back to What to send and pick another name.`
+                  : serverErrors.message !== serverErrors.title
+                    ? serverErrors.message
+                    : (serverErrors.hint ?? '')}
               </Callout>
             </div>
           ) : null}

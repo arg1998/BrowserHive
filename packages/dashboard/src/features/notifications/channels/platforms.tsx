@@ -57,7 +57,7 @@ export const PLATFORMS: readonly PlatformInfo[] = [
     icon: 'platformWebhook',
     tagline: 'POSTs the notification as signed JSON to your URL.',
     setup: 'For your own tools',
-    facts: ['HMAC signature', 'Full message contract', 'Home Assistant, n8n…'],
+    facts: ['HMAC signature', 'Full message contract', 'Home Assistant, n8n'],
     docs: 'channelWebhook',
     tile: 'bg-platform-webhook-bg text-platform-webhook',
   },

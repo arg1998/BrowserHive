@@ -6,7 +6,8 @@ export type MdToken =
   | { readonly t: 'text'; readonly v: string }
   | { readonly t: 'code'; readonly v: string }
   | { readonly t: 'b' | 'i' | 'u' | 's'; readonly c: readonly MdToken[] }
-  | { readonly t: 'link'; readonly label: readonly MdToken[]; readonly href: string };
+  | { readonly t: 'link'; readonly label: readonly MdToken[]; readonly href: string }
+  | { readonly t: 'time'; readonly unix: number; readonly style: string };
 
 const PAIRS: readonly (readonly [string, 'b' | 'i' | 'u' | 's'])[] = [
   ['**', 'b'],
@@ -15,6 +16,25 @@ const PAIRS: readonly (readonly [string, 'b' | 'i' | 'u' | 's'])[] = [
   ['*', 'i'],
   ['_', 'i'],
 ];
+
+/** A Discord timestamp in the viewer's locale, per its style letter. */
+export function formatDiscordTime(unix: number, style: string): string {
+  const d = new Date(unix * 1000);
+  switch (style) {
+    case 't':
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    case 'T':
+      return d.toLocaleTimeString();
+    case 'd':
+      return d.toLocaleDateString();
+    case 'D':
+      return d.toLocaleDateString([], { dateStyle: 'long' });
+    case 'R':
+      return d.toLocaleString();
+    default:
+      return d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+  }
+}
 
 /** Parses one line of inline markdown. */
 export function parseInline(text: string): readonly MdToken[] {
@@ -38,6 +58,15 @@ export function parseInline(text: string): readonly MdToken[] {
         flush();
         out.push({ t: 'code', v: text.slice(i + 1, end) });
         i = end + 1;
+        continue;
+      }
+    }
+    if (ch === '<') {
+      const m = /^<t:(-?\d+)(?::([tTdDfFR]))?>/.exec(text.slice(i));
+      if (m !== null) {
+        flush();
+        out.push({ t: 'time', unix: Number(m[1]), style: m[2] ?? 'f' });
+        i += m[0].length;
         continue;
       }
     }
@@ -103,6 +132,13 @@ function renderToken(token: MdToken, k: string): ReactNode {
         <s key={k} className="opacity-80">
           {renderTokens(token.c, k)}
         </s>
+      );
+    case 'time':
+      // Discord shows `<t:unix:style>` in the reader's own time zone.
+      return (
+        <span key={k} className="rounded-sm bg-black/10 px-1 dark:bg-white/10">
+          {formatDiscordTime(token.unix, token.style)}
+        </span>
       );
     case 'link':
       return (

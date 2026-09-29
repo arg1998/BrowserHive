@@ -85,13 +85,18 @@ export function PlatformPreview({
           mode={preview.mode === 'bot' ? 'bot' : 'webhook'}
         />
       ) : preview.kind === 'ntfy' ? (
-        <NtfyMock request={request} at={at} masked={masked} />
+        <NtfyMock
+          request={request}
+          at={at}
+          masked={masked}
+          revised={preview.message.revision > 1}
+        />
       ) : (
         <WebhookMock request={request} />
       )}
       {!compact && (preview.notes.length > 0 || preview.local_links) ? (
         <ul className="flex flex-col gap-1 text-sm text-muted-foreground">
-          {preview.local_links ? (
+          {preview.local_links && !preview.notes.some((n) => n.includes('publicUrl')) ? (
             <li className="flex gap-2">
               <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
               <span>

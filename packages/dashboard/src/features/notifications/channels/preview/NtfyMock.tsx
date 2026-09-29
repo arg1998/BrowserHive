@@ -19,10 +19,12 @@ export interface NtfyMockProps {
   readonly at: number;
   readonly masked: boolean;
   readonly topic?: string | null;
+  /** A later revision: say that it replaces the first notification. */
+  readonly revised?: boolean;
 }
 
 /** The ntfy notification mock. */
-export function NtfyMock({ request, at, masked, topic }: NtfyMockProps) {
+export function NtfyMock({ request, at, masked, topic, revised = false }: NtfyMockProps) {
   const view = readNtfy(request);
   const { emoji, plain } = splitNtfyTags(view.tags);
   const time = new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -87,9 +89,10 @@ export function NtfyMock({ request, at, masked, topic }: NtfyMockProps) {
           </div>
         ) : null}
       </div>
-      {view.sequence !== null ? (
+      {view.sequence !== null && revised ? (
         <p className="mt-2 text-center text-xs text-muted-foreground">
-          Replaced in place by sequence id <span className="font-mono">{view.sequence}</span>
+          Replaces the first notification in place (sequence id{' '}
+          <span className="font-mono">{view.sequence}</span>)
         </p>
       ) : null}
     </div>

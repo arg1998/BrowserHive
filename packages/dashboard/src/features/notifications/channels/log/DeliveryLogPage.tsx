@@ -57,16 +57,16 @@ function Row({ row, onOpen }: { readonly row: DeliveryRow; readonly onOpen: () =
       <button
         type="button"
         onClick={onOpen}
-        className="grid w-full cursor-pointer grid-cols-[1fr_auto] gap-x-4 gap-y-1 px-4 py-3 text-left transition-colors focus-ring-inset hover:bg-accent/70 md:grid-cols-[7rem_minmax(8rem,12rem)_minmax(0,1fr)_minmax(8rem,14rem)_5rem_1rem] md:items-center dark:hover:bg-white/[0.035]"
+        className="grid w-full cursor-pointer grid-cols-[1fr_auto] gap-x-4 gap-y-1 px-4 py-3 text-left transition-colors focus-ring-inset hover:bg-accent/70 lg:grid-cols-[7rem_minmax(8rem,12rem)_minmax(0,1fr)_minmax(8rem,14rem)_5rem_1rem] lg:items-center dark:hover:bg-white/[0.035]"
       >
-        <span className="order-3 text-sm text-muted-foreground md:order-none">
+        <span className="order-4 col-span-2 text-xs text-muted-foreground lg:order-none lg:col-span-1 lg:text-sm">
           <RelativeTime at={row.updated_at} />
         </span>
-        <span className="order-1 flex min-w-0 items-center gap-2 md:order-none">
+        <span className="order-1 flex min-w-0 items-center gap-2 lg:order-none">
           {row.channel_kind !== null ? <PlatformMark kind={row.channel_kind} size="sm" /> : null}
           <span className="truncate text-sm font-medium">{row.channel_name ?? row.channel_id}</span>
         </span>
-        <span className="order-4 col-span-2 flex min-w-0 flex-col md:order-none md:col-span-1">
+        <span className="order-3 col-span-2 flex min-w-0 flex-col lg:order-none lg:col-span-1">
           <span className="truncate text-sm group-hover/row:underline">
             {row.notification_title ?? row.notification_id}
           </span>
@@ -77,21 +77,21 @@ function Row({ row, onOpen }: { readonly row: DeliveryRow; readonly onOpen: () =
               : ''}
           </span>
         </span>
-        <span className="order-2 flex min-w-0 flex-col items-end gap-0.5 md:order-none md:items-start">
+        <span className="order-2 flex min-w-0 flex-col items-end gap-0.5 lg:order-none lg:items-start">
           <TonePill entry={entry} />
           {reason !== null ? (
-            <span className="line-clamp-1 hidden text-xs text-muted-foreground md:block">
+            <span className="line-clamp-1 hidden text-xs text-muted-foreground lg:block">
               {reason}
             </span>
           ) : null}
         </span>
-        <span className="order-5 hidden text-right text-sm text-muted-foreground tabular-nums md:order-none md:block">
+        <span className="order-5 hidden text-right text-sm text-muted-foreground tabular-nums lg:order-none lg:block">
           {row.duration_ms === null ? '—' : formatMs(row.duration_ms)}
           {row.attempts > 1 ? <span className="block text-xs">{row.attempts} tries</span> : null}
         </span>
         <Chevron
           aria-hidden="true"
-          className="order-6 hidden size-4 text-subtle-foreground md:block"
+          className="order-6 hidden size-4 text-subtle-foreground lg:block"
         />
       </button>
     </li>
@@ -211,7 +211,7 @@ export function DeliveryLogPage() {
             <Panel padding="none" bodyClassName="overflow-hidden rounded-xl">
               <div
                 aria-hidden="true"
-                className="hidden grid-cols-[7rem_minmax(8rem,12rem)_minmax(0,1fr)_minmax(8rem,14rem)_5rem_1rem] gap-x-4 border-b bg-muted/40 px-4 py-2 text-xs font-medium text-muted-foreground md:grid dark:bg-white/[0.02]"
+                className="hidden grid-cols-[7rem_minmax(8rem,12rem)_minmax(0,1fr)_minmax(8rem,14rem)_5rem_1rem] gap-x-4 border-b bg-muted/40 px-4 py-2 text-xs font-medium text-muted-foreground lg:grid dark:bg-white/[0.02]"
               >
                 <span>When</span>
                 <span>Channel</span>
