@@ -1,6 +1,6 @@
 # Telemetry (OpenTelemetry)
 
-Telemetry is **off by default**, and nothing leaves your machine unless you turn it on. With `--otel`, BrowserHive exports traces, metrics and logs over OTLP/HTTP to any compatible backend: an OpenTelemetry Collector, Grafana Tempo/Loki/Mimir, Jaeger, Honeycomb, Datadog Agent and others.
+Telemetry is **off by default**: nothing is exported unless you turn it on. With `--otel`, BrowserHive exports traces, metrics and logs over OTLP/HTTP to any compatible backend: an OpenTelemetry Collector, Grafana Tempo/Loki/Mimir, Jaeger, Honeycomb, Datadog Agent and others.
 
 ```bash
 browserhive --admin --otel --otelEndpoint http://127.0.0.1:4318 --otelServiceName browserhive-dev

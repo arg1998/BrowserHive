@@ -85,6 +85,7 @@ Local-first means you own the records. With the defaults:
 | Navigations, blocked attempts, attention requests, vault access (without secrets) | Passwords, tokens, vault credentials, `Authorization` headers |
 | Screenshots taken by the agent; one frame per tool call with `--screenshotTrace` | Fields marked sensitive in the contracts, redacted before any sink |
 | A Playwright trace per session when `trace` is on (default with `--admin`) | Error messages are passed through the same redaction first |
+| Notifications, their deliveries to channels and act-button presses; channel settings with the **names** of their token variables | Channel tokens, which stay in environment variables; act-button tokens are stored only as hashes |
 
 Stricter deployments can reduce what tool results store:
 
@@ -148,6 +149,6 @@ During an open attention request, an operator's mouse and keyboard input goes st
 
 - Where the sandbox cannot run (see [above](#the-browser-sandbox)), a page that exploits a Chromium bug gets the privileges of the user running BrowserHive. Run it as a user with access only to what it needs, and keep BrowserHive (and an installed Chrome) updated: each BrowserHive version pins its Chromium build.
 - WebAuthn and passkeys cannot be replayed from saved state.
-- Telemetry is off by default. Nothing leaves the host unless you set `--otel`, and then only to the endpoint you configure.
+- Telemetry is off by default, and there is no notification channel until you add one. Nothing leaves the host unless you set `--otel` (then only to the endpoint you configure) or add a [notification channel](notifications.md#what-leaves-your-machine) (then only to the service you chose, at the channel's content level).
 
 Report vulnerabilities as described in `SECURITY.md` at the root of the repository.

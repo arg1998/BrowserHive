@@ -359,4 +359,4 @@ At every level, BrowserHive first removes registered secrets and credential-shap
 
 ## Retention
 
-Read or dismissed notifications are kept for 30 days, others for 90. Delivery history is kept for 30 days. The act-button audit is kept like the other audit records (`auditRetentionDays`, 90 days by default); used or expired button tokens are removed a day after they expire. Configured channels are never pruned; `browserhive purge` lists them with everything else in the database.
+Read or dismissed notifications are kept for 30 days, others for 90. Reports (digests and anomaly alerts) are kept for 90 days whether or not they were read or dismissed, so the Reports tab keeps its history. Delivery history is kept for 30 days. The act-button audit is kept for 90 days, like the other audit records; used or expired button tokens are removed a day after they expire. Configured channels are never pruned; `browserhive purge` lists them with everything else in the database.

@@ -240,7 +240,7 @@ Any other `X-BH-Meta-<Name>` header or `ai.browserhive/<name>` `_meta` key is ke
 
 ### What is stored
 
-Each connection's harness, model, workspace, client name and version, protocol version, User-Agent, IP address and labels are stored in the local database with the connection. A closed connection is deleted with the rest of the telemetry after `--retentionDays`, unless a stored session still refers to it. A session keeps its harness for as long as the session is kept. Nothing leaves the machine unless you turn [telemetry](telemetry.md) on; exported spans carry the harness and model, and metrics carry only the harness name.
+Each connection's harness, model, workspace, client name and version, protocol version, User-Agent, IP address and labels are stored in the local database with the connection. A closed connection is deleted with the rest of the telemetry after `--retentionDays`, unless a stored session still refers to it. A session keeps its harness for as long as the session is kept. Nothing leaves the machine unless you turn on [telemetry](telemetry.md) (exported spans carry the harness and model, metrics only the harness name) or a [notification channel](notifications.md#what-leaves-your-machine), whose notifications and digests name the harness at the `titles` and `full` content levels.
 
 A W3C `traceparent` in a tool call's `_meta` becomes the parent of the tool span when [telemetry](telemetry.md) is on.
 

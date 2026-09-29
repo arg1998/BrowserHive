@@ -22,7 +22,7 @@ In your password manager. BrowserHive stores only bindings (which entry may be f
 Not through tool results while the redaction window is open, and never from BrowserHive's logs, database or traces. An agent with `evaluate` could read a field that still contains the value later; see [Security](security.md#redaction-and-its-limits) for the mitigations.
 
 **Does it phone home?**
-No. Telemetry is opt-in and goes only to the OTLP endpoint you configure.
+No. Telemetry is opt-in and goes only to the OTLP endpoint you configure. [Notification channels](notifications.md) are opt-in too: each sends only to the Telegram bot, Discord channel, ntfy topic or webhook you set up, at the content level you pick. BrowserHive runs no servers of its own.
 
 **Does it solve CAPTCHAs?**
 No. An agent can ask a human with `request_attention`; see [Human takeover](attention.md).
