@@ -1,4 +1,4 @@
-/** @module composition/adapters/metrics — OTel metrics consumers (spec 10 §7): bus events → counters/histograms; observable instruments over the write queue, the database size, the realtime hub, the browser-memory sampler and this process. Only wired when telemetry is on. */
+/** @module composition/adapters/metrics — OTel metrics consumers (spec 10 §7): bus events → counters/histograms; observable instruments over the write queue, the database size, the realtime hub, the browser-memory sampler and this process. Only wired when metrics are exported. */
 
 import { metricHarness } from '@browserhive/contracts/harness';
 import type {

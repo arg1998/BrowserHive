@@ -1,4 +1,4 @@
-/** @module composition/adapters/browser-memory — samples the resident memory of each live session's browser process tree every 10 s for `browserhive.browser.rss_bytes` (spec 10 §7). Only started when telemetry is on. */
+/** @module composition/adapters/browser-memory — samples the resident memory of each live session's browser process tree every 10 s for `browserhive.browser.rss_bytes` (spec 10 §7). Only started when metrics are exported. */
 
 import type { ProcessTreeReader } from '@browserhive/core/runtime';
 import { BROWSER_RSS_SAMPLE_INTERVAL_MS } from '@browserhive/core/runtime';
