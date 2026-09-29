@@ -1,6 +1,7 @@
-/** @module test/integration/isolation — two sessions never share cookies, localStorage, sessionStorage, IndexedDB or service workers (the project's core guarantee). */
+/** @module test/integration/isolation — two sessions never share cookies, localStorage, sessionStorage, IndexedDB or service workers (the project's core guarantee), and each runs its own browser process tree (whose memory `browserhive.browser.rss_bytes` reports). */
 
 import { describe, expect, it } from 'bun:test';
+import { createProcessTreeReader } from '../../src/infra/host/process-tree.ts';
 import { useDriverFixtures } from './driver-fixture.ts';
 
 /** What `/storage` renders into `#storage` after `window.__setStorage`. */
@@ -152,5 +153,23 @@ describe('session isolation', () => {
     await b.page.goto(state.fixture.url('/'));
     expect(await b.page.locator('#title').textContent()).toBe('fixture');
     expect(crashes).toEqual([]);
+  });
+
+  it('each session runs its own browser process tree, whose memory can be read', async () => {
+    const a = await state.launch({ slug: 'treea' });
+    const b = await state.launch({ slug: 'treeb', persistenceMode: 'persistent' });
+    const pidA = await a.handle.browserPid?.();
+    const pidB = await b.handle.browserPid?.();
+    expect(pidA).toBeGreaterThan(0);
+    expect(pidB).toBeGreaterThan(0);
+    expect(pidA).not.toBe(pidB);
+    // Cached: the second read opens no new DevTools session.
+    expect(await a.handle.browserPid?.()).toBe(pidA);
+    const reader = createProcessTreeReader();
+    if (reader === null || pidA == null || pidB == null) return; // Windows: no reader (spec 10 §7).
+    const rss = await reader.rssOfTrees([pidA, pidB]);
+    // A whole Chromium tree (browser, zygotes, renderer, GPU, network) is well above 10 MB.
+    expect(rss.get(pidA)).toBeGreaterThan(10 * 1024 * 1024);
+    expect(rss.get(pidB)).toBeGreaterThan(10 * 1024 * 1024);
   });
 });
