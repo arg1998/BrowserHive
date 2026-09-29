@@ -1,5 +1,4 @@
-/**
- * @module features/notifications/channels/discord-shots — the screenshot slot of the "What's the
+/** @module features/notifications/channels/discord-shots — the screenshot slot of the "What's the
  * difference?" panel (D-38, plan §6).
  *
  * The panel always draws both Discord styles live, side by side, from the preview endpoint

@@ -270,8 +270,9 @@ const NAME_SUGGESTION: Readonly<Record<string, string>> = {
 export function suggestName(kind: string, taken: readonly string[]): string {
   const base = NAME_SUGGESTION[kind] ?? kind;
   if (!taken.includes(base)) return base;
-  for (let i = 2; i < 100; i++) if (!taken.includes(`${base}-${i}`)) return `${base}-${i}`;
-  return `${base}-${Date.now() % 1000}`;
+  let i = 2;
+  while (taken.includes(`${base}-${i}`)) i++;
+  return `${base}-${i}`;
 }
 
 /** The draft after choosing a platform: its required secrets named, defaults filled, a preset. */
