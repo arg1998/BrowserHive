@@ -1,0 +1,82 @@
+{
+  "kind": "webhook",
+  "variant": "test-local",
+  "mode": null,
+  "requests": [
+    {
+      "method": "POST",
+      "path": "https://hooks.example.net/bh",
+      "encoding": "json",
+      "body": {
+        "schema": 1,
+        "event": "notification",
+        "op": "send",
+        "delivered_at": 1790000000000,
+        "channel": null,
+        "links": {
+          "open-dashboard": "http://127.0.0.1:9876/notifications/channels"
+        },
+        "local_links": true,
+        "message": {
+          "schema": 1,
+          "id": "n-sample000001",
+          "revision": 1,
+          "thread": "test:sample",
+          "kind": "test",
+          "category": "system",
+          "severity": "info",
+          "state": "final",
+          "alert": true,
+          "at": {
+            "created": 1790000000000,
+            "updated": 1790000000000
+          },
+          "title": "BrowserHive test message",
+          "summary": "This channel works. Tap \"Open dashboard\" on your phone to check that links reach BrowserHive.",
+          "blocks": [
+            {
+              "type": "fields",
+              "items": [
+                {
+                  "label": "Sent",
+                  "value": [
+                    {
+                      "type": "time",
+                      "at": 1790000000000,
+                      "style": "absolute"
+                    }
+                  ]
+                },
+                {
+                  "label": "Kind",
+                  "value": [
+                    {
+                      "type": "code",
+                      "text": "test"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "kind": "open",
+              "id": "open-dashboard",
+              "label": "Open dashboard",
+              "style": "primary",
+              "path": "/notifications/channels"
+            }
+          ],
+          "entities": {},
+          "privacy": {
+            "level": "full",
+            "has_image": false
+          }
+        }
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}

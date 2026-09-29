@@ -1,0 +1,117 @@
+{
+  "kind": "webhook",
+  "variant": "vault-confirm",
+  "mode": null,
+  "requests": [
+    {
+      "method": "POST",
+      "path": "https://hooks.example.net/bh",
+      "encoding": "json",
+      "body": {
+        "schema": 1,
+        "event": "notification",
+        "op": "send",
+        "delivered_at": 1790000000000,
+        "channel": null,
+        "links": {
+          "approve": "https://bh.example.net/vault?tab=confirm"
+        },
+        "local_links": false,
+        "message": {
+          "schema": 1,
+          "id": "n-sample000001",
+          "revision": 1,
+          "thread": "vault:a-sample000001",
+          "kind": "vault.confirm",
+          "category": "needs-you",
+          "severity": "warn",
+          "state": "open",
+          "alert": true,
+          "at": {
+            "created": 1790000000000,
+            "updated": 1790000000000
+          },
+          "title": "Vault fill awaiting confirm",
+          "summary": "entry github — approve or deny the release",
+          "blocks": [
+            {
+              "type": "fields",
+              "items": [
+                {
+                  "label": "Entry",
+                  "value": [
+                    {
+                      "type": "code",
+                      "text": "github"
+                    }
+                  ]
+                },
+                {
+                  "label": "Session",
+                  "value": [
+                    {
+                      "type": "link",
+                      "text": "checkout",
+                      "path": "/sessions/checkout-a1b2c3d4"
+                    }
+                  ]
+                },
+                {
+                  "label": "Page",
+                  "value": [
+                    {
+                      "type": "code",
+                      "text": "https://github.com/login"
+                    }
+                  ]
+                },
+                {
+                  "label": "Tool",
+                  "value": [
+                    {
+                      "type": "code",
+                      "text": "vault_fill"
+                    }
+                  ]
+                },
+                {
+                  "label": "Waiting since",
+                  "value": [
+                    {
+                      "type": "time",
+                      "at": 1790000000000,
+                      "style": "absolute"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "kind": "open",
+              "id": "approve",
+              "label": "Review in BrowserHive",
+              "style": "primary",
+              "path": "/vault?tab=confirm"
+            }
+          ],
+          "entities": {
+            "session_id": "checkout-a1b2c3d4",
+            "session_slug": "checkout",
+            "owner": "local",
+            "tool": "vault_fill",
+            "domain": "github.com",
+            "request_id": "a-sample000001"
+          },
+          "privacy": {
+            "level": "full",
+            "has_image": false
+          }
+        }
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "kind": "discord",
+  "variant": "test-local",
+  "mode": "webhook",
+  "requests": [
+    {
+      "method": "POST",
+      "path": "{secret:webhook}?wait=true&with_components=true",
+      "encoding": "json",
+      "body": {
+        "content": null,
+        "allowed_mentions": {
+          "parse": []
+        },
+        "components": [],
+        "embeds": [
+          {
+            "title": "ℹ️ BrowserHive test message",
+            "description": "This channel works. Tap \"Open dashboard\" on your phone to check that links reach BrowserHive.\n\n**🖥 Open on this computer**\nOpen dashboard: `http://127.0.0.1:9876/notifications/channels`",
+            "color": 3900150,
+            "fields": [
+              {
+                "name": "Sent",
+                "value": "<t:1790000000:t>",
+                "inline": true
+              },
+              {
+                "name": "Kind",
+                "value": "`test`",
+                "inline": true
+              }
+            ],
+            "footer": {
+              "text": "BrowserHive"
+            },
+            "timestamp": "2026-09-21T14:13:20.000Z"
+          }
+        ]
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}
