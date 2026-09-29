@@ -3,13 +3,20 @@ import type {
   BlockedSource,
   ClosedReason,
   LogLevel,
+  NotificationChannelStatus,
+  NotificationDeliveryStatus,
   NotificationState,
   NotificationType,
   OperatorRequestStatus,
   SessionStatus,
   UrlCategory,
 } from '@browserhive/contracts/enums';
-import type { OriginCheck, SessionSummary, VaultAccessResult } from '@browserhive/contracts/http';
+import type {
+  OriginCheck,
+  PublicUrlOutcome,
+  SessionSummary,
+  VaultAccessResult,
+} from '@browserhive/contracts/http';
 import type { IconName } from './icons.ts';
 
 /** Closed union of tones (spec 04 §7). */
@@ -165,6 +172,38 @@ export const NOTIFICATION_STATE: { readonly [K in NotificationState]: StatusEntr
   final: { label: 'closed', tone: 'muted' },
 };
 
+/** Notification channel status (D-34): `paused` by the operator, `broken` by the circuit breaker. */
+export const CHANNEL_STATUS: { readonly [K in NotificationChannelStatus]: StatusEntry } = {
+  active: { label: 'active', tone: 'success', hint: 'Delivering notifications' },
+  paused: { label: 'paused', tone: 'muted', icon: 'pause', hint: 'Paused: nothing is sent' },
+  broken: {
+    label: 'failing',
+    tone: 'danger',
+    icon: 'danger',
+    hint: 'Five deliveries failed in a row; resume to retry',
+  },
+};
+
+/** Delivery job status (D-34). */
+export const DELIVERY_STATUS: { readonly [K in NotificationDeliveryStatus]: StatusEntry } = {
+  pending: { label: 'pending', tone: 'info', pulse: true },
+  sending: { label: 'sending', tone: 'info', pulse: true },
+  sent: { label: 'sent', tone: 'success', icon: 'check' },
+  retrying: { label: 'retrying', tone: 'warn', icon: 'retry' },
+  dead: { label: 'failed', tone: 'danger', icon: 'failure' },
+  suppressed: { label: 'not sent', tone: 'muted' },
+  superseded: { label: 'superseded', tone: 'neutral' },
+};
+
+/** Outcome of the `publicUrl` check (spec 08 §5.8). */
+export const PUBLIC_URL_OUTCOME: { readonly [K in PublicUrlOutcome]: StatusEntry } = {
+  ok: { label: 'Points to this BrowserHive', tone: 'success', icon: 'success' },
+  elsewhere: { label: 'Points to a different server', tone: 'danger', icon: 'danger' },
+  login: { label: 'Behind a login', tone: 'warn', icon: 'lock' },
+  unreachable: { label: 'Not reachable from here', tone: 'warn', icon: 'offline' },
+  unset: { label: 'Not set', tone: 'muted' },
+};
+
 /** Log level registry. */
 export const LOG_LEVEL: { readonly [K in LogLevel]: StatusEntry } = {
   error: { label: 'error', tone: 'danger' },
@@ -217,6 +256,9 @@ export const REGISTRIES = {
   notificationState: NOTIFICATION_STATE,
   logLevel: LOG_LEVEL,
   socket: SOCKET_STATE,
+  channel: CHANNEL_STATUS,
+  delivery: DELIVERY_STATUS,
+  publicUrl: PUBLIC_URL_OUTCOME,
 } as const;
 
 /** Registry domain name. */

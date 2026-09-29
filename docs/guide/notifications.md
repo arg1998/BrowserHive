@@ -49,3 +49,43 @@ Your own accounts, no servers: BrowserHive never runs a relay or a shared bot. Y
 ## Retention
 
 Read or dismissed notifications are kept for 30 days, others for 90. Delivery history is kept for 30 days. Configured channels are never pruned; `browserhive purge` lists them with everything else in the database.
+
+## Channels
+
+Placeholder: the channel setup guides are written with the channels release.
+
+### Telegram
+
+Placeholder: create a bot with @BotFather and connect a chat.
+
+### Discord
+
+Placeholder: create a webhook in a channel's Integrations settings.
+
+### ntfy
+
+Placeholder: pick a server and a topic, then subscribe on your phone.
+
+### Webhook
+
+Placeholder: receive the notification contract, signed with HMAC SHA-256.
+
+### Public address
+
+Placeholder: set `publicUrl` so links open on your phone.
+
+### Screenshots
+
+Placeholder: opt-in screenshots per category, with form-field masking.
+
+### Self-destruct
+
+Placeholder: per-category message TTL and delete when resolved.
+
+### Startup channels
+
+Placeholder: channels declared with `--notificationChannel`.
+
+### Delivery log
+
+Placeholder: every delivery, and why a notification was not sent.

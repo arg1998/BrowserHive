@@ -25,8 +25,12 @@ import { Route as AuthVaultRouteImport } from './routes/_auth/vault';
 import { Route as AuthWebsitesRouteImport } from './routes/_auth/websites';
 import { Route as PublicChangePasswordRouteImport } from './routes/_public/change-password';
 import { Route as PublicLoginRouteImport } from './routes/_public/login';
+import { Route as AuthNotificationsChannelsRouteImport } from './routes/_auth/notifications_.channels';
+import { Route as AuthNotificationsLogRouteImport } from './routes/_auth/notifications_.log';
 import { Route as AuthSessionsIdRouteImport } from './routes/_auth/sessions_.$id';
 import { Route as AuthVaultLogRouteImport } from './routes/_auth/vault_.log';
+import { Route as AuthNotificationsChannelsChannelIdRouteImport } from './routes/_auth/notifications_.channels_.$channelId';
+import { Route as AuthNotificationsChannelsNewRouteImport } from './routes/_auth/notifications_.channels_.new';
 import { Route as AuthSessionsIdLiveRouteImport } from './routes/_auth/sessions_.$id_.live';
 
 const IndexRoute = IndexRouteImport.update({
@@ -107,6 +111,17 @@ const PublicLoginRoute = PublicLoginRouteImport.update({
   path: '/login',
   getParentRoute: () => PublicRoute,
 } as any);
+const AuthNotificationsChannelsRoute =
+  AuthNotificationsChannelsRouteImport.update({
+    id: '/notifications_/channels',
+    path: '/notifications/channels',
+    getParentRoute: () => AuthRoute,
+  } as any);
+const AuthNotificationsLogRoute = AuthNotificationsLogRouteImport.update({
+  id: '/notifications_/log',
+  path: '/notifications/log',
+  getParentRoute: () => AuthRoute,
+} as any);
 const AuthSessionsIdRoute = AuthSessionsIdRouteImport.update({
   id: '/sessions_/$id',
   path: '/sessions/$id',
@@ -117,6 +132,18 @@ const AuthVaultLogRoute = AuthVaultLogRouteImport.update({
   path: '/vault/log',
   getParentRoute: () => AuthRoute,
 } as any);
+const AuthNotificationsChannelsChannelIdRoute =
+  AuthNotificationsChannelsChannelIdRouteImport.update({
+    id: '/notifications_/channels_/$channelId',
+    path: '/notifications/channels/$channelId',
+    getParentRoute: () => AuthRoute,
+  } as any);
+const AuthNotificationsChannelsNewRoute =
+  AuthNotificationsChannelsNewRouteImport.update({
+    id: '/notifications_/channels_/new',
+    path: '/notifications/channels/new',
+    getParentRoute: () => AuthRoute,
+  } as any);
 const AuthSessionsIdLiveRoute = AuthSessionsIdLiveRouteImport.update({
   id: '/sessions_/$id_/live',
   path: '/sessions/$id/live',
@@ -138,8 +165,12 @@ export interface FileRoutesByFullPath {
   '/websites': typeof AuthWebsitesRoute;
   '/change-password': typeof PublicChangePasswordRoute;
   '/login': typeof PublicLoginRoute;
+  '/notifications/channels': typeof AuthNotificationsChannelsRoute;
+  '/notifications/log': typeof AuthNotificationsLogRoute;
   '/sessions/$id': typeof AuthSessionsIdRoute;
   '/vault/log': typeof AuthVaultLogRoute;
+  '/notifications/channels/$channelId': typeof AuthNotificationsChannelsChannelIdRoute;
+  '/notifications/channels/new': typeof AuthNotificationsChannelsNewRoute;
   '/sessions/$id/live': typeof AuthSessionsIdLiveRoute;
 }
 export interface FileRoutesByTo {
@@ -157,8 +188,12 @@ export interface FileRoutesByTo {
   '/websites': typeof AuthWebsitesRoute;
   '/change-password': typeof PublicChangePasswordRoute;
   '/login': typeof PublicLoginRoute;
+  '/notifications/channels': typeof AuthNotificationsChannelsRoute;
+  '/notifications/log': typeof AuthNotificationsLogRoute;
   '/sessions/$id': typeof AuthSessionsIdRoute;
   '/vault/log': typeof AuthVaultLogRoute;
+  '/notifications/channels/$channelId': typeof AuthNotificationsChannelsChannelIdRoute;
+  '/notifications/channels/new': typeof AuthNotificationsChannelsNewRoute;
   '/sessions/$id/live': typeof AuthSessionsIdLiveRoute;
 }
 export interface FileRoutesById {
@@ -179,8 +214,12 @@ export interface FileRoutesById {
   '/_auth/websites': typeof AuthWebsitesRoute;
   '/_public/change-password': typeof PublicChangePasswordRoute;
   '/_public/login': typeof PublicLoginRoute;
+  '/_auth/notifications_/channels': typeof AuthNotificationsChannelsRoute;
+  '/_auth/notifications_/log': typeof AuthNotificationsLogRoute;
   '/_auth/sessions_/$id': typeof AuthSessionsIdRoute;
   '/_auth/vault_/log': typeof AuthVaultLogRoute;
+  '/_auth/notifications_/channels_/$channelId': typeof AuthNotificationsChannelsChannelIdRoute;
+  '/_auth/notifications_/channels_/new': typeof AuthNotificationsChannelsNewRoute;
   '/_auth/sessions_/$id_/live': typeof AuthSessionsIdLiveRoute;
 }
 export interface FileRouteTypes {
@@ -200,8 +239,12 @@ export interface FileRouteTypes {
     | '/websites'
     | '/change-password'
     | '/login'
+    | '/notifications/channels'
+    | '/notifications/log'
     | '/sessions/$id'
     | '/vault/log'
+    | '/notifications/channels/$channelId'
+    | '/notifications/channels/new'
     | '/sessions/$id/live';
   fileRoutesByTo: FileRoutesByTo;
   to:
@@ -219,8 +262,12 @@ export interface FileRouteTypes {
     | '/websites'
     | '/change-password'
     | '/login'
+    | '/notifications/channels'
+    | '/notifications/log'
     | '/sessions/$id'
     | '/vault/log'
+    | '/notifications/channels/$channelId'
+    | '/notifications/channels/new'
     | '/sessions/$id/live';
   id:
     | '__root__'
@@ -240,8 +287,12 @@ export interface FileRouteTypes {
     | '/_auth/websites'
     | '/_public/change-password'
     | '/_public/login'
+    | '/_auth/notifications_/channels'
+    | '/_auth/notifications_/log'
     | '/_auth/sessions_/$id'
     | '/_auth/vault_/log'
+    | '/_auth/notifications_/channels_/$channelId'
+    | '/_auth/notifications_/channels_/new'
     | '/_auth/sessions_/$id_/live';
   fileRoutesById: FileRoutesById;
 }
@@ -366,6 +417,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PublicLoginRouteImport;
       parentRoute: typeof PublicRoute;
     };
+    '/_auth/notifications_/channels': {
+      id: '/_auth/notifications_/channels';
+      path: '/notifications/channels';
+      fullPath: '/notifications/channels';
+      preLoaderRoute: typeof AuthNotificationsChannelsRouteImport;
+      parentRoute: typeof AuthRoute;
+    };
+    '/_auth/notifications_/log': {
+      id: '/_auth/notifications_/log';
+      path: '/notifications/log';
+      fullPath: '/notifications/log';
+      preLoaderRoute: typeof AuthNotificationsLogRouteImport;
+      parentRoute: typeof AuthRoute;
+    };
     '/_auth/sessions_/$id': {
       id: '/_auth/sessions_/$id';
       path: '/sessions/$id';
@@ -378,6 +443,20 @@ declare module '@tanstack/react-router' {
       path: '/vault/log';
       fullPath: '/vault/log';
       preLoaderRoute: typeof AuthVaultLogRouteImport;
+      parentRoute: typeof AuthRoute;
+    };
+    '/_auth/notifications_/channels_/$channelId': {
+      id: '/_auth/notifications_/channels_/$channelId';
+      path: '/notifications/channels/$channelId';
+      fullPath: '/notifications/channels/$channelId';
+      preLoaderRoute: typeof AuthNotificationsChannelsChannelIdRouteImport;
+      parentRoute: typeof AuthRoute;
+    };
+    '/_auth/notifications_/channels_/new': {
+      id: '/_auth/notifications_/channels_/new';
+      path: '/notifications/channels/new';
+      fullPath: '/notifications/channels/new';
+      preLoaderRoute: typeof AuthNotificationsChannelsNewRouteImport;
       parentRoute: typeof AuthRoute;
     };
     '/_auth/sessions_/$id_/live': {
@@ -401,8 +480,12 @@ interface AuthRouteChildren {
   AuthSystemRoute: typeof AuthSystemRoute;
   AuthVaultRoute: typeof AuthVaultRoute;
   AuthWebsitesRoute: typeof AuthWebsitesRoute;
+  AuthNotificationsChannelsRoute: typeof AuthNotificationsChannelsRoute;
+  AuthNotificationsLogRoute: typeof AuthNotificationsLogRoute;
   AuthSessionsIdRoute: typeof AuthSessionsIdRoute;
   AuthVaultLogRoute: typeof AuthVaultLogRoute;
+  AuthNotificationsChannelsChannelIdRoute: typeof AuthNotificationsChannelsChannelIdRoute;
+  AuthNotificationsChannelsNewRoute: typeof AuthNotificationsChannelsNewRoute;
   AuthSessionsIdLiveRoute: typeof AuthSessionsIdLiveRoute;
 }
 
@@ -417,8 +500,13 @@ const AuthRouteChildren: AuthRouteChildren = {
   AuthSystemRoute: AuthSystemRoute,
   AuthVaultRoute: AuthVaultRoute,
   AuthWebsitesRoute: AuthWebsitesRoute,
+  AuthNotificationsChannelsRoute: AuthNotificationsChannelsRoute,
+  AuthNotificationsLogRoute: AuthNotificationsLogRoute,
   AuthSessionsIdRoute: AuthSessionsIdRoute,
   AuthVaultLogRoute: AuthVaultLogRoute,
+  AuthNotificationsChannelsChannelIdRoute:
+    AuthNotificationsChannelsChannelIdRoute,
+  AuthNotificationsChannelsNewRoute: AuthNotificationsChannelsNewRoute,
   AuthSessionsIdLiveRoute: AuthSessionsIdLiveRoute,
 };
 

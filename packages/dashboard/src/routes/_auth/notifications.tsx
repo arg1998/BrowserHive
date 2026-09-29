@@ -8,5 +8,9 @@ export const Route = createFileRoute('/_auth/notifications')({
   component: NotificationsPage,
   validateSearch: notificationsSearch,
   search: { middlewares: [stripSearchParams(NOTIFICATIONS_DEFAULTS)] },
-  staticData: { title: 'Notifications', palette: { keywords: ['bell', 'alerts', 'preferences'] } },
+  staticData: {
+    title: 'Notifications',
+    nav: { label: 'Notifications', icon: 'notifications', group: 'primary', order: 70, key: 'n' },
+    palette: { keywords: ['bell', 'alerts', 'preferences', 'inbox'] },
+  },
 });

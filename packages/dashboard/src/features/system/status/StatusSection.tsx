@@ -47,6 +47,7 @@ import {
   runtimeRows,
   systemNotices,
 } from '../model.ts';
+import { PublicAddressPanel } from './PublicAddressPanel.tsx';
 
 const SEVERITY_TONE: { readonly [K in SystemEvent['severity']]: Tone } = {
   info: 'info',
@@ -550,6 +551,7 @@ export function StatusSection({
       ))}
       <Kpis system={system} />
       <HealthRuntimePanel system={system} health={health} query={healthQuery} />
+      <PublicAddressPanel />
       <BrowsersPanel system={system} />
       {mcpConnections !== undefined ? (
         <McpConnectionsPanel
