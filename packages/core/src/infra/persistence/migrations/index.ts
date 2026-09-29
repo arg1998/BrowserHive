@@ -4,6 +4,7 @@ import { initial } from './0001-initial.ts';
 import { notificationGroups } from './0002-notification-groups.ts';
 import { harnessIdentity } from './0003-harness-identity.ts';
 import { sessionBrowser } from './0004-session-browser.ts';
+import { notificationOutbox } from './0005-notification-outbox.ts';
 import type { Migration } from './migration.ts';
 
 export type { Migration } from './migration.ts';
@@ -14,6 +15,7 @@ export const MIGRATIONS: readonly Migration[] = [
   notificationGroups,
   harnessIdentity,
   sessionBrowser,
+  notificationOutbox,
 ];
 
 /** The schema version this binary writes. */
@@ -22,7 +24,7 @@ export const SCHEMA_VERSION: number = MIGRATIONS[MIGRATIONS.length - 1]?.version
 /** `application_id` stamped on every BrowserHive database ("BHIV"). */
 export const APPLICATION_ID = 0x42484956;
 
-/** Table names of schema v1, in FK-safe delete order (children first). */
+/** Table names of the current schema, in FK-safe delete order (children first). */
 export const TABLES: readonly string[] = [
   'screenshots',
   'tool_calls',
@@ -32,7 +34,10 @@ export const TABLES: readonly string[] = [
   'operator_requests',
   'resource_samples',
   'events',
+  'notification_deliveries',
+  'notification_channel_messages',
   'notifications',
+  'notification_channels',
   'sessions',
   'grants',
   'auth_sessions',

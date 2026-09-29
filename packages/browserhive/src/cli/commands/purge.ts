@@ -30,7 +30,7 @@ export const ALL_ONLY_TARGETS: readonly PurgeTarget[] = [
 
 const LABELS: Readonly<Record<PurgeTarget, string>> = {
   database:
-    'Database (browserhive.db + WAL): events, sessions, vault bindings and policies, tokens',
+    'Database (browserhive.db + WAL): events, sessions, vault bindings and policies, tokens, notification channels',
   sessions: 'Session directories (traces, screenshots, downloads, browser profiles)',
   'auth-states': 'Saved auth states (logged-in profiles + storage snapshots)',
   uploads: 'Upload sandbox',

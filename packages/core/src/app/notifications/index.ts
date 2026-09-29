@@ -1,6 +1,33 @@
-/** @module app/notifications — public surface of the notification subsystem (D-16). */
+/** @module app/notifications — public surface of the notification subsystem (D-16, D-32, D-34): producers, the message contract builders, content levels, `degrade`, routing, the channel registry, the delivery outbox and the inbox service. */
 
-export { createInAppChannel, IN_APP_CHANNEL } from './in-app-channel.ts';
+export {
+  type ChannelAdapterFactory,
+  type ChannelFactoryContext,
+  ChannelRegistry,
+  type ChannelRegistryDeps,
+  type RegisteredChannel,
+} from './channel-registry.ts';
+export { restrictContent } from './content-level.ts';
+export { degrade, OPEN_IN_BROWSERHIVE } from './degrade.ts';
+export { createInAppChannel, IN_APP_CAPABILITIES, IN_APP_CHANNEL } from './in-app-channel.ts';
+export { createLocalLinkBuilder } from './links.ts';
+export {
+  type BuildMessageInput,
+  bold,
+  buildMessage,
+  clip,
+  code,
+  decodeMessage,
+  encodeMessage,
+  formatDuration,
+  type LifecycleChange,
+  link,
+  type MessageContent,
+  reviseMessage,
+  scrubMessage,
+  text,
+  time,
+} from './message.ts';
 export {
   DEDUP_WINDOW,
   NOTIFICATION_DAYS,
@@ -9,6 +36,14 @@ export {
   type NotificationServiceDeps,
   toNotification,
 } from './notification-service.ts';
+export {
+  DEFAULT_OUTBOX_OPTIONS,
+  type DeliveryCounter,
+  NotificationOutbox,
+  type NotificationOutboxDeps,
+  type OutboxOptions,
+  type OutboxPass,
+} from './outbox.ts';
 export {
   crashed,
   draftFor,
@@ -20,5 +55,20 @@ export {
   PRODUCED_EVENTS,
   type ProducedEvent,
   type ProducedEventName,
+  requestSettled,
+  revisionFor,
+  type SettledRequestFacts,
+  type ThreadRevision,
   toolErrorsTitle,
 } from './producers.ts';
+export {
+  contentLevelOf,
+  deleteWhenResolved,
+  expiryFor,
+  inQuietHours,
+  localMinutes,
+  planDeliveries,
+  type RoutableChannel,
+  type RouteDecision,
+  route,
+} from './routing.ts';

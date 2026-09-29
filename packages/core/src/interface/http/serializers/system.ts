@@ -56,6 +56,12 @@ export function notificationToWire(record: NotificationRecord): z.input<typeof N
     count: record.count,
     read_at: record.readAt,
     dismissed_at: record.dismissedAt,
+    kind: record.kind,
+    category: record.category,
+    severity: record.severity,
+    state: record.state,
+    revision: record.revision,
+    thread: record.thread,
   };
 }
 

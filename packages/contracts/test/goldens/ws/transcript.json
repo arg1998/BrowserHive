@@ -246,7 +246,13 @@
             "updated_at": 1735689597000,
             "count": 1,
             "read_at": null,
-            "dismissed_at": null
+            "dismissed_at": null,
+            "kind": "attention.requested",
+            "category": "needs-you",
+            "severity": "warn",
+            "state": "open",
+            "revision": 1,
+            "thread": "attention:a-k3j4h5g6f7d8"
           }
         }
       }

@@ -144,18 +144,72 @@ export interface Meta {
   value: string;
 }
 
+export interface NotificationChannelMessages {
+  channel_id: string;
+  deleted_at: number | null;
+  expires_at: number | null;
+  last_revision: number;
+  message_ref_json: string;
+  notification_id: string;
+  sent_at: number;
+  thread: string;
+  updated_at: number;
+}
+
+export interface NotificationChannels {
+  channel_id: string;
+  created_at: number;
+  failure_count: Generated<number>;
+  kind: string;
+  last_error: string | null;
+  last_failure_at: number | null;
+  last_ok_at: number | null;
+  mode: string | null;
+  name: string;
+  rules_json: Generated<string>;
+  secret_refs_json: Generated<string>;
+  source: Generated<string>;
+  status: Generated<string>;
+  target_json: Generated<string>;
+  updated_at: number;
+}
+
+export interface NotificationDeliveries {
+  attempts: Generated<number>;
+  channel_id: string;
+  created_at: number;
+  duration_ms: number | null;
+  last_error: string | null;
+  message_ref_json: string | null;
+  next_attempt_at: number | null;
+  notification_id: string;
+  op: string;
+  reason: string | null;
+  revision: number;
+  seq: Generated<number | null>;
+  status: string;
+  updated_at: number;
+}
+
 export interface Notifications {
   body: string | null;
+  category: string | null;
   count: Generated<number>;
   created_at: number;
   dismissed_at: number | null;
   group_key: string | null;
+  kind: string | null;
+  message_json: string | null;
   notification_id: string;
   principal_id: string | null;
   read_at: number | null;
+  revision: Generated<number>;
   session_id: string | null;
+  severity: string | null;
   source_event_id: string | null;
+  state: string | null;
   target: string | null;
+  thread: string | null;
   title: string;
   type: string;
   updated_at: Generated<number>;
@@ -381,6 +435,9 @@ export interface DB {
   logs: Logs;
   mcp_connections: McpConnections;
   meta: Meta;
+  notification_channel_messages: NotificationChannelMessages;
+  notification_channels: NotificationChannels;
+  notification_deliveries: NotificationDeliveries;
   notifications: Notifications;
   operator_actions: OperatorActions;
   operator_requests: OperatorRequests;

@@ -281,7 +281,7 @@ One broker (D-15) backs two resource views; paths stay recognizable.
 
 | Method | Path | Auth | Request | Response |
 |---|---|---|---|---|
-| GET | `/notifications` | S | `read` (`all|unread|read`), `type[]`, `since`, `until`, `sort` (`updated_at` default \| `created_at`), cursor | `Page<Notification>` + `unread_count`. `Notification` = `notification_id, principal_id, type, title, body, session_id, session_slug, target, source_event_id, created_at, updated_at, count, read_at, dismissed_at`; `session_slug` is `null` without a session; `count ≥ 1` is the number of folded occurrences; `updated_at` is the latest occurrence (= `created_at` when `count` is 1). `since`/`until` filter on the sort column and cursors are bound to it, so a growing group moves to the top. `unread_count` counts rows (a group of 12 errors counts 1) |
+| GET | `/notifications` | S | `read` (`all|unread|read`), `type[]`, `since`, `until`, `sort` (`updated_at` default \| `created_at`), cursor | `Page<Notification>` + `unread_count`. `Notification` = `notification_id, principal_id, type, title, body, session_id, session_slug, target, source_event_id, created_at, updated_at, count, read_at, dismissed_at, kind, category, severity, state, revision, thread` (the last six classify the row by the notification contract, §9; rows from before schema v5 read values derived from `type`); `session_slug` is `null` without a session; `count ≥ 1` is the number of folded occurrences; `updated_at` is the latest occurrence (= `created_at` when `count` is 1). `since`/`until` filter on the sort column and cursors are bound to it, so a growing group moves to the top. `unread_count` counts rows (a group of 12 errors counts 1) |
 | POST | `/notifications/{notification_id}/read` | S | — | `{ok:true}` |
 | POST | `/notifications/read-all` | S | — | `{ok:true, updated:n}` |
 | DELETE | `/notifications/{notification_id}` | S | — | `{ok:true}` (dismiss) |
@@ -383,7 +383,7 @@ Ordering: `screencast.start`, `screencast.stop` and `screencast.set_size` from o
 | `pages` | `page.visited` `{row}` fleet-wide (scope `sessions:read`), so overview and websites views update live; also published on `session:<id>` |
 | `blocklist` | `blocklist.hit` `{row}`, `blocklist.reloaded` `{patterns, skipped}` |
 | `system` | `system.degraded` `{event: SystemEvent}`, `system.recovered`, `tick`, `capacity` `{live, max}`, `retention.completed` |
-| `notifications` | `notification.created` `{notification}` (first occurrence), `notification.updated` `{notification}` (the full row: a group grew — `count`, `title`, `body`, `updated_at`, `source_event_id` changed — or it was read/dismissed; clients upsert by `notification_id` and re-position by `updated_at`) |
+| `notifications` | `notification.created` `{notification}` (first occurrence), `notification.updated` `{notification}` (the full row: a group grew — `count`, `title`, `body`, `updated_at`, `source_event_id`, `revision` changed — a lifecycle revision changed `state` and `revision` (`updated_at` unchanged), or it was read/dismissed; clients upsert by `notification_id` and re-position by `updated_at`) |
 | `logs` | `log.record` `{record}` (droppable, live only) |
 | `screencast:<id>` | `meta`, `started`, `stopped`, `failed {code}` |
 
@@ -402,7 +402,7 @@ Every event is produced by the app-level event bus (01 §5); the hub only maps b
 
 ---
 
-## 7. Data model (schema v4)
+## 7. Data model (schema v5)
 
 All tables in `browserhive.db` (D-24). Conventions: `TEXT` ids, epoch-ms `INTEGER` columns suffixed `_at`/`_ts`, durations `_ms`, sizes `_bytes`, booleans `INTEGER CHECK IN (0,1)`, enums `TEXT CHECK (col IN (...))` generated from `contracts/enums`, every `session_id` FK `ON DELETE CASCADE`. `WITHOUT ROWID` on tables with a TEXT primary key that are never scanned in insertion order.
 
@@ -513,6 +513,16 @@ ALTER TABLE notifications ADD COLUMN count INTEGER NOT NULL DEFAULT 1 CHECK (cou
 ALTER TABLE notifications ADD COLUMN group_key TEXT;                          -- e.g. tool-errors:<session_id|none>
 CREATE INDEX idx_notifications_updated ON notifications(principal_id, updated_at) WHERE dismissed_at IS NULL;
 CREATE INDEX idx_notifications_group ON notifications(group_key, updated_at) WHERE group_key IS NOT NULL AND read_at IS NULL AND dismissed_at IS NULL;
+-- v5 (0005-notification-outbox): the notification contract (§9, D-32). Classification columns are nullable and have no CHECK on the open sets
+-- (kind, category), so an older reader in the compatibility window can still insert rows; readers derive NULLs from `type` (§9).
+ALTER TABLE notifications ADD COLUMN kind TEXT;                      -- NotificationKind (attention.requested, tool.errors, …); backfilled from type
+ALTER TABLE notifications ADD COLUMN category TEXT;                  -- needs-you|problems|wrap-ups|reports|system; backfilled from kind
+ALTER TABLE notifications ADD COLUMN severity TEXT CHECK (severity IN ('info','warn','error','critical'));
+ALTER TABLE notifications ADD COLUMN state TEXT CHECK (state IN ('open','acted','resolved','expired','final'));   -- backfilled from the request / degradation it points at
+ALTER TABLE notifications ADD COLUMN revision INTEGER NOT NULL DEFAULT 1 CHECK (revision >= 1);
+ALTER TABLE notifications ADD COLUMN thread TEXT;                    -- attention:<request_id>, vault:<request_id>, tool-errors:<session_id|none>, session:<session_id>, system:<event_id>
+ALTER TABLE notifications ADD COLUMN message_json TEXT;              -- the current NotificationMessage; NULL for rows from before v5 (never fabricated)
+CREATE INDEX idx_notifications_thread ON notifications(thread, created_at) WHERE thread IS NOT NULL;
 CREATE TABLE preferences (principal_id TEXT NOT NULL REFERENCES principals(principal_id) ON DELETE CASCADE, key TEXT NOT NULL, value_json TEXT NOT NULL, updated_at INTEGER NOT NULL, PRIMARY KEY (principal_id, key)) WITHOUT ROWID;
 
 -- operations
@@ -520,14 +530,61 @@ CREATE TABLE system_events (seq INTEGER PRIMARY KEY, event_id TEXT NOT NULL UNIQ
 CREATE INDEX idx_system_events_open ON system_events(code) WHERE resolved_at IS NULL;
 CREATE TABLE artifact_outbox (outbox_id INTEGER PRIMARY KEY, kind TEXT NOT NULL CHECK (kind IN ('trace','screenshot','session_dir','backup')), path TEXT NOT NULL, session_id TEXT, enqueued_at INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, last_error TEXT);
 CREATE TABLE idempotency_keys (key TEXT PRIMARY KEY, principal_id TEXT NOT NULL, route TEXT NOT NULL, response_json TEXT NOT NULL, created_at INTEGER NOT NULL) WITHOUT ROWID;
+
+-- v5: notification channels and the delivery outbox (§9, D-33, D-34, D-35, D-39)
+CREATE TABLE notification_channels (
+  channel_id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE,
+  kind TEXT NOT NULL,                                   -- telegram|discord|ntfy|webhook|… (open set: NotificationChannelKind, no CHECK so a platform needs no rebuild)
+  mode TEXT,                                            -- discord: webhook|bot (D-38); NULL elsewhere
+  source TEXT NOT NULL DEFAULT 'db' CHECK (source IN ('db','startup')),     -- startup = projected from --notificationChannel at each start (D-39), read-only
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','paused','broken')),
+  target_json TEXT NOT NULL DEFAULT '{}',               -- non-secret coordinates (chat id, topic, server)
+  secret_refs_json TEXT NOT NULL DEFAULT '{}',          -- environment variable NAMES only, never values (D-33)
+  rules_json TEXT NOT NULL DEFAULT '{}',                -- NotificationChannelRules (categories, severity, sessions, quiet hours, content, TTL, …)
+  failure_count INTEGER NOT NULL DEFAULT 0 CHECK (failure_count >= 0),   -- consecutive failures (breaker)
+  last_error TEXT, last_ok_at INTEGER, last_failure_at INTEGER,
+  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+) WITHOUT ROWID;
+CREATE TABLE notification_deliveries (                  -- the outbox and the delivery log in one table
+  seq INTEGER PRIMARY KEY,
+  channel_id TEXT NOT NULL REFERENCES notification_channels(channel_id) ON DELETE CASCADE,
+  notification_id TEXT NOT NULL REFERENCES notifications(notification_id) ON DELETE CASCADE,
+  revision INTEGER NOT NULL CHECK (revision >= 1),     -- the revision that caused the job
+  op TEXT NOT NULL CHECK (op IN ('send','edit','delete')),
+  status TEXT NOT NULL CHECK (status IN ('pending','sending','sent','retrying','dead','suppressed','superseded')),
+  reason TEXT,                                          -- suppressed/superseded/dead reason (filtered, quiet_hours, collapsed, too_old, …)
+  attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+  next_attempt_at INTEGER, last_error TEXT, duration_ms INTEGER,
+  message_ref_json TEXT,                                -- the platform message the job produced or addressed
+  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX idx_notification_deliveries_idem ON notification_deliveries(channel_id, notification_id, revision, op);
+CREATE INDEX idx_notification_deliveries_due ON notification_deliveries(next_attempt_at, seq) WHERE status IN ('pending','retrying');
+CREATE INDEX idx_notification_deliveries_sending ON notification_deliveries(updated_at) WHERE status = 'sending';
+CREATE INDEX idx_notification_deliveries_channel ON notification_deliveries(channel_id, seq);
+CREATE INDEX idx_notification_deliveries_notification ON notification_deliveries(notification_id, seq);
+CREATE INDEX idx_notification_deliveries_updated ON notification_deliveries(updated_at);
+CREATE TABLE notification_channel_messages (           -- the platform message each notification became on each channel: edits and TTL
+  channel_id TEXT NOT NULL REFERENCES notification_channels(channel_id) ON DELETE CASCADE,
+  notification_id TEXT NOT NULL REFERENCES notifications(notification_id) ON DELETE CASCADE,
+  thread TEXT NOT NULL,                                 -- the notification's thread (reply-to on platforms with replies)
+  message_ref_json TEXT NOT NULL,                       -- opaque platform refs (message id, chat id, sequence id)
+  last_revision INTEGER NOT NULL CHECK (last_revision >= 1),
+  sent_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+  expires_at INTEGER,                                   -- TTL deadline (D-35); NULL = never
+  deleted_at INTEGER,
+  PRIMARY KEY (channel_id, notification_id)
+) WITHOUT ROWID;
+CREATE INDEX idx_notification_channel_messages_expiry ON notification_channel_messages(expires_at) WHERE expires_at IS NOT NULL AND deleted_at IS NULL;
+CREATE INDEX idx_notification_channel_messages_thread ON notification_channel_messages(channel_id, thread, sent_at);
 -- created in v1 ahead of use: logs (written only by the optional `--logPersist` durable sink), resource_samples (no writer yet; pruned by retention)
--- reserved names, NOT created: proxies, profiles, security_rules, extensions, notification_channels — the migration of the feature that needs one creates it (and may pick another name)
+-- reserved names, NOT created: proxies, profiles, security_rules, extensions — the migration of the feature that needs one creates it (and may pick another name)
 CREATE TABLE logs (seq INTEGER PRIMARY KEY, ts INTEGER NOT NULL, level TEXT NOT NULL, module TEXT NOT NULL, msg TEXT NOT NULL, trace_id TEXT, span_id TEXT, request_id TEXT, session_id TEXT, principal TEXT, fields_json TEXT);
 CREATE INDEX idx_logs_ts ON logs(ts); CREATE INDEX idx_logs_trace ON logs(trace_id) WHERE trace_id IS NOT NULL; CREATE INDEX idx_logs_session ON logs(session_id, ts) WHERE session_id IS NOT NULL;
 CREATE TABLE resource_samples (ts INTEGER NOT NULL, session_id TEXT REFERENCES sessions(session_id) ON DELETE CASCADE, cpu_pct REAL, rss_bytes INTEGER, host_free_bytes INTEGER, PRIMARY KEY (ts, session_id)) WITHOUT ROWID;
 ```
 
-`meta.min_reader_version = 1`. Migration v1 (`0001-initial`) creates everything above except the v2, v3 and v4 lines; migration v2 (`0002-notification-groups`, `compatible: true`, so the min reader stays 1) adds the notification grouping columns and indexes; migration v3 (`0003-harness-identity`, `compatible: true`) adds the identity columns and indexes, backfills `workspace` from `agent_name` and the two source columns where a value was set, and leaves `sessions.harness` NULL for existing sessions; migration v4 (`0004-session-browser`, `compatible: true`) adds `sessions.sandboxed` and `sessions.browser_version`, both NULL for existing sessions (no guess is backfilled: under `sandbox=auto` the answer depends on the browser and the host). The runner writes a backup before migrating. A dedicated CI test asserts fresh == migrated (D-04); fixtures `v1.db`, `v2.db`, `v3.db` and `v4.db` upgrade to head, and the golden is `schema-v4.json`.
+`meta.min_reader_version = 1`. Migration v1 (`0001-initial`) creates everything above except the v2 to v5 lines; migration v2 (`0002-notification-groups`, `compatible: true`, so the min reader stays 1) adds the notification grouping columns and indexes; migration v3 (`0003-harness-identity`, `compatible: true`) adds the identity columns and indexes, backfills `workspace` from `agent_name` and the two source columns where a value was set, and leaves `sessions.harness` NULL for existing sessions; migration v4 (`0004-session-browser`, `compatible: true`) adds `sessions.sandboxed` and `sessions.browser_version`, both NULL for existing sessions (no guess is backfilled: under `sandbox=auto` the answer depends on the browser and the host); migration v5 (`0005-notification-outbox`, `compatible: true`) adds the notification contract columns and the three outbox tables. v5 backfills every existing notification from facts only: `kind` from `type` (`attention` → `attention.requested`, `vault` → `vault.confirm`, `lifecycle` → `session.reaped`, `system` → `system.degraded`, `error` titled "Session crashed" → `session.crashed`, any other `error` → `tool.errors`), `category` and `severity` from `kind` (§9), `state` from the operator request or degradation the row points at (`source_event_id`; `open` while pending/unresolved, `resolved`, `expired` on timeout, `final` when cancelled or gone), `open` for tool-error groups and `final` for the rest, `thread` from the ids the row carries, `revision` 1; `message_json` stays NULL. The runner writes a backup before migrating. A dedicated CI test asserts fresh == migrated (D-04); fixtures `v1.db` to `v5.db` upgrade to head, and the golden is `schema-v5.json`.
 
 ### 7.1 Retention classes
 
@@ -538,7 +595,9 @@ CREATE TABLE resource_samples (ts INTEGER NOT NULL, session_id TEXT REFERENCES s
 | sessions | `sessions` rows | deleted only when all children are gone and `closed_at < now - retentionDays`; **archived sessions exempt** |
 | artifacts | `trace.zip`, `sessions/<id>/`, downloads | follow their session; deletion via `artifact_outbox` (row delete and outbox insert in one transaction; sweeper unlinks with retries; orphan scan weekly) |
 | connections | `mcp_connections` (with its IP, `User-Agent` and meta bag) | closed rows with `closed_at < now - retentionDays` that no remaining `sessions` row references (a session keeps its client metadata as long as it lives, archived ones included); open rows never. A pruned row's tool calls are older than it, so they are pruned first; a session's own harness survives in `sessions.harness` |
-| notifications | `notifications` | 30 d after `dismissed_at`/`read_at`, 90 d otherwise |
+| notifications | `notifications` | 30 d after `dismissed_at`/`read_at`, 90 d otherwise (a pruned row takes its deliveries and channel messages with it) |
+| notification deliveries | `notification_deliveries` (terminal rows: `sent`, `dead`, `suppressed`, `superseded`), `notification_channel_messages` (deleted, or without a TTL) | telemetry-like, own window: 30 d after `updated_at`; never byte-pruned; `pending`, `sending` and `retrying` jobs and messages with a pending TTL are never pruned |
+| configuration | `notification_channels`, `vault_bindings`, `vault_group_policies`, `preferences` | never pruned; `purge` lists them with the other tables (deleting the database loses configured channels and bindings) |
 | backups | `backups/*.db` | keep last 5 |
 
 `retentionDays` must be ≥ 1 (`0` is rejected at config time, see 08 — "keep forever" is expressed by the per-class exemptions below and a large value). The sweep runs every 6 h (`retentionIntervalMs`), catches per-item failures, records a `system.degraded` on repeated failure, never throws, and never runs `VACUUM`: the DB is opened with `auto_vacuum=INCREMENTAL` and the sweep issues `PRAGMA incremental_vacuum(N)` in bounded chunks. `/system.retention` exposes the last run.
@@ -557,7 +616,10 @@ interface EventLogRepository { append(event); replay(afterSeq, limit); }
 interface PrincipalRepository / CredentialRepository / AuthSessionRepository / GrantRepository / AuthEventRepository
 interface VaultBindingRepository { list(query); get(handle); upsert(binding, ifVersion?); remove(handle); exportAll(); importAll(doc, mode); }
 interface VaultGroupPolicyRepository { list(); get(groupKey); upsert(policy, ifVersion?); }
-interface NotificationRepository { …; list(query /* sort: updated_at|created_at */); findOpenGroup(principalId, groupKey); updateGroup(id, patch /* applies only while unread and undismissed */); }
+interface NotificationRepository { …; list(query /* sort: updated_at|created_at */); findOpenGroup(principalId, groupKey); updateGroup(id, patch /* applies only while unread and undismissed; carries revision + message */); findLatestByThread(principalId, thread); revise(id, patch /* state, severity, revision, message; never title/body/updated_at */); }
+interface NotificationChannelRepository { list(); get(id); getByName(name); upsert(row); remove(id); setStatus(id, status, at); recordSuccess(id, at); recordFailure(id, at, error): {failureCount}; }
+interface NotificationDeliveryRepository { enqueue(rows) /* ignores duplicates of (channel, notification, revision, op) */; due(now, limit); claim(seq, at): boolean /* pending|retrying → sending */; finish(seq, patch); supersedeOlder(channelId, notificationId, revision, at); recoverSending(at): number; pendingByChannel(channelId, severity); list(query); get(seq); }
+interface NotificationChannelMessageRepository { get(channelId, notificationId); upsert(row); firstInThread(channelId, thread); dueForDelete(now, limit) /* expired, not deleted, no delete job yet */; markDeleted(channelId, notificationId, at); }
 interface PreferenceRepository / SystemEventRepository / IdempotencyRepository / ArtifactOutboxRepository
 interface McpConnectionRepository { insert(row); update(id, patch); get(id); listOpen(); listRecent(limit) /* live first, with session counts */; closeAll(at); }
 interface UnitOfWork { transaction<T>(fn: (repos: Repositories) => Promise<T>): Promise<T>; }
@@ -581,25 +643,60 @@ Writes are enqueued (FIFO, one transaction per drain, statements prepared once);
 
 ---
 
-## 9. Notifications (D-16)
+## 9. Notifications (D-16, D-32, D-34)
 
-Producer (`app/notifications`) subscribes to the bus and writes every row to **one shared operator inbox** (`principal_id` NULL): v1 has a single operator, the list, unread count and read/dismiss routes are not filtered by principal, and per-operator inboxes wait for multi-user (D-25). `NotificationService`'s `recipients` hook (default `[null]`) is the seam they plug into; composition does not set it. Rows:
+Producer (`app/notifications`) subscribes to the bus and writes every row to **one shared operator inbox** (`principal_id` NULL): v1 has a single operator, the list, unread count and read/dismiss routes are not filtered by principal, and per-operator inboxes wait for multi-user (D-25). `NotificationService`'s `recipients` hook (default `[null]`) is the seam they plug into; composition does not set it. External channels are instance-wide: deliveries are enqueued once per produced notification, for the first recipient's row.
 
-| Bus event | Notification |
-|---|---|
-| `attention.created` | type `attention`, title "Attention requested", body "{reason} · {mode} — agent blocked, lease frozen", target `/sessions/{id}?tab=live` (the dashboard redirects it to `?live=1`) |
-| `session.closed` with reason `crash` | type `error`, "Session crashed", target `/sessions/{id}` |
-| `tool.called` with `ok=false` | type `error`, **grouped per session** (below): title "{slug} · 1 tool error" / "{slug} · {n} tool errors", body "{tool} · {error_code} ({duration_ms} ms)" (or "{tool} · failed (…)"), `source_event_id` = latest failing call, target `/sessions/{id}?kinds=tool&errors_only=1` |
-| `vault.confirm.created` | type `vault`, "Vault fill awaiting confirm", target `/vault?tab=confirm` |
-| `session.closed` with `lease_expired` | type `lifecycle`, "Session reaped (lease expired)" |
-| `system.degraded` (severity error) | type `system`, message |
+### 9.1 Producer rules
 
-**Tool-error grouping** (`app/notifications/producers.ts`): group key `tool-errors:<session_id>`. A new failure grows the existing row of its group when that row is unread, not dismissed, its `updated_at` is < 5 min ago (`NOTIFICATION_GROUP_IDLE_MS`) and its `created_at` is < 60 min ago (`NOTIFICATION_GROUP_MAX_AGE_MS`): `count` +1, `title`, `body`, `updated_at` and `source_event_id` follow the latest occurrence, and `notification.updated` carries the full row. Otherwise a new row (`count` 1) is created with `notification.created`. Marking read or dismissing therefore starts a fresh group, and a failure run longer than an hour resurfaces hourly. Session-less failures: a caller mistake (an error code with `retryable: 'different_args'`, e.g. `INVALID_ARGUMENTS`, `SESSION_NOT_FOUND`) produces no notification; any other (e.g. `launch_session` → `BROWSER_NOT_INSTALLED`) is grouped under "No session · {n} tool errors" with `session_id`, `session_slug` and `target` null. External `NotificationChannel`s receive created rows only. Every row carries `session_slug` when it has a session.
+| Bus event | Kind | Category · severity · state | In-app row |
+|---|---|---|---|
+| `attention.created` | `attention.requested` | needs-you · warn · open | type `attention`, title "Attention requested", body "{reason} · {mode} — agent blocked, lease frozen", target `/sessions/{id}?live=1` (`&takeover=1` for takeover) |
+| `attention.resolved` | revision of the request's notification | state `resolved` (resolved, rejected), `expired` (timeout), `final` (cancelled) | row unchanged except the classification fields |
+| `vault.confirm.created` | `vault.confirm` | needs-you · warn · open | type `vault`, "Vault fill awaiting confirm", target `/vault?tab=confirm` |
+| `vault.confirm.resolved` | revision | state `resolved` (approved, denied), `expired`, `final` | as above |
+| `session.closed` with a crash reason | `session.crashed` | problems · error · final | type `error`, "Session crashed", target `/sessions/{id}` |
+| `session.closed` with `lease_expired` | `session.reaped` | problems · warn · final | type `lifecycle`, "Session reaped (lease expired)" |
+| `tool.called` with `ok=false` | `tool.errors` | problems · warn · open | type `error`, **grouped per session** (below) |
+| `system.degraded` (severity error) | `system.degraded` | system · error · open | type `system`, message, target `/system` |
+| `system.recovered` | revision | state `resolved` | as above |
+| `notification.channel.changed` to `broken` (internal) | `channel.broken` | system · error · final | type `system`, "Notification channel {name} is failing", target `/system`; **in-app only** (§9.4) |
 
-Deliberately silent: `session.opened`, `page.visited`, `session.removed`, `attention.resolved`, `vault.confirm.resolved`. Rows are broadcast on the `notifications` topic; read/dismiss state is server-side and survives reloads. External channels are a `NotificationChannel` port (`send(payload)`) with no implementations.
+Reserved kinds without a producer yet: `session.finished`, `vault.filled` (wrap-ups · info), `digest.daily` (reports · info), `report.anomaly` (reports · warn), `test` (system · info). The kind → category map is fixed in `contracts/notifications`; severity is set per producer.
 
----
+**Tool-error grouping** (`app/notifications/producers.ts`): group key `tool-errors:<session_id>`. A new failure grows the existing row of its group when that row is unread, not dismissed, its `updated_at` is < 5 min ago (`NOTIFICATION_GROUP_IDLE_MS`) and its `created_at` is < 60 min ago (`NOTIFICATION_GROUP_MAX_AGE_MS`): `count` +1, `title`, `body`, `updated_at` and `source_event_id` follow the latest occurrence, the revision grows by one, and `notification.updated` carries the full row. Otherwise a new row (`count` 1) is created with `notification.created`. Marking read or dismissing therefore starts a fresh group, and a failure run longer than an hour resurfaces hourly. Session-less failures: a caller mistake (an error code with `retryable: 'different_args'`, e.g. `INVALID_ARGUMENTS`, `SESSION_NOT_FOUND`) produces no notification; any other (e.g. `launch_session` → `BROWSER_NOT_INSTALLED`) is grouped under "No session · {n} tool errors" with `session_id`, `session_slug` and `target` null. Every row carries `session_slug` when it has a session.
 
+Deliberately silent (no new notification): `session.opened`, `page.visited`, `session.removed`, a clean `session.closed`. `attention.resolved`, `vault.confirm.resolved` and `system.recovered` only revise an existing notification (found by its `thread`); rows from before schema v5 are revised in their classification fields only. A request settled while no subscriber listened (rejected by a shutdown, or by the orphan recovery of the startup reconcile) is caught up at start: after the reconcile, `reconcileRequests` revises every still-open attention or vault notification whose request is no longer pending, exactly as the live event would have. Rows are broadcast on the `notifications` topic; read/dismiss state is server-side and survives reloads.
+
+### 9.2 The message contract
+
+Every produced or revised notification also stores its current `NotificationMessage` (`message_json`, `@browserhive/contracts/notifications`, JSON Schema in `docs/reference/notification-message.schema.json`, D-32): `schema: 1`, `id` (= `notification_id`), `revision`, `thread`, `kind`, `category`, `severity`, `state`, `alert` (whether this revision should make noise: true for the first revision, false for lifecycle revisions and group growth), `at {created, updated}`, `title` (≤ 120), `summary` (≤ 240), `blocks` (text, heading, fields, quote, list, table, image, code, divider, footer; inline text, bold, italic, code, dashboard-path link, time), `actions` (≤ 5: `act` with a `command {op, args}` and an `open` fallback, or `open` with a dashboard `path`; act ops `attention.resolve`, `vault.confirm.resolve`, `session.extend_lease`, `session.close`), `entities` (`session_id`, `session_slug`, `harness`, `owner`, `tool`, `error_code`, `domain`, `request_id`) and `privacy {level, has_image}`. Field names are snake_case like every wire shape (D-05).
+
+- Producers are pure (`buildMessage(draft, …)`); every copied string passes the `Redactor` and URLs pass `sanitizeUrl` before it becomes part of the message. The in-app title and body are the message's `title` and `summary` at creation; lifecycle revisions change the message only.
+- Act buttons exist only while `state = open`, and a lifecycle revision out of `open` carries no actions at all: the buttons disappear with a silent edit. A one-shot fact (`final` from its first revision, e.g. a crash) keeps its open links.
+- Links are paths (`/sessions/{id}?live=1`); a `LinkBuilder` port turns them into absolute URLs for external channels (`publicUrl`, D-37). The in-app channel needs none.
+- `restrictContent(message, level)` derives the lower content levels per channel: `titles` keeps title, summary, `fields` and `footer` blocks and the actions; `counts` keeps only a fixed per-kind title (with the group count), the session slug and the actions.
+- `degrade(message, capabilities)` adapts a message to a renderer (D-32); both are pure and tested table-driven.
+
+Rows whose classification columns are NULL (written by an older reader in the compatibility window) are read with values derived from `type` as migration v5 backfills them, except `state`, which reads `open` for tool-error groups and `final` otherwise (`classifyLegacy`).
+
+### 9.3 Channels and the registry
+
+`NotificationChannel` (`ports/notification-channel.ts`) is the platform seam: `id`, `name`, `kind`, `capabilities` (rich blocks, tables, images, act buttons, open links, edit, delete, replies, delete window, max title/text length, max buttons), `send(delivery) → {ref}`, `edit(ref, delivery) → {ref}`, `delete(ref)`. A delivery is the restricted, degraded message plus the `LinkBuilder` and, where the platform supports replies, the ref of the first message of the thread. A platform failure is a `ChannelSendError` (`retryable`, `retryAfterMs`, `code`: `rate_limited`, `unavailable`, `timeout`, `auth`, `rejected`, `message_gone`, `too_old`). The in-app channel (`kind: in-app`) implements the same port and is delivered **inline after the commit**: the row is the delivery, so it has no outbox rows.
+
+`ChannelRegistry` (`app/notifications/channel-registry.ts`) holds the configured channels (`notification_channels`) and builds an adapter for each through factories registered per kind by composition (none are registered yet: without a factory a channel's jobs are suppressed with reason `no_adapter`). At start it projects the startup channels (`--notificationChannel`, 08 §5.7, D-39) into rows with `source = 'startup'`: configuration columns rewritten, status and failure counters kept, rows no longer declared removed; a name that a `source = 'db'` channel already uses stops startup with `CONFIG_INVALID` (exit 64). Channel rows store environment variable names only (D-33).
+
+### 9.4 The outbox (D-34)
+
+- **Enqueue.** In the same transaction as the notification insert, growth or revision, `planDeliveries` writes one `notification_deliveries` row per external channel: `pending` with `op = send` for the first revision and `edit` for later ones, or `suppressed` with its reason when the channel's rules filter it (`channel_paused` for a paused or broken channel, `filtered` for category, minimum severity, session glob or harness rules, `quiet_hours` outside the channel's hours unless `critical`, `edit_unsupported` for a silent revision on a platform that cannot edit; an alerting revision there becomes a new `send`). `channel.broken` is never enqueued for an external channel: the degradation loop is cut by kind. With no external channel nothing is written.
+- **Worker** (`app/notifications/outbox.ts`, injected clock, interval scheduler and jitter; like `RetentionScheduler`). It runs only while at least one external channel exists: a tick every second plus a kick after each enqueue. Each tick claims due jobs (`pending`/`retrying` with `next_attempt_at <= now`, oldest first) one at a time: `claim` moves a job to `sending` and counts the attempt; the adapter call runs outside any transaction; the result is written in one transaction (delivery row, channel message, channel counters).
+- **Coalescing and supersede.** A job renders the notification's current message. When the channel message's `last_revision` already covers the job's revision the job is `superseded`; claiming a job supersedes older pending jobs of the same notification and channel. An edit is deferred (not an attempt) until 3 s after the message's last update.
+- **Send, edit, delete.** `send` stores the ref in `notification_channel_messages` with `last_revision` and `expires_at` (from the channel's TTL for the category; never by default, D-35) and sets `expires_at = now` on a resolved notification when "delete when resolved" is on. `edit` addresses the stored ref; `message_gone` turns an alerting revision into a new `send` and marks the rest `superseded`. `delete` jobs are enqueued by the TTL sweep for expired, undeleted messages; a platform that cannot delete gives `suppressed: delete_unsupported`; `too_old` ends `dead` with reason `could_not_delete: too_old`; a delete more than a minute past its deadline is logged as late.
+- **Retries.** Retryable failures back off exponentially (1 s · 2ⁿ, capped at 15 min) with ±20 % jitter, or wait the platform's `retry_after`; a job is `dead` after 8 attempts or when 24 h old. Non-retryable failures (`auth`, `rejected`) are `dead` at once.
+- **Crash recovery.** At start every `sending` job returns to `retrying` due now. A `send` interrupted after the platform accepted it can therefore duplicate one message (at least once).
+- **Breaker.** A success resets the channel's consecutive `failure_count` and sets `last_ok_at`; a failure increments it and records `last_error`. At 5 the channel becomes `broken`, its pending jobs are `suppressed: channel_paused`, `notification.channel.changed` is published and the `channel.broken` in-app notification is produced. No `system.degraded` is ever raised for a channel. Resuming a channel through the channel API sets it `active` and resets the count.
+- **Backlog collapse.** When more than 20 `info` sends are pending for one channel, the newest is sent with a "you missed N" footer and the others are `superseded: collapsed`.
+- **Telemetry.** `browserhive.notifications.deliveries{channel_kind,status}` counts each finished job; each platform call is a `notification.deliver` span (10 §6, §7).
 ## 10. Design notes
 
 - `POST /sessions/{id}/input` exists so takeover can be scripted without a WebSocket client; it shares the attention gate and audit path with the WS `input` command.

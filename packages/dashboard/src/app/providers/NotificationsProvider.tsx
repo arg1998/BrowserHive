@@ -1,9 +1,10 @@
-/** @module app/providers/NotificationsProvider — server-backed notifications: unread count query, `notifications` topic, toasts only from `notification.created` with a per-type policy: no tool-error toasts by default, titles name the session, a growing group updates its toast in place (spec 04 §4.3, D-16) */
+/** @module app/providers/NotificationsProvider — server-backed notifications: unread count query, `notifications` topic, toasts only from `notification.created` with a per-type policy: no tool-error toasts by default, titles name the session, a growing group updates its toast in place, a settled request closes it (spec 04 §4.3, D-16) */
 import { NotificationType } from '@browserhive/contracts/enums';
 import type { Notification } from '@browserhive/contracts/http';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import { createContext, type ReactNode, useContext, useMemo, useRef } from 'react';
+import { notificationOutcome } from '@/features/notifications/notification-meta.ts';
 import { toAppError } from '@/lib/api/errors.ts';
 import { keys } from '@/lib/api/keys.ts';
 import { sessionSlug } from '@/lib/format/ids.ts';
@@ -109,6 +110,20 @@ export function planToast(
   };
 }
 
+/**
+ * Whether an updated notification's toast should close: it was read or dismissed, or the request
+ * it announced was settled somewhere else (resolved, rejected, timed out, cancelled).
+ */
+export function toastSettled(
+  notification: Pick<Notification, 'read_at' | 'dismissed_at' | 'state' | 'kind'>,
+): boolean {
+  return (
+    notification.read_at !== null ||
+    notification.dismissed_at !== null ||
+    notificationOutcome(notification) !== null
+  );
+}
+
 /** Is the operator already looking at `target` (same path, or a sub-path of it)? */
 export function isAlreadyAt(pathname: string, target: string): boolean {
   const path = target.split(/[?#]/)[0] ?? target;
@@ -159,9 +174,9 @@ export function NotificationsProvider({ children }: { readonly children: ReactNo
     const id = notificationToastId(notification);
     if (event.type === 'notification.updated') {
       // A growing group updates its toast in place while it is still shown; read or dismissed
-      // elsewhere (bell, another tab) closes it. Never a new toast.
+      // elsewhere (bell, another tab), or a request settled elsewhere, closes it. Never a new toast.
       if (!toasted.current.has(notification.notification_id)) return;
-      if (notification.read_at !== null || notification.dismissed_at !== null) toast.close(id);
+      if (toastSettled(notification)) toast.close(id);
       else
         toast.update(id, {
           title: withSession(notification.title, slugOf(notification)),

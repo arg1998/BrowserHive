@@ -70,6 +70,7 @@ Failures are returned as a status and reason (`origin_mismatch`, `not_authorized
 - **Traces do not contain typed credentials.** Playwright tracing is stopped before the first credential keystroke and restarted after submit, and the parts are merged when the session closes. The replay has a gap instead of the login POST.
 - **Pixels are not redacted.** The live view and screenshots show exactly what the browser shows. Screenshot tracing skips frames while a redaction window is open, but operators are trusted with the live view.
 - Every secret BrowserHive creates or handles (seed password, tokens, cookies, vault session tokens, OTLP headers) is registered with a redactor that scrubs logs, database rows, WebSocket frames, MCP results and OTLP exports. That includes secrets the config file reads from environment variables (`{env:CI_TOKEN}`, see [References](configuration.md#references)): the variable's name is shown so you know what to set, never its value or the file's text around it.
+- **Notifications are redacted before they are stored or sent.** Every text a notification copies from an event (an agent's attention reason, a page address, an error) goes through the same redactor, and URLs lose their query strings. A notification channel keeps its tokens in environment variables; BrowserHive stores only the variable names, so a database backup never contains one. See [Notifications](notifications.md).
 
 ## What is recorded
 

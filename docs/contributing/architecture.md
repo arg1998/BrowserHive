@@ -62,6 +62,7 @@ Playwright and Patchright may be imported only under `infra/browsers/`; Kysely a
 - **Auth:** provider chain (password session cookie, bearer token, short-lived grant), `Authorizer.can(principal, scope)`, ownership on every tool (D-09).
 - **Vault:** broker with fixed gate order and one audit row per fill, Bitwarden backend, bindings and folder policies in SQLite (D-14).
 - **Operator requests:** one broker for attention and vault confirmations with deadlines, lease pause, cancellation and restart recovery (D-15).
+- **Notifications:** pure producer rules turn bus events into rows plus a versioned `NotificationMessage` (`@browserhive/contracts/notifications`) with full-state revisions; the in-app inbox is delivered inline, external channels through a transactional outbox (`notification_deliveries`) drained by a worker with retries, coalescing, a circuit breaker that never raises a degradation, and a TTL sweep. Platform adapters implement `NotificationChannel` and receive only the contract after `restrictContent` and `degrade` (D-16, D-32, D-34, [spec 03 §9](../../specs/03-admin-backend.md#9-notifications-d-16-d-32-d-34)).
 - **Observability:** structured logger with per-module levels and a ring buffer, OpenTelemetry API everywhere with exporters opt-in, redaction by construction (D-08, D-20, [spec 10](../../specs/10-error-handling-and-telemetry.md)).
 - **Event bus:** typed in-process events (`session.opened`, `tool.called`, `page.visited`, `vault.access`, …). Every mutation publishes through it; the WebSocket layer never synthesizes events.
 
@@ -88,7 +89,7 @@ A failure in phase N unwinds phases N-1…1 in reverse and exits with a typed bo
 
 ## Extension points
 
-Seams exist for features that are deliberately not built yet: other browser engines (`BrowserDriver` capabilities), managed proxies (`ProxyResolver`, `LaunchSpec.proxy`), other vault backends (`VaultBackend`), security intercepts and approval gates (`OperatorRequestBroker.kind`, `InterceptionChain`), multi-user auth (`AuthenticationProvider`, `tenant_id`), external notification channels (`NotificationChannel`), resource governance (`AdmissionPolicy`). See [spec 01 §9](../../specs/01-overall-architecture.md#9-extension-points-seams-that-exist-without-their-features).
+Seams exist for features that are deliberately not built yet: other browser engines (`BrowserDriver` capabilities), managed proxies (`ProxyResolver`, `LaunchSpec.proxy`), other vault backends (`VaultBackend`), security intercepts and approval gates (`OperatorRequestBroker.kind`, `InterceptionChain`), multi-user auth (`AuthenticationProvider`, `tenant_id`), external notification channels (`NotificationChannel` plus a factory per channel kind in `ChannelRegistry`), resource governance (`AdmissionPolicy`). See [spec 01 §9](../../specs/01-overall-architecture.md#9-extension-points-seams-that-exist-without-their-features).
 
 ## Working on the code
 

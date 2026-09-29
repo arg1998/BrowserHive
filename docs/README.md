@@ -15,6 +15,7 @@ BrowserHive is a local MCP server that gives AI agents isolated, stealthy Chromi
 - [Security model](guide/security.md): authentication, bind rules, the vault model, redaction, what is recorded
 - [Vault](guide/vault.md): Bitwarden setup, folder policies, bindings, confirmations
 - [Human takeover](guide/attention.md): `request_attention` and the live view
+- [Notifications](guide/notifications.md): what is notified, how a notification changes over its life, and how delivery to chat apps works
 - [Stealth](guide/stealth.md): what it does, what it does not, ceilings, proxies
 - [Telemetry](guide/telemetry.md): OpenTelemetry export and a local Grafana stack
 - [Command line](guide/cli.md): every command and exit code
@@ -33,6 +34,7 @@ Generated from the source by `scripts/gen-docs.ts`; always in sync with the code
 - [REST API](reference/api.md): every admin API endpoint with scope and authentication
 - [WebSocket protocol](reference/websocket.md): envelope, topics, commands, screencast frames
 - [Config file JSON Schema](reference/config.schema.json)
+- [Notification message JSON Schema](reference/notification-message.schema.json)
 
 ## Contributing
 

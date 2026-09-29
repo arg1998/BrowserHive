@@ -292,6 +292,13 @@ describe('serializers', () => {
       groupKey: null,
       readAt: null,
       dismissedAt: null,
+      kind: 'session.crashed' as const,
+      category: 'problems' as const,
+      severity: 'error' as const,
+      state: 'final' as const,
+      revision: 1,
+      thread: 'notification:n-1',
+      messageJson: null,
     };
     expect(Notification.parse(notificationToWire(notification)).title).toBe('t');
     const bundle = resolveOk({ env: { BROWSERHIVE_AUTH_TOKENS: `bot:${'a'.repeat(32)}` } });

@@ -5,6 +5,7 @@ import type {
   JsonValue,
   NotificationGroupPatch,
   NotificationRecord,
+  NotificationRevisionPatch,
   PreferenceRecord,
 } from './records.ts';
 
@@ -28,6 +29,26 @@ export interface NotificationRepository {
     notificationId: string,
     patch: NotificationGroupPatch,
   ): Promise<NotificationRecord | null>;
+  /** Newest row of a thread in one inbox (`attention:<request_id>`), or `null`. */
+  findLatestByThread(
+    principalId: string | null,
+    thread: string,
+  ): Promise<NotificationRecord | null>;
+  /**
+   * Applies a lifecycle revision (state, severity, revision, message). Unlike `updateGroup` it
+   * applies whatever the read state, and never changes `title`, `body` or `updated_at`.
+   *
+   * @returns The updated row, or `null` when the id is unknown.
+   */
+  revise(
+    notificationId: string,
+    patch: NotificationRevisionPatch,
+  ): Promise<NotificationRecord | null>;
+  /**
+   * Rows still `open`/`acted` whose kind is one of `kinds`, oldest first (the startup catch-up of
+   * requests settled while no subscriber listened).
+   */
+  listUnsettled(kinds: readonly string[], limit: number): Promise<readonly NotificationRecord[]>;
   /** Lists notifications newest first (by `query.sort`, default `updated_at`). */
   list(query: NotificationListQuery): Promise<Page<NotificationRecord>>;
   /** Unread, undismissed count for a principal (or the anonymous inbox when `null`). */

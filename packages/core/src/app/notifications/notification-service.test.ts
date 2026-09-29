@@ -2,25 +2,28 @@
 
 import { describe, expect, it } from 'bun:test';
 import { Notification } from '@browserhive/contracts/http';
+import { NotificationMessage } from '@browserhive/contracts/notifications';
 import { CollectingLogger } from '../../../test/helpers/collecting-logger.ts';
 import { FakeClock } from '../../../test/helpers/fake-clock.ts';
 import { FakeIdGenerator } from '../../../test/helpers/fake-id-generator.ts';
 import { InMemoryNotificationRepository } from '../../../test/helpers/in-memory-repos.ts';
 import { RecordingEventBus } from '../../../test/helpers/recording-event-bus.ts';
-import type { NotificationChannel } from '../../ports/notification-channel.ts';
 import type { DomainEvents } from '../events/catalog.ts';
 import { NotificationService } from './notification-service.ts';
 import { draftFor, type ProducedEvent } from './producers.ts';
 import {
   attentionCreated,
+  attentionResolved,
   SESSION,
   sessionClosed,
   systemDegraded,
+  systemRecovered,
   toolCalled,
   vaultConfirmCreated,
+  vaultConfirmResolved,
 } from './test-fixtures.ts';
 
-function setup(channels: NotificationChannel[] = []) {
+function setup() {
   const clock = new FakeClock();
   const repo = new InMemoryNotificationRepository();
   const bus = new RecordingEventBus<DomainEvents>();
@@ -30,7 +33,6 @@ function setup(channels: NotificationChannel[] = []) {
     clock,
     ids: new FakeIdGenerator(),
     logger: new CollectingLogger(),
-    channels,
   });
   return { clock, repo, bus, service };
 }
@@ -235,17 +237,6 @@ describe('NotificationService producers', () => {
     expect(rows.map((r) => r.count)).toEqual([1, 1, 1, 15, 2]);
   });
 
-  it('isolates a failing external channel', async () => {
-    const sent: string[] = [];
-    const { repo, service } = setup([
-      { name: 'broken', send: () => Promise.reject(new Error('down')) },
-      { name: 'ok', send: (n) => void sent.push(n.title) },
-    ]);
-    await service.produce(sessionClosed('crash'));
-    expect(repo.rows.size).toBe(1);
-    expect(sent).toEqual(['Session crashed']);
-  });
-
   it('fans out to every recipient inbox', async () => {
     const { repo, bus, clock } = setup();
     const service = new NotificationService({
@@ -289,5 +280,172 @@ describe('NotificationService inbox', () => {
     const page = await service.list({ read: 'read' });
     expect(page.items).toHaveLength(3);
     expect(page.items.every((n) => Notification.safeParse(n).success)).toBe(true);
+  });
+});
+
+describe('NotificationService contract and revisions', () => {
+  it('stores the first revision of the message with the row and serves the classification', async () => {
+    const { repo, service } = setup();
+    const [dto] = await service.produce(attentionCreated('a-000000000001', 'takeover'));
+    expect(dto).toMatchObject({
+      kind: 'attention.requested',
+      category: 'needs-you',
+      severity: 'warn',
+      state: 'open',
+      revision: 1,
+      thread: 'attention:a-000000000001',
+    });
+    const row = repo.rows.get(dto?.notification_id ?? '');
+    const message = NotificationMessage.parse(JSON.parse(row?.messageJson ?? 'null'));
+    expect(message).toMatchObject({
+      id: dto?.notification_id,
+      revision: 1,
+      alert: true,
+      title: dto?.title,
+    });
+    expect(message.summary).toBe(dto?.body ?? '');
+  });
+
+  it('revises the request notification when it resolves; title, body and updated_at stay', async () => {
+    const { clock, repo, bus, service } = setup();
+    const [created] = await service.produce(attentionCreated('a-000000000001', 'takeover'));
+    await clock.advance(130_000);
+    const [revised] = await service.produce(attentionResolved('a-000000000001', 'resolved'));
+    expect(revised).toMatchObject({
+      notification_id: created?.notification_id,
+      state: 'resolved',
+      revision: 2,
+      title: created?.title,
+      body: created?.body,
+      updated_at: created?.updated_at,
+    });
+    const message = NotificationMessage.parse(
+      JSON.parse(repo.rows.get(created?.notification_id ?? '')?.messageJson ?? 'null'),
+    );
+    expect(message).toMatchObject({ revision: 2, state: 'resolved', alert: false, actions: [] });
+    const updates = bus.published.filter((p) => p.name === 'notification.updated');
+    expect(updates).toHaveLength(1);
+    // A replayed resolution and a later terminal status change nothing.
+    expect(await service.produce(attentionResolved('a-000000000001', 'resolved'))).toEqual([]);
+    expect(await service.produce(attentionResolved('a-000000000001', 'timeout'))).toEqual([]);
+  });
+
+  it('revises vault confirmations and recovered degradations', async () => {
+    const { service } = setup();
+    await service.produce(vaultConfirmCreated('a-000000000003', 'github'));
+    const [vault] = await service.produce(vaultConfirmResolved('a-000000000003', 'rejected'));
+    expect(vault).toMatchObject({ kind: 'vault.confirm', state: 'resolved', revision: 2 });
+    await service.produce(systemDegraded('error'));
+    const [system] = await service.produce(systemRecovered());
+    expect(system).toMatchObject({ kind: 'system.degraded', state: 'resolved', revision: 2 });
+  });
+
+  it('a resolution without a notification (or of a row from before v5) fabricates nothing', async () => {
+    const { repo, service } = setup();
+    expect(await service.produce(attentionResolved('a-000000000009', 'resolved'))).toEqual([]);
+    await repo.insert({
+      notificationId: 'n-legacy000001',
+      principalId: null,
+      type: 'attention',
+      title: 'Attention requested',
+      body: null,
+      sessionId: SESSION,
+      target: null,
+      sourceEventId: 'a-000000000008',
+      createdAt: 1,
+      updatedAt: 1,
+      count: 1,
+      groupKey: null,
+      readAt: null,
+      dismissedAt: null,
+      kind: 'attention.requested',
+      category: 'needs-you',
+      severity: 'warn',
+      state: 'open',
+      revision: 1,
+      thread: 'attention:a-000000000008',
+      messageJson: null,
+    });
+    const [legacy] = await service.produce(attentionResolved('a-000000000008', 'timeout'));
+    expect(legacy).toMatchObject({ state: 'expired', revision: 2 });
+    expect(repo.rows.get('n-legacy000001')?.messageJson).toBeNull();
+  });
+
+  it('grows a tool-error group as silent revisions of one message', async () => {
+    const { clock, repo, service } = setup();
+    const [a] = await service.produce(toolCalled(1, { ok: false }));
+    await clock.advance(1_000);
+    const [b] = await service.produce(toolCalled(2, { ok: false }));
+    expect(b).toMatchObject({ notification_id: a?.notification_id, revision: 2, count: 2 });
+    const message = NotificationMessage.parse(
+      JSON.parse(repo.rows.get(a?.notification_id ?? '')?.messageJson ?? 'null'),
+    );
+    expect(message).toMatchObject({ revision: 2, alert: false, title: 'shop · 2 tool errors' });
+  });
+
+  it('the breaker notice is an in-app system notification', async () => {
+    const { service } = setup();
+    const [notice] = await service.produce({
+      name: 'notification.channel.changed',
+      at: 1,
+      payload: {
+        type: 'notification.channel.changed',
+        channel_id: 'nc-1',
+        name: 'phone',
+        kind: 'telegram',
+        status: 'broken',
+        previous_status: 'active',
+        failure_count: 5,
+        last_error: 'unavailable: down',
+        at: 1,
+      },
+    });
+    expect(notice).toMatchObject({ type: 'system', kind: 'channel.broken', severity: 'error' });
+  });
+});
+
+describe('NotificationService startup catch-up', () => {
+  it('revises notifications of requests settled while nothing listened', async () => {
+    const { repo, service } = setup();
+    const [attention] = await service.produce(attentionCreated('a-000000000001', 'takeover'));
+    const [vault] = await service.produce(vaultConfirmCreated('a-000000000002', 'github'));
+    await service.produce(attentionCreated('a-000000000003', 'notify'));
+    const settled = new Map([
+      [
+        'a-000000000001',
+        {
+          status: 'rejected' as const,
+          resolvedBy: 'system',
+          createdAt: 1,
+          resolvedAt: 61_001,
+          waitedMs: 61_000,
+        },
+      ],
+      [
+        'a-000000000002',
+        { status: 'timeout' as const, resolvedBy: null, createdAt: 1, resolvedAt: 5, waitedMs: 4 },
+      ],
+      [
+        'a-000000000003',
+        {
+          status: 'pending' as const,
+          resolvedBy: null,
+          createdAt: 1,
+          resolvedAt: null,
+          waitedMs: null,
+        },
+      ],
+    ]);
+    expect(await service.reconcileRequests({ get: async (id) => settled.get(id) ?? null })).toBe(2);
+    expect(repo.rows.get(attention?.notification_id ?? '')).toMatchObject({
+      state: 'resolved',
+      revision: 2,
+    });
+    expect(repo.rows.get(vault?.notification_id ?? '')).toMatchObject({
+      state: 'expired',
+      revision: 2,
+    });
+    // Already settled rows are left alone on the next start.
+    expect(await service.reconcileRequests({ get: async (id) => settled.get(id) ?? null })).toBe(0);
   });
 });

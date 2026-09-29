@@ -1,9 +1,13 @@
 /** @module infra/persistence/mappers/operations — notifications, preferences, system_events, artifact_outbox, idempotency_keys, mcp_connections, schema_migrations rows ↔ records. */
 
+import { NotificationCategory, NotificationKind } from '@browserhive/contracts/enums';
+import { classifyLegacy } from '@browserhive/contracts/notifications';
 import type { Insertable, Selectable, Updateable } from 'kysely';
 import {
   ARTIFACT_KINDS,
   MCP_TRANSPORTS,
+  NOTIFICATION_SEVERITIES,
+  NOTIFICATION_STATES,
   NOTIFICATION_TYPES,
   SYSTEM_EVENT_SEVERITIES,
 } from '../../../ports/persistence/enums.ts';
@@ -28,14 +32,38 @@ import type {
   SchemaMigrations,
   SystemEvents,
 } from '../generated/db.d.ts';
-import { parseEnum, parseJsonObjectOrNull, parseJsonValue, toJson, toJsonOrNull } from './codec.ts';
+import {
+  parseEnum,
+  parseEnumOrNull,
+  parseJsonObjectOrNull,
+  parseJsonValue,
+  toJson,
+  toJsonOrNull,
+} from './codec.ts';
 
-/** `notifications` row → record. */
+/**
+ * `notifications` row → record. Contract columns that are NULL (a row an older reader inserted in
+ * the compatibility window) or that name a kind this binary does not know read the values derived
+ * from `type`, exactly as migration v5 classifies rows (spec 03 §9.2).
+ */
 export function notificationFromRow(row: Selectable<Notifications>): NotificationRecord {
+  const where = `notifications.${row.notification_id}`;
+  const type = parseEnum(NOTIFICATION_TYPES, row.type, where);
+  const legacy = classifyLegacy({
+    notificationId: row.notification_id,
+    type,
+    title: row.title,
+    groupKey: row.group_key,
+    sessionId: row.session_id,
+    sourceEventId: row.source_event_id,
+  });
+  const kind = NotificationKind.safeParse(row.kind);
+  const category = NotificationCategory.safeParse(row.category);
+  const known = kind.success && category.success;
   return {
     notificationId: row.notification_id,
     principalId: row.principal_id,
-    type: parseEnum(NOTIFICATION_TYPES, row.type, `notifications.${row.notification_id}`),
+    type,
     title: row.title,
     body: row.body,
     sessionId: row.session_id,
@@ -47,6 +75,15 @@ export function notificationFromRow(row: Selectable<Notifications>): Notificatio
     groupKey: row.group_key,
     readAt: row.read_at,
     dismissedAt: row.dismissed_at,
+    kind: known ? kind.data : legacy.kind,
+    category: known ? category.data : legacy.category,
+    severity:
+      parseEnumOrNull(NOTIFICATION_SEVERITIES, row.severity, `${where}.severity`) ??
+      legacy.severity,
+    state: parseEnumOrNull(NOTIFICATION_STATES, row.state, `${where}.state`) ?? legacy.state,
+    revision: row.revision,
+    thread: row.thread ?? legacy.thread,
+    messageJson: row.message_json,
   };
 }
 
@@ -67,6 +104,13 @@ export function notificationToRow(record: NotificationRecord): Selectable<Notifi
     group_key: record.groupKey,
     read_at: record.readAt,
     dismissed_at: record.dismissedAt,
+    kind: record.kind,
+    category: record.category,
+    severity: record.severity,
+    state: record.state,
+    revision: record.revision,
+    thread: record.thread,
+    message_json: record.messageJson,
   };
 }
 

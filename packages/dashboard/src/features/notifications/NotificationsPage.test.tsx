@@ -13,11 +13,13 @@ import {
 import { fireEvent, screen, waitFor, within } from '../../../test/helpers/render.tsx';
 import { mergePreferences } from './components/PreferencesForm.tsx';
 import { groupByDay, NotificationsPage, visibleNotifications } from './NotificationsPage.tsx';
-import { notificationMeta } from './notification-meta.ts';
+import { notificationMeta, notificationOutcome } from './notification-meta.ts';
 import { notificationsSearch } from './search.ts';
 
 interface ServerOptions {
   readonly failWrites?: boolean;
+  /** Extra rows after the two defaults. */
+  readonly extra?: readonly Notification[];
   /** Resolves pending writes when called (to observe the optimistic state). */
   readonly gate?: Promise<void>;
 }
@@ -26,6 +28,7 @@ function mount(url = '/notifications', options: ServerOptions = {}) {
   const rows: Notification[] = [
     notification(1),
     notification(2, { type: 'vault', title: 'Vault fill awaiting confirm', target: '/vault' }),
+    ...(options.extra ?? []),
   ];
   const write = (patch: (n: Notification) => Notification) => async (req: RecordedRequest) => {
     await options.gate;
@@ -129,6 +132,18 @@ describe('notifications helpers', () => {
     ]);
   });
 
+  it('shows an outcome only once a request left open', () => {
+    const attention = notification(6, { type: 'attention', kind: 'attention.requested' });
+    expect(notificationOutcome(attention)).toBeNull();
+    expect(notificationOutcome({ ...attention, state: 'resolved' })).toBe('resolved');
+    expect(notificationOutcome({ ...attention, state: 'expired' })).toBe('expired');
+    expect(notificationOutcome({ ...attention, state: 'acted' })).toBe('acted');
+    expect(notificationOutcome({ ...attention, state: 'final' })).toBe('final');
+    expect(
+      notificationOutcome({ ...attention, kind: 'session.crashed', state: 'final' }),
+    ).toBeNull();
+  });
+
   it('keeps preference keys the form does not edit', () => {
     const merged = mergePreferences(
       { saved_views: [], page_defaults: { sessions: { ps: 50 } } },
@@ -166,6 +181,26 @@ describe('NotificationsPage', () => {
     expect(released).toBe(false);
     await poll(() => released && view.requests.some((r) => r.method === 'POST'));
     await poll(() => screen.queryByText('1 unread') !== null);
+    await expectNoA11yViolations(view.container);
+  });
+
+  it('marks a settled request with its outcome pill', async () => {
+    const view = mount('/notifications', {
+      extra: [
+        notification(3, {
+          type: 'attention',
+          kind: 'attention.requested',
+          category: 'needs-you',
+          title: 'Attention requested',
+          state: 'resolved',
+          revision: 2,
+          read_at: NOW,
+        }),
+      ],
+    });
+    await screen.findByText('Attention requested');
+    expect(within(row('Attention requested')).getByText('resolved')).toBeDefined();
+    expect(within(row('Tool error · navigate 1')).queryByText('resolved')).toBeNull();
     await expectNoA11yViolations(view.container);
   });
 

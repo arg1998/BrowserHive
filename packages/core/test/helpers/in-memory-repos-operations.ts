@@ -11,6 +11,7 @@ import type {
   NewSystemEvent,
   NotificationGroupPatch,
   NotificationRecord,
+  NotificationRevisionPatch,
   SystemEventRecord,
 } from '../../src/ports/persistence/records.ts';
 import { inWindow, pageOf } from './in-memory-repos-facts.ts';
@@ -110,6 +111,45 @@ export class InMemoryNotificationRepository implements NotificationRepository {
     const next: NotificationRecord = { ...row, ...patch };
     this.rows.set(notificationId, next);
     return next;
+  }
+
+  async findLatestByThread(
+    principalId: string | null,
+    thread: string,
+  ): Promise<NotificationRecord | null> {
+    const rows = [...this.rows.values()]
+      .filter((r) => r.principalId === principalId && r.thread === thread)
+      .sort(
+        (a, b) => b.createdAt - a.createdAt || b.notificationId.localeCompare(a.notificationId),
+      );
+    return rows[0] ?? null;
+  }
+
+  async revise(
+    notificationId: string,
+    patch: NotificationRevisionPatch,
+  ): Promise<NotificationRecord | null> {
+    const row = this.rows.get(notificationId);
+    if (row === undefined) return null;
+    const next: NotificationRecord = {
+      ...row,
+      state: patch.state,
+      severity: patch.severity,
+      revision: patch.revision,
+      messageJson: patch.messageJson ?? row.messageJson,
+    };
+    this.rows.set(notificationId, next);
+    return next;
+  }
+
+  async listUnsettled(
+    kinds: readonly string[],
+    limit: number,
+  ): Promise<readonly NotificationRecord[]> {
+    return [...this.rows.values()]
+      .filter((r) => (r.state === 'open' || r.state === 'acted') && kinds.includes(r.kind))
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .slice(0, Math.max(1, limit));
   }
 
   async list(query: NotificationListQuery): Promise<Page<NotificationRecord>> {

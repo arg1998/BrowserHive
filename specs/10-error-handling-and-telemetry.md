@@ -247,7 +247,7 @@ Boot errors print `browserhive: [CODE] <public message>` followed by the hint on
 
 ## 3. Degradations: `system_events`
 
-Background failures and non-fatal boot findings become rows (`code`, `severity`, `message`, `details`, `first_seen_at`, `last_seen_at`, `count`, `resolved_at`) aggregated in-process by `code` + a details fingerprint (so a retention failure repeating every 6 h is one row with `count`). Producers: retention, outbox, WS overload, unhandled rejections, DB `dropped_writes`, browser install missing, blocklist reload failure, OTel export failure, stale Chromium processes found at startup. Rows appear on `/system.degradations`, on the `system` WS topic, in the dashboard System page, and as `system` notifications when severity is `error`. `resolved_at` is set when the producer reports recovery (e.g. next retention pass succeeds).
+Background failures and non-fatal boot findings become rows (`code`, `severity`, `message`, `details`, `first_seen_at`, `last_seen_at`, `count`, `resolved_at`) aggregated in-process by `code` + a details fingerprint (so a retention failure repeating every 6 h is one row with `count`). Producers: retention, the artifact outbox, WS overload, unhandled rejections, DB `dropped_writes`, browser install missing, blocklist reload failure, OTel export failure, stale Chromium processes found at startup. Rows appear on `/system.degradations`, on the `system` WS topic, in the dashboard System page, and as `system` notifications when severity is `error`. `resolved_at` is set when the producer reports recovery (e.g. next retention pass succeeds). A failing notification channel is **never** a degradation (D-34): it would be delivered through the failing channel again. Its breaker state shows on the channel and as an in-app-only `channel.broken` notification.
 
 ---
 
@@ -321,6 +321,7 @@ All spans use `@opentelemetry/api`'s tracer `browserhive`; attributes use the `b
 | `http.request` | `http.request.method`, `http.route`, `http.response.status_code`, `browserhive.principal` |
 | `ws.command`, `ws.broadcast` | `browserhive.ws.command`, `browserhive.ws.topic`, `browserhive.ws.recipients` |
 | `retention.sweep`, `outbox.sweep`, `lease.sweep` | counts pruned/failed |
+| `notification.deliver` (one per platform call of the notification outbox) | `browserhive.channel_kind`, `browserhive.channel_id`, `browserhive.notification_id`, `browserhive.revision`, `browserhive.op` (`send`/`edit`/`delete`), `browserhive.status`, `browserhive.attempt`, `browserhive.error_code` (the `ChannelSendError` code) |
 | `screencast.frame` (never exported; metrics only) | — |
 
 `--otelSampleRatio` (default 1.0) applies a parent-based ratio sampler; `db.query` and `cdp.command` are additionally gated behind `--otelVerbose`.
@@ -348,6 +349,7 @@ All spans use `@opentelemetry/api`'s tracer `browserhive`; attributes use the `b
 | `browserhive.vault.fills` | counter | `result` |
 | `browserhive.blocklist.hits` | counter | `source` |
 | `browserhive.retention.pruned_rows` | counter | `table` |
+| `browserhive.notifications.deliveries` | counter | `channel_kind`, `status` (`sent`, `retrying`, `dead`, `suppressed`, `superseded`) — one increment per finished or rescheduled outbox job (03 §9.4) |
 | `browserhive.process.*` | gauges: rss, heap, event-loop lag (sampled) | — |
 
 The same registry backs `/api/v1/system` figures; with `--otel` off, the in-process meter provider is the SDK's no-op.
@@ -381,7 +383,8 @@ The same registry backs `/api/v1/system` figures; with `--otel` off, the in-proc
 - References in config files (D-29, 08 §3.1): the variable *name* is always shown (it is the operator's coordinate); the value and the file's text around a reference never are on a secret key (no `template`, problem messages name the variable only). The key-name heuristics above also apply to reference names: a value that came through `{env:GRAFANA_API_TOKEN}` renders `<redacted>` on every surface even on a key that is not flagged secret, `GET /api/v1/system/config` marks that key `secret: true` for this run, and the values such references produced are registered as always-on entries in the `observability` phase. Over-redaction is the accepted failure direction.
 - Error projections run through `toWire` too, so an error message that echoes a typed value cannot carry a secret past the redaction window.
 - `--screenshotTrace` skips frames while a session's secret window is open; `vault_fill` is excluded from screenshot tracing.
-- Property test: for every sink (log line, DB row, WS frame, MCP result, problem+json, OTLP payload, export stream) inject a sentinel secret through every documented path and assert the sentinel never appears.
+- Notifications are a sink (D-32): producers pass every string they copy from an event (attention reason and message, tool name, error message, entry name, degradation message, URLs) through the `Redactor` and `sanitizeUrl` before it becomes part of the stored `NotificationMessage`, the in-app row or a delivery; adapters and the delivery log only ever see that result, and `last_error` of a delivery is scrubbed too. Channel secrets are never in the database (only environment variable names, D-33).
+- Property test: for every sink (log line, DB row, WS frame, MCP result, problem+json, OTLP payload, export stream, notification message, in-app notification row, delivery log) inject a sentinel secret through every documented path and assert the sentinel never appears.
 
 ---
 

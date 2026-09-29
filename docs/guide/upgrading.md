@@ -29,6 +29,8 @@ browserhive db migrate
 
 **Each session records whether it ran sandboxed (schema v4).** From 0.2 on, the database stores each session's sandbox state and browser version when its browser launches, so closed sessions keep showing them. The migration only adds columns: an older release still opens the database. Sessions from before the upgrade show "not recorded"; nothing is guessed for them.
 
+**Notifications gain a message contract (schema v5).** The database adds the notification contract's fields to every notification (kind, category, severity, state, revision, thread) and three tables for delivery to chat apps (channels, the delivery outbox and the sent-message index). Existing notifications are classified from what they already recorded; an attention request's notification reads as resolved or expired when the request was. The migration only adds columns and tables: an older release still opens the database. See [Notifications](notifications.md).
+
 Prereleases are published under the `next` tag: `bun add -g browserhive@next`.
 
 ## Downgrade

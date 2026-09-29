@@ -1,4 +1,4 @@
-/** @module infra/persistence/retention — one retention pass over the retention classes of spec 03 §7.1. */
+/** @module infra/persistence/retention — one retention pass over the retention classes of spec 03 §7.1 (including the notification outbox history, D-34). */
 
 import { type Kysely, sql } from 'kysely';
 import type { Clock } from '../../ports/clock.ts';
@@ -210,6 +210,29 @@ class Sweep {
     });
   }
 
+  /**
+   * Outbox history (D-34): terminal deliveries and settled channel messages older than the cutoff.
+   * Work still to do (`pending`, `sending`, `retrying`) and messages with a pending TTL are kept.
+   */
+  async pruneNotificationDeliveries(cutoff: number): Promise<void> {
+    await this.step('notification_deliveries', async () => {
+      const result = await this.ctx.db
+        .deleteFrom('notification_deliveries')
+        .where('status', 'in', ['sent', 'dead', 'suppressed', 'superseded'])
+        .where('updated_at', '<', cutoff)
+        .executeTakeFirst();
+      return Number(result.numDeletedRows);
+    });
+    await this.step('notification_channel_messages', async () => {
+      const result = await this.ctx.db
+        .deleteFrom('notification_channel_messages')
+        .where('updated_at', '<', cutoff)
+        .where((eb) => eb.or([eb('deleted_at', 'is not', null), eb('expires_at', 'is', null)]))
+        .executeTakeFirst();
+      return Number(result.numDeletedRows);
+    });
+  }
+
   async oldestTelemetryTs(): Promise<number | null> {
     const result = await sql<{ m: number | null }>`
       SELECT MIN(ts) AS m FROM (
@@ -246,6 +269,7 @@ export async function sweepRetention(
       now - (policy.notificationSeenDays ?? 30) * DAY_MS,
       now - (policy.notificationDays ?? 90) * DAY_MS,
     );
+    await sweep.pruneNotificationDeliveries(now - (policy.notificationDeliveryDays ?? 30) * DAY_MS);
     await sweep.step('idempotency_keys', async () => {
       const result = await ctx.db
         .deleteFrom('idempotency_keys')

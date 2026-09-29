@@ -2,11 +2,23 @@
 import { describe, expect, it } from 'bun:test';
 import { notification } from '../../../test/fixtures/ops.ts';
 import { bellBadge } from '../shell/NotificationBell.tsx';
-import { DEFAULT_TOAST_TYPES, planToast } from './NotificationsProvider.tsx';
+import { DEFAULT_TOAST_TYPES, planToast, toastSettled } from './NotificationsProvider.tsx';
 
 const SESSION = 'login-smoke-abcd1234' as never;
 
 describe('toast policy', () => {
+  it('closes a toast once the notification is read, dismissed or its request settled', () => {
+    const open = notification(9, { type: 'attention', state: 'open' });
+    expect(toastSettled(open)).toBe(false);
+    expect(toastSettled({ ...open, read_at: 1 })).toBe(true);
+    expect(toastSettled({ ...open, dismissed_at: 1 })).toBe(true);
+    expect(toastSettled({ ...open, state: 'resolved' })).toBe(true);
+    expect(toastSettled({ ...open, state: 'expired' })).toBe(true);
+    // A cancelled request is final and closed; a one-shot fact is final from birth and is not.
+    expect(toastSettled({ ...open, kind: 'attention.requested', state: 'final' })).toBe(true);
+    expect(toastSettled({ ...open, kind: 'session.crashed', state: 'final' })).toBe(false);
+  });
+
   it('keeps tool errors in the bell by default and toasts attention', () => {
     expect(DEFAULT_TOAST_TYPES).not.toContain('error');
     const error = notification(1, { type: 'error', title: 'login-smoke · 3 tool errors' });

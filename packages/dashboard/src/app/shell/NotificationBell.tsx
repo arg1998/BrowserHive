@@ -8,12 +8,16 @@ import { useConfirm } from '@/app/providers/ConfirmProvider.tsx';
 import { useNotifications } from '@/app/providers/NotificationsProvider.tsx';
 import { EmptyState } from '@/components/shared/EmptyState.tsx';
 import { RelativeTime } from '@/components/shared/RelativeTime.tsx';
+import { StatusBadge } from '@/components/shared/StatusBadge.tsx';
 import { TONE_CLASSES } from '@/components/shared/tones.ts';
 import { Button, buttonVariants } from '@/components/ui/button.tsx';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover.tsx';
 import { Skeleton } from '@/components/ui/skeleton.tsx';
 import { Hint } from '@/components/ui/tooltip.tsx';
-import { notificationMeta } from '@/features/notifications/notification-meta.ts';
+import {
+  notificationMeta,
+  notificationOutcome,
+} from '@/features/notifications/notification-meta.ts';
 import { keys } from '@/lib/api/keys.ts';
 import { ICONS } from '@/lib/icons.ts';
 import { NOTIFICATION_TYPE } from '@/lib/status-registry.ts';
@@ -192,6 +196,7 @@ function BellRow({
   const Icon = ICONS[entry.icon ?? 'notifications'];
   const unread = n.read_at === null;
   const meta = notificationMeta(n);
+  const outcome = notificationOutcome(n);
   return (
     <li data-reveal-scope="" className="group/bell relative">
       <button
@@ -220,6 +225,15 @@ function BellRow({
             <span className="line-clamp-2 text-sm text-muted-foreground">{n.body}</span>
           ) : null}
           <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+            {outcome !== null ? (
+              <StatusBadge
+                domain="notificationState"
+                value={outcome}
+                variant="pill"
+                iconless
+                className="shrink-0"
+              />
+            ) : null}
             {meta.length > 0 ? (
               <>
                 <span className="min-w-0 truncate">{meta.join(' · ')}</span>

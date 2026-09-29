@@ -2,6 +2,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { configFileJsonSchema } from '@browserhive/contracts/config';
+import { notificationMessageJsonSchema } from '@browserhive/contracts/notifications';
 import { type OperationSummaries, renderApi, summariesFromOpenApi } from './gen-docs/api.ts';
 import { renderConfiguration } from './gen-docs/configuration.ts';
 import { renderErrors } from './gen-docs/errors.ts';
@@ -31,6 +32,10 @@ export function renderAll(): ReadonlyMap<string, string> {
     [ref('api.md'), renderApi(loadSummaries())],
     [ref('websocket.md'), renderWebsocket()],
     [ref('config.schema.json'), `${JSON.stringify(configFileJsonSchema(), null, 2)}\n`],
+    [
+      ref('notification-message.schema.json'),
+      `${JSON.stringify(notificationMessageJsonSchema(), null, 2)}\n`,
+    ],
   ]);
 }
 

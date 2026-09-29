@@ -71,7 +71,7 @@ describe('round-trips', () => {
       identity: { ua: 'x' },
       closedAt: 5,
       closedReason: 'crash',
-      state: 'crashed',
+      state: 'crashed' as const,
       tenantId: 't',
     });
     expect(sessionFromRow(sessionToRow(record))).toEqual(record);
@@ -195,6 +195,13 @@ describe('round-trips', () => {
       groupKey: 'tool-errors:s',
       readAt: null,
       dismissedAt: 2,
+      kind: 'tool.errors' as const,
+      category: 'problems' as const,
+      severity: 'warn' as const,
+      state: 'open' as const,
+      revision: 1,
+      thread: 'tool-errors:s',
+      messageJson: null,
     };
     expect(notificationFromRow(notificationToRow(notification))).toEqual(notification);
     const connection = {

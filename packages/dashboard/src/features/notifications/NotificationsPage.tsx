@@ -94,6 +94,8 @@ export function NotificationsPage() {
           ) : undefined
         }
         description="Attention requests, tool errors, vault and lifecycle events for your account."
+        learnMore="A notification keeps its place when the thing it announces changes: a settled request shows its outcome (resolved, expired) instead of a new row, and a growing group of tool errors updates its count."
+        learnMoreDocs="notifications"
         actions={
           <>
             <Button

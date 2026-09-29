@@ -31,7 +31,9 @@ import type {
   AttentionService,
   AuthStateStore,
   BlocklistService,
+  ChannelRegistry,
   LeaseSweeper,
+  NotificationOutbox,
   NotificationService,
   OperatorRequestBroker,
   PageActions,
@@ -107,6 +109,10 @@ export interface DomainPart {
   readonly adminAuthenticator: Authenticator;
   readonly mcpAuthenticator: Authenticator;
   readonly notifications: NotificationService;
+  /** Configured external notification channels (D-39). */
+  readonly channels: ChannelRegistry;
+  /** The notification delivery outbox worker (D-34). */
+  readonly notificationOutbox: NotificationOutbox;
   readonly preferences: PreferenceService;
   readonly recorder: Recorder;
   readonly retention: RetentionScheduler;

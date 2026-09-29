@@ -43,6 +43,7 @@ export function retentionPolicyFromConfig(config: RetentionConfig): RetentionPol
     auditRetentionDays: config.auditRetentionDays ?? DEFAULT_AUDIT_RETENTION_DAYS,
     notificationSeenDays: 30,
     notificationDays: 90,
+    notificationDeliveryDays: 30,
   };
 }
 

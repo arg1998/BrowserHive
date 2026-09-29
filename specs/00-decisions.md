@@ -401,14 +401,15 @@ Details in `04-admin-frontend.md`.
 
 **Decision.**
 - Notifications are produced server-side from the domain event bus, persisted (`notifications` table with read and dismissed state), and delivered in-app over the WS `notifications` topic.
-- Producer rules: attention requested; session crashed; lease-expired reap; vault confirm pending; system degraded (error severity); tool errors.
+- Producer rules: attention requested; session crashed; lease-expired reap; vault confirm pending; system degraded (error severity); tool errors. Each produced notification is also a versioned `NotificationMessage` (D-32) with a kind, category, severity, state and revision; the resolution of an attention request or a vault confirmation, the recovery of a degradation and a growing tool-error group are new revisions of the same notification, never new notifications.
 - Tool errors are **grouped per session**: one row per group (`"<slug> · N tool errors"`) grows while it is unread, has been idle for less than 5 minutes and is younger than 60 minutes; `notification.updated` carries the full row and clients upsert by id; lists sort by `updated_at`. Session-less caller mistakes (codes whose retry guidance is "different arguments") produce no notification. A failing agent would otherwise flood the inbox and toasts with one row per call, none naming the session.
 - `/me/preferences` stores the notification toast preferences (`notifications.toasts`, `notifications.types`), which follow the operator across devices; sidebar state and page size are per-device or per-URL.
-- External channel adapters (webhook, ntfy, Telegram, Slack, email) are a documented seam (`NotificationChannel.send(payload)`); not built.
+- External channels (Telegram, Discord, ntfy, a generic webhook, later more) implement the `NotificationChannel` port and receive the contract through the delivery outbox (D-34). The in-app inbox is itself a channel on that port, delivered inline.
 
 **Consequences.**
 - Read state survives reloads and is shared across tabs.
 - By default the dashboard does not toast tool errors; the grouped inbox row is the signal.
+- A lifecycle revision changes the row's state fields but not its title, body or `updated_at`, so the inbox order does not move when a request is resolved.
 
 **Alternatives considered.**
 - *Client-only notifications derived from the feed.* Lost on reload, different in every tab, and unavailable to external channels.
@@ -526,9 +527,9 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 
 **Context.** Several features are likely but not required for the first release. Building their seams now avoids reshaping public contracts later; building the features now would delay the product.
 
-**Decision.** Not built: managed proxy pool and rotation; foreign fingerprint identities; profile blueprints (named, versioned, encrypted); local vault, TOTP, 1Password; extensions registry; external notification channels; security-intercept rule engine; resource governor and eviction; CAPTCHA detection and solving; Web Bot Auth; Tor egress; benchmark harness; multi-user, organisations and OIDC; Firefox and WebKit engines; standalone binaries. Each has a named seam in `01-overall-architecture.md` §9.
+**Decision.** Not built: managed proxy pool and rotation; foreign fingerprint identities; profile blueprints (named, versioned, encrypted); local vault, TOTP, 1Password; extensions registry; security-intercept rule engine; resource governor and eviction; CAPTCHA detection and solving; Web Bot Auth; Tor egress; benchmark harness; multi-user, organisations and OIDC; Firefox and WebKit engines; standalone binaries. Each has a named seam in `01-overall-architecture.md` §9.
 
-**Consequences.** Reserved enum values and config values for these features fail fast with a clear message rather than silently doing nothing.
+**Consequences.** Reserved enum values and config values for these features fail fast with a clear message rather than silently doing nothing. External notification channels left this list in 0.2: they are built in stages from the contract and outbox up (D-32 to D-39).
 
 ## D-26 Browser choice: bundled by default, installed browsers by choice, never a silent switch
 
@@ -629,3 +630,117 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 **Consequences.** Closed sessions keep showing whether they ran sandboxed and with which browser version, in the API, over WS and in the dashboard. Older readers still open the database (the migration is additive). History from before the upgrade honestly reads "not recorded".
 
 **Alternatives considered.** *Inferring the verdict for old rows from the channel and the host*: rejected; the policy's verdict depends on the executable, the host and the mode at the time, none of which is stored. *First launch wins*: rejected in favour of the latest launch, which is what the session actually ran with last. *A new `sandbox: 'sandboxed' | 'unsandboxed' | 'unknown'` wire field*: rejected; the existing optional `browser` already expresses "not recorded" by its absence, and a second field would duplicate it.
+
+## D-32 The notification contract is producer-owned, versioned and full-state
+
+**Status:** Accepted
+
+**Implementation:** the notification foundations (plan N0): contract, producers, JSON Schema, `degrade()`.
+
+**Context.** Notifications are about to leave the machine: Telegram, Discord, ntfy and a generic webhook first, more later (D-16). Each platform renders differently, some can edit a sent message and some cannot, and a user may build their own consumer from the webhook. If every adapter read domain events or the database, each would re-derive what happened, re-decide what may leave the machine, and break whenever the core changes. The in-app row (`Notification`) was designed for the inbox and carries neither severity, lifecycle, structure nor links.
+
+**Decision.**
+- BrowserHive owns one message contract, `NotificationMessage` (`@browserhive/contracts/notifications`): zod-first, JSON-serialisable, `schema: 1`, with a JSON Schema published at `docs/reference/notification-message.schema.json` and regenerated in CI like the other references. It carries `id`, `revision`, `thread`, `kind`, `category`, `severity`, `state`, `alert`, `at`, `title`, `summary`, semantic `blocks` (a tiny inline AST, never a markdown string), up to 5 `actions` (`act` commands with an `open` fallback, or `open` dashboard paths), routing `entities` and the `privacy` already applied. Field names are snake_case like every other wire shape (D-05).
+- **Producers own it; consumers only render it.** Producers are pure, table-driven functions from observed bus events (spec 03 §9). A platform adapter receives the contract and nothing else: it never reads domain events or the database. **Agents never author notifications**: every message derives from facts BrowserHive observed (D-09, D-12); there is no `notify` tool.
+- **Full-state revisions.** A notification keeps its `id` for life; every state change is `revision + 1` and the message is complete at every revision, so a re-send or re-edit is always correct and adapters are idempotent.
+- **Redaction happens before the contract** (spec 10 §9): every string a producer copies from an event goes through the `Redactor` (registered secrets and credential patterns) and URLs through `sanitizeUrl`. Content levels (`counts` < `titles` < `full`) are applied by the core per channel, never by an adapter.
+- **Versioning.** Additive changes (a new optional field, a new kind, block, inline or command) keep `schema: 1`; consumers MUST ignore what they do not know (an unknown block renders as nothing, an unknown action is skipped). Removing or re-typing a field bumps `schema`, and the generic webhook announces the version it sends.
+- A shared, pure `degrade(message, capabilities)` adapts a message to what a renderer supports (tables → lists, images dropped or linked, `act` → `open`, truncation with "… Open in BrowserHive"); renderers never implement fallbacks themselves.
+
+**Consequences.** Adding a platform is a renderer plus a transport against a fixed input, testable with golden files. The contract is a public compatibility surface: its JSON Schema is diffed in review. The in-app `Notification` DTO keeps its shape and gains the contract's classification fields (`kind`, `category`, `severity`, `state`, `revision`, `thread`) additively. Rows from before schema v5 have no stored message (`message_json` NULL): nothing is fabricated for them.
+
+**Alternatives considered.** *Adapters over the wire DTO* (the research's envelope): no structure, no lifecycle, and every adapter would derive links and severity itself. *A markdown string body*: every platform escapes markdown differently (Telegram MarkdownV2 reserves 18 characters) and a page title would break messages. *Letting agents send notifications*: a prompt-injected page would become a message from BrowserHive on the operator's phone; `request_attention` already is the agent's way to reach a human.
+
+## D-33 No hosted infrastructure; bring your own credentials; secrets only as environment variable names
+
+**Status:** Accepted
+
+**Implementation:** binding on every channel; the storage (`secret_refs_json`) exists since the notification foundations (N0), the checks arrive with the first channels (N1).
+
+**Context.** BrowserHive is local-first. A relay, a shared bot or a hosted callback would make BrowserHive a service with an operator, an uptime and a data-protection story, and would see every user's messages. Channel credentials (bot tokens, webhook URLs, access tokens) are live secrets; the database is backed up (`db backup`) and copied around.
+
+**Decision.**
+- BrowserHive provides no server, relay or shared bot, now or later. Everything it does with a platform is an **outbound** connection from the user's machine (HTTP requests, Telegram long polling, the Discord gateway WebSocket, ntfy subscriptions); nothing needs a public URL or an open port.
+- Every user brings their own Telegram bot, Discord webhook or bot and ntfy topic, and has full authority over it.
+- **Secrets live only in the environment.** A channel stores the *names* of environment variables (`secret_refs_json`, `token=env:BH_TG_TOKEN` in a startup channel), never a value, so a database backup never contains a token. An inline secret is refused: over the API with a validation error, on the command line with exit 64. The dashboard shows whether a variable is set, never its value. Names starting with `BROWSERHIVE_` are refused, because the config loader reserves that prefix.
+
+**Consequences.** Changing a token is an environment change plus a restart. Features that seem to need an inbound connection are designed without one (act buttons through Telegram callbacks, the Discord gateway or a second ntfy topic, D-38).
+
+**Alternatives considered.** *A shared BrowserHive bot*: users would share a rate limit and trust a third party with every message. *Storing tokens encrypted in the database*: the key would have to live next to the database, so a backup would still carry both.
+
+## D-34 Notification delivery is a transactional outbox: at least once, full-state, silent edits, no degradation loop
+
+**Status:** Accepted
+
+**Implementation:** the notification foundations (N0): tables, worker, breaker, retention, metrics; platform adapters follow (N1).
+
+**Context.** An external platform can be down, rate-limited or misconfigured, and BrowserHive can stop at any moment. A delivery made from an in-memory callback is lost on restart, and the producer's in-memory de-duplication set does not survive one either. A channel failure reported as a system degradation would itself produce a notification, delivered through the failing channel: a feedback loop.
+
+**Decision.**
+- A notification change and its delivery jobs (`notification_deliveries`, one row per channel × revision × op) are written in **one transaction**; a worker drains the jobs. `notification_deliveries` is both the outbox and the delivery log; `notification_channel_messages` maps a channel and notification to the platform message it produced, its last revision and its TTL deadline.
+- **At least once.** Jobs left `sending` by a crash are retried at the next start. Edits and deletes are idempotent (full-state, D-32); a crash in the middle of a *new* send can duplicate that message, which is documented.
+- **Coalescing.** A job renders the notification's current state; a job whose revision a later delivery already covered is `superseded`. At most one edit per message every 3 s.
+- **Edits are silent.** Anything that must wake the user is a new message (`alert: true`). When a platform cannot edit, or the message was deleted in the chat, an alerting revision is sent as a new message and anything else is `superseded`.
+- **Retries.** Exponential backoff with jitter, honouring `retry_after` / `Retry-After`; a job is `dead` after 8 attempts or 24 h.
+- **Circuit breaker.** 5 consecutive failures mark the channel `broken`. That is shown in-app (a `channel.broken` notification and the channel's status) and **never** raised as a system degradation. The loop is cut structurally by kind: `channel.broken` notifications are delivered in-app only and are never enqueued for an external channel.
+- **Backlog.** After an outage only the latest revision per notification is sent, and more than 20 pending `info` sends on one channel collapse into the newest one with a "you missed N" note.
+- **Suppressed deliveries are logged** with a reason (`filtered`, `quiet_hours`, `throttled`, `channel_paused`, `content_blocked`, `image_blocked`, `edit_unsupported`, `delete_unsupported`, `collapsed`), so "why didn't I get it?" always has an answer.
+- With no external channel configured nothing is enqueued, no worker timer runs and the only cost is one indexed read of `notification_channels` at startup.
+
+**Consequences.** Delivery rows are telemetry-class (30 days, spec 03 §7.1); channels are configuration and never pruned. `browserhive.notifications.deliveries{channel_kind,status}` counts outcomes and every platform call is a span (spec 10). A per-principal routing model is not built: channels are instance-wide and deliveries are enqueued once per produced notification, matching the single shared inbox (spec 03 §9).
+
+**Alternatives considered.** *Fire-and-forget calls from the producer* (the pre-0.2 seam): no retry, no log, lost on restart. *A retry counter to stop the degradation loop*: it bounds the loop instead of removing it, and a slow loop still spams the other channels. *Delivering the latest revision per thread* (the plan's first wording): a thread can hold several notifications (a session's crash and its wrap-up), so coalescing is per notification.
+
+## D-35 Message TTL is performed by BrowserHive
+
+**Status:** Accepted
+
+**Implementation:** `expires_at` and the sweeper exist since the notification foundations (N0); rules, platform deletes and the wizard arrive with the channels (N1).
+
+**Context.** Users want notifications that clean themselves up. No platform offers a per-message timer to bots; Telegram's auto-delete timer is a whole-chat setting chosen by the user, and a bot may delete its own messages only within 48 hours of sending them.
+
+**Decision.** BrowserHive deletes the message itself. A TTL can be set per channel and category; the default is **never** for every category. The deadline is stored as `expires_at` on the channel message when it is sent, so a deletion that fell due while BrowserHive was stopped happens at the next start and is logged as late. "Delete when resolved" is offered per channel and category and is **off** by default. The setup wizard caps Telegram TTLs at 47 h and suggests Telegram's own chat timer as a backstop; a message that became too old while BrowserHive was stopped is logged as `could_not_delete: too_old`. The UI says plainly that a lock-screen preview someone already saw cannot be taken back, and that ntfy.sh drops attachments after 3 h regardless.
+
+**Consequences.** TTL deletes are ordinary outbox jobs (`op = delete`) with the same retries and log.
+
+## D-36 Screenshots in notifications are opt-in; vault screenshots are taken before the fill
+
+**Status:** Accepted
+
+**Implementation:** with the first external channels (N1); the contract's `image` block and `privacy.has_image` exist since N0.
+
+**Context.** A screenshot is the most useful and the most dangerous thing a notification can carry: a logged-in page, an inbox, a balance, or a credential being typed.
+
+**Decision.** Screenshots are off by default and switched on per channel and category, for three triggers only: an attention request (CAPTCHA requests are attention requests with a CAPTCHA reason; no new detector), a vault fill and a session crash (its last screenshot, when one exists). The vault screenshot is taken **before the fill sequence starts** (the login page and the origin being filled), never during or after a fill and never while a secret window is open. Images are never sent when `recordToolResults=none` or when the channel's content level is below `full`. An optional setting masks form fields (Playwright's screenshot `mask`). The wizard recommends a self-hosted ntfy for images or warns about ntfy.sh's public 3-hour attachment store.
+
+## D-37 `publicUrl` builds notification links and is trusted automatically
+
+**Status:** Accepted
+
+**Implementation:** with the first external channels (N1); the `LinkBuilder` port exists since N0.
+
+**Context.** "Open session" in a notification is a link, and a `127.0.0.1` link does nothing on a phone. Users who reach their dashboard remotely do it through their own reverse proxy, Cloudflare, Caddy, nginx or a Tailscale name, which today also needs `allowedHosts` and can fail the origin check when a proxy rewrites `Host`.
+
+**Decision.** A config key `publicUrl` (absolute `http(s)://`; a warning for `http` on a non-loopback host) holds the address where the user made the dashboard reachable. Every open link in a notification is `publicUrl + path`, built by one `LinkBuilder`; without `publicUrl` links use the local address and are labelled "Open on this computer". The `publicUrl` host is added to the Host allow-list and accepted by the origin (CSRF) guard. `doctor` and the System page check it by fetching `<publicUrl>/health` and comparing this start's random instance id. Links never carry tokens; opening one still needs a login. BrowserHive provides no proxy or tunnel.
+
+## D-38 A Discord channel uses webhook mode or bot mode, one per channel
+
+**Status:** Accepted
+
+**Implementation:** webhook mode with the first external channels (N1), bot mode with act buttons (N2); `notification_channels.mode` exists since N0.
+
+**Context.** A Discord webhook takes 30 seconds to create and needs no connection, but its messages cannot carry interactive buttons. A bot needs a Developer Portal application and a gateway connection, and is the only way to receive button presses without a public endpoint (an Interactions Endpoint URL and the gateway are mutually exclusive).
+
+**Decision.** Each Discord channel uses exactly one mode: **webhook** (default: open links only; act buttons degrade to "Open in BrowserHive") or **bot** (opt-in: act buttons over the gateway WebSocket while BrowserHive runs). Switching mode is an edit of the channel and keeps its rules. The setup explains the difference with pictures of BrowserHive's own messages, never images copied from Discord or the web.
+
+## D-39 Startup channels come from command-line flags only and are read-only
+
+**Status:** Accepted
+
+**Implementation:** the registry merge and clash rule since the notification foundations (N0); the flag and its parser with the first external channels (N1).
+
+**Context.** Some users want a channel that exists from the first start (a server, a container) without clicking through the dashboard. Nested per-channel rules do not fit the flat config grammar (spec 08 §2), and a second copy of a channel in the config file and the database would be two truths. Process arguments are visible to other users of the machine (`ps`).
+
+**Decision.** Startup channels are declared only with a repeatable `--notificationChannel` flag (spec 08 §5.7): not in the config file and not in the environment. A startup channel references secrets by environment variable **name** (`token=env:BH_TG_TOKEN`); an inline secret is a usage error (exit 64). At each start the startup channels are projected into `notification_channels` with `source = 'startup'` (their configuration columns rewritten from the flags, their status and failure counters kept), so deliveries keep their foreign keys and the breaker state survives restarts; a startup channel no longer passed is removed with its delivery log. The dashboard and API show them read-only with a "from startup" badge. A startup channel whose name matches a dashboard channel stops startup with `CONFIG_INVALID` (exit 64); neither silently shadows the other.
+
+**Alternatives considered.** *A `notificationChannels` config key with a URI grammar* (the research's P1): secrets would sit in a file that gets committed, and per-channel rules would need a grammar the config ladder does not have. *Seeding the database from config on first run*: friendlier once, but the file would then lie about what is configured.

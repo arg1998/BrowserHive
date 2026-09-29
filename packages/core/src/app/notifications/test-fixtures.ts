@@ -4,10 +4,13 @@ import type { ClosedReason } from '@browserhive/contracts/enums';
 import type { ToolName } from '@browserhive/contracts/tools';
 import {
   AttentionCreatedEvent,
+  AttentionResolvedEvent,
   SessionClosedEvent,
   SystemDegradedEvent,
+  SystemRecoveredEvent,
   ToolCalledEvent,
   VaultConfirmCreatedEvent,
+  VaultConfirmResolvedEvent,
 } from '@browserhive/contracts/ws';
 import type { DomainEvents } from '../events/catalog.ts';
 import type { ProducedEvent } from './producers.ts';
@@ -46,13 +49,50 @@ function request(kind: 'attention' | 'vault_confirm', id: string, extra: object)
   };
 }
 
-/** `attention.created`. */
-export function attentionCreated(id: string, mode: 'takeover' | 'notify' | null): ProducedEvent {
+/** `attention.created`; `extra` overrides request fields (reason, page_url, tool…). */
+export function attentionCreated(
+  id: string,
+  mode: 'takeover' | 'notify' | null,
+  extra: object = {},
+): ProducedEvent {
   const payload: DomainEvents['attention.created'] = AttentionCreatedEvent.parse({
     type: 'attention.created',
-    request: request('attention', id, { mode }),
+    request: request('attention', id, { mode, ...extra }),
   });
   return { name: 'attention.created', at: 1, payload };
+}
+
+/** Operator request statuses a resolution can carry. */
+export type Settled = 'resolved' | 'rejected' | 'timeout' | 'cancelled';
+
+/** `attention.resolved` with `status`, settled 130 s after creation by `local`. */
+export function attentionResolved(id: string, status: Settled): ProducedEvent {
+  const payload: DomainEvents['attention.resolved'] = AttentionResolvedEvent.parse({
+    type: 'attention.resolved',
+    request: request('attention', id, {
+      mode: 'takeover',
+      status,
+      resolved_by: status === 'timeout' || status === 'cancelled' ? null : 'local',
+      resolved_at: 130_001,
+      waited_ms: 130_000,
+    }),
+  });
+  return { name: 'attention.resolved', at: 2, payload };
+}
+
+/** `vault.confirm.resolved` with `status`. */
+export function vaultConfirmResolved(id: string, status: Settled): ProducedEvent {
+  const payload: DomainEvents['vault.confirm.resolved'] = VaultConfirmResolvedEvent.parse({
+    type: 'vault.confirm.resolved',
+    request: request('vault_confirm', id, {
+      entry_name: 'github',
+      status,
+      resolved_by: 'local',
+      resolved_at: 5_001,
+      waited_ms: 5_000,
+    }),
+  });
+  return { name: 'vault.confirm.resolved', at: 2, payload };
 }
 
 /** `vault.confirm.created`. */
@@ -123,6 +163,25 @@ export function toolCalled(
     },
   };
   return { name: 'tool.called', at: n, payload };
+}
+
+/** `system.recovered` of the degradation {@link systemDegraded} raised. */
+export function systemRecovered(n = 1): ProducedEvent {
+  const payload: DomainEvents['system.recovered'] = SystemRecoveredEvent.parse({
+    type: 'system.recovered',
+    event: {
+      event_id: eventId(n),
+      code: 'RETENTION_FAILED',
+      severity: 'error',
+      message: 'retention sweep failed',
+      details: null,
+      first_seen_at: 1,
+      last_seen_at: 1,
+      count: 1,
+      resolved_at: 9,
+    },
+  });
+  return { name: 'system.recovered', at: 9, payload };
 }
 
 /** `system.degraded`. */

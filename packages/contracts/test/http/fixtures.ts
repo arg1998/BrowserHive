@@ -192,6 +192,12 @@ export const notification = (): Input<typeof Notification> => ({
   count: 1,
   read_at: null,
   dismissed_at: null,
+  kind: 'attention.requested',
+  category: 'needs-you',
+  severity: 'warn',
+  state: 'open',
+  revision: 1,
+  thread: `attention:${REQUEST_ID}`,
 });
 
 export const logRecord = (): Input<typeof LogRecord> => ({

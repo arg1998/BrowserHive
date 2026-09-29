@@ -263,6 +263,12 @@ export function notification(i: number, patch: Partial<Notification> = {}): Noti
     count: 1,
     read_at: null,
     dismissed_at: null,
+    kind: 'tool.errors',
+    category: 'problems',
+    severity: 'warn',
+    state: 'open',
+    revision: 1,
+    thread: 'tool-errors:none',
     ...patch,
   };
 }

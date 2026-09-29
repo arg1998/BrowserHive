@@ -326,14 +326,14 @@ Payloads of `kind: "event"` frames, discriminated on `type`. DTO fields (`sessio
 
 | Field | Type | Required | Constraints |
 |---|---|---|---|
-| `notification` | `object` | yes | keys `notification_id`, `principal_id`, `type`, `title`, `body`, `session_id`, `session_slug`, `target`, `source_event_id`, `created_at`, `updated_at`, `count`, `read_at`, `dismissed_at` |
+| `notification` | `object` | yes | keys `notification_id`, `principal_id`, `type`, `title`, `body`, `session_id`, `session_slug`, `target`, `source_event_id`, `created_at`, `updated_at`, `count`, `read_at`, `dismissed_at`, `kind`, `category`, `severity`, `state`, `revision`, `thread` |
 
 <a id="event-notification-updated"></a>
 ### `notification.updated`
 
 | Field | Type | Required | Constraints |
 |---|---|---|---|
-| `notification` | `object` | yes | keys `notification_id`, `principal_id`, `type`, `title`, `body`, `session_id`, `session_slug`, `target`, `source_event_id`, `created_at`, `updated_at`, `count`, `read_at`, `dismissed_at` |
+| `notification` | `object` | yes | keys `notification_id`, `principal_id`, `type`, `title`, `body`, `session_id`, `session_slug`, `target`, `source_event_id`, `created_at`, `updated_at`, `count`, `read_at`, `dismissed_at`, `kind`, `category`, `severity`, `state`, `revision`, `thread` |
 
 <a id="event-log-record"></a>
 ### `log.record`

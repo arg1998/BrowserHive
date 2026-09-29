@@ -5,7 +5,14 @@ export { AuthStateStore } from '../app/auth-states/store.ts';
 export { type BlocklistFileWatcher, BlocklistService } from '../app/blocklist/blocklist-service.ts';
 export { configView } from '../app/config/provenance-view.ts';
 export { InProcessEventBus } from '../app/events/bus.ts';
-export { NotificationService } from '../app/notifications/notification-service.ts';
+export {
+  type ChannelAdapterFactory,
+  ChannelRegistry,
+  createLocalLinkBuilder,
+  type DeliveryCounter,
+  NotificationOutbox,
+  NotificationService,
+} from '../app/notifications/index.ts';
 export { Recorder } from '../app/observability/recorder.ts';
 export { SystemStatusService } from '../app/observability/system-status.ts';
 export { PreferenceService } from '../app/preferences/preference-service.ts';

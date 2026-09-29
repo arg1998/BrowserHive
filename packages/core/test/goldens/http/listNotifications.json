@@ -14,7 +14,13 @@
       "updated_at": 1699999980000,
       "count": 1,
       "read_at": null,
-      "dismissed_at": null
+      "dismissed_at": null,
+      "kind": "tool.errors",
+      "category": "problems",
+      "severity": "warn",
+      "state": "open",
+      "revision": 1,
+      "thread": "tool-errors:shop-0000000a"
     }
   ],
   "page": {

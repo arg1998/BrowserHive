@@ -101,6 +101,7 @@ export async function wireObserversPhase(ctx: BootContext): Promise<PhaseHandle>
 
   domain.recorder.start();
   domain.notifications.start();
+  domain.notificationOutbox.start();
   status.start();
   domain.retention.start();
   domain.outbox.start();
@@ -125,6 +126,7 @@ export async function wireObserversPhase(ctx: BootContext): Promise<PhaseHandle>
       domain.outbox.stop();
       domain.retention.stop();
       status.stop();
+      domain.notificationOutbox.stop();
       domain.notifications.stop();
     },
   };
