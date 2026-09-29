@@ -324,6 +324,25 @@ describe('ntfy', () => {
     expect(put?.headers['authorization']).toBe('Bearer tk_x');
   });
 
+  it('falls back to the text when the server refuses attachments (self-hosted, no cache)', async () => {
+    fakes.script('ntfy:PUT', {
+      status: 400,
+      body: { code: 40014, http: 400, error: 'invalid request: attachments not allowed' },
+    });
+    const channel = ntfy();
+    const { ref } = await channel.send(
+      delivery('attention', NTFY_CAPABILITIES, { image: 'unmasked' }),
+    );
+    const [put, post] = fakes.of('ntfy');
+    expect(put?.method).toBe('PUT');
+    expect([post?.method, post?.path]).toEqual(['POST', '/']);
+    expect(post?.json).toMatchObject({
+      sequence_id: 'n-sample000001',
+      title: 'Attention requested',
+    });
+    expect(ref['sequence_id']).toBe('n-sample000001');
+  });
+
   it('reads the topic from a variable and never stores it in the ref', async () => {
     const channel = ntfy({ target: { server: fakes.ntfyServer } }, null, 'secret-topic-x');
     const { ref } = await channel.send(delivery('crash', NTFY_CAPABILITIES));

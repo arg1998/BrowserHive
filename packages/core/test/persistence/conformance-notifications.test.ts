@@ -295,6 +295,62 @@ for (const [name, open] of adapters) {
       ).toEqual(['n-info00000001']);
     });
 
+    it('deliveries: filter the log by op and notification kind; per-channel stats', async () => {
+      await r.notifications.insert(
+        notification({ notificationId: 'n-tool00000001', kind: 'tool.errors', thread: 'x' }),
+      );
+      await r.notificationDeliveries.enqueue([
+        job(),
+        job({ revision: 2, op: 'edit' }),
+        job({ notificationId: 'n-tool00000001' }),
+        job({ notificationId: 'n-tool00000001', revision: 2, op: 'edit', status: 'suppressed' }),
+      ]);
+      const rows = [...(await r.notificationDeliveries.list({ limit: 10 }))].reverse();
+      const [send, edit, toolSend, toolEdit] = rows;
+      if (
+        send === undefined ||
+        edit === undefined ||
+        toolSend === undefined ||
+        toolEdit === undefined
+      )
+        throw new Error('rows');
+      expect((await r.notificationDeliveries.list({ ops: ['edit'] })).map((d) => d.seq)).toEqual([
+        toolEdit.seq,
+        edit.seq,
+      ]);
+      expect(
+        (await r.notificationDeliveries.list({ kinds: ['tool.errors'] })).map(
+          (d) => d.notificationId,
+        ),
+      ).toEqual(['n-tool00000001', 'n-tool00000001']);
+      await r.notificationDeliveries.claim(send.seq, 200);
+      await r.notificationDeliveries.finish(send.seq, { status: 'sent', updatedAt: 300 });
+      await r.notificationDeliveries.claim(toolSend.seq, 200);
+      await r.notificationDeliveries.finish(toolSend.seq, {
+        status: 'dead',
+        reason: 'auth',
+        updatedAt: 400,
+      });
+      const stats = await r.notificationDeliveries.stats(250);
+      expect(stats).toEqual([
+        {
+          channelId: 'nc-000000000001',
+          sent: 1,
+          failed: 1,
+          suppressed: 0,
+          pending: 1,
+          lastAt: 400,
+          lastStatus: 'dead',
+        },
+      ]);
+      expect((await r.notificationDeliveries.stats(1_000))[0]).toMatchObject({
+        sent: 0,
+        failed: 0,
+        pending: 1,
+        lastAt: 400,
+      });
+    });
+
     it('channel messages: upsert, first of a thread, TTL due once, expiry and delete marks', async () => {
       const message = {
         channelId: 'nc-000000000001',

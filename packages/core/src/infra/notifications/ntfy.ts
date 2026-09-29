@@ -279,12 +279,34 @@ export function createNtfyChannel(
     },
   });
 
+  /** Publishes the text of a binary request as JSON, keeping its sequence id (no screenshot). */
+  function publishText(path: string, request: RenderedRequest): Promise<PlatformAnswer> {
+    const [, , sequence = ''] = path.split('/');
+    const { filename: _dropped, ...fields } = request.body;
+    return callPlatform(
+      {
+        url: `${server}/`,
+        method: 'POST',
+        headers: { ...auth, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          topic: resolvedTopic,
+          ...fields,
+          markdown: false,
+          sequence_id: sequence,
+        }),
+      },
+      options,
+    );
+  }
+
   async function publish(request: RenderedRequest): Promise<PlatformAnswer> {
     const path = substituteSecrets(request.path, { topic: resolvedTopic });
     if (request.encoding === 'binary' && request.file !== null) {
       const image = await deps.images.read(request.file.ref);
-      if (image !== null) {
-        return callPlatform(
+      // The screenshot is gone (pruned): publish the text alone, keeping the sequence id.
+      if (image === null) return publishText(path, request);
+      try {
+        return await callPlatform(
           {
             url: `${server}${path}${ntfyQuery(request.body)}`,
             method: 'PUT',
@@ -293,24 +315,18 @@ export function createNtfyChannel(
           },
           options,
         );
+      } catch (err) {
+        // A self-hosted ntfy without an attachment cache (or with a smaller size limit) refuses
+        // uploads: the notification still goes out, without its screenshot.
+        if (
+          err instanceof ChannelSendError &&
+          err.code === 'rejected' &&
+          /attachment/i.test(err.message)
+        ) {
+          return publishText(path, request);
+        }
+        throw err;
       }
-      // The screenshot is gone (pruned): publish the text alone, keeping the sequence id.
-      const [, , sequence = ''] = path.split('/');
-      const { filename: _dropped, ...fields } = request.body;
-      return callPlatform(
-        {
-          url: `${server}/`,
-          method: 'POST',
-          headers: { ...auth, 'content-type': 'application/json' },
-          body: JSON.stringify({
-            topic: resolvedTopic,
-            ...fields,
-            markdown: false,
-            sequence_id: sequence,
-          }),
-        },
-        options,
-      );
     }
     const body = { ...request.body, topic: resolvedTopic };
     return callPlatform(

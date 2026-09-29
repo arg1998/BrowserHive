@@ -87,6 +87,7 @@ export class ChannelRegistry {
           },
           {
             message: `notification channel '${spec.name}' is defined by --notificationChannel and in the dashboard. Rename one of them.`,
+            publicMessage: `notification channel '${spec.name}' is defined by --notificationChannel and in the dashboard. Rename one of them.`,
           },
         );
       }
