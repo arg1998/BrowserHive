@@ -449,3 +449,71 @@ describe('NotificationService startup catch-up', () => {
     expect(await service.reconcileRequests({ get: async (id) => settled.get(id) ?? null })).toBe(0);
   });
 });
+
+describe('screenshots (D-36)', () => {
+  function shotSetup(options: {
+    readonly enabled?: boolean;
+    readonly variants?: { masked: boolean; unmasked: boolean };
+    readonly slow?: boolean;
+  }) {
+    const repo = new InMemoryNotificationRepository();
+    const calls: string[] = [];
+    const service = new NotificationService({
+      repo,
+      bus: new RecordingEventBus<DomainEvents>(),
+      clock: new FakeClock(),
+      ids: new FakeIdGenerator(),
+      logger: new CollectingLogger(),
+      screenshots: {
+        enabled: options.enabled ?? true,
+        timeoutMs: 20,
+        variants: () => options.variants ?? { masked: true, unmasked: true },
+        snapshots: {
+          capture: async (sessionId, { masked }) => {
+            calls.push(`capture:${sessionId}:${masked ? 'masked' : 'plain'}`);
+            if (options.slow === true) await new Promise((r) => setTimeout(r, 200));
+            return { ref: masked ? 'nimg-mask' : 'nimg-plain', capturedAt: 7 };
+          },
+          lastFrame: async (sessionId) => {
+            calls.push(`last:${sessionId}`);
+            return { ref: 'nimg-last', capturedAt: 3 };
+          },
+        },
+      },
+    });
+    const images = (id: string) => {
+      const message = NotificationMessage.parse(JSON.parse(repo.rows.get(id)?.messageJson ?? '{}'));
+      return message.blocks.flatMap((b) => (b.type === 'image' ? [[b.ref, b.masked]] : []));
+    };
+    return { service, calls, images };
+  }
+
+  it('captures the variants the channels want for an attention request', async () => {
+    const { service, calls, images } = shotSetup({});
+    const [dto] = await service.produce(attentionCreated('a-000000000001', 'takeover'));
+    expect(calls).toEqual([`capture:${SESSION}:plain`, `capture:${SESSION}:masked`]);
+    expect(images(dto?.notification_id ?? '')).toEqual([
+      ['nimg-plain', false],
+      ['nimg-mask', true],
+    ]);
+  });
+
+  it('uses the last stored frame for a crash, never masked', async () => {
+    const { service, calls, images } = shotSetup({ variants: { masked: true, unmasked: false } });
+    const [dto] = await service.produce(sessionClosed('crash'));
+    expect(calls).toEqual([`last:${SESSION}`]);
+    expect(images(dto?.notification_id ?? '')).toEqual([['nimg-last', false]]);
+  });
+
+  it('captures nothing when no channel wants it, when disabled, or when it times out', async () => {
+    const none = shotSetup({ variants: { masked: false, unmasked: false } });
+    await none.service.produce(attentionCreated('a-000000000001', 'notify'));
+    expect(none.calls).toEqual([]);
+    const off = shotSetup({ enabled: false });
+    await off.service.produce(vaultConfirmCreated('a-000000000009', 'github'));
+    expect(off.calls).toEqual([]);
+    const slow = shotSetup({ slow: true, variants: { masked: false, unmasked: true } });
+    const [dto] = await slow.service.produce(attentionCreated('a-000000000002', 'notify'));
+    expect(slow.images(dto?.notification_id ?? '')).toEqual([]);
+  });
+});

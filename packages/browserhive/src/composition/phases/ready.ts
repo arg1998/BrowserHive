@@ -55,6 +55,11 @@ export async function bannerFacts(ctx: BootContext): Promise<BannerFacts> {
     adminPassword: domain.seeds.adminPassword,
     agentToken: domain.seeds.agentToken,
     browserMissing: !domain.browserInstalled,
+    notifications: {
+      channels: domain.channels.channels().length,
+      startup: domain.channels.channels().filter((c) => c.record.source === 'startup').length,
+      publicUrl: config.publicUrl ?? null,
+    },
   };
 }
 

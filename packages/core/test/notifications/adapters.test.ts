@@ -11,6 +11,8 @@ import {
   DISCORD_WEBHOOK_CAPABILITIES,
   NTFY_CAPABILITIES,
   TELEGRAM_CAPABILITIES,
+  telegramAcceptsUrl,
+  telegramRenderer,
   WEBHOOK_CAPABILITIES,
 } from '../../src/infra/notifications/index.ts';
 import { ChannelSendError } from '../../src/ports/notification-channel.ts';
@@ -277,6 +279,27 @@ describe('discord (webhook mode)', () => {
   });
 });
 
+describe('telegram button URLs', () => {
+  it('accepts domains and IPv4, refuses dotless hosts and IPv6 literals (Bot API behaviour)', () => {
+    expect(telegramAcceptsUrl('https://bh.example.net/x')).toBe(true);
+    expect(telegramAcceptsUrl('http://100.101.102.103:9876/x')).toBe(true);
+    expect(telegramAcceptsUrl('http://127.0.0.1:9876/x')).toBe(true);
+    expect(telegramAcceptsUrl('http://localhost:9876/x')).toBe(false);
+    expect(telegramAcceptsUrl('http://mybox:9876/x')).toBe(false);
+    expect(telegramAcceptsUrl('http://[::1]:9876/x')).toBe(false);
+  });
+
+  it('puts links in the text when publicUrl is a host Telegram refuses', () => {
+    const links = { local: false, url: (path: string) => `http://localhost:9876${path}` };
+    const [request] = telegramRenderer.render(
+      { ...delivery('test', TELEGRAM_CAPABILITIES), links },
+      { mode: null, target: { chat_id: '1' }, op: 'send', ref: null, actToken: () => 'x' },
+    );
+    expect(request?.body['reply_markup']).toBeUndefined();
+    expect(String(request?.body['text'])).toContain('🔗 Links');
+  });
+});
+
 describe('ntfy', () => {
   const ntfy = (overrides = {}, token: string | null = null, topic: string | null = null) =>
     createNtfyChannel(
@@ -322,6 +345,25 @@ describe('ntfy', () => {
     expect(put?.query['filename']).toBe('screenshot.jpg');
     expect(JSON.parse(put?.query['actions'] ?? '[]')).toHaveLength(2);
     expect(put?.headers['authorization']).toBe('Bearer tk_x');
+  });
+
+  it('falls back to the text when the server refuses attachments (self-hosted, no cache)', async () => {
+    fakes.script('ntfy:PUT', {
+      status: 400,
+      body: { code: 40014, http: 400, error: 'invalid request: attachments not allowed' },
+    });
+    const channel = ntfy();
+    const { ref } = await channel.send(
+      delivery('attention', NTFY_CAPABILITIES, { image: 'unmasked' }),
+    );
+    const [put, post] = fakes.of('ntfy');
+    expect(put?.method).toBe('PUT');
+    expect([post?.method, post?.path]).toEqual(['POST', '/']);
+    expect(post?.json).toMatchObject({
+      sequence_id: 'n-sample000001',
+      title: 'Attention requested',
+    });
+    expect(ref['sequence_id']).toBe('n-sample000001');
   });
 
   it('reads the topic from a variable and never stores it in the ref', async () => {

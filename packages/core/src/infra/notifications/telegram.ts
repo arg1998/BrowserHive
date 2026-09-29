@@ -127,7 +127,7 @@ function inlineRun(run: readonly Inline[], links: LinkBuilder, budget: number): 
         break;
       case 'link': {
         const label = plain(node.text, left);
-        piece = links.local
+        piece = linksAsText(links)
           ? label
           : wrap('a', label, ` href="${escapeAttr(links.url(node.path))}"`);
         break;
@@ -224,7 +224,7 @@ export function telegramHtml(
     plain(`${severityMark(message)} `, 4),
     wrap('b', plain(message.title, 120)),
   ]);
-  const local = links.local ? localLinks(message, links) : EMPTY;
+  const local = linksAsText(links) ? localLinks(message, links) : EMPTY;
   const reserve = local.visible > 0 ? local.visible + 2 : 0;
   const parts: Frag[] = [];
   let used = header.visible;
@@ -254,11 +254,32 @@ export function telegramHtml(
   return concat(parts, '\n\n').html;
 }
 
+/**
+ * Whether Telegram accepts `url` in a URL button or an `<a href>`: it refuses hosts without a dot
+ * (`localhost`, a bare machine name) and IPv6 literals ("Wrong HTTP URL"), and accepts domains and
+ * IPv4 addresses (checked against the Bot API on 2026-09-28).
+ */
+export function telegramAcceptsUrl(url: string): boolean {
+  let host: string;
+  try {
+    host = new URL(url).hostname;
+  } catch {
+    return false;
+  }
+  if (host.startsWith('[')) return false;
+  return /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes('.');
+}
+
+/** Links go into the text instead of buttons: local links, or a base Telegram would refuse. */
+function linksAsText(links: LinkBuilder): boolean {
+  return links.local || !telegramAcceptsUrl(links.url('/'));
+}
+
 function localLinks(message: NotificationMessage, links: LinkBuilder): Frag {
   const resolved = openLinks(message, links);
   if (resolved.length === 0) return EMPTY;
   return lines([
-    wrap('b', plain(`🖥 ${LOCAL_LINKS_LABEL}`, 64)),
+    wrap('b', plain(links.local ? `🖥 ${LOCAL_LINKS_LABEL}` : '🔗 Links', 64)),
     ...resolved.map((l) => concat([plain(`${l.label}: `, 64), wrap('code', plain(l.url, 2048))])),
   ]);
 }
@@ -273,7 +294,7 @@ function keyboard(
   const buttons: { text: string; url?: string; callback_data?: string }[] = [];
   for (const action of message.actions) {
     if (action.kind === 'open') {
-      if (!links.local) buttons.push({ text: action.label, url: links.url(action.path) });
+      if (!linksAsText(links)) buttons.push({ text: action.label, url: links.url(action.path) });
     } else if (capabilities.actButtons) {
       buttons.push({ text: action.label, callback_data: context.actToken(action.id) });
     }
