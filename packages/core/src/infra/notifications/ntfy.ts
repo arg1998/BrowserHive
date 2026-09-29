@@ -1,21 +1,25 @@
-/** @module infra/notifications/ntfy — the ntfy adapter (spec 03 §9.5): a pure renderer to a JSON publish (or a `PUT` upload when a screenshot is attached) with priority, tags, click and `view` actions, and the transport (send, replace by sequence id, delete). */
+/** @module infra/notifications/ntfy — the ntfy adapter (spec 03 §9.5, D-42): a pure renderer to a JSON publish (or a `PUT` upload when a screenshot is attached) with priority, tags, click, `view` actions and — with a reply topic and act buttons on — `http` actions that post the command token to the reply topic; the transport (send, replace by sequence id, delete) and the reply-topic subscription. */
 
 import type { Block, NotificationMessage } from '@browserhive/contracts/notifications';
 import { NTFY_DEFAULT_SERVER } from '@browserhive/contracts/notifications';
+import type { Logger } from '../../ports/logger.ts';
 import {
   type ChannelCapabilities,
   type ChannelDelivery,
   type ChannelRenderer,
   ChannelSendError,
   type ChannelSendResult,
+  type ChannelSetup,
   type NotificationChannel,
   type NotificationImageReader,
   type PlatformMessageRef,
+  type PressSource,
   type RenderContext,
   type RenderedRequest,
 } from '../../ports/notification-channel.ts';
 import type { NotificationChannelRecord } from '../../ports/persistence/records.ts';
 import { callPlatform, type FetchFn, type PlatformAnswer, substituteSecrets } from './http.ts';
+import { createNtfyReplySource } from './ntfy-replies.ts';
 import {
   bodyBlocks,
   clipText,
@@ -25,6 +29,7 @@ import {
   plainRun,
   SCREENSHOT_FILENAME,
 } from './render-common.ts';
+import type { CursorStore } from './telegram-updates.ts';
 
 /** ntfy turns a message longer than 4096 bytes into an attachment; stay well below. */
 export const NTFY_MESSAGE_MAX_BYTES = 4000;
@@ -50,6 +55,22 @@ export const NTFY_CAPABILITIES: ChannelCapabilities = {
   maxTextChars: 3500,
   maxButtons: NTFY_ACTIONS_MAX,
 };
+
+/**
+ * The capabilities of an ntfy channel: act buttons when its rules switch them on and it has a reply
+ * topic for the buttons to post to (D-42).
+ *
+ * @returns The capabilities.
+ */
+export function ntfyCapabilities(
+  setup: Pick<ChannelSetup, 'target' | 'secretRefs' | 'rules'>,
+): ChannelCapabilities {
+  const reply =
+    (setup.target['reply_topic'] ?? '') !== '' || setup.secretRefs['reply_topic'] !== undefined;
+  return reply && setup.rules.act_buttons === true
+    ? { ...NTFY_CAPABILITIES, actButtons: true }
+    : NTFY_CAPABILITIES;
+}
 
 /** ntfy priority: info 3, warn and error 4, critical 5; silent revisions 2 (no sound). */
 export function ntfyPriority(message: Pick<NotificationMessage, 'severity' | 'alert'>): number {
@@ -144,6 +165,22 @@ interface ViewAction {
   clear: boolean;
 }
 
+/** A button that makes the phone post the command token to the reply topic (D-42). */
+interface HttpAction {
+  action: 'http';
+  label: string;
+  url: string;
+  method: 'POST';
+  body: string;
+  clear: true;
+}
+
+/** The reply topic as rendered: literal, or `{secret:reply_topic}` from a variable. */
+function replyTopicOf(target: Readonly<Record<string, string>>): string {
+  const literal = target['reply_topic'];
+  return literal !== undefined && literal !== '' ? literal : '{secret:reply_topic}';
+}
+
 /**
  * The topic of a channel as rendered: the literal topic, or `{secret:topic}` when it lives in a
  * variable (the transport substitutes it; the preview shows the variable's name).
@@ -161,7 +198,7 @@ function topicOf(target: Readonly<Record<string, string>>): string {
  */
 export const ntfyRenderer: ChannelRenderer = {
   kind: 'ntfy',
-  capabilities: () => NTFY_CAPABILITIES,
+  capabilities: ntfyCapabilities,
   render(delivery: ChannelDelivery, context: RenderContext): readonly RenderedRequest[] {
     const { message, links } = delivery;
     const topic = topicOf(context.target);
@@ -169,19 +206,40 @@ export const ntfyRenderer: ChannelRenderer = {
       context.op === 'edit' && context.ref !== null && context.ref['sequence_id'] !== undefined
         ? String(context.ref['sequence_id'])
         : message.id;
-    const resolved = openLinks(message, links).slice(0, NTFY_ACTIONS_MAX);
-    const actions: ViewAction[] = resolved.map((l, i) => ({
-      action: 'view',
-      label: links.local && i === 0 ? LOCAL_LINKS_LABEL : clipText(l.label, 40),
-      url: l.url,
-      clear: false,
-    }));
+    const server = (context.target['server'] ?? NTFY_DEFAULT_SERVER).replace(/\/+$/, '');
+    // Act buttons first (they answer), then links, three at most (D-42). Act actions survive
+    // `degrade` only where the channel has a reply topic and act buttons on.
+    const answers: HttpAction[] = message.actions.flatMap((a) =>
+      a.kind === 'act'
+        ? [
+            {
+              action: 'http' as const,
+              label: clipText(a.label, 40),
+              url: `${server}/${replyTopicOf(context.target)}`,
+              method: 'POST' as const,
+              body: context.actToken(a.id),
+              clear: true as const,
+            },
+          ]
+        : [],
+    );
+    const links3 = openLinks(message, links);
+    const resolved = links3.slice(0, Math.max(0, NTFY_ACTIONS_MAX - answers.length));
+    const actions: (HttpAction | ViewAction)[] = [
+      ...answers.slice(0, NTFY_ACTIONS_MAX),
+      ...resolved.map((l, i) => ({
+        action: 'view' as const,
+        label: links.local && i === 0 ? LOCAL_LINKS_LABEL : clipText(l.label, 40),
+        url: l.url,
+        clear: false,
+      })),
+    ];
     const fields = {
       title: clipText(message.title, NTFY_CAPABILITIES.maxTitleChars),
       message: ntfyText(message),
       priority: ntfyPriority(message),
       tags: ntfyTags(message),
-      ...(resolved[0] !== undefined && { click: resolved[0].url }),
+      ...(links3[0] !== undefined && { click: links3[0].url }),
       ...(actions.length > 0 && { actions }),
     };
     const image = firstImage(message);
@@ -234,8 +292,15 @@ export interface NtfyChannelDeps {
   readonly token: string | null;
   /** The topic from a variable (when `target.topic` is empty). */
   readonly topic: string | null;
+  /** The reply topic from a variable (when `target.reply_topic` is empty). */
+  readonly replyTopic?: string | null;
+  /** Access token that reads the reply topic (default: `token`). */
+  readonly replyToken?: string | null;
   readonly images: NotificationImageReader;
   readonly fetch?: FetchFn;
+  /** Where the reply subscription resumes after a restart (`notification_cursors`). */
+  readonly cursors?: CursorStore;
+  readonly logger?: Logger;
 }
 
 function refOf(answer: PlatformAnswer, sequence: string): PlatformMessageRef {
@@ -262,27 +327,45 @@ export function createNtfyChannel(
   const topic = literal !== undefined && literal !== '' ? literal : deps.topic;
   if (topic === null || topic === '') throw new Error(`channel '${record.name}' has no ntfy topic`);
   const resolvedTopic: string = topic;
+  const replyLiteral = record.target['reply_topic'];
+  const replyTopic =
+    replyLiteral !== undefined && replyLiteral !== '' ? replyLiteral : (deps.replyTopic ?? null);
+  const replyToken = deps.replyToken ?? deps.token;
   const secrets = [
     ...(deps.token === null ? [] : [deps.token]),
     ...(deps.topic === null ? [] : [deps.topic]),
+    ...(deps.replyTopic === null || deps.replyTopic === undefined ? [] : [deps.replyTopic]),
+    ...(deps.replyToken === null || deps.replyToken === undefined ? [] : [deps.replyToken]),
   ];
   const options = { fetch: deps.fetch ?? fetch, secrets, platform: 'ntfy' };
   const auth: Record<string, string> =
     deps.token === null ? {} : { authorization: `Bearer ${deps.token}` };
-  const context = (op: 'send' | 'edit', ref: PlatformMessageRef | null): RenderContext => ({
+  const capabilities = ntfyCapabilities(record);
+  const values = { topic: resolvedTopic, ...(replyTopic !== null && { reply_topic: replyTopic }) };
+  const context = (
+    op: 'send' | 'edit',
+    ref: PlatformMessageRef | null,
+    delivery: ChannelDelivery,
+  ): RenderContext => ({
     mode: null,
     target: record.target,
     op,
     ref,
-    actToken: () => {
-      throw new ChannelSendError('rejected', 'act buttons are not available on ntfy yet');
+    actToken: (id) => {
+      const payload = delivery.actTokens?.get(id);
+      if (payload === undefined)
+        throw new ChannelSendError('rejected', 'act button without a token');
+      return payload;
     },
   });
+  /** A rendered body with its `{secret:…}` placeholders (the reply topic in `http` actions) filled. */
+  const filled = (body: Readonly<Record<string, unknown>>): Record<string, unknown> =>
+    JSON.parse(substituteSecrets(JSON.stringify(body), values)) as Record<string, unknown>;
 
   /** Publishes the text of a binary request as JSON, keeping its sequence id (no screenshot). */
   function publishText(path: string, request: RenderedRequest): Promise<PlatformAnswer> {
     const [, , sequence = ''] = path.split('/');
-    const { filename: _dropped, ...fields } = request.body;
+    const { filename: _dropped, ...fields } = filled(request.body);
     return callPlatform(
       {
         url: `${server}/`,
@@ -308,7 +391,7 @@ export function createNtfyChannel(
       try {
         return await callPlatform(
           {
-            url: `${server}${path}${ntfyQuery(request.body)}`,
+            url: `${server}${path}${ntfyQuery(filled(request.body))}`,
             method: 'PUT',
             headers: { ...auth, 'content-type': image.contentType },
             body: new Blob([new Uint8Array(image.bytes)], { type: image.contentType }),
@@ -328,7 +411,7 @@ export function createNtfyChannel(
         throw err;
       }
     }
-    const body = { ...request.body, topic: resolvedTopic };
+    const body = { ...filled(request.body), topic: resolvedTopic };
     return callPlatform(
       {
         url: `${server}${path}`,
@@ -340,18 +423,32 @@ export function createNtfyChannel(
     );
   }
 
+  const presses: PressSource | undefined =
+    capabilities.actButtons && replyTopic !== null
+      ? createNtfyReplySource({
+          server,
+          topic: replyTopic,
+          token: replyToken,
+          cursorKey: `ntfy:${record.channelId}`,
+          ...(deps.cursors !== undefined && { cursors: deps.cursors }),
+          ...(deps.fetch !== undefined && { fetch: deps.fetch }),
+          ...(deps.logger !== undefined && { logger: deps.logger }),
+        })
+      : undefined;
+
   return {
     id: record.channelId,
     name: record.name,
     kind: 'ntfy',
-    capabilities: NTFY_CAPABILITIES,
+    capabilities,
+    ...(presses !== undefined && { presses }),
     async send(delivery: ChannelDelivery): Promise<ChannelSendResult> {
-      const [request] = ntfyRenderer.render(delivery, context('send', null));
+      const [request] = ntfyRenderer.render(delivery, context('send', null, delivery));
       if (request === undefined) throw new ChannelSendError('rejected', 'nothing to send');
       return { ref: refOf(await publish(request), delivery.message.id) };
     },
     async edit(ref: PlatformMessageRef, delivery: ChannelDelivery): Promise<ChannelSendResult> {
-      const [request] = ntfyRenderer.render(delivery, context('edit', ref));
+      const [request] = ntfyRenderer.render(delivery, context('edit', ref, delivery));
       if (request === undefined) return { ref };
       const sequence = String(ref['sequence_id'] ?? delivery.message.id);
       return { ref: refOf(await publish(request), sequence) };

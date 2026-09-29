@@ -177,7 +177,28 @@ describe('ChannelService writes', () => {
           rules: {},
         }),
       ),
-    ).toBe('CHANNEL_KIND_UNAVAILABLE');
+    ).toBe('VALIDATION_FAILED');
+    // Act buttons need a platform that receives presses; allow-lists take numeric ids.
+    expect(
+      await codeOf(
+        service.create({
+          name: 'hooky',
+          kind: 'discord',
+          target: {},
+          secret_refs: { webhook: 'BH_W' },
+          rules: { act_buttons: true },
+        }),
+      ),
+    ).toBe('VALIDATION_FAILED');
+    expect(
+      await codeOf(
+        service.create({
+          ...base,
+          secret_refs: { token: 'BH_TELEGRAM_TOKEN' },
+          rules: { act_buttons: true, allow_list: ['me'] },
+        }),
+      ),
+    ).toBe('VALIDATION_FAILED');
     expect(
       await codeOf(
         service.create({
@@ -301,8 +322,18 @@ describe('ChannelService test send, preview and the delivery log', () => {
       content_type: 'image/jpeg',
     });
     expect(preview.message.privacy.has_image).toBe(true);
-    const bot = service.preview({ kind: 'discord', mode: 'bot', sample: 'attention' });
+    const bot = service.preview({
+      kind: 'discord',
+      mode: 'bot',
+      target: { channel_id: '112233445566778899' },
+      rules: { act_buttons: true },
+      sample: 'attention',
+    });
     expect(bot.capabilities.act_buttons).toBe(true);
+    expect(JSON.stringify(bot.requests)).toContain('bh1:preview-reject');
+    expect(bot.notes.some((n) => n.includes('allow-list'))).toBe(true);
+    const off = service.preview({ kind: 'discord', mode: 'bot', sample: 'attention' });
+    expect(off.capabilities.act_buttons).toBe(false);
     expect(fakes.requests).toHaveLength(0);
   });
 

@@ -15,7 +15,9 @@ import {
   discordRenderer,
   ntfyRenderer,
   TELEGRAM_CAPTION_MAX,
+  TELEGRAM_RICH_MAX,
   TELEGRAM_TEXT_MAX,
+  telegramClassicRenderer,
   telegramRenderer,
 } from '../../src/infra/notifications/index.ts';
 import type { ChannelRenderer, RenderContext } from '../../src/ports/notification-channel.ts';
@@ -102,10 +104,16 @@ function render(
   next: () => number,
   mode: string | null,
 ) {
-  const capabilities = renderer.capabilities(mode);
+  const target = { chat_id: '1', topic: 't', reply_topic: 'r', channel_id: '112233445566778899' };
+  const capabilities = renderer.capabilities({
+    mode,
+    target,
+    secretRefs: {},
+    rules: { act_buttons: true },
+  });
   const context: RenderContext = {
     mode,
-    target: { chat_id: '1', topic: 't' },
+    target,
     op: 'send',
     ref: null,
     actToken: () => 'bh1:x',
@@ -121,6 +129,8 @@ function render(
 }
 
 const TG_TAG = /<\/?(b|i|code|pre|blockquote|a|tg-time)(\s[^<>]*)?>/g;
+const RICH_TAG =
+  /<\/?(h3|h4|p|br|img|b|i|code|pre|blockquote|a|tg-time|table|tr|td|th|ul|ol|li|footer|hr)(\s[^<>]*)?\/?>/g;
 const TG_ENTITY = /&(lt|gt|amp|quot);/g;
 
 /** Visible text of Telegram HTML, or an error sentence when it is not well formed. */
@@ -147,12 +157,12 @@ function telegramVisible(html: string): { visible: string } | { error: string } 
 }
 
 describe('renderer properties', () => {
-  it('Telegram HTML is well formed and within the text and caption limits', () => {
+  it('classic Telegram HTML (the fallback) is well formed and within the text and caption limits', () => {
     const next = rng(7);
     const problems: string[] = [];
     let nearLimit = 0;
     for (let i = 0; i < 500; i++) {
-      const [request] = render(telegramRenderer, randomMessage(next), next, null);
+      const [request] = render(telegramClassicRenderer, randomMessage(next), next, null);
       const body = request?.body as { text?: string; caption?: string };
       const html = body.caption ?? body.text ?? '';
       const limit = body.caption !== undefined ? TELEGRAM_CAPTION_MAX : TELEGRAM_TEXT_MAX;
@@ -165,6 +175,37 @@ describe('renderer properties', () => {
     expect(problems).toEqual([]);
     // Not vacuous: many cases come close to a limit and are clipped.
     expect(nearLimit).toBeGreaterThan(20);
+  });
+
+  it('Rich Message HTML is well formed, escaped and within the rich limit; buttons fit 64 bytes', () => {
+    const next = rng(8);
+    const problems: string[] = [];
+    for (let i = 0; i < 500; i++) {
+      const [request] = render(telegramRenderer, randomMessage(next), next, null);
+      const rich = request?.body['rich_message'] as { html: string } | undefined;
+      const html = rich?.html ?? '';
+      if (html.length > TELEGRAM_RICH_MAX) problems.push(`case ${i}: ${html.length} too long`);
+      const stack: string[] = [];
+      for (const match of html.matchAll(RICH_TAG)) {
+        const tag = match[1] ?? '';
+        if (match[0].endsWith('/>') || tag === 'br') continue;
+        if (match[0].startsWith('</')) {
+          if (stack.pop() !== tag) problems.push(`case ${i}: unbalanced </${tag}>`);
+        } else stack.push(tag);
+      }
+      if (stack.length > 0) problems.push(`case ${i}: unclosed ${stack.join(',')}`);
+      const stripped = html.replace(RICH_TAG, '');
+      if (/[<>]/.test(stripped)) problems.push(`case ${i}: raw < or > outside a tag`);
+      if (/&/.test(stripped.replace(TG_ENTITY, ''))) problems.push(`case ${i}: raw &`);
+      const markup = request?.body['reply_markup'] as
+        | { inline_keyboard: { callback_data?: string }[][] }
+        | undefined;
+      for (const b of markup?.inline_keyboard.flat() ?? []) {
+        if (b.callback_data !== undefined && new TextEncoder().encode(b.callback_data).length > 64)
+          problems.push(`case ${i}: callback_data over 64 bytes`);
+      }
+    }
+    expect(problems).toEqual([]);
   });
 
   it('Discord embeds stay within Discord limits and never ping', () => {

@@ -34,6 +34,7 @@ import type {
   ChannelRegistry,
   ChannelService,
   LeaseSweeper,
+  NotificationActionListeners,
   NotificationOutbox,
   NotificationService,
   OperatorRequestBroker,
@@ -117,6 +118,8 @@ export interface DomainPart {
   readonly notificationOutbox: NotificationOutbox;
   /** The channels API (spec 03 §4.8.1). */
   readonly channelService: ChannelService;
+  /** Act-button press listeners (Telegram poller, Discord gateway, ntfy reply topic; D-41). */
+  readonly actionListeners: NotificationActionListeners;
   /** The `publicUrl` check (spec 08 §5.8). */
   readonly publicUrl: PublicUrlChecker;
   /** Random per start; `GET /health` reports it (D-37). */

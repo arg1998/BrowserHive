@@ -1,0 +1,57 @@
+{
+  "kind": "telegram",
+  "variant": "attention-image-act",
+  "mode": null,
+  "requests": [
+    {
+      "method": "POST",
+      "path": "sendRichMessage",
+      "encoding": "multipart",
+      "body": {
+        "chat_id": "-1001234567890",
+        "rich_message": {
+          "html": "<h3>⚠️ Attention requested</h3><p>CAPTCHA on the checkout page: please solve it, then resume · takeover — agent blocked, lease frozen</p><img src=\"tg://photo?id=shot\"/><table compact><tr><td><b>Mode</b></td><td>takeover</td></tr><tr><td><b>Session</b></td><td><a href=\"https://bh.example.net/sessions/checkout-a1b2c3d4\">checkout</a></td></tr><tr><td><b>Page</b></td><td><code>https://shop.example.com/checkout/payment</code></td></tr><tr><td><b>Tool</b></td><td><code>click</code></td></tr><tr><td><b>Waiting since</b></td><td><tg-time unix=\"1790000000\" format=\"t\">14:13 UTC</tg-time></td></tr></table>",
+          "media": [
+            {
+              "id": "shot",
+              "media": {
+                "type": "photo",
+                "media": "attach://shot"
+              }
+            }
+          ],
+          "skip_entity_detection": true
+        },
+        "disable_notification": false,
+        "reply_markup": {
+          "inline_keyboard": [
+            [
+              {
+                "text": "Take over",
+                "url": "https://bh.example.net/sessions/checkout-a1b2c3d4?live=1&takeover=1",
+                "style": "primary"
+              },
+              {
+                "text": "Mark resolved",
+                "callback_data": "bh1:preview-resolve"
+              }
+            ],
+            [
+              {
+                "text": "Reject",
+                "callback_data": "bh1:preview-reject",
+                "style": "danger"
+              }
+            ]
+          ]
+        }
+      },
+      "headers": {},
+      "file": {
+        "ref": "nimg-sample",
+        "name": "screenshot.jpg",
+        "content_type": "image/jpeg"
+      }
+    }
+  ]
+}

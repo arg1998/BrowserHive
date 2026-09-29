@@ -12,7 +12,13 @@ import {
   reviseMessage,
   scrubMessage,
 } from './message.ts';
-import { draftFor, type ProducedEvent, revisionFor } from './producers.ts';
+import {
+  actorPhrase,
+  draftFor,
+  type ProducedEvent,
+  requestSettled,
+  revisionFor,
+} from './producers.ts';
 import {
   attentionCreated,
   attentionResolved,
@@ -220,6 +226,24 @@ describe('producer messages', () => {
     expect(draftFor(sessionClosed('user'))).toBeNull();
     expect(draftFor(attentionResolved('a-000000000001', 'resolved'))).toBeNull();
     expect(draftFor(systemRecovered())).toBeNull();
+  });
+});
+
+describe('who answered (D-41)', () => {
+  it('names a dashboard principal, a chat user with the platform, or the ntfy reply topic', () => {
+    expect(actorPhrase('admin')).toBe('by admin');
+    expect(actorPhrase('telegram:123456789')).toBe('on Telegram by 123456789');
+    expect(actorPhrase('discord:4455')).toBe('on Discord by 4455');
+    expect(actorPhrase('ntfy:topic-b')).toBe('from ntfy');
+    const revision = requestSettled('attention', {
+      requestId: 'a-000000000001',
+      status: 'rejected',
+      resolvedBy: 'telegram:42',
+      createdAt: 0,
+      resolvedAt: 42_000,
+      waitedMs: 42_000,
+    });
+    expect(revision?.change.summary).toBe('Rejected on Telegram by 42 after 42 s');
   });
 });
 

@@ -1,0 +1,34 @@
+{
+  "kind": "telegram-classic",
+  "variant": "vault-confirm",
+  "mode": null,
+  "requests": [
+    {
+      "method": "POST",
+      "path": "sendMessage",
+      "encoding": "json",
+      "body": {
+        "chat_id": "-1001234567890",
+        "parse_mode": "HTML",
+        "disable_notification": false,
+        "reply_markup": {
+          "inline_keyboard": [
+            [
+              {
+                "text": "Review in BrowserHive",
+                "url": "https://bh.example.net/vault?tab=confirm",
+                "style": "primary"
+              }
+            ]
+          ]
+        },
+        "text": "⚠️ <b>Vault fill awaiting confirm</b>\nentry github — approve or deny the release\n\n<b>Entry:</b> <code>github</code>\n<b>Session:</b> <a href=\"https://bh.example.net/sessions/checkout-a1b2c3d4\">checkout</a>\n<b>Page:</b> <code>https://github.com/login</code>\n<b>Tool:</b> <code>vault_fill</code>\n<b>Waiting since:</b> <tg-time unix=\"1790000000\" format=\"t\">14:13 UTC</tg-time>",
+        "link_preview_options": {
+          "is_disabled": true
+        }
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}

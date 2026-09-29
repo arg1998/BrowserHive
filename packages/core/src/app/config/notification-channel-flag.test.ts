@@ -8,6 +8,8 @@ const ENV: Record<string, string> = {
   BH_NTFY_TOKEN: `tk_${'c'.repeat(29)}`,
   BH_HOOK_SECRET: 'd'.repeat(32),
   BH_EMPTY: '',
+  BH_DISCORD_BOT: 'e'.repeat(40),
+  BH_NTFY_REPLY: 'bh-replies-x',
 };
 const env = (name: string) => ENV[name];
 const parse = (...values: string[]) => parseNotificationChannelFlags(values, env);
@@ -132,13 +134,71 @@ describe('parseNotificationChannelFlags', () => {
     ]);
   });
 
-  it('refuses duplicate names, repeated parameters and Discord bot mode', () => {
+  it('refuses duplicate names and repeated parameters', () => {
     expect(parse('ntfy:name=a,topic=t1', 'ntfy:name=a,topic=t2').problems[0]).toContain(
       "the name 'a' is used by two channels",
     );
     expect(parse('ntfy:name=a,topic=t1,topic=t2').problems[0]).toContain('given twice');
-    expect(parse('discord:name=a,webhook=env:BH_DISCORD_WEBHOOK,mode=bot').problems[0]).toContain(
-      'bot mode is not available',
+  });
+
+  it('parses act buttons, allow-lists, Discord bot mode and the ntfy reply topic (D-41, D-42)', () => {
+    const r = parse(
+      'telegram:name=phone,token=env:BH_TG_TOKEN,chat=123456,actButtons=true,allow=111+222',
+      'discord:name=ops,mode=bot,token=env:BH_DISCORD_BOT,channel=112233445566778899,guild=998877665544332211,actButtons=true,allow=445566778899001122',
+      'ntfy:name=pager,topic=bh-alerts-x,reply=env:BH_NTFY_REPLY,replyToken=env:BH_NTFY_TOKEN,actButtons=true',
+      'ntfy:name=pager2,topic=bh-alerts-y,reply=bh-replies-y',
+    );
+    expect(r.problems).toEqual([]);
+    expect(r.channels.map((c) => [c.name, c.mode, c.target, c.secret_refs, c.rules])).toEqual([
+      [
+        'phone',
+        null,
+        { chat_id: '123456' },
+        { token: 'BH_TG_TOKEN' },
+        { act_buttons: true, allow_list: ['111', '222'] },
+      ],
+      [
+        'ops',
+        'bot',
+        { channel_id: '112233445566778899', guild_id: '998877665544332211' },
+        { token: 'BH_DISCORD_BOT' },
+        { act_buttons: true, allow_list: ['445566778899001122'] },
+      ],
+      [
+        'pager',
+        null,
+        { topic: 'bh-alerts-x' },
+        { reply_topic: 'BH_NTFY_REPLY', reply_token: 'BH_NTFY_TOKEN' },
+        { act_buttons: true },
+      ],
+      ['pager2', null, { topic: 'bh-alerts-y', reply_topic: 'bh-replies-y' }, {}, {}],
+    ]);
+  });
+
+  it('refuses act buttons where presses cannot arrive, bad allow-lists and missing bot settings', () => {
+    expect(parse('discord:name=a,webhook=env:BH_DISCORD_WEBHOOK,actButtons=true').problems).toEqual(
+      [
+        "--notificationChannel 'a': actButtons: act buttons need Discord bot mode; webhook messages can only carry links.",
+      ],
+    );
+    expect(parse('ntfy:name=a,topic=t1,actButtons=true').problems[0]).toContain(
+      'need a reply topic',
+    );
+    expect(parse('ntfy:name=a,topic=t1,reply=t2,allow=1').problems[0]).toContain(
+      'allow: ntfy presses carry no user identity',
+    );
+    expect(parse('telegram:name=a,token=env:BH_TG_TOKEN,chat=1,allow=me').problems[0]).toContain(
+      "allow: 'me' is not a user id",
+    );
+    expect(parse('discord:name=a,webhook=env:BH_DISCORD_WEBHOOK,mode=bot').problems).toEqual([
+      "--notificationChannel 'a': channel is required in bot mode.",
+      "--notificationChannel 'a': token is required in bot mode (token=env:NAME).",
+    ]);
+    expect(parse('ntfy:name=a,topic=t1,replyToken=tk_inline').problems[0]).toContain(
+      'replyToken must name an environment variable (replyToken=env:NAME)',
+    );
+    expect(parse('telegram:name=a,token=env:BH_TG_TOKEN,chat=1,actButtons=maybe').problems).toEqual(
+      ["--notificationChannel 'a': actButtons must be true or false."],
     );
   });
 

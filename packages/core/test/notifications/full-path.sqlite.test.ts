@@ -98,7 +98,7 @@ describe('full notification path through the real adapters', () => {
     expect(w.registered).toContain(FAKE_TG_TOKEN);
     const log = await lifecycle(w);
     expect(calls(fakes.of('telegram'))).toEqual([
-      'POST sendMessage',
+      'POST sendRichMessage',
       'POST editMessageText',
       'POST deleteMessage',
     ]);
@@ -107,9 +107,12 @@ describe('full notification path through the real adapters', () => {
       ['edit', '2', 'sent', ''],
       ['send', '1', 'sent', ''],
     ]);
-    const edit = fakes.of('telegram')[1]?.json as { text: string; message_id: number };
+    const edit = fakes.of('telegram')[1]?.json as {
+      rich_message: { html: string };
+      message_id: number;
+    };
     expect(edit.message_id).toBe(101);
-    expect(edit.text).toContain('Resolved by local');
+    expect(edit.rich_message.html).toContain('Resolved by local');
   });
 
   it('discord: send, edit, TTL delete', async () => {

@@ -1,4 +1,4 @@
-/** @module infra/notifications/discord — the Discord adapter, webhook mode (spec 03 §9.5, D-38, D-40): a pure renderer to one embed plus link buttons (bot mode's interactive buttons are drawn for the preview only), and the webhook transport (send with `?wait=true`, edit keeping the screenshot, delete). */
+/** @module infra/notifications/discord — the Discord adapter (spec 03 §9.5, D-38, D-40, D-41): a pure renderer to one embed plus action rows (link buttons; interactive act buttons in bot mode), the webhook transport (send with `?wait=true`, edit keeping the screenshot, delete) and the bot transport (the same through the bot REST API, presses over the gateway). */
 
 import type { Block, Inline, NotificationMessage } from '@browserhive/contracts/notifications';
 import {
@@ -7,14 +7,17 @@ import {
   type ChannelRenderer,
   ChannelSendError,
   type ChannelSendResult,
+  type ChannelSetup,
   type LinkBuilder,
   type NotificationChannel,
   type NotificationImageReader,
   type PlatformMessageRef,
+  type PressSource,
   type RenderContext,
   type RenderedRequest,
 } from '../../ports/notification-channel.ts';
 import type { NotificationChannelRecord } from '../../ports/persistence/records.ts';
+import { DISCORD_API_BASE, type DiscordGatewayHub } from './discord-gateway.ts';
 import {
   callPlatform,
   type FailureRefiner,
@@ -62,7 +65,7 @@ export const DISCORD_WEBHOOK_CAPABILITIES: ChannelCapabilities = {
   maxButtons: 5,
 };
 
-/** Bot mode (N2): interactive act buttons; drawn by the preview's "What's the difference?" panel. */
+/** Bot mode with act buttons on: interactive buttons, presses over the gateway (D-38, D-41). */
 export const DISCORD_BOT_CAPABILITIES: ChannelCapabilities = {
   ...DISCORD_WEBHOOK_CAPABILITIES,
   actButtons: true,
@@ -227,13 +230,15 @@ export function discordEmbed(
 
 type Button =
   | { type: 2; style: 5; label: string; url: string }
-  | { type: 2; style: 1 | 2 | 4; label: string; custom_id: string };
+  | { type: 2; style: 1 | 2 | 3 | 4; label: string; custom_id: string };
 
-/** Action rows: link buttons, and in bot mode interactive act buttons. */
+/**
+ * Action rows: link buttons, and in bot mode interactive act buttons (an affirmative answer green,
+ * a destructive one red, others grey). Act actions survive `degrade` only where presses arrive.
+ */
 export function discordComponents(
   message: NotificationMessage,
   links: LinkBuilder,
-  capabilities: ChannelCapabilities,
   context: RenderContext,
 ): { type: 1; components: Button[] }[] {
   const buttons: Button[] = [];
@@ -241,8 +246,8 @@ export function discordComponents(
     const label = clipText(action.label, DISCORD_LIMITS.buttonLabel);
     if (action.kind === 'open') {
       if (!links.local) buttons.push({ type: 2, style: 5, label, url: links.url(action.path) });
-    } else if (capabilities.actButtons) {
-      const style = action.style === 'primary' ? 1 : action.style === 'danger' ? 4 : 2;
+    } else if (context.mode === 'bot') {
+      const style = action.style === 'primary' ? 3 : action.style === 'danger' ? 4 : 2;
       buttons.push({ type: 2, style, label, custom_id: context.actToken(action.id) });
     }
   }
@@ -253,24 +258,41 @@ export function discordComponents(
   return rows;
 }
 
-function capabilitiesOf(mode: string | null): ChannelCapabilities {
-  return mode === 'bot' ? DISCORD_BOT_CAPABILITIES : DISCORD_WEBHOOK_CAPABILITIES;
+/**
+ * The capabilities of a Discord channel: act buttons in bot mode when its rules switch them on.
+ *
+ * @returns The capabilities.
+ */
+export function discordCapabilities(
+  setup: Pick<ChannelSetup, 'mode' | 'rules'>,
+): ChannelCapabilities {
+  return setup.mode === 'bot' && setup.rules.act_buttons === true
+    ? DISCORD_BOT_CAPABILITIES
+    : DISCORD_WEBHOOK_CAPABILITIES;
+}
+
+/** Where a request goes: the webhook URL (`{secret:webhook}`), or the bot API channel path. */
+function messagesPath(context: RenderContext): string {
+  if (context.mode === 'bot') {
+    return `/channels/${context.target['channel_id'] ?? '{channel_id}'}/messages`;
+  }
+  return '{secret:webhook}';
 }
 
 /**
  * The Discord renderer. Webhook sends go to `{secret:webhook}?wait=true&with_components=true`
- * (the path placeholder is the secret webhook URL); a screenshot makes the request multipart
- * (`payload_json` + `files[0]`, shown as the embed image). Edits `PATCH …/messages/{id}` list the
- * attachment to keep.
+ * (the path placeholder is the secret webhook URL); bot sends to `/channels/{id}/messages`. A
+ * screenshot makes the request multipart (`payload_json` + `files[0]`, shown as the embed image).
+ * Edits `PATCH …/messages/{id}` list the attachment to keep.
  */
 export const discordRenderer: ChannelRenderer = {
   kind: 'discord',
-  capabilities: capabilitiesOf,
+  capabilities: discordCapabilities,
   render(delivery: ChannelDelivery, context: RenderContext): readonly RenderedRequest[] {
     const { message, links } = delivery;
-    const capabilities = capabilitiesOf(context.mode);
+    const bot = context.mode === 'bot';
     const image = firstImage(message);
-    const components = discordComponents(message, links, capabilities, context);
+    const components = discordComponents(message, links, context);
     const base = {
       content: null,
       allowed_mentions: { parse: [] as string[] },
@@ -279,7 +301,9 @@ export const discordRenderer: ChannelRenderer = {
     if (context.op === 'edit' && context.ref !== null) {
       const kept = context.ref['attachment_id'];
       const keptName = context.ref['attachment_name'];
-      const path = `{secret:webhook}/messages/${context.ref['message_id']}?with_components=true`;
+      const path = bot
+        ? `${messagesPath(context)}/${context.ref['message_id']}`
+        : `{secret:webhook}/messages/${context.ref['message_id']}?with_components=true`;
       if (image !== null && kept !== undefined) {
         const name = String(keptName ?? SCREENSHOT_FILENAME);
         return [
@@ -326,7 +350,7 @@ export const discordRenderer: ChannelRenderer = {
         },
       ];
     }
-    const path = '{secret:webhook}?wait=true&with_components=true';
+    const path = bot ? messagesPath(context) : '{secret:webhook}?wait=true&with_components=true';
     if (image !== null) {
       return [
         {
@@ -371,10 +395,16 @@ export const refineDiscord: FailureRefiner = (answer) => {
 
 /** What the Discord transport needs besides the channel row. */
 export interface DiscordChannelDeps {
-  /** The webhook URL (resolved from the channel's `webhook` variable). */
-  readonly webhookUrl: string;
+  /** Webhook mode: the webhook URL (resolved from the channel's `webhook` variable). */
+  readonly webhookUrl?: string;
+  /** Bot mode: the bot token (resolved from the channel's `token` variable). */
+  readonly botToken?: string;
   readonly images: NotificationImageReader;
   readonly fetch?: FetchFn;
+  /** Bot REST base; the fakes pass their own. */
+  readonly apiBase?: string;
+  /** Bot mode: the gateway connections; the channel's presses arrive through them (D-41). */
+  readonly gateway?: DiscordGatewayHub;
 }
 
 /**
@@ -412,7 +442,8 @@ function refOf(answer: PlatformAnswer, previous: PlatformMessageRef | null): Pla
 }
 
 /**
- * A Discord channel in webhook mode. Bot mode is refused (it arrives with act buttons, N2).
+ * A Discord channel. Webhook mode posts through the webhook URL; bot mode through the bot REST API
+ * (`Authorization: Bot …`) and, with act buttons on, listens for presses over the gateway (D-38).
  *
  * @returns The adapter.
  */
@@ -420,36 +451,57 @@ export function createDiscordChannel(
   record: NotificationChannelRecord,
   deps: DiscordChannelDeps,
 ): NotificationChannel {
-  if (record.mode === 'bot') {
-    throw new Error('Discord bot mode arrives with act buttons; use webhook mode');
+  const bot = record.mode === 'bot';
+  let webhookUrl = '';
+  let botToken = '';
+  const apiBase = (deps.apiBase ?? DISCORD_API_BASE).replace(/\/+$/, '');
+  if (bot) {
+    botToken = deps.botToken ?? '';
+    if (botToken === '') throw new Error(`channel '${record.name}' has no bot token`);
+    if ((record.target['channel_id'] ?? '') === '') {
+      throw new Error(`channel '${record.name}' names no Discord channel`);
+    }
+  } else {
+    webhookUrl = deps.webhookUrl ?? '';
+    try {
+      const parsed = new URL(webhookUrl);
+      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') throw new Error('scheme');
+    } catch {
+      throw new Error(`the webhook variable of channel '${record.name}' does not hold a URL`);
+    }
   }
-  try {
-    const parsed = new URL(deps.webhookUrl);
-    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') throw new Error('scheme');
-  } catch {
-    throw new Error(`the webhook variable of channel '${record.name}' does not hold a URL`);
-  }
+  const capabilities = discordCapabilities(record);
   const options = {
     fetch: deps.fetch ?? fetch,
-    secrets: [deps.webhookUrl, new URL(deps.webhookUrl).pathname],
+    secrets: bot ? [botToken] : [webhookUrl, new URL(webhookUrl).pathname],
     platform: 'Discord',
     refine: refineDiscord,
   };
-  const context = (op: 'send' | 'edit', ref: PlatformMessageRef | null): RenderContext => ({
-    mode: 'webhook',
+  const auth: Record<string, string> = bot ? { authorization: `Bot ${botToken}` } : {};
+  const context = (
+    op: 'send' | 'edit',
+    ref: PlatformMessageRef | null,
+    delivery: ChannelDelivery,
+  ): RenderContext => ({
+    mode: bot ? 'bot' : 'webhook',
     target: record.target,
     op,
     ref,
-    actToken: () => {
-      throw new ChannelSendError('rejected', 'act buttons need Discord bot mode');
+    actToken: (id) => {
+      const payload = delivery.actTokens?.get(id);
+      if (payload === undefined)
+        throw new ChannelSendError('rejected', 'act button without a token');
+      return payload;
     },
   });
+  const urlOf = (path: string) =>
+    bot ? `${apiBase}${path}` : webhookUrlFor(webhookUrl, substituteSecrets(path, {}));
 
   async function perform(
     request: RenderedRequest,
     addressesMessage: boolean,
   ): Promise<PlatformAnswer> {
-    const url = webhookUrlFor(deps.webhookUrl, substituteSecrets(request.path, {}));
+    const url = urlOf(request.path);
     if (request.encoding === 'multipart') {
       const payload = request.body['payload_json'] as Record<string, unknown>;
       const image = request.file === null ? null : await deps.images.read(request.file.ref);
@@ -462,7 +514,7 @@ export function createDiscordChannel(
           {
             url,
             method: request.method,
-            headers: { 'content-type': 'application/json' },
+            headers: { ...auth, 'content-type': 'application/json' },
             body: JSON.stringify({ ...payload, embeds, attachments: [] }),
             addressesMessage,
           },
@@ -473,6 +525,7 @@ export function createDiscordChannel(
         {
           url,
           method: request.method,
+          headers: auth,
           body: multipart(
             { payload_json: payload },
             {
@@ -491,7 +544,7 @@ export function createDiscordChannel(
       {
         url,
         method: request.method,
-        headers: { 'content-type': 'application/json' },
+        headers: { ...auth, 'content-type': 'application/json' },
         body: JSON.stringify(request.body),
         addressesMessage,
       },
@@ -499,26 +552,36 @@ export function createDiscordChannel(
     );
   }
 
+  const presses: PressSource | undefined =
+    bot && capabilities.actButtons && deps.gateway !== undefined
+      ? deps.gateway.pressSource(botToken, String(record.target['channel_id']))
+      : undefined;
+
   return {
     id: record.channelId,
     name: record.name,
     kind: 'discord',
-    capabilities: DISCORD_WEBHOOK_CAPABILITIES,
+    capabilities,
+    ...(presses !== undefined && { presses }),
     async send(delivery: ChannelDelivery): Promise<ChannelSendResult> {
-      const [request] = discordRenderer.render(delivery, context('send', null));
+      const [request] = discordRenderer.render(delivery, context('send', null, delivery));
       if (request === undefined) throw new ChannelSendError('rejected', 'nothing to send');
       return { ref: refOf(await perform(request, false), null) };
     },
     async edit(ref: PlatformMessageRef, delivery: ChannelDelivery): Promise<ChannelSendResult> {
-      const [request] = discordRenderer.render(delivery, context('edit', ref));
+      const [request] = discordRenderer.render(delivery, context('edit', ref, delivery));
       if (request === undefined) return { ref };
       return { ref: refOf(await perform(request, true), ref) };
     },
     async delete(ref: PlatformMessageRef): Promise<void> {
+      const path = bot
+        ? `/channels/${record.target['channel_id']}/messages/${ref['message_id']}`
+        : `/messages/${ref['message_id']}`;
       await callPlatform(
         {
-          url: webhookUrlFor(deps.webhookUrl, `/messages/${ref['message_id']}`),
+          url: bot ? `${apiBase}${path}` : webhookUrlFor(webhookUrl, path),
           method: 'DELETE',
+          headers: auth,
           addressesMessage: true,
         },
         options,

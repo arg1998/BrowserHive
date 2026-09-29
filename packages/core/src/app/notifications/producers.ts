@@ -367,6 +367,26 @@ function vaultConfirmCreated(payload: DomainEvents['vault.confirm.created']): No
   };
 }
 
+const PLATFORM_NAMES: Readonly<Record<string, string>> = {
+  telegram: 'Telegram',
+  discord: 'Discord',
+  ntfy: 'ntfy',
+};
+
+/**
+ * How a settled request names who answered: "by admin" for a dashboard principal, "on Telegram by
+ * 123456789" for an act button (`telegram:<id>`), "from ntfy" for the ntfy reply topic (D-41).
+ *
+ * @returns The phrase, without a leading space.
+ */
+export function actorPhrase(resolvedBy: string): string {
+  const match = /^(telegram|discord|ntfy):(.+)$/.exec(resolvedBy);
+  if (match === null) return `by ${resolvedBy}`;
+  const platform = PLATFORM_NAMES[match[1] ?? ''] ?? match[1];
+  if (match[1] === 'ntfy') return `from ${platform}`;
+  return `on ${platform} by ${match[2]}`;
+}
+
 /** What the revision of a settled operator request is built from (a wire row or a stored record). */
 export interface SettledRequestFacts {
   readonly requestId: string;
@@ -403,7 +423,7 @@ export function requestSettled(
   const waited = f.waitedMs ?? (f.resolvedAt === null ? null : f.resolvedAt - f.createdAt);
   const after = waited === null ? '' : ` after ${formatDuration(waited)}`;
   // Orphan recovery and shutdown settle a request with no actor: the summary names none.
-  const by = f.resolvedBy === null ? '' : ` by ${f.resolvedBy}`;
+  const by = f.resolvedBy === null ? '' : ` ${actorPhrase(f.resolvedBy)}`;
   const vault = prefix === 'vault';
   const outcome: { state: NotificationState; label: string; summary: string } = (() => {
     switch (f.status) {

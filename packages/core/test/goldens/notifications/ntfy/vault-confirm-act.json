@@ -1,0 +1,50 @@
+{
+  "kind": "ntfy",
+  "variant": "vault-confirm-act",
+  "mode": null,
+  "requests": [
+    {
+      "method": "POST",
+      "path": "/",
+      "encoding": "json",
+      "body": {
+        "topic": "bh-alerts",
+        "title": "Vault fill awaiting confirm",
+        "message": "entry github — approve or deny the release\n\nEntry: github\nSession: checkout\nPage: https://github.com/login\nTool: vault_fill\nWaiting since: 14:13 UTC",
+        "priority": 4,
+        "tags": [
+          "warning"
+        ],
+        "click": "https://bh.example.net/vault?tab=confirm",
+        "actions": [
+          {
+            "action": "http",
+            "label": "Approve",
+            "url": "https://ntfy.example.net/bh-replies",
+            "method": "POST",
+            "body": "bh1:preview-approve",
+            "clear": true
+          },
+          {
+            "action": "http",
+            "label": "Deny",
+            "url": "https://ntfy.example.net/bh-replies",
+            "method": "POST",
+            "body": "bh1:preview-deny",
+            "clear": true
+          },
+          {
+            "action": "view",
+            "label": "Review",
+            "url": "https://bh.example.net/vault?tab=confirm",
+            "clear": false
+          }
+        ],
+        "markdown": false,
+        "sequence_id": "n-sample000001"
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}

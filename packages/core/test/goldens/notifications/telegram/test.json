@@ -5,25 +5,25 @@
   "requests": [
     {
       "method": "POST",
-      "path": "sendMessage",
+      "path": "sendRichMessage",
       "encoding": "json",
       "body": {
         "chat_id": "-1001234567890",
-        "parse_mode": "HTML",
+        "rich_message": {
+          "html": "<h3>ℹ️ BrowserHive test message</h3><p>This channel works. Tap \"Open dashboard\" on your phone to check that links reach BrowserHive.</p><table compact><tr><td><b>Sent</b></td><td><tg-time unix=\"1790000000\" format=\"t\">14:13 UTC</tg-time></td></tr><tr><td><b>Kind</b></td><td><code>test</code></td></tr></table>",
+          "skip_entity_detection": true
+        },
         "disable_notification": false,
         "reply_markup": {
           "inline_keyboard": [
             [
               {
                 "text": "Open dashboard",
-                "url": "https://bh.example.net/notifications/channels"
+                "url": "https://bh.example.net/notifications/channels",
+                "style": "primary"
               }
             ]
           ]
-        },
-        "text": "ℹ️ <b>BrowserHive test message</b>\nThis channel works. Tap \"Open dashboard\" on your phone to check that links reach BrowserHive.\n\n<b>Sent:</b> <tg-time unix=\"1790000000\" format=\"t\">14:13 UTC</tg-time>\n<b>Kind:</b> <code>test</code>",
-        "link_preview_options": {
-          "is_disabled": true
         }
       },
       "headers": {},

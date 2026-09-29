@@ -67,6 +67,15 @@ async function telegramConnect(ctx: CaseContext): Promise<void> {
   ctx.state['connect'] = body.connect_id ?? 'placeholder01';
 }
 
+async function discordConnect(ctx: CaseContext): Promise<void> {
+  const response = await ctx.kit.request('POST', api('/channels/discord/connect'), {
+    cookie: ctx.cookie,
+    body: { token_env: 'BH_DISCORD_BOT_TOKEN', channel_id: '300000000000000003' },
+  });
+  const body = (await response.json()) as { connect_id?: string };
+  ctx.state['discordConnect'] = body.connect_id ?? 'placeholder01';
+}
+
 async function liveSession(ctx: CaseContext): Promise<void> {
   const session = await ctx.kit.sessions.create({ slug: 'live' }, { subject: 'admin' });
   ctx.state['live'] = session.id;
@@ -742,6 +751,58 @@ export const ROUTE_CASES: readonly RouteCase[] = [
       status: 200,
     },
     invalid: { path: api('/channels/telegram/connect/x!') },
+  },
+  {
+    operationId: 'getDiscordBot',
+    success: {
+      method: 'POST',
+      path: api('/channels/discord/bot'),
+      body: { token_env: 'BH_DISCORD_BOT_TOKEN' },
+      status: 200,
+    },
+    invalid: { method: 'POST', path: api('/channels/discord/bot'), body: { token_env: 'x y' } },
+  },
+  {
+    operationId: 'listDiscordChannels',
+    success: {
+      method: 'POST',
+      path: api('/channels/discord/channels'),
+      body: { token_env: 'BH_DISCORD_BOT_TOKEN', guild_id: '200000000000000002' },
+      status: 200,
+    },
+    invalid: {
+      method: 'POST',
+      path: api('/channels/discord/channels'),
+      body: { token_env: 'BH_DISCORD_BOT_TOKEN', guild_id: 'home' },
+    },
+  },
+  {
+    operationId: 'startDiscordConnect',
+    success: {
+      method: 'POST',
+      path: api('/channels/discord/connect'),
+      body: { token_env: 'BH_DISCORD_BOT_TOKEN', channel_id: '300000000000000003' },
+      status: 200,
+    },
+    invalid: {
+      method: 'POST',
+      path: api('/channels/discord/connect'),
+      body: { token_env: 'BH_DISCORD_BOT_TOKEN' },
+    },
+  },
+  {
+    operationId: 'getDiscordConnect',
+    setup: discordConnect,
+    success: {
+      path: (ctx) => api(`/channels/discord/connect/${ctx.state['discordConnect'] ?? ''}`),
+      status: 200,
+    },
+    invalid: { path: api('/channels/discord/connect/x!') },
+  },
+  {
+    operationId: 'listChannelActions',
+    success: { path: api('/channels/actions?outcome=done,not_allowed'), status: 200 },
+    invalid: { path: api('/channels/actions?outcome=perhaps') },
   },
   {
     operationId: 'getChannel',

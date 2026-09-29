@@ -5,13 +5,24 @@
   "requests": [
     {
       "method": "POST",
-      "path": "editMessageCaption",
+      "path": "editMessageText",
       "encoding": "json",
       "body": {
         "chat_id": -1001234567890,
         "message_id": 101,
-        "caption": "✅ <b>Attention requested</b>\nResolved by admin after 2m 10s\n\n<blockquote expandable>CAPTCHA on the checkout page: please solve it, then resume</blockquote>\n\n<b>Mode:</b> takeover\n<b>Session:</b> <a href=\"https://bh.example.net/sessions/checkout-a1b2c3d4\">checkout</a>\n<b>Page:</b> <code>https://shop.example.com/checkout/payment</code>\n<b>Tool:</b> <code>click</code>\n<b>Waiting since:</b> <tg-time unix=\"1790000000\" format=\"t\">14:13 UTC</tg-time>\n<b>Outcome:</b> resolved\n<b>Settled:</b> <tg-time unix=\"1790000130\" format=\"t\">14:15 UTC</tg-time>",
-        "parse_mode": "HTML",
+        "rich_message": {
+          "html": "<h3>✅ Attention requested</h3><p>Resolved by admin after 2m 10s</p><img src=\"tg://photo?id=shot\"/><blockquote expandable>CAPTCHA on the checkout page: please solve it, then resume</blockquote><table compact><tr><td><b>Mode</b></td><td>takeover</td></tr><tr><td><b>Session</b></td><td><a href=\"https://bh.example.net/sessions/checkout-a1b2c3d4\">checkout</a></td></tr><tr><td><b>Page</b></td><td><code>https://shop.example.com/checkout/payment</code></td></tr><tr><td><b>Tool</b></td><td><code>click</code></td></tr><tr><td><b>Waiting since</b></td><td><tg-time unix=\"1790000000\" format=\"t\">14:13 UTC</tg-time></td></tr><tr><td><b>Outcome</b></td><td>resolved</td></tr><tr><td><b>Settled</b></td><td><tg-time unix=\"1790000130\" format=\"t\">14:15 UTC</tg-time></td></tr></table>",
+          "media": [
+            {
+              "id": "shot",
+              "media": {
+                "type": "photo",
+                "media": "photo-file-1"
+              }
+            }
+          ],
+          "skip_entity_detection": true
+        },
         "reply_markup": {
           "inline_keyboard": []
         }

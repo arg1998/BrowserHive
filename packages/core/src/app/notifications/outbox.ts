@@ -110,6 +110,17 @@ export interface NotificationOutboxDeps {
    * so the live delivery log can refresh those rows. Must not throw.
    */
   readonly onDeliveryChange?: (channelId: string, notificationId: string) => void;
+  /**
+   * Mints the command tokens of a message's act buttons for a channel that receives presses
+   * (D-41), before the platform call. Absent: act buttons carry no tokens.
+   */
+  readonly actions?: {
+    mint(
+      channelId: string,
+      message: NotificationMessage,
+      now: number,
+    ): Promise<ReadonlyMap<string, string>>;
+  };
 }
 
 /** Summary of one pass (tests, logs). */
@@ -386,9 +397,10 @@ export class NotificationOutbox {
       'covered',
       job.seq,
     );
-    const delivery = await this.delivery(job, entry, message);
+    const shaped = await this.delivery(job, entry, message);
     const started = this.deps.clock.now();
     try {
+      const delivery = await this.withTokens(entry, shaped, started);
       const result = await this.call(entry, job, message.revision, () =>
         job.op === 'edit' && cm !== null && adapter.edit !== undefined
           ? adapter.edit(cm.messageRef, delivery)
@@ -441,6 +453,22 @@ export class NotificationOutbox {
         replyTo = first.messageRef;
     }
     return { message: degraded, links: this.deps.links, replyTo };
+  }
+
+  /**
+   * Adds the act buttons' command tokens when the channel receives presses and the (degraded)
+   * message still carries act actions. The tokens are stored before the platform call.
+   */
+  private async withTokens(
+    entry: RegisteredChannel,
+    delivery: ChannelDelivery,
+    now: number,
+  ): Promise<ChannelDelivery> {
+    const mint = this.deps.actions;
+    if (mint === undefined || entry.adapter?.presses === undefined) return delivery;
+    if (!delivery.message.actions.some((a) => a.kind === 'act')) return delivery;
+    const actTokens = await mint.mint(entry.record.channelId, delivery.message, now);
+    return { ...delivery, actTokens };
   }
 
   /** One platform call inside a `notification.deliver` span. */

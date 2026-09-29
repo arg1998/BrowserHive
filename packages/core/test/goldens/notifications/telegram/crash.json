@@ -5,25 +5,25 @@
   "requests": [
     {
       "method": "POST",
-      "path": "sendMessage",
+      "path": "sendRichMessage",
       "encoding": "json",
       "body": {
         "chat_id": "-1001234567890",
-        "parse_mode": "HTML",
+        "rich_message": {
+          "html": "<h3>🔴 Session crashed</h3><p>reason: crash</p><table compact><tr><td><b>Session</b></td><td><a href=\"https://bh.example.net/sessions/checkout-a1b2c3d4\">checkout</a></td></tr><tr><td><b>Reason</b></td><td><code>crash</code></td></tr><tr><td><b>Closed</b></td><td><tg-time unix=\"1790000000\" format=\"t\">14:13 UTC</tg-time></td></tr></table>",
+          "skip_entity_detection": true
+        },
         "disable_notification": false,
         "reply_markup": {
           "inline_keyboard": [
             [
               {
                 "text": "Open session",
-                "url": "https://bh.example.net/sessions/checkout-a1b2c3d4"
+                "url": "https://bh.example.net/sessions/checkout-a1b2c3d4",
+                "style": "primary"
               }
             ]
           ]
-        },
-        "text": "🔴 <b>Session crashed</b>\nreason: crash\n\n<b>Session:</b> <a href=\"https://bh.example.net/sessions/checkout-a1b2c3d4\">checkout</a>\n<b>Reason:</b> <code>crash</code>\n<b>Closed:</b> <tg-time unix=\"1790000000\" format=\"t\">14:13 UTC</tg-time>",
-        "link_preview_options": {
-          "is_disabled": true
         }
       },
       "headers": {},

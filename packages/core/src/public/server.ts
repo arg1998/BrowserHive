@@ -6,6 +6,8 @@ export { type BlocklistFileWatcher, BlocklistService } from '../app/blocklist/bl
 export { configView } from '../app/config/provenance-view.ts';
 export { InProcessEventBus } from '../app/events/bus.ts';
 export {
+  type ActionCounter,
+  type ActionExecutor,
   type ChannelAdapterFactory,
   ChannelRegistry,
   ChannelService,
@@ -13,6 +15,8 @@ export {
   type DeliveryCounter,
   imageVariants,
   linkBuilderFor,
+  NotificationActionListeners,
+  NotificationActionService,
   NotificationOutbox,
   NotificationService,
   PublicUrlChecker,

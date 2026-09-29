@@ -3,10 +3,14 @@
 import { join } from 'node:path';
 import {
   CHANNEL_RENDERERS,
+  type CursorStore,
   channelFactories,
+  createDiscordSetup,
   createNotificationImageStore,
   createTelegramSetup,
   createUrlProbe,
+  DiscordGatewayHub,
+  TelegramUpdatesHub,
 } from '@browserhive/core/notifications';
 import type { DomainEvents } from '@browserhive/core/runtime';
 import {
@@ -15,7 +19,11 @@ import {
   isInsecurePublicUrl,
   serializeError,
 } from '@browserhive/core/runtime';
-import { createPlaywrightPageActions, InProcessEventBus } from '@browserhive/core/server';
+import {
+  type ActionExecutor,
+  createPlaywrightPageActions,
+  InProcessEventBus,
+} from '@browserhive/core/server';
 import { asyncTick, createTimers } from '../adapters/timers.ts';
 import { createAuthStack } from '../auth-stack.ts';
 import { type BootContext, part, type SeedNotice } from '../context.ts';
@@ -130,6 +138,44 @@ async function buildDomain(
 
   const images = createNotificationImageStore(join(config.dataDir, 'notifications', 'images'));
   const instanceId = ids.opaque(16);
+  // Act buttons (D-41): one Telegram poller and one Discord gateway connection per bot token,
+  // shared by that bot's channels and its setup flow; their offsets live in notification_cursors.
+  const cursors: CursorStore = {
+    get: (key) => repos.notificationCursors.get(key),
+    set: (key, value) => repos.notificationCursors.set(key, value, clock.now()),
+  };
+  const telegramUpdates = new TelegramUpdatesHub({ cursors, logger });
+  const discordGateway = new DiscordGatewayHub({ logger });
+  undo.push(() => {
+    telegramUpdates.stop();
+    discordGateway.stop();
+  });
+  // What an act-button press runs: the services behind the dashboard's resolve routes.
+  const actionExecutors = new Map<string, ActionExecutor>();
+  const attention = operators.attention;
+  if (attention !== null) {
+    actionExecutors.set('attention.resolve', {
+      scope: 'attention:resolve',
+      async run(args, actor) {
+        const id = String(args['request_id'] ?? '');
+        if (args['decision'] === 'reject') {
+          await attention.reject(id, actor);
+          return 'Rejected. The agent was told.';
+        }
+        await attention.resolve(id, actor);
+        return 'Marked resolved. The agent continues.';
+      },
+    });
+  }
+  actionExecutors.set('vault.confirm.resolve', {
+    scope: 'vault:confirm',
+    async run(args, actor) {
+      const id = String(args['request_id'] ?? '');
+      const approve = args['decision'] === 'approve';
+      await operators.vault.resolveConfirm(id, approve ? 'approve' : 'deny', actor);
+      return approve ? 'Approved. The fill goes ahead.' : 'Denied. Nothing was filled.';
+    },
+  });
   const ops = buildOps({
     config,
     repos,
@@ -148,9 +194,18 @@ async function buildDomain(
     registerSecret: (literal) => secrets.add(literal),
     dashboardUrl: () => ctx.listeners?.url ?? `http://${config.host}:${config.port}`,
     deliveryCounter: telemetry.instruments.notificationDeliveries,
-    channelFactories: channelFactories({ images }),
+    channelFactories: channelFactories({
+      images,
+      telegramUpdates,
+      discordGateway,
+      cursors,
+      logger,
+    }),
     renderers: CHANNEL_RENDERERS,
-    telegram: createTelegramSetup(),
+    telegram: createTelegramSetup({ updates: telegramUpdates }),
+    discord: createDiscordSetup({ gateway: discordGateway }),
+    actionExecutors,
+    actionCounter: telemetry.instruments.notificationActions,
     probe: createUrlProbe(),
     instanceId,
     snapshots: createNotificationSnapshots({
@@ -240,6 +295,7 @@ async function buildDomain(
     channels: ops.channels,
     notificationOutbox: ops.notificationOutbox,
     channelService: ops.channelService,
+    actionListeners: ops.actionListeners,
     publicUrl: ops.publicUrl,
     instanceId,
     preferences: ops.preferences,
@@ -258,6 +314,8 @@ async function buildDomain(
       stopAuthSweep();
       stopImagePrune();
       ops.channelService.stop();
+      telegramUpdates.stop();
+      discordGateway.stop();
       sessionParts.sweeper.stop();
       sessionParts.stopWatcher?.();
       await sessions.closeAll('shutdown', Math.max(1_000, deadlineMs - 500));

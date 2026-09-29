@@ -22,6 +22,7 @@ export const METRIC = {
   BLOCKLIST_HITS: 'browserhive.blocklist.hits',
   RETENTION_PRUNED_ROWS: 'browserhive.retention.pruned_rows',
   NOTIFICATION_DELIVERIES: 'browserhive.notifications.deliveries',
+  NOTIFICATION_ACTIONS: 'browserhive.notifications.actions',
   PROCESS_RSS_BYTES: 'browserhive.process.rss_bytes',
   PROCESS_HEAP_BYTES: 'browserhive.process.heap_bytes',
   PROCESS_EVENT_LOOP_LAG: 'browserhive.process.event_loop_lag',
@@ -51,6 +52,8 @@ export interface Instruments {
   readonly retentionPrunedRows: Counter;
   /** Outbox jobs by `channel_kind` and `status` (D-34). */
   readonly notificationDeliveries: Counter;
+  /** Act-button presses by `channel_kind` and `outcome` (D-41). */
+  readonly notificationActions: Counter;
   readonly processRssBytes: ObservableGauge;
   readonly processHeapBytes: ObservableGauge;
   readonly processEventLoopLag: ObservableGauge;
@@ -188,6 +191,13 @@ export function createInstruments(meter: Meter): Instruments {
       return lazy(METRIC.NOTIFICATION_DELIVERIES, () =>
         meter.createCounter(METRIC.NOTIFICATION_DELIVERIES, {
           description: 'Notification deliveries by channel_kind and status',
+        }),
+      );
+    },
+    get notificationActions() {
+      return lazy(METRIC.NOTIFICATION_ACTIONS, () =>
+        meter.createCounter(METRIC.NOTIFICATION_ACTIONS, {
+          description: 'Act-button presses by channel_kind and outcome',
         }),
       );
     },

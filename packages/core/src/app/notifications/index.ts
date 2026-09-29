@@ -1,6 +1,20 @@
 /** @module app/notifications — public surface of the notification subsystem (D-16, D-32, D-34): producers, the message contract builders, content levels, `degrade`, routing, the channel registry, the delivery outbox and the inbox service. */
 
 export {
+  NotificationActionListeners,
+  type NotificationActionListenersDeps,
+} from './action-listeners.ts';
+export {
+  type ActionCounter,
+  type ActionExecutor,
+  type ActionListInput,
+  type ActionPage,
+  actorOf,
+  NotificationActionService,
+  type NotificationActionServiceDeps,
+  pressOrigin,
+} from './actions.ts';
+export {
   type ChannelAdapterFactory,
   type ChannelFactoryContext,
   ChannelRegistry,

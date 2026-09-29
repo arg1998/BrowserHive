@@ -4,6 +4,7 @@ import type { ServerConfig } from '@browserhive/contracts/config';
 import type { DatabaseHandle, SqliteMaintenanceService } from '@browserhive/core/persistence';
 import type {
   ChannelRenderer,
+  DiscordSetup,
   NotificationSnapshots,
   TelegramSetup,
   UrlProbe,
@@ -31,12 +32,16 @@ import {
 } from '@browserhive/core/runtime';
 import type { OperatorRequestBroker } from '@browserhive/core/server';
 import {
+  type ActionCounter,
+  type ActionExecutor,
   type ChannelAdapterFactory,
   ChannelRegistry,
   ChannelService,
   type DeliveryCounter,
   imageVariants,
   linkBuilderFor,
+  NotificationActionListeners,
+  NotificationActionService,
   NotificationOutbox,
   NotificationService,
   PreferenceService,
@@ -75,6 +80,12 @@ export interface OpsInput {
   /** Screenshot seam (D-36); late-bound because it needs the sessions. */
   readonly snapshots?: NotificationSnapshots;
   readonly telegram?: TelegramSetup;
+  /** The Discord bot-mode setup calls (D-38). */
+  readonly discord?: DiscordSetup;
+  /** What an act-button press may run (D-41): the same services as the dashboard's routes. */
+  readonly actionExecutors?: ReadonlyMap<string, ActionExecutor>;
+  /** Counts act-button presses (spec 10 §7). */
+  readonly actionCounter?: ActionCounter;
   /** One-shot URL probe of the `publicUrl` check. */
   readonly probe: UrlProbe;
   /** Random per start (`GET /health`). */
@@ -91,6 +102,10 @@ export interface OpsParts {
   readonly notificationOutbox: NotificationOutbox;
   /** The channels API (spec 03 §4.8.1). */
   readonly channelService: ChannelService;
+  /** Act buttons: tokens, presses and the audit (D-41). */
+  readonly actions: NotificationActionService;
+  /** The press listeners (started by `wire-observers`). */
+  readonly actionListeners: NotificationActionListeners;
   /** The `publicUrl` check (spec 08 §5.8). */
   readonly publicUrl: PublicUrlChecker;
   readonly preferences: PreferenceService;
@@ -115,6 +130,23 @@ export function buildOps(input: OpsInput): OpsParts {
   const links = linkBuilderFor(config.publicUrl, input.dashboardUrl);
   // The feed is late-bound: the channel service is built after the outbox that reports to it.
   let feed: ChannelService | undefined;
+  const actions = new NotificationActionService({
+    repos,
+    registry: channels,
+    clock,
+    ids,
+    logger,
+    executors: input.actionExecutors ?? new Map(),
+    bus,
+    redactor: input.redactor,
+    ...(input.actionCounter !== undefined && { counter: input.actionCounter }),
+  });
+  const actionListeners = new NotificationActionListeners({
+    registry: channels,
+    handler: (press) => actions.press(press),
+    logger,
+    onStatus: (channelId) => feed?.scheduleChannel(channelId),
+  });
   const notificationOutbox = new NotificationOutbox({
     uow: input.uow,
     repos,
@@ -128,6 +160,7 @@ export function buildOps(input: OpsInput): OpsParts {
     ...(input.deliveryCounter !== undefined && { counter: input.deliveryCounter }),
     onDeliveryChange: (channelId, notificationId) =>
       feed?.onDeliveryChange(notificationId, channelId),
+    actions,
   });
   const channelService = new ChannelService({
     repos,
@@ -143,6 +176,9 @@ export function buildOps(input: OpsInput): OpsParts {
     registerSecret: input.registerSecret,
     redactor: input.redactor,
     ...(input.telegram !== undefined && { telegram: input.telegram }),
+    ...(input.discord !== undefined && { discord: input.discord }),
+    connection: (channelId) => actionListeners.status(channelId),
+    actions,
   });
   feed = channelService;
   const publicUrl = new PublicUrlChecker({
@@ -188,6 +224,8 @@ export function buildOps(input: OpsInput): OpsParts {
     channels,
     notificationOutbox,
     channelService,
+    actions,
+    actionListeners,
     publicUrl,
     preferences: new PreferenceService({ repo: repos.preferences, clock, logger }),
     retention: new RetentionScheduler({
