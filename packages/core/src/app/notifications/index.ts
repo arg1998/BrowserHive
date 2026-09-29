@@ -112,15 +112,32 @@ export {
   anomalyCursorKey,
   channelCursorKeys,
   digestCursorKey,
+  digestPeriodThread,
   forgetChannelCursors,
+  IN_APP_REPORT_THREAD,
+  IN_APP_SCHEDULE,
   LATE_AFTER_MS,
+  manualPeriodThread,
   REPORT_TICK_MS,
   type ReportCounter,
   type ReportPass,
   ReportScheduler,
   type ReportSchedulerDeps,
+  type ReportSettingsSource,
+  reportPath,
   reportsView,
+  watchKey,
 } from './report-scheduler.ts';
+export {
+  isInAppReport,
+  ReportService,
+  type ReportServiceDeps,
+} from './report-service.ts';
+export {
+  REPORT_SETTINGS_KEY,
+  ReportSettingsStore,
+  schedulesReports,
+} from './report-settings.ts';
 export {
   type ActiveCheck,
   type AnomalyFacts,

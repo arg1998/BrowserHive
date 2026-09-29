@@ -523,9 +523,13 @@ describe('ChannelService reports (D-43, D-44)', () => {
     expect(body.message.report.manual).toBe(true);
     // The generic webhook receives the chart as data.
     expect(body.message.blocks.some((b) => b.type === 'chart')).toBe(true);
-    // The row is kept out of the inbox.
-    const row = [...k.repos.notifications.rows.values()].find((r) => r.kind === 'digest.daily');
-    expect(row?.dismissedAt).not.toBeNull();
+    // The channel row is kept out of the inbox; the inbox gets the on-demand copy (D-45).
+    const rows = [...k.repos.notifications.rows.values()].filter((r) => r.kind === 'digest.daily');
+    const channelRow = rows.find((r) => !(r.thread ?? '').startsWith('report:'));
+    const copy = rows.find((r) => (r.thread ?? '').startsWith('report:'));
+    expect(channelRow?.dismissedAt).not.toBeNull();
+    expect(copy).toMatchObject({ dismissedAt: null, readAt: expect.any(Number) });
+    expect(channelRow?.sourceEventId).toBe(copy?.notificationId ?? 'missing');
   });
 
   it('renders the report samples at the channel level and zone', async () => {

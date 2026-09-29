@@ -134,6 +134,10 @@ export const HTTP_ENDPOINTS: readonly HttpEndpoint[] = [
   ep('markAllNotificationsRead', 'post', '/notifications/read-all', 'notifications:write'),
   ep('dismissNotification', 'delete', '/notifications/{notification_id}', 'notifications:write'),
   ep('dismissAllNotifications', 'post', '/notifications/dismiss-all', 'notifications:write'),
+  ep('listReports', 'get', '/notifications/reports', 'notifications:read'),
+  ep('getReport', 'get', '/notifications/reports/{notification_id}', 'notifications:read'),
+  ep('getReportSettings', 'get', '/notifications/report-settings', 'notifications:read'),
+  ep('putReportSettings', 'put', '/notifications/report-settings', 'channels:write'),
   // §4.8.1 notification channels
   ep('listChannels', 'get', '/channels', 'channels:read'),
   ep('createChannel', 'post', '/channels', 'channels:write'),

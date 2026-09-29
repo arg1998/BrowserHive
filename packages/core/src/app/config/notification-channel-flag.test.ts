@@ -231,7 +231,20 @@ describe('parseNotificationChannelFlags', () => {
     expect(rules('digest=weekly:fri@17:00')).toEqual({
       digest: { every: 'week', at: '17:00', day: 'fri' },
     });
-    expect(rules('digest=weekly')).toEqual({ digest: { every: 'week', at: '09:00', day: 'mon' } });
+    // Weekly defaults to Friday 17:00; each part can be given alone (D-43).
+    expect(rules('digest=weekly')).toEqual({ digest: { every: 'week', at: '17:00', day: 'fri' } });
+    expect(rules('digest=weekly:mon')).toEqual({
+      digest: { every: 'week', at: '17:00', day: 'mon' },
+    });
+    expect(rules('digest=weekly@08:00')).toEqual({
+      digest: { every: 'week', at: '08:00', day: 'fri' },
+    });
+    expect(rules('digest=daily:weekdays')).toEqual({
+      digest: { every: 'day', at: '09:00', weekdays_only: true },
+    });
+    expect(rules('digest=daily:weekdays@07:30')).toEqual({
+      digest: { every: 'day', at: '07:30', weekdays_only: true },
+    });
     expect(rules('anomaly=on')).toEqual({ anomaly: {} });
     expect(rules('anomaly=off')).toEqual({});
     expect(
@@ -255,7 +268,10 @@ describe('parseNotificationChannelFlags', () => {
     const base = 'telegram:name=morning,token=env:BH_TG_TOKEN,chat=1';
     const problems = (extra: string) => parse(`${base},${extra}`).problems;
     expect(problems('digest=hourly')).toEqual([
-      "--notificationChannel 'morning': digest must be daily@HH:MM or weekly:<mon…sun>@HH:MM, like daily@09:00 or weekly:mon@08:30.",
+      "--notificationChannel 'morning': digest must be daily@HH:MM, daily:weekdays@HH:MM or weekly:<mon…sun>@HH:MM, like daily@09:00 or weekly:fri@17:00.",
+    ]);
+    expect(problems('digest=weekly:weekdays')).toEqual([
+      "--notificationChannel 'morning': weekdays applies to a daily digest only (daily:weekdays@…).",
     ]);
     expect(problems('digest=daily:mon@09:00')).toEqual([
       "--notificationChannel 'morning': a weekday applies to a weekly digest only (weekly:mon@…).",

@@ -233,6 +233,7 @@ export async function openHttpListener(
         auth: domain.auth,
         blocklist: blocklistPort(domain.blocklist, config.blocklist ?? null),
         notifications: notificationsPort(domain.notifications, storage.uow.repos.notifications),
+        reports: domain.reportService,
         preferences: preferencesPort(domain.preferences, () => ctx.clock.now()),
         logs: ring,
         logLevel: logLevelController(logger, LOG_MODULES),

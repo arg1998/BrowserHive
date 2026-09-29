@@ -4,8 +4,13 @@ import { type Kysely, sql } from 'kysely';
 import type {
   NotificationRepository,
   PreferenceRepository,
+  ReportChannelRow,
 } from '../../../ports/persistence/notifications.ts';
-import type { NotificationListQuery, Page } from '../../../ports/persistence/queries.ts';
+import type {
+  NotificationListQuery,
+  Page,
+  ReportListQuery,
+} from '../../../ports/persistence/queries.ts';
 import type {
   JsonValue,
   NotificationGroupPatch,
@@ -31,6 +36,10 @@ import {
 } from './common.ts';
 
 const RESOURCE = 'notifications';
+const REPORTS_RESOURCE = 'notifications.reports';
+/** In-app report copies have threads `report:…` (D-45); `;` sorts right after `:`. */
+const REPORT_THREAD_FROM = 'report:';
+const REPORT_THREAD_TO = 'report;';
 const SORTS: Readonly<Record<'created_at' | 'updated_at', SortExpr>> = {
   created_at: { expr: sql.ref('created_at'), nullValue: 0 },
   updated_at: { expr: sql.ref('updated_at'), nullValue: 0 },
@@ -172,8 +181,17 @@ export class SqliteNotificationRepository implements NotificationRepository {
       }
       if (query.read === 'unread') qb = qb.where('read_at', 'is', null);
       if (query.read === 'read') qb = qb.where('read_at', 'is not', null);
-      if (query.types !== undefined && query.types.length > 0)
-        qb = qb.where('type', 'in', [...query.types]);
+      const types = query.types ?? [];
+      const categories = query.categories ?? [];
+      if (types.length > 0 || categories.length > 0) {
+        // Type and category are one facet: a row matches either (D-45).
+        qb = qb.where((eb) =>
+          eb.or([
+            ...(types.length > 0 ? [eb('type', 'in', [...types])] : []),
+            ...(categories.length > 0 ? [eb('category', 'in', [...categories])] : []),
+          ]),
+        );
+      }
       if (query.since !== undefined) qb = qb.where(sortKeyName, '>=', query.since);
       if (query.until !== undefined) qb = qb.where(sortKeyName, '<=', query.until);
       return qb;
@@ -199,6 +217,107 @@ export class SqliteNotificationRepository implements NotificationRepository {
       (row) => ({ key: row[sortKeyName], id: row.notification_id }),
       total,
     );
+  }
+
+  async listReports(query: ReportListQuery): Promise<Page<NotificationRecord>> {
+    const limit = clampLimit(query.limit);
+    const dir = query.dir ?? 'desc';
+    const order = SORTS.created_at;
+    const cursor = decodeCursor(REPORTS_RESOURCE, query.cursor);
+    const filtered = () => {
+      let qb = this.#db
+        .selectFrom('notifications')
+        .where('category', '=', 'reports')
+        .where('thread', '>=', REPORT_THREAD_FROM)
+        .where('thread', '<', REPORT_THREAD_TO);
+      if (query.kinds !== undefined && query.kinds.length > 0)
+        qb = qb.where('kind', 'in', [...query.kinds]);
+      if (query.channelId !== undefined) {
+        const channelId = query.channelId;
+        qb = qb.where('notification_id', 'in', (eb) =>
+          eb
+            .selectFrom('notification_deliveries as d')
+            .innerJoin('notifications as c', 'c.notification_id', 'd.notification_id')
+            .select('c.source_event_id')
+            .where('d.channel_id', '=', channelId)
+            .where('c.category', '=', 'reports')
+            .where('c.source_event_id', 'is not', null),
+        );
+      }
+      if (query.inAppOnly === true) {
+        qb = qb.where('notification_id', 'not in', (eb) =>
+          eb
+            .selectFrom('notifications as c')
+            .select('c.source_event_id')
+            .where('c.category', '=', 'reports')
+            .where('c.source_event_id', 'is not', null),
+        );
+      }
+      if (query.since !== undefined) qb = qb.where('created_at', '>=', query.since);
+      if (query.until !== undefined) qb = qb.where('created_at', '<=', query.until);
+      return qb;
+    };
+    let qb = filtered().selectAll();
+    if (cursor !== null) qb = qb.where(keysetWhere(order, sql.ref('notification_id'), dir, cursor));
+    const rows = await qb
+      .orderBy(sortKey(order), dir)
+      .orderBy('notification_id', dir)
+      .limit(limit + 1)
+      .execute();
+    let total: number | undefined;
+    if (query.total === true) {
+      total = asNumber(
+        (await filtered().select(sql<number>`COUNT(*)`.as('n')).executeTakeFirst())?.n,
+      );
+    }
+    return toPage(
+      REPORTS_RESOURCE,
+      rows,
+      limit,
+      notificationFromRow,
+      (row) => ({ key: row.created_at, id: row.notification_id }),
+      total,
+    );
+  }
+
+  async reportChannels(
+    reportIds: readonly string[],
+  ): Promise<ReadonlyMap<string, readonly ReportChannelRow[]>> {
+    const out = new Map<string, ReportChannelRow[]>();
+    if (reportIds.length === 0) return out;
+    const rows = await this.#db
+      .selectFrom('notifications as c')
+      .innerJoin('notification_deliveries as d', 'd.notification_id', 'c.notification_id')
+      .leftJoin('notification_channels as ch', 'ch.channel_id', 'd.channel_id')
+      .select([
+        'c.source_event_id as report_id',
+        'd.channel_id',
+        'd.status',
+        'd.reason',
+        'd.seq',
+        'ch.name',
+        'ch.kind',
+      ])
+      .where('c.source_event_id', 'in', [...reportIds])
+      .where('c.category', '=', 'reports')
+      .orderBy('d.seq', 'asc')
+      .execute();
+    // The latest row per (report, channel) wins; channels keep the order they were first reached.
+    const latest = new Map<string, Map<string, ReportChannelRow>>();
+    for (const row of rows) {
+      if (row.report_id === null || row.name === null || row.kind === null) continue;
+      const byChannel = latest.get(row.report_id) ?? new Map<string, ReportChannelRow>();
+      byChannel.set(row.channel_id, {
+        channelId: row.channel_id,
+        name: row.name,
+        kind: row.kind,
+        status: row.status,
+        reason: row.reason,
+      });
+      latest.set(row.report_id, byChannel);
+    }
+    for (const [id, byChannel] of latest) out.set(id, [...byChannel.values()]);
+    return out;
   }
 
   async unreadCount(principalId: string | null): Promise<number> {

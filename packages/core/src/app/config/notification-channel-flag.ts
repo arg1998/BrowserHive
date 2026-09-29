@@ -14,7 +14,8 @@ import {
   type ChannelKindSpec,
   checkChannelConfig,
   checkChannelRules,
-  DEFAULT_DIGEST_AT,
+  DEFAULT_DIGEST_DAY,
+  defaultDigest,
   NotificationChannelName,
   type NotificationChannelRules,
   NTFY_DEFAULT_SERVER,
@@ -354,7 +355,7 @@ function categoriesOf(
 }
 
 const DIGEST_RE =
-  /^(daily|weekly)(?::(mon|tue|wed|thu|fri|sat|sun))?(?:@([01]\d|2[0-3]):([0-5]\d))?$/;
+  /^(daily|weekly)(?::(mon|tue|wed|thu|fri|sat|sun|weekdays))?(?:@([01]\d|2[0-3]):([0-5]\d))?$/;
 
 const ANOMALY_NUMBERS = [
   { param: 'anomaly.errorRate', key: 'error_rate', min: 1, max: 100, off: true, int: false },
@@ -390,16 +391,20 @@ function parseReports(
     const m = DIGEST_RE.exec(digest.toLowerCase());
     if (m === null) {
       problems.push(
-        `${label}: digest must be daily@HH:MM or weekly:<mon…sun>@HH:MM, like daily@09:00 or weekly:mon@08:30.`,
+        `${label}: digest must be daily@HH:MM, daily:weekdays@HH:MM or weekly:<mon…sun>@HH:MM, like daily@09:00 or weekly:fri@17:00.`,
       );
-    } else if (m[1] === 'daily' && m[2] !== undefined) {
+    } else if (m[1] === 'daily' && m[2] !== undefined && m[2] !== 'weekdays') {
       problems.push(`${label}: a weekday applies to a weekly digest only (weekly:${m[2]}@…).`);
+    } else if (m[1] === 'weekly' && m[2] === 'weekdays') {
+      problems.push(`${label}: weekdays applies to a daily digest only (daily:weekdays@…).`);
     } else {
-      const at = m[3] === undefined ? DEFAULT_DIGEST_AT : `${m[3]}:${m[4]}`;
+      const every = m[1] === 'weekly' ? 'week' : 'day';
+      const base = defaultDigest(every);
+      const at = m[3] === undefined ? base.at : `${m[3]}:${m[4]}`;
       rules.digest =
-        m[1] === 'weekly'
-          ? { every: 'week', at, day: WEEKDAYS.find((d) => d === m[2]) ?? 'mon' }
-          : { every: 'day', at };
+        every === 'week'
+          ? { every, at, day: WEEKDAYS.find((d) => d === m[2]) ?? DEFAULT_DIGEST_DAY }
+          : { every, at, ...(m[2] === 'weekdays' && { weekdays_only: true }) };
     }
   }
   const anomaly = params.get('anomaly');

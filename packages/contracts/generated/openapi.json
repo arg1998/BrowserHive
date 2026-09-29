@@ -182,6 +182,7 @@
               "CHANNEL_KIND_UNAVAILABLE",
               "CHANNEL_PLATFORM_ERROR",
               "DELIVERY_NOT_FOUND",
+              "REPORT_NOT_FOUND",
               "INTERNAL_ERROR",
               "ADMIN_REQUIRES_HTTP",
               "INSECURE_BIND_REFUSED",
@@ -8740,6 +8741,2466 @@
           "latest_seq"
         ]
       },
+      "ReportsPage": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "notification": {
+                  "type": "object",
+                  "properties": {
+                    "notification_id": {
+                      "type": "string",
+                      "pattern": "^n-[A-Za-z0-9_-]{12}$"
+                    },
+                    "principal_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "attention",
+                        "error",
+                        "vault",
+                        "lifecycle",
+                        "system"
+                      ]
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "body": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "session_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "pattern": "^([a-z][a-z0-9-]{1,31})-([0-9a-z]{8})$"
+                    },
+                    "session_slug": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "target": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "source_event_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "created_at": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "updated_at": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "read_at": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0
+                    },
+                    "dismissed_at": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "attention.requested",
+                        "vault.confirm",
+                        "vault.filled",
+                        "session.finished",
+                        "session.crashed",
+                        "session.reaped",
+                        "tool.errors",
+                        "system.degraded",
+                        "channel.broken",
+                        "digest.daily",
+                        "digest.weekly",
+                        "report.anomaly",
+                        "test"
+                      ]
+                    },
+                    "category": {
+                      "type": "string",
+                      "enum": [
+                        "needs-you",
+                        "problems",
+                        "wrap-ups",
+                        "reports",
+                        "system"
+                      ]
+                    },
+                    "severity": {
+                      "type": "string",
+                      "enum": [
+                        "info",
+                        "warn",
+                        "error",
+                        "critical"
+                      ]
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "open",
+                        "acted",
+                        "resolved",
+                        "expired",
+                        "final"
+                      ]
+                    },
+                    "revision": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "thread": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "notification_id",
+                    "principal_id",
+                    "type",
+                    "title",
+                    "body",
+                    "session_id",
+                    "session_slug",
+                    "target",
+                    "source_event_id",
+                    "created_at",
+                    "updated_at",
+                    "count",
+                    "read_at",
+                    "dismissed_at",
+                    "kind",
+                    "category",
+                    "severity",
+                    "state",
+                    "revision",
+                    "thread"
+                  ]
+                },
+                "report": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "properties": {
+                    "window": {
+                      "type": "object",
+                      "properties": {
+                        "since": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "until": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "since",
+                        "until"
+                      ]
+                    },
+                    "time_zone": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64
+                    },
+                    "late": {
+                      "type": "boolean"
+                    },
+                    "skipped": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "manual": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "window",
+                    "time_zone",
+                    "late",
+                    "skipped",
+                    "manual"
+                  ]
+                },
+                "channels": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "channel_id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "pending",
+                          "sending",
+                          "sent",
+                          "retrying",
+                          "dead",
+                          "suppressed",
+                          "superseded"
+                        ]
+                      },
+                      "reason": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "channel_id",
+                      "name",
+                      "kind",
+                      "status",
+                      "reason"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "notification",
+                "report",
+                "channels"
+              ]
+            }
+          },
+          "page": {
+            "type": "object",
+            "properties": {
+              "next_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "prev_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "limit": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "total": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "next_cursor",
+              "limit"
+            ]
+          },
+          "facets": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "value": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "count": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "value",
+                  "count"
+                ]
+              }
+            }
+          },
+          "applied": {
+            "type": "object",
+            "properties": {
+              "filters": {
+                "type": "object",
+                "additionalProperties": {}
+              },
+              "sort": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  },
+                  "dir": {
+                    "type": "string",
+                    "enum": [
+                      "asc",
+                      "desc"
+                    ]
+                  }
+                },
+                "required": [
+                  "key",
+                  "dir"
+                ]
+              }
+            },
+            "required": [
+              "filters",
+              "sort"
+            ]
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "now": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "now"
+            ]
+          }
+        },
+        "required": [
+          "data",
+          "page",
+          "applied",
+          "meta"
+        ]
+      },
+      "ReportDetailResponse": {
+        "type": "object",
+        "properties": {
+          "report": {
+            "type": "object",
+            "properties": {
+              "notification": {
+                "type": "object",
+                "properties": {
+                  "notification_id": {
+                    "type": "string",
+                    "pattern": "^n-[A-Za-z0-9_-]{12}$"
+                  },
+                  "principal_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "attention",
+                      "error",
+                      "vault",
+                      "lifecycle",
+                      "system"
+                    ]
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "body": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "session_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "pattern": "^([a-z][a-z0-9-]{1,31})-([0-9a-z]{8})$"
+                  },
+                  "session_slug": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "target": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "source_event_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "created_at": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "updated_at": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "count": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "read_at": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0
+                  },
+                  "dismissed_at": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "attention.requested",
+                      "vault.confirm",
+                      "vault.filled",
+                      "session.finished",
+                      "session.crashed",
+                      "session.reaped",
+                      "tool.errors",
+                      "system.degraded",
+                      "channel.broken",
+                      "digest.daily",
+                      "digest.weekly",
+                      "report.anomaly",
+                      "test"
+                    ]
+                  },
+                  "category": {
+                    "type": "string",
+                    "enum": [
+                      "needs-you",
+                      "problems",
+                      "wrap-ups",
+                      "reports",
+                      "system"
+                    ]
+                  },
+                  "severity": {
+                    "type": "string",
+                    "enum": [
+                      "info",
+                      "warn",
+                      "error",
+                      "critical"
+                    ]
+                  },
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "open",
+                      "acted",
+                      "resolved",
+                      "expired",
+                      "final"
+                    ]
+                  },
+                  "revision": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "thread": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "notification_id",
+                  "principal_id",
+                  "type",
+                  "title",
+                  "body",
+                  "session_id",
+                  "session_slug",
+                  "target",
+                  "source_event_id",
+                  "created_at",
+                  "updated_at",
+                  "count",
+                  "read_at",
+                  "dismissed_at",
+                  "kind",
+                  "category",
+                  "severity",
+                  "state",
+                  "revision",
+                  "thread"
+                ]
+              },
+              "report": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "window": {
+                    "type": "object",
+                    "properties": {
+                      "since": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "until": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "required": [
+                      "since",
+                      "until"
+                    ]
+                  },
+                  "time_zone": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "late": {
+                    "type": "boolean"
+                  },
+                  "skipped": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "manual": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "window",
+                  "time_zone",
+                  "late",
+                  "skipped",
+                  "manual"
+                ]
+              },
+              "channels": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "channel_id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "sending",
+                        "sent",
+                        "retrying",
+                        "dead",
+                        "suppressed",
+                        "superseded"
+                      ]
+                    },
+                    "reason": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "channel_id",
+                    "name",
+                    "kind",
+                    "status",
+                    "reason"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "notification",
+              "report",
+              "channels"
+            ]
+          },
+          "message": {
+            "type": "object",
+            "properties": {
+              "schema": {
+                "type": "number",
+                "enum": [
+                  1
+                ]
+              },
+              "id": {
+                "type": "string",
+                "pattern": "^n-[A-Za-z0-9_-]{12}$"
+              },
+              "revision": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "thread": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "attention.requested",
+                  "vault.confirm",
+                  "vault.filled",
+                  "session.finished",
+                  "session.crashed",
+                  "session.reaped",
+                  "tool.errors",
+                  "system.degraded",
+                  "channel.broken",
+                  "digest.daily",
+                  "digest.weekly",
+                  "report.anomaly",
+                  "test"
+                ]
+              },
+              "category": {
+                "type": "string",
+                "enum": [
+                  "needs-you",
+                  "problems",
+                  "wrap-ups",
+                  "reports",
+                  "system"
+                ]
+              },
+              "severity": {
+                "type": "string",
+                "enum": [
+                  "info",
+                  "warn",
+                  "error",
+                  "critical"
+                ]
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "acted",
+                  "resolved",
+                  "expired",
+                  "final"
+                ]
+              },
+              "alert": {
+                "type": "boolean"
+              },
+              "at": {
+                "type": "object",
+                "properties": {
+                  "created": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "updated": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "created",
+                  "updated"
+                ]
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              },
+              "summary": {
+                "type": "string",
+                "maxLength": 240
+              },
+              "blocks": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "text"
+                          ]
+                        },
+                        "content": {
+                          "type": "array",
+                          "items": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "text"
+                                    ]
+                                  },
+                                  "text": {
+                                    "type": "string",
+                                    "maxLength": 4000
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "text"
+                                ]
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "bold"
+                                    ]
+                                  },
+                                  "text": {
+                                    "type": "string",
+                                    "maxLength": 4000
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "text"
+                                ]
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "italic"
+                                    ]
+                                  },
+                                  "text": {
+                                    "type": "string",
+                                    "maxLength": 4000
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "text"
+                                ]
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "code"
+                                    ]
+                                  },
+                                  "text": {
+                                    "type": "string",
+                                    "maxLength": 4000
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "text"
+                                ]
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "link"
+                                    ]
+                                  },
+                                  "text": {
+                                    "type": "string",
+                                    "maxLength": 4000
+                                  },
+                                  "path": {
+                                    "type": "string",
+                                    "maxLength": 2048,
+                                    "pattern": "^\\/(?!\\/)\\S*$"
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "text",
+                                  "path"
+                                ]
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "time"
+                                    ]
+                                  },
+                                  "at": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                  },
+                                  "style": {
+                                    "type": "string",
+                                    "enum": [
+                                      "relative",
+                                      "absolute"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "at",
+                                  "style"
+                                ]
+                              }
+                            ]
+                          },
+                          "maxItems": 64
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "content"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "heading"
+                          ]
+                        },
+                        "text": {
+                          "type": "string",
+                          "maxLength": 4000
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "text"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "fields"
+                          ]
+                        },
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "label": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 40
+                              },
+                              "value": {
+                                "type": "array",
+                                "items": {
+                                  "oneOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "type": {
+                                          "type": "string",
+                                          "enum": [
+                                            "text"
+                                          ]
+                                        },
+                                        "text": {
+                                          "type": "string",
+                                          "maxLength": 4000
+                                        }
+                                      },
+                                      "required": [
+                                        "type",
+                                        "text"
+                                      ]
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "type": {
+                                          "type": "string",
+                                          "enum": [
+                                            "bold"
+                                          ]
+                                        },
+                                        "text": {
+                                          "type": "string",
+                                          "maxLength": 4000
+                                        }
+                                      },
+                                      "required": [
+                                        "type",
+                                        "text"
+                                      ]
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "type": {
+                                          "type": "string",
+                                          "enum": [
+                                            "italic"
+                                          ]
+                                        },
+                                        "text": {
+                                          "type": "string",
+                                          "maxLength": 4000
+                                        }
+                                      },
+                                      "required": [
+                                        "type",
+                                        "text"
+                                      ]
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "type": {
+                                          "type": "string",
+                                          "enum": [
+                                            "code"
+                                          ]
+                                        },
+                                        "text": {
+                                          "type": "string",
+                                          "maxLength": 4000
+                                        }
+                                      },
+                                      "required": [
+                                        "type",
+                                        "text"
+                                      ]
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "type": {
+                                          "type": "string",
+                                          "enum": [
+                                            "link"
+                                          ]
+                                        },
+                                        "text": {
+                                          "type": "string",
+                                          "maxLength": 4000
+                                        },
+                                        "path": {
+                                          "type": "string",
+                                          "maxLength": 2048,
+                                          "pattern": "^\\/(?!\\/)\\S*$"
+                                        }
+                                      },
+                                      "required": [
+                                        "type",
+                                        "text",
+                                        "path"
+                                      ]
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "type": {
+                                          "type": "string",
+                                          "enum": [
+                                            "time"
+                                          ]
+                                        },
+                                        "at": {
+                                          "type": "integer",
+                                          "minimum": 0
+                                        },
+                                        "style": {
+                                          "type": "string",
+                                          "enum": [
+                                            "relative",
+                                            "absolute"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "type",
+                                        "at",
+                                        "style"
+                                      ]
+                                    }
+                                  ]
+                                },
+                                "maxItems": 64
+                              }
+                            },
+                            "required": [
+                              "label",
+                              "value"
+                            ]
+                          },
+                          "minItems": 1,
+                          "maxItems": 12
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "items"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "quote"
+                          ]
+                        },
+                        "content": {
+                          "type": "array",
+                          "items": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "text"
+                                    ]
+                                  },
+                                  "text": {
+                                    "type": "string",
+                                    "maxLength": 4000
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "text"
+                                ]
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "bold"
+                                    ]
+                                  },
+                                  "text": {
+                                    "type": "string",
+                                    "maxLength": 4000
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "text"
+                                ]
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "italic"
+                                    ]
+                                  },
+                                  "text": {
+                                    "type": "string",
+                                    "maxLength": 4000
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "text"
+                                ]
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "code"
+                                    ]
+                                  },
+                                  "text": {
+                                    "type": "string",
+                                    "maxLength": 4000
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "text"
+                                ]
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "link"
+                                    ]
+                                  },
+                                  "text": {
+                                    "type": "string",
+                                    "maxLength": 4000
+                                  },
+                                  "path": {
+                                    "type": "string",
+                                    "maxLength": 2048,
+                                    "pattern": "^\\/(?!\\/)\\S*$"
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "text",
+                                  "path"
+                                ]
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "time"
+                                    ]
+                                  },
+                                  "at": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                  },
+                                  "style": {
+                                    "type": "string",
+                                    "enum": [
+                                      "relative",
+                                      "absolute"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "at",
+                                  "style"
+                                ]
+                              }
+                            ]
+                          },
+                          "maxItems": 64
+                        },
+                        "collapsible": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "content",
+                        "collapsible"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "list"
+                          ]
+                        },
+                        "ordered": {
+                          "type": "boolean"
+                        },
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "array",
+                            "items": {
+                              "oneOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "type": {
+                                      "type": "string",
+                                      "enum": [
+                                        "text"
+                                      ]
+                                    },
+                                    "text": {
+                                      "type": "string",
+                                      "maxLength": 4000
+                                    }
+                                  },
+                                  "required": [
+                                    "type",
+                                    "text"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "type": {
+                                      "type": "string",
+                                      "enum": [
+                                        "bold"
+                                      ]
+                                    },
+                                    "text": {
+                                      "type": "string",
+                                      "maxLength": 4000
+                                    }
+                                  },
+                                  "required": [
+                                    "type",
+                                    "text"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "type": {
+                                      "type": "string",
+                                      "enum": [
+                                        "italic"
+                                      ]
+                                    },
+                                    "text": {
+                                      "type": "string",
+                                      "maxLength": 4000
+                                    }
+                                  },
+                                  "required": [
+                                    "type",
+                                    "text"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "type": {
+                                      "type": "string",
+                                      "enum": [
+                                        "code"
+                                      ]
+                                    },
+                                    "text": {
+                                      "type": "string",
+                                      "maxLength": 4000
+                                    }
+                                  },
+                                  "required": [
+                                    "type",
+                                    "text"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "type": {
+                                      "type": "string",
+                                      "enum": [
+                                        "link"
+                                      ]
+                                    },
+                                    "text": {
+                                      "type": "string",
+                                      "maxLength": 4000
+                                    },
+                                    "path": {
+                                      "type": "string",
+                                      "maxLength": 2048,
+                                      "pattern": "^\\/(?!\\/)\\S*$"
+                                    }
+                                  },
+                                  "required": [
+                                    "type",
+                                    "text",
+                                    "path"
+                                  ]
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "type": {
+                                      "type": "string",
+                                      "enum": [
+                                        "time"
+                                      ]
+                                    },
+                                    "at": {
+                                      "type": "integer",
+                                      "minimum": 0
+                                    },
+                                    "style": {
+                                      "type": "string",
+                                      "enum": [
+                                        "relative",
+                                        "absolute"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "type",
+                                    "at",
+                                    "style"
+                                  ]
+                                }
+                              ]
+                            },
+                            "maxItems": 64
+                          },
+                          "minItems": 1,
+                          "maxItems": 20
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "ordered",
+                        "items"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "table"
+                          ]
+                        },
+                        "columns": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 40
+                          },
+                          "minItems": 1,
+                          "maxItems": 8
+                        },
+                        "rows": {
+                          "type": "array",
+                          "items": {
+                            "type": "array",
+                            "items": {
+                              "type": "array",
+                              "items": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "text"
+                                        ]
+                                      },
+                                      "text": {
+                                        "type": "string",
+                                        "maxLength": 4000
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "text"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "bold"
+                                        ]
+                                      },
+                                      "text": {
+                                        "type": "string",
+                                        "maxLength": 4000
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "text"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "italic"
+                                        ]
+                                      },
+                                      "text": {
+                                        "type": "string",
+                                        "maxLength": 4000
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "text"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "code"
+                                        ]
+                                      },
+                                      "text": {
+                                        "type": "string",
+                                        "maxLength": 4000
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "text"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "link"
+                                        ]
+                                      },
+                                      "text": {
+                                        "type": "string",
+                                        "maxLength": 4000
+                                      },
+                                      "path": {
+                                        "type": "string",
+                                        "maxLength": 2048,
+                                        "pattern": "^\\/(?!\\/)\\S*$"
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "text",
+                                      "path"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "time"
+                                        ]
+                                      },
+                                      "at": {
+                                        "type": "integer",
+                                        "minimum": 0
+                                      },
+                                      "style": {
+                                        "type": "string",
+                                        "enum": [
+                                          "relative",
+                                          "absolute"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "at",
+                                      "style"
+                                    ]
+                                  }
+                                ]
+                              },
+                              "maxItems": 64
+                            }
+                          },
+                          "maxItems": 20
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "columns",
+                        "rows"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "image"
+                          ]
+                        },
+                        "ref": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 512
+                        },
+                        "alt": {
+                          "type": "string",
+                          "maxLength": 4000
+                        },
+                        "captured_at": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "masked": {
+                          "type": "boolean"
+                        },
+                        "path": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "maxLength": 2048,
+                          "pattern": "^\\/(?!\\/)\\S*$"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "ref",
+                        "alt",
+                        "captured_at",
+                        "masked",
+                        "path"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "code"
+                          ]
+                        },
+                        "text": {
+                          "type": "string",
+                          "maxLength": 4000
+                        },
+                        "language": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "maxLength": 32
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "text",
+                        "language"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "divider"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "type"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "footer"
+                          ]
+                        },
+                        "content": {
+                          "type": "array",
+                          "items": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "text"
+                                    ]
+                                  },
+                                  "text": {
+                                    "type": "string",
+                                    "maxLength": 4000
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "text"
+                                ]
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "bold"
+                                    ]
+                                  },
+                                  "text": {
+                                    "type": "string",
+                                    "maxLength": 4000
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "text"
+                                ]
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "italic"
+                                    ]
+                                  },
+                                  "text": {
+                                    "type": "string",
+                                    "maxLength": 4000
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "text"
+                                ]
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "code"
+                                    ]
+                                  },
+                                  "text": {
+                                    "type": "string",
+                                    "maxLength": 4000
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "text"
+                                ]
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "link"
+                                    ]
+                                  },
+                                  "text": {
+                                    "type": "string",
+                                    "maxLength": 4000
+                                  },
+                                  "path": {
+                                    "type": "string",
+                                    "maxLength": 2048,
+                                    "pattern": "^\\/(?!\\/)\\S*$"
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "text",
+                                  "path"
+                                ]
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "time"
+                                    ]
+                                  },
+                                  "at": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                  },
+                                  "style": {
+                                    "type": "string",
+                                    "enum": [
+                                      "relative",
+                                      "absolute"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "at",
+                                  "style"
+                                ]
+                              }
+                            ]
+                          },
+                          "maxItems": 64
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "content"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "chart"
+                          ]
+                        },
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 40
+                        },
+                        "values": {
+                          "type": "array",
+                          "items": {
+                            "type": "number",
+                            "minimum": 0
+                          },
+                          "minItems": 1,
+                          "maxItems": 48
+                        },
+                        "start": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "step_ms": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0
+                        },
+                        "unit": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "maxLength": 24
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "label",
+                        "values",
+                        "start",
+                        "step_ms",
+                        "unit"
+                      ]
+                    }
+                  ]
+                },
+                "maxItems": 50
+              },
+              "actions": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "act"
+                          ]
+                        },
+                        "id": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-z0-9-]{0,31}$",
+                          "description": "Stable within the message (`resolve`, `open-session`)."
+                        },
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 40
+                        },
+                        "style": {
+                          "type": "string",
+                          "enum": [
+                            "primary",
+                            "danger",
+                            "default"
+                          ]
+                        },
+                        "command": {
+                          "type": "object",
+                          "properties": {
+                            "op": {
+                              "type": "string",
+                              "enum": [
+                                "attention.resolve",
+                                "vault.confirm.resolve",
+                                "session.extend_lease",
+                                "session.close"
+                              ]
+                            },
+                            "args": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "maxLength": 256
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "boolean"
+                                  }
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "op",
+                            "args"
+                          ]
+                        },
+                        "confirm": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "maxLength": 240
+                        },
+                        "fallback": {
+                          "type": "object",
+                          "properties": {
+                            "label": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 40
+                            },
+                            "path": {
+                              "type": "string",
+                              "maxLength": 2048,
+                              "pattern": "^\\/(?!\\/)\\S*$"
+                            }
+                          },
+                          "required": [
+                            "label",
+                            "path"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "id",
+                        "label",
+                        "style",
+                        "command",
+                        "confirm",
+                        "fallback"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "open"
+                          ]
+                        },
+                        "id": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-z0-9-]{0,31}$",
+                          "description": "Stable within the message (`resolve`, `open-session`)."
+                        },
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 40
+                        },
+                        "style": {
+                          "type": "string",
+                          "enum": [
+                            "primary",
+                            "danger",
+                            "default"
+                          ]
+                        },
+                        "path": {
+                          "type": "string",
+                          "maxLength": 2048,
+                          "pattern": "^\\/(?!\\/)\\S*$"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "id",
+                        "label",
+                        "style",
+                        "path"
+                      ]
+                    }
+                  ]
+                },
+                "maxItems": 5
+              },
+              "entities": {
+                "type": "object",
+                "properties": {
+                  "session_id": {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  "session_slug": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "harness": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "owner": {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  "tool": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "error_code": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "domain": {
+                    "type": "string",
+                    "maxLength": 253
+                  },
+                  "request_id": {
+                    "type": "string",
+                    "maxLength": 64
+                  }
+                }
+              },
+              "privacy": {
+                "type": "object",
+                "properties": {
+                  "level": {
+                    "type": "string",
+                    "enum": [
+                      "counts",
+                      "titles",
+                      "full"
+                    ]
+                  },
+                  "has_image": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "level",
+                  "has_image"
+                ]
+              },
+              "report": {
+                "type": "object",
+                "properties": {
+                  "window": {
+                    "type": "object",
+                    "properties": {
+                      "since": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "until": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "required": [
+                      "since",
+                      "until"
+                    ]
+                  },
+                  "time_zone": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "late": {
+                    "type": "boolean"
+                  },
+                  "skipped": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "manual": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "window",
+                  "time_zone",
+                  "late",
+                  "skipped",
+                  "manual"
+                ]
+              }
+            },
+            "required": [
+              "schema",
+              "id",
+              "revision",
+              "thread",
+              "kind",
+              "category",
+              "severity",
+              "state",
+              "alert",
+              "at",
+              "title",
+              "summary",
+              "blocks",
+              "actions",
+              "entities",
+              "privacy"
+            ]
+          }
+        },
+        "required": [
+          "report",
+          "message"
+        ]
+      },
+      "ReportSettingsResponse": {
+        "type": "object",
+        "properties": {
+          "settings": {
+            "type": "object",
+            "properties": {
+              "digest": {
+                "type": "object",
+                "properties": {
+                  "every": {
+                    "type": "string",
+                    "enum": [
+                      "day",
+                      "week"
+                    ]
+                  },
+                  "at": {
+                    "type": "string",
+                    "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                  },
+                  "day": {
+                    "type": "string",
+                    "enum": [
+                      "mon",
+                      "tue",
+                      "wed",
+                      "thu",
+                      "fri",
+                      "sat",
+                      "sun"
+                    ]
+                  },
+                  "weekdays_only": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "every",
+                  "at"
+                ]
+              },
+              "anomaly": {
+                "type": "object",
+                "properties": {
+                  "error_rate": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "minimum": 1,
+                    "maximum": 100
+                  },
+                  "min_calls": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100000
+                  },
+                  "attention_minutes": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 1,
+                    "maximum": 10080
+                  },
+                  "blocked_spike": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "minimum": 1.5,
+                    "maximum": 1000
+                  },
+                  "blocked_min": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1000000
+                  },
+                  "capacity": {
+                    "type": "boolean"
+                  },
+                  "degraded": {
+                    "type": "boolean"
+                  }
+                }
+              },
+              "time_zone": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              }
+            },
+            "additionalProperties": false
+          },
+          "host_time_zone": {
+            "type": "string"
+          },
+          "reports": {
+            "type": "object",
+            "properties": {
+              "time_zone": {
+                "type": "string"
+              },
+              "host_zone": {
+                "type": "boolean"
+              },
+              "digest": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "every": {
+                    "type": "string",
+                    "enum": [
+                      "day",
+                      "week"
+                    ]
+                  },
+                  "at": {
+                    "type": "string"
+                  },
+                  "day": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "enum": [
+                      "mon",
+                      "tue",
+                      "wed",
+                      "thu",
+                      "fri",
+                      "sat",
+                      "sun",
+                      null
+                    ]
+                  },
+                  "weekdays_only": {
+                    "type": "boolean"
+                  },
+                  "next_at": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "last_until": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "every",
+                  "at",
+                  "day",
+                  "weekdays_only",
+                  "next_at",
+                  "last_until"
+                ]
+              },
+              "anomaly": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "next_check_at": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "active": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "check": {
+                          "type": "string",
+                          "enum": [
+                            "error_rate",
+                            "attention",
+                            "capacity",
+                            "blocked",
+                            "degraded"
+                          ]
+                        },
+                        "since": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "value": {
+                          "type": "number"
+                        },
+                        "threshold": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "check",
+                        "since",
+                        "value",
+                        "threshold"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "next_check_at",
+                  "active"
+                ]
+              }
+            },
+            "required": [
+              "time_zone",
+              "host_zone",
+              "digest",
+              "anomaly"
+            ]
+          }
+        },
+        "required": [
+          "settings",
+          "host_time_zone",
+          "reports"
+        ]
+      },
+      "PutReportSettingsRequest": {
+        "type": "object",
+        "properties": {
+          "settings": {
+            "type": "object",
+            "properties": {
+              "digest": {
+                "type": "object",
+                "properties": {
+                  "every": {
+                    "type": "string",
+                    "enum": [
+                      "day",
+                      "week"
+                    ]
+                  },
+                  "at": {
+                    "type": "string",
+                    "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                  },
+                  "day": {
+                    "type": "string",
+                    "enum": [
+                      "mon",
+                      "tue",
+                      "wed",
+                      "thu",
+                      "fri",
+                      "sat",
+                      "sun"
+                    ]
+                  },
+                  "weekdays_only": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "every",
+                  "at"
+                ]
+              },
+              "anomaly": {
+                "type": "object",
+                "properties": {
+                  "error_rate": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "minimum": 1,
+                    "maximum": 100
+                  },
+                  "min_calls": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100000
+                  },
+                  "attention_minutes": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 1,
+                    "maximum": 10080
+                  },
+                  "blocked_spike": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "minimum": 1.5,
+                    "maximum": 1000
+                  },
+                  "blocked_min": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1000000
+                  },
+                  "capacity": {
+                    "type": "boolean"
+                  },
+                  "degraded": {
+                    "type": "boolean"
+                  }
+                }
+              },
+              "time_zone": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "settings"
+        ],
+        "additionalProperties": false
+      },
       "NotificationsPage": {
         "type": "object",
         "properties": {
@@ -9441,6 +11902,9 @@
                             "sat",
                             "sun"
                           ]
+                        },
+                        "weekdays_only": {
+                          "type": "boolean"
                         }
                       },
                       "required": [
@@ -9818,6 +12282,9 @@
                             null
                           ]
                         },
+                        "weekdays_only": {
+                          "type": "boolean"
+                        },
                         "next_at": {
                           "type": "integer",
                           "minimum": 0
@@ -9834,6 +12301,7 @@
                         "every",
                         "at",
                         "day",
+                        "weekdays_only",
                         "next_at",
                         "last_until"
                       ]
@@ -10122,6 +12590,9 @@
                           "sat",
                           "sun"
                         ]
+                      },
+                      "weekdays_only": {
+                        "type": "boolean"
                       }
                     },
                     "required": [
@@ -10499,6 +12970,9 @@
                           null
                         ]
                       },
+                      "weekdays_only": {
+                        "type": "boolean"
+                      },
                       "next_at": {
                         "type": "integer",
                         "minimum": 0
@@ -10515,6 +12989,7 @@
                       "every",
                       "at",
                       "day",
+                      "weekdays_only",
                       "next_at",
                       "last_until"
                     ]
@@ -10743,6 +13218,9 @@
                       "sat",
                       "sun"
                     ]
+                  },
+                  "weekdays_only": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -12684,6 +15162,9 @@
                       "sat",
                       "sun"
                     ]
+                  },
+                  "weekdays_only": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -15544,6 +18025,9 @@
                       "sat",
                       "sun"
                     ]
+                  },
+                  "weekdays_only": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -27917,6 +30401,451 @@
         }
       }
     },
+    "/api/v1/notifications/reports": {
+      "get": {
+        "operationId": "listReports",
+        "tags": [
+          "notifications"
+        ],
+        "summary": "Reports in BrowserHive: the in-app copies of digests and anomaly alerts, newest first.",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-browserhive-scope": "notifications:read",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "required": false,
+            "name": "total",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "string",
+                "enum": [
+                  "digest.daily",
+                  "digest.weekly",
+                  "report.anomaly"
+                ]
+              },
+              "minItems": 1
+            },
+            "required": false,
+            "name": "kind",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^nc-[A-Za-z0-9_-]{4,64}$"
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "in-app"
+                  ]
+                }
+              ]
+            },
+            "required": false,
+            "name": "channel",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "required": false,
+            "name": "since",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "required": false,
+            "name": "until",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reports in BrowserHive: the in-app copies of digests and anomaly alerts, newest first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportsPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, PASSWORD_CHANGE_REQUIRED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/notifications/reports/{notification_id}": {
+      "get": {
+        "operationId": "getReport",
+        "tags": [
+          "notifications"
+        ],
+        "summary": "One report with its message and the channels it reached.",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-browserhive-scope": "notifications:read",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^n-[A-Za-z0-9_-]{12}$"
+            },
+            "required": true,
+            "name": "notification_id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One report with its message and the channels it reached.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportDetailResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, PASSWORD_CHANGE_REQUIRED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "REPORT_NOT_FOUND",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/notifications/report-settings": {
+      "get": {
+        "operationId": "getReportSettings",
+        "tags": [
+          "notifications"
+        ],
+        "summary": "The in-app reports: the digest schedule and the anomaly switch (D-45).",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-browserhive-scope": "notifications:read",
+        "responses": {
+          "200": {
+            "description": "The in-app reports: the digest schedule and the anomaly switch (D-45).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportSettingsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, PASSWORD_CHANGE_REQUIRED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "putReportSettings",
+        "tags": [
+          "notifications"
+        ],
+        "summary": "Replaces the in-app reports settings; a changed schedule re-arms from now.",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-browserhive-scope": "channels:write",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutReportSettingsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Replaces the in-app reports settings; a changed schedule re-arms from now.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportSettingsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, PASSWORD_CHANGE_REQUIRED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "PAYLOAD_TOO_LARGE",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/notifications": {
       "get": {
         "operationId": "listNotifications",
@@ -28025,6 +30954,28 @@
             },
             "required": false,
             "name": "type",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "string",
+                "enum": [
+                  "needs-you",
+                  "problems",
+                  "wrap-ups",
+                  "reports",
+                  "system"
+                ]
+              },
+              "minItems": 1
+            },
+            "required": false,
+            "name": "category",
             "in": "query"
           },
           {

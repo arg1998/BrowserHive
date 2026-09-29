@@ -79,7 +79,12 @@ export function reportsText(channel: ChannelView): string | null {
   const r = channel.reports;
   const parts: string[] = [];
   if (r.digest !== null) {
-    const every = r.digest.every === 'week' ? `weekly ${r.digest.day ?? 'mon'}` : 'daily';
+    const every =
+      r.digest.every === 'week'
+        ? `weekly ${r.digest.day ?? 'fri'}`
+        : r.digest.weekdays_only
+          ? 'weekday'
+          : 'daily';
     parts.push(
       `${every} digest ${r.digest.at} → next ${inZone(r.digest.next_at, r.time_zone)} ${r.time_zone}`,
     );

@@ -469,6 +469,43 @@ export function hasPresserIdentity(kind: string): boolean {
   return kind === 'telegram' || kind === 'discord';
 }
 
+function zoneProblem(field: string, zone: string): { field: string; message: string } {
+  return {
+    field,
+    message: `'${zone.slice(0, 64)}' is not a time zone; use an IANA name such as Europe/Berlin.`,
+  };
+}
+
+/**
+ * Checks the report rules shared by a channel and the in-app settings (D-43, D-45): a known time
+ * zone, a weekday only for a weekly digest, weekdays only only for a daily one.
+ *
+ * @returns Every problem, its field prefixed with `prefix` (`rules.` for a channel).
+ */
+export function checkReportRules(
+  rules: Pick<NotificationChannelRules, 'time_zone' | 'digest'>,
+  prefix = '',
+): readonly { readonly field: string; readonly message: string }[] {
+  const problems: { field: string; message: string }[] = [];
+  if (rules.time_zone !== undefined && !isValidTimeZone(rules.time_zone)) {
+    problems.push(zoneProblem(`${prefix}time_zone`, rules.time_zone));
+  }
+  const digest = rules.digest;
+  if (digest !== undefined && digest.every === 'day' && digest.day !== undefined) {
+    problems.push({
+      field: `${prefix}digest.day`,
+      message: 'a weekday applies to a weekly digest only.',
+    });
+  }
+  if (digest !== undefined && digest.every === 'week' && digest.weekdays_only !== undefined) {
+    problems.push({
+      field: `${prefix}digest.weekdays_only`,
+      message: 'weekdays only applies to a daily digest.',
+    });
+  }
+  return problems;
+}
+
 /**
  * Checks the act-button rules of a channel (D-41): the switch only where presses can arrive, and
  * an allow-list of numeric platform user ids only where pressers are identified. Shared by the
@@ -495,24 +532,11 @@ export function checkChannelRules(input: {
             : `${input.kind} cannot receive button presses.`,
     });
   }
-  for (const [field, zone] of [
-    ['rules.time_zone', input.rules.time_zone],
-    ['rules.quiet_hours.time_zone', input.rules.quiet_hours?.time_zone],
-  ] as const) {
-    if (zone !== undefined && !isValidTimeZone(zone)) {
-      problems.push({
-        field,
-        message: `'${zone.slice(0, 64)}' is not a time zone; use an IANA name such as Europe/Berlin.`,
-      });
-    }
+  const quietZone = input.rules.quiet_hours?.time_zone;
+  if (quietZone !== undefined && !isValidTimeZone(quietZone)) {
+    problems.push(zoneProblem('rules.quiet_hours.time_zone', quietZone));
   }
-  const digest = input.rules.digest;
-  if (digest !== undefined && digest.every === 'day' && digest.day !== undefined) {
-    problems.push({
-      field: 'rules.digest.day',
-      message: 'a weekday applies to a weekly digest only.',
-    });
-  }
+  problems.push(...checkReportRules(input.rules, 'rules.'));
   const allow = input.rules.allow_list ?? [];
   if (allow.length > 0 && !hasPresserIdentity(input.kind)) {
     problems.push({

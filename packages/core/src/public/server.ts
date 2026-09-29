@@ -25,6 +25,8 @@ export {
   publicUrlHost,
   type ReportCounter,
   ReportScheduler,
+  ReportService,
+  ReportSettingsStore,
   runtimeZone,
 } from '../app/notifications/index.ts';
 export { Recorder } from '../app/observability/recorder.ts';

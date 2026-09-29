@@ -204,8 +204,11 @@ class Sweep {
         .deleteFrom('notifications')
         .where((eb) =>
           eb.or([
-            eb('dismissed_at', '<', seenCutoff),
-            eb('read_at', '<', seenCutoff),
+            // Reports keep their history for the Reports tab whatever their inbox state (D-45).
+            eb.and([
+              eb.or([eb('category', 'is', null), eb('category', '!=', 'reports')]),
+              eb.or([eb('dismissed_at', '<', seenCutoff), eb('read_at', '<', seenCutoff)]),
+            ]),
             eb('created_at', '<', unseenCutoff),
           ]),
         )

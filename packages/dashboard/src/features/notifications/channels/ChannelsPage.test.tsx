@@ -128,6 +128,7 @@ describe('ChannelsPage', () => {
           every: 'day',
           at: '09:00',
           day: null,
+          weekdays_only: false,
           next_at: Date.UTC(2026, 8, 30, 0),
           last_until: null,
         },

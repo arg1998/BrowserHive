@@ -6,8 +6,12 @@ import type {
   HealthCheckState,
   HealthStatus,
   RealtimeConnection,
+  ReportDetailResponse,
+  ReportItem,
+  ReportSettingsResponse,
   SystemInfo,
 } from '@browserhive/contracts/http';
+import type { ReportSettings } from '@browserhive/contracts/notifications';
 import type { LiveInput } from '@browserhive/contracts/ws';
 import type { AttentionService } from '../../app/attention/attention-service.ts';
 import type { AuthService } from '../../app/auth/auth-service.ts';
@@ -24,7 +28,11 @@ import type { Desktop } from '../../ports/desktop.ts';
 import type { EventPublisher } from '../../ports/event-bus.ts';
 import type { IdGenerator } from '../../ports/id-generator.ts';
 import type { AnalyticsQueries } from '../../ports/persistence/analytics.ts';
-import type { NotificationListQuery, Page } from '../../ports/persistence/queries.ts';
+import type {
+  NotificationListQuery,
+  Page,
+  ReportListQuery,
+} from '../../ports/persistence/queries.ts';
 import type { IdempotencyRecord, NotificationRecord } from '../../ports/persistence/records.ts';
 import type { Repositories } from '../../ports/persistence/unit-of-work.ts';
 import type { ArtifactFiles } from '../../ports/static-assets.ts';
@@ -106,6 +114,14 @@ export interface NotificationsPort {
   markAllRead(): Promise<number>;
   dismiss(notificationId: string): Promise<boolean>;
   dismissAll(): Promise<number>;
+}
+
+/** Reports in the dashboard (D-45; the `app/notifications` report service; structural). */
+export interface ReportsPort {
+  list(query: ReportListQuery): Promise<Page<ReportItem>>;
+  get(notificationId: string): Promise<ReportDetailResponse>;
+  settings(): ReportSettingsResponse;
+  saveSettings(settings: ReportSettings): Promise<ReportSettingsResponse>;
 }
 
 /** Per-operator preferences (the `app/notifications` preference service; structural). */
@@ -264,6 +280,7 @@ export interface HttpServices {
   readonly auth: AuthPort;
   readonly blocklist: BlocklistPort;
   readonly notifications: NotificationsPort;
+  readonly reports: ReportsPort;
   readonly preferences: PreferencesPort;
   readonly logs: LogsPort;
   readonly logLevel: LogLevelController;

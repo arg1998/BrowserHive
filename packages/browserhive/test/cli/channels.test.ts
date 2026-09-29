@@ -68,6 +68,7 @@ const CHANNELS: ChannelView[] = [
         every: 'day',
         at: '08:30',
         day: null,
+        weekdays_only: false,
         next_at: 1_790_749_800_000,
         last_until: null,
       },

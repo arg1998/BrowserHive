@@ -105,6 +105,8 @@ export const ChannelReports = z.object({
       every: z.enum(['day', 'week']),
       at: z.string(),
       day: z.enum(WEEKDAYS).nullable(),
+      /** A daily digest that runs Monday to Friday only. */
+      weekdays_only: z.boolean(),
       /** The next scheduled time. */
       next_at: EpochMs,
       /** End of the last window handled, or `null` before the first. */

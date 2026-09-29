@@ -119,7 +119,10 @@ export interface ChannelServiceDeps {
   /** Timer for debounced feed events (defaults to `setTimeout`). */
   readonly schedule?: (fn: () => void, ms: number) => void;
   /** The scheduled reports (D-43, D-44): views, "Send a digest now", cursor cleanup. */
-  readonly reports?: Pick<ReportScheduler, 'view' | 'zoneOf' | 'manualDigest' | 'forget'>;
+  readonly reports?: Pick<
+    ReportScheduler,
+    'view' | 'zoneOf' | 'manualDigest' | 'storeManualCopy' | 'forget'
+  >;
   /** The channel cursors (removed with a channel). */
   readonly cursors?: NotificationCursorRepository;
   /** The host's IANA zone (the default of `rules.time_zone`); default the runtime's. */
@@ -389,7 +392,8 @@ export class ChannelService {
       },
       connection: this.deps.connection?.(r.channelId) ?? null,
       reports:
-        this.deps.reports?.view(r) ?? reportsView(r, this.deps.clock.now(), this.hostTimeZone()),
+        this.deps.reports?.view(r) ??
+        reportsView(r.rules, this.deps.clock.now(), this.hostTimeZone()),
     };
   }
 
@@ -670,10 +674,13 @@ export class ChannelService {
     );
     const base = { preview, window: built.window, empty: built.empty };
     if (!send) return { ...base, sent: false, ok: true, delivery: null, error: null };
+    const ready = this.readyEntry(channelId);
+    // A digest someone asked for has its own in-app copy (D-45), which the channel row names.
+    const copy = await reports.storeManualCopy(built);
     const sent = await this.sendNow(
-      this.readyEntry(channelId),
+      ready,
       built.message,
-      built.record,
+      copy === null ? built.record : { ...built.record, sourceEventId: copy },
       'manual',
     );
     return {

@@ -66,20 +66,42 @@ export const Weekday = z.enum(WEEKDAYS);
 /** A day of the week. */
 export type Weekday = z.infer<typeof Weekday>;
 
-/** Time a digest is sent when none is chosen. */
+/** Time a daily digest is sent when none is chosen. */
 export const DEFAULT_DIGEST_AT = '09:00';
+/** Time a weekly digest is sent when none is chosen (D-43). */
+export const DEFAULT_WEEKLY_DIGEST_AT = '17:00';
+/** Day a weekly digest is sent when none is chosen (D-43). */
+export const DEFAULT_DIGEST_DAY: Weekday = 'fri';
 
 /**
- * A scheduled digest (D-43): every day or every week (on `day`, default Monday) at `at`, in the
- * channel's time zone. The report covers the period that ends at that time.
+ * A scheduled digest (D-43): every day (with `weekdays_only`, Monday to Friday) or every week (on
+ * `day`, default Friday) at `at`, in the channel's time zone. The report covers the period that
+ * ends at that time: with weekdays only, Monday's covers the weekend.
  */
 export const DigestRule = z.object({
   every: z.enum(['day', 'week']),
   at: ClockTime,
   day: Weekday.optional(),
+  weekdays_only: z.boolean().optional(),
 });
 /** A scheduled digest. */
 export type DigestRule = z.infer<typeof DigestRule>;
+
+/** The weekday a weekly digest runs on (its `day`, default Friday). */
+export function digestDay(rule: Pick<DigestRule, 'day'>): Weekday {
+  return rule.day ?? DEFAULT_DIGEST_DAY;
+}
+
+/**
+ * The rule a frequency starts with: every day at 09:00, every week on Friday at 17:00 (D-43).
+ *
+ * @returns A new rule.
+ */
+export function defaultDigest(every: DigestRule['every']): DigestRule {
+  return every === 'week'
+    ? { every: 'week', at: DEFAULT_WEEKLY_DIGEST_AT, day: DEFAULT_DIGEST_DAY }
+    : { every: 'day', at: DEFAULT_DIGEST_AT };
+}
 
 /**
  * The hourly anomaly checks (D-44). Each key is a threshold (or a switch); absent = its default
@@ -204,3 +226,18 @@ export const SUPPRESSION_REASONS = [
 ] as const;
 /** A suppression reason. */
 export type SuppressionReason = (typeof SUPPRESSION_REASONS)[number];
+
+/**
+ * The in-app reports (D-45): a digest schedule and the anomaly switch for the dashboard itself,
+ * with no external channel. The same keys as a channel's report rules; `{}` = off (the default).
+ */
+export const ReportSettings = z.strictObject({
+  /** The in-app digest; absent = off. */
+  digest: DigestRule.optional(),
+  /** The in-app anomaly alerts (their thresholds); absent = off. */
+  anomaly: AnomalyRule.optional(),
+  /** The IANA zone of the in-app reports; absent = the host's. */
+  time_zone: z.string().min(1).max(64).optional(),
+});
+/** The in-app reports. */
+export type ReportSettings = z.infer<typeof ReportSettings>;

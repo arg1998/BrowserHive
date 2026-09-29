@@ -1,6 +1,6 @@
 /** @module contracts/notifications/schedule — the calendar maths of scheduled reports (D-43, spec 03 §9.7), shared by the server and the dashboard: wall-clock times in an IANA zone with DST handled (a skipped time is shifted by the gap, a repeated one fires once), the occurrences of a digest rule, its windows, the next run and the hourly anomaly slots. Pure (`Intl` only). */
 
-import { type DigestRule, WEEKDAYS } from './channel.ts';
+import { type DigestRule, digestDay, WEEKDAYS } from './channel.ts';
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -127,10 +127,13 @@ function weekdayOf(date: { readonly year: number; readonly month: number; readon
   return (new Date(Date.UTC(date.year, date.month - 1, date.day)).getUTCDay() + 6) % 7;
 }
 
-/** The weekday a rule fires on (weekly), as an index; `null` for a daily rule. */
-function ruleWeekday(rule: DigestRule): number | null {
-  if (rule.every !== 'week') return null;
-  return WEEKDAYS.indexOf(rule.day ?? 'mon');
+/** Whether a rule fires on a calendar date (its weekday; Monday to Friday for weekdays only). */
+function firesOn(
+  rule: DigestRule,
+  date: { readonly year: number; readonly month: number; readonly day: number },
+): boolean {
+  if (rule.every === 'week') return weekdayOf(date) === WEEKDAYS.indexOf(digestDay(rule));
+  return rule.weekdays_only !== true || weekdayOf(date) < 5;
 }
 
 /** Nominal length of one period of a rule. */
@@ -154,13 +157,12 @@ export function occurrencesBetween(
   const start = Math.max(from, to - MAX_SCAN_MS);
   const older = start > from ? Math.floor((start - from) / periodMs(rule)) : 0;
   const clock = parseClock(rule.at);
-  const weekday = ruleWeekday(rule);
   const out: number[] = [];
   let date = addDays(wallTime(start, zone), -1);
   const last = addDays(wallTime(to, zone), 1);
   const lastKey = Date.UTC(last.year, last.month - 1, last.day);
   while (Date.UTC(date.year, date.month - 1, date.day) <= lastKey) {
-    if (weekday === null || weekdayOf(date) === weekday) {
+    if (firesOn(rule, date)) {
       const at = zonedInstant(date, clock, zone);
       if (at > start && at <= to) out.push(at);
     }
@@ -176,10 +178,9 @@ export function occurrencesBetween(
  */
 export function nextOccurrence(rule: DigestRule, zone: string, after: number): number {
   const clock = parseClock(rule.at);
-  const weekday = ruleWeekday(rule);
   let date = addDays(wallTime(after, zone), -1);
   for (let i = 0; i < 16; i++) {
-    if (weekday === null || weekdayOf(date) === weekday) {
+    if (firesOn(rule, date)) {
       const at = zonedInstant(date, clock, zone);
       if (at > after) return at;
     }
@@ -195,10 +196,9 @@ export function nextOccurrence(rule: DigestRule, zone: string, after: number): n
  */
 export function previousOccurrence(rule: DigestRule, zone: string, before: number): number {
   const clock = parseClock(rule.at);
-  const weekday = ruleWeekday(rule);
   let date = addDays(wallTime(before, zone), 1);
   for (let i = 0; i < 16; i++) {
-    if (weekday === null || weekdayOf(date) === weekday) {
+    if (firesOn(rule, date)) {
       const at = zonedInstant(date, clock, zone);
       if (at < before) return at;
     }
@@ -228,7 +228,8 @@ export function digestWindow(
 
 /** Identity of a rule in a zone: a change re-arms the schedule (spec 03 §9.7). */
 export function scheduleKey(rule: DigestRule, zone: string): string {
-  const day = rule.every === 'week' ? `:${rule.day ?? 'mon'}` : '';
+  const day =
+    rule.every === 'week' ? `:${digestDay(rule)}` : rule.weekdays_only === true ? '-weekdays' : '';
   return `${rule.every}${day}@${rule.at}@${zone}`;
 }
 

@@ -2,7 +2,7 @@
 
 # REST API reference
 
-The admin REST API served under `/api/v1` on the same port as MCP and the dashboard when `--admin` is on (107 operations), generated from `HTTP_ENDPOINTS` in `@browserhive/contracts/http`. Request and response schemas are in the OpenAPI 3.1 document the server serves at `/api/v1/openapi.json`, with an interactive reference UI at `/api/v1/docs`.
+The admin REST API served under `/api/v1` on the same port as MCP and the dashboard when `--admin` is on (111 operations), generated from `HTTP_ENDPOINTS` in `@browserhive/contracts/http`. Request and response schemas are in the OpenAPI 3.1 document the server serves at `/api/v1/openapi.json`, with an interactive reference UI at `/api/v1/docs`.
 
 Summaries come from `packages/contracts/generated/openapi.json`.
 
@@ -161,6 +161,10 @@ Summaries come from `packages/contracts/generated/openapi.json`.
 | POST | `/api/v1/notifications/read-all` | `markAllNotificationsRead` | `notifications:write` | cookie, bearer | Mark every notification read. |
 | DELETE | `/api/v1/notifications/{notification_id}` | `dismissNotification` | `notifications:write` | cookie, bearer | Dismiss one notification. |
 | POST | `/api/v1/notifications/dismiss-all` | `dismissAllNotifications` | `notifications:write` | cookie, bearer | Dismiss every notification. |
+| GET | `/api/v1/notifications/reports` | `listReports` | `notifications:read` | cookie, bearer | Reports in BrowserHive: the in-app copies of digests and anomaly alerts, newest first. |
+| GET | `/api/v1/notifications/reports/{notification_id}` | `getReport` | `notifications:read` | cookie, bearer | One report with its message and the channels it reached. |
+| GET | `/api/v1/notifications/report-settings` | `getReportSettings` | `notifications:read` | cookie, bearer | The in-app reports: the digest schedule and the anomaly switch (D-45). |
+| PUT | `/api/v1/notifications/report-settings` | `putReportSettings` | `channels:write` | cookie, bearer | Replaces the in-app reports settings; a changed schedule re-arms from now. |
 | GET | `/api/v1/me/preferences` | `getPreferences` | — | cookie, bearer | The caller's stored preferences (known keys only). |
 | PUT | `/api/v1/me/preferences` | `putPreferences` | `preferences:write` | cookie, bearer | Replace the preferences document (≤ 64 KiB; unknown keys rejected). |
 

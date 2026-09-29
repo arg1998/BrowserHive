@@ -1,5 +1,7 @@
 /** @module test/helpers/http-route-cases — one success request and one validation-failure request per `/api/v1` operation (spec 09 §3.2). */
 
+import { buildDigest, reportMessage } from '../../src/app/notifications/reports.ts';
+import { sampleDigestFacts } from '../../src/app/notifications/samples.ts';
 import { ARCHIVED_ID, CLOSED_ID, EVENT_OK } from './http-fixtures.ts';
 import type { HttpKit } from './http-kit.ts';
 import { PASSWORD } from './http-kit.ts';
@@ -45,6 +47,54 @@ async function webhookChannel(ctx: CaseContext): Promise<void> {
   // Under a pending password change the create is refused: a well-formed id keeps the path valid.
   const body = (await response.json()) as { channel?: { channel_id: string } };
   ctx.state['channel'] = body.channel?.channel_id ?? 'nc-placeholder01';
+}
+
+/** An in-app digest copy (D-45) for the report routes. */
+async function inAppReport(ctx: CaseContext): Promise<void> {
+  const rule = { every: 'day', at: '09:00' } as const;
+  const content = buildDigest(sampleDigestFacts(Date.UTC(2026, 8, 29, 9), rule), rule, {
+    zone: 'UTC',
+    level: 'full',
+    scheduledAt: Date.UTC(2026, 8, 29, 9),
+    late: false,
+    skipped: 0,
+    manual: false,
+    quiet: false,
+  });
+  const id = 'n-report000001';
+  const thread = 'report:digest:day@09:00@UTC:1:2';
+  const message = reportMessage(content, {
+    id,
+    thread,
+    revision: 1,
+    createdAt: 1,
+    updatedAt: 1,
+    level: 'full',
+  });
+  await ctx.kit.repos.notifications.insert({
+    notificationId: id,
+    principalId: null,
+    type: 'lifecycle',
+    title: message.title,
+    body: message.summary,
+    sessionId: null,
+    target: `/notifications/reports/${id}`,
+    sourceEventId: null,
+    createdAt: 1,
+    updatedAt: 1,
+    count: 1,
+    groupKey: null,
+    readAt: 1,
+    dismissedAt: null,
+    kind: message.kind,
+    category: 'reports',
+    severity: message.severity,
+    state: message.state,
+    revision: 1,
+    thread,
+    messageJson: JSON.stringify(message),
+  });
+  ctx.state['report'] = id;
 }
 
 async function testedChannel(ctx: CaseContext): Promise<void> {
@@ -629,6 +679,37 @@ export const ROUTE_CASES: readonly RouteCase[] = [
     operationId: 'listNotifications',
     success: { path: api('/notifications'), status: 200 },
     invalid: { path: api('/notifications?read=maybe') },
+  },
+  {
+    operationId: 'listReports',
+    setup: inAppReport,
+    success: { path: api('/notifications/reports?kind=digest.daily&channel=in-app'), status: 200 },
+    invalid: { path: api('/notifications/reports?kind=digest.hourly') },
+  },
+  {
+    operationId: 'getReport',
+    setup: inAppReport,
+    success: { path: api('/notifications/reports/n-report000001'), status: 200 },
+    invalid: { path: api('/notifications/reports/bad') },
+  },
+  {
+    operationId: 'getReportSettings',
+    success: { path: api('/notifications/report-settings'), status: 200 },
+    invalid: null,
+  },
+  {
+    operationId: 'putReportSettings',
+    success: {
+      method: 'PUT',
+      path: api('/notifications/report-settings'),
+      body: { settings: { digest: { every: 'week', at: '17:00', day: 'fri' }, anomaly: {} } },
+      status: 200,
+    },
+    invalid: {
+      method: 'PUT',
+      path: api('/notifications/report-settings'),
+      body: { settings: { digest: { every: 'hourly' } } },
+    },
   },
   {
     operationId: 'markNotificationRead',

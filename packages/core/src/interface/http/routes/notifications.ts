@@ -11,6 +11,13 @@ import {
   PreferencesResponse,
   PutPreferencesRequest,
   PutPreferencesResponse,
+  PutReportSettingsRequest,
+  REPORTS_IN_APP_ONLY,
+  ReportDetailResponse,
+  ReportIdParams,
+  ReportSettingsResponse,
+  ReportsPage,
+  ReportsQuery,
 } from '@browserhive/contracts/http';
 import { AppError } from '../../../kernel/errors/app-error.ts';
 import { defineRoute, reply } from '../define-route.ts';
@@ -22,6 +29,60 @@ const tags = ['notifications'];
 
 /** Notification and preference routes. */
 export const NOTIFICATION_ROUTES = [
+  defineRoute({
+    operationId: 'listReports',
+    tags,
+    summary:
+      'Reports in BrowserHive: the in-app copies of digests and anomaly alerts, newest first.',
+    request: { query: ReportsQuery },
+    responses: { 200: ReportsPage },
+    async handler({ input, services, ctx }) {
+      const q = input.query;
+      const page = await services.reports.list({
+        ...pagingOf(q),
+        ...(q.kind !== undefined && { kinds: q.kind }),
+        ...(q.channel !== undefined &&
+          (q.channel === REPORTS_IN_APP_ONLY ? { inAppOnly: true } : { channelId: q.channel })),
+        ...(q.since !== undefined && { since: q.since }),
+        ...(q.until !== undefined && { until: q.until }),
+      });
+      return reply(
+        200,
+        envelope(page, (item) => item, { ...q, sort: 'created_at' }, ctx.now, 'created_at'),
+      );
+    },
+  }),
+  defineRoute({
+    operationId: 'getReport',
+    tags,
+    summary: 'One report with its message and the channels it reached.',
+    request: { params: ReportIdParams },
+    responses: { 200: ReportDetailResponse },
+    errors: ['REPORT_NOT_FOUND'],
+    async handler({ input, services }) {
+      return reply(200, await services.reports.get(input.params.notification_id));
+    },
+  }),
+  defineRoute({
+    operationId: 'getReportSettings',
+    tags,
+    summary: 'The in-app reports: the digest schedule and the anomaly switch (D-45).',
+    request: {},
+    responses: { 200: ReportSettingsResponse },
+    async handler({ services }) {
+      return reply(200, services.reports.settings());
+    },
+  }),
+  defineRoute({
+    operationId: 'putReportSettings',
+    tags,
+    summary: 'Replaces the in-app reports settings; a changed schedule re-arms from now.',
+    request: { body: PutReportSettingsRequest },
+    responses: { 200: ReportSettingsResponse },
+    async handler({ input, services }) {
+      return reply(200, await services.reports.saveSettings(input.body.settings));
+    },
+  }),
   defineRoute({
     operationId: 'listNotifications',
     tags,
@@ -36,6 +97,7 @@ export const NOTIFICATION_ROUTES = [
           read: q.read,
           sort: q.sort,
           ...(q.type !== undefined && { types: q.type }),
+          ...(q.category !== undefined && { categories: q.category }),
           ...(q.since !== undefined && { since: q.since }),
           ...(q.until !== undefined && { until: q.until }),
         }),

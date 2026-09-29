@@ -2,7 +2,7 @@
 
 # Error reference
 
-Every error code BrowserHive can produce (106 codes), generated from `ERROR_REGISTRY` in `@browserhive/contracts/errors`. Each code has a stable anchor: `errors.md#<CODE>`, which is also the `type` URL of HTTP problem responses (`https://browserhive.ai/docs/errors#<CODE>`).
+Every error code BrowserHive can produce (107 codes), generated from `ERROR_REGISTRY` in `@browserhive/contracts/errors`. Each code has a stable anchor: `errors.md#<CODE>`, which is also the `type` URL of HTTP problem responses (`https://browserhive.ai/docs/errors#<CODE>`).
 
 ## How errors reach you
 
@@ -80,6 +80,7 @@ Returned by tools and the REST API when a request cannot be served (unknown sess
 | [`CHANNEL_KIND_UNAVAILABLE`](#CHANNEL_KIND_UNAVAILABLE) | Platform not available yet | 400 | different_args |
 | [`CHANNEL_PLATFORM_ERROR`](#CHANNEL_PLATFORM_ERROR) | The platform refused the request | 502 | backoff |
 | [`DELIVERY_NOT_FOUND`](#DELIVERY_NOT_FOUND) | Delivery not found | 404 | never |
+| [`REPORT_NOT_FOUND`](#REPORT_NOT_FOUND) | Report not found | 404 | never |
 | [`INTERNAL_ERROR`](#INTERNAL_ERROR) | Internal error | 500 | backoff |
 
 <a id="SESSION_NOT_FOUND"></a>
@@ -1377,6 +1378,30 @@ Details:
 | Field | Type | Required | Constraints |
 |---|---|---|---|
 | `seq` | `number` | yes | — |
+
+<a id="REPORT_NOT_FOUND"></a>
+### `REPORT_NOT_FOUND`
+
+| Property | Value |
+|---|---|
+| Title | Report not found |
+| HTTP status | 404 |
+| Category | `domain` |
+| Retryable | `never` (do not retry; the request cannot succeed as sent) |
+
+Message: `Report {notification_id} does not exist.`
+
+Hint: Reports are kept for 90 days.
+
+Cause: The id is not an in-app report, or retention pruned it.
+
+Resolution: List the reports with GET /api/v1/notifications/reports.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `notification_id` | `string` | yes | — |
 
 <a id="INTERNAL_ERROR"></a>
 ### `INTERNAL_ERROR`

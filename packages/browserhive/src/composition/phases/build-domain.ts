@@ -302,6 +302,8 @@ async function buildDomain(
     channelService: ops.channelService,
     actionListeners: ops.actionListeners,
     reports: ops.reports,
+    reportSettings: ops.reportSettings,
+    reportService: ops.reportService,
     publicUrl: ops.publicUrl,
     instanceId,
     preferences: ops.preferences,

@@ -3533,6 +3533,9 @@
                                   "sat",
                                   "sun"
                                 ]
+                              },
+                              "weekdays_only": {
+                                "type": "boolean"
                               }
                             },
                             "required": [
@@ -3957,6 +3960,9 @@
                                       }
                                     ]
                                   },
+                                  "weekdays_only": {
+                                    "type": "boolean"
+                                  },
                                   "next_at": {
                                     "type": "integer",
                                     "minimum": 0,
@@ -3979,6 +3985,7 @@
                                   "every",
                                   "at",
                                   "day",
+                                  "weekdays_only",
                                   "next_at",
                                   "last_until"
                                 ],
@@ -8035,6 +8042,9 @@
                           "sat",
                           "sun"
                         ]
+                      },
+                      "weekdays_only": {
+                        "type": "boolean"
                       }
                     },
                     "required": [
@@ -8459,6 +8469,9 @@
                               }
                             ]
                           },
+                          "weekdays_only": {
+                            "type": "boolean"
+                          },
                           "next_at": {
                             "type": "integer",
                             "minimum": 0,
@@ -8481,6 +8494,7 @@
                           "every",
                           "at",
                           "day",
+                          "weekdays_only",
                           "next_at",
                           "last_until"
                         ],

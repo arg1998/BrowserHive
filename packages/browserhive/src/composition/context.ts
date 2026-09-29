@@ -43,6 +43,8 @@ import type {
   PublicUrlChecker,
   Recorder,
   ReportScheduler,
+  ReportService,
+  ReportSettingsStore,
   RuntimeFacts,
   SessionService,
   SystemStatusService,
@@ -123,6 +125,10 @@ export interface DomainPart {
   readonly actionListeners: NotificationActionListeners;
   /** Digests and anomaly alerts (D-43, D-44). */
   readonly reports: ReportScheduler;
+  /** The in-app report settings (D-45). */
+  readonly reportSettings: ReportSettingsStore;
+  /** The Reports tab's reads and settings (D-45). */
+  readonly reportService: ReportService;
   /** The `publicUrl` check (spec 08 §5.8). */
   readonly publicUrl: PublicUrlChecker;
   /** Random per start; `GET /health` reports it (D-37). */

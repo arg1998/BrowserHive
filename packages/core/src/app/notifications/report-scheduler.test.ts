@@ -106,8 +106,14 @@ async function setup(opts: Setup = {}) {
       counter: { add: (n, a) => void counted.push({ ...a, n }) },
     });
   const scheduler = make();
+  /** The channel copies (stored out of the inbox). */
   const reports = () =>
-    [...repos.notifications.rows.values()].filter((r) => r.category === 'reports');
+    [...repos.notifications.rows.values()].filter(
+      (r) => r.category === 'reports' && !(r.thread ?? '').startsWith('report:'),
+    );
+  /** The in-app copies (D-45). */
+  const inApp = () =>
+    [...repos.notifications.rows.values()].filter((r) => (r.thread ?? '').startsWith('report:'));
   const deliveries = () => repos.notificationDeliveries.rows;
   return {
     clock,
@@ -119,6 +125,7 @@ async function setup(opts: Setup = {}) {
     intervals,
     counted,
     reports,
+    inApp,
     deliveries,
   };
 }
@@ -423,11 +430,15 @@ describe('ReportScheduler: anomaly alerts (D-44)', () => {
       anomaly: failing,
     });
     await t.scheduler.tick();
-    expect(t.calls.anomaly).toBe(0);
+    // The channel is quiet; its watch (the in-app alert, D-45) has no quiet hours.
+    expect(t.reports()).toHaveLength(0);
+    expect(t.inApp()).toHaveLength(1);
     await t.clock.set(START + HOUR); // 13:00 UTC: quiet hours are over
     await t.scheduler.tick();
-    expect(t.calls.anomaly).toBe(1);
     expect(t.reports()).toHaveLength(1);
+    // The channel's alert names the episode's in-app copy; the watch did not alert again.
+    expect(t.inApp()).toHaveLength(1);
+    expect(t.reports()[0]?.sourceEventId).toBe(t.inApp()[0]?.notificationId);
   });
 
   it('survives a restart without repeating the alert', async () => {
