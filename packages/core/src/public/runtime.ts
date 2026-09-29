@@ -27,7 +27,9 @@ export { createCredentialsFile } from '../infra/auth/credentials-file.ts';
 export { createWebCryptoRandom } from '../infra/auth/web-crypto-random.ts';
 export { createSystemClock } from '../infra/clock/system-clock.ts';
 export { createNodeFileSystem } from '../infra/fs/node-file-system.ts';
+export { type EventLoopLagMonitor, startEventLoopLagMonitor } from '../infra/host/event-loop.ts';
 export { readHostMemory, readProcessMemory } from '../infra/host/memory.ts';
+export { createProcessTreeReader, type ProcessTreeReader } from '../infra/host/process-tree.ts';
 export { createNanoidIdGenerator } from '../infra/ids/nanoid-id-generator.ts';
 export { resolveColor } from '../infra/logging/color.ts';
 export { redirectConsoleToLogger } from '../infra/logging/console-redirect.ts';
@@ -41,7 +43,17 @@ export { createLogger, type RootLogger } from '../infra/logging/logger.ts';
 export { createRingBuffer, type LogRingBuffer } from '../infra/logging/ring-buffer.ts';
 export type { LogSink } from '../infra/logging/sinks.ts';
 export { createBunProcessRunner } from '../infra/process/bun-process-runner.ts';
-export type { Instruments } from '../infra/telemetry/metrics.ts';
+export {
+  BROWSER_RSS_SAMPLE_INTERVAL_MS,
+  DB_WRITE_TABLES,
+  type Instruments,
+  METRIC,
+  METRIC_DEFINITIONS,
+  type MetricDefinition,
+  type MetricKind,
+  type MetricName,
+  WS_BUFFERED_BYTES_MAX_SERIES,
+} from '../infra/telemetry/metrics.ts';
 export { createOtelLogSink } from '../infra/telemetry/otel-log-sink.ts';
 export { createTelemetry, type Telemetry } from '../infra/telemetry/telemetry.ts';
 export { AppError, isAppError } from '../kernel/errors/app-error.ts';

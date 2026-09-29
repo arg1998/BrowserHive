@@ -368,6 +368,7 @@ export class InMemoryWriteQueue implements WriteQueue {
   private readonly jobs: Array<{ operation: string; job: WriteJob }> = [];
   private closed = false;
   private dropped = 0;
+  private readonly droppedByTable = new Map<string, number>();
   private draining: Promise<void> | undefined;
 
   constructor(
@@ -377,7 +378,7 @@ export class InMemoryWriteQueue implements WriteQueue {
 
   enqueue(operation: string, job: WriteJob): boolean {
     if (this.closed) {
-      this.dropped++;
+      this.drop(operation);
       return false;
     }
     this.operations.push(operation);
@@ -402,9 +403,19 @@ export class InMemoryWriteQueue implements WriteQueue {
     return this.dropped;
   }
 
+  get droppedWritesByTable(): ReadonlyMap<string, number> {
+    return this.droppedByTable;
+  }
+
   async close(): Promise<void> {
     await this.drain();
     this.closed = true;
+  }
+
+  private drop(operation: string): void {
+    this.dropped++;
+    const table = operation.split('.', 1)[0] || 'unknown';
+    this.droppedByTable.set(table, (this.droppedByTable.get(table) ?? 0) + 1);
   }
 
   private async runAll(): Promise<void> {
@@ -414,7 +425,7 @@ export class InMemoryWriteQueue implements WriteQueue {
       try {
         await next.job(this.repos);
       } catch (error) {
-        this.dropped++;
+        this.drop(next.operation);
         this.failures.push({ operation: next.operation, error });
       }
     }

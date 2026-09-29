@@ -53,6 +53,7 @@ import type {
   VaultService,
 } from '@browserhive/core/server';
 import type { DegradationRelay } from './adapters/degradation-relay.ts';
+import type { RealtimeMetricsSource } from './adapters/metrics.ts';
 import type { DataDirLayout } from './data-dir.ts';
 import type { PhaseTracker } from './health.ts';
 import type { DataDirLock } from './lock-file.ts';
@@ -157,7 +158,10 @@ export interface ListenersPart {
   /** Open MCP Streamable HTTP sessions (0 under stdio). */
   mcpConnections(): number;
   /** WS hub counters; absent under stdio. */
-  readonly realtime?: { connections(): number; activeScreencasts(): number };
+  readonly realtime?: RealtimeMetricsSource & {
+    connections(): number;
+    activeScreencasts(): number;
+  };
 }
 
 /** Boot-time record shared by every phase. */

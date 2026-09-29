@@ -323,6 +323,10 @@ describe('ReportScheduler: digests (D-43)', () => {
     expect(built.window).toEqual({ since: START - DAY, until: START });
     expect(built.message.report?.manual).toBe(true);
     expect(await t.repos.notificationCursors.get(digestCursorKey(CHANNEL))).toBe(before);
+    // A preview is not a decision; sending (which stores the copy) counts `manual` (spec 10 §7).
+    expect(t.counted.filter((c) => c.outcome === 'manual')).toEqual([]);
+    await t.scheduler.storeManualCopy(built);
+    expect(t.counted).toContainEqual({ kind: 'digest.daily', outcome: 'manual', n: 1 });
   });
 
   it('shows the next run in the channel zone', async () => {

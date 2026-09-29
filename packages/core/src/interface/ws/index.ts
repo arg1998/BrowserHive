@@ -18,7 +18,7 @@ export {
 } from './cdp-bridge.ts';
 export { WsConnection } from './connection.ts';
 export { topicsForEvent, wireFeed } from './feed.ts';
-export { RealtimeHub, type RealtimeHubDeps } from './hub.ts';
+export { type DroppedFrameChannel, RealtimeHub, type RealtimeHubDeps } from './hub.ts';
 export { DEFAULT_HUB_LIMITS, type HubLimits } from './hub-support.ts';
 export {
   INPUT_AUDIT_WINDOW_MS,

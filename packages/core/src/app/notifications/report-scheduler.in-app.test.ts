@@ -104,6 +104,7 @@ async function setup(opts: Setup = {}) {
   };
   const intervals = new ManualIntervals();
   const announced: { op: string; notification: Notification }[] = [];
+  const counted: { kind: string; outcome: string; n: number }[] = [];
   const make = () =>
     new ReportScheduler({
       registry,
@@ -122,6 +123,7 @@ async function setup(opts: Setup = {}) {
       inbox: (op, notification) => void announced.push({ op, notification }),
       redactor: createRedactor(),
       scheduler: intervals,
+      counter: { add: (n, a) => void counted.push({ ...a, n }) },
     });
   const scheduler = make();
   const rows = () => [...repos.notifications.rows.values()];
@@ -138,6 +140,7 @@ async function setup(opts: Setup = {}) {
     make,
     intervals,
     announced,
+    counted,
     inApp,
     copies,
     service,
@@ -400,6 +403,11 @@ describe('anomaly watches (D-45)', () => {
       ['created', 'open'],
       ['updated', 'resolved'],
     ]);
+    // `browserhive.notifications.reports`: the new in-app alert, then its resolution (spec 10 §7).
+    expect(t.counted).toEqual([
+      { kind: 'report.anomaly', outcome: 'in_app', n: 1 },
+      { kind: 'report.anomaly', outcome: 'resolved', n: 1 },
+    ]);
   });
 
   it('closes the open alert of a watch no longer wanted', async () => {
@@ -436,6 +444,10 @@ describe('on-demand digests (D-45)', () => {
     const built = await t.scheduler.manualDigest(record);
     const id = await t.scheduler.storeManualCopy(built);
     expect(t.inApp().map((r) => r.notificationId)).toEqual([id ?? 'missing']);
+    expect(t.counted).toEqual([
+      { kind: 'digest.daily', outcome: 'manual', n: 1 },
+      { kind: 'digest.daily', outcome: 'in_app', n: 1 },
+    ]);
     expect(decodeMessage(t.inApp()[0]?.messageJson ?? null)?.report?.manual).toBe(true);
     // Asking twice for the same instant finds the same copy.
     expect(await t.scheduler.storeManualCopy(built)).toBe(id);

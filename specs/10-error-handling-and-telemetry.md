@@ -339,31 +339,35 @@ All spans use `@opentelemetry/api`'s tracer `browserhive`; attributes use the `b
 
 ## 7. Metrics catalogue
 
-| Instrument | Type | Attributes |
-|---|---|---|
-| `browserhive.tool_calls` | counter | `tool`, `ok`, `error_code`, `harness` (folded, below) |
-| `browserhive.tool_call.duration` | histogram (ms) | `tool` |
-| `browserhive.sessions.active` | up-down counter | `harness` (folded, below) |
-| `browserhive.session.launch.duration` | histogram (ms) | `channel`, `stealth` |
-| `browserhive.session.lifetime` | histogram (ms) | `closed_reason` |
-| `browserhive.ws.connections` | up-down counter | — |
-| `browserhive.ws.buffered_bytes` | gauge (observable) | `connection_id` capped to 50 series |
-| `browserhive.ws.frames_dropped` | counter | `channel` |
-| `browserhive.db.write_queue.depth` | gauge | — |
-| `browserhive.db.dropped_writes` | counter | `table` |
-| `browserhive.db.size_bytes` | gauge | — |
-| `browserhive.browser.rss_bytes` | gauge (observable; sampled every 10 s from the process tree) | `session_id` |
-| `browserhive.attention.open` | up-down counter | `kind` |
-| `browserhive.attention.wait` | histogram (ms) | `status` |
-| `browserhive.vault.fills` | counter | `result` |
-| `browserhive.blocklist.hits` | counter | `source` |
-| `browserhive.retention.pruned_rows` | counter | `table` |
-| `browserhive.notifications.deliveries` | counter | `channel_kind`, `status` (`sent`, `retrying`, `dead`, `suppressed`, `superseded`) — one increment per finished or rescheduled outbox job (03 §9.4) |
-| `browserhive.notifications.reports` | counter | `kind` (`digest.daily`, `digest.weekly`, `report.anomaly`), `outcome` (`sent` for a produced report, `late`, `empty`, `skipped` per skipped window, `manual`, `resolved` for an anomaly alert that cleared, `in_app` for a new in-app copy, D-45) — one increment per report decision of the scheduler (03 §9.7) |
-| `browserhive.notifications.actions` | counter | `channel_kind`, `outcome` (`done`, `failed`, `not_allowed`, `used`, `expired`, `stale`, `wrong_channel`, `disabled`, `unknown`) — one increment per act-button press (03 §9.6); `unknown` counts presses of tokens BrowserHive never minted, which are not audited |
-| `browserhive.process.*` | gauges: rss, heap, event-loop lag (sampled) | — |
+This table is the single source of truth: `infra/telemetry/metrics.ts` defines exactly these instruments, the guard test (09 §3.2) fails when a row here, a row of `docs/guide/telemetry.md` and the catalogue disagree on name, type, unit or attributes, or when an instrument is never recorded. Attribute values in parentheses are the closed set that can occur. Types are the OTLP data a collector receives: *counter* is a monotonic sum, *up-down counter* a non-monotonic sum, *gauge* a gauge; "observable" instruments are read by a callback at each export (every 30 s) instead of being written on each event. An observable gauge reports only the series observed at that export (it is collected with delta temporality, which an OTLP gauge does not carry), so a closed session or WebSocket stops being reported instead of repeating its last value.
 
-The same registry backs `/api/v1/system` figures; with `--otel` off, the in-process meter provider is the SDK's no-op.
+| Instrument | Type | Unit | Attributes | Recorded |
+|---|---|---|---|---|
+| `browserhive.tool_calls` | counter | `{call}` | `tool`, `ok`, `error_code` (failed calls only), `harness` (folded, below) | once per terminal tool outcome (`tool.called`) |
+| `browserhive.tool_call.duration` | histogram | `ms` | `tool` | once per terminal tool outcome (`tool.called`) |
+| `browserhive.sessions.active` | up-down counter | `{session}` | `harness` (folded, below) | +1 on `session.opened`, −1 on `session.closed` |
+| `browserhive.session.launch.duration` | histogram | `ms` | `channel`, `stealth` | once per successful launch: create request to browser attached (the session's `launch_ms`, first seen on `session.updated`) |
+| `browserhive.session.lifetime` | histogram | `ms` | `closed_reason` | once per `session.closed`, opened to closed |
+| `browserhive.ws.connections` | up-down counter (observable) | `{connection}` | — | open dashboard WebSocket connections of the realtime hub (http transport only) |
+| `browserhive.ws.buffered_bytes` | gauge (observable) | `By` | `connection_id` (the 50 connections with the most buffered bytes) | bytes the socket has not flushed yet, per connection (http transport only) |
+| `browserhive.ws.frames_dropped` | counter (observable) | `{frame}` | `channel` (`screencast`, `logs`, `feed`) | the hub's running totals: a screencast frame replaced by a newer one or refused by a congested socket; a log record skipped for a congested `logs` subscriber; a feed frame the socket refused (the connection closes with 1013 and replays from its cursor) |
+| `browserhive.db.write_queue.depth` | gauge (observable) | `{write}` | — | recorder writes waiting in the queue |
+| `browserhive.db.dropped_writes` | counter (observable) | `{write}` | `table` (the recorder table: `sessions`, `tool_calls`, `pages`, `screenshots`, `blocked_requests`, `vault_access`, `events`, `logs`) | the write queue's running totals: writes refused (queue full or closed) or failed inside their drain; every recorder table is reported from the start, at 0 until it loses a write |
+| `browserhive.db.size_bytes` | gauge (observable) | `By` | — | database file size, read in the background and reported at the next export |
+| `browserhive.browser.rss_bytes` | gauge (observable) | `By` | `session_id` | resident memory of each live session's browser process tree: the sum of the RSS of the browser process and every descendant (renderers, GPU, utilities; memory they share counts once per process), sampled every 10 s from `/proc` or `ps` with the browser pid read once over a browser-level DevTools session; Linux and macOS only, no data points on Windows |
+| `browserhive.attention.open` | up-down counter | `{request}` | `kind` (`attention`, `vault_confirm`) | +1 when an operator request opens, −1 when it settles |
+| `browserhive.attention.wait` | histogram | `ms` | `status` (`resolved`, `rejected`, `timeout`, `cancelled`) | once per settled attention request, its `waited_ms` |
+| `browserhive.vault.fills` | counter | `{fill}` | `result` | once per `vault.access` |
+| `browserhive.blocklist.hits` | counter | `{hit}` | `source` | once per `blocklist.hit` |
+| `browserhive.retention.pruned_rows` | counter | `{row}` | `table` | once per retention pass and table that lost rows |
+| `browserhive.notifications.deliveries` | counter | `{delivery}` | `channel_kind`, `status` (`sent`, `retrying`, `dead`, `suppressed`, `superseded`) | one increment per finished or rescheduled outbox job (03 §9.4); `channel_kind` is `unknown` for a job of a channel removed meanwhile |
+| `browserhive.notifications.reports` | counter | `{report}` | `kind` (`digest.daily`, `digest.weekly`, `report.anomaly`), `outcome` (`sent` for a produced report, `late`, `empty`, `skipped` per skipped window, `manual` for an on-demand digest sent from the dashboard, `resolved` for an anomaly alert that cleared, `in_app` for a new in-app copy, D-45) | one increment per report decision of the scheduler (03 §9.7); a silent revision of an open anomaly alert is not a decision and is not counted |
+| `browserhive.notifications.actions` | counter | `{press}` | `channel_kind`, `outcome` (`done`, `failed`, `not_allowed`, `used`, `expired`, `stale`, `wrong_channel`, `disabled`, `unknown`) | one increment per act-button press (03 §9.6); `unknown` counts presses of tokens BrowserHive never minted, which are not audited |
+| `browserhive.process.rss_bytes` | gauge (observable) | `By` | — | resident memory of the BrowserHive process |
+| `browserhive.process.heap_bytes` | gauge (observable) | `By` | — | JavaScript heap in use |
+| `browserhive.process.event_loop_lag` | gauge (observable) | `ms` | — | 99th percentile event-loop delay since the previous export |
+
+Instruments are only created and fed when `--otel` is on with the `metrics` signal: the consumers, the 10 s browser-memory sampler and the event-loop monitor are wired by the composition root in that case only, so with `--otel` off nothing is subscribed, sampled or timed. The sources themselves only keep plain running totals whether or not telemetry is on (the hub's dropped frames per channel, the write queue's dropped writes per table, next to the per-connection counters `/api/v1/system/realtime` already shows); the observable instruments read those at export time. `/api/v1/system` reads the same sources directly, never the meter.
 
 **Cardinality rule for client identity (D-30).** `harness` is a metric attribute only on `browserhive.tool_calls` and `browserhive.sessions.active`, and only as `metricHarness(slug)`: the known slug table of `contracts/harness` (including `unknown` and `other`), with every other value folded into `other`, so it adds at most that many series per existing combination. It is never an attribute of `browserhive.tool_call.duration` (a histogram already split by 43 tools). `model`, `workspace`, `harness_source`, client names, `User-Agent` and meta-bag keys or values are never metric attributes; spans carry `browserhive.harness`, `browserhive.harness_source` and `browserhive.model` because a span is one event. The `tool called` log line carries `harness` as a field.
 

@@ -662,6 +662,8 @@ export class ReportScheduler {
    */
   async storeManualCopy(built: BuiltReport): Promise<string | null> {
     const now = this.deps.clock.now();
+    // Only the send path stores a copy, so this is where an on-demand digest is counted.
+    this.count(built.message.kind, 'manual');
     const thread = manualPeriodThread(built.ctx.zone, built.window);
     const inApp = await this.inAppDigest(thread, built.rule, built.facts, now, built.ctx);
     let found: { id: string | null; inserted: NotificationRecord | null } = {
@@ -860,7 +862,10 @@ export class ReportScheduler {
       if (step.revised !== null) revised.push(step.revised);
       if (step.outcome !== 'none') {
         decisions++;
-        this.count('report.anomaly', step.outcome === 'sent' ? 'in_app' : step.outcome);
+        // A silent revision is not a decision (spec 10 §7), as for a channel's alert.
+        if (step.outcome !== 'revised') {
+          this.count('report.anomaly', step.outcome === 'sent' ? 'in_app' : step.outcome);
+        }
       }
     }
     if (rows.length === 0 && revised.length === 0 && sameWatches(stored, next)) return 0;

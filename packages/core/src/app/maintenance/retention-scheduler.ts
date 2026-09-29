@@ -136,6 +136,7 @@ export class RetentionScheduler {
         type: 'retention.completed',
         at: run.at,
         pruned_rows: run.prunedRows,
+        prunedByTable: run.result?.prunedRows ?? {},
         result: run.outcome,
         ...(run.outcome !== 'ok' && { severity: run.outcome === 'failed' ? 'error' : 'warn' }),
       });

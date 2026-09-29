@@ -103,7 +103,13 @@ describe('RetentionScheduler', () => {
     expect(recovered).toEqual([]);
     const completed = bus.published.find((p) => p.name === 'retention.completed')
       ?.payload as DomainEvents['retention.completed'];
-    expect(completed).toMatchObject({ result: 'partial', severity: 'warn', pruned_rows: 4 });
+    expect(completed).toMatchObject({
+      result: 'partial',
+      severity: 'warn',
+      pruned_rows: 4,
+      // Internal, for `retention.pruned_rows{table}` (spec 10 §7); the WS feed schema strips it.
+      prunedByTable: { tool_calls: 3, pages: 1 },
+    });
   });
 
   it('status matches the contracts RetentionStatus and coalesces overlapping ticks', async () => {

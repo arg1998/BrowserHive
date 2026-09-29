@@ -148,7 +148,10 @@ export type DomainEvents = {
     readonly status: 'starting' | 'ready' | 'degraded' | 'stopping';
     readonly at: number;
   };
-  readonly 'retention.completed': z.infer<typeof RetentionCompletedEvent>;
+  readonly 'retention.completed': z.infer<typeof RetentionCompletedEvent> & {
+    /** Rows deleted per table in this pass (internal: the `retention.pruned_rows{table}` metric). */
+    readonly prunedByTable?: Readonly<Record<string, number>>;
+  };
   // notifications
   readonly 'notification.created': z.infer<typeof NotificationCreatedEvent>;
   readonly 'notification.updated': z.infer<typeof NotificationUpdatedEvent>;

@@ -54,6 +54,7 @@ describe('SqliteWriteQueue', () => {
     });
     await queue.drain();
     expect(queue.droppedWrites).toBe(1);
+    expect([...queue.droppedWritesByTable]).toEqual([['bad', 1]]);
     expect(await t.repos.sessions.get('shop-a1b2c3d4')).not.toBeNull();
     expect(t.logger.records.some((r) => r.msg === 'write failed')).toBe(true);
     await t.close();
@@ -66,8 +67,13 @@ describe('SqliteWriteQueue', () => {
     expect(queue.enqueue('two', async () => undefined)).toBe(false);
     expect(queue.droppedWrites).toBe(1);
     await queue.close();
-    expect(queue.enqueue('late', async () => undefined)).toBe(false);
+    expect(queue.enqueue('tool_calls.insert', async () => undefined)).toBe(false);
     expect(queue.droppedWrites).toBe(2);
+    // By table: the operation up to the first dot (spec 10 §7 `browserhive.db.dropped_writes`).
+    expect([...queue.droppedWritesByTable]).toEqual([
+      ['two', 1],
+      ['tool_calls', 1],
+    ]);
     await queue.close();
     await t.close();
   });

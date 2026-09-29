@@ -183,6 +183,7 @@ describe('feed', () => {
     socket.sendResults.push(0);
     hub.publish('system', event(2));
     expect(socket.closed?.code).toBe(WS_CLOSE.OVERLOADED);
+    expect(hub.droppedFrames()).toEqual({ screencast: 0, logs: 0, feed: 1 });
   });
 
   it('closes 1013 when bufferedAmount stays above the overload bound past the grace', async () => {
@@ -236,6 +237,9 @@ describe('screencast', () => {
     expect(conn.droppedFrames).toBe(1);
     hub.drain(conn);
     expect(socket.binaries.map((b) => b[16])).toEqual([1, 3]);
+    // The hub's running total outlives the connection (spec 10 §7 `ws.frames_dropped`).
+    hub.close(conn);
+    expect(hub.droppedFrames().screencast).toBe(1);
   });
 
   it('drops frames while bufferedAmount exceeds the screencast bound', async () => {
@@ -487,5 +491,10 @@ describe('connection lifecycle', () => {
           m.kind === 'event' && m.payload.type === 'log.record' ? m.payload.record.msg : null,
         ),
     ).toEqual(['b']);
+    expect(hub.droppedFrames().logs).toBe(0);
+    // A congested subscriber skips the record and the hub counts it.
+    socket.buffered = 2 * 1024 * 1024;
+    hub.publishLog({ seq: 4, record: { ts: 1, level: 'error', msg: 'd', module: 'auth' } });
+    expect(hub.droppedFrames()).toEqual({ screencast: 0, logs: 1, feed: 0 });
   });
 });
