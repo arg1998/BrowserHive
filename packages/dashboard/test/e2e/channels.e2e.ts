@@ -1,4 +1,4 @@
-/** @module dashboard/test/e2e/channels.e2e — the notification channels journey against a running daemon: add a webhook channel through the wizard (pointed at a receiver this test starts), preview it, save, send a real test and see it arrive, find it in the delivery log, delete it; skips cleanly without a daemon */
+/** @module dashboard/test/e2e/channels.e2e — the notification channels journey against a running daemon: add a webhook channel through the wizard (pointed at a receiver this test starts, answering from the chat switched on), preview it, save, send a real test and see it arrive, find it in the delivery log, the empty Actions audit, delete it; skips cleanly without a daemon */
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { expect, type Page, test } from '@playwright/test';
@@ -64,7 +64,7 @@ test.describe('notification channels', () => {
     'BROWSERHIVE_E2E_URL / BROWSERHIVE_E2E_PASSWORD not set',
   );
 
-  test('add a webhook channel, preview, save, test, see it in the log, delete', async ({
+  test('add a webhook channel with act buttons, preview, save, test, see it in the log, delete', async ({
     page,
   }, testInfo) => {
     const receiver = await startReceiver();
@@ -84,8 +84,13 @@ test.describe('notification channels', () => {
       await page.getByLabel('URL', { exact: true }).fill(receiver.url);
       await expect(page.getByText('A private address')).toBeVisible();
       await page.getByRole('button', { name: 'Continue' }).click();
-      // 4. What to send: name it.
+      // 4. What to send: name it, and let the receiver answer (act buttons travel in the payload).
       await page.getByLabel('Name', { exact: true }).fill(name);
+      const answer = page.getByRole('switch', { name: 'Answer from the chat' });
+      await expect(answer).not.toBeChecked();
+      await answer.click();
+      await expect(answer).toBeChecked();
+      await expect(page.getByText('Your receiver answers')).toBeVisible();
       await page.getByRole('button', { name: 'Continue' }).click();
       // 5. Preview (drawn by the server's renderer), save, send a real test.
       await expect(page.locator('[data-platform="webhook"]')).toBeVisible();
@@ -102,9 +107,19 @@ test.describe('notification channels', () => {
       await page.goto('/notifications/log');
       await expect(page.getByText(name).first()).toBeVisible();
 
-      // The card, then delete it.
+      // The card says who answers.
       await page.goto('/notifications/channels');
       const card = page.locator('article').filter({ has: page.getByRole('heading', { name }) });
+      await expect(card).toBeVisible();
+      await expect(card.getByText('Answers from the chat')).toBeVisible();
+
+      // Nothing was pressed: the Actions audit explains itself.
+      await page.goto('/notifications/actions');
+      await expect(page.getByText('No answers from a chat yet')).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Go to channels' })).toBeVisible();
+
+      // Delete the channel.
+      await page.goto('/notifications/channels');
       await expect(card).toBeVisible();
       await card.getByRole('button', { name: `More actions for ${name}` }).click();
       await page.getByRole('menuitem', { name: /Delete/ }).click();

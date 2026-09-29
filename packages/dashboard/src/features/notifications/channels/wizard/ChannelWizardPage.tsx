@@ -28,9 +28,11 @@ import {
 } from '../api.ts';
 import {
   type ChannelDraft,
+  channelWhere,
   clearDraft,
   draftEnvNames,
   draftForKind,
+  draftForMode,
   draftFromChannel,
   draftProblems,
   draftToInput,
@@ -229,7 +231,7 @@ function Wizard({
             draft={draft}
             locked={editing || readOnly}
             onKind={(kind: AvailableChannelKind) => setDraft((d) => draftForKind(d, kind, taken))}
-            onMode={(mode) => setDraft((d) => ({ ...d, mode }))}
+            onMode={(mode) => setDraft((d) => draftForMode(d, mode))}
           />
         );
       case 'credentials':
@@ -254,10 +256,21 @@ function Wizard({
             onTarget={updateTarget}
             onSecretRef={updateSecret}
             onConnectedUser={(user) =>
-              setDraft((d) => ({
-                ...d,
-                rules: user === null ? d.rules : { ...d.rules, allow_list: [user.id] },
-              }))
+              setDraft((d) =>
+                user === null
+                  ? d
+                  : {
+                      ...d,
+                      rules: {
+                        ...d.rules,
+                        allow_list: [
+                          user.id,
+                          ...(d.rules.allow_list ?? []).filter((id) => id !== user.id),
+                        ],
+                      },
+                      ...(user.name !== '' && { people: { ...d.people, [user.id]: user.name } }),
+                    },
+              )
             }
           />
         );
@@ -269,6 +282,8 @@ function Wizard({
             readOnly={readOnly}
             onName={(name) => setDraft((d) => ({ ...d, name }))}
             onRules={(rules: NotificationChannelRules) => setDraft((d) => ({ ...d, rules }))}
+            connection={channel?.connection ?? null}
+            onStep={onStep}
           />
         );
       case 'preview':
@@ -292,7 +307,7 @@ function Wizard({
         description={
           channel === null
             ? 'BrowserHive sends notifications through your own bot, webhook or topic.'
-            : `${platformOf(channel.kind).label} channel · ${channel.target_hint}`
+            : `${platformOf(channel.kind).label}${channel.kind === 'discord' && channel.mode === 'bot' ? ' bot' : ''} channel · ${channelWhere(channel)}`
         }
         learnMore="Channels deliver notifications to the platforms you choose. Secrets stay in environment variables; everything else is set here and kept in the database."
         learnMoreDocs={draft.kind === null ? 'notificationChannels' : platformOf(draft.kind).docs}

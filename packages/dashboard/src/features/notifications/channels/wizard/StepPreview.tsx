@@ -68,6 +68,7 @@ export function StepPreview({ draft, channelId, ready, readOnly }: StepPreviewPr
             kind: draft.kind,
             mode: draft.mode,
             target: { ...draft.target },
+            secret_refs: { ...draft.secretRefs },
             rules: cleanRules(draft.rules),
             sample,
           },

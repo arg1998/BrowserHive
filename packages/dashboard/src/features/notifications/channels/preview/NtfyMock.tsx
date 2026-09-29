@@ -1,4 +1,4 @@
-/** @module features/notifications/channels/preview/NtfyMock — an Android notification as the ntfy app shows it, drawn from the renderer's publish request: app row with topic, priority, emoji tags before the title, the message, an attached image and the action buttons. Our own CSS; no ntfy assets. */
+/** @module features/notifications/channels/preview/NtfyMock — an Android notification as the ntfy app shows it, drawn from the renderer's publish request: app row with topic, priority, emoji tags before the title, the message, an attached image and the action buttons (`http` ones answer through the reply topic, D-42). Our own CSS; no ntfy assets. */
 import type { PlatformRequest } from '@browserhive/contracts/http';
 import { ICONS } from '@/lib/icons.ts';
 import { cn } from '@/lib/utils.ts';
@@ -30,6 +30,7 @@ export function NtfyMock({ request, at, masked, topic, revised = false }: NtfyMo
   const time = new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const Bell = ICONS.platformNtfy;
   const Warn = ICONS.warn;
+  const Answer = ICONS.answer;
   const shownTopic = view.topic ?? topic ?? 'topic';
   return (
     <div className="rounded-xl border bg-nt-shade p-3 sm:p-4" data-platform="ntfy">
@@ -77,15 +78,27 @@ export function NtfyMock({ request, at, masked, topic, revised = false }: NtfyMo
         ) : null}
         {view.actions.length > 0 ? (
           <div className="flex flex-wrap gap-2 pt-1">
-            {view.actions.map((a) => (
-              <MockAction
-                key={`${a.label}|${a.url ?? a.kind}`}
-                url={a.url}
-                className="inline-flex h-8 cursor-pointer items-center rounded-full bg-nt-chip px-3.5 text-[0.8rem] font-medium text-nt-accent transition hover:brightness-95 focus-ring dark:hover:brightness-125"
-              >
-                {a.label}
-              </MockAction>
-            ))}
+            {view.actions.map((a) =>
+              a.kind === 'http' ? (
+                <button
+                  key={`${a.label}|${a.url ?? a.kind}`}
+                  type="button"
+                  title="Tapping posts the answer to the reply topic; BrowserHive acts on it"
+                  className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full bg-nt-accent px-3.5 text-[0.8rem] font-medium text-nt-card transition hover:brightness-110 focus-ring"
+                >
+                  <Answer aria-hidden="true" className="size-3.5" />
+                  {a.label}
+                </button>
+              ) : (
+                <MockAction
+                  key={`${a.label}|${a.url ?? a.kind}`}
+                  url={a.url}
+                  className="inline-flex h-8 cursor-pointer items-center rounded-full bg-nt-chip px-3.5 text-[0.8rem] font-medium text-nt-accent transition hover:brightness-95 focus-ring dark:hover:brightness-125"
+                >
+                  {a.label}
+                </MockAction>
+              ),
+            )}
           </div>
         ) : null}
       </div>

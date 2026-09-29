@@ -3,8 +3,10 @@ import type {
   BlockedSource,
   ClosedReason,
   LogLevel,
+  NotificationActionOutcome,
   NotificationChannelStatus,
   NotificationDeliveryStatus,
+  NotificationListenerState,
   NotificationState,
   NotificationType,
   OperatorRequestStatus,
@@ -195,6 +197,26 @@ export const DELIVERY_STATUS: { readonly [K in NotificationDeliveryStatus]: Stat
   superseded: { label: 'superseded', tone: 'neutral' },
 };
 
+/** Outcome of an act-button press (D-41). */
+export const ACTION_OUTCOME: { readonly [K in NotificationActionOutcome]: StatusEntry } = {
+  done: { label: 'done', tone: 'success', icon: 'check' },
+  failed: { label: 'failed', tone: 'danger', icon: 'failure' },
+  not_allowed: { label: 'not allowed', tone: 'warn', icon: 'lock' },
+  used: { label: 'already used', tone: 'warn' },
+  expired: { label: 'expired', tone: 'warn', icon: 'clock' },
+  stale: { label: 'no longer waiting', tone: 'warn' },
+  wrong_channel: { label: 'wrong chat', tone: 'warn' },
+  disabled: { label: 'switched off', tone: 'warn' },
+};
+
+/** Press listener state of a channel with act buttons (D-41). */
+export const LISTENER_STATE: { readonly [K in NotificationListenerState]: StatusEntry } = {
+  connected: { label: 'connected', tone: 'success' },
+  connecting: { label: 'connecting', tone: 'warn', pulse: true },
+  reconnecting: { label: 'reconnecting', tone: 'warn', pulse: true },
+  offline: { label: 'offline', tone: 'danger' },
+};
+
 /** Outcome of the `publicUrl` check (spec 08 §5.8). */
 export const PUBLIC_URL_OUTCOME: { readonly [K in PublicUrlOutcome]: StatusEntry } = {
   ok: { label: 'Points to this BrowserHive', tone: 'success', icon: 'success' },
@@ -258,6 +280,8 @@ export const REGISTRIES = {
   socket: SOCKET_STATE,
   channel: CHANNEL_STATUS,
   delivery: DELIVERY_STATUS,
+  actionOutcome: ACTION_OUTCOME,
+  listener: LISTENER_STATE,
   publicUrl: PUBLIC_URL_OUTCOME,
 } as const;
 

@@ -3,8 +3,10 @@ import { describe, expect, it } from 'bun:test';
 import { TELEGRAM_TTL_MAX_MS } from '@browserhive/contracts/notifications';
 import {
   applyPreset,
+  channelWhere,
   cleanRules,
   draftForKind,
+  draftForMode,
   draftProblems,
   draftToInput,
   draftToPatch,
@@ -14,6 +16,7 @@ import {
   isPublicNtfy,
   ntfyLinks,
   presetOf,
+  randomReplyTopic,
   randomTopic,
   rulesSummary,
   stepProblems,
@@ -138,5 +141,82 @@ describe('snippets and links', () => {
     }
     expect(isPrivateUrl('https://hooks.example.net/x')).toBe(false);
     expect(isPrivateUrl('not a url')).toBe(false);
+  });
+});
+
+describe('act buttons and Discord modes', () => {
+  const discord = draftForKind(EMPTY_DRAFT, 'discord', []);
+
+  it("names only the current mode's variable and swaps it with the mode", () => {
+    expect(discord.mode).toBe('webhook');
+    expect(discord.secretRefs).toEqual({ webhook: 'BH_DISCORD_WEBHOOK' });
+    const bot = draftForMode({ ...discord, rules: { ...discord.rules, act_buttons: true } }, 'bot');
+    expect(bot.secretRefs).toEqual({ token: 'BH_DISCORD_BOT_TOKEN' });
+    const withTarget = {
+      ...bot,
+      target: { channel_id: '1', channel_name: 'alerts', guild_id: '2', guild_name: 'Home' },
+    };
+    const back = draftForMode(withTarget, 'webhook');
+    expect(back.secretRefs).toEqual({ webhook: 'BH_DISCORD_WEBHOOK' });
+    expect(back.target).toEqual({});
+    // Webhook messages cannot carry act buttons, so the switch goes off; the rest is kept.
+    expect(back.rules.act_buttons).toBeUndefined();
+    expect(back.rules.categories).toEqual(discord.rules.categories);
+  });
+
+  it('checks act buttons and the allow-list in the rules step', () => {
+    const webhook = { ...discord, rules: { act_buttons: true, allow_list: ['12', 'me'] } };
+    expect(stepProblems(webhook, 'rules').map((p) => p.field)).toEqual([
+      'rules.act_buttons',
+      'rules.allow_list',
+    ]);
+    const ntfy = draftForKind(EMPTY_DRAFT, 'ntfy', []);
+    expect(
+      stepProblems({ ...ntfy, rules: { act_buttons: true } }, 'rules').map((p) => p.field),
+    ).toEqual(['rules.act_buttons']);
+    expect(
+      stepProblems(
+        {
+          ...ntfy,
+          target: { ...ntfy.target, reply_topic: 'bh-reply-x' },
+          rules: { act_buttons: true },
+        },
+        'rules',
+      ),
+    ).toEqual([]);
+  });
+
+  it('asks for the reply topic variable in Connect, not in Credentials', () => {
+    const ntfy = draftForKind(EMPTY_DRAFT, 'ntfy', []);
+    const draft = { ...ntfy, secretRefs: { ...ntfy.secretRefs, reply_topic: 'bad name' } };
+    expect(stepProblems(draft, 'credentials')).toEqual([]);
+    expect(stepProblems(draft, 'connect').map((p) => p.field)).toContain('secret_refs.reply_topic');
+  });
+
+  it('summarises act buttons and draws hard-to-guess reply topics', () => {
+    expect(rulesSummary({ act_buttons: true })).toContain('answer from the chat');
+    expect(randomReplyTopic(() => 0.5)).toMatch(/^bh-reply-[a-z0-9]{12}$/);
+  });
+
+  it('says where a channel sends', () => {
+    const base = { kind: 'discord', mode: 'bot', target_hint: 'bot from $?' } as const;
+    expect(
+      channelWhere({
+        ...base,
+        target: { channel_id: '1', channel_name: 'alerts', guild_name: 'Home' },
+      }),
+    ).toBe('#alerts in Home');
+    expect(channelWhere({ ...base, target: { channel_id: '1' } })).toBe('#1');
+    expect(
+      channelWhere({
+        kind: 'discord',
+        mode: 'webhook',
+        target: {},
+        target_hint: 'webhook from $BH_DISCORD_WEBHOOK',
+      }),
+    ).toBe('from $BH_DISCORD_WEBHOOK');
+    expect(channelWhere({ kind: 'ntfy', mode: null, target: {}, target_hint: 'ntfy.sh/x' })).toBe(
+      'ntfy.sh/x',
+    );
   });
 });

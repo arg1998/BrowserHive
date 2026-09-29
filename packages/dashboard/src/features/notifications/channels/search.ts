@@ -1,5 +1,6 @@
-/** @module features/notifications/channels/search — URL search of the channel wizard (`step`, `kind`) and the delivery log (`channel`, `status`, `op`, `kind`, `notification`, `seq`, `page`, `ps`) (spec 04 §1, §12.11.1) */
+/** @module features/notifications/channels/search — URL search of the channel wizard (`step`, `kind`), the delivery log (`channel`, `status`, `op`, `kind`, `notification`, `seq`, `page`, `ps`) and the act-button audit (`channel`, `outcome`, `page`, `ps`) (spec 04 §1, §12.11.1) */
 import {
+  NotificationActionOutcome,
   NotificationDeliveryOp,
   NotificationDeliveryStatus,
   NotificationKind,
@@ -35,3 +36,15 @@ export const deliveryLogSearch = z.object({
 export type DeliveryLogSearch = z.infer<typeof deliveryLogSearch>;
 /** Defaults omitted from the URL. */
 export const DELIVERY_LOG_DEFAULTS = { ...TABLE_SEARCH_DEFAULTS } as const;
+
+/** Act-button audit search (`/notifications/actions`). */
+export const actionsSearch = z.object({
+  channel: z.string().max(80).optional().catch(undefined),
+  outcome: csvParam(NotificationActionOutcome),
+  page: pageParam,
+  ps: pageSizeParam,
+});
+/** Act-button audit search. */
+export type ActionsSearch = z.infer<typeof actionsSearch>;
+/** Defaults omitted from the URL. */
+export const ACTIONS_DEFAULTS = { ...TABLE_SEARCH_DEFAULTS } as const;

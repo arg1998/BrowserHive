@@ -20,6 +20,11 @@ const OPERATIONS = [
   'resumeChannel',
   'testChannel',
   'getPublicUrlStatus',
+  'getDiscordBot',
+  'listDiscordChannels',
+  'startDiscordConnect',
+  'getDiscordConnect',
+  'listChannelActions',
 ] as const;
 
 function sources(dir: string): string[] {

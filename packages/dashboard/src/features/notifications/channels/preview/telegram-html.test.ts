@@ -77,3 +77,35 @@ describe('discord timestamps', () => {
     ]);
   });
 });
+
+describe('parseTelegramHtml (rich)', () => {
+  it('parses the Rich Message block tags only when asked', () => {
+    const html =
+      '<h3>Attention</h3><p>Page <b>x</b></p><hr/><img src="tg://photo?id=shot"/><table bordered compact><tr><th>Mode</th><td>live</td></tr></table><footer>BrowserHive</footer>';
+    const rich = parseTelegramHtml(html, { rich: true });
+    expect(rich.map((n) => (n.type === 'el' ? n.tag : 'text'))).toEqual([
+      'h',
+      'p',
+      'hr',
+      'img',
+      'table',
+      'footer',
+    ]);
+    const heading = rich[0];
+    expect(heading?.type === 'el' && heading.level).toBe(3);
+    const img = rich[3];
+    expect(img?.type === 'el' && img.src).toBe('tg://photo?id=shot');
+    const table = rich[4];
+    expect(table?.type === 'el' && table.bordered && table.compact).toBe(true);
+    // Classic HTML mode does not know these tags: they stay visible as text.
+    const classic = parseTelegramHtml('<h3>Attention</h3>');
+    expect(classic.every((n) => n.type === 'text')).toBe(true);
+  });
+
+  it('keeps a script or event handler as text', () => {
+    const nodes = parseTelegramHtml('<img src="x" onerror="alert(1)"/><script>x</script>', {
+      rich: true,
+    });
+    expect(nodes.some((n) => n.type === 'el' && n.tag === ('script' as never))).toBe(false);
+  });
+});

@@ -1,4 +1,4 @@
-/** @module features/notifications/channels/wizard/StepPlatform — step 1: choose the platform (radio cards with setup time and what each supports; the upcoming platforms shown disabled) and, for Discord, the mode (webhook now, bot with act buttons later) with "What's the difference?" */
+/** @module features/notifications/channels/wizard/StepPlatform — step 1: choose the platform (radio cards with setup time and what each supports; the upcoming platforms shown disabled) and, for Discord, the mode (webhook, or a bot that also takes Approve and Reject from buttons) with "What's the difference?" */
 import {
   AVAILABLE_DISCORD_MODES,
   type AvailableChannelKind,
@@ -152,7 +152,8 @@ export function StepPlatform({ draft, onKind, onMode, locked }: StepPlatformProp
               <span className="flex min-w-0 flex-col gap-1 pr-6">
                 <span className="font-semibold">Webhook</span>
                 <span className="text-sm text-muted-foreground">
-                  30-second setup. Alerts, screenshots, live updates and link buttons.
+                  About 30 seconds. Alerts, screenshots, live updates and buttons that open
+                  BrowserHive.
                 </span>
               </span>
             </RadioCard>
@@ -166,12 +167,13 @@ export function StepPlatform({ draft, onKind, onMode, locked }: StepPlatformProp
               <span className="flex min-w-0 flex-col gap-1 pr-6">
                 <span className="flex items-center gap-2 font-semibold">
                   Bot
-                  <span className="rounded-full bg-muted px-2 text-xs leading-5 font-normal text-muted-foreground dark:bg-white/[0.06]">
-                    coming later
+                  <span className="rounded-full bg-accent-bg px-2 text-xs leading-5 font-medium text-accent-text">
+                    answer from Discord
                   </span>
                 </span>
                 <span className="text-sm text-muted-foreground">
-                  Approve or deny right in Discord. Arrives with act buttons.
+                  About 3 minutes. Everything a webhook does, plus Approve, Reject and Mark resolved
+                  buttons that work right in Discord.
                 </span>
               </span>
             </RadioCard>

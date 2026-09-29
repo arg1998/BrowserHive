@@ -1,4 +1,4 @@
-/** @module features/notifications/channels/ChannelCard — one channel as a whole-card link: platform mark, name, status, where it sends, what it sends, secret variables (set / missing, never values), last delivery and 24 h counts; Send test (result inline), Pause/Resume, and Edit / Duplicate / Delete in a menu (not for startup channels, which are read-only; D-39) */
+/** @module features/notifications/channels/ChannelCard — one channel as a whole-card link: platform mark, name, status, where it sends, what it sends, whether answers from the chat reach BrowserHive (the press listener's state, D-41), secret variables (set / missing, never values), last delivery and 24 h counts; Send test (result inline), Pause/Resume, and Edit / Duplicate / Delete in a menu (not for startup channels, which are read-only; D-39) */
 import type { ChannelTestResponse, ChannelView } from '@browserhive/contracts/http';
 import { deliveryReasonText } from '@browserhive/contracts/notifications';
 import { isPlainClick, useHrefNavigate } from '@/components/shared/DataTableBody.tsx';
@@ -16,9 +16,9 @@ import { Spinner } from '@/components/ui/spinner.tsx';
 import { formatNumber } from '@/lib/format/bytes.ts';
 import { formatMs } from '@/lib/format/time.ts';
 import { ICONS } from '@/lib/icons.ts';
-import { CHANNEL_STATUS, DELIVERY_STATUS } from '@/lib/status-registry.ts';
+import { CHANNEL_STATUS, DELIVERY_STATUS, LISTENER_STATE } from '@/lib/status-registry.ts';
 import { cn } from '@/lib/utils.ts';
-import { rulesSummary } from './model.ts';
+import { channelWhere, rulesSummary } from './model.ts';
 import { PlatformMark, platformOf } from './platforms.tsx';
 
 /** The outcome of the last test send of a card. */
@@ -41,6 +41,60 @@ export interface ChannelCardProps {
   readonly onDelete: () => void;
   readonly onEdit: () => void;
   readonly busy?: boolean;
+}
+
+/** "Answers from the chat": whether presses reach BrowserHive (only with act buttons on). */
+function AnswersLine({ channel, now }: { readonly channel: ChannelView; readonly now: number }) {
+  if (channel.rules.act_buttons !== true) return null;
+  const Answer = ICONS.answer;
+  const c = channel.connection;
+  const allow = channel.rules.allow_list?.length ?? 0;
+  const who =
+    channel.kind === 'telegram' || channel.kind === 'discord'
+      ? allow === 0
+        ? 'no allowed people yet'
+        : `${allow} ${allow === 1 ? 'person' : 'people'} may answer`
+      : null;
+  return (
+    <div
+      className={cn(
+        'flex min-w-0 items-start gap-2 rounded-md px-3 py-2 text-sm',
+        c?.state === 'offline'
+          ? 'bg-danger-bg text-danger-text'
+          : c?.state === 'connected' || channel.kind === 'webhook'
+            ? 'bg-muted/60 dark:bg-white/[0.03]'
+            : 'bg-warn-bg text-warn-text',
+      )}
+    >
+      <Answer aria-hidden="true" className="mt-0.5 size-4 shrink-0 opacity-80" />
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
+          <span className="font-medium">Answers from the chat</span>
+          {c !== null ? (
+            <>
+              <StatusDot entry={LISTENER_STATE[c.state]} />
+              {c.state !== 'connected' ? (
+                <span className="text-xs opacity-80">
+                  since <RelativeTime at={c.since} now={now} />
+                </span>
+              ) : null}
+            </>
+          ) : (
+            <span className="text-muted-foreground">
+              {channel.kind === 'webhook' ? 'via your receiver' : 'not listening'}
+            </span>
+          )}
+        </p>
+        {c !== null && c.detail !== null && c.state !== 'connected' ? (
+          <p className="text-xs [overflow-wrap:anywhere]">{c.detail}</p>
+        ) : who !== null ? (
+          <p className={cn('text-xs', allow === 0 ? 'text-warn-text' : 'text-muted-foreground')}>
+            {who}
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
 }
 
 function TestResult({ test }: { readonly test: TestState }) {
@@ -162,9 +216,13 @@ export function ChannelCard({
           </div>
           <p className="truncate text-sm text-muted-foreground">
             {info.label}
-            {channel.mode !== null && channel.kind === 'discord' ? ` ${channel.mode}` : ''}
+            {channel.mode !== null && channel.kind === 'discord'
+              ? channel.mode === 'bot'
+                ? ' bot'
+                : ' webhook'
+              : ''}
             {' · '}
-            {channel.target_hint}
+            {channelWhere(channel)}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1">
@@ -233,6 +291,7 @@ export function ChannelCard({
             {channel.problem}
           </p>
         ) : null}
+        <AnswersLine channel={channel} now={now} />
         <ul aria-label="Environment variables" className="flex flex-wrap gap-1.5">
           {channel.secrets.map((s) => (
             <li
