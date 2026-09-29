@@ -186,7 +186,21 @@ export function discordEmbed(
   if (message.summary.trim() !== '' && message.summary !== message.title) {
     paragraphs.push(escapeMarkdown(message.summary));
   }
-  for (const b of bodyBlocks(message)) {
+  const body = bodyBlocks(message);
+  // Embed fields always show below the description, so a fields block with more content after it
+  // (a digest's chart and tables) is written in place, as lines, to keep the reading order.
+  const lastContent = body.findLastIndex(
+    (b) => b.type !== 'footer' && b.type !== 'image' && b.type !== 'divider',
+  );
+  for (const [index, b] of body.entries()) {
+    if (b.type === 'fields' && index < lastContent) {
+      paragraphs.push(
+        b.items
+          .map((item) => `**${escapeMarkdown(item.label)}:** ${inline(item.value, links) || '—'}`)
+          .join('\n'),
+      );
+      continue;
+    }
     if (b.type === 'fields') {
       for (const item of b.items) {
         const value = clipText(inline(item.value, links) || '—', DISCORD_LIMITS.fieldValue);

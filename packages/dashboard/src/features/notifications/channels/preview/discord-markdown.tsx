@@ -155,13 +155,21 @@ function renderToken(token: MdToken, k: string): ReactNode {
   }
 }
 
-/** Renders a block of Discord markdown (lines, `> ` quotes, `- ` bullets). */
+/** Renders a block of Discord markdown (lines, `-# ` subtext, `> ` quotes, `- ` bullets). */
 export function DiscordMarkdown({ text }: { readonly text: string }) {
   const lines = text.split('\n');
   return (
     <>
       {lines.map((line, n) => {
         const key = `l${n}`;
+        if (line.startsWith('-# ')) {
+          // Subtext: Discord draws it small and muted.
+          return (
+            <div key={key} className="text-[0.75rem] leading-snug text-dc-muted">
+              {renderTokens(parseInline(line.slice(3)), key)}
+            </div>
+          );
+        }
         if (line.startsWith('> ')) {
           return (
             <div key={key} className="my-0.5 border-l-4 border-dc-muted/50 pl-2.5">

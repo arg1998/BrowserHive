@@ -197,10 +197,14 @@ async function discord(): Promise<Outcome> {
   const digest = await channel.send(deliveryOf(channel, 'digest', false, { id: DIGEST_ID }));
   const readDigest = await read(digest.ref['message_id'] ?? '');
   const digestEmbed = (
-    (readDigest.body?.['embeds'] ?? []) as { title?: string; fields?: unknown[] }[]
+    (readDigest.body?.['embeds'] ?? []) as { title?: string; description?: string }[]
   )[0];
   check((digestEmbed?.title ?? '').startsWith('📊'), 'the digest embed title');
-  check((digestEmbed?.fields ?? []).length >= 5, 'the digest facts as embed fields');
+  check(
+    (digestEmbed?.description ?? '').includes('**Sessions:**') &&
+      (digestEmbed?.description ?? '').includes('Tool calls per hour'),
+    'the digest facts and chart in the description',
+  );
   const alert = await channel.send(deliveryOf(channel, 'anomaly', false, { id: ANOMALY_ID }));
   await channel.edit?.(
     alert.ref,
@@ -218,7 +222,7 @@ async function discord(): Promise<Outcome> {
     platform: 'Discord',
     status: 'passed',
     detail:
-      'send, read back, edit (screenshot kept), delete; a digest (fields read back) and an anomaly alert edited to back to normal',
+      'send, read back, edit (screenshot kept), delete; a digest (read back) and an anomaly alert edited to back to normal',
   };
 }
 
