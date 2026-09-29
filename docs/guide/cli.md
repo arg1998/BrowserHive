@@ -56,11 +56,11 @@ A list value joins its items with `+`; a value cannot contain `,` (write `%2C`).
 | Platform | Parameters |
 |---|---|
 | `telegram` | `name`, `token=env:NAME`, `chat` (a chat id), optional `thread` (a forum topic id) |
-| `discord` | `name`, `webhook=env:NAME` (the webhook URL), optional `mode=webhook` |
-| `ntfy` | `name`, `topic` (a topic, or `env:NAME`), optional `server` (default `https://ntfy.sh`), `token=env:NAME` |
+| `discord` | webhook mode: `name`, `webhook=env:NAME` (the webhook URL). Bot mode: `name`, `mode=bot`, `token=env:NAME` (the bot token), `channel` (the channel id), optional `guild` (the server id) |
+| `ntfy` | `name`, `topic` (a topic, or `env:NAME`), optional `server` (default `https://ntfy.sh`), `token=env:NAME`, `reply` (the [reply topic](notifications.md#ntfy-a-second-topic-for-answers) for act buttons, or `env:NAME`), `replyToken=env:NAME` |
 | `webhook` | `name`, `url` (a URL, or `env:NAME`), optional `secret=env:NAME` (the signing key) |
 
-Rules, all optional: `categories` (`needs-you+problems+wrap-ups+reports+system`), `min` (`info`, `warn`, `error`, `critical`), `sessions` (session name patterns such as `shop-*`), `harness`, `content` (`counts`, `titles`, `full`), `quiet=22:00-07:00` with `tz=Europe/Berlin`, `ttl.<category>=2h` (Telegram at most `47h`), `deleteWhenResolved` (`true`, or a `+` list of categories), `images` (a `+` list of categories; needs `content=full`) and `maskImages=true`.
+Rules, all optional: `categories` (`needs-you+problems+wrap-ups+reports+system`), `min` (`info`, `warn`, `error`, `critical`), `sessions` (session name patterns such as `shop-*`), `harness`, `content` (`counts`, `titles`, `full`), `quiet=22:00-07:00` with `tz=Europe/Berlin`, `ttl.<category>=2h` (Telegram at most `47h`), `deleteWhenResolved` (`true`, or a `+` list of categories), `images` (a `+` list of categories; needs `content=full`), `maskImages=true`, `actButtons=true` ([answer from your phone](notifications.md#answer-from-your-phone); Telegram, Discord bot mode, ntfy with `reply`, webhook) and `allow` (a `+` list of Telegram or Discord user ids allowed to press them; not for ntfy).
 
 ## `init`
 
@@ -139,7 +139,7 @@ Token commands work on the database directly when the server is stopped, or thro
 
 | Command | Meaning |
 |---|---|
-| `channels list [--json]` | Every notification channel: platform, status (and "from startup"), where it sends, whether its variables are set, the last delivery and the last 24 hours. |
+| `channels list [--json]` | Every notification channel: platform (with the Discord mode), status (and "from startup"), where it sends, whether its variables are set, whether chat answers reach BrowserHive (`connected`, `reconnecting`, `offline (reason)`, or `—` when act buttons are off), the last delivery and the last 24 hours. |
 | `channels test <name> [--json]` | Sends a real test message. Exit `0` when the platform accepted it, `1` with the reason when it did not. |
 | `channels preview <name> [--sample <kind>] [--json]` | Prints the platform request a send would make (secrets shown as variable names); sends nothing. Samples: `attention` (default), `attention-resolved`, `vault-confirm`, `tool-errors`, `crash`, `degraded`, `test`. |
 

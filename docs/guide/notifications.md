@@ -2,9 +2,10 @@
 
 BrowserHive tells you when something needs you or went wrong: an agent asked for help, a vault fill waits for your approval, a session crashed, tools keep failing, or BrowserHive itself is degraded. Notifications are stored in the database, so they survive reloads and restarts, and they appear in the dashboard's bell, as toasts and on the **Notifications** page.
 
-BrowserHive can also put them on your phone: through your own Telegram bot, a Discord webhook, an ntfy topic or a webhook of your own. This page explains what produces a notification, how one changes over its life, how to set up each channel, and what leaves your machine.
+BrowserHive can also put them on your phone: through your own Telegram bot, a Discord webhook or bot, an ntfy topic or a webhook of your own. And you can answer from there: **Approve**, **Reject** or **Mark resolved** right in the chat. This page explains what produces a notification, how one changes over its life, how to set up each channel, how answering from your phone works, and what leaves your machine.
 
 - [Channels: set one up in two minutes](#channels)
+- [Answer from your phone](#answer-from-your-phone): act buttons on Telegram, Discord and ntfy
 - [Public address: links that open on your phone](#public-address)
 - [Screenshots](#screenshots), [self-destruct](#self-destruct), [startup channels](#startup-channels), [the delivery log](#delivery-log)
 - [What leaves your machine](#what-leaves-your-machine)
@@ -71,7 +72,9 @@ Secrets are never stored: a channel holds the **name** of the environment variab
 2. Put it in a variable where BrowserHive runs, for example `export BH_TELEGRAM_TOKEN='123456789:AA…'`, and restart BrowserHive.
 3. In the wizard's **Connect** step, tap the one-time link (or scan its QR code with your phone). It opens a chat with your bot and sends `/start`. BrowserHive waits up to two minutes for it and fills in the chat by itself. For a group, use **Add to a group** instead, pick the group, and the bot posts there. For a forum topic, send the start link inside that topic.
 
-Messages use Telegram's HTML formatting. A notification with a screenshot is a photo with a caption (Telegram allows 1 024 characters in a caption; longer messages end with "… Open in BrowserHive"). Buttons are links. When an attention request is resolved, the message is edited in place, silently, and its buttons disappear.
+Messages are Telegram **Rich Messages**: a heading with the severity or outcome, the summary, the screenshot, the facts as a compact table, real tables, collapsible quotes and code blocks. Page text never turns into a mention or a command. Buttons sit below the message: links, and with [act buttons](#answer-from-your-phone) on, **Mark resolved** and **Reject** (or **Approve** and **Deny** for a vault fill), coloured green and red. When a request is settled, the message is edited in place, silently: the buttons disappear and the heading shows who answered.
+
+If Telegram ever refuses a Rich Message (a formatting it rejects, or a self-hosted Bot API server that does not know them yet), BrowserHive sends the same notification as a classic HTML message instead, so nothing is lost; messages already sent that way keep being edited that way.
 
 Telegram lets a bot delete its own messages for **48 hours** only, so self-destruct timers on a Telegram channel go up to 47 hours. Telegram's own auto-delete timer (chat settings → Auto-delete messages) is a good backstop.
 
@@ -83,7 +86,17 @@ Telegram lets a bot delete its own messages for **48 hours** only, so self-destr
 
 Messages are an embed: a coloured bar by severity, the facts as fields, the screenshot as the embed image, and link buttons below. Edits are silent; deletes work at any age.
 
-**Webhook or bot?** A Discord channel uses one mode. Webhook mode takes thirty seconds and needs no connection, but its buttons can only open links. Bot mode (a Developer Portal application with a bot token) is the only way to press **Approve** or **Reject** right in Discord, and keeps one outbound connection to Discord while BrowserHive runs. Bot mode arrives with act buttons in a later release; the wizard's **What's the difference?** panel shows both message styles side by side.
+**Webhook or bot?** A Discord channel uses one mode, and you can switch later without losing its rules. Webhook mode takes thirty seconds and needs no connection, but its buttons can only open links. Bot mode takes about three minutes and is the only way to press **Approve** or **Reject** right in Discord; BrowserHive then keeps one outbound connection to Discord (the gateway) while it runs. The wizard's **What's the difference?** panel shows both message styles side by side.
+
+**Bot mode, step by step:**
+
+1. Open the [Discord Developer Portal](https://discord.com/developers/applications) → **New Application**, name it (for example "BrowserHive").
+2. Open **Bot** → **Reset Token** → copy the token. Leave the privileged intents off: BrowserHive needs none.
+3. Put the token in a variable, for example `export BH_DISCORD_BOT_TOKEN='…'`, and restart BrowserHive.
+4. In the wizard choose **Bot**, then in **Connect**: **Invite the bot** opens Discord with the minimal permissions (View Channel, Send Messages, Embed Links, Attach Files); pick your server there. Back in the wizard, press **Refresh**, pick the server and the channel.
+5. **Link your Discord account**: the bot posts a message with a **This is me** button in that channel. Press it within two minutes; your account becomes the first one allowed to answer ([allow-list](#who-may-answer)). The bot deletes that message afterwards.
+
+The bot sends the same embed as a webhook, with **Mark resolved**/**Reject** buttons when act buttons are on. The channel card shows the gateway connection: **connected**, **reconnecting** (BrowserHive retries with growing pauses and resumes where Discord allows) or **offline** with the reason, such as a refused token.
 
 ### ntfy
 
@@ -94,7 +107,7 @@ Messages are an embed: a coloured bar by severity, the facts as fields, the scre
 3. Scan the QR code with your phone (or tap **Subscribe** in the app and enter the server and topic).
 4. For a protected server or topic, create an access token in ntfy and put it in a variable such as `BH_NTFY_TOKEN`.
 
-Priority follows severity (a critical notification is urgent). Buttons are "view" actions (at most three). A revision replaces the notification on the phone; a self-destruct deletes it. On ntfy.sh, attachments (screenshots) are stored on the public server for three hours and their links are not documented to be private: for screenshots, a self-hosted ntfy is the better choice. A self-hosted server without an attachment cache refuses uploads; BrowserHive then sends the text alone.
+Priority follows severity (a critical notification is urgent). Buttons are "view" actions (at most three); with a [reply topic](#ntfy-a-second-topic-for-answers) they can also answer. A revision replaces the notification on the phone; a self-destruct deletes it. On ntfy.sh, attachments (screenshots) are stored on the public server for three hours and their links are not documented to be private: for screenshots, a self-hosted ntfy is the better choice. A self-hosted server without an attachment cache refuses uploads; BrowserHive then sends the text alone.
 
 ### Webhook
 
@@ -114,6 +127,65 @@ The webhook channel POSTs the [message contract](#the-message-contract) itself a
 ```
 
 A revision is POSTed again with `op: "edit"` and a higher `message.revision`; keep the highest. When you set a signing secret (`secret` from a variable such as `BH_WEBHOOK_SECRET`), each request carries `X-BrowserHive-Timestamp` and `X-BrowserHive-Signature: sha256=<hex>`, the HMAC-SHA256 of the raw body with your secret. Only `http:` and `https:` URLs are accepted, redirects are followed only on the same scheme and host, and a private address (your LAN) is allowed with a warning, because the request comes from inside your network.
+
+## Answer from your phone
+
+With **act buttons** on, a notification that waits for you carries buttons that act, not just links: **Mark resolved** and **Reject** for an attention request, **Approve** and **Deny** for a vault fill. Press one in the chat, and BrowserHive does exactly what the same button in the dashboard does, then edits the message: the buttons disappear and it says who answered and when ("Resolved on Telegram by 123456789 after 42 s"). Everything else (take over, open the live view) stays a link.
+
+Act buttons are **off** by default. Switch them on per channel in the wizard's **What to send → Answer from the chat**, or with `actButtons=true` on a [startup channel](#startup-channels).
+
+| Platform | What it needs | How a press reaches BrowserHive | Who may press |
+|---|---|---|---|
+| Telegram | nothing more | BrowserHive asks Telegram for new events (long polling), one connection per bot | the people on the channel's [allow-list](#who-may-answer) |
+| Discord | [bot mode](#discord) | the bot's gateway connection | the people on the allow-list |
+| ntfy | a [reply topic](#ntfy-a-second-topic-for-answers) | the phone posts to the reply topic; BrowserHive subscribes to it | whoever can read the notification topic |
+| Webhook | a receiver that calls the API | your receiver | whoever holds the API token it uses |
+
+Every connection goes **out** from your machine; nothing needs a public address. Presses made while BrowserHive is stopped are handled at the next start when the platform kept them (Telegram keeps them for a day, ntfy.sh for 12 hours), and refused when the request has stopped waiting in the meantime. On Discord a press while BrowserHive is stopped shows "This interaction failed".
+
+### Who may answer
+
+A button in a chat is a remote control for your agent's browser, so every press is checked before anything runs:
+
+- **The allow-list.** Only the Telegram or Discord accounts on the channel's allow-list may press. By default that is the person who connected the chat in the wizard (the one who sent `/start`, or pressed **This is me**). Add more people by their numeric user id under **Answer from the chat**. Someone else who presses gets "Not allowed: your Telegram id 555… is not on this channel's allow-list": the id to add, if you want to.
+- **Single use.** Each button carries a one-time command token (`bh1:` and 11 random characters). It works once, for 24 hours, only in the chat it was sent to, and only while the request still waits. BrowserHive stores only a hash of it.
+- **The same rules as the dashboard.** The press runs through the same code as the dashboard's resolve buttons. The agent learns that it was answered from Telegram, Discord or ntfy, but never your chat identity.
+- **An audit.** **Notifications → Actions** lists every press of a real button: when, which channel and notification, which button, who pressed it and what happened (done, not allowed, already used, expired, the request had already stopped waiting, pressed in another chat, act buttons off, or failed with the reason). Presses of buttons BrowserHive never created are only counted, so a stranger cannot fill the list. The audit is kept like the other audit records (90 days by default).
+
+### ntfy: a second topic for answers
+
+ntfy has no bot and no way to receive a button press, so BrowserHive uses a second, private topic, the **reply topic**. Each act button is an ntfy `http` action: tapping it makes your phone post the button's one-time token to the reply topic on your ntfy server. BrowserHive subscribes to the reply topic, acts, and replaces the notification on your phone with its new state. Android and iOS both support these buttons. At most three buttons fit on an ntfy notification: the answers come first, then the links.
+
+Set it in the wizard's **Connect** step (a random name is suggested, like the main topic), or `reply=bh-reply-…` (or `reply=env:NAME`) on a startup channel. The reply topic must differ from the notification topic. If reading it needs a token, name its variable in `replyToken` (the channel's own `token` is used otherwise).
+
+**Security.** ntfy notifications carry no user identity, so there is no allow-list: **whoever can read the notification topic can press its buttons.** Keep the notification topic private: a long random name on ntfy.sh, or access control on your own server. On a self-hosted server, the tidy setup is to let everyone write to the reply topic but not read it, and let BrowserHive read it with a token:
+
+```sh
+ntfy access everyone bh-reply-7f3kq9x2 write-only
+ntfy access browserhive bh-reply-7f3kq9x2 read-only
+```
+
+Someone who learns only the reply topic can post to it (BrowserHive ignores anything that is not a live token), repeat a token that was already used (refused) and see tokens after they were used. They cannot guess a live token (66 random bits) and so cannot act. Putting an access token into the buttons instead would hand a write token to everyone who can read the notification topic, so BrowserHive does not do that.
+
+### Webhook: answer from your own receiver
+
+With act buttons on, the webhook channel sends the notification's `act` actions unchanged in the [message contract](#the-message-contract), for example:
+
+```json
+{ "kind": "act", "id": "reject", "label": "Reject", "style": "danger",
+  "command": { "op": "attention.resolve", "args": { "request_id": "a-…", "decision": "reject" } },
+  "confirm": "Reject this request? The agent is told it was rejected.",
+  "fallback": { "label": "Open in BrowserHive", "path": "/sessions/…?live=1" } }
+```
+
+There are no tokens in them and BrowserHive opens no callback endpoint. Your receiver answers through the REST API with an operator API token that has the right scope (`attention:resolve`, or `vault:confirm` for vault fills):
+
+```sh
+curl -X POST https://browserhive.example.net/api/v1/attention/a-…/resolve \
+  -H "Authorization: Bearer $BH_API_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"decision":"reject"}'
+# vault fills: POST /api/v1/vault/confirm/{request_id}/resolve {"decision":"approve"|"deny"}
+```
 
 ## Public address
 
@@ -176,7 +248,7 @@ browserhive --admin \
 ```
 
 - Secrets are always written `env:NAME`. A token typed into the flag is refused (exit 64), because other users of the machine can read process arguments.
-- Rules use the same names as the dashboard: `categories`, `min`, `sessions`, `harness`, `content`, `quiet=22:00-07:00` with `tz`, `ttl.needs-you=2h`, `deleteWhenResolved`, `images`, `maskImages`. Every parameter is listed in the [command-line guide](cli.md#notification-channels).
+- Rules use the same names as the dashboard: `categories`, `min`, `sessions`, `harness`, `content`, `quiet=22:00-07:00` with `tz`, `ttl.needs-you=2h`, `deleteWhenResolved`, `images`, `maskImages`, `actButtons=true` and `allow=123456+789012` (the Telegram or Discord user ids allowed to answer; a startup channel has no setup flow, so name them here). A Discord bot is `discord:name=ops,mode=bot,token=env:BH_DISCORD_BOT_TOKEN,channel=<channel id>`; an ntfy reply topic is `reply=…`. Every parameter is listed in the [command-line guide](cli.md#notification-channels).
 - The flag has no environment-variable or config-file spelling. Startup channels appear in the dashboard with a **from startup** badge. You can pause them there, but you edit them by changing the flag and restarting. A startup channel whose name a dashboard channel already uses stops the start with an error, so neither silently wins.
 
 ## Delivery log
@@ -186,7 +258,7 @@ browserhive --admin \
 From a terminal:
 
 ```sh
-browserhive channels list                     # status, target, variables, last delivery, 24 h counts
+browserhive channels list                     # status, target, variables, answers, last delivery, 24 h counts
 browserhive channels test phone               # a real test message; exit 1 when the platform refused it
 browserhive channels preview phone --sample vault-confirm   # the request a send would make; sends nothing
 ```
@@ -203,8 +275,8 @@ A channel sends notifications to a service you chose, so each one has a **conten
 | `titles` (default) | Adds the title, the summary and the facts (session, tool, error code, page address without query string). |
 | `full` | Adds the agent's own words (the attention reason), longer details, and allows [screenshots](#screenshots). |
 
-At every level, BrowserHive first removes registered secrets and credential-shaped text and strips query strings and fragments from URLs ([security](security.md)). Channel tokens never reach a log line, the database or the delivery log.
+At every level, BrowserHive first removes registered secrets and credential-shaped text and strips query strings and fragments from URLs ([security](security.md)). Channel tokens never reach a log line, the database or the delivery log. Act-button tokens exist only in the chat message; the database keeps a hash, and no log, delivery row or preview shows one.
 
 ## Retention
 
-Read or dismissed notifications are kept for 30 days, others for 90. Delivery history is kept for 30 days. Configured channels are never pruned; `browserhive purge` lists them with everything else in the database.
+Read or dismissed notifications are kept for 30 days, others for 90. Delivery history is kept for 30 days. The act-button audit is kept like the other audit records (`auditRetentionDays`, 90 days by default); used or expired button tokens are removed a day after they expire. Configured channels are never pruned; `browserhive purge` lists them with everything else in the database.
