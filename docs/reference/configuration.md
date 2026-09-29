@@ -2,7 +2,7 @@
 
 # Configuration reference
 
-Every configuration key of BrowserHive (52 keys), generated from the zod schema in `@browserhive/contracts/config`. For a guided introduction see [the configuration guide](../guide/configuration.md).
+Every configuration key of BrowserHive (53 keys), generated from the zod schema in `@browserhive/contracts/config`. For a guided introduction see [the configuration guide](../guide/configuration.md).
 
 ## Precedence
 
@@ -102,6 +102,7 @@ These names are reserved for future releases. Setting any of them fails fast wit
 | [`allowInsecureBind`](#allowInsecureBind) | `--allowInsecureBind` | `BROWSERHIVE_ALLOW_INSECURE_BIND` | `false` |
 | [`trustedProxies`](#trustedProxies) | `--trustedProxies` | `BROWSERHIVE_TRUSTED_PROXIES` | empty list |
 | [`allowedHosts`](#allowedHosts) | `--allowedHosts` | `BROWSERHIVE_ALLOWED_HOSTS` | empty list |
+| [`publicUrl`](#publicUrl) | `--publicUrl` | `BROWSERHIVE_PUBLIC_URL` | unset |
 | [`admin`](#admin) | `--admin` | `BROWSERHIVE_ADMIN` | `false` |
 | [`dataDir`](#dataDir) | `--dataDir` | `BROWSERHIVE_DATA_DIR` | derived (platform) |
 | [`shutdownTimeout`](#shutdownTimeout) | `--shutdownTimeout` | `BROWSERHIVE_SHUTDOWN_TIMEOUT` | `20s` |
@@ -233,6 +234,21 @@ Extra Host names to accept besides loopback and the bound host, such as the name
 | Type | a comma-separated list of host names or IP addresses |
 | Default | empty list |
 | Examples | `browserhive.example.com` |
+| Notes | restart required |
+
+<a id="publicUrl"></a>
+### `publicUrl`
+
+Address where you made the dashboard reachable (reverse proxy, tunnel, Tailscale name). Notification links use it, and its host is trusted like allowedHosts.
+
+| Property | Value |
+|---|---|
+| CLI flag | `--publicUrl` |
+| Environment | `BROWSERHIVE_PUBLIC_URL` |
+| Config file | `"publicUrl"` |
+| Type | an absolute http: or https: URL without query or fragment, like 'https://browserhive.example.net' |
+| Default | unset |
+| Examples | `https://browserhive.example.net` |
 | Notes | restart required |
 
 <a id="admin"></a>

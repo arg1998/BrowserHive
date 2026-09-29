@@ -6,6 +6,7 @@ import {
   DATA_DIR,
   detected,
   MemoryFs,
+  type ProbeState,
   probeState,
   sandboxEnvironment,
   storageState,
@@ -54,6 +55,8 @@ describe('doctor', () => {
       'otel',
       'max sessions',
       'secrets',
+      'publicUrl',
+      'notification channels',
     ]);
     expect(rows.every((r) => r.status === 'ok')).toBe(true);
   });
@@ -68,7 +71,7 @@ describe('doctor', () => {
     expect(run.stdout).toMatch(/^\s+CHECK\s+DETAIL/m);
     expect(run.stdout).toContain('✓  bun');
     expect(run.stdout).toContain('config: maxSessions=4 (cli) shadows env=2');
-    expect(run.stdout).toContain('18 passed, 0 warnings, 0 failed');
+    expect(run.stdout).toContain('20 passed, 0 warnings, 0 failed');
   });
 
   it.each([
@@ -185,6 +188,74 @@ describe('doctor', () => {
     });
     expect(byName.get('otel')?.status).toBe('warn');
     expect(run.code).toBe(2);
+  });
+
+  it('publicUrl: points here ✓, a login in front !, unreachable !, elsewhere ✗ (spec 08 §5.8)', async () => {
+    const local = 'http://127.0.0.1:9876/health';
+    const pub = 'https://bh.example.net/health';
+    const health = (id: string) => ({
+      kind: 'response' as const,
+      status: 200,
+      contentType: 'application/json',
+      location: null,
+      body: JSON.stringify({ status: 'ready', version: '0.2.0', instance_id: id }),
+    });
+    const verdict = async (answer: ProbeState['fetches']) =>
+      (
+        await doctorJson({
+          argv: ['--publicUrl', 'https://bh.example.net/'],
+          fs: healthyFs(),
+          probes: probeState({ fetches: { [local]: health('me'), ...answer } }),
+        })
+      ).byName.get('publicUrl');
+    expect((await verdict({ [pub]: health('me') }))?.status).toBe('ok');
+    expect((await verdict({ [pub]: health('other') }))?.status).toBe('fail');
+    expect(
+      (
+        await verdict({
+          [pub]: {
+            kind: 'response',
+            status: 302,
+            contentType: null,
+            location: 'https://login.example.com/',
+            body: '',
+          },
+        })
+      )?.status,
+    ).toBe('warn');
+    const none = await verdict({});
+    expect(none?.status).toBe('warn');
+    expect(none?.detail).toContain('hairpin');
+  });
+
+  it('notification channels: a startup flag with an unset variable or a dashboard channel with one fails', async () => {
+    const flag = await doctorJson({
+      argv: ['--notificationChannel', 'telegram:name=phone,token=env:BH_TG_TOKEN,chat=1'],
+      fs: healthyFs(),
+    });
+    expect(flag.byName.get('notification channels')?.status).toBe('fail');
+    expect(flag.byName.get('notification channels')?.detail).toContain('BH_TG_TOKEN is not set');
+    const db = await doctorJson({
+      argv: [],
+      fs: healthyFs(),
+      storage: storageState({
+        channels: [
+          { name: 'team', kind: 'discord', source: 'db', secretRefs: { webhook: 'BH_DISCORD' } },
+        ],
+      }),
+    });
+    expect(db.byName.get('notification channels')?.detail).toBe('team: BH_DISCORD is not set');
+    const ok = await doctorJson({
+      argv: [],
+      env: { BH_DISCORD: 'x'.repeat(40) },
+      fs: healthyFs(),
+      storage: storageState({
+        channels: [
+          { name: 'team', kind: 'discord', source: 'db', secretRefs: { webhook: 'BH_DISCORD' } },
+        ],
+      }),
+    });
+    expect(ok.byName.get('notification channels')?.status).toBe('ok');
   });
 
   it('maxSessions unbounded or above RAM is a warning', async () => {

@@ -8,10 +8,15 @@ export { InProcessEventBus } from '../app/events/bus.ts';
 export {
   type ChannelAdapterFactory,
   ChannelRegistry,
+  ChannelService,
   createLocalLinkBuilder,
   type DeliveryCounter,
+  imageVariants,
+  linkBuilderFor,
   NotificationOutbox,
   NotificationService,
+  PublicUrlChecker,
+  publicUrlHost,
 } from '../app/notifications/index.ts';
 export { Recorder } from '../app/observability/recorder.ts';
 export { SystemStatusService } from '../app/observability/system-status.ts';

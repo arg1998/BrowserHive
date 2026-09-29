@@ -32,12 +32,14 @@ import type {
   AuthStateStore,
   BlocklistService,
   ChannelRegistry,
+  ChannelService,
   LeaseSweeper,
   NotificationOutbox,
   NotificationService,
   OperatorRequestBroker,
   PageActions,
   PreferenceService,
+  PublicUrlChecker,
   Recorder,
   RuntimeFacts,
   SessionService,
@@ -113,6 +115,12 @@ export interface DomainPart {
   readonly channels: ChannelRegistry;
   /** The notification delivery outbox worker (D-34). */
   readonly notificationOutbox: NotificationOutbox;
+  /** The channels API (spec 03 §4.8.1). */
+  readonly channelService: ChannelService;
+  /** The `publicUrl` check (spec 08 §5.8). */
+  readonly publicUrl: PublicUrlChecker;
+  /** Random per start; `GET /health` reports it (D-37). */
+  readonly instanceId: string;
   readonly preferences: PreferenceService;
   readonly recorder: Recorder;
   readonly retention: RetentionScheduler;

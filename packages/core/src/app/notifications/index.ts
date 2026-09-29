@@ -7,10 +7,25 @@ export {
   type ChannelRegistryDeps,
   type RegisteredChannel,
 } from './channel-registry.ts';
+export {
+  ChannelService,
+  type ChannelServiceDeps,
+  capabilitiesDto,
+  type DeliveryListInput,
+  type DeliveryPage,
+  TELEGRAM_CONNECT_MS,
+  targetHint,
+} from './channel-service.ts';
 export { restrictContent } from './content-level.ts';
 export { degrade, OPEN_IN_BROWSERHIVE } from './degrade.ts';
+export {
+  applyImageRule,
+  type ImageVariants,
+  imageVariants,
+  wantsImages,
+} from './images.ts';
 export { createInAppChannel, IN_APP_CAPABILITIES, IN_APP_CHANNEL } from './in-app-channel.ts';
-export { createLocalLinkBuilder } from './links.ts';
+export { createLocalLinkBuilder, createPublicLinkBuilder, linkBuilderFor } from './links.ts';
 export {
   type BuildMessageInput,
   bold,
@@ -32,6 +47,7 @@ export {
   DEDUP_WINDOW,
   NOTIFICATION_DAYS,
   NOTIFICATION_SEEN_DAYS,
+  type NotificationScreenshots,
   NotificationService,
   type NotificationServiceDeps,
   toNotification,
@@ -47,6 +63,7 @@ export {
 export {
   crashed,
   draftFor,
+  type ImageRequest,
   NO_SESSION_LABEL,
   NOTIFICATION_GROUP_IDLE_MS,
   NOTIFICATION_GROUP_MAX_AGE_MS,
@@ -61,6 +78,17 @@ export {
   type ThreadRevision,
   toolErrorsTitle,
 } from './producers.ts';
+export {
+  classifyPublicUrlProbe,
+  isInsecurePublicUrl,
+  PUBLIC_URL_CACHE_MS,
+  PUBLIC_URL_PROBE_TIMEOUT_MS,
+  PublicUrlChecker,
+  type PublicUrlCheckerDeps,
+  type PublicUrlVerdict,
+  publicUrlHost,
+  publicUrlOrigin,
+} from './public-url.ts';
 export {
   contentLevelOf,
   deleteWhenResolved,
