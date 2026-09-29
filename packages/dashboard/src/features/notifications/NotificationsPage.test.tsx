@@ -150,6 +150,18 @@ describe('notifications helpers', () => {
     ).toBeNull();
   });
 
+  it('marks an on-demand digest in the meta line', () => {
+    const manual = notification(8, {
+      kind: 'digest.daily',
+      category: 'reports',
+      thread: 'report:digest:now:Europe/Berlin:1:2',
+    });
+    expect(notificationMeta(manual)).toContain('on demand');
+    expect(
+      notificationMeta({ ...manual, thread: 'report:digest:day@09:00@UTC:1:2' }),
+    ).not.toContain('on demand');
+  });
+
   it('splits the Type facet into types and the Reports category', () => {
     expect(typeChips({ type: ['error'], category: ['reports'] })).toEqual(['error', 'reports']);
     expect(splitTypeChips(['reports', 'vault'])).toEqual({

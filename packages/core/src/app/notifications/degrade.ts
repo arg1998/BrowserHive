@@ -69,17 +69,20 @@ export function sparkline(values: readonly number[]): string {
     .join('');
 }
 
+/** No-break space: "peak 1,525 calls" wraps as one piece on a narrow phone. */
+const NBSP = '\u00a0';
+
 /** A chart as one paragraph: its label, the bars in monospace and the peak. */
 function chartToText(block: Extract<Block, { type: 'chart' }>): Block {
   const peak = Math.max(0, ...block.values);
-  const unit = block.unit === null ? '' : ` ${block.unit}`;
+  const unit = block.unit === null ? '' : `${NBSP}${block.unit}`;
   return {
     type: 'text',
     content: [
       bold(block.label),
       text(' '),
       code(sparkline(block.values)),
-      text(` peak ${formatCount(peak)}${unit}`),
+      text(` peak${NBSP}${formatCount(peak)}${unit}`),
     ],
   };
 }

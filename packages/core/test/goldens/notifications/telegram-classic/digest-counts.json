@@ -22,7 +22,7 @@
             ]
           ]
         },
-        "text": "📊 <b>Daily digest · Mon 21 Sep</b>\n12 sessions (2 live) · 3,412 tool calls · 68 errors (2%)\n\n<b>Sessions:</b> 12 started · 2 live now\n<b>Tool calls:</b> 3,412 · 68 errors (2%) · was 1.2%\n<b>Attention:</b> 4 requests · 3 answered (median 1m 36s) · 1 timed out\n<b>Vault fills:</b> 9 · 1 failed\n<b>Blocked requests:</b> 27\n<b>Open problems:</b> 1\n\n<b>Tool calls per hour</b> <code>▁▁▁▁▁▁▁▁▃▅▆▆▄▅▇█▇▅▄▃▂▂▂▁</code> peak 412 calls\n\n<i>20 Sep 16:13 → 21 Sep 16:13 · Europe/Berlin</i>",
+        "text": "📊 <b>Daily digest · Mon 21 Sep</b>\n12 sessions (2 live) · 3,412 tool calls · 68 errors (2%)\n\n<b>Sessions:</b> 12 started · 2 live now\n<b>Tool calls:</b> 3,412 · 68 errors (2%) · was 1.2%\n<b>Attention:</b> 4 requests · 3 answered (median 1m 36s) · 1 timed out\n<b>Vault fills:</b> 9 · 1 failed\n<b>Blocked requests:</b> 27\n<b>Open problems:</b> 1\n\n<b>Tool calls per hour</b> <code>▁▁▁▁▁▁▁▁▃▅▆▆▄▅▇█▇▅▄▃▂▂▂▁</code> peak 412 calls\n\n<i>20 Sep 16:13 → 21 Sep 16:13 · Europe/Berlin</i>",
         "link_preview_options": {
           "is_disabled": true
         }

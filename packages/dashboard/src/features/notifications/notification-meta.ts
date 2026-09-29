@@ -16,6 +16,8 @@ export function notificationSession(n: Notification): string | null {
  */
 export function notificationMeta(n: Notification): readonly string[] {
   const parts: string[] = [];
+  // A digest someone asked for reads like the scheduled one: say so (D-45).
+  if (n.thread.startsWith('report:digest:now:')) parts.push('on demand');
   const slug = notificationSession(n);
   if (slug !== null && !n.title.startsWith(`${slug} ·`)) parts.push(slug);
   if (n.count > 1) parts.push(`first ${formatAbsoluteShort(n.created_at)}`);

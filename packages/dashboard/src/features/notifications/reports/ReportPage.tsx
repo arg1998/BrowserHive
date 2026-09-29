@@ -6,7 +6,6 @@ import { useEffect, useRef } from 'react';
 import { useNotifications } from '@/app/providers/NotificationsProvider.tsx';
 import { DataPanel } from '@/components/shared/DataPanel.tsx';
 import { PageHeader } from '@/components/shared/PageHeader.tsx';
-import { RelativeTime } from '@/components/shared/RelativeTime.tsx';
 import { Panel } from '@/components/shared/Section.tsx';
 import { SkeletonCard } from '@/components/shared/Skeletons.tsx';
 import { TonePill } from '@/components/shared/StatusBadge.tsx';
@@ -15,6 +14,7 @@ import { buttonVariants } from '@/components/ui/button.tsx';
 import { ICONS } from '@/lib/icons.ts';
 import { notificationEntry } from '@/lib/status-registry.ts';
 import { cn } from '@/lib/utils.ts';
+import { formatInZone } from '../channels/model.ts';
 import { PlatformMark, platformOf } from '../channels/platforms.tsx';
 import { NotificationsNav } from '../NotificationsNav.tsx';
 import { useReport } from './api.ts';
@@ -45,7 +45,9 @@ function ReportMeta({
       <div className="flex items-center gap-1.5">
         <dt className="text-muted-foreground">Made</dt>
         <dd>
-          <RelativeTime at={n.created_at} mode="absolute" />
+          <time dateTime={new Date(n.created_at).toISOString()}>
+            {formatInZone(n.created_at, item.report?.time_zone ?? 'UTC')}
+          </time>
         </dd>
       </div>
       {window !== null ? (
@@ -94,7 +96,6 @@ function ReportMeta({
 
 /** The channels a report reached, each with how its delivery went. */
 function SentTo({ item }: { readonly item: ReportItem }) {
-  const n = item.notification;
   if (item.channels.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
@@ -126,7 +127,6 @@ function SentTo({ item }: { readonly item: ReportItem }) {
           </Link>
         </li>
       ))}
-      <li className="sr-only">{n.title}</li>
     </ul>
   );
 }
@@ -204,7 +204,7 @@ export function ReportPage() {
                 <section aria-label="Report" className="min-w-0">
                   <ReportMessage message={message} zone={item.report?.time_zone ?? 'UTC'} />
                 </section>
-                <Panel title="Sent to" className="self-start">
+                <Panel title="Sent to" className="self-start" bodyClassName="pt-1">
                   <SentTo item={item} />
                 </Panel>
               </div>

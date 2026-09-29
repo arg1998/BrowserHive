@@ -239,7 +239,7 @@ describe('charts (D-32, spec 03 §9.2)', () => {
           { type: 'bold', text: 'Tool calls per hour' },
           { type: 'text', text: ' ' },
           { type: 'code', text: '▁▃▅█' },
-          { type: 'text', text: ' peak 8 calls' },
+          { type: 'text', text: ' peak\u00a08\u00a0calls' },
         ],
       },
     ]);
