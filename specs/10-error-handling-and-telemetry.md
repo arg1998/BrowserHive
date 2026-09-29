@@ -92,6 +92,7 @@ Decisions: D-07 (error model), D-08 (telemetry), D-20 (privacy).
 | CHANNEL_KIND_UNAVAILABLE | 400 | domain | different_args | `{kind, mode?, mode_text}` |
 | CHANNEL_PLATFORM_ERROR | 502 | domain | backoff | `{kind, code, detail}` (the classified platform failure, scrubbed) |
 | DELIVERY_NOT_FOUND | 404 | domain | never | `{seq}` |
+| REPORT_NOT_FOUND | 404 | domain | never | `{notification_id}` |
 | INPUT_NOT_PERMITTED | 409 | domain | after_operator | `{session_id}` |
 | SCREENCAST_FAILED | 502 | domain | backoff | `{session_id, reason}` |
 | TOOL_NOT_AVAILABLE | 400 | domain | never | `{tool, requires}` |
@@ -358,7 +359,7 @@ All spans use `@opentelemetry/api`'s tracer `browserhive`; attributes use the `b
 | `browserhive.blocklist.hits` | counter | `source` |
 | `browserhive.retention.pruned_rows` | counter | `table` |
 | `browserhive.notifications.deliveries` | counter | `channel_kind`, `status` (`sent`, `retrying`, `dead`, `suppressed`, `superseded`) — one increment per finished or rescheduled outbox job (03 §9.4) |
-| `browserhive.notifications.reports` | counter | `kind` (`digest.daily`, `digest.weekly`, `report.anomaly`), `outcome` (`sent` for a produced report, `late`, `empty`, `skipped` per skipped window, `manual`, `resolved` for an anomaly alert that cleared) — one increment per report decision of the scheduler (03 §9.7) |
+| `browserhive.notifications.reports` | counter | `kind` (`digest.daily`, `digest.weekly`, `report.anomaly`), `outcome` (`sent` for a produced report, `late`, `empty`, `skipped` per skipped window, `manual`, `resolved` for an anomaly alert that cleared, `in_app` for a new in-app copy, D-45) — one increment per report decision of the scheduler (03 §9.7) |
 | `browserhive.notifications.actions` | counter | `channel_kind`, `outcome` (`done`, `failed`, `not_allowed`, `used`, `expired`, `stale`, `wrong_channel`, `disabled`, `unknown`) — one increment per act-button press (03 §9.6); `unknown` counts presses of tokens BrowserHive never minted, which are not audited |
 | `browserhive.process.*` | gauges: rss, heap, event-loop lag (sampled) | — |
 
