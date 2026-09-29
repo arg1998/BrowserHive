@@ -87,9 +87,12 @@ export function ntfyPriority(message: Pick<NotificationMessage, 'severity' | 'al
   }
 }
 
-/** ntfy tags (emoji short codes): the outcome once settled, else the severity. */
-export function ntfyTags(message: Pick<NotificationMessage, 'severity' | 'state'>): string[] {
+/** ntfy tags (emoji short codes): the outcome once settled, a chart for a digest, else the severity. */
+export function ntfyTags(
+  message: Pick<NotificationMessage, 'severity' | 'state'> & { readonly kind?: string },
+): string[] {
   if (message.state === 'resolved') return ['white_check_mark'];
+  if (message.kind?.startsWith('digest.') === true) return ['bar_chart'];
   if (message.state === 'expired') return ['hourglass'];
   switch (message.severity) {
     case 'info':

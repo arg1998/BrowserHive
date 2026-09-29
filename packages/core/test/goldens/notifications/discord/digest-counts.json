@@ -27,7 +27,7 @@
         ],
         "embeds": [
           {
-            "title": "ℹ️ Daily digest · Mon 21 Sep",
+            "title": "📊 Daily digest · Mon 21 Sep",
             "description": "12 sessions \\(2 live\\) · 3,412 tool calls · 68 errors \\(2%\\)\n\n**Tool calls per hour** `▁▁▁▁▁▁▁▁▃▅▆▆▄▅▇█▇▅▄▃▂▂▂▁` peak 412 calls\n\n-# 20 Sep 16:13 → 21 Sep 16:13 · Europe/Berlin",
             "url": "https://bh.example.net/overview?since=1789913600000&until=1790000000000",
             "color": 3900150,

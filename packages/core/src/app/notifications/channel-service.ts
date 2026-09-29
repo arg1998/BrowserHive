@@ -666,6 +666,7 @@ export class ChannelService {
       { kind: r.kind, mode: r.mode, target: r.target, secretRefs: r.secretRefs, rules: r.rules },
       built.message,
       'digest',
+      true,
     );
     const base = { preview, window: built.window, empty: built.empty };
     if (!send) return { ...base, sent: false, ok: true, delivery: null, error: null };
@@ -865,6 +866,7 @@ export class ChannelService {
     setup: PreviewSetup,
     message: NotificationMessage,
     sample: PreviewSample,
+    real = false,
   ): ChannelPreview {
     const { kind, mode, target, rules, secretRefs } = setup;
     const renderer = this.deps.renderers.get(kind);
@@ -902,7 +904,14 @@ export class ChannelService {
       message: shown,
       requests,
       local_links: this.deps.links.local,
-      notes: this.notes(parsedKind.data, rules, capabilities, message.category, sample, target),
+      notes: this.notes(
+        parsedKind.data,
+        rules,
+        capabilities,
+        message.category,
+        real ? null : sample,
+        target,
+      ),
     };
   }
 
@@ -911,7 +920,8 @@ export class ChannelService {
     rules: NotificationChannelRules,
     caps: ChannelCapabilities,
     category: NotificationCategory,
-    sample: PreviewSample,
+    /** The sample, or `null` for a real message (no sample notes). */
+    sample: PreviewSample | null,
     target: Readonly<Record<string, string>>,
   ): string[] {
     const notes: string[] = [];

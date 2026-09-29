@@ -87,6 +87,7 @@ describe.skipIf(SERVER === undefined)('ntfy adapter against a real server', () =
     expect(events[0]?.message).toContain('Sent late: BrowserHive was not running');
     expect(events[0]?.message).toContain('Tool calls per hour ');
     expect(events[0]?.priority).toBe(3);
+    expect(events[0]?.tags).toEqual(['bar_chart']);
     const alert = await channel.send(delivery('anomaly', NTFY_CAPABILITIES));
     await channel.edit?.(alert.ref, delivery('anomaly', NTFY_CAPABILITIES, { resolved: true }));
     events = (await poll(server, topic)).filter((e) => e.event === 'message');
