@@ -1,5 +1,5 @@
-/** @module features/notifications/search — `/notifications` search params: read (all|unread|read), type csv, range (24h|7d|30d|all, default 7d), page, ps (spec 04 §12.11) */
-import { NotificationType } from '@browserhive/contracts/enums';
+/** @module features/notifications/search — `/notifications` search params: read (all|unread|read), type csv, category csv (the Reports chip, D-45), range (24h|7d|30d|all, default 7d), page, ps (spec 04 §12.11) */
+import { NotificationCategory, NotificationType } from '@browserhive/contracts/enums';
 import { z } from 'zod';
 import { csvParam, pageParam, pageSizeParam, TABLE_SEARCH_DEFAULTS } from '@/lib/search/table.ts';
 
@@ -10,6 +10,7 @@ export const NOTIFICATION_RANGES = ['24h', '7d', '30d', 'all'] as const;
 export const notificationsSearch = z.object({
   read: z.enum(['all', 'unread', 'read']).catch('all').default('all'),
   type: csvParam(NotificationType),
+  category: csvParam(NotificationCategory),
   range: z.enum(NOTIFICATION_RANGES).catch('7d').default('7d'),
   page: pageParam,
   ps: pageSizeParam,

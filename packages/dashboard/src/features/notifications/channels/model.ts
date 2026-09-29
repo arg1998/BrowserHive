@@ -10,6 +10,7 @@ import {
   checkChannelRules,
   DEFAULT_DIGEST_AT,
   type DigestRule,
+  digestDay,
   type NotificationChannelRules,
   NTFY_DEFAULT_SERVER,
   nextOccurrence,
@@ -134,11 +135,10 @@ export const WEEKDAY_LABEL: { readonly [D in Weekday]: string } = {
   sun: 'Sunday',
 };
 
-/** The digest schedule in words ("daily at 09:00", "Mondays at 08:30"). */
+/** The digest schedule in words ("daily at 09:00", "weekdays at 09:00", "Fridays at 17:00"). */
 export function digestText(rule: DigestRule): string {
-  return rule.every === 'week'
-    ? `${WEEKDAY_LABEL[rule.day ?? 'mon']}s at ${rule.at}`
-    : `daily at ${rule.at}`;
+  if (rule.every === 'week') return `${WEEKDAY_LABEL[digestDay(rule)]}s at ${rule.at}`;
+  return rule.weekdays_only === true ? `weekdays at ${rule.at}` : `daily at ${rule.at}`;
 }
 
 /**

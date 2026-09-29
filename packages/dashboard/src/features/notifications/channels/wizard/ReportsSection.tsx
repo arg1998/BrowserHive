@@ -1,15 +1,17 @@
-/** @module features/notifications/channels/wizard/ReportsSection — "Reports" in the rules step (D-43, D-44): the digest (Off · Every day · Every week, a 24-hour time, a weekday) with the next run in the channel's zone, the channel's time zone (default the host's, which also applies to quiet hours), and "Tell me when something looks off" with its checks in plain words; the thresholds live in Advanced ({@link AnomalyThresholds}) */
+/** @module features/notifications/channels/wizard/ReportsSection — "Reports" in the rules step (D-43, D-44) and, in its in-app form, on the Reports tab (D-45): the digest (Off · Every day · Every week; every day at 09:00, optionally weekdays only; every week on Friday at 17:00; a 24-hour time, a weekday) with the next run in the zone, the time zone (default the host's; for a channel it also applies to quiet hours), and "Tell me when something looks off" with its checks in plain words; a channel's thresholds live in Advanced ({@link AnomalyThresholds}) */
 import {
   ANOMALY_CHECK_TEXT,
   ANOMALY_CHECKS,
   ANOMALY_DEFAULTS,
   type AnomalyRule,
-  DEFAULT_DIGEST_AT,
+  DEFAULT_DIGEST_DAY,
+  defaultDigest,
   type NotificationChannelRules,
   WEEKDAYS,
   type Weekday,
 } from '@browserhive/contracts/notifications';
 import { useId } from 'react';
+import { Checkbox } from '@/components/ui/checkbox.tsx';
 import { Input } from '@/components/ui/input.tsx';
 import { SimpleSelect } from '@/components/ui/select.tsx';
 import { Switch } from '@/components/ui/switch.tsx';
@@ -33,6 +35,8 @@ export interface ReportsSectionProps {
   readonly errors: Readonly<Record<string, string>>;
   /** Now, for the next run (injectable for tests). */
   readonly now?: number;
+  /** `in-app`: the Reports tab's own schedule (D-45), with its own words and no quiet hours. */
+  readonly variant?: 'channel' | 'in-app';
 }
 
 /** The digest, the zone and the anomaly switch. */
@@ -43,7 +47,11 @@ export function ReportsSection({
   readOnly,
   errors,
   now: nowProp,
+  variant = 'channel',
 }: ReportsSectionProps) {
+  const inApp = variant === 'in-app';
+  // On the Reports tab the section is a page section (h2); in the wizard it sits under a step (h3).
+  const Heading = inApp ? 'h2' : 'h3';
   const serverNow = useServerNow(30_000);
   const now = nowProp ?? serverNow;
   const id = useId();
@@ -65,13 +73,11 @@ export function ReportsSection({
     }
     onRules(next);
   };
+  // Each frequency starts from its own default: every day at 09:00, every week on Friday at 17:00.
   const setFrequency = (f: Frequency) => {
     if (f === 'off') return set({ digest: undefined });
-    const at = digest?.at ?? DEFAULT_DIGEST_AT;
-    set({
-      digest:
-        f === 'week' ? { every: 'week', at, day: digest?.day ?? 'mon' } : { every: 'day', at },
-    });
+    if (digest?.every === f) return;
+    set({ digest: defaultDigest(f) });
   };
   const next = digest === undefined ? null : nextDigestAt(digest, zone, now);
 
@@ -98,12 +104,13 @@ export function ReportsSection({
           <Digest className="size-4.5" />
         </span>
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <h3 id={`${id}-title`} className="text-base font-medium">
-            Reports
-          </h3>
+          <Heading id={`${id}-title`} className="text-base font-medium">
+            {inApp ? 'Reports in BrowserHive' : 'Reports'}
+          </Heading>
           <p className="text-sm text-muted-foreground">
-            A summary on your schedule, and a heads-up when something looks off. They come to this
-            channel whatever its categories, and nothing is sent when there is nothing to tell.
+            {inApp
+              ? 'A digest in your inbox on your schedule, and an alert when something looks off, with no external channel needed. Digests arrive quietly (no pop-up, no badge); anomaly alerts follow your toast preferences.'
+              : 'A summary on your schedule, and a heads-up when something looks off. They come to this channel whatever its categories, and nothing is sent when there is nothing to tell.'}
           </p>
         </div>
       </div>
@@ -111,7 +118,7 @@ export function ReportsSection({
       <div className="flex flex-col gap-4 border-t p-4">
         <div className="flex flex-col gap-2">
           <span id={`${id}-digest`} className="text-sm font-medium">
-            Digest
+            {inApp ? 'Digest in BrowserHive' : 'Digest'}
           </span>
           <ToggleGroup
             aria-labelledby={`${id}-digest`}
@@ -137,7 +144,7 @@ export function ReportsSection({
                     id={`${id}-day`}
                     className="w-40"
                     disabled={readOnly}
-                    value={digest.day ?? 'mon'}
+                    value={digest.day ?? DEFAULT_DIGEST_DAY}
                     options={WEEKDAYS.map((d) => ({ value: d, label: WEEKDAY_LABEL[d] }))}
                     onValueChange={(v) => set({ digest: { ...digest, day: v as Weekday } })}
                   />
@@ -157,6 +164,25 @@ export function ReportsSection({
                   }}
                 />
               </Field>
+              {digest.every === 'day' ? (
+                <div className="flex h-9 items-center gap-2 text-sm">
+                  <Checkbox
+                    id={`${id}-weekdays`}
+                    disabled={readOnly}
+                    checked={digest.weekdays_only === true}
+                    onCheckedChange={(checked) => {
+                      const { weekdays_only: _off, ...rest } = digest;
+                      set({ digest: checked === true ? { ...rest, weekdays_only: true } : rest });
+                    }}
+                  />
+                  <label
+                    htmlFor={`${id}-weekdays`}
+                    className={readOnly ? 'cursor-not-allowed' : 'cursor-pointer'}
+                  >
+                    Weekdays only
+                  </label>
+                </div>
+              ) : null}
               {next !== null ? (
                 <p className="pb-2 text-sm text-muted-foreground" aria-live="polite">
                   Next digest: <span className="text-foreground">{formatInZone(next, zone)}</span>
@@ -166,10 +192,14 @@ export function ReportsSection({
           ) : null}
           {digest !== undefined ? (
             <p className="text-sm text-muted-foreground">
-              {digest.every === 'week' ? 'The last seven days' : 'The last 24 hours'} in numbers:
-              sessions, tool calls and errors, attention requests, vault fills, blocked requests,
-              the slowest tool, the top errors and open problems. If BrowserHive was off at that
-              time, the digest comes when it starts again, marked late.
+              {digest.every === 'week'
+                ? 'The last seven days, weekend included,'
+                : digest.weekdays_only === true
+                  ? 'The last working day (on Monday, the whole weekend)'
+                  : 'The last 24 hours'}{' '}
+              in numbers: sessions, tool calls and errors, attention requests, vault fills, blocked
+              requests, the slowest tool, the top errors and open problems. If BrowserHive was off
+              at that time, the digest comes when it starts again, marked late.
             </p>
           ) : null}
           {errors['rules.digest.day'] !== undefined ? (
@@ -187,7 +217,7 @@ export function ReportsSection({
             </span>
           }
           htmlFor={`${id}-tz`}
-          help={`Digest times and quiet hours follow this zone. Now: ${formatInZone(now, zone)} in ${zoneLabel(zone)}.`}
+          help={`${inApp ? 'Digest times follow this zone.' : 'Digest times and quiet hours follow this zone.'} Now: ${formatInZone(now, zone)} in ${zoneLabel(zone)}.`}
           error={errors['rules.time_zone']}
           className="max-w-md"
         >

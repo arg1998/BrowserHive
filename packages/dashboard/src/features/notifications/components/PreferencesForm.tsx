@@ -104,6 +104,10 @@ export function PreferencesForm({ preferences, saving, onSave }: PreferencesForm
             </label>
           ))}
         </div>
+        <p className="text-sm text-muted-foreground">
+          Anomaly alerts toast with System. Digests never pop up: they arrive quietly in the bell
+          and the Reports tab.
+        </p>
       </fieldset>
       <div className="flex items-center gap-3 border-t pt-4">
         <Button type="submit" size="sm" disabled={saving || !dirty}>

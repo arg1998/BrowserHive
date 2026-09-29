@@ -18,6 +18,7 @@ export function notificationsQuery(search: NotificationsSearch, anchor: number) 
     total: true,
     read: search.read,
     ...(search.type !== undefined && { type: search.type }),
+    ...(search.category !== undefined && { category: search.category }),
     ...(window.since !== undefined && { since: window.since }),
   } as const;
 }

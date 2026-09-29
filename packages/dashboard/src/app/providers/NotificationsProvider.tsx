@@ -1,4 +1,4 @@
-/** @module app/providers/NotificationsProvider — server-backed notifications: unread count query, `notifications` topic, toasts only from `notification.created` with a per-type policy: no tool-error toasts by default, titles name the session, a growing group updates its toast in place, a settled request closes it (spec 04 §4.3, D-16) */
+/** @module app/providers/NotificationsProvider — server-backed notifications: unread count query, `notifications` topic, toasts only from `notification.created` with a per-type policy: no tool-error toasts by default, never a digest, anomaly alerts as `system` warnings, titles name the session, a growing group updates its toast in place, a settled request closes it (spec 04 §4.3, D-16, D-45) */
 import { NotificationType } from '@browserhive/contracts/enums';
 import type { Notification } from '@browserhive/contracts/http';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -47,6 +47,13 @@ export interface ToastPlan {
   readonly persist: boolean;
   /** Route for the action button, `null` when there is none (or the operator is already there). */
   readonly target: string | null;
+  /** Label of the action button. */
+  readonly actionLabel: string;
+}
+
+/** A digest is a record, not a call to act: it never toasts (D-45). */
+export function isDigest(notification: Pick<Notification, 'kind'>): boolean {
+  return notification.kind === 'digest.daily' || notification.kind === 'digest.weekly';
 }
 
 /** Toast id of a notification (re-issuing it updates the same toast). */
@@ -88,15 +95,17 @@ export function planToast(
 ): ToastPlan | null {
   const { preferences } = context;
   if (preferences?.toasts === false) return null;
+  if (isDigest(notification)) return null;
   const types = preferences?.types ?? DEFAULT_TOAST_TYPES;
   if (!types.includes(notification.type)) return null;
   const target = notificationTarget(notification);
   const here = target !== null && isAlreadyAt(context.pathname, target);
   if (notification.type === 'error' && here) return null;
+  const anomaly = notification.kind === 'report.anomaly';
   const tone =
     notification.type === 'error'
       ? 'error'
-      : notification.type === 'attention'
+      : notification.type === 'attention' || anomaly
         ? 'warning'
         : 'info';
   return {
@@ -107,6 +116,11 @@ export function planToast(
     // Only attention requests wait for the operator; errors, lifecycle and vault news fade out.
     persist: notification.type === 'attention',
     target: here ? null : target,
+    actionLabel: anomaly
+      ? 'Open report'
+      : notification.type === 'vault'
+        ? 'Review in vault'
+        : 'Open session',
   };
 }
 
@@ -209,7 +223,7 @@ export function NotificationsProvider({ children }: { readonly children: ReactNo
       // No "Open session" button when the operator is already on that page.
       ...(target !== null && {
         action: {
-          label: notification.type === 'vault' ? 'Review in vault' : 'Open session',
+          label: plan.actionLabel,
           onClick: () => void navigate({ to: target }),
         },
       }),

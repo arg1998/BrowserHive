@@ -70,7 +70,11 @@ function ReportsLine({
           <Digest aria-hidden="true" className="mt-0.5 size-4 shrink-0 opacity-80" />
           <p className="min-w-0 flex-1">
             <span className="font-medium">
-              {r.digest.every === 'week' ? 'Weekly digest' : 'Daily digest'}
+              {r.digest.every === 'week'
+                ? 'Weekly digest'
+                : r.digest.weekdays_only
+                  ? 'Weekday digest'
+                  : 'Daily digest'}
             </span>{' '}
             <span className="text-muted-foreground">
               · next {formatInZone(r.digest.next_at, r.time_zone)}

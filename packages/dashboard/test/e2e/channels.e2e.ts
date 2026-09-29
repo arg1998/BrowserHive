@@ -1,4 +1,4 @@
-/** @module dashboard/test/e2e/channels.e2e — the notification channels journey against a running daemon: add a webhook channel through the wizard (pointed at a receiver this test starts, answering from the chat switched on), preview it, save, send a real test and see it arrive, find it in the delivery log, the empty Actions audit, delete it; skips cleanly without a daemon */
+/** @module dashboard/test/e2e/channels.e2e — the notification channels journey against a running daemon: add a webhook channel through the wizard (pointed at a receiver this test starts, answering from the chat switched on), preview it, save, send a real test and see it arrive, find it in the delivery log, the empty Actions audit, delete it; a digest sent on demand found again through the inbox's Reports chip, its report page and the Overview of its period; the in-app report settings saved and switched off (D-45); skips cleanly without a daemon */
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { expect, type Page, test } from '@playwright/test';
@@ -130,6 +130,34 @@ test.describe('notification channels', () => {
     }
   });
 
+  test('reports in BrowserHive: a weekly digest on Friday at 17:00, saved, then off', async ({
+    page,
+  }) => {
+    await signIn(page);
+    // Start from the default (off), whatever an earlier project left.
+    const reset = await page.request.put('/api/v1/notifications/report-settings', {
+      data: { settings: {} },
+      headers: { origin: baseUrl ?? '' },
+    });
+    expect(reset.ok()).toBe(true);
+    await page.goto('/notifications/reports');
+    const form = page.getByRole('form', { name: 'Reports in BrowserHive' });
+    await expect(form.getByRole('button', { name: 'Off' })).toHaveAttribute('aria-pressed', 'true');
+    await form.getByRole('button', { name: 'Every week' }).click();
+    await expect(form.getByLabel('At')).toHaveValue('17:00');
+    await expect(form.getByText(/Next digest: Fri /)).toBeVisible();
+    await form.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByRole('heading', { name: 'Reports in BrowserHive saved' })).toBeVisible();
+    await page.reload();
+    await expect(form.getByRole('button', { name: 'Every week' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await form.getByRole('button', { name: 'Off' }).click();
+    await form.getByRole('button', { name: 'Save' }).click();
+    await expect(form.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
   test('schedule a daily digest in a time zone, send one now, see it in the log', async ({
     page,
   }, testInfo) => {
@@ -185,6 +213,21 @@ test.describe('notification channels', () => {
       // The delivery log marks it as sent on demand.
       await page.goto('/notifications/log');
       await expect(page.getByText('on demand').first()).toBeVisible();
+
+      // The inbox has its in-app copy (D-45): the Reports chip, the report page, the Overview.
+      await page.goto('/notifications');
+      await page.getByRole('button', { name: 'Reports', exact: true }).click();
+      await expect(page).toHaveURL(/category=reports/);
+      const row = page.getByRole('link', { name: /^Open: Daily digest/ }).first();
+      await expect(row).toBeVisible();
+      await row.click();
+      await expect(page).toHaveURL(/\/notifications\/reports\/n-/);
+      await expect(page.getByRole('heading', { level: 2, name: /Daily digest/ })).toBeVisible();
+      await expect(page.getByText('on demand').first()).toBeVisible();
+      await expect(page.getByText(/Asia\/Tokyo/).first()).toBeVisible();
+      await expect(page.getByRole('img', { name: /Tool calls per hour/ })).toBeVisible();
+      await page.getByRole('link', { name: 'Open Overview for this period' }).click();
+      await expect(page).toHaveURL(/\/overview\?.*since=\d+.*until=\d+/);
 
       await page.goto('/notifications/channels');
       await card.getByRole('button', { name: `More actions for ${name}` }).click();

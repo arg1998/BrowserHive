@@ -171,12 +171,12 @@ describe('in-app digest copies (D-45)', () => {
     expect(message?.alert).toBe(false);
     expect(message?.report?.window).toEqual({ since: NINE - DAY, until: NINE });
     expect(t.copies().map((c) => c.sourceEventId)).toEqual([
-      copy?.notificationId,
-      copy?.notificationId,
+      copy?.notificationId ?? null,
+      copy?.notificationId ?? null,
     ]);
     expect(t.copies().every((c) => c.dismissedAt !== null)).toBe(true);
     expect(t.announced.map((a) => [a.op, a.notification.notification_id])).toEqual([
-      ['created', copy?.notificationId],
+      ['created', copy?.notificationId ?? ''],
     ]);
     expect(await t.repos.notifications.unreadCount(null)).toBe(0);
     // The history lists it once, with both channels.
@@ -359,8 +359,8 @@ describe('anomaly watches (D-45)', () => {
     });
     expect(await t.repos.notifications.unreadCount(null)).toBe(1);
     expect(t.copies().map((c) => c.sourceEventId)).toEqual([
-      alert?.notificationId,
-      alert?.notificationId,
+      alert?.notificationId ?? null,
+      alert?.notificationId ?? null,
     ]);
     expect(t.announced.map((a) => a.op)).toEqual(['created']);
   });
@@ -435,7 +435,7 @@ describe('on-demand digests (D-45)', () => {
     if (record === null) throw new Error('no channel');
     const built = await t.scheduler.manualDigest(record);
     const id = await t.scheduler.storeManualCopy(built);
-    expect(t.inApp().map((r) => r.notificationId)).toEqual([id]);
+    expect(t.inApp().map((r) => r.notificationId)).toEqual([id ?? 'missing']);
     expect(decodeMessage(t.inApp()[0]?.messageJson ?? null)?.report?.manual).toBe(true);
     // Asking twice for the same instant finds the same copy.
     expect(await t.scheduler.storeManualCopy(built)).toBe(id);

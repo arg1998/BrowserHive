@@ -42,13 +42,61 @@ describe('ReportsSection', () => {
     await expectNoA11yViolations(view.container);
   });
 
-  it('switches to weekly with a weekday, and off again', () => {
+  it('switches to weekly on Friday at 17:00 by default, and off again (D-43)', () => {
     render(<Harness initial={{ digest: { every: 'day', at: '08:00' } }} />);
     fireEvent.click(screen.getByRole('button', { name: 'Every week' }));
-    expect(rules().digest).toEqual({ every: 'week', at: '08:00', day: 'mon' });
-    expect(screen.getByText('Mon 5 Oct, 08:00')).toBeDefined();
+    expect(rules().digest).toEqual({ every: 'week', at: '17:00', day: 'fri' });
+    // Tue 29 Sep 14:00 in Berlin: this Friday.
+    expect(screen.getByText('Fri 2 Oct, 17:00')).toBeDefined();
+    expect(screen.getByText(/The last seven days, weekend included/)).toBeDefined();
+    expect(screen.queryByRole('checkbox', { name: 'Weekdays only' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Off' }));
     expect(rules().digest).toBeUndefined();
+  });
+
+  it('runs every day unless weekdays only is ticked; Monday covers the weekend', async () => {
+    const view = render(<Harness initial={{ digest: { every: 'day', at: '09:00' } }} />);
+    const box = screen.getByRole('checkbox', { name: 'Weekdays only' });
+    expect(box.getAttribute('aria-checked')).toBe('false');
+    fireEvent.click(box);
+    expect(rules().digest).toEqual({ every: 'day', at: '09:00', weekdays_only: true });
+    expect(screen.getByText(/on Monday, the whole weekend/)).toBeDefined();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Weekdays only' }));
+    expect(rules().digest).toEqual({ every: 'day', at: '09:00' });
+    await expectNoA11yViolations(view.container);
+  });
+
+  it('skips the weekend in the next run with weekdays only', () => {
+    // Fri 2 Oct 2026 12:00 UTC: the next weekday run is Monday.
+    render(
+      <ReportsSection
+        rules={{ digest: { every: 'day', at: '09:00', weekdays_only: true } }}
+        onRules={() => undefined}
+        hostZone="Europe/Berlin"
+        readOnly={false}
+        errors={{}}
+        now={Date.UTC(2026, 9, 2, 12)}
+      />,
+    );
+    expect(screen.getByText('Mon 5 Oct, 09:00')).toBeDefined();
+  });
+
+  it('speaks of BrowserHive in its in-app form (D-45)', () => {
+    render(
+      <ReportsSection
+        variant="in-app"
+        rules={{}}
+        onRules={() => undefined}
+        hostZone="Europe/Berlin"
+        readOnly={false}
+        errors={{}}
+        now={NOW}
+      />,
+    );
+    expect(screen.getByRole('heading', { name: 'Reports in BrowserHive' })).toBeDefined();
+    expect(screen.getByRole('group', { name: 'Digest in BrowserHive' })).toBeDefined();
+    expect(screen.getByText(/Digest times follow this zone/)).toBeDefined();
+    expect(screen.queryByText(/quiet hours/)).toBeNull();
   });
 
   it('defaults the zone to the host and names it', () => {

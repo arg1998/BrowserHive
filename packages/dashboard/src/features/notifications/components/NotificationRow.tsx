@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button.tsx';
 import { Hint } from '@/components/ui/tooltip.tsx';
 import { LinkRow } from '@/features/overview/components/LinkList.tsx';
 import { ICONS } from '@/lib/icons.ts';
-import { NOTIFICATION_TYPE } from '@/lib/status-registry.ts';
+import { notificationEntry } from '@/lib/status-registry.ts';
 import { cn } from '@/lib/utils.ts';
 import {
   notificationMeta,
@@ -31,7 +31,7 @@ export function NotificationRow({
   onDismiss,
 }: NotificationRowProps) {
   const unread = n.read_at === null;
-  const entry = NOTIFICATION_TYPE[n.type];
+  const entry = notificationEntry(n);
   const TypeIcon = ICONS[entry.icon ?? 'notifications'];
   const Session = ICONS.sessions;
   const Close = ICONS.close;

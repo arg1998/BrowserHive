@@ -44,6 +44,7 @@ import {
   ExternalLink,
   Eye,
   EyeOff,
+  FileChartColumn,
   FileQuestion,
   FileText,
   Folder,
@@ -190,6 +191,7 @@ export const ICONS = {
   // Reports (N3)
   digest: CalendarClock,
   anomaly: Radar,
+  reports: FileChartColumn,
   // Act buttons (N2)
   actions: MousePointerClick,
   allowList: UserCheck,

@@ -35,6 +35,28 @@ import { PreferencesForm } from './components/PreferencesForm.tsx';
 import { NotificationsNav } from './NotificationsNav.tsx';
 import { NOTIFICATION_RANGES, type NotificationsSearch } from './search.ts';
 
+/** The Reports chip: one more value of the Type facet, sent as `category=reports` (D-45). */
+export const REPORTS_CHIP = 'reports';
+
+/** The Type facet's selected chips: the types, plus Reports when `category=reports`. */
+export function typeChips(search: Pick<NotificationsSearch, 'type' | 'category'>): string[] {
+  return [
+    ...(search.type ?? []),
+    ...((search.category ?? []).includes('reports') ? [REPORTS_CHIP] : []),
+  ];
+}
+
+/** Splits the Type facet's chips back into the `type` and `category` params. */
+export function splitTypeChips(
+  values: readonly string[],
+): Pick<NotificationsSearch, 'type' | 'category'> {
+  const types = NotificationType.options.filter((t) => values.includes(t));
+  return {
+    type: types.length > 0 ? types : undefined,
+    category: values.includes(REPORTS_CHIP) ? ['reports'] : undefined,
+  };
+}
+
 /** Visible (not dismissed) notifications, latest activity first (a folded group moves up as it grows). */
 export function visibleNotifications(rows: readonly Notification[]): readonly Notification[] {
   return rows
@@ -81,7 +103,14 @@ export function NotificationsPage() {
   const hold = useLiveHold(rows, listRef, {
     getId: notificationId,
     getVersion: notificationVersion,
-    listKey: JSON.stringify([search.read, search.type, search.range, search.page, search.ps]),
+    listKey: JSON.stringify([
+      search.read,
+      search.type,
+      search.category,
+      search.range,
+      search.page,
+      search.ps,
+    ]),
     enabled: search.page === 1,
   });
 
@@ -94,7 +123,7 @@ export function NotificationsPage() {
             <TonePill entry={{ label: `${formatNumber(unread)} unread`, tone: 'accent' }} />
           ) : undefined
         }
-        description="Attention requests, tool errors, vault and lifecycle events for your account."
+        description="Attention requests, tool errors, vault and lifecycle events, digests and anomaly alerts for your account."
         learnMore="A notification keeps its place when the thing it announces changes: a settled request shows its outcome (resolved, expired) instead of a new row, and a growing group of tool errors updates its count."
         learnMoreDocs="notifications"
         tabs={<NotificationsNav />}
@@ -170,17 +199,25 @@ export function NotificationsPage() {
           {
             param: 'type',
             label: 'Type',
-            options: NotificationType.options.map((value) => ({ value, count: 0 })),
-            selected: search.type ?? [],
+            options: [...NotificationType.options, REPORTS_CHIP].map((value) => ({
+              value,
+              count: 0,
+            })),
+            selected: typeChips(search),
             counts: false,
             format: (value) => {
+              if (value === REPORTS_CHIP) return 'Reports';
               const label = NOTIFICATION_TYPE[value as NotificationType]?.label ?? value;
               return label.charAt(0).toUpperCase() + label.slice(1);
             },
           },
         ]}
         {...(list.data?.page.total !== undefined && { matching: list.data.page.total })}
-        onChange={(param, value) => set({ [param]: value })}
+        onChange={(param, value) =>
+          param === 'type'
+            ? set(splitTypeChips(typeof value === 'string' ? [value] : (value ?? [])))
+            : set({ [param]: value })
+        }
         onClear={() => clear(['range'])}
       />
       {/* The skeleton holds the list's place from the first paint so the preferences panel below never jumps. */}
@@ -203,7 +240,9 @@ export function NotificationsPage() {
           empty={
             <EmptyState
               kind={
-                search.read !== 'all' || search.type !== undefined ? 'zero-results' : 'zero-data'
+                search.read !== 'all' || search.type !== undefined || search.category !== undefined
+                  ? 'zero-results'
+                  : 'zero-data'
               }
               variant="panel"
               icon="notifications"

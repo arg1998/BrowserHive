@@ -109,6 +109,10 @@ export const keys = {
     lists: () => ['notifications', 'list'] as const,
     list: (params?: KeyParams) => ['notifications', 'list', stableParams(params)] as const,
     unreadCount: () => ['notifications', 'unread-count'] as const,
+    reportLists: () => ['notifications', 'reports'] as const,
+    reports: (params?: KeyParams) => ['notifications', 'reports', stableParams(params)] as const,
+    report: (id: string) => ['notifications', 'report', id] as const,
+    reportSettings: () => ['notifications', 'report-settings'] as const,
   },
   channels: {
     all: ['channels'] as const,

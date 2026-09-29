@@ -20,7 +20,7 @@ import {
 } from '@/features/notifications/notification-meta.ts';
 import { keys } from '@/lib/api/keys.ts';
 import { ICONS } from '@/lib/icons.ts';
-import { NOTIFICATION_TYPE } from '@/lib/status-registry.ts';
+import { notificationEntry } from '@/lib/status-registry.ts';
 import { cn } from '@/lib/utils.ts';
 
 /** How many recent notifications the popover fetches (dismissed ones are filtered out). */
@@ -192,7 +192,7 @@ function BellRow({
   readonly onMarkRead: () => void;
   readonly onDismiss: () => void;
 }) {
-  const entry = NOTIFICATION_TYPE[n.type];
+  const entry = notificationEntry(n);
   const Icon = ICONS[entry.icon ?? 'notifications'];
   const unread = n.read_at === null;
   const meta = notificationMeta(n);
