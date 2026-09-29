@@ -48,6 +48,7 @@ export const DOCS_PAGES = {
   notificationSelfDestruct: { page: 'guide/notifications', anchor: 'self-destruct' },
   startupChannels: { page: 'guide/notifications', anchor: 'startup-channels' },
   deliveryLog: { page: 'guide/notifications', anchor: 'delivery-log' },
+  notificationPrivacy: { page: 'guide/notifications', anchor: 'what-leaves-your-machine' },
   attentionOperator: { page: 'guide/attention', anchor: 'the-operators-side' },
   vault: { page: 'guide/vault' },
   vaultPolicies: { page: 'guide/vault', anchor: 'folder-policies' },

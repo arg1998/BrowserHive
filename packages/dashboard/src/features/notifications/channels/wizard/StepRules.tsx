@@ -10,6 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox.tsx';
 import { Input } from '@/components/ui/input.tsx';
 import { SimpleSelect } from '@/components/ui/select.tsx';
 import { ICONS } from '@/lib/icons.ts';
+import { docsUrl } from '@/lib/links.ts';
 import { cn } from '@/lib/utils.ts';
 import {
   applyPreset,
@@ -342,6 +343,17 @@ export function StepRules({ draft, onName, onRules, errors, readOnly }: StepRule
 
             <fieldset className="flex flex-col gap-3">
               <legend className="text-base font-medium">What the messages may contain</legend>
+              <p className="-mt-1 text-sm text-muted-foreground">
+                Secrets are removed at every level.{' '}
+                <a
+                  href={docsUrl('notificationPrivacy')}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-link hover:underline"
+                >
+                  What leaves your machine
+                </a>
+              </p>
               <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                 {CONTENT.map((c) => (
                   <RadioCard
