@@ -18,6 +18,7 @@ export const KIND_CATEGORY: { readonly [K in NotificationKind]: NotificationCate
   'system.degraded': 'system',
   'channel.broken': 'system',
   'digest.daily': 'reports',
+  'digest.weekly': 'reports',
   'report.anomaly': 'reports',
   test: 'system',
 };
@@ -34,6 +35,7 @@ export const KIND_SEVERITY: { readonly [K in NotificationKind]: NotificationSeve
   'system.degraded': 'error',
   'channel.broken': 'error',
   'digest.daily': 'info',
+  'digest.weekly': 'info',
   'report.anomaly': 'warn',
   test: 'info',
 };
@@ -50,6 +52,7 @@ export const KIND_LABEL: { readonly [K in NotificationKind]: string } = {
   'system.degraded': 'BrowserHive degraded',
   'channel.broken': 'Notification channel failing',
   'digest.daily': 'Daily digest',
+  'digest.weekly': 'Weekly digest',
   'report.anomaly': 'Something looks off',
   test: 'Test notification',
 };
@@ -74,6 +77,7 @@ export const KIND_TYPE: { readonly [K in NotificationKind]: NotificationType } =
   'system.degraded': 'system',
   'channel.broken': 'system',
   'digest.daily': 'lifecycle',
+  'digest.weekly': 'lifecycle',
   'report.anomaly': 'system',
   test: 'system',
 };

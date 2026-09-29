@@ -154,6 +154,7 @@ export const HTTP_ENDPOINTS: readonly HttpEndpoint[] = [
   ep('pauseChannel', 'post', '/channels/{channel_id}/pause', 'channels:write'),
   ep('resumeChannel', 'post', '/channels/{channel_id}/resume', 'channels:write'),
   ep('testChannel', 'post', '/channels/{channel_id}/test', 'channels:write'),
+  ep('sendChannelDigest', 'post', '/channels/{channel_id}/digest', 'channels:write'),
   ep('getPreferences', 'get', '/me/preferences', null),
   ep('putPreferences', 'put', '/me/preferences', 'preferences:write'),
   ep('search', 'get', '/search', 'sessions:read'),

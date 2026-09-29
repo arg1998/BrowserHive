@@ -46,6 +46,76 @@ export type QuietHours = z.infer<typeof QuietHours>;
 const PerCategory = <T extends z.ZodType>(value: T) => z.partialRecord(NotificationCategory, value);
 
 /**
+ * Whether `name` is a time zone the runtime knows (`Intl`).
+ *
+ * @returns True for a known IANA zone (or `UTC`).
+ */
+export function isValidTimeZone(name: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-GB', { timeZone: name });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Days of the week, as a weekly digest names them. */
+export const WEEKDAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
+/** A day of the week. */
+export const Weekday = z.enum(WEEKDAYS);
+/** A day of the week. */
+export type Weekday = z.infer<typeof Weekday>;
+
+/** Time a digest is sent when none is chosen. */
+export const DEFAULT_DIGEST_AT = '09:00';
+
+/**
+ * A scheduled digest (D-43): every day or every week (on `day`, default Monday) at `at`, in the
+ * channel's time zone. The report covers the period that ends at that time.
+ */
+export const DigestRule = z.object({
+  every: z.enum(['day', 'week']),
+  at: ClockTime,
+  day: Weekday.optional(),
+});
+/** A scheduled digest. */
+export type DigestRule = z.infer<typeof DigestRule>;
+
+/**
+ * The hourly anomaly checks (D-44). Each key is a threshold (or a switch); absent = its default
+ * ({@link ANOMALY_DEFAULTS}); `null` (or `false`) switches that check off.
+ */
+export const AnomalyRule = z.object({
+  /** Percent of failed tool calls in the last hour. */
+  error_rate: z.number().min(1).max(100).nullable().optional(),
+  /** Calls needed before the error rate counts. */
+  min_calls: z.number().int().min(1).max(100_000).optional(),
+  /** Minutes an attention request may wait. */
+  attention_minutes: z.number().int().min(1).max(10_080).nullable().optional(),
+  /** Blocked requests this many times the hourly average of the 24 hours before. */
+  blocked_spike: z.number().min(1.5).max(1000).nullable().optional(),
+  /** Blocked requests needed before a spike counts. */
+  blocked_min: z.number().int().min(1).max(1_000_000).optional(),
+  /** Live sessions at `maxSessions`. */
+  capacity: z.boolean().optional(),
+  /** An unresolved error-severity system event. */
+  degraded: z.boolean().optional(),
+});
+/** The anomaly checks. */
+export type AnomalyRule = z.infer<typeof AnomalyRule>;
+
+/** Thresholds used when a channel's `anomaly` rule leaves a key out (D-44). */
+export const ANOMALY_DEFAULTS = {
+  error_rate: 20,
+  min_calls: 20,
+  attention_minutes: 30,
+  blocked_spike: 3,
+  blocked_min: 50,
+  capacity: true,
+  degraded: true,
+} as const;
+
+/**
  * What a channel receives and how (`notification_channels.rules_json`). Every key is optional:
  * absent means "no restriction" or the documented default. Unknown keys are dropped on read, so a
  * newer release's rules never break an older reader.
@@ -60,6 +130,15 @@ export const NotificationChannelRules = z.object({
   /** Harness slugs (`claude-code`); absent = any. Self-reported, routing only (D-30). */
   harness: z.array(z.string().min(1).max(32)).max(32).optional(),
   quiet_hours: QuietHours.optional(),
+  /**
+   * The channel's IANA time zone for its reports and quiet hours (`quiet_hours.time_zone` still
+   * wins for quiet hours); absent = the host's zone (D-43).
+   */
+  time_zone: z.string().min(1).max(64).optional(),
+  /** A scheduled digest (D-43); absent = none. */
+  digest: DigestRule.optional(),
+  /** Hourly anomaly alerts (D-44); absent = off. */
+  anomaly: AnomalyRule.optional(),
   /** Content level; absent = `titles`. */
   content: NotificationContentLevel.optional(),
   /** Screenshots per category (D-36); absent = off. */
@@ -121,6 +200,7 @@ export const SUPPRESSION_REASONS = [
   'edit_unsupported',
   'delete_unsupported',
   'no_adapter',
+  'empty',
 ] as const;
 /** A suppression reason. */
 export type SuppressionReason = (typeof SUPPRESSION_REASONS)[number];

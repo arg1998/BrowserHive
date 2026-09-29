@@ -3067,6 +3067,7 @@
                           "system.degraded",
                           "channel.broken",
                           "digest.daily",
+                          "digest.weekly",
                           "report.anomaly",
                           "test"
                         ]
@@ -3260,6 +3261,7 @@
                           "system.degraded",
                           "channel.broken",
                           "digest.daily",
+                          "digest.weekly",
                           "report.anomaly",
                           "test"
                         ]
@@ -3501,6 +3503,102 @@
                             ],
                             "additionalProperties": false
                           },
+                          "time_zone": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 64
+                          },
+                          "digest": {
+                            "type": "object",
+                            "properties": {
+                              "every": {
+                                "type": "string",
+                                "enum": [
+                                  "day",
+                                  "week"
+                                ]
+                              },
+                              "at": {
+                                "type": "string",
+                                "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                              },
+                              "day": {
+                                "type": "string",
+                                "enum": [
+                                  "mon",
+                                  "tue",
+                                  "wed",
+                                  "thu",
+                                  "fri",
+                                  "sat",
+                                  "sun"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "every",
+                              "at"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "anomaly": {
+                            "type": "object",
+                            "properties": {
+                              "error_rate": {
+                                "anyOf": [
+                                  {
+                                    "type": "number",
+                                    "minimum": 1,
+                                    "maximum": 100
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "min_calls": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 100000
+                              },
+                              "attention_minutes": {
+                                "anyOf": [
+                                  {
+                                    "type": "integer",
+                                    "minimum": 1,
+                                    "maximum": 10080
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "blocked_spike": {
+                                "anyOf": [
+                                  {
+                                    "type": "number",
+                                    "minimum": 1.5,
+                                    "maximum": 1000
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "blocked_min": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 1000000
+                              },
+                              "capacity": {
+                                "type": "boolean"
+                              },
+                              "degraded": {
+                                "type": "boolean"
+                              }
+                            },
+                            "additionalProperties": false
+                          },
                           "content": {
                             "type": "string",
                             "enum": [
@@ -3588,6 +3686,9 @@
                               "tables": {
                                 "type": "boolean"
                               },
+                              "charts": {
+                                "type": "boolean"
+                              },
                               "images": {
                                 "type": "boolean"
                               },
@@ -3637,6 +3738,7 @@
                             "required": [
                               "rich_blocks",
                               "tables",
+                              "charts",
                               "images",
                               "act_buttons",
                               "open_links",
@@ -3811,6 +3913,148 @@
                             "type": "null"
                           }
                         ]
+                      },
+                      "reports": {
+                        "type": "object",
+                        "properties": {
+                          "time_zone": {
+                            "type": "string"
+                          },
+                          "host_zone": {
+                            "type": "boolean"
+                          },
+                          "digest": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "every": {
+                                    "type": "string",
+                                    "enum": [
+                                      "day",
+                                      "week"
+                                    ]
+                                  },
+                                  "at": {
+                                    "type": "string"
+                                  },
+                                  "day": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string",
+                                        "enum": [
+                                          "mon",
+                                          "tue",
+                                          "wed",
+                                          "thu",
+                                          "fri",
+                                          "sat",
+                                          "sun"
+                                        ]
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "next_at": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "last_until": {
+                                    "anyOf": [
+                                      {
+                                        "type": "integer",
+                                        "minimum": 0,
+                                        "maximum": 9007199254740991
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "every",
+                                  "at",
+                                  "day",
+                                  "next_at",
+                                  "last_until"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "anomaly": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "next_check_at": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "active": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "check": {
+                                          "type": "string",
+                                          "enum": [
+                                            "error_rate",
+                                            "attention",
+                                            "capacity",
+                                            "blocked",
+                                            "degraded"
+                                          ]
+                                        },
+                                        "since": {
+                                          "type": "integer",
+                                          "minimum": 0,
+                                          "maximum": 9007199254740991
+                                        },
+                                        "value": {
+                                          "type": "number"
+                                        },
+                                        "threshold": {
+                                          "type": "number"
+                                        }
+                                      },
+                                      "required": [
+                                        "check",
+                                        "since",
+                                        "value",
+                                        "threshold"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "next_check_at",
+                                  "active"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "time_zone",
+                          "host_zone",
+                          "digest",
+                          "anomaly"
+                        ],
+                        "additionalProperties": false
                       }
                     },
                     "required": [
@@ -3835,7 +4079,8 @@
                       "created_at",
                       "updated_at",
                       "stats",
-                      "connection"
+                      "connection",
+                      "reports"
                     ],
                     "additionalProperties": false
                   }
@@ -3912,6 +4157,7 @@
                               "system.degraded",
                               "channel.broken",
                               "digest.daily",
+                              "digest.weekly",
                               "report.anomaly",
                               "test"
                             ]
@@ -4021,6 +4267,62 @@
                         "type": "integer",
                         "minimum": 0,
                         "maximum": 9007199254740991
+                      },
+                      "report": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "window": {
+                                "type": "object",
+                                "properties": {
+                                  "since": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "until": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 9007199254740991
+                                  }
+                                },
+                                "required": [
+                                  "since",
+                                  "until"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "time_zone": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 64
+                              },
+                              "late": {
+                                "type": "boolean"
+                              },
+                              "skipped": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "manual": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "window",
+                              "time_zone",
+                              "late",
+                              "skipped",
+                              "manual"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       }
                     },
                     "required": [
@@ -4041,7 +4343,8 @@
                       "duration_ms",
                       "message_ref",
                       "created_at",
-                      "updated_at"
+                      "updated_at",
+                      "report"
                     ],
                     "additionalProperties": false
                   }
@@ -7266,6 +7569,7 @@
                   "system.degraded",
                   "channel.broken",
                   "digest.daily",
+                  "digest.weekly",
                   "report.anomaly",
                   "test"
                 ]
@@ -7459,6 +7763,7 @@
                   "system.degraded",
                   "channel.broken",
                   "digest.daily",
+                  "digest.weekly",
                   "report.anomaly",
                   "test"
                 ]
@@ -7700,6 +8005,102 @@
                     ],
                     "additionalProperties": false
                   },
+                  "time_zone": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "digest": {
+                    "type": "object",
+                    "properties": {
+                      "every": {
+                        "type": "string",
+                        "enum": [
+                          "day",
+                          "week"
+                        ]
+                      },
+                      "at": {
+                        "type": "string",
+                        "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                      },
+                      "day": {
+                        "type": "string",
+                        "enum": [
+                          "mon",
+                          "tue",
+                          "wed",
+                          "thu",
+                          "fri",
+                          "sat",
+                          "sun"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "every",
+                      "at"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "anomaly": {
+                    "type": "object",
+                    "properties": {
+                      "error_rate": {
+                        "anyOf": [
+                          {
+                            "type": "number",
+                            "minimum": 1,
+                            "maximum": 100
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "min_calls": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100000
+                      },
+                      "attention_minutes": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 10080
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "blocked_spike": {
+                        "anyOf": [
+                          {
+                            "type": "number",
+                            "minimum": 1.5,
+                            "maximum": 1000
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "blocked_min": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1000000
+                      },
+                      "capacity": {
+                        "type": "boolean"
+                      },
+                      "degraded": {
+                        "type": "boolean"
+                      }
+                    },
+                    "additionalProperties": false
+                  },
                   "content": {
                     "type": "string",
                     "enum": [
@@ -7787,6 +8188,9 @@
                       "tables": {
                         "type": "boolean"
                       },
+                      "charts": {
+                        "type": "boolean"
+                      },
                       "images": {
                         "type": "boolean"
                       },
@@ -7836,6 +8240,7 @@
                     "required": [
                       "rich_blocks",
                       "tables",
+                      "charts",
                       "images",
                       "act_buttons",
                       "open_links",
@@ -8010,6 +8415,148 @@
                     "type": "null"
                   }
                 ]
+              },
+              "reports": {
+                "type": "object",
+                "properties": {
+                  "time_zone": {
+                    "type": "string"
+                  },
+                  "host_zone": {
+                    "type": "boolean"
+                  },
+                  "digest": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "every": {
+                            "type": "string",
+                            "enum": [
+                              "day",
+                              "week"
+                            ]
+                          },
+                          "at": {
+                            "type": "string"
+                          },
+                          "day": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "mon",
+                                  "tue",
+                                  "wed",
+                                  "thu",
+                                  "fri",
+                                  "sat",
+                                  "sun"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "next_at": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "last_until": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "every",
+                          "at",
+                          "day",
+                          "next_at",
+                          "last_until"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "anomaly": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "next_check_at": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "active": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "check": {
+                                  "type": "string",
+                                  "enum": [
+                                    "error_rate",
+                                    "attention",
+                                    "capacity",
+                                    "blocked",
+                                    "degraded"
+                                  ]
+                                },
+                                "since": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "value": {
+                                  "type": "number"
+                                },
+                                "threshold": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "check",
+                                "since",
+                                "value",
+                                "threshold"
+                              ],
+                              "additionalProperties": false
+                            }
+                          }
+                        },
+                        "required": [
+                          "next_check_at",
+                          "active"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "time_zone",
+                  "host_zone",
+                  "digest",
+                  "anomaly"
+                ],
+                "additionalProperties": false
               }
             },
             "required": [
@@ -8034,7 +8581,8 @@
               "created_at",
               "updated_at",
               "stats",
-              "connection"
+              "connection",
+              "reports"
             ],
             "additionalProperties": false
           }
@@ -8111,6 +8659,7 @@
                       "system.degraded",
                       "channel.broken",
                       "digest.daily",
+                      "digest.weekly",
                       "report.anomaly",
                       "test"
                     ]
@@ -8220,6 +8769,62 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 9007199254740991
+              },
+              "report": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "window": {
+                        "type": "object",
+                        "properties": {
+                          "since": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "until": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "required": [
+                          "since",
+                          "until"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "time_zone": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      },
+                      "late": {
+                        "type": "boolean"
+                      },
+                      "skipped": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "manual": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "window",
+                      "time_zone",
+                      "late",
+                      "skipped",
+                      "manual"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             },
             "required": [
@@ -8240,7 +8845,8 @@
               "duration_ms",
               "message_ref",
               "created_at",
-              "updated_at"
+              "updated_at",
+              "report"
             ],
             "additionalProperties": false
           }

@@ -2,7 +2,7 @@
 
 # REST API reference
 
-The admin REST API served under `/api/v1` on the same port as MCP and the dashboard when `--admin` is on (106 operations), generated from `HTTP_ENDPOINTS` in `@browserhive/contracts/http`. Request and response schemas are in the OpenAPI 3.1 document the server serves at `/api/v1/openapi.json`, with an interactive reference UI at `/api/v1/docs`.
+The admin REST API served under `/api/v1` on the same port as MCP and the dashboard when `--admin` is on (107 operations), generated from `HTTP_ENDPOINTS` in `@browserhive/contracts/http`. Request and response schemas are in the OpenAPI 3.1 document the server serves at `/api/v1/openapi.json`, with an interactive reference UI at `/api/v1/docs`.
 
 Summaries come from `packages/contracts/generated/openapi.json`.
 
@@ -187,6 +187,7 @@ Summaries come from `packages/contracts/generated/openapi.json`.
 | POST | `/api/v1/channels/{channel_id}/pause` | `pauseChannel` | `channels:write` | cookie, bearer | Pause a channel; its pending deliveries are suppressed. |
 | POST | `/api/v1/channels/{channel_id}/resume` | `resumeChannel` | `channels:write` | cookie, bearer | Resume a paused or broken channel. |
 | POST | `/api/v1/channels/{channel_id}/test` | `testChannel` | `channels:write` | cookie, bearer | Send a real test message through the channel now; the result says why it failed. |
+| POST | `/api/v1/channels/{channel_id}/digest` | `sendChannelDigest` | `channels:write` | cookie, bearer | Preview the channel's digest of the period that ends now, or also send it now (D-43). |
 
 ## Search
 

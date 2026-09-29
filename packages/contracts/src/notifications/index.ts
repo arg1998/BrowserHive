@@ -1,7 +1,12 @@
 /** @module contracts/notifications — the notification contract (D-32): `NotificationMessage`, its taxonomy, channel rules and the published JSON Schema */
 
 export {
+  ANOMALY_DEFAULTS,
+  AnomalyRule,
   DEFAULT_CONTENT_LEVEL,
+  DEFAULT_DIGEST_AT,
+  DigestRule,
+  isValidTimeZone,
   NotificationChannelName,
   NotificationChannelRules,
   NotificationChannelSecretRefs,
@@ -12,6 +17,8 @@ export {
   StartupNotificationChannel,
   SUPPRESSION_REASONS,
   type SuppressionReason,
+  WEEKDAYS,
+  Weekday,
 } from './channel.ts';
 export { NOTIFICATION_MESSAGE_SCHEMA_ID, notificationMessageJsonSchema } from './json-schema.ts';
 export {
@@ -19,6 +26,7 @@ export {
   ActionStyle,
   Block,
   type BlockType,
+  ChartBlock,
   CodeBlock,
   DashboardPath,
   DividerBlock,
@@ -37,6 +45,7 @@ export {
   ListBlock,
   NOTIFICATION_ACTIONS_MAX,
   NOTIFICATION_BLOCKS_MAX,
+  NOTIFICATION_CHART_POINTS_MAX,
   NOTIFICATION_LABEL_MAX,
   NOTIFICATION_SCHEMA_VERSION,
   NOTIFICATION_SUMMARY_MAX,
@@ -47,6 +56,7 @@ export {
   NotificationEntities,
   NotificationMessage,
   NotificationPrivacy,
+  NotificationReport,
   OpenAction,
   QuoteBlock,
   TableBlock,
@@ -58,6 +68,9 @@ export {
   ACTION_TOKEN_LENGTH,
   ACTION_TOKEN_PREFIX,
   ACTION_TOKEN_TTL_MS,
+  ANOMALY_CHECK_TEXT,
+  ANOMALY_CHECKS,
+  type AnomalyCheck,
   AVAILABLE_CHANNEL_KINDS,
   AVAILABLE_DISCORD_MODES,
   AvailableChannelKind,
