@@ -85,16 +85,30 @@ export function actorOf(actor: PressEvent['actor']): string {
   return `${actor.platform}:${actor.id}`;
 }
 
-/** The answer text of each refusal (the presser reads it in the chat). */
+const PLATFORM_LABEL: Readonly<Record<string, string>> = {
+  telegram: 'Telegram',
+  discord: 'Discord',
+  ntfy: 'ntfy',
+};
+
+/**
+ * The answer text of each refusal. Only the presser sees it (a Telegram callback answer, an
+ * ephemeral Discord reply), so a refused presser may read their own id, to ask for access.
+ */
 function refusalText(
   outcome: Exclude<NotificationActionOutcome, 'done'>,
   press: PressEvent,
+  channelName: string | null,
 ): string {
   switch (outcome) {
-    case 'not_allowed':
-      return press.actor.id === null
-        ? 'You are not allowed to answer here.'
-        : `Not allowed: your ${press.actor.platform === 'telegram' ? 'Telegram' : 'Discord'} id ${press.actor.id} is not on this channel's allow-list.`;
+    case 'not_allowed': {
+      const where = channelName === null ? 'the channel' : `"${channelName}"`;
+      const id =
+        press.actor.id === null
+          ? ''
+          : ` Your ${PLATFORM_LABEL[press.actor.platform] ?? press.actor.platform} id is ${press.actor.id}.`;
+      return `You are not allowed to answer here yet. Ask the BrowserHive admin to add you (Notifications → Channels → ${where} → Answer from the chat).${id}`;
+    }
     case 'used':
       return 'This button was already used.';
     case 'expired':
@@ -191,7 +205,7 @@ export class NotificationActionService {
       return await this.handle(press);
     } catch (err) {
       this.log.error('press failed', { err: serializeError(err) });
-      return { outcome: 'failed', text: refusalText('failed', press), refused: true };
+      return { outcome: 'failed', text: refusalText('failed', press, null), refused: true };
     }
   }
 
@@ -216,7 +230,7 @@ export class NotificationActionService {
     const refuse = async (
       outcome: Exclude<NotificationActionOutcome, 'done' | 'failed'>,
     ): Promise<PressAnswer> => {
-      const text = refusalText(outcome, press);
+      const text = refusalText(outcome, press, channel?.name ?? null);
       await this.audit(press, token, channel, label, outcome, text, now);
       return { outcome, text, refused: true };
     };
@@ -278,11 +292,11 @@ export class NotificationActionService {
               err.code === 'NOT_FOUND')
           ) {
             outcome = 'stale';
-            text = refusalText('stale', press);
+            text = refusalText('stale', press, channel.name);
           } else {
             outcome = 'failed';
             const detail = serializeError(err).message;
-            text = `${refusalText('failed', press)} (${clip(this.scrub(detail), 120)})`;
+            text = `${refusalText('failed', press, channel.name)} (${clip(this.scrub(detail), 120)})`;
             this.log.warn('press command failed', { op: token.op, err: serializeError(err) });
           }
         }

@@ -329,6 +329,28 @@ describe('Discord gateway', () => {
     gateway.stop();
   });
 
+  it('answers a refusal ephemerally, so only the presser sees it', async () => {
+    const gateway = hub();
+    const r = recorder({
+      outcome: 'not_allowed',
+      text: 'You are not allowed to answer here yet.',
+      refused: true,
+    });
+    const stop = gateway
+      .pressSource(FAKE_DISCORD_BOT_TOKEN, FAKE_DISCORD.channelId)
+      .listen(r.handler, r.onStatus);
+    await until(() => r.statuses.includes('connected'));
+    fakes.discordPress('bh1:AAAAAAAAAAA', { userId: '500000000000000005' });
+    await until(() => fakes.of('discord-bot').some((q) => q.path.startsWith('/interactions/')));
+    expect(fakes.of('discord-bot').find((q) => q.path.startsWith('/interactions/'))?.json).toEqual({
+      type: 4,
+      data: { content: 'You are not allowed to answer here yet.', flags: 64 },
+    });
+    expect(r.presses[0]?.actor.id).toBe('500000000000000005');
+    stop();
+    gateway.stop();
+  });
+
   it('reports a refused token as offline without retrying at once', async () => {
     fakes.script('discord-bot:GET gateway', {
       status: 401,

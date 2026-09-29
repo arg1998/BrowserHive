@@ -210,7 +210,9 @@ describe('press', () => {
       actor: { platform: 'telegram', id: '7', name: 'Stranger' },
     });
     expect(answer.outcome).toBe('not_allowed');
-    expect(answer.text).toContain('7');
+    expect(answer.text).toBe(
+      'You are not allowed to answer here yet. Ask the BrowserHive admin to add you (Notifications → Channels → "phone" → Answer from the chat). Your Telegram id is 7.',
+    );
     expect(t.repos.notificationActions.rows[0]).toMatchObject({
       actor: 'telegram:7',
       outcome: 'not_allowed',
