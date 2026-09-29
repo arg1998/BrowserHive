@@ -2,9 +2,11 @@
 
 import { createRequire } from 'node:module';
 import { listBackups } from '@browserhive/core/persistence';
-import { serializeError } from '@browserhive/core/runtime';
+import { createProcessTreeReader, type Logger, serializeError } from '@browserhive/core/runtime';
 import { pinnedPlaywrightVersion, SystemStatusService } from '@browserhive/core/server';
+import { startBrowserMemorySampler } from '../adapters/browser-memory.ts';
 import { wireMetrics } from '../adapters/metrics.ts';
+import { createTimers } from '../adapters/timers.ts';
 import { type BootContext, part } from '../context.ts';
 import type { PhaseHandle } from '../unwind.ts';
 
@@ -20,6 +22,43 @@ export function patchrightVersion(): string | null {
     // Optional dependency absent.
   }
   return null;
+}
+
+/**
+ * The OTel metrics consumers and the browser-memory sampler (spec 10 §7); only called with
+ * telemetry on, so with `--otel` off nothing is subscribed, sampled or timed.
+ */
+function wireMetricsFor(ctx: BootContext, logger: Logger): () => void {
+  const { telemetry } = part(ctx.observability, 'observability');
+  const storage = part(ctx.storage, 'storage');
+  const domain = part(ctx.domain, 'domain');
+  const report = (err: unknown) =>
+    logger.warn('metrics sampler failed', { err: serializeError(err) });
+  const sampler = startBrowserMemorySampler({
+    sessions: () =>
+      domain.sessions.listAll().map((session) => {
+        const handle = session.handle;
+        return {
+          id: session.id,
+          ...(handle?.browserPid !== undefined && {
+            browserPid: () => handle.browserPid?.() ?? Promise.resolve(null),
+          }),
+        };
+      }),
+    reader: createProcessTreeReader(),
+    repeat: createTimers(report).every,
+    onError: report,
+  });
+  const unwire = wireMetrics(telemetry.instruments, domain.bus, {
+    queue: storage.queue,
+    analytics: storage.analytics,
+    realtime: () => ctx.listeners?.realtime,
+    browserMemory: () => sampler.latest(),
+  });
+  return () => {
+    unwire();
+    sampler.stop();
+  };
 }
 
 /** Phase `wire-observers`. */
@@ -116,12 +155,7 @@ export async function wireObserversPhase(ctx: BootContext): Promise<PhaseHandle>
     .refreshLastBackup()
     .catch((err: unknown) => logger.warn('backup scan failed', { err: serializeError(err) }));
   domain.sweeper.start();
-  const unwireMetrics = telemetry.enabled
-    ? wireMetrics(telemetry.instruments, domain.bus, {
-        queue: storage.queue,
-        analytics: storage.analytics,
-      })
-    : () => undefined;
+  const unwireMetrics = telemetry.enabled ? wireMetricsFor(ctx, logger) : () => undefined;
   ctx.observers = { status };
 
   return {

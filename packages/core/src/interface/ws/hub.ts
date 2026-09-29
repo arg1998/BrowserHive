@@ -57,10 +57,19 @@ export interface RealtimeHubDeps {
   readonly degradations?: DegradationReporter;
 }
 
+/** Where a frame was dropped (spec 10 §7 `browserhive.ws.frames_dropped{channel}`). */
+export type DroppedFrameChannel = 'screencast' | 'logs' | 'feed';
+
 /** The realtime hub. One instance per process. */
 export class RealtimeHub implements HubCommandHost {
   readonly liveView: LiveViewPort;
   private readonly conns = new Set<WsConnection>();
+  /** Frames dropped since start, by channel (plain counters; read by the metrics at export). */
+  private readonly dropped: Record<DroppedFrameChannel, number> = {
+    screencast: 0,
+    logs: 0,
+    feed: 0,
+  };
   private readonly feed: FeedBuffer;
   private readonly limits: HubLimits;
   private readonly log: Logger;
@@ -160,7 +169,10 @@ export class RealtimeHub implements HubCommandHost {
     const text = eventFrame(this.feed.head, this.now(), 'logs', { type: 'log.record', record });
     for (const conn of this.conns) {
       if (!conn.topics.has('logs') || !matchesLogFilter(conn, entry)) continue;
-      if (conn.socket.bufferedAmount() > this.limits.screencastDropBytes) continue;
+      if (conn.socket.bufferedAmount() > this.limits.screencastDropBytes) {
+        this.dropped.logs += 1;
+        continue;
+      }
       conn.send(text);
     }
   }
@@ -208,6 +220,11 @@ export class RealtimeHub implements HubCommandHost {
       dropped_frames: c.droppedFrames,
       messages_out: c.messagesOut,
     }));
+  }
+
+  /** Frames dropped since start, by channel: running totals across every connection. */
+  droppedFrames(): Readonly<Record<DroppedFrameChannel, number>> {
+    return { ...this.dropped };
   }
 
   /** Sessions currently screencasting. */
@@ -298,7 +315,10 @@ export class RealtimeHub implements HubCommandHost {
     bytes.set(header, 0);
     bytes.set(jpeg, header.byteLength);
     if (conn.congested || conn.socket.bufferedAmount() > this.limits.screencastDropBytes) {
-      if (sub.pending !== undefined) conn.droppedFrames += 1;
+      if (sub.pending !== undefined) {
+        conn.droppedFrames += 1;
+        this.dropped.screencast += 1;
+      }
       sub.pending = bytes;
       return;
     }
@@ -309,7 +329,10 @@ export class RealtimeHub implements HubCommandHost {
 
   private writeFrame(conn: WsConnection, bytes: Uint8Array<ArrayBuffer>): void {
     const status = conn.send(bytes);
-    if (status === 0) conn.droppedFrames += 1;
+    if (status === 0) {
+      conn.droppedFrames += 1;
+      this.dropped.screencast += 1;
+    }
     if (status <= 0) conn.congested = true;
   }
 
@@ -318,6 +341,7 @@ export class RealtimeHub implements HubCommandHost {
     if (status === 0) {
       // Bun dropped the frame: the feed must never lose events, so the client reconnects and
       // replays from its cursor.
+      this.dropped.feed += 1;
       this.overloaded(conn);
       return;
     }

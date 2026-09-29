@@ -208,6 +208,11 @@ export interface SessionHandle {
   onCrash(listener: (reason: string) => void): () => void;
   /** Closes everything within `deadlineMs`; never throws (findings become warnings). */
   close(deadlineMs: number, signal?: AbortSignal): Promise<readonly LaunchWarning[]>;
+  /**
+   * The OS pid of the browser's main process (the root of its process tree), read once and cached;
+   * `null` when it cannot be read. Only the browser-memory metric asks (spec 10 §7). Absent in fakes.
+   */
+  browserPid?(): Promise<number | null>;
 }
 
 /** Strategy for spawning a new isolated browser session (spec 01 §9 engine seam). */

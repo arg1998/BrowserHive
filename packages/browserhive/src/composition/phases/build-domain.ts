@@ -24,6 +24,7 @@ import {
   createPlaywrightPageActions,
   InProcessEventBus,
 } from '@browserhive/core/server';
+import { notificationCounters } from '../adapters/metrics.ts';
 import { asyncTick, createTimers } from '../adapters/timers.ts';
 import { createAuthStack } from '../auth-stack.ts';
 import { type BootContext, part, type SeedNotice } from '../context.ts';
@@ -177,6 +178,8 @@ async function buildDomain(
     },
   });
   const ops = buildOps({
+    // `browserhive.notifications.*` (spec 10 §7): no-ops unless telemetry is on.
+    ...notificationCounters(telemetry.instruments),
     config,
     repos,
     queue: storage.queue,
@@ -193,7 +196,6 @@ async function buildDomain(
     env: ctx.input.env,
     registerSecret: (literal) => secrets.add(literal),
     dashboardUrl: () => ctx.listeners?.url ?? `http://${config.host}:${config.port}`,
-    deliveryCounter: telemetry.instruments.notificationDeliveries,
     channelFactories: channelFactories({
       images,
       telegramUpdates,
@@ -205,14 +207,12 @@ async function buildDomain(
     telegram: createTelegramSetup({ updates: telegramUpdates }),
     discord: createDiscordSetup({ gateway: discordGateway }),
     actionExecutors,
-    actionCounter: telemetry.instruments.notificationActions,
     probe: createUrlProbe(),
     instanceId,
     capacity: () => {
       const status = sessions.serverStatus();
       return { live: status.count, max: status.limit ?? 0 };
     },
-    reportCounter: telemetry.instruments.notificationReports,
     snapshots: createNotificationSnapshots({
       sessions,
       screenshots: repos.screenshots,

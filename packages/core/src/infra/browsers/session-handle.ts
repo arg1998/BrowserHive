@@ -52,6 +52,7 @@ export class PlaywrightSessionHandle implements SessionHandle {
   private readonly crashListeners = new Set<(reason: string) => void>();
   private closing = false;
   private closed: Promise<readonly LaunchWarning[]> | undefined;
+  private pid: Promise<number | null> | undefined;
 
   constructor(input: SessionHandleInput) {
     this.sessionId = input.sessionId;
@@ -149,6 +150,32 @@ export class PlaywrightSessionHandle implements SessionHandle {
       deadline.clear();
     }
     return warnings;
+  }
+
+  /**
+   * The browser's main process id, from a browser-level DevTools session opened once
+   * (`SystemInfo.getProcessInfo`); no page target is touched. Cached, including a `null`.
+   */
+  browserPid(): Promise<number | null> {
+    this.pid ??= this.readBrowserPid();
+    return this.pid;
+  }
+
+  private async readBrowserPid(): Promise<number | null> {
+    const browser = this.browser ?? this.context.browser();
+    if (browser === null || this.closing) return null;
+    try {
+      const cdp = await browser.newBrowserCDPSession();
+      try {
+        const info = await cdp.send('SystemInfo.getProcessInfo');
+        return info.processInfo.find((p) => p.type === 'browser')?.id ?? null;
+      } finally {
+        await cdp.detach().catch(() => undefined);
+      }
+    } catch (err) {
+      this.logger.debug('browser pid unavailable', { err: serializeError(err) });
+      return null;
+    }
   }
 
   /** Last resort on overrun: the process, not the protocol, is what holds the resources. */

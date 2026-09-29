@@ -21,6 +21,11 @@ export interface WriteQueue {
   readonly depth: number;
   /** Writes refused or failed since start (`dropped_writes_total`). */
   readonly droppedWrites: number;
+  /**
+   * {@link droppedWrites} split by table: the part of each dropped write's `operation` before the
+   * first `.` (`tool_calls.insert` → `tool_calls`). Only tables that lost a write appear.
+   */
+  readonly droppedWritesByTable: ReadonlyMap<string, number>;
   /** Drains and refuses further writes. Idempotent. */
   close(): Promise<void>;
 }

@@ -35,6 +35,7 @@ export class SqliteWriteQueue implements WriteQueue {
   #scheduled = false;
   #closed = false;
   #dropped = 0;
+  readonly #droppedByTable = new Map<string, number>();
 
   constructor(options: WriteQueueOptions) {
     this.#uow = options.uow;
@@ -51,9 +52,13 @@ export class SqliteWriteQueue implements WriteQueue {
     return this.#dropped;
   }
 
+  get droppedWritesByTable(): ReadonlyMap<string, number> {
+    return this.#droppedByTable;
+  }
+
   enqueue(operation: string, job: WriteJob): boolean {
     if (this.#closed || this.#queue.length >= this.#maxDepth) {
-      this.#dropped += 1;
+      this.#drop(operation, 1);
       this.#logger.warn('write dropped', { operation, reason: this.#closed ? 'closed' : 'full' });
       return false;
     }
@@ -93,7 +98,7 @@ export class SqliteWriteQueue implements WriteQueue {
               try {
                 await item.job(repos);
               } catch (error) {
-                this.#dropped += 1;
+                this.#drop(item.operation, 1);
                 this.#logger.error('write failed', {
                   operation: item.operation,
                   error: String(error),
@@ -103,11 +108,17 @@ export class SqliteWriteQueue implements WriteQueue {
           });
         } catch (error) {
           // The transaction itself failed (lock timeout, I/O): every job of the batch is lost.
-          this.#dropped += batch.length;
+          for (const item of batch) this.#drop(item.operation, 1);
           this.#logger.error('drain failed', { jobs: batch.length, error: String(error) });
         }
       },
     );
+  }
+
+  #drop(operation: string, count: number): void {
+    this.#dropped += count;
+    const table = operation.split('.', 1)[0] || 'unknown';
+    this.#droppedByTable.set(table, (this.#droppedByTable.get(table) ?? 0) + count);
   }
 
   async close(): Promise<void> {

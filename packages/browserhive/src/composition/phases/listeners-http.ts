@@ -34,6 +34,7 @@ import {
   notificationsPort,
   preferencesPort,
 } from '../adapters/http-ports.ts';
+import { realtimeMetrics } from '../adapters/metrics.ts';
 import { createTimers } from '../adapters/timers.ts';
 import { type BootContext, part } from '../context.ts';
 import { resolveDashboardDir } from '../dashboard-dir.ts';
@@ -297,6 +298,7 @@ export async function openHttpListener(
     realtime: {
       connections: () => realtime.hub.connections().length,
       activeScreencasts: () => realtime.hub.activeScreencasts(),
+      ...realtimeMetrics(realtime.hub),
     },
   };
   log.info('listening', { url });
