@@ -119,3 +119,125 @@ export interface NotificationChannel {
   /** Deletes a sent message. Required when `capabilities.delete`. */
   delete?(ref: PlatformMessageRef): Promise<void>;
 }
+
+/**
+ * One platform request a renderer produced (spec 03 §9.5). `path` never holds a secret: a secret
+ * parameter appears as `{secret:<param>}` (`{secret:webhook}/messages/123`), which the transport
+ * substitutes with the value and the preview with the variable's name. Shaped like the contract's
+ * `PlatformRequest`, so the preview returns it as-is.
+ */
+export interface RenderedRequest {
+  /** `POST`, `PUT`, `PATCH`, `DELETE`. */
+  readonly method: string;
+  /** Platform method (`sendPhoto`) or path relative to the platform base (`/bh-alerts`). */
+  readonly path: string;
+  readonly encoding: 'json' | 'multipart' | 'binary';
+  /** JSON body, or the non-file fields of a multipart/binary request. */
+  readonly body: Readonly<Record<string, unknown>>;
+  /** Content headers (ntfy `X-*`); never credentials. */
+  readonly headers: Readonly<Record<string, string>>;
+  /** The attached image, if any: the `image` block's `ref` and how it is named on the wire. */
+  readonly file: {
+    readonly ref: string;
+    readonly name: string;
+    readonly content_type: string;
+  } | null;
+}
+
+/** What a renderer knows about the channel and the call beyond the delivery. */
+export interface RenderContext {
+  /** Discord `webhook`/`bot`; `null` elsewhere. */
+  readonly mode: string | null;
+  /** The channel's non-secret coordinates (chat id, topic, server). */
+  readonly target: Readonly<Record<string, string>>;
+  readonly op: 'send' | 'edit';
+  /** The message being edited (`op = edit`). */
+  readonly ref: PlatformMessageRef | null;
+  /**
+   * The payload an act button carries (`bh1:<token>`, N2) where the capabilities allow act
+   * buttons; the preview passes a placeholder.
+   */
+  readonly actToken: (actionId: string) => string;
+}
+
+/**
+ * The pure half of a platform adapter: the contract in, the platform request(s) out (spec 03 §9.5).
+ * The same renderer serves the transport and `POST /channels/preview`, so a preview is exactly
+ * what a send makes.
+ */
+export interface ChannelRenderer {
+  readonly kind: string;
+  /** What this platform renders in `mode`. */
+  capabilities(mode: string | null): ChannelCapabilities;
+  /** The request(s) for one send or edit, in order. Throws only on a programming error. */
+  render(delivery: ChannelDelivery, context: RenderContext): readonly RenderedRequest[];
+}
+
+/** A stored notification screenshot (D-36). */
+export interface NotificationImage {
+  readonly bytes: Uint8Array;
+  readonly contentType: string;
+  /** Wire file name (`screenshot.jpg`). */
+  readonly filename: string;
+}
+
+/** Resolves an `image` block's `ref` to bytes; adapters never read the database or the disk. */
+export interface NotificationImageReader {
+  /** The image, or `null` when it is gone (pruned, or never stored). */
+  read(ref: string): Promise<NotificationImage | null>;
+}
+
+/** Stores notification screenshots (`<dataDir>/notifications/images/`, 0600) and prunes them. */
+export interface NotificationImageStore extends NotificationImageReader {
+  /** Stores bytes and returns their opaque ref. */
+  put(image: NotificationImage): Promise<string>;
+  /** Deletes images older than `olderThan` (epoch ms). */
+  prune(olderThan: number): Promise<number>;
+}
+
+/** Who pressed `/start <code>` and where (the Telegram connect flow, spec 03 §4.8.1). */
+export interface TelegramStart {
+  readonly chat: {
+    readonly id: string;
+    readonly title: string;
+    readonly type: string;
+    readonly threadId: string | null;
+  };
+  readonly user: { readonly id: string; readonly name: string } | null;
+}
+
+/**
+ * The Telegram setup calls: the bot's identity and the one-time `/start <code>` wait. Setup-only
+ * long polling; the persistent callback loop of act buttons is N2's.
+ */
+export interface TelegramSetup {
+  /** `getMe`: the bot's username. Throws a `ChannelSendError` (`auth` for a refused token). */
+  botUsername(token: string): Promise<string>;
+  /**
+   * Long-polls `getUpdates` until a message `/start <code>` arrives (private chat or group), the
+   * signal aborts, or `deadline` (epoch ms) passes. Updates it reads are acknowledged.
+   *
+   * @returns The chat and the sender, or `null` on timeout/abort.
+   */
+  waitForStart(
+    token: string,
+    code: string,
+    options: { readonly signal: AbortSignal; readonly deadline: number },
+  ): Promise<TelegramStart | null>;
+}
+
+/** Outcome of one HTTP probe of `<publicUrl>/health` (spec 08 §5.8). */
+export type UrlProbeResult =
+  | {
+      readonly kind: 'response';
+      readonly status: number;
+      readonly contentType: string | null;
+      /** Where a 3xx pointed. */
+      readonly location: string | null;
+      /** At most 64 KiB of the body. */
+      readonly body: string;
+    }
+  | { readonly kind: 'error'; readonly detail: string };
+
+/** Fetches a URL once without following redirects (the `publicUrl` check). */
+export type UrlProbe = (url: string, timeoutMs: number) => Promise<UrlProbeResult>;
