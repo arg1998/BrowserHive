@@ -9,11 +9,16 @@ import { configView } from '../../src/app/config/provenance-view.ts';
 import { resolveOk } from '../../src/app/config/test-support.ts';
 import { InProcessEventBus } from '../../src/app/events/bus.ts';
 import type { DomainEvents } from '../../src/app/events/catalog.ts';
+import { ChannelRegistry } from '../../src/app/notifications/channel-registry.ts';
+import { ChannelService } from '../../src/app/notifications/channel-service.ts';
+import { createLocalLinkBuilder } from '../../src/app/notifications/links.ts';
+import { PublicUrlChecker } from '../../src/app/notifications/public-url.ts';
 import { sessionDirLayout } from '../../src/app/sessions/profile-dir.ts';
 import { SessionService } from '../../src/app/sessions/session-service.ts';
 import { FakeSessionDirFs, testConfig } from '../../src/app/sessions/test-support.ts';
 import { VaultService } from '../../src/app/vault/vault-service.ts';
 import { OperatorRequestBroker } from '../../src/domain/operator-requests/broker.ts';
+import { CHANNEL_RENDERERS, channelFactories } from '../../src/infra/notifications/index.ts';
 import { createHttpApp, type HttpApp } from '../../src/interface/http/app.ts';
 import type { HttpServices } from '../../src/interface/http/services.ts';
 import type { StaticAssets } from '../../src/ports/static-assets.ts';
@@ -36,9 +41,12 @@ import {
   SYSTEM_FACTS,
 } from './http-fakes.ts';
 import { SYSTEM_INFO, seedDataset } from './http-fixtures.ts';
-import { InMemoryRepositories } from './in-memory-repos.ts';
+import { InMemoryRepositories, InMemoryUnitOfWork } from './in-memory-repos.ts';
 import { createVaultRepos } from './in-memory-vault-repos.ts';
 import { RecordingEventBus } from './recording-event-bus.ts';
+
+/** Environment the channel service sees in the HTTP suites (names only matter). */
+export const CHANNEL_ENV: Readonly<Record<string, string>> = { BH_TELEGRAM_TOKEN: 'a'.repeat(40) };
 
 /** Operator password used by every suite. */
 export const PASSWORD = 'correct horse battery';
@@ -131,6 +139,42 @@ export async function createHttpKit(options: HttpKitOptions = {}) {
   const blocklist = fakeBlocklist();
   const idempotency = fakeIdempotency();
   const config = resolveOk();
+  const channelRegistry = new ChannelRegistry({
+    repo: repos.notificationChannels,
+    clock,
+    ids: auth.ids,
+    logger,
+    env: (name) => CHANNEL_ENV[name],
+    factories: channelFactories({
+      images: { read: async () => null },
+      fetch: async () => new Response('{}', { status: 200 }),
+    }),
+  });
+  await channelRegistry.load();
+  const channels = new ChannelService({
+    repos,
+    uow: new InMemoryUnitOfWork(repos),
+    registry: channelRegistry,
+    renderers: CHANNEL_RENDERERS,
+    links: createLocalLinkBuilder(() => 'http://127.0.0.1:9876'),
+    clock,
+    ids: auth.ids,
+    logger,
+    bus: events,
+    env: (name) => CHANNEL_ENV[name],
+    schedule: () => undefined,
+    telegram: {
+      botUsername: async () => 'bh_test_bot',
+      waitForStart: async () => null,
+    },
+  });
+  const publicUrl = new PublicUrlChecker({
+    publicUrl: undefined,
+    localUrl: () => 'http://127.0.0.1:9876',
+    instanceId: 'test-instance',
+    probe: async () => ({ kind: 'error', detail: 'no network in tests' }),
+    clock,
+  });
   const services: HttpServices = {
     sessions,
     repos: { ...repos, operatorActions: vaultRepos.actions },
@@ -158,6 +202,8 @@ export async function createHttpKit(options: HttpKitOptions = {}) {
     events,
     ids: auth.ids,
     traceViewerAvailable: true,
+    channels,
+    publicUrl,
   };
   if (options.seed !== false) await seedDataset(repos, vaultRepos, files, sessionDirs);
   const http: HttpApp = createHttpApp({

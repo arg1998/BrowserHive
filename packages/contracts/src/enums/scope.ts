@@ -18,6 +18,8 @@ export const Scope = z.enum([
   'logs:read',
   'notifications:read',
   'notifications:write',
+  'channels:read',
+  'channels:write',
   'preferences:write',
   'mcp:tools',
 ]);

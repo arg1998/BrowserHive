@@ -31,6 +31,11 @@ export type ChannelAdapterFactory = (
 /** A channel with its adapter (`null` when no factory exists for its kind or the factory failed). */
 export interface RegisteredChannel extends RoutableChannel {
   readonly adapter: NotificationChannel | null;
+  /**
+   * Why there is no adapter (no factory for the kind, or the factory's error such as an unset
+   * variable); `null` with an adapter. Never contains a secret value (factories name variables).
+   */
+  readonly problem: string | null;
 }
 
 /** Dependencies of {@link ChannelRegistry}. */
@@ -82,6 +87,7 @@ export class ChannelRegistry {
           },
           {
             message: `notification channel '${spec.name}' is defined by --notificationChannel and in the dashboard. Rename one of them.`,
+            publicMessage: `notification channel '${spec.name}' is defined by --notificationChannel and in the dashboard. Rename one of them.`,
           },
         );
       }
@@ -158,7 +164,9 @@ export class ChannelRegistry {
 
   private build(record: NotificationChannelRecord): Omit<RegisteredChannel, 'record'> {
     const factory = this.deps.factories?.get(record.kind);
-    if (factory === undefined) return { adapter: null, capabilities: null };
+    if (factory === undefined) {
+      return { adapter: null, capabilities: null, problem: `no adapter for '${record.kind}'` };
+    }
     const context: ChannelFactoryContext = {
       secret: (envName) => {
         const value = this.deps.env?.(envName);
@@ -169,10 +177,11 @@ export class ChannelRegistry {
     };
     try {
       const adapter = factory(record, context);
-      return { adapter, capabilities: adapter.capabilities };
+      return { adapter, capabilities: adapter.capabilities, problem: null };
     } catch (err) {
+      const problem = serializeError(err).message;
       this.log.warn('channel adapter failed', { channel: record.name, err: serializeError(err) });
-      return { adapter: null, capabilities: null };
+      return { adapter: null, capabilities: null, problem };
     }
   }
 }

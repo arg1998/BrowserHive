@@ -18,6 +18,7 @@ import {
   EpochMs,
   listQuery,
   page,
+  QueryBool as QueryBoolFlag,
   QueryInt,
   sortable,
 } from './common.ts';
@@ -169,6 +170,35 @@ export const SystemInfo = z.object({
 });
 /** `GET /system` body. */
 export type SystemInfo = z.infer<typeof SystemInfo>;
+
+/** Outcome of the `publicUrl` check (spec 08 §5.8). */
+export const PublicUrlOutcome = z.enum(['ok', 'elsewhere', 'login', 'unreachable', 'unset']);
+/** Outcome of the `publicUrl` check. */
+export type PublicUrlOutcome = z.infer<typeof PublicUrlOutcome>;
+
+/** `GET /system/public-url` query. */
+export const PublicUrlQuery = z.strictObject({ refresh: QueryBoolFlag.optional() });
+
+/** `GET /system/public-url` body (D-37). */
+export const PublicUrlStatus = z.object({
+  configured: z.boolean(),
+  /** The `publicUrl` value, or `null` when unset. */
+  url: z.string().nullable(),
+  /** Where links point without `publicUrl`: the local listener. */
+  local_url: z.string(),
+  /** The `publicUrl` host is in the `Host` allow-list and its origin passes the origin guard. */
+  host_trusted: z.boolean(),
+  outcome: PublicUrlOutcome,
+  /** One sentence about the outcome. */
+  detail: z.string(),
+  /** HTTP status of `<publicUrl>/health`, when there was an answer. */
+  status_code: z.number().int().nullable(),
+  checked_at: EpochMs.nullable(),
+  /** `http:` on a host that is not loopback. */
+  insecure: z.boolean(),
+});
+/** `GET /system/public-url` body. */
+export type PublicUrlStatus = z.infer<typeof PublicUrlStatus>;
 
 /** Redaction marker used for secret config values. */
 export const REDACTED = '[REDACTED]';

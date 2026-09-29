@@ -5,15 +5,16 @@ USAGE
   browserhive <command> [flags]
 
 COMMANDS
-  serve    Start the MCP server (default)
-  init     Install browsers and prepare the data directory
-  doctor   Check the host, browsers, and configuration
-  purge    Delete local state after an inventory and confirmation
-  config   Show, validate, or export the configuration schema
-  db       Inspect, back up, restore, or migrate the database
-  admin    Administrative actions (reset-password, tokens)
-  version  Print version information
-  help     Show help for a command
+  serve     Start the MCP server (default)
+  init      Install browsers and prepare the data directory
+  doctor    Check the host, browsers, and configuration
+  purge     Delete local state after an inventory and confirmation
+  config    Show, validate, or export the configuration schema
+  db        Inspect, back up, restore, or migrate the database
+  admin     Administrative actions (reset-password, tokens)
+  channels  List, test and preview notification channels
+  version   Print version information
+  help      Show help for a command
 
 GLOBAL FLAGS
   -h, --help     Show help.
@@ -39,6 +40,9 @@ FLAGS — server
   --allowedHosts <a,b,...>          Extra Host names to accept besides loopback and the bound host,
                                     such as the name a reverse proxy forwards. Ports are ignored.
                                     default: none
+  --publicUrl <url>                 Address where you made the dashboard reachable (reverse proxy,
+                                    tunnel, Tailscale name). Notification links use it, and its host
+                                    is trusted like allowedHosts.
   --admin                           Enable the dashboard, REST API, WebSocket and trace viewer (http
                                     only). default: false
   --dataDir <path>                  Data directory (database, sessions, auth states, uploads,
@@ -137,6 +141,12 @@ FLAGS — telemetry
   --otelVerbose                     Also export db.query and cdp.command spans. default: false
   --otelTraceUrlTemplate <text>     Dashboard deep-link template for a trace; {trace_id} is
                                     substituted. Used only by the dashboard.
+
+FLAGS — notifications (flag only)
+  --notificationChannel <kind:params>
+                                    Declare a notification channel for this run (repeatable; secrets
+                                    as env:NAME), e.g.
+                                    "telegram:name=phone,token=env:BH_TG_TOKEN,chat=123456".
 
 Precedence: defaults < environment < browserhive.config.json < flags (rightmost wins).
 References: a config-file value may contain {env:NAME} or {env:NAME:-default}.

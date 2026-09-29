@@ -51,7 +51,7 @@ describe('scopes', () => {
     expect(scopesForKind('operator')).toBe(OPERATOR_SCOPES);
     expect(scopesForKind('agent')).toBe(AGENT_SCOPES);
     expect(scopesForKind('service')).toEqual([]);
-    expect(OPERATOR_SCOPES).toHaveLength(17);
+    expect(OPERATOR_SCOPES).toHaveLength(19);
   });
 
   it('parseScopes drops unknown values and keeps registry order', () => {

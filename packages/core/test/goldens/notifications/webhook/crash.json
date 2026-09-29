@@ -1,0 +1,95 @@
+{
+  "kind": "webhook",
+  "variant": "crash",
+  "mode": null,
+  "requests": [
+    {
+      "method": "POST",
+      "path": "https://hooks.example.net/bh",
+      "encoding": "json",
+      "body": {
+        "schema": 1,
+        "event": "notification",
+        "op": "send",
+        "delivered_at": 1790000000000,
+        "channel": null,
+        "links": {
+          "open-session": "https://bh.example.net/sessions/checkout-a1b2c3d4"
+        },
+        "local_links": false,
+        "message": {
+          "schema": 1,
+          "id": "n-sample000001",
+          "revision": 1,
+          "thread": "session:checkout-a1b2c3d4",
+          "kind": "session.crashed",
+          "category": "problems",
+          "severity": "error",
+          "state": "final",
+          "alert": true,
+          "at": {
+            "created": 1790000000000,
+            "updated": 1790000000000
+          },
+          "title": "Session crashed",
+          "summary": "reason: crash",
+          "blocks": [
+            {
+              "type": "fields",
+              "items": [
+                {
+                  "label": "Session",
+                  "value": [
+                    {
+                      "type": "link",
+                      "text": "checkout",
+                      "path": "/sessions/checkout-a1b2c3d4"
+                    }
+                  ]
+                },
+                {
+                  "label": "Reason",
+                  "value": [
+                    {
+                      "type": "code",
+                      "text": "crash"
+                    }
+                  ]
+                },
+                {
+                  "label": "Closed",
+                  "value": [
+                    {
+                      "type": "time",
+                      "at": 1790000000000,
+                      "style": "absolute"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "kind": "open",
+              "id": "open-session",
+              "label": "Open session",
+              "style": "primary",
+              "path": "/sessions/checkout-a1b2c3d4"
+            }
+          ],
+          "entities": {
+            "session_id": "checkout-a1b2c3d4",
+            "session_slug": "checkout"
+          },
+          "privacy": {
+            "level": "full",
+            "has_image": false
+          }
+        }
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}

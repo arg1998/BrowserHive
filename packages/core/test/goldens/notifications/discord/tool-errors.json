@@ -1,0 +1,67 @@
+{
+  "kind": "discord",
+  "variant": "tool-errors",
+  "mode": "webhook",
+  "requests": [
+    {
+      "method": "POST",
+      "path": "{secret:webhook}?wait=true&with_components=true",
+      "encoding": "json",
+      "body": {
+        "content": null,
+        "allowed_mentions": {
+          "parse": []
+        },
+        "components": [
+          {
+            "type": 1,
+            "components": [
+              {
+                "type": 2,
+                "style": 5,
+                "label": "Open errors",
+                "url": "https://bh.example.net/sessions/checkout-a1b2c3d4?kinds=tool&errors_only=1"
+              }
+            ]
+          }
+        ],
+        "embeds": [
+          {
+            "title": "⚠️ checkout · 3 tool errors",
+            "description": "navigate · NAVIGATION\\_TIMEOUT \\(30000 ms\\)",
+            "url": "https://bh.example.net/sessions/checkout-a1b2c3d4?kinds=tool&errors_only=1",
+            "color": 16096779,
+            "fields": [
+              {
+                "name": "Session",
+                "value": "[checkout](https://bh.example.net/sessions/checkout-a1b2c3d4)",
+                "inline": true
+              },
+              {
+                "name": "Errors",
+                "value": "3",
+                "inline": true
+              },
+              {
+                "name": "Latest",
+                "value": "`navigate · NAVIGATION_TIMEOUT`",
+                "inline": true
+              },
+              {
+                "name": "Duration",
+                "value": "30 s",
+                "inline": true
+              }
+            ],
+            "footer": {
+              "text": "BrowserHive"
+            },
+            "timestamp": "2026-09-21T14:14:00.000Z"
+          }
+        ]
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}

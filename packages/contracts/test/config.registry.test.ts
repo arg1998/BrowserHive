@@ -24,6 +24,7 @@ const SPEC_KEYS = [
   'allowInsecureBind',
   'trustedProxies',
   'allowedHosts',
+  'publicUrl',
   'admin',
   'dataDir',
   'shutdownTimeout',

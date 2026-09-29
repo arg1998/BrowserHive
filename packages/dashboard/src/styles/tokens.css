@@ -153,6 +153,42 @@
   --color-accent-solid: var(--primary);
   --color-accent-text: var(--accent-text);
   --color-accent-on-solid: var(--primary-foreground);
+
+  /* Notification platforms (marks and the preview mocks; our own palette, never platform assets) */
+  --color-platform-telegram: var(--platform-telegram);
+  --color-platform-telegram-bg: var(--platform-telegram-bg);
+  --color-platform-discord: var(--platform-discord);
+  --color-platform-discord-bg: var(--platform-discord-bg);
+  --color-platform-ntfy: var(--platform-ntfy);
+  --color-platform-ntfy-bg: var(--platform-ntfy-bg);
+  --color-platform-webhook: var(--platform-webhook);
+  --color-platform-webhook-bg: var(--platform-webhook-bg);
+  --color-tg-wall: var(--tg-wall);
+  --color-tg-wall-2: var(--tg-wall-2);
+  --color-tg-bubble: var(--tg-bubble);
+  --color-tg-text: var(--tg-text);
+  --color-tg-muted: var(--tg-muted);
+  --color-tg-link: var(--tg-link);
+  --color-tg-quote: var(--tg-quote);
+  --color-tg-key: var(--tg-key);
+  --color-tg-key-text: var(--tg-key-text);
+  --color-dc-bg: var(--dc-bg);
+  --color-dc-embed: var(--dc-embed);
+  --color-dc-text: var(--dc-text);
+  --color-dc-muted: var(--dc-muted);
+  --color-dc-heading: var(--dc-heading);
+  --color-dc-link: var(--dc-link);
+  --color-dc-button: var(--dc-button);
+  --color-dc-button-text: var(--dc-button-text);
+  --color-dc-primary: var(--dc-primary);
+  --color-dc-danger: var(--dc-danger);
+  --color-dc-success: var(--dc-success);
+  --color-nt-shade: var(--nt-shade);
+  --color-nt-card: var(--nt-card);
+  --color-nt-text: var(--nt-text);
+  --color-nt-muted: var(--nt-muted);
+  --color-nt-accent: var(--nt-accent);
+  --color-nt-chip: var(--nt-chip);
 }
 
 /* Keyframes referenced by the --animate-* theme keys */
@@ -309,6 +345,41 @@
   --accent-bg-hover: oklch(0.93 0.05 258);
   --accent-border: oklch(0.8 0.08 258);
   --accent-text: oklch(0.46 0.15 258);
+
+  --platform-telegram: oklch(0.6 0.13 235);
+  --platform-telegram-bg: oklch(0.95 0.03 235);
+  --platform-discord: oklch(0.56 0.19 275);
+  --platform-discord-bg: oklch(0.95 0.035 275);
+  --platform-ntfy: oklch(0.55 0.1 175);
+  --platform-ntfy-bg: oklch(0.95 0.03 175);
+  --platform-webhook: oklch(0.5 0.05 250);
+  --platform-webhook-bg: oklch(0.95 0.008 250);
+  --tg-wall: oklch(0.86 0.06 150);
+  --tg-wall-2: oklch(0.83 0.07 110);
+  --tg-bubble: oklch(1 0 0);
+  --tg-text: oklch(0.2 0.01 250);
+  --tg-muted: oklch(0.55 0.01 250);
+  --tg-link: oklch(0.52 0.14 240);
+  --tg-quote: oklch(0.6 0.13 235);
+  --tg-key: oklch(0.36 0.04 150 / 0.32);
+  --tg-key-text: oklch(0.99 0 0);
+  --dc-bg: oklch(0.985 0.002 270);
+  --dc-embed: oklch(0.955 0.004 270);
+  --dc-text: oklch(0.3 0.01 270);
+  --dc-muted: oklch(0.5 0.01 270);
+  --dc-heading: oklch(0.2 0.01 270);
+  --dc-link: oklch(0.5 0.16 250);
+  --dc-button: oklch(0.52 0.01 270);
+  --dc-button-text: oklch(0.99 0 0);
+  --dc-primary: oklch(0.55 0.2 275);
+  --dc-danger: oklch(0.55 0.2 25);
+  --dc-success: oklch(0.55 0.13 155);
+  --nt-shade: oklch(0.93 0.01 250);
+  --nt-card: oklch(0.99 0.003 250);
+  --nt-text: oklch(0.2 0.01 250);
+  --nt-muted: oklch(0.48 0.01 250);
+  --nt-accent: oklch(0.5 0.1 175);
+  --nt-chip: oklch(0.93 0.02 175);
 }
 
 :root[data-theme="dark"] {
@@ -411,6 +482,41 @@
   --accent-bg-hover: oklch(0.68 0.14 258 / 0.23);
   --accent-border: oklch(0.68 0.14 258 / 0.4);
   --accent-text: oklch(0.8 0.1 258);
+
+  --platform-telegram: oklch(0.72 0.12 235);
+  --platform-telegram-bg: oklch(0.72 0.12 235 / 0.16);
+  --platform-discord: oklch(0.72 0.14 275);
+  --platform-discord-bg: oklch(0.72 0.14 275 / 0.16);
+  --platform-ntfy: oklch(0.74 0.1 175);
+  --platform-ntfy-bg: oklch(0.74 0.1 175 / 0.15);
+  --platform-webhook: oklch(0.76 0.03 250);
+  --platform-webhook-bg: oklch(1 0 0 / 0.07);
+  --tg-wall: oklch(0.24 0.025 240);
+  --tg-wall-2: oklch(0.2 0.03 265);
+  --tg-bubble: oklch(0.29 0.02 245);
+  --tg-text: oklch(0.96 0.003 250);
+  --tg-muted: oklch(0.7 0.01 250);
+  --tg-link: oklch(0.78 0.1 235);
+  --tg-quote: oklch(0.72 0.12 235);
+  --tg-key: oklch(1 0 0 / 0.12);
+  --tg-key-text: oklch(0.97 0 0);
+  --dc-bg: oklch(0.27 0.008 270);
+  --dc-embed: oklch(0.235 0.008 270);
+  --dc-text: oklch(0.86 0.005 270);
+  --dc-muted: oklch(0.68 0.008 270);
+  --dc-heading: oklch(0.97 0.003 270);
+  --dc-link: oklch(0.74 0.12 250);
+  --dc-button: oklch(0.4 0.01 270);
+  --dc-button-text: oklch(0.97 0 0);
+  --dc-primary: oklch(0.58 0.19 275);
+  --dc-danger: oklch(0.58 0.19 25);
+  --dc-success: oklch(0.58 0.13 155);
+  --nt-shade: oklch(0.13 0.004 250);
+  --nt-card: oklch(0.24 0.008 250);
+  --nt-text: oklch(0.95 0.003 250);
+  --nt-muted: oklch(0.72 0.008 250);
+  --nt-accent: oklch(0.76 0.1 175);
+  --nt-chip: oklch(0.76 0.1 175 / 0.18);
 }
 
 @media (min-width: 40rem) {

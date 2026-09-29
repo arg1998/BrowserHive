@@ -13,6 +13,8 @@ import type { AttentionService } from '../../app/attention/attention-service.ts'
 import type { AuthService } from '../../app/auth/auth-service.ts';
 import type { ConfigView } from '../../app/config/provenance-view.ts';
 import type { DomainEvents } from '../../app/events/catalog.ts';
+import type { ChannelService } from '../../app/notifications/channel-service.ts';
+import type { PublicUrlChecker } from '../../app/notifications/public-url.ts';
 import type { SessionDirLayout } from '../../app/sessions/profile-dir.ts';
 import type { SessionService } from '../../app/sessions/session-service.ts';
 import type { VaultAdmin } from '../../app/vault/vault-admin.ts';
@@ -172,6 +174,8 @@ export interface SystemFacts {
   readonly startedAt: number;
   /** `trace` config key (trace descriptors report `enabled`). */
   readonly traceEnabled: boolean;
+  /** Random per start; `GET /health` reports it for the `publicUrl` check (spec 08 §5.8). */
+  readonly instanceId?: string;
 }
 
 /** The system surface (`GET /system/config` and the facts above). */
@@ -277,4 +281,30 @@ export interface HttpServices {
   readonly ids: Pick<IdGenerator, 'eventId'>;
   /** Whether the Playwright trace viewer bundle is servable. */
   readonly traceViewerAvailable: boolean;
+  /** Notification channels (spec 03 §4.8.1). */
+  readonly channels: ChannelsPort;
+  /** The `publicUrl` check (spec 08 §5.8). */
+  readonly publicUrl: PublicUrlPort;
 }
+
+/** The notification channels API (a structural slice of `ChannelService`). */
+export type ChannelsPort = Pick<
+  ChannelService,
+  | 'list'
+  | 'get'
+  | 'create'
+  | 'update'
+  | 'remove'
+  | 'pause'
+  | 'resume'
+  | 'test'
+  | 'preview'
+  | 'deliveries'
+  | 'delivery'
+  | 'env'
+  | 'telegramConnect'
+  | 'telegramConnectStatus'
+>;
+
+/** The `publicUrl` check (a structural slice of `PublicUrlChecker`). */
+export type PublicUrlPort = Pick<PublicUrlChecker, 'status'>;

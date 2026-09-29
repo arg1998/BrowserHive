@@ -5,21 +5,31 @@ import {
   BlockedSource,
   ClosedReason,
   LogLevel,
+  NotificationChannelStatus,
+  NotificationDeliveryStatus,
   NotificationState,
   NotificationType,
   OperatorRequestStatus,
   SessionStatus,
   UrlCategory,
 } from '@browserhive/contracts/enums';
-import { OriginCheck, type SessionSummary, VaultAccessResult } from '@browserhive/contracts/http';
+import {
+  OriginCheck,
+  PublicUrlOutcome,
+  type SessionSummary,
+  VaultAccessResult,
+} from '@browserhive/contracts/http';
 import {
   BLOCKED_SOURCE,
+  CHANNEL_STATUS,
   CLOSED_REASON_STATE,
+  DELIVERY_STATUS,
   LOG_LEVEL,
   leaseTone,
   NOTIFICATION_STATE,
   NOTIFICATION_TYPE,
   ORIGIN_CHECK,
+  PUBLIC_URL_OUTCOME,
   REQUEST_STATUS,
   SESSION_STATE,
   sessionDisplayState,
@@ -53,6 +63,9 @@ describe('status registry', () => {
     expectCovers(NOTIFICATION_TYPE, NotificationType.options);
     expectCovers(NOTIFICATION_STATE, NotificationState.options);
     expectCovers(LOG_LEVEL, LogLevel.options);
+    expectCovers(CHANNEL_STATUS, NotificationChannelStatus.options);
+    expectCovers(DELIVERY_STATUS, NotificationDeliveryStatus.options);
+    expectCovers(PUBLIC_URL_OUTCOME, PublicUrlOutcome.options);
     for (const reason of ClosedReason.options)
       expect(SESSION_STATE[CLOSED_REASON_STATE[reason]]).toBeDefined();
   });

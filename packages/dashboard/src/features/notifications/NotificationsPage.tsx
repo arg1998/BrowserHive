@@ -32,6 +32,7 @@ import { NOTIFICATION_TYPE } from '@/lib/status-registry.ts';
 import { useNotificationList, usePreferences, useSavePreferences } from './api.ts';
 import { NotificationRow } from './components/NotificationRow.tsx';
 import { PreferencesForm } from './components/PreferencesForm.tsx';
+import { NotificationsNav } from './NotificationsNav.tsx';
 import { NOTIFICATION_RANGES, type NotificationsSearch } from './search.ts';
 
 /** Visible (not dismissed) notifications, latest activity first (a folded group moves up as it grows). */
@@ -96,6 +97,7 @@ export function NotificationsPage() {
         description="Attention requests, tool errors, vault and lifecycle events for your account."
         learnMore="A notification keeps its place when the thing it announces changes: a settled request shows its outcome (resolved, expired) instead of a new row, and a growing group of tool errors updates its count."
         learnMoreDocs="notifications"
+        tabs={<NotificationsNav />}
         actions={
           <>
             <Button

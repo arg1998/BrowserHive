@@ -25,6 +25,7 @@ import {
   createRealtimeHub,
   createTraceViewerAssets,
   playwrightBridgeFactory,
+  publicUrlHost,
   sessionDirLayout,
 } from '@browserhive/core/server';
 import {
@@ -187,6 +188,9 @@ export async function openHttpListener(
     throw bindError(err, config.host, config.port);
   }
   const port = server.port ?? config.port;
+  // publicUrl's host is trusted like an allowedHosts entry, on /mcp too (D-37).
+  const publicHost = publicUrlHost(config.publicUrl);
+  const trustedHosts = [...config.allowedHosts, ...(publicHost === null ? [] : [publicHost])];
   const url = urlFor(config.host, port);
 
   let mcp: McpHttpHandler | undefined;
@@ -199,7 +203,7 @@ export async function openHttpListener(
       logger,
       connections: storage.uow.repos.mcpConnections,
       host: config.host,
-      allowedHosts: config.allowedHosts,
+      allowedHosts: trustedHosts,
       onSessionClosed: (closed) => {
         if (closed.remainingForSubject > 0) return;
         void cancelAttentionOf(domain.broker, closed.subject).catch((err: unknown) =>
@@ -218,6 +222,7 @@ export async function openHttpListener(
         trustedProxies: config.trustedProxies,
         allowedHosts: config.allowedHosts,
         allowInsecureBind: config.allowInsecureBind,
+        ...(config.publicUrl !== undefined && { publicUrl: config.publicUrl }),
       },
       services: {
         sessions,
@@ -237,6 +242,7 @@ export async function openHttpListener(
             transport: 'http',
             startedAt: ctx.startedAt,
             traceEnabled: config.trace,
+            instanceId: domain.instanceId,
           }),
           configView: () => configView(ctx.input.resolved.config, ctx.input.resolved.provenance),
         },
@@ -258,6 +264,8 @@ export async function openHttpListener(
         idempotency: storage.uow.repos.idempotency,
         events: domain.bus,
         ids: domain.ids,
+        channels: domain.channelService,
+        publicUrl: domain.publicUrl,
         traceViewerAvailable: traceViewer.available,
       },
       adminAuthenticator: domain.adminAuthenticator,

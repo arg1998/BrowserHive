@@ -1,5 +1,9 @@
 /** @module cli/invocation — `CliPlan`: the pure decision `planCli` reaches from argv before any side effect (spec 09 §3.3) */
 import type { Channel } from '@browserhive/contracts/enums';
+import type {
+  PreviewSample,
+  StartupNotificationChannel,
+} from '@browserhive/contracts/notifications';
 import type { ConfigFailure, ResolvedConfigBundle } from '@browserhive/core/config';
 import type { ColorMode } from './output/style.ts';
 import type { CommandName } from './registry.ts';
@@ -31,7 +35,14 @@ export interface DataDirTarget {
 
 /** What to run once planning succeeded. */
 export type Invocation =
-  | { readonly command: 'serve'; readonly resolved: ResolvedConfigBundle }
+  | {
+      readonly command: 'serve';
+      readonly resolved: ResolvedConfigBundle;
+      /** `--notificationChannel` values, parsed (spec 08 §5.7). */
+      readonly startupChannels: readonly StartupNotificationChannel[];
+      /** Warnings of the channel flags (a literal ntfy.sh topic), logged at boot. */
+      readonly channelWarnings: readonly string[];
+    }
   | {
       readonly command: 'init';
       readonly resolved: ResolvedConfigBundle;
@@ -53,6 +64,8 @@ export type Invocation =
         | { readonly ok: false; readonly error: ConfigFailure };
       /** The data directory used for disk and database checks (resolved even when config is invalid). */
       readonly dataDir: string;
+      /** Raw `--notificationChannel` values (checked by the doctor, never a usage error there). */
+      readonly notificationChannels: readonly string[];
     }
   | ({
       readonly command: 'purge';
@@ -98,6 +111,24 @@ export type Invocation =
       readonly json: boolean;
       readonly remote: RemoteTarget | null;
     } & DataDirTarget)
+  | {
+      readonly command: 'channels-list';
+      readonly json: boolean;
+      readonly remote: RemoteTarget;
+    }
+  | {
+      readonly command: 'channels-test';
+      readonly name: string;
+      readonly json: boolean;
+      readonly remote: RemoteTarget;
+    }
+  | {
+      readonly command: 'channels-preview';
+      readonly name: string;
+      readonly sample: PreviewSample;
+      readonly json: boolean;
+      readonly remote: RemoteTarget;
+    }
   | { readonly command: 'version'; readonly json: boolean };
 
 /** Help topic: the whole CLI, one command, or one subcommand. */

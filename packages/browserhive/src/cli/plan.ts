@@ -2,8 +2,9 @@
 import { isAbsolute, resolve as resolvePath } from 'node:path';
 import { lookupKey } from '@browserhive/contracts/config';
 import { Channel } from '@browserhive/contracts/enums';
+import { PREVIEW_SAMPLES, PreviewSample } from '@browserhive/contracts/notifications';
 import type { ConfigFailure, ConfigFs, ResolvedConfigBundle } from '@browserhive/core/config';
-import { keyKind, resolveConfig } from '@browserhive/core/config';
+import { keyKind, parseNotificationChannelFlags, resolveConfig } from '@browserhive/core/config';
 import type { HostEnvironment } from '@browserhive/core/ports/host-environment';
 import { type CliPlan, EXIT, type Invocation, type RemoteTarget } from './invocation.ts';
 import type { ColorMode } from './output/style.ts';
@@ -232,8 +233,18 @@ function planInvocation(name: string, input: PlanInput): CliPlan {
       const resolved = resolveFull(input);
       if (!resolved.ok) return failurePlan(resolved.error);
       const bundle = resolved.value;
+      const flags = parseNotificationChannelFlags(
+        input.tokens.flags.get('notificationChannel') ?? [],
+        (name) => input.env[name],
+      );
+      if (flags.problems.length > 0) return usage(flags.problems);
       return run(
-        { command: 'serve', resolved: bundle },
+        {
+          command: 'serve',
+          resolved: bundle,
+          startupChannels: flags.channels,
+          channelWarnings: flags.warnings,
+        },
         colorOf(bundle, color),
         bundle.config.transport === 'stdio',
       );
@@ -271,7 +282,14 @@ function planInvocation(name: string, input: PlanInput): CliPlan {
       const scoped = resolution.ok ? resolution : resolveDataDir(input);
       const dir = scoped.ok ? scoped.value.config.dataDir : fallbackDataDir(input);
       return run(
-        { command: 'doctor', json, printApparmorProfile, resolution, dataDir: dir },
+        {
+          command: 'doctor',
+          json,
+          printApparmorProfile,
+          resolution,
+          dataDir: dir,
+          notificationChannels: input.tokens.flags.get('notificationChannel') ?? [],
+        },
         color,
       );
     }
@@ -291,6 +309,10 @@ function planInvocation(name: string, input: PlanInput): CliPlan {
     }
     case 'config schema':
       return run({ command: 'config-schema' }, color);
+    case 'channels list':
+    case 'channels test':
+    case 'channels preview':
+      return planChannels(name, input);
     case 'version': {
       const json = reader.bool('json');
       if (reader.problems.length > 0) return usage(reader.problems);
@@ -298,6 +320,33 @@ function planInvocation(name: string, input: PlanInput): CliPlan {
     }
     default:
       return planDataDirCommand(name, input);
+  }
+}
+
+function planChannels(name: string, input: PlanInput): CliPlan {
+  const { reader, color, args } = input;
+  const json = reader.bool('json');
+  const sampleText = reader.oneOf('sample', PREVIEW_SAMPLES) ?? 'attention';
+  const explicit = remoteTarget(reader);
+  if (reader.problems.length > 0) return usage(reader.problems);
+  let remote: RemoteTarget;
+  if (explicit !== null) remote = explicit;
+  else {
+    const resolved = resolveFull(input);
+    const host = resolved.ok ? resolved.value.config.host : '127.0.0.1';
+    const port = resolved.ok ? resolved.value.config.port : 9876;
+    const reachable = host === '0.0.0.0' || host === '::' ? '127.0.0.1' : host;
+    remote = { url: `http://${reachable.includes(':') ? `[${reachable}]` : reachable}:${port}` };
+  }
+  const sample = PreviewSample.parse(sampleText);
+  const channel = args[0] ?? '';
+  switch (name) {
+    case 'channels list':
+      return run({ command: 'channels-list', json, remote }, color);
+    case 'channels test':
+      return run({ command: 'channels-test', name: channel, json, remote }, color);
+    default:
+      return run({ command: 'channels-preview', name: channel, sample, json, remote }, color);
   }
 }
 

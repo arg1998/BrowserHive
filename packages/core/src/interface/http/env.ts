@@ -38,6 +38,11 @@ export interface HttpAppConfig {
   readonly authMode: AuthMode;
   /** Extra `Host` values accepted by the DNS-rebinding guard (in addition to loopback and `host`). */
   readonly allowedHosts?: readonly string[];
+  /**
+   * `publicUrl` (spec 08 §5.8, D-37): its host joins the `Host` allow-list and its origin passes
+   * the origin guard.
+   */
+  readonly publicUrl?: string;
   /** CIDR list of proxies whose `X-Forwarded-*` headers are trusted. */
   readonly trustedProxies?: readonly string[];
   /** `allowInsecureBind`: serve the local MCP principal to non-loopback peers under `auth=off`. */

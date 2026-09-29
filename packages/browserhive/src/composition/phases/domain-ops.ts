@@ -3,6 +3,12 @@
 import type { ServerConfig } from '@browserhive/contracts/config';
 import type { DatabaseHandle, SqliteMaintenanceService } from '@browserhive/core/persistence';
 import type {
+  ChannelRenderer,
+  NotificationSnapshots,
+  TelegramSetup,
+  UrlProbe,
+} from '@browserhive/core/ports/notification-channel';
+import type {
   AnalyticsQueries,
   Clock,
   DegradationService,
@@ -27,11 +33,14 @@ import type { OperatorRequestBroker } from '@browserhive/core/server';
 import {
   type ChannelAdapterFactory,
   ChannelRegistry,
-  createLocalLinkBuilder,
+  ChannelService,
   type DeliveryCounter,
+  imageVariants,
+  linkBuilderFor,
   NotificationOutbox,
   NotificationService,
   PreferenceService,
+  PublicUrlChecker,
   Recorder,
 } from '@browserhive/core/server';
 
@@ -59,8 +68,17 @@ export interface OpsInput {
   readonly dashboardUrl: () => string;
   /** `browserhive.notifications.deliveries` (a no-op without telemetry). */
   readonly deliveryCounter?: DeliveryCounter;
-  /** Platform adapter factories by channel kind; none ship yet. */
+  /** Platform adapter factories by channel kind (`@browserhive/core/notifications`). */
   readonly channelFactories?: ReadonlyMap<string, ChannelAdapterFactory>;
+  /** The platform renderers (the preview uses the adapters' own). */
+  readonly renderers: ReadonlyMap<string, ChannelRenderer>;
+  /** Screenshot seam (D-36); late-bound because it needs the sessions. */
+  readonly snapshots?: NotificationSnapshots;
+  readonly telegram?: TelegramSetup;
+  /** One-shot URL probe of the `publicUrl` check. */
+  readonly probe: UrlProbe;
+  /** Random per start (`GET /health`). */
+  readonly instanceId: string;
 }
 
 /** Built operations services (not started; `wire-observers` starts them). */
@@ -71,6 +89,10 @@ export interface OpsParts {
   readonly channels: ChannelRegistry;
   /** The delivery outbox worker (started by `wire-observers`). */
   readonly notificationOutbox: NotificationOutbox;
+  /** The channels API (spec 03 §4.8.1). */
+  readonly channelService: ChannelService;
+  /** The `publicUrl` check (spec 08 §5.8). */
+  readonly publicUrl: PublicUrlChecker;
   readonly preferences: PreferenceService;
   readonly retention: RetentionScheduler;
   readonly outbox: ArtifactOutboxSweeper;
@@ -90,17 +112,45 @@ export function buildOps(input: OpsInput): OpsParts {
     registerSecret: input.registerSecret,
     ...(input.channelFactories !== undefined && { factories: input.channelFactories }),
   });
+  const links = linkBuilderFor(config.publicUrl, input.dashboardUrl);
+  // The feed is late-bound: the channel service is built after the outbox that reports to it.
+  let feed: ChannelService | undefined;
   const notificationOutbox = new NotificationOutbox({
     uow: input.uow,
     repos,
     registry: channels,
-    links: createLocalLinkBuilder(input.dashboardUrl),
+    links,
     clock,
     logger,
     bus,
     redactor: input.redactor,
     jitter: Math.random,
     ...(input.deliveryCounter !== undefined && { counter: input.deliveryCounter }),
+    onDeliveryChange: (channelId, notificationId) =>
+      feed?.onDeliveryChange(notificationId, channelId),
+  });
+  const channelService = new ChannelService({
+    repos,
+    uow: input.uow,
+    registry: channels,
+    renderers: input.renderers,
+    links,
+    clock,
+    ids,
+    logger,
+    bus,
+    env: (name) => input.env[name],
+    registerSecret: input.registerSecret,
+    redactor: input.redactor,
+    ...(input.telegram !== undefined && { telegram: input.telegram }),
+  });
+  feed = channelService;
+  const publicUrl = new PublicUrlChecker({
+    publicUrl: config.publicUrl,
+    localUrl: input.dashboardUrl,
+    instanceId: input.instanceId,
+    probe: input.probe,
+    clock,
   });
   return {
     recorder: new Recorder({
@@ -122,9 +172,23 @@ export function buildOps(input: OpsInput): OpsParts {
       uow: input.uow,
       outbox: notificationOutbox,
       redactor: input.redactor,
+      onDeliveryChange: (notificationId) => channelService.onDeliveryChange(notificationId),
+      ...(input.snapshots !== undefined && {
+        screenshots: {
+          enabled: config.recordToolResults !== 'none',
+          snapshots: input.snapshots,
+          variants: (category) =>
+            imageVariants(
+              channels.channels().map((c) => c.record),
+              category,
+            ),
+        },
+      }),
     }),
     channels,
     notificationOutbox,
+    channelService,
+    publicUrl,
     preferences: new PreferenceService({ repo: repos.preferences, clock, logger }),
     retention: new RetentionScheduler({
       maintenance: input.maintenance,

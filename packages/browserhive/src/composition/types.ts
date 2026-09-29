@@ -1,6 +1,7 @@
 /** @module composition/types — the seam shared with the CLI and the programmatic API: `BootInput`, `RunningServer`, `OutputSinks`. */
 
 import type { Readable, Writable } from 'node:stream';
+import type { StartupNotificationChannel } from '@browserhive/contracts/notifications';
 import type { ResolvedConfigBundle } from '@browserhive/core/config';
 import type { HostEnvironment, LogSink } from '@browserhive/core/runtime';
 import type { SandboxHost } from './sandbox.ts';
@@ -30,6 +31,10 @@ export interface BootInput {
   readonly stdio?: { readonly stdin: Readable; readonly stdout: Writable };
   /** Test seam: the sandbox probes and browser detection (no real launches). */
   readonly sandboxHost?: SandboxHost;
+  /** Startup notification channels (`--notificationChannel`, spec 08 §5.7, D-39). */
+  readonly startupChannels?: readonly StartupNotificationChannel[];
+  /** Warnings of those flags (a literal ntfy.sh topic), logged at boot. */
+  readonly startupChannelWarnings?: readonly string[];
 }
 
 /** A running server. */

@@ -15,6 +15,11 @@ export {
   retentionPolicyFromConfig,
 } from '../app/maintenance/retention-scheduler.ts';
 export { reconcileOnStartup } from '../app/maintenance/startup-reconcile.ts';
+export {
+  classifyPublicUrlProbe,
+  isInsecurePublicUrl,
+  type PublicUrlVerdict,
+} from '../app/notifications/public-url.ts';
 export { DegradationService } from '../app/observability/degradations.ts';
 export { createLogPersistSink, LogPersistSink } from '../app/observability/log-persist-sink.ts';
 export { createBunPasswordHasher } from '../infra/auth/bun-password-hasher.ts';
@@ -49,6 +54,7 @@ export type { FileSystem } from '../ports/file-system.ts';
 export type { HostEnvironment } from '../ports/host-environment.ts';
 export type { IdGenerator } from '../ports/id-generator.ts';
 export type { LogFields, Logger, LogLevel } from '../ports/logger.ts';
+export type { UrlProbeResult } from '../ports/notification-channel.ts';
 export {
   type ChannelCapabilities,
   type ChannelDelivery,

@@ -43,6 +43,12 @@ export interface BannerFacts {
   readonly agentToken: { readonly principalId: string; readonly token: string } | null;
   /** Browser binary missing (degraded, not fatal). */
   readonly browserMissing: boolean;
+  /** Notification channels and where their links point (shown when either is configured). */
+  readonly notifications?: {
+    readonly channels: number;
+    readonly startup: number;
+    readonly publicUrl: string | null;
+  };
 }
 
 /** Label column width (`Dashboard` + gap). */
@@ -117,6 +123,16 @@ export function renderBanner(facts: BannerFacts, options: { readonly color: bool
         : `${facts.vault.backend} (${facts.vault.unlocked ? 'unlocked' : 'locked'})`,
     ),
   );
+  const notify = facts.notifications;
+  if (notify !== undefined && (notify.channels > 0 || notify.publicUrl !== null)) {
+    const count =
+      notify.channels === 0
+        ? 'no channels'
+        : `${notify.channels} channel${notify.channels === 1 ? '' : 's'}${notify.startup > 0 ? ` (${notify.startup} from startup)` : ''}`;
+    const links =
+      notify.publicUrl === null ? 'links open on this computer' : `links → ${notify.publicUrl}`;
+    lines.push(row('Notify', `${count} · ${links}`));
+  }
   const notes: string[] = [];
   for (const line of facts.shadowLines) notes.push(` ${line}`);
   if (facts.browserMissing) {

@@ -152,6 +152,26 @@ describe('planCli precedence', () => {
     });
   });
 
+  it('--notificationChannel: parsed for serve, an inline secret is 64 without echoing it', () => {
+    const ok = plan(['--notificationChannel', 'ntfy:name=pager,topic=bh-x'], {});
+    if (ok.kind !== 'run' || ok.invocation.command !== 'serve') throw new Error('expected serve');
+    expect(ok.invocation.startupChannels.map((c) => c.name)).toEqual(['pager']);
+    expect(ok.invocation.channelWarnings).toHaveLength(1);
+    const secret = `1234:${'z'.repeat(35)}`;
+    const refused = exitOf(
+      plan(['--notificationChannel', `telegram:name=phone,token=${secret},chat=1`]),
+    );
+    expect(refused).toEqual({
+      code: 64,
+      text: "browserhive: --notificationChannel 'phone': token must name an environment variable (token=env:NAME), never contain the secret: other users of this machine can read process arguments.",
+    });
+    expect(refused.text).not.toContain('zzzz');
+    expect(exitOf(plan([], { BROWSERHIVE_NOTIFICATION_CHANNEL: 'x' })).text).toContain(
+      'declared with the --notificationChannel flag',
+    );
+    expect(commandOf(plan(['doctor', '--notificationChannel', 'bogus']))).toBe('doctor');
+  });
+
   it('stray flags win over invalid config values', () => {
     const { text } = exitOf(plan(['--all', '--port', 'abc']));
     expect(text).toContain('--all only applies');

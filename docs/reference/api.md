@@ -2,7 +2,7 @@
 
 # REST API reference
 
-The admin REST API served under `/api/v1` on the same port as MCP and the dashboard when `--admin` is on (86 operations), generated from `HTTP_ENDPOINTS` in `@browserhive/contracts/http`. Request and response schemas are in the OpenAPI 3.1 document the server serves at `/api/v1/openapi.json`, with an interactive reference UI at `/api/v1/docs`.
+The admin REST API served under `/api/v1` on the same port as MCP and the dashboard when `--admin` is on (101 operations), generated from `HTTP_ENDPOINTS` in `@browserhive/contracts/http`. Request and response schemas are in the OpenAPI 3.1 document the server serves at `/api/v1/openapi.json`, with an interactive reference UI at `/api/v1/docs`.
 
 Summaries come from `packages/contracts/generated/openapi.json`.
 
@@ -18,7 +18,7 @@ Summaries come from `packages/contracts/generated/openapi.json`.
 
 ## Scopes
 
-`sessions:read` · `sessions:write` · `sessions:takeover` · `attention:read` · `attention:resolve` · `vault:read` · `vault:write` · `vault:confirm` · `blocklist:read` · `blocklist:write` · `system:read` · `system:write` · `logs:read` · `notifications:read` · `notifications:write` · `preferences:write` · `mcp:tools`
+`sessions:read` · `sessions:write` · `sessions:takeover` · `attention:read` · `attention:resolve` · `vault:read` · `vault:write` · `vault:confirm` · `blocklist:read` · `blocklist:write` · `system:read` · `system:write` · `logs:read` · `notifications:read` · `notifications:write` · `channels:read` · `channels:write` · `preferences:write` · `mcp:tools`
 
 ## Health
 
@@ -134,6 +134,7 @@ Summaries come from `packages/contracts/generated/openapi.json`.
 | GET | `/api/v1/system/config` | `getSystemConfig` | `system:read` | cookie, bearer | Every config key with its value, source and shadowed values (secrets redacted). |
 | GET | `/api/v1/system/realtime` | `getSystemRealtime` | `system:read` | cookie, bearer | Open realtime connections with topics, screencasts and backpressure counters. |
 | GET | `/api/v1/system/mcp/connections` | `listMcpConnections` | `system:read` | cookie, bearer | MCP connections with their self-reported identity: live ones first, then recent (D-30). |
+| GET | `/api/v1/system/public-url` | `getPublicUrlStatus` | `system:read` | cookie, bearer | The publicUrl check: does the public address reach this BrowserHive? (cached 60 s) |
 | PATCH | `/api/v1/system/log-level` | `setLogLevel` | `system:write` | cookie, bearer | Change the log level spec at runtime (`info,sessions=debug`). |
 | GET | `/api/v1/system/events` | `listSystemEvents` | `system:read` | cookie, bearer | Degradations (`resolved=open` by default). |
 
@@ -162,6 +163,25 @@ Summaries come from `packages/contracts/generated/openapi.json`.
 | POST | `/api/v1/notifications/dismiss-all` | `dismissAllNotifications` | `notifications:write` | cookie, bearer | Dismiss every notification. |
 | GET | `/api/v1/me/preferences` | `getPreferences` | — | cookie, bearer | The caller's stored preferences (known keys only). |
 | PUT | `/api/v1/me/preferences` | `putPreferences` | `preferences:write` | cookie, bearer | Replace the preferences document (≤ 64 KiB; unknown keys rejected). |
+
+## channels
+
+| Method | Path | operationId | Scope | Auth | Summary |
+|---|---|---|---|---|---|
+| GET | `/api/v1/channels` | `listChannels` | `channels:read` | cookie, bearer | Every notification channel (dashboard and startup) with its state; never a secret value. |
+| POST | `/api/v1/channels` | `createChannel` | `channels:write` | cookie, bearer | Create a channel. Secrets are environment variable names, never values (D-33). |
+| POST | `/api/v1/channels/preview` | `previewChannel` | `channels:read` | cookie, bearer | Render a sample notification exactly as the channel would send it. Sends nothing. |
+| GET | `/api/v1/channels/deliveries` | `listDeliveries` | `channels:read` | cookie, bearer | The delivery log newest first: every send, edit and delete, and why anything was not sent. |
+| GET | `/api/v1/channels/deliveries/{seq}` | `getDelivery` | `channels:read` | cookie, bearer | One delivery with the message as that channel is shown it (redacted). |
+| GET | `/api/v1/channels/env` | `checkChannelEnv` | `channels:read` | cookie, bearer | Whether each named environment variable is set in the server (never its value). |
+| POST | `/api/v1/channels/telegram/connect` | `startTelegramConnect` | `channels:write` | cookie, bearer | Start the one-tap Telegram connect: a t.me link and a 2-minute wait for /start. |
+| GET | `/api/v1/channels/telegram/connect/{connect_id}` | `getTelegramConnect` | `channels:read` | cookie, bearer | State of a Telegram connect: waiting, connected (with the chat), expired or failed. |
+| GET | `/api/v1/channels/{channel_id}` | `getChannel` | `channels:read` | cookie, bearer | One channel. |
+| PATCH | `/api/v1/channels/{channel_id}` | `updateChannel` | `channels:write` | cookie, bearer | Edit a dashboard channel (startup channels are read-only). |
+| DELETE | `/api/v1/channels/{channel_id}` | `deleteChannel` | `channels:write` | cookie, bearer | Delete a dashboard channel and its delivery log. |
+| POST | `/api/v1/channels/{channel_id}/pause` | `pauseChannel` | `channels:write` | cookie, bearer | Pause a channel; its pending deliveries are suppressed. |
+| POST | `/api/v1/channels/{channel_id}/resume` | `resumeChannel` | `channels:write` | cookie, bearer | Resume a paused or broken channel. |
+| POST | `/api/v1/channels/{channel_id}/test` | `testChannel` | `channels:write` | cookie, bearer | Send a real test message through the channel now; the result says why it failed. |
 
 ## Search
 

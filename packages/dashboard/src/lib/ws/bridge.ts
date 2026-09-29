@@ -424,6 +424,76 @@ function upsertNotification(qc: QueryClient, n: NotificationLike, created: boole
 
 const SESSION_CREATED_KEYS = ['created', 'created_at'] as const;
 
+/** Delivery-log filters a cached `GET /channels/deliveries` list carries (structural). */
+interface DeliveryListParams {
+  readonly channel_id?: unknown;
+  readonly notification_id?: unknown;
+  readonly status?: unknown;
+  readonly op?: unknown;
+  readonly kind?: unknown;
+  readonly page?: unknown;
+  readonly limit?: unknown;
+}
+
+function inList(filter: unknown, value: unknown): boolean {
+  return !Array.isArray(filter) || filter.length === 0 || filter.includes(value);
+}
+
+/** Whether a delivery row belongs on a cached delivery-log list (its filters; the first page only takes inserts). */
+export function deliveryMembership(
+  params: unknown,
+  row: Record<string, unknown>,
+): 'member' | 'not-member' {
+  if (!isRecord(params)) return 'member';
+  const p = params as DeliveryListParams;
+  if (p.channel_id !== undefined && p.channel_id !== row['channel_id']) return 'not-member';
+  if (p.notification_id !== undefined && p.notification_id !== row['notification_id']) {
+    return 'not-member';
+  }
+  if (!inList(p.status, row['status'])) return 'not-member';
+  if (!inList(p.op, row['op'])) return 'not-member';
+  if (!inList(p.kind, row['notification_kind'])) return 'not-member';
+  return 'member';
+}
+
+/**
+ * `delivery.updated`: replace the row where a cached list holds it (removing it when its new
+ * status leaves the list's filter), prepend it on first pages whose filters it matches (newest
+ * first by `seq`), and refresh an open detail. The channel cards' counts move with
+ * `channel.changed`.
+ */
+function upsertDelivery(qc: QueryClient, row: Record<string, unknown>): void {
+  for (const [key, data] of qc.getQueriesData({ queryKey: keys.channels.deliveryLists() })) {
+    if (!isCachedPage(data)) continue;
+    const params = key[key.length - 1];
+    const member = deliveryMembership(params, row) === 'member';
+    const index = data.data.findIndex((item) => item['seq'] === row['seq']);
+    if (index >= 0) {
+      const next = member
+        ? data.data.map((item, i) => (i === index ? { ...item, ...row } : item))
+        : data.data.filter((_, i) => i !== index);
+      qc.setQueryData(key, {
+        ...data,
+        data: next,
+        page: member ? data.page : withTotal(data.page, -1),
+      });
+      continue;
+    }
+    const page = isRecord(params) ? params['page'] : undefined;
+    if (!member || (page !== undefined && page !== 1)) continue;
+    const limit = isRecord(params) && typeof params['limit'] === 'number' ? params['limit'] : 50;
+    qc.setQueryData(key, {
+      ...data,
+      data: [row, ...data.data].slice(0, limit),
+      page: withTotal(data.page, 1),
+    });
+  }
+  const seq = row['seq'];
+  if (typeof seq === 'number') {
+    patchObject(qc, keys.channels.delivery(seq), (detail) => ({ ...detail, delivery: row }));
+  }
+}
+
 /** The table (spec 04 §5). Add a row here for every new WS-driven update (spec 04 §15). */
 export const BRIDGE: { readonly [T in EventType]?: Patch<T> } = {
   'session.opened': ({ queryClient: qc }, { session }) => {
@@ -596,6 +666,29 @@ export const BRIDGE: { readonly [T in EventType]?: Patch<T> } = {
   },
   'notification.updated': ({ queryClient: qc }, { notification }) => {
     upsertNotification(qc, notification, false);
+  },
+  'channel.changed': ({ queryClient: qc }, { channel }) => {
+    qc.setQueryData(keys.channels.detail(channel.channel_id), { channel });
+    const list = qc.getQueryData(keys.channels.list());
+    if (!isRecord(list) || !Array.isArray(list['data'])) return;
+    const rows = list['data'] as readonly Record<string, unknown>[];
+    const index = rows.findIndex((c) => c['channel_id'] === channel.channel_id);
+    const data =
+      index < 0 ? [...rows, channel] : rows.map((c, i) => (i === index ? { ...c, ...channel } : c));
+    qc.setQueryData(keys.channels.list(), { ...list, data });
+  },
+  'channel.removed': ({ queryClient: qc }, { channel_id }) => {
+    qc.removeQueries({ queryKey: keys.channels.detail(channel_id) });
+    const list = qc.getQueryData(keys.channels.list());
+    if (!isRecord(list) || !Array.isArray(list['data'])) return;
+    const rows = list['data'] as readonly Record<string, unknown>[];
+    qc.setQueryData(keys.channels.list(), {
+      ...list,
+      data: rows.filter((c) => c['channel_id'] !== channel_id),
+    });
+  },
+  'delivery.updated': ({ queryClient: qc }, { delivery }) => {
+    upsertDelivery(qc, delivery);
   },
 };
 

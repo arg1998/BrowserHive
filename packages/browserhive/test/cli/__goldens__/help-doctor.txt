@@ -8,11 +8,16 @@ warnings only. Accepts the server flags so the checks see the configuration serv
 launch each installed browser once to test the sandbox.
 
 FLAGS
-  --json                  Print machine-readable JSON instead of text.
-  --printApparmorProfile  Print an AppArmor profile that lets the configured browser sandbox on
-                          Ubuntu 23.10+, then exit. Install it with sudo tee /etc/apparmor.d/<name>;
-                          nothing is installed for you.
-  <server flags>          Every flag of 'browserhive serve' (see 'browserhive serve --help').
+  --json                            Print machine-readable JSON instead of text.
+  --notificationChannel <kind:params>
+                                    Declare a notification channel for this run (repeatable; secrets
+                                    as env:NAME), e.g.
+                                    "telegram:name=phone,token=env:BH_TG_TOKEN,chat=123456".
+  --printApparmorProfile            Print an AppArmor profile that lets the configured browser
+                                    sandbox on Ubuntu 23.10+, then exit. Install it with sudo tee
+                                    /etc/apparmor.d/<name>; nothing is installed for you.
+  <server flags>                    Every flag of 'browserhive serve' (see 'browserhive serve
+                                    --help').
 
 GLOBAL FLAGS
   -h, --help     Show help.

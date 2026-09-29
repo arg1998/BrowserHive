@@ -1,7 +1,8 @@
 /** @module features/system/api — system queries: status (`GET /system`, patched by the `system` topic), config with provenance, realtime connections, MCP connections, degradations history, health (a degraded 503 still yields its body) (spec 04 §12.10, spec 03 §4.7) */
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useApi } from '@/app/providers/AuthProvider.tsx';
-import { isAppError } from '@/lib/api/errors.ts';
+import { useToast } from '@/app/providers/ToastProvider.tsx';
+import { isAppError, toAppError } from '@/lib/api/errors.ts';
 import { keys } from '@/lib/api/keys.ts';
 
 /** `GET /system`. */
@@ -73,4 +74,22 @@ export function useHealth(enabled = true) {
 /** `true` when the error is an authorization refusal. */
 export function isForbiddenError(error: unknown): boolean {
   return isAppError(error) && error.status === 403;
+}
+
+/** `GET /system/public-url` (cached server-side for 60 s; `refresh` runs the check now). */
+export function usePublicUrl() {
+  const api = useApi();
+  return useQuery({ queryKey: keys.publicUrl(), queryFn: () => api.getPublicUrlStatus() });
+}
+
+/** Re-runs the `publicUrl` check. */
+export function useRefreshPublicUrl() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  return useMutation({
+    mutationFn: () => api.getPublicUrlStatus({ query: { refresh: true } }),
+    onSuccess: (status) => queryClient.setQueryData(keys.publicUrl(), status),
+    onError: (error) => toast.fromError(toAppError(error), 'Could not check the public address'),
+  });
 }

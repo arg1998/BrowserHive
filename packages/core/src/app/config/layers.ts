@@ -78,7 +78,11 @@ export function collectEnvLayer(env: Readonly<Record<string, string | undefined>
         code: 'CONFIG_UNKNOWN_KEY',
         source: 'env',
         location: name,
-        message: removed ? `${base} ${UNSUPPORTED_HINT}` : withSuggestion(base, suggestions),
+        message: FLAG_ONLY_SPELLINGS.has(name)
+          ? `${base} ${FLAG_ONLY_HINT}`
+          : removed
+            ? `${base} ${UNSUPPORTED_HINT}`
+            : withSuggestion(base, suggestions),
         suggestions,
       });
       continue;
@@ -117,6 +121,19 @@ export function collectEnvLayer(env: Readonly<Record<string, string | undefined>
 /** Hint for the unsupported `--admin-bind`, `--admin-port` and their env spellings (D-02). */
 export const UNSUPPORTED_HINT =
   'This option is not supported: the dashboard shares --host and --port.';
+
+/**
+ * Spellings of the flag-only `--notificationChannel` (spec 08 §5.7, D-39) in the environment and
+ * the config file: unknown there, answered with a hint naming the flag.
+ */
+export const FLAG_ONLY_SPELLINGS: ReadonlySet<string> = new Set([
+  'BROWSERHIVE_NOTIFICATION_CHANNEL',
+  'notificationChannel',
+]);
+
+/** Hint for {@link FLAG_ONLY_SPELLINGS}. */
+export const FLAG_ONLY_HINT =
+  'Notification channels are declared with the --notificationChannel flag or in the dashboard, never in the environment or the config file.';
 
 /** Standard OTEL variables read as the `env(otel)` sub-source (spec 08 §5.3). */
 export const OTEL_ENV_KEYS: Readonly<Record<string, ConfigKey>> = {
@@ -247,7 +264,11 @@ export function collectFileLayer(
         code: 'CONFIG_UNKNOWN_KEY',
         source: 'file',
         location,
-        message: removed ? `${base} ${UNSUPPORTED_HINT}` : withSuggestion(base, suggestions),
+        message: FLAG_ONLY_SPELLINGS.has(name)
+          ? `${base} ${FLAG_ONLY_HINT}`
+          : removed
+            ? `${base} ${UNSUPPORTED_HINT}`
+            : withSuggestion(base, suggestions),
         suggestions,
       });
       continue;

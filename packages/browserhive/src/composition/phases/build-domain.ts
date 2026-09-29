@@ -1,9 +1,18 @@
 /** @module composition/phases/build-domain — phase 4: clock/ids/bus, degradations, sessions, operators, vault, auth (seed flow), notifications, schedulers, startup reconcile, tools. */
 
+import { join } from 'node:path';
+import {
+  CHANNEL_RENDERERS,
+  channelFactories,
+  createNotificationImageStore,
+  createTelegramSetup,
+  createUrlProbe,
+} from '@browserhive/core/notifications';
 import type { DomainEvents } from '@browserhive/core/runtime';
 import {
   createNanoidIdGenerator,
   DegradationService,
+  isInsecurePublicUrl,
   serializeError,
 } from '@browserhive/core/runtime';
 import { createPlaywrightPageActions, InProcessEventBus } from '@browserhive/core/server';
@@ -11,6 +20,7 @@ import { asyncTick, createTimers } from '../adapters/timers.ts';
 import { createAuthStack } from '../auth-stack.ts';
 import { type BootContext, part, type SeedNotice } from '../context.ts';
 import { hostFactsOf } from '../host.ts';
+import { createNotificationSnapshots } from '../notification-snapshots.ts';
 import type { PhaseHandle } from '../unwind.ts';
 import { buildOperators } from './domain-operators.ts';
 import { buildOps, reconcile } from './domain-ops.ts';
@@ -19,6 +29,10 @@ import { buildTools } from './domain-tools.ts';
 
 /** How often expired auth sessions, grants and rate buckets are swept. */
 export const AUTH_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
+/** Notification screenshots are kept this long (retries last at most 24 h, D-34). */
+export const IMAGE_KEEP_MS = 7 * 24 * 60 * 60 * 1000;
+/** How often old notification screenshots are pruned. */
+export const IMAGE_PRUNE_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 /** Phase `build-domain`. Stop drains sessions (the 15 s budget) and settles operator requests. */
 export async function buildDomainPhase(ctx: BootContext): Promise<PhaseHandle> {
@@ -110,7 +124,12 @@ async function buildDomain(
     registerSecret: (literal) => secrets.add(literal),
   });
   const seeds = await seedCredentials(ctx, auth.service);
+  const timers = createTimers((err) =>
+    logger.warn('timer callback failed', { err: serializeError(err) }),
+  );
 
+  const images = createNotificationImageStore(join(config.dataDir, 'notifications', 'images'));
+  const instanceId = ids.opaque(16);
   const ops = buildOps({
     config,
     repos,
@@ -129,9 +148,39 @@ async function buildDomain(
     registerSecret: (literal) => secrets.add(literal),
     dashboardUrl: () => ctx.listeners?.url ?? `http://${config.host}:${config.port}`,
     deliveryCounter: telemetry.instruments.notificationDeliveries,
+    channelFactories: channelFactories({ images }),
+    renderers: CHANNEL_RENDERERS,
+    telegram: createTelegramSetup(),
+    probe: createUrlProbe(),
+    instanceId,
+    snapshots: createNotificationSnapshots({
+      sessions,
+      screenshots: repos.screenshots,
+      images,
+      secretWindowOpen: (sessionId) => secrets.isWindowOpen(sessionId),
+      now: () => clock.now(),
+      logger,
+    }),
   });
-  // Startup channels (--notificationChannel, D-39) arrive with the first platform adapters.
-  await ops.channels.load();
+  // Startup channels (--notificationChannel, D-39): projected into the table, read-only. A name a
+  // dashboard channel already uses stops startup with CONFIG_INVALID (exit 64).
+  for (const warning of ctx.input.startupChannelWarnings ?? []) {
+    logger.warn('startup channel warning', { detail: warning });
+  }
+  await ops.channels.load(ctx.input.startupChannels ?? []);
+  if (isInsecurePublicUrl(config.publicUrl)) {
+    logger.warn('publicUrl is plain http', { public_url: config.publicUrl });
+  }
+  const stopImagePrune = timers.every(
+    asyncTick(
+      async () => {
+        await images.prune(clock.now() - IMAGE_KEEP_MS);
+      },
+      (err) => logger.warn('image prune failed', { err: serializeError(err) }),
+    ),
+    IMAGE_PRUNE_INTERVAL_MS,
+  );
+  undo.push(stopImagePrune);
   await reconcile({ repos, clock, logger, degradations, broker: operators.broker });
   // Requests settled while nothing listened (the last shutdown, the orphan recovery above) revise
   // their notifications now; the producers subscribe later, in wire-observers.
@@ -159,9 +208,6 @@ async function buildDomain(
     logger,
   });
 
-  const timers = createTimers((err) =>
-    logger.warn('timer callback failed', { err: serializeError(err) }),
-  );
   const stopAuthSweep = timers.every(
     asyncTick(
       () => auth.service.sweep(),
@@ -193,6 +239,9 @@ async function buildDomain(
     notifications: ops.notifications,
     channels: ops.channels,
     notificationOutbox: ops.notificationOutbox,
+    channelService: ops.channelService,
+    publicUrl: ops.publicUrl,
+    instanceId,
     preferences: ops.preferences,
     recorder: ops.recorder,
     retention: ops.retention,
@@ -207,6 +256,8 @@ async function buildDomain(
   return {
     async stop(deadlineMs) {
       stopAuthSweep();
+      stopImagePrune();
+      ops.channelService.stop();
       sessionParts.sweeper.stop();
       sessionParts.stopWatcher?.();
       await sessions.closeAll('shutdown', Math.max(1_000, deadlineMs - 500));

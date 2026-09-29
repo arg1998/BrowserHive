@@ -1,0 +1,40 @@
+{
+  "kind": "ntfy",
+  "variant": "attention-local",
+  "mode": null,
+  "requests": [
+    {
+      "method": "POST",
+      "path": "/",
+      "encoding": "json",
+      "body": {
+        "topic": "bh-alerts",
+        "title": "Attention requested",
+        "message": "CAPTCHA on the checkout page: please solve it, then resume · takeover — agent blocked, lease frozen\n\nMode: takeover\nSession: checkout\nPage: https://shop.example.com/checkout/payment\nTool: click\nWaiting since: 14:13 UTC",
+        "priority": 4,
+        "tags": [
+          "warning"
+        ],
+        "click": "http://127.0.0.1:9876/sessions/checkout-a1b2c3d4?live=1&takeover=1",
+        "actions": [
+          {
+            "action": "view",
+            "label": "Open on this computer",
+            "url": "http://127.0.0.1:9876/sessions/checkout-a1b2c3d4?live=1&takeover=1",
+            "clear": false
+          },
+          {
+            "action": "view",
+            "label": "Open in BrowserHive",
+            "url": "http://127.0.0.1:9876/sessions/checkout-a1b2c3d4?live=1",
+            "clear": false
+          }
+        ],
+        "markdown": false,
+        "sequence_id": "n-sample000001"
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}

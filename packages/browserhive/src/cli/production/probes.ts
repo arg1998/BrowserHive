@@ -193,6 +193,34 @@ export function createHostProbes(options: {
         readFile: readText,
       });
     },
+    fetchOnce: async (url, timeoutMs) => {
+      try {
+        const response = await fetch(url, {
+          method: 'GET',
+          redirect: 'manual',
+          signal: AbortSignal.timeout(timeoutMs),
+        });
+        const text = await response.text();
+        return {
+          kind: 'response',
+          status: response.status,
+          contentType: response.headers.get('content-type'),
+          location: response.headers.get('location'),
+          body: text.slice(0, 64 * 1024),
+        };
+      } catch (err) {
+        const name = err instanceof Error ? err.name : '';
+        return {
+          kind: 'error',
+          detail:
+            name === 'TimeoutError'
+              ? `no answer within ${timeoutMs} ms`
+              : err instanceof Error
+                ? err.message
+                : 'request failed',
+        };
+      }
+    },
     httpReachable: async (url, timeoutMs) => {
       try {
         const response = await fetch(url, {

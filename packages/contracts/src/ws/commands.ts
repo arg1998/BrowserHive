@@ -124,7 +124,8 @@ export const WS_TOPIC_SCOPES: {
     | 'blocklist'
     | 'system'
     | 'logs'
-    | 'notifications']: Scope;
+    | 'notifications'
+    | 'channels']: Scope;
 } = {
   sessions: 'sessions:read',
   session: 'sessions:read',
@@ -138,4 +139,5 @@ export const WS_TOPIC_SCOPES: {
   system: 'system:read',
   logs: 'logs:read',
   notifications: 'notifications:read',
+  channels: 'channels:read',
 };

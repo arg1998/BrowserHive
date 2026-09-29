@@ -1,0 +1,59 @@
+{
+  "kind": "discord",
+  "variant": "attention-local",
+  "mode": "webhook",
+  "requests": [
+    {
+      "method": "POST",
+      "path": "{secret:webhook}?wait=true&with_components=true",
+      "encoding": "json",
+      "body": {
+        "content": null,
+        "allowed_mentions": {
+          "parse": []
+        },
+        "components": [],
+        "embeds": [
+          {
+            "title": "⚠️ Attention requested",
+            "description": "CAPTCHA on the checkout page: please solve it, then resume · takeover — agent blocked, lease frozen\n\n**🖥 Open on this computer**\nTake over: `http://127.0.0.1:9876/sessions/checkout-a1b2c3d4?live=1&takeover=1`\nOpen in BrowserHive: `http://127.0.0.1:9876/sessions/checkout-a1b2c3d4?live=1`",
+            "color": 16096779,
+            "fields": [
+              {
+                "name": "Mode",
+                "value": "takeover",
+                "inline": true
+              },
+              {
+                "name": "Session",
+                "value": "checkout",
+                "inline": true
+              },
+              {
+                "name": "Page",
+                "value": "`https://shop.example.com/checkout/payment`",
+                "inline": true
+              },
+              {
+                "name": "Tool",
+                "value": "`click`",
+                "inline": true
+              },
+              {
+                "name": "Waiting since",
+                "value": "<t:1790000000:t>",
+                "inline": true
+              }
+            ],
+            "footer": {
+              "text": "BrowserHive"
+            },
+            "timestamp": "2026-09-21T14:13:20.000Z"
+          }
+        ]
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}

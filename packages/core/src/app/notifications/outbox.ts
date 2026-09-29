@@ -28,6 +28,7 @@ import { type IntervalScheduler, realIntervalScheduler } from '../maintenance/ti
 import type { ChannelRegistry, RegisteredChannel } from './channel-registry.ts';
 import { restrictContent } from './content-level.ts';
 import { degrade } from './degrade.ts';
+import { applyImageRule } from './images.ts';
 import { clip, decodeMessage, text } from './message.ts';
 import { contentLevelOf, deleteWhenResolved, expiryFor, planDeliveries } from './routing.ts';
 
@@ -104,6 +105,11 @@ export interface NotificationOutboxDeps {
   readonly tracer?: Tracer;
   readonly counter?: DeliveryCounter;
   readonly options?: Partial<OutboxOptions>;
+  /**
+   * Called after a job of (channel, notification) was written (a status change, a new delete job),
+   * so the live delivery log can refresh those rows. Must not throw.
+   */
+  readonly onDeliveryChange?: (channelId: string, notificationId: string) => void;
 }
 
 /** Summary of one pass (tests, logs). */
@@ -271,7 +277,9 @@ export class NotificationOutbox {
         createdAt: now,
       }));
     if (rows.length === 0) return 0;
-    return this.deps.uow.transaction((r) => r.notificationDeliveries.enqueue(rows));
+    const n = await this.deps.uow.transaction((r) => r.notificationDeliveries.enqueue(rows));
+    for (const row of rows) this.changed(row.channelId, row.notificationId);
+    return n;
   }
 
   /** More than `backlogThreshold` pending `info` sends on a channel collapse into the newest. */
@@ -311,6 +319,14 @@ export class NotificationOutbox {
     this.deps.counter?.add(1, { channel_kind: kind, status });
   }
 
+  private changed(channelId: string, notificationId: string): void {
+    try {
+      this.deps.onDeliveryChange?.(channelId, notificationId);
+    } catch (err) {
+      this.report(err);
+    }
+  }
+
   /** Writes a decision made without a platform call. */
   private async settle(
     job: NotificationDeliveryRecord,
@@ -324,6 +340,7 @@ export class NotificationOutbox {
       updatedAt: this.deps.clock.now(),
     });
     this.count(entry?.record.kind ?? 'unknown', status);
+    this.changed(job.channelId, job.notificationId);
   }
 
   private async process(job: NotificationDeliveryRecord): Promise<void> {
@@ -360,6 +377,7 @@ export class NotificationOutbox {
       return this.settle(job, entry, 'superseded', 'covered');
     }
     if (!(await this.deps.repos.notificationDeliveries.claim(job.seq, now))) return;
+    this.changed(job.channelId, job.notificationId);
     await this.deps.repos.notificationDeliveries.supersede(
       job.channelId,
       job.notificationId,
@@ -388,7 +406,10 @@ export class NotificationOutbox {
     entry: RegisteredChannel,
     message: NotificationMessage,
   ): Promise<ChannelDelivery> {
-    let shown = restrictContent(message, contentLevelOf(entry.record.rules));
+    let shown = applyImageRule(
+      restrictContent(message, contentLevelOf(entry.record.rules)),
+      entry.record.rules,
+    );
     const missed = job.reason?.startsWith(BACKLOG_PREFIX)
       ? Number(job.reason.slice(BACKLOG_PREFIX.length))
       : 0;
@@ -496,6 +517,7 @@ export class NotificationOutbox {
     });
     this.deps.registry.setCachedStatus(job.channelId, entry.record.status, 0);
     this.count(entry.record.kind, 'sent');
+    this.changed(job.channelId, job.notificationId);
   }
 
   private classify(err: unknown): Classified {
@@ -556,6 +578,7 @@ export class NotificationOutbox {
           await r.notificationChannelMessages.markDeleted(job.channelId, job.notificationId, now);
       });
       this.count(entry.record.kind, 'superseded');
+      this.changed(job.channelId, job.notificationId);
       return;
     }
     const attempts = job.attempts + 1;
@@ -581,6 +604,7 @@ export class NotificationOutbox {
       return health ? r.notificationChannels.recordFailure(job.channelId, now, detail) : 0;
     });
     this.count(entry.record.kind, patch.status);
+    this.changed(job.channelId, job.notificationId);
     this.log.warn('delivery failed', {
       channel: entry.record.name,
       seq: job.seq,
@@ -646,6 +670,7 @@ export class NotificationOutbox {
       return this.settle(job, entry, 'dead', 'could_not_delete: too_old');
     }
     if (!(await this.deps.repos.notificationDeliveries.claim(job.seq, now))) return;
+    this.changed(job.channelId, job.notificationId);
     const remove = adapter.delete.bind(adapter);
     const started = this.deps.clock.now();
     try {
@@ -670,6 +695,7 @@ export class NotificationOutbox {
         });
       }
       this.count(entry.record.kind, 'sent');
+      this.changed(job.channelId, job.notificationId);
     } catch (err) {
       await this.failed(job, entry, err, started, cm);
     }

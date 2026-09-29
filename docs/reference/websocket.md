@@ -138,6 +138,7 @@ Subscribe with `{ "type": "subscribe", "topic": "<topic>", "cursor"?: <last seq>
 | `system` | `system:read` | [`system.degraded`](#event-system-degraded), [`system.recovered`](#event-system-recovered), [`system.tick`](#event-system-tick), [`system.capacity`](#event-system-capacity), [`retention.completed`](#event-retention-completed) |
 | `logs` | `logs:read` | [`log.record`](#event-log-record) |
 | `notifications` | `notifications:read` | [`notification.created`](#event-notification-created), [`notification.updated`](#event-notification-updated) |
+| `channels` | `channels:read` | [`channel.changed`](#event-channel-changed), [`channel.removed`](#event-channel-removed), [`delivery.updated`](#event-delivery-updated) |
 | `session:<id>` | `sessions:read` | [`session.opened`](#event-session-opened), [`session.updated`](#event-session-updated), [`session.closed`](#event-session-closed), [`session.removed`](#event-session-removed), [`session.warning`](#event-session-warning), [`tool.called`](#event-tool-called), [`page.visited`](#event-page-visited), [`screenshot.captured`](#event-screenshot-captured), [`vault.access`](#event-vault-access), [`blocklist.hit`](#event-blocklist-hit), [`attention.created`](#event-attention-created), [`attention.resolved`](#event-attention-resolved), [`vault.confirm.created`](#event-vault-confirm-created), [`vault.confirm.resolved`](#event-vault-confirm-resolved) |
 | `screencast:<id>` | `sessions:read` | stream messages `meta`, `started`, `stopped`, `failed` and binary frames |
 
@@ -334,6 +335,27 @@ Payloads of `kind: "event"` frames, discriminated on `type`. DTO fields (`sessio
 | Field | Type | Required | Constraints |
 |---|---|---|---|
 | `notification` | `object` | yes | keys `notification_id`, `principal_id`, `type`, `title`, `body`, `session_id`, `session_slug`, `target`, `source_event_id`, `created_at`, `updated_at`, `count`, `read_at`, `dismissed_at`, `kind`, `category`, `severity`, `state`, `revision`, `thread` |
+
+<a id="event-channel-changed"></a>
+### `channel.changed`
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `channel` | `object` | yes | keys `channel_id`, `name`, `kind`, `mode`, `source`, `status`, `target`, `target_hint`, `secret_refs`, `secrets`, `rules`, `capabilities`, `ready`, `problem`, `failure_count`, `last_error`, `last_ok_at`, `last_failure_at`, `created_at`, `updated_at`, `stats` |
+
+<a id="event-channel-removed"></a>
+### `channel.removed`
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `channel_id` | `string` | yes | — |
+
+<a id="event-delivery-updated"></a>
+### `delivery.updated`
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `delivery` | `object` | yes | keys `seq`, `channel_id`, `channel_name`, `channel_kind`, `notification_id`, `notification_kind`, `notification_title`, `revision`, `op`, `status`, `reason`, `attempts`, `next_attempt_at`, `last_error`, `duration_ms`, `message_ref`, `created_at`, `updated_at` |
 
 <a id="event-log-record"></a>
 ### `log.record`

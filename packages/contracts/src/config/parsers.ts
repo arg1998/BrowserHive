@@ -175,6 +175,24 @@ export const zUrl = z
   })
   .meta({ [GRAMMAR_META_KEY]: URL_GRAMMAR });
 
+const PUBLIC_URL_GRAMMAR =
+  "an absolute http: or https: URL without query or fragment, like 'https://browserhive.example.net'";
+const PUBLIC_URL_RE = /^https?:\/\/[^\s/?#@]+(?::\d{1,5})?(?:\/[^\s?#]*)?$/i;
+
+/**
+ * Public-address grammar (`publicUrl`, spec 08 §5.8): an absolute `http:`/`https:` URL without
+ * credentials, query or fragment. Output: the trimmed text without trailing slashes.
+ */
+export const zPublicUrl = z
+  .string()
+  .transform((value, ctx): string => {
+    const text = value.trim();
+    return PUBLIC_URL_RE.test(text)
+      ? text.replace(/\/+$/, '')
+      : fail(ctx, PUBLIC_URL_GRAMMAR, value);
+  })
+  .meta({ [GRAMMAR_META_KEY]: PUBLIC_URL_GRAMMAR });
+
 const STRING_GRAMMAR = 'a non-empty string';
 
 /** String grammar: as-is, but never empty (an empty value is a usage error, spec 08 §1). */

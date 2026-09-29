@@ -10,6 +10,7 @@ export const COMMAND_NAMES = [
   'config',
   'db',
   'admin',
+  'channels',
   'version',
   'help',
 ] as const;
@@ -79,6 +80,13 @@ const json: FlagDescriptor = {
   describe: 'Print machine-readable JSON instead of text.',
 };
 const dataDirKeys: readonly ConfigKey[] = ['dataDir', 'config', 'color'];
+const notificationChannelFlag: FlagDescriptor = {
+  name: 'notificationChannel',
+  kind: 'value',
+  placeholder: '<kind:params>',
+  describe:
+    'Declare a notification channel for this run (repeatable; secrets as env:NAME), e.g. "telegram:name=phone,token=env:BH_TG_TOKEN,chat=123456".',
+};
 const remoteFlags: readonly FlagDescriptor[] = [
   {
     name: 'url',
@@ -125,8 +133,8 @@ export const COMMANDS: readonly CommandDescriptor[] = [
     name: 'serve',
     summary: 'Start the MCP server (default)',
     description:
-      'Resolves the configuration (defaults < environment < browserhive.config.json < flags), starts the server and waits for a signal. Every configuration key is a flag.',
-    flags: [],
+      'Resolves the configuration (defaults < environment < browserhive.config.json < flags), starts the server and waits for a signal. Every configuration key is a flag; --notificationChannel is a flag only (never an environment variable or a config-file key).',
+    flags: [notificationChannelFlag],
     configKeys: CONFIG_KEYS,
     subcommands: [],
     defaultSubcommand: null,
@@ -187,6 +195,7 @@ export const COMMANDS: readonly CommandDescriptor[] = [
       'Runs every host check and prints a table. Exit 0 when all checks pass, 1 when any fails, 2 for warnings only. Accepts the server flags so the checks see the configuration serve would use. Checks launch each installed browser once to test the sandbox.',
     flags: [
       json,
+      notificationChannelFlag,
       {
         name: 'printApparmorProfile',
         kind: 'boolean',
@@ -325,6 +334,40 @@ export const COMMANDS: readonly CommandDescriptor[] = [
       }),
     ],
     defaultSubcommand: null,
+    args: [],
+  },
+  {
+    name: 'channels',
+    summary: 'List, test and preview notification channels',
+    description:
+      'Talks to a running server over its REST API (--url, default the configured host and port) with an operator bearer (--token) or the dashboard cookie (--cookie). test sends a real message and exits 1 when the platform refused it; preview sends nothing.',
+    flags: [],
+    configKeys: ['host', 'port', 'config', 'color'],
+    subcommands: [
+      sub(['list'], 'List channels with status, target, secret variables and 24 h counts', {
+        flags: [json, ...remoteFlags],
+      }),
+      sub(['test'], 'Send a real test message through a channel', {
+        args: [{ name: 'name', required: true, describe: 'Channel name.' }],
+        flags: [json, ...remoteFlags],
+      }),
+      sub(['preview'], 'Print the platform request a channel would send (sends nothing)', {
+        args: [{ name: 'name', required: true, describe: 'Channel name.' }],
+        flags: [
+          json,
+          {
+            name: 'sample',
+            kind: 'value',
+            placeholder: '<kind>',
+            describe:
+              'Sample notification: attention, attention-resolved, vault-confirm, tool-errors, crash, degraded or test.',
+            defaultText: 'attention',
+          },
+          ...remoteFlags,
+        ],
+      }),
+    ],
+    defaultSubcommand: ['list'],
     args: [],
   },
   {

@@ -9,6 +9,7 @@ browserhive config show|schema|validate
 browserhive db status|backup|restore <file>|migrate
 browserhive admin reset-password
 browserhive admin tokens list|create <name>|revoke <name>
+browserhive channels list | test <name> | preview <name> [--sample <kind>]
 browserhive version | --version | -v
 browserhive help [command] | --help | -h
 ```
@@ -42,6 +43,25 @@ Output streams: under `--transport stdio`, stdout carries only MCP frames and ev
 
 All server flags are in the [configuration reference](../reference/configuration.md).
 
+### Notification channels
+
+`--notificationChannel` declares a notification channel for this run ([startup channels](notifications.md#startup-channels)). Repeat it for several channels. It is a flag only: there is no environment variable or config-file key for it.
+
+```
+--notificationChannel "<platform>:<param>=<value>,<param>=<value>…"
+```
+
+A list value joins its items with `+`; a value cannot contain `,` (write `%2C`). Secret parameters are always `env:NAME`, the name of an environment variable (not starting with `BROWSERHIVE_`); a secret written into the flag is refused with exit 64, because process arguments are visible to other users of the machine.
+
+| Platform | Parameters |
+|---|---|
+| `telegram` | `name`, `token=env:NAME`, `chat` (a chat id), optional `thread` (a forum topic id) |
+| `discord` | `name`, `webhook=env:NAME` (the webhook URL), optional `mode=webhook` |
+| `ntfy` | `name`, `topic` (a topic, or `env:NAME`), optional `server` (default `https://ntfy.sh`), `token=env:NAME` |
+| `webhook` | `name`, `url` (a URL, or `env:NAME`), optional `secret=env:NAME` (the signing key) |
+
+Rules, all optional: `categories` (`needs-you+problems+wrap-ups+reports+system`), `min` (`info`, `warn`, `error`, `critical`), `sessions` (session name patterns such as `shop-*`), `harness`, `content` (`counts`, `titles`, `full`), `quiet=22:00-07:00` with `tz=Europe/Berlin`, `ttl.<category>=2h` (Telegram at most `47h`), `deleteWhenResolved` (`true`, or a `+` list of categories), `images` (a `+` list of categories; needs `content=full`) and `maskImages=true`.
+
 ## `init`
 
 One-time setup, safe to re-run:
@@ -68,7 +88,7 @@ One-time setup, safe to re-run:
 
 ## `doctor`
 
-Checks Bun, browsers (the bundled Chromium, installed Chrome and Edge, that the configured `defaultChannel` is installed, version drift, managed policies that block automation), Chromium's sandbox for each installed browser (each is launched once), running as root or in a container, data directory permissions and disk space, configuration, port availability, `bw` when the vault is on, the database and pending migrations, the OTLP endpoint when telemetry is on, `maxSessions` against RAM, and config-file permissions when it holds secrets (not when `authTokens` only [references](configuration.md#references) environment variables). It counts the values that came from references and warns about each referenced variable that was not set, so its default is in use. It also warns when the data directory contains an unrecognised data file, which BrowserHive neither reads nor migrates.
+Checks Bun, browsers (the bundled Chromium, installed Chrome and Edge, that the configured `defaultChannel` is installed, version drift, managed policies that block automation), Chromium's sandbox for each installed browser (each is launched once), running as root or in a container, data directory permissions and disk space, configuration, port availability, `bw` when the vault is on, the database and pending migrations, the OTLP endpoint when telemetry is on, `maxSessions` against RAM, `publicUrl` (whether it reaches this BrowserHive; see [public address](notifications.md#public-address)), notification channels (each `--notificationChannel` parses and every variable a channel names is set), and config-file permissions when it holds secrets (not when `authTokens` only [references](configuration.md#references) environment variables). It counts the values that came from references and warns about each referenced variable that was not set, so its default is in use. It also warns when the data directory contains an unrecognised data file, which BrowserHive neither reads nor migrates.
 
 `--json` prints `[{ check, status, detail }]`. Exit codes: `0` all good, `2` warnings only, `1` a check failed. When the configured browser cannot run sandboxed, the text output ends with what to do on this machine. `--printApparmorProfile` prints an AppArmor profile for the configured browser (for Ubuntu 23.10+) and exits; install it yourself with `sudo tee /etc/apparmor.d/<name>` and `sudo apparmor_parser -r`.
 
@@ -114,6 +134,16 @@ See [Upgrading](upgrading.md).
 | `admin tokens revoke <name>` | Revoke immediately. |
 
 Token commands work on the database directly when the server is stopped, or through the REST API of a running server with `--url <server>` and an operator credential.
+
+## `channels`
+
+| Command | Meaning |
+|---|---|
+| `channels list [--json]` | Every notification channel: platform, status (and "from startup"), where it sends, whether its variables are set, the last delivery and the last 24 hours. |
+| `channels test <name> [--json]` | Sends a real test message. Exit `0` when the platform accepted it, `1` with the reason when it did not. |
+| `channels preview <name> [--sample <kind>] [--json]` | Prints the platform request a send would make (secrets shown as variable names); sends nothing. Samples: `attention` (default), `attention-resolved`, `vault-confirm`, `tool-errors`, `crash`, `degraded`, `test`. |
+
+They talk to the running server: `--url` defaults to the configured host and port, and `--token` (an operator API token) or `--cookie` authenticates. See [Notifications](notifications.md).
 
 ## `version`
 

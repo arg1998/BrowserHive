@@ -103,6 +103,12 @@
       "x-browserhive-env": "BROWSERHIVE_ALLOWED_HOSTS",
       "x-browserhive-cli": "--allowedHosts"
     },
+    "publicUrl": {
+      "type": "string",
+      "description": "Address where you made the dashboard reachable (reverse proxy, tunnel, Tailscale name). Notification links use it, and its host is trusted like allowedHosts.",
+      "x-browserhive-env": "BROWSERHIVE_PUBLIC_URL",
+      "x-browserhive-cli": "--publicUrl"
+    },
     "admin": {
       "description": "Enable the dashboard, REST API, WebSocket and trace viewer (http only).",
       "x-browserhive-env": "BROWSERHIVE_ADMIN",

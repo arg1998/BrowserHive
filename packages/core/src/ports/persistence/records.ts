@@ -28,6 +28,7 @@ export type {
   PrincipalRecord,
 } from './records-identity.ts';
 export type {
+  ChannelDeliveryStats,
   DeliveryFinishPatch,
   NewNotificationDelivery,
   NotificationChannelMessageRecord,

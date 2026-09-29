@@ -110,6 +110,18 @@ export const keys = {
     list: (params?: KeyParams) => ['notifications', 'list', stableParams(params)] as const,
     unreadCount: () => ['notifications', 'unread-count'] as const,
   },
+  channels: {
+    all: ['channels'] as const,
+    list: () => ['channels', 'list'] as const,
+    detail: (id: string) => ['channels', 'detail', id] as const,
+    preview: (params?: KeyParams) => ['channels', 'preview', stableParams(params)] as const,
+    env: (names: readonly string[]) => ['channels', 'env', [...names].sort()] as const,
+    connect: (id: string) => ['channels', 'telegram-connect', id] as const,
+    deliveryLists: () => ['channels', 'deliveries'] as const,
+    deliveries: (params?: KeyParams) => ['channels', 'deliveries', stableParams(params)] as const,
+    delivery: (seq: number) => ['channels', 'delivery', seq] as const,
+  },
+  publicUrl: () => ['system', 'public-url'] as const,
   preferences: () => ['preferences'] as const,
   search: (q: string) => ['search', q] as const,
 } as const;

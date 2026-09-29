@@ -6,6 +6,7 @@ import {
   runTokensList,
   runTokensRevoke,
 } from './commands/admin.ts';
+import { runChannelsList, runChannelsPreview, runChannelsTest } from './commands/channels.ts';
 import { appErrorFacts } from './commands/common.ts';
 import { runConfigSchema, runConfigShow, runConfigValidate } from './commands/config.ts';
 import { runDbBackup, runDbMigrate, runDbRestore, runDbStatus } from './commands/db.ts';
@@ -46,7 +47,7 @@ export async function runInvocation(
 ): Promise<number> {
   switch (invocation.command) {
     case 'serve':
-      return runServe(context, invocation.resolved);
+      return runServe(context, invocation);
     case 'init':
       return runInit(context, invocation);
     case 'doctor':
@@ -75,6 +76,18 @@ export async function runInvocation(
       return runTokensCreate(context, invocation);
     case 'admin-tokens-revoke':
       return runTokensRevoke(context, invocation);
+    case 'channels-list':
+      return runChannelsList(context, invocation.remote, invocation.json);
+    case 'channels-test':
+      return runChannelsTest(context, invocation.remote, invocation.name, invocation.json);
+    case 'channels-preview':
+      return runChannelsPreview(
+        context,
+        invocation.remote,
+        invocation.name,
+        invocation.sample,
+        invocation.json,
+      );
     case 'version':
       return runVersion(context, invocation.json);
   }

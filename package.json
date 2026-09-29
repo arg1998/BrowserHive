@@ -41,7 +41,7 @@
     "release:publish": "bun run build && bun run package:check && changeset publish",
     "sync:version": "bun scripts/sync-version.ts",
     "typecheck:tsc": "tsc -b --pretty",
-    "test:server": "bun test packages/contracts packages/core/src packages/core/test/persistence packages/core/test/lint packages/browserhive/src packages/browserhive/test/cli packages/browserhive/test/composition test/lint test/docs",
+    "test:server": "bun test packages/contracts packages/core/src packages/core/test/persistence packages/core/test/notifications packages/core/test/lint packages/browserhive/src packages/browserhive/test/cli packages/browserhive/test/composition test/lint test/docs",
     "test:dashboard": "bun test packages/dashboard/src",
     "website:install": "bun install --cwd website --frozen-lockfile",
     "website:dev": "bun run --cwd website dev",

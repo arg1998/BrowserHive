@@ -41,6 +41,7 @@ export {
   zMaxSessions,
   zPath,
   zPort,
+  zPublicUrl,
   zRatio,
   zReservedEnum,
   zString,

@@ -5,6 +5,7 @@ import type { AnyRoute } from '../define-route.ts';
 import { ATTENTION_ROUTES } from './attention.ts';
 import { AUTH_ROUTES } from './auth.ts';
 import { BLOCKLIST_ROUTES } from './blocklist.ts';
+import { CHANNEL_ROUTES } from './channels.ts';
 import { FLEET_ROUTES } from './fleet.ts';
 import { LOG_ROUTES } from './logs.ts';
 import { type MetaRouteDeps, metaRoutes } from './meta.ts';
@@ -35,6 +36,7 @@ export function apiRoutes(deps: MetaRouteDeps & { readonly logger: Logger }): re
     ...SYSTEM_ROUTES,
     ...LOG_ROUTES,
     ...NOTIFICATION_ROUTES,
+    ...CHANNEL_ROUTES,
     ...searchRoutes(deps.logger),
   ];
 }

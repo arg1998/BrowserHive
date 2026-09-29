@@ -1,0 +1,31 @@
+browserhive channels preview — Print the platform request a channel would send (sends nothing)
+
+USAGE
+  browserhive channels preview <name> [flags]
+
+Talks to a running server over its REST API (--url, default the configured host and port) with an
+operator bearer (--token) or the dashboard cookie (--cookie). test sends a real message and exits 1
+when the platform refused it; preview sends nothing.
+
+ARGUMENTS
+  <name>  Channel name.
+
+FLAGS
+  --json                       Print machine-readable JSON instead of text.
+  --sample <kind>              Sample notification: attention, attention-resolved, vault-confirm,
+                               tool-errors, crash, degraded or test. default: attention
+  --url <url>                  Talk to a running server over its REST API instead of opening the
+                               database (http://127.0.0.1:9876).
+  --token <bearer>             Operator bearer token for --url (bh_operator_…).
+  --cookie <value>             Dashboard session cookie value for --url (browserhive_session).
+  --host <address>             Bind address. A non-loopback host requires auth=token or
+                               allowInsecureBind=true. default: 127.0.0.1
+  --port <1-65535>             Bind port for MCP, REST, WebSocket and the dashboard. default: 9876
+  --config <path>              Config file path. CLI and environment only: a config file cannot
+                               point at another.
+  --color <auto|always|never>  Colour for logs and CLI output. auto honours NO_COLOR, FORCE_COLOR,
+                               TERM=dumb and TTY. default: auto
+
+GLOBAL FLAGS
+  -h, --help     Show help.
+  -v, --version  Print the version.

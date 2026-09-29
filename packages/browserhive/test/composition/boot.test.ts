@@ -160,6 +160,48 @@ describe('bootServer', () => {
     expect(existsSync(lock)).toBe(false);
   });
 
+  it('projects startup channels, shows them in the banner, and stops on a name clash', async () => {
+    const channel = {
+      name: 'pager',
+      kind: 'ntfy' as const,
+      mode: null,
+      target: { topic: 'bh-test' },
+      secret_refs: {},
+      rules: {},
+    };
+    const input = {
+      ...bootInputFor(dir.path, { admin: true, publicUrl: 'https://bh.example.net' }),
+      startupChannels: [channel],
+    };
+    const server = await bootServer(input);
+    expect(input.output.out.join('\n')).toContain(
+      'Notify     1 channel (1 from startup) · links → https://bh.example.net',
+    );
+    await server.stop();
+    // A dashboard channel with the same name: the start refuses (D-39).
+    const quiet = {
+      child: () => quiet,
+      isLevelEnabled: () => false,
+      error: () => undefined,
+      warn: () => undefined,
+      info: () => undefined,
+      debug: () => undefined,
+      trace: () => undefined,
+    };
+    const storage = await openStorageForCli({
+      dataDir: dir.path,
+      readOnly: false,
+      migrate: false,
+      logger: quiet,
+    });
+    const row = (await storage.repos.notificationChannels.list())[0];
+    if (row === undefined) throw new Error('startup channel was not projected');
+    await storage.repos.notificationChannels.upsert({ ...row, source: 'db' });
+    await storage.close();
+    const clash = { ...bootInputFor(dir.path), startupChannels: [channel] };
+    await expect(bootServer(clash)).rejects.toMatchObject({ code: 'CONFIG_INVALID' });
+  });
+
   it('prints the banner through output once ready, with the seed secrets on first start', async () => {
     const input = bootInputFor(dir.path, { admin: true, auth: 'token' });
     const server = await bootServer(input);

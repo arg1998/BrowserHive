@@ -1,0 +1,27 @@
+{
+  "kind": "ntfy",
+  "variant": "attention-resolved-image-edit",
+  "mode": null,
+  "requests": [
+    {
+      "method": "PUT",
+      "path": "/bh-alerts/n-sample000001",
+      "encoding": "binary",
+      "body": {
+        "title": "Attention requested",
+        "message": "Resolved by admin after 2m 10s\n\n“CAPTCHA on the checkout page: please solve it, then resume”\n\nMode: takeover\nSession: checkout\nPage: https://shop.example.com/checkout/payment\nTool: click\nWaiting since: 14:13 UTC\nOutcome: resolved\nSettled: 14:15 UTC",
+        "priority": 2,
+        "tags": [
+          "white_check_mark"
+        ],
+        "filename": "screenshot.jpg"
+      },
+      "headers": {},
+      "file": {
+        "ref": "nimg-sample",
+        "name": "screenshot.jpg",
+        "content_type": "image/jpeg"
+      }
+    }
+  ]
+}

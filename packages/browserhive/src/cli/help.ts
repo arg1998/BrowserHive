@@ -175,6 +175,20 @@ function serverFlagSections(options: HelpOptions): string[] {
   return lines;
 }
 
+/** `serve`'s own flags (not config keys): `--notificationChannel` (spec 08 §5.7). */
+function serveFlagSection(options: HelpOptions): string[] {
+  const serve = COMMANDS.find((command) => command.name === 'serve');
+  if (serve === undefined || serve.flags.length === 0) return [];
+  return [
+    '',
+    header('FLAGS — notifications (flag only)', options.style),
+    ...renderRows(
+      serve.flags.map((f) => commandFlagRow(f, options.style)),
+      options,
+    ),
+  ];
+}
+
 function footer(options: HelpOptions): string[] {
   return [
     '',
@@ -215,6 +229,7 @@ export function renderGlobalHelp(options: HelpOptions): readonly string[] {
     header('GLOBAL FLAGS', style),
     ...renderRows(GLOBAL_ROWS(style), options),
     ...serverFlagSections(options),
+    ...serveFlagSection(options),
     ...footer(options),
   ];
   return lines;
@@ -299,7 +314,7 @@ export function renderCommandHelp(topic: HelpTopic, options: HelpOptions): reado
       ...paragraph(command.description, options),
     );
     lines.push('', header('GLOBAL FLAGS', style), ...renderRows(GLOBAL_ROWS(style), options));
-    lines.push(...serverFlagSections(options), ...footer(options));
+    lines.push(...serverFlagSections(options), ...serveFlagSection(options), ...footer(options));
     return lines;
   }
 
