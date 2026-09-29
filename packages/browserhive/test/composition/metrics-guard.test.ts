@@ -27,6 +27,7 @@ import {
   createRedactor,
   createSystemClock,
   createTelemetry,
+  DB_WRITE_TABLES,
   DegradationService,
   type DomainEvents,
   type Logger,
@@ -106,6 +107,13 @@ const CATALOGUE = METRIC_DEFINITIONS.map((d: MetricDefinition) => ({
 describe('documented == defined', () => {
   it('spec 10 §7 lists exactly the catalogue, row for row', () => {
     expect(SPEC).toEqual(CATALOGUE);
+  });
+
+  it('spec 10 §7 names the recorder tables the dropped-writes counter reports from the start', () => {
+    const text = readFileSync(join(ROOT, 'specs/10-error-handling-and-telemetry.md'), 'utf8');
+    const row = text.split('\n').find((l) => l.startsWith('| `browserhive.db.dropped_writes`'));
+    const listed = /\(the recorder table: ([^)]*)\)/.exec(row ?? '')?.[1] ?? '';
+    expect(ticked(listed)).toEqual([...DB_WRITE_TABLES]);
   });
 
   it('the telemetry guide lists exactly the catalogue (types without the observable note)', () => {
@@ -321,8 +329,8 @@ const SOURCES: readonly Source[] = [
     name: 'vault broker and blocklist (vault.access, blocklist.hit)',
     drives: ['browserhive.vault.fills', 'browserhive.blocklist.hits'],
     async run(w) {
-      publish(w, 'vault.access', { type: 'vault.access', row: { result: 'filled' } });
-      publish(w, 'blocklist.hit', { type: 'blocklist.hit', row: { source: 'config' } });
+      publish(w, 'vault.access', { type: 'vault.access', row: { result: 'success' } });
+      publish(w, 'blocklist.hit', { type: 'blocklist.hit', row: { source: 'request' } });
     },
   },
   {
@@ -409,7 +417,7 @@ const SOURCES: readonly Source[] = [
     drives: ['browserhive.notifications.actions'],
     async run(w) {
       await w.ops.actions.press({
-        token: 'a'.repeat(22),
+        token: 'a'.repeat(11),
         origin: null,
         actor: { platform: 'ntfy', id: null, name: null },
       });
@@ -435,6 +443,7 @@ describe('documented == recorded', () => {
   let server: ReturnType<typeof Bun.serve> | undefined;
   let telemetry: Telemetry | undefined;
   let received = new Map<string, Received>();
+  let first = new Map<string, Received>();
   const stops: (() => unknown)[] = [];
 
   beforeAll(async () => {
@@ -605,9 +614,14 @@ describe('documented == recorded', () => {
       schedule: () => () => undefined,
       every: () => () => undefined,
     });
-    // A "browser" whose process tree is this test process: the real reader, the real sampler.
+    // "Browsers" whose process trees are this test process and its parent: the real reader, the
+    // real sampler. The second one closes before the last export.
+    const browsers = [
+      { id: SESSION, browserPid: async () => process.pid },
+      { id: 'gone-00000001', browserPid: async () => process.ppid },
+    ];
     const sampler = startBrowserMemorySampler({
-      sessions: () => [{ id: SESSION, browserPid: async () => process.pid }],
+      sessions: () => browsers,
       reader: createProcessTreeReader(),
       repeat: () => () => undefined,
     });
@@ -623,8 +637,12 @@ describe('documented == recorded', () => {
     );
     const world: World = { bus, queue, realtime, ops, retention, sampler, channelId, hooks };
     for (const source of SOURCES) await source.run(world);
-    // The size gauge reports the value read at the previous collection.
     await telemetry.forceFlush();
+    first = receivedMetrics(bodies);
+    // A session closes; the next export no longer reports its browser. (The size gauge also
+    // reports the value read at the previous collection.)
+    browsers.pop();
+    await sampler.sample();
     await telemetry.forceFlush();
     received = receivedMetrics(bodies);
   });
@@ -658,6 +676,13 @@ describe('documented == recorded', () => {
     });
   }
 
+  it('stops reporting a gauge series that is no longer observed (a closed session)', () => {
+    const sessions = (m: Map<string, Received>) =>
+      (m.get('browserhive.browser.rss_bytes')?.points ?? []).map((p) => p.attrs['session_id']);
+    expect(sessions(first).sort()).toEqual(['gone-00000001', SESSION]);
+    expect(sessions(received)).toEqual([SESSION]);
+  });
+
   it('carries the values of the driven sources', () => {
     const points = (name: MetricName) => received.get(name)?.points ?? [];
     expect(points('browserhive.tool_calls')).toContainEqual({
@@ -679,9 +704,14 @@ describe('documented == recorded', () => {
     expect(points('browserhive.retention.pruned_rows')).toEqual([
       { value: 4, attrs: { table: 'tool_calls' } },
     ]);
-    expect(points('browserhive.db.dropped_writes')).toEqual([
-      { value: 1, attrs: { table: 'tool_calls' } },
-    ]);
+    expect(points('browserhive.db.dropped_writes')).toContainEqual({
+      value: 1,
+      attrs: { table: 'tool_calls' },
+    });
+    expect(points('browserhive.db.dropped_writes')).toContainEqual({
+      value: 0,
+      attrs: { table: 'logs' },
+    });
     expect(points('browserhive.ws.connections')).toContainEqual({ value: 1, attrs: {} });
     expect(points('browserhive.ws.frames_dropped')).toContainEqual({
       value: 1,

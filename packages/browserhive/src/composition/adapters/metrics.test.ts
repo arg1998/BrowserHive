@@ -253,7 +253,11 @@ describe('wireMetrics: observable instruments', () => {
     );
     await Promise.resolve();
     expect(collect('dbWriteQueueDepth')).toEqual([{ value: 3, attrs: {} }]);
-    expect(collect('dbDroppedWrites')).toEqual([{ value: 2, attrs: { table: 'tool_calls' } }]);
+    // Every recorder table from the start, at 0 until it loses a write.
+    const dropped = collect('dbDroppedWrites');
+    expect(dropped).toHaveLength(8);
+    expect(dropped).toContainEqual({ value: 2, attrs: { table: 'tool_calls' } });
+    expect(dropped).toContainEqual({ value: 0, attrs: { table: 'logs' } });
     expect(collect('dbSizeBytes')).toEqual([{ value: 4096, attrs: {} }]);
     expect(collect('browserRssBytes')).toEqual([{ value: 123_456, attrs: { session_id: 's-1' } }]);
     expect(collect('processEventLoopLag')).toEqual([{ value: 12.5, attrs: {} }]);

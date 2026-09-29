@@ -43,6 +43,21 @@ export type MetricName = (typeof METRIC)[keyof typeof METRIC];
 /** Cap on `connection_id` series for the buffered-bytes gauge (spec 10 §7). */
 export const WS_BUFFERED_BYTES_MAX_SERIES = 50;
 
+/**
+ * The recorder tables of the write queue (spec 10 §7 `browserhive.db.dropped_writes{table}`): each
+ * is reported from the start, at 0 until it loses a write, so a rate over the series works.
+ */
+export const DB_WRITE_TABLES = [
+  'sessions',
+  'tool_calls',
+  'pages',
+  'screenshots',
+  'blocked_requests',
+  'vault_access',
+  'events',
+  'logs',
+] as const;
+
 /** How often the browser-memory sampler reads the process trees (spec 10 §7). */
 export const BROWSER_RSS_SAMPLE_INTERVAL_MS = 10_000;
 

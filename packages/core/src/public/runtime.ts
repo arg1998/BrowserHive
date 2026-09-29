@@ -45,6 +45,7 @@ export type { LogSink } from '../infra/logging/sinks.ts';
 export { createBunProcessRunner } from '../infra/process/bun-process-runner.ts';
 export {
   BROWSER_RSS_SAMPLE_INTERVAL_MS,
+  DB_WRITE_TABLES,
   type Instruments,
   METRIC,
   METRIC_DEFINITIONS,

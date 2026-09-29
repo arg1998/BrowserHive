@@ -10,6 +10,7 @@ import type {
   WriteQueue,
 } from '@browserhive/core/runtime';
 import {
+  DB_WRITE_TABLES,
   readProcessMemory,
   startEventLoopLagMonitor,
   WS_BUFFERED_BYTES_MAX_SERIES,
@@ -181,8 +182,10 @@ export function wireMetrics(
     [
       instruments.dbDroppedWrites,
       (r) => {
-        for (const [table, count] of sources.queue.droppedWritesByTable) {
-          r.observe(count, { table });
+        const dropped = sources.queue.droppedWritesByTable;
+        for (const table of DB_WRITE_TABLES) r.observe(dropped.get(table) ?? 0, { table });
+        for (const [table, count] of dropped) {
+          if (!(DB_WRITE_TABLES as readonly string[]).includes(table)) r.observe(count, { table });
         }
       },
     ],

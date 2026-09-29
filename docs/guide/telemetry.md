@@ -53,7 +53,7 @@ If the MCP client sends a W3C `traceparent` in the tool call's `_meta`, the tool
 | `browserhive.db.write_queue.depth` | gauge | `{write}` | | Writes waiting to be saved. |
 | `browserhive.db.dropped_writes` | counter | `{write}` | `table` | Writes lost because the queue was full or the write failed. |
 | `browserhive.db.size_bytes` | gauge | `By` | | Database size. |
-| `browserhive.browser.rss_bytes` | gauge | `By` | `session_id` | Memory of each session's browser, all its processes together, sampled every 10 seconds. Linux and macOS only. |
+| `browserhive.browser.rss_bytes` | gauge | `By` | `session_id` | Memory of each session's browser, all its processes added up (memory they share counts once per process), sampled every 10 seconds. Linux and macOS only. |
 | `browserhive.attention.open` | up-down counter | `{request}` | `kind` (`attention`, `vault_confirm`) | Operator requests waiting for an answer. |
 | `browserhive.attention.wait` | histogram | `ms` | `status` | How long each attention request waited until it was answered, timed out or cancelled. |
 | `browserhive.vault.fills` | counter | `{fill}` | `result` | Vault fills. |
@@ -68,7 +68,7 @@ If the MCP client sends a W3C `traceparent` in the tool call's `_meta`, the tool
 
 `harness` on metrics is one of the known harness names, `unknown` or `other` (every name BrowserHive doesn't know is folded into `other`), so it adds a bounded number of series. The model, workspace and extra labels are never metric attributes.
 
-Metrics are exported every 30 seconds. Gauges and the WebSocket and write-queue totals are read at export time; with telemetry off nothing is measured.
+Metrics are exported every 30 seconds. Gauges and the WebSocket and write-queue totals are read at export time, and a gauge only reports what exists at that moment: a closed session or connection disappears from the next export. With telemetry off nothing is measured.
 
 ### Logs
 

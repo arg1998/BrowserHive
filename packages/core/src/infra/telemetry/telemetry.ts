@@ -9,7 +9,7 @@ import {
 } from '@opentelemetry/api';
 import { logs, type Logger as OtelLogger } from '@opentelemetry/api-logs';
 import type { LogRecordExporter } from '@opentelemetry/sdk-logs';
-import type { PushMetricExporter } from '@opentelemetry/sdk-metrics';
+import type { InstrumentType, PushMetricExporter } from '@opentelemetry/sdk-metrics';
 import type { SpanExporter } from '@opentelemetry/sdk-trace-base';
 import { createInstruments, type Instruments } from './metrics.ts';
 import { TRACER_NAME } from './spans.ts';
@@ -174,9 +174,9 @@ async function enabledTelemetry(options: TelemetryOptions): Promise<Telemetry> {
       protocol === 'http/json'
         ? await import('@opentelemetry/exporter-metrics-otlp-http')
         : await import('@opentelemetry/exporter-metrics-otlp-proto');
-    const exporter = trackMetricExporter(
-      new OTLPMetricExporter(exporterConfig('/v1/metrics')),
-      tracker,
+    const exporter = reportOnlyObservedGauges(
+      trackMetricExporter(new OTLPMetricExporter(exporterConfig('/v1/metrics')), tracker),
+      sdk,
     );
     const provider = new sdk.MeterProvider({
       resource,
@@ -313,6 +313,28 @@ function trackMetricExporter(
     ...(temporality !== undefined && { selectAggregationTemporality: temporality }),
     ...(aggregation !== undefined && { selectAggregation: aggregation }),
   };
+}
+
+/**
+ * Observable gauges are collected with delta temporality, which OTLP gauges do not carry, so each
+ * export holds only the series observed at that collection: a closed session's browser memory or a
+ * closed WebSocket's buffered bytes stops being reported instead of repeating its last value.
+ * Every other instrument keeps the exporter's temporality (cumulative by default).
+ */
+function reportOnlyObservedGauges(
+  exporter: PushMetricExporter,
+  sdk: Pick<
+    typeof import('@opentelemetry/sdk-metrics'),
+    'AggregationTemporality' | 'InstrumentType'
+  >,
+): PushMetricExporter {
+  const inner = exporter.selectAggregationTemporality?.bind(exporter);
+  return Object.assign(exporter, {
+    selectAggregationTemporality: (type: InstrumentType) =>
+      type === sdk.InstrumentType.OBSERVABLE_GAUGE || type === sdk.InstrumentType.GAUGE
+        ? sdk.AggregationTemporality.DELTA
+        : (inner?.(type) ?? sdk.AggregationTemporality.CUMULATIVE),
+  });
 }
 
 function trackLogExporter(inner: LogRecordExporter, tracker: FailureTracker): LogRecordExporter {
