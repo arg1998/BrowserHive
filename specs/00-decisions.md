@@ -405,6 +405,7 @@ Details in `04-admin-frontend.md`.
 - Tool errors are **grouped per session**: one row per group (`"<slug> · N tool errors"`) grows while it is unread, has been idle for less than 5 minutes and is younger than 60 minutes; `notification.updated` carries the full row and clients upsert by id; lists sort by `updated_at`. Session-less caller mistakes (codes whose retry guidance is "different arguments") produce no notification. A failing agent would otherwise flood the inbox and toasts with one row per call, none naming the session.
 - `/me/preferences` stores the notification toast preferences (`notifications.toasts`, `notifications.types`), which follow the operator across devices; sidebar state and page size are per-device or per-URL.
 - External channels (Telegram, Discord, ntfy, a generic webhook, later more) implement the `NotificationChannel` port and receive the contract through the delivery outbox (D-34). The in-app inbox is itself a channel on that port, delivered inline.
+- Scheduled reports (a daily or weekly digest, D-43) and anomaly alerts (D-44) are produced per channel from the analytics read model, never from a single event, and are addressed to the channel that schedules them.
 
 **Consequences.**
 - Read state survives reloads and is shared across tabs.
@@ -644,8 +645,8 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 - **Producers own it; consumers only render it.** Producers are pure, table-driven functions from observed bus events (spec 03 §9). A platform adapter receives the contract and nothing else: it never reads domain events or the database. **Agents never author notifications**: every message derives from facts BrowserHive observed (D-09, D-12); there is no `notify` tool.
 - **Full-state revisions.** A notification keeps its `id` for life; every state change is `revision + 1` and the message is complete at every revision, so a re-send or re-edit is always correct and adapters are idempotent.
 - **Redaction happens before the contract** (spec 10 §9): every string a producer copies from an event goes through the `Redactor` (registered secrets and credential patterns) and URLs through `sanitizeUrl`. Content levels (`counts` < `titles` < `full`) are applied by the core per channel, never by an adapter.
-- **Versioning.** Additive changes (a new optional field, a new kind, block, inline or command) keep `schema: 1`; consumers MUST ignore what they do not know (an unknown block renders as nothing, an unknown action is skipped). Removing or re-typing a field bumps `schema`, and the generic webhook announces the version it sends.
-- A shared, pure `degrade(message, capabilities)` adapts a message to what a renderer supports (tables → lists, images dropped or linked, `act` → `open`, truncation with "… Open in BrowserHive"); renderers never implement fallbacks themselves.
+- **Versioning.** Additive changes (a new optional field, a new kind, block, inline or command) keep `schema: 1` (N3 added the kind `digest.weekly`, the `chart` block and the optional `report` field this way); consumers MUST ignore what they do not know (an unknown block renders as nothing, an unknown action is skipped). Removing or re-typing a field bumps `schema`, and the generic webhook announces the version it sends.
+- A shared, pure `degrade(message, capabilities)` adapts a message to what a renderer supports (tables → lists, charts → a line of text bars, images dropped or linked, `act` → `open`, truncation with "… Open in BrowserHive"); renderers never implement fallbacks themselves. A new block type is added only when `degrade` can turn it into something every renderer already draws.
 
 **Consequences.** Adding a platform is a renderer plus a transport against a fixed input, testable with golden files. The contract is a public compatibility surface: its JSON Schema is diffed in review. The in-app `Notification` DTO keeps its shape and gains the contract's classification fields (`kind`, `category`, `severity`, `state`, `revision`, `thread`) additively. Rows from before schema v5 have no stored message (`message_json` NULL): nothing is fabricated for them.
 
@@ -686,6 +687,7 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 - **Backlog.** After an outage only the latest revision per notification is sent, and more than 20 pending `info` sends on one channel collapse into the newest one with a "you missed N" note.
 - **Suppressed deliveries are logged** with a reason (`filtered`, `quiet_hours`, `throttled`, `channel_paused`, `content_blocked`, `image_blocked`, `edit_unsupported`, `delete_unsupported`, `collapsed`), so "why didn't I get it?" always has an answer.
 - With no external channel configured nothing is enqueued, no worker timer runs and the only cost is one indexed read of `notification_channels` at startup.
+- **Addressed notifications.** A scheduled report (D-43, D-44) is planned for the one channel it was produced for, and only that channel's paused/adapter state applies; every other notification is planned for every channel, filtered by its rules.
 
 **Consequences.** Delivery rows are telemetry-class (30 days, spec 03 §7.1); channels are configuration and never pruned. `browserhive.notifications.deliveries{channel_kind,status}` counts outcomes and every platform call is a span (spec 10). A per-principal routing model is not built: channels are instance-wide and deliveries are enqueued once per produced notification, matching the single shared inbox (spec 03 §9).
 
@@ -807,3 +809,53 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 **Consequences.** Two-way ntfy needs no BrowserHive endpoint. Presses made while BrowserHive was stopped for more than ntfy's cache time are lost (the request is settled by then anyway).
 
 **Alternatives considered.** *Open links only on ntfy*: the fallback if the spike had failed. *Putting an access token in the `http` action's headers*: anyone who reads topic A would get a write token.
+
+## D-43 Scheduled reports: addressed to each channel, in its time zone, sent late once, never empty
+
+**Status:** Accepted
+
+**Implementation:** N3: `ReportScheduler` and the report producers (`app/notifications/reports*.ts`), the `digest` rule, `POST /channels/{id}/digest`, the wizard's Reports section, `--notificationChannel … digest=…`.
+
+**Context.** A daily summary is the notification people keep when they do not want to be interrupted. "09:00" means the operator's wall clock, which moves with daylight saving time and differs between the phone a channel reaches and the host BrowserHive runs on. BrowserHive is a local daemon: it is stopped, the laptop sleeps, a container restarts. A report must neither be lost because the daemon was off at 09:00 nor arrive five times after a long weekend, and a report that says "nothing happened" is noise.
+
+**Decision.**
+- **Per channel, addressed.** A channel opts in with `rules.digest` (`every: 'day'|'week'`, `at: 'HH:MM'`, `day` for weekly). Every report is its own notification, addressed only to that channel (the outbox plans it for no other channel), because the window, the time zone, the thresholds and the content level are the channel's. The schedule is the opt-in: the channel's category, severity, session and harness filters do not apply to its reports. The in-app row is stored read and dismissed (like a test send): the inbox is not repeated, the delivery log keeps its record, and the dashboard's Overview is the in-app equivalent.
+- **Time zone.** `rules.time_zone` (an IANA name) is the channel's zone for its reports and its quiet hours (`quiet_hours.time_zone`, when set, still wins for quiet hours). Absent, it is **the host's zone, read at each evaluation** (so a moved host follows). The window of a report is the local period that ends at the scheduled time: yesterday 09:00 to today 09:00 (23 or 25 hours across a DST change), or the previous week. A local time that does not exist on a day (spring forward) fires at the same wall time shifted by the gap; a local time that occurs twice (fall back) fires once, at its first occurrence.
+- **Durable, exactly once per window.** The last handled occurrence and the end of the last window are kept in `notification_cursors` (`digest:<channel_id>`), written in the same transaction as the report's notification and delivery row. Changing a schedule re-arms it from the moment of the change: an edit never causes a late report.
+- **Late, once.** When the daemon starts (or wakes) after one or more scheduled times passed, the **most recent** missed window is produced and marked late ("Sent late: BrowserHive was not running at 09:00"); older missed windows are skipped and counted in one line ("2 earlier digests were skipped while BrowserHive was off"). A report is late when it is produced more than 5 minutes after its scheduled time. At most one late report per schedule; the dashboard's Overview covers the rest.
+- **Never empty.** A window with no session started, no tool call, no attention request, no vault access, no blocked request and no open degradation produces no message: the notification is stored and its delivery row is `suppressed` with the reason `empty`, so "why didn't I get a digest?" has an answer. "Send a digest now" (the dashboard, `POST /channels/{id}/digest`) sends even an empty one.
+- **Quiet hours.** A digest is sent at the time the operator chose even inside the channel's quiet hours, but **silently** there (`alert: false`: no sound, no vibration). Quiet hours hold back alerts; a digest scheduled into them is still wanted.
+- **Content levels.** A report is built at the channel's content level: `counts` carries numbers and fixed labels only; `titles` (the default) adds BrowserHive's own vocabulary (tool names, error codes, harness slugs, vault results, degradation codes, blocklist patterns, session slugs); `full` adds degradation messages and the most blocked domain. Every copied string passes the `Redactor` (spec 10 §9) like any other notification.
+- **Structure.** Reports use tables and the additive `chart` block (D-32) and carry the optional `report` field (window, time zone, `late`, skipped windows, `manual`), so the generic webhook's consumers and the delivery log read the window without parsing text.
+- With no channel scheduling a report, no timer runs and no query is made.
+
+**Consequences.** Reports cost one scheduler tick a minute while any channel schedules one, a handful of indexed queries per report, and no table. The delivery log shows every report with its window and the late marker. A report addressed to a channel that was paused when it fell due is logged `suppressed: channel_paused` and not re-sent after the resume.
+
+**Alternatives considered.** *Reports in UTC*: testable, but "09:00" would move twice a year and differ from the operator's clock. *One shared digest for every channel*: the window and level differ per channel. *Sending every missed window*: a long weekend would arrive as a burst of stale messages. *Skipping missed windows silently*: data loss with no trace. *Merging missed windows into the next digest*: a 24-hour digest that suddenly covers four days reads as a mistake. *No record of empty digests*: "why didn't I get one?" would have no answer.
+
+## D-44 Anomaly alerts: hourly checks with thresholds and hysteresis, silent unless something crosses
+
+**Status:** Accepted
+
+**Implementation:** N3: `evaluateAnomalies` (pure), the hourly check in `ReportScheduler`, the `anomaly` rule, `--notificationChannel … anomaly=on`.
+
+**Context.** Individual notifications already cover each attention request, crash and degradation. What they miss is a trend: a fleet whose tool calls start failing, a blocklist suddenly hit hundreds of times, a queue of requests nobody answers, sessions pinned at the limit. A check that reports on every tick is ignored within a day; one that flaps around a threshold is worse.
+
+**Decision.**
+- A channel opts in with `rules.anomaly` (each check can be tuned or switched off: `null`). Once an hour (at the top of the hour; after downtime one check runs at once, and nothing is reported late), BrowserHive computes the facts of the trailing 60 minutes once and evaluates each channel's checks:
+
+| Check | Fires when (defaults) | Clears when |
+|---|---|---|
+| `error_rate` | ≥ 20 % of tool calls failed, with at least `min_calls` (20) calls | below half the threshold, or fewer than half the minimum calls |
+| `attention` | an attention request has waited ≥ `attention_minutes` (30) | no request waits that long |
+| `capacity` | live sessions ≥ `maxSessions` | below 90 % of `maxSessions` (at least one below) |
+| `blocked` | blocked requests ≥ `blocked_spike` (3) × the hourly average of the 24 hours before, and ≥ `blocked_min` (50) | below half of both |
+| `degraded` | an unresolved error-severity system event exists | none is unresolved |
+
+- **Hysteresis and state.** Each channel's active checks, when each became active and the open alert are kept in `notification_cursors` (`anomaly:<channel_id>`), so a restart neither repeats nor forgets an episode. A check that becomes active is a **crossing**: it produces a new, alerting message that lists every active check (the new ones first) with its value and threshold. A change without a crossing (one of several checks clears) is a silent edit of the open alert. When every check has cleared, the alert is revised to `resolved` with a silent edit ("Back to normal since 15:00"). Nothing is sent while nothing crosses.
+- **Quiet hours.** No check runs for a channel during its quiet hours; the first check after them reports what is still wrong (held, not lost).
+- Severity `warn`, `error` while `degraded` or `capacity` is active; addressed to the channel like any report (D-43), at its content level (the checks' names and numbers are fixed labels, so every level carries them; `full` adds the degradation messages).
+
+**Consequences.** The check is five indexed counts and one list per hour, shared by every channel. The thresholds are per channel (advanced settings, `anomaly.*` flag parameters). The anomaly alert complements, and does not replace, the per-event notifications.
+
+**Alternatives considered.** *A statistical baseline for every metric*: opaque ("why did this fire?") and noisy on a small fleet; fixed, visible thresholds with one relative check (blocked) are explainable. *A check every minute*: faster, but an hourly window is what makes a rate meaningful on a small fleet. *Re-alerting while a check stays active*: that is the flapping the hysteresis removes.
