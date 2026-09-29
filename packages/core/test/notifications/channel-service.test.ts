@@ -322,6 +322,41 @@ describe('ChannelService test send, preview and the delivery log', () => {
     expect(result.delivery).toMatchObject({ status: 'dead', reason: 'auth' });
   });
 
+  it('previews a crash without an image on a masking channel, like a real crash', async () => {
+    const { service } = await kit();
+    const rules = { content: 'full' as const, images: { problems: true } };
+    const shown = (mask: boolean) =>
+      service
+        .preview({ kind: 'telegram', rules: { ...rules, mask_images: mask }, sample: 'crash' })
+        .message.blocks.some((b) => b.type === 'image');
+    expect(shown(false)).toBe(true);
+    expect(shown(true)).toBe(false);
+  });
+
+  it('republishes every row of a notification, so a superseded row does not look stale', async () => {
+    const { service, repos, bus } = await kit();
+    const view = await service.create({
+      name: 'hook',
+      kind: 'webhook',
+      target: { url: fakes.webhookUrl },
+      secret_refs: {},
+      rules: {},
+    });
+    await service.test(view.channel_id);
+    const [row] = repos.notificationDeliveries.rows;
+    if (row === undefined) throw new Error('no row');
+    await repos.notificationDeliveries.enqueue([
+      { ...row, revision: 2, op: 'edit', status: 'pending', reason: null, nextAttemptAt: 1 },
+    ]);
+    bus.published.length = 0;
+    service.onDeliveryChange(row.notificationId, view.channel_id);
+    await new Promise((r) => setTimeout(r, 20));
+    const seqs = bus.published
+      .filter((e) => e.name === 'delivery.updated')
+      .map((e) => (e.payload as { delivery: { revision: number } }).delivery.revision);
+    expect(seqs).toEqual([1, 2]);
+  });
+
   it('previews a draft and a saved channel with variable names in place of secrets', async () => {
     const { service } = await kit();
     const draft = service.preview({ kind: 'discord', sample: 'attention' });

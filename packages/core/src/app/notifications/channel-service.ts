@@ -847,12 +847,15 @@ export class ChannelService {
       ...(rules.digest !== undefined && { digest: rules.digest }),
     };
     const plain = sampleMessage(request.sample, options);
-    const withImage = wantsImages(rules, plain.category)
-      ? sampleMessage(request.sample, {
-          ...options,
-          image: rules.mask_images === true ? 'masked' : 'unmasked',
-        })
-      : plain;
+    // A crash's image is its last stored frame, which cannot be masked: a masking channel gets none.
+    const maskedCrash = request.sample === 'crash' && rules.mask_images === true;
+    const withImage =
+      wantsImages(rules, plain.category) && !maskedCrash
+        ? sampleMessage(request.sample, {
+            ...options,
+            image: rules.mask_images === true ? 'masked' : 'unmasked',
+          })
+        : plain;
     return this.render(setup, withImage, request.sample);
   }
 
@@ -1359,16 +1362,13 @@ export class ChannelService {
         limit: FEED_ROWS,
       });
       const cache = new Map<string, NotificationRecord | null>();
-      const latest = new Map<string, NotificationDeliveryRecord>();
-      for (const row of rows) {
-        const key = `${row.channelId}:${row.op}`;
-        if (!latest.has(key)) latest.set(key, row);
-      }
-      for (const row of latest.values()) {
+      // Every row of the notification (a newer job supersedes older ones, so the older rows change
+      // too), oldest first, so clients end on the newest state.
+      for (const row of [...rows].reverse()) {
         const dto = await this.deliveryRow(row, cache);
         this.deps.bus.publish('delivery.updated', { type: 'delivery.updated', delivery: dto });
-        this.scheduleChannel(row.channelId);
       }
+      for (const id of new Set(rows.map((r) => r.channelId))) this.scheduleChannel(id);
     })().catch((err: unknown) =>
       this.log.warn('delivery feed failed', { err: serializeError(err) }),
     );

@@ -61,6 +61,12 @@ describe('classifyPublicUrlProbe', () => {
       body: '<html>Sign in</html>',
     };
     expect(classifyPublicUrlProbe(html, 'me').outcome).toBe('login');
+    // A proxy's error page is not a login: the proxy cannot reach BrowserHive.
+    for (const status of [502, 503, 504]) {
+      const verdict = classifyPublicUrlProbe({ ...html, status }, 'me');
+      expect(verdict.outcome).toBe('unreachable');
+      expect(verdict.detail).toContain(`HTTP ${status}`);
+    }
   });
 
   it('unreachable for network errors, elsewhere for other servers', () => {
