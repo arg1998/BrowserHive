@@ -3,6 +3,8 @@
 import {
   McpConnectionsQuery,
   McpConnectionsResponse,
+  PublicUrlQuery,
+  PublicUrlStatus,
   SetLogLevelRequest,
   SetLogLevelResponse,
   SystemConfigResponse,
@@ -38,6 +40,16 @@ export const SYSTEM_ROUTES = [
     responses: { 200: SystemConfigResponse },
     async handler({ services }) {
       return reply(200, { keys: configKeysToWire(services.system.configView()) });
+    },
+  }),
+  defineRoute({
+    operationId: 'getPublicUrlStatus',
+    tags,
+    summary: 'The publicUrl check: does the public address reach this BrowserHive? (cached 60 s)',
+    request: { query: PublicUrlQuery },
+    responses: { 200: PublicUrlStatus },
+    async handler({ input, services }) {
+      return reply(200, await services.publicUrl.status(input.query.refresh === true));
     },
   }),
   defineRoute({

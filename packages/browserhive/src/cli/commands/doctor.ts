@@ -19,8 +19,10 @@ import {
   checkConfig,
   checkDatabase,
   checkDataDir,
+  checkNotificationChannels,
   checkOtel,
   checkPort,
+  checkPublicUrl,
   checkReferenceDefaults,
   checkSecretsFile,
   checkUnrecognisedDataFiles,
@@ -95,7 +97,9 @@ export async function runChecks(
     results.push(await checkOtel(deps, config));
     results.push(checkCapacity(deps, config));
     results.push(checkSecretsFile(deps, resolution.value));
+    results.push(await checkPublicUrl(deps, config));
   }
+  results.push(await checkNotificationChannels(deps, dataDir, invocation.notificationChannels));
   return { results, browsers };
 }
 

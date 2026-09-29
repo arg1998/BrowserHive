@@ -40,7 +40,10 @@ export function isSameOrigin(origin: string, host: string): boolean {
  * `same-origin`/`none`. Without either header the request is allowed only when it carries no
  * ambient cookie credential (a bearer or anonymous non-browser client cannot be forged cross-site).
  */
-export function originGuard(): MiddlewareHandler<HttpEnv> {
+export function originGuard(
+  options: { readonly trustedOrigins?: readonly string[] } = {},
+): MiddlewareHandler<HttpEnv> {
+  const trusted = new Set((options.trustedOrigins ?? []).map((o) => o.toLowerCase()));
   return async (c, next) => {
     const upgrade = c.req.header('upgrade')?.toLowerCase() === 'websocket';
     if (!MUTATING.has(c.req.method) && !upgrade) return next();
@@ -48,7 +51,8 @@ export function originGuard(): MiddlewareHandler<HttpEnv> {
     const origin = c.req.header('origin');
     const fetchSite = c.req.header('sec-fetch-site');
     let allowed: boolean;
-    if (origin !== undefined) allowed = isSameOrigin(origin, host);
+    if (origin !== undefined)
+      allowed = isSameOrigin(origin, host) || trusted.has(origin.toLowerCase());
     else if (fetchSite !== undefined) allowed = fetchSite === 'same-origin' || fetchSite === 'none';
     else allowed = c.req.header('cookie') === undefined;
     if (!allowed) {

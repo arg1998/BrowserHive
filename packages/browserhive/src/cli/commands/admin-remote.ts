@@ -20,7 +20,12 @@ function headers(remote: RemoteTarget, withBody: boolean): Record<string, string
   };
 }
 
-async function call(
+/**
+ * One REST call to a running server with the remote target's credentials; failures are printed.
+ *
+ * @returns The parsed JSON, or an exit code after printing the failure.
+ */
+export async function remoteCall(
   context: CommandContext,
   remote: RemoteTarget,
   method: string,
@@ -84,7 +89,7 @@ export async function remoteListTokens(
   context: CommandContext,
   remote: RemoteTarget,
 ): Promise<readonly TokenRow[] | ExitCode> {
-  const result = await call(context, remote, 'GET', '/auth/tokens');
+  const result = await remoteCall(context, remote, 'GET', '/auth/tokens');
   if (!result.ok) return result.code;
   const parsed = ApiTokenList.safeParse(result.json);
   if (!parsed.success) {
@@ -114,7 +119,7 @@ export async function remoteCreateToken(
   principal: string,
   expiresInMs: number | null,
 ): Promise<IssuedToken | ExitCode> {
-  const result = await call(context, remote, 'POST', '/auth/tokens', {
+  const result = await remoteCall(context, remote, 'POST', '/auth/tokens', {
     owner_kind: 'agent',
     display: principal,
     ...(expiresInMs !== null && { expires_in_ms: expiresInMs }),
@@ -149,7 +154,7 @@ export async function remoteRevokeToken(
   remote: RemoteTarget,
   credentialId: string,
 ): Promise<ExitCode> {
-  const result = await call(
+  const result = await remoteCall(
     context,
     remote,
     'DELETE',

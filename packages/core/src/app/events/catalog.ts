@@ -6,6 +6,9 @@ import type {
   AttentionResolvedEvent,
   BlocklistHitEvent,
   BlocklistReloadedEvent,
+  ChannelChangedEvent,
+  ChannelRemovedEvent,
+  DeliveryUpdatedEvent,
   LogRecordEvent,
   NotificationCreatedEvent,
   NotificationUpdatedEvent,
@@ -158,6 +161,10 @@ export type DomainEvents = {
   };
   /** A notification channel's status changed (the breaker opened, D-34). Internal; not on the feed. */
   readonly 'notification.channel.changed': NotificationChannelChangedEvent;
+  // channels (the `channels` topic, spec 03 §6.6)
+  readonly 'channel.changed': z.infer<typeof ChannelChangedEvent>;
+  readonly 'channel.removed': z.infer<typeof ChannelRemovedEvent>;
+  readonly 'delivery.updated': z.infer<typeof DeliveryUpdatedEvent>;
   // logs
   readonly 'log.record': z.infer<typeof LogRecordEvent>;
 } & AuthEvents; // auth (audit; never on the public feed): `auth.<auth_events.type>`

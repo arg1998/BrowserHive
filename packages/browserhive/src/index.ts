@@ -12,6 +12,7 @@ import {
   type ConfigFailure,
   type ConfigOverrides,
   configFailure,
+  parseNotificationChannelFlags,
   resolveConfig,
   suggestKey,
   withSuggestion,
@@ -80,6 +81,11 @@ export interface CreateServerOptions extends ServerOptions {
   readonly logger?: BrowserHiveLogSink;
   /** Host RAM in bytes for the `maxSessions` derivation (tests). */
   readonly hostMemory?: number;
+  /**
+   * Startup notification channels in the `--notificationChannel` grammar (spec 08 §5.7); secrets
+   * as `env:NAME`, read from `env`.
+   */
+  readonly notificationChannels?: readonly string[];
 }
 
 /** A created (not yet listening) server. */
@@ -117,6 +123,7 @@ const EXTRA_OPTIONS: ReadonlySet<string> = new Set([
   'output',
   'logger',
   'hostMemory',
+  'notificationChannels',
 ]);
 
 function isConfigKey(name: string): name is ConfigKey {
@@ -191,6 +198,22 @@ export async function createServer(options: CreateServerOptions = {}): Promise<B
   if (!result.ok) throw new ConfigError(result.error);
   const resolved = result.value;
   const { config } = resolved;
+  const channelFlags = parseNotificationChannelFlags(
+    options.notificationChannels ?? [],
+    (name) => env[name],
+  );
+  if (channelFlags.problems.length > 0) {
+    throw new ConfigError(
+      configFailure(
+        channelFlags.problems.map((message) => ({
+          code: 'CONFIG_INVALID' as const,
+          source: 'cli' as const,
+          location: 'options.notificationChannels',
+          message,
+        })),
+      ),
+    );
+  }
 
   let running: RunningServer | undefined;
   let listening: Promise<void> | undefined;
@@ -206,6 +229,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<B
       env,
       appVersion: VERSION,
       installProcessHandlers: false,
+      startupChannels: channelFlags.channels,
+      startupChannelWarnings: channelFlags.warnings,
       ...(logger !== undefined && {
         logSink: {
           name: 'external',
