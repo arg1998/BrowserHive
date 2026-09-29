@@ -18,6 +18,12 @@ import type {
 } from './enums.ts';
 
 export type {
+  NewNotificationAction,
+  NotificationActionListQuery,
+  NotificationActionRecord,
+  NotificationActionTokenRecord,
+} from './notification-actions.ts';
+export type {
   AuthEventRecord,
   AuthSessionRecord,
   CredentialRecord,

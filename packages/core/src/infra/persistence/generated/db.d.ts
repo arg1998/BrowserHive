@@ -144,6 +144,35 @@ export interface Meta {
   value: string;
 }
 
+export interface NotificationActions {
+  action_id: string;
+  action_label: string | null;
+  actor: string;
+  actor_name: string | null;
+  args_json: Generated<string>;
+  at: number;
+  channel_id: string;
+  channel_kind: string;
+  channel_name: string;
+  detail: string | null;
+  notification_id: string | null;
+  op: string;
+  outcome: string;
+  seq: Generated<number | null>;
+}
+
+export interface NotificationActionTokens {
+  action_id: string;
+  args_json: Generated<string>;
+  channel_id: string;
+  created_at: number;
+  expires_at: number;
+  notification_id: string;
+  op: string;
+  token_hash: string;
+  used_at: number | null;
+}
+
 export interface NotificationChannelMessages {
   channel_id: string;
   deleted_at: number | null;
@@ -172,6 +201,12 @@ export interface NotificationChannels {
   status: Generated<string>;
   target_json: Generated<string>;
   updated_at: number;
+}
+
+export interface NotificationCursors {
+  cursor_key: string;
+  updated_at: number;
+  value: string;
 }
 
 export interface NotificationDeliveries {
@@ -435,8 +470,11 @@ export interface DB {
   logs: Logs;
   mcp_connections: McpConnections;
   meta: Meta;
+  notification_action_tokens: NotificationActionTokens;
+  notification_actions: NotificationActions;
   notification_channel_messages: NotificationChannelMessages;
   notification_channels: NotificationChannels;
+  notification_cursors: NotificationCursors;
   notification_deliveries: NotificationDeliveries;
   notifications: Notifications;
   operator_actions: OperatorActions;

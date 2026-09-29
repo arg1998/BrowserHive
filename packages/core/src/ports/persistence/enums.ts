@@ -183,6 +183,20 @@ export const NOTIFICATION_DELIVERY_STATUSES = [
 /** Element of {@link NOTIFICATION_DELIVERY_STATUSES}. */
 export type NotificationDeliveryStatus = (typeof NOTIFICATION_DELIVERY_STATUSES)[number];
 
+/** How an act-button press ended (`notification_actions.outcome`, D-41). */
+export const NOTIFICATION_ACTION_OUTCOMES = [
+  'done',
+  'failed',
+  'not_allowed',
+  'used',
+  'expired',
+  'stale',
+  'wrong_channel',
+  'disabled',
+] as const;
+/** Element of {@link NOTIFICATION_ACTION_OUTCOMES}. */
+export type NotificationActionOutcome = (typeof NOTIFICATION_ACTION_OUTCOMES)[number];
+
 /** Severity of a `system_events` row. */
 export const SYSTEM_EVENT_SEVERITIES = ['info', 'warn', 'error'] as const;
 /** Element of {@link SYSTEM_EVENT_SEVERITIES}. */

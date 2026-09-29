@@ -321,6 +321,36 @@ export async function seedFixture(uow: SqliteUnitOfWork): Promise<void> {
       expiresAt: null,
       deletedAt: null,
     });
+    // Schema v6: one act-button token, one audited press, one listener cursor (D-41, D-42).
+    await r.notificationActionTokens.insert([
+      {
+        tokenHash: 'a'.repeat(64),
+        channelId: 'nc-fixture00001',
+        notificationId: 'n-fixture00002',
+        actionId: 'resolve',
+        op: 'attention.resolve',
+        args: { request_id: 'a-fixture00001', decision: 'resolve' },
+        createdAt: at + 3_000,
+        expiresAt: at + 3_000 + 86_400_000,
+        usedAt: at + 4_000,
+      },
+    ]);
+    await r.notificationActions.insert({
+      at: at + 4_000,
+      channelId: 'nc-fixture00001',
+      channelName: 'phone',
+      channelKind: 'telegram',
+      notificationId: 'n-fixture00002',
+      actionId: 'resolve',
+      actionLabel: 'Mark resolved',
+      op: 'attention.resolve',
+      args: { request_id: 'a-fixture00001', decision: 'resolve' },
+      actor: 'telegram:123456',
+      actorName: 'Fixture Person',
+      outcome: 'done',
+      detail: 'Marked resolved. The agent continues.',
+    });
+    await r.notificationCursors.set('telegram:123456', '1001', at + 4_000);
     await r.preferences.set('local', 'theme', 'dark', at);
     await r.systemEvents.record({
       eventId: 'e-sys-1',

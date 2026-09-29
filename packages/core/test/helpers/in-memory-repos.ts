@@ -23,6 +23,11 @@ import type {
 import type { Repositories, UnitOfWork } from '../../src/ports/persistence/unit-of-work.ts';
 import type { WriteJob, WriteQueue } from '../../src/ports/persistence/write-queue.ts';
 import {
+  InMemoryNotificationActionRepository,
+  InMemoryNotificationActionTokenRepository,
+  InMemoryNotificationCursorRepository,
+} from './in-memory-action-repos.ts';
+import {
   InMemoryNotificationChannelMessageRepository,
   InMemoryNotificationChannelRepository,
   InMemoryNotificationDeliveryRepository,
@@ -294,9 +299,13 @@ export class InMemoryRepositories implements Repositories {
   readonly notificationChannelMessages = new InMemoryNotificationChannelMessageRepository(
     this.notificationDeliveries,
   );
+  readonly notificationActionTokens = new InMemoryNotificationActionTokenRepository();
+  readonly notificationActions = new InMemoryNotificationActionRepository();
+  readonly notificationCursors = new InMemoryNotificationCursorRepository();
   readonly notificationChannels = new InMemoryNotificationChannelRepository([
     this.notificationDeliveries,
     this.notificationChannelMessages,
+    this.notificationActionTokens,
   ]);
   readonly operatorRequests = notImplemented<Repositories['operatorRequests']>('operatorRequests');
   readonly operatorActions = notImplemented<Repositories['operatorActions']>('operatorActions');
