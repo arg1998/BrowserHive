@@ -218,7 +218,14 @@ describe('act buttons end to end', () => {
     );
     expect(w.actors).toHaveLength(1);
     expect((await t.repos.notificationActions.list({}))[0]?.outcome).toBe('used');
-    expect(await t.repos.notificationCursors.get('telegram:1234')).toBe('902');
+    // The offset is stored after the update was handled (right after its answer).
+    let cursor: string | null = null;
+    await until(() => {
+      void t.repos.notificationCursors.get('telegram:1234').then((v) => {
+        cursor = v;
+      });
+      return cursor === '902';
+    });
   });
 
   it('discord bot: press an interactive button over the gateway', async () => {

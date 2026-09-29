@@ -29,6 +29,7 @@ import {
   type NotificationMessage,
   NTFY_DEFAULT_SERVER,
   type PreviewSample,
+  SecretEnvName,
   TELEGRAM_TTL_MAX_MS,
 } from '@browserhive/contracts/notifications';
 import { AppError } from '../../kernel/errors/app-error.ts';
@@ -204,8 +205,14 @@ export function targetHint(
           : `chat ${last(chat, 4)}`;
       return t['thread_id'] === undefined ? base : `${base} · topic ${t['thread_id']}`;
     }
-    case 'discord':
-      return `${record.mode ?? 'webhook'} from $${s['webhook'] ?? '?'}`;
+    case 'discord': {
+      if (record.mode === 'bot') {
+        const room =
+          t['channel_name'] ?? (t['channel_id'] === undefined ? '?' : last(t['channel_id'], 4));
+        return `bot · #${room}${t['guild_name'] === undefined ? '' : ` in ${t['guild_name']}`}`;
+      }
+      return `webhook from $${s['webhook'] ?? '?'}`;
+    }
     case 'ntfy': {
       const server = hostPath(t['server'] ?? NTFY_DEFAULT_SERVER);
       const topic = t['topic'] ?? (s['topic'] === undefined ? '?' : `$${s['topic']}`);
@@ -723,6 +730,12 @@ export class ChannelService {
       mode = request.mode ?? spec.defaultMode;
       target = request.target ?? {};
       rules = request.rules ?? {};
+      // Names only; anything that is not a variable name (a pasted value) is never echoed back.
+      secretRefs = Object.fromEntries(
+        Object.entries(request.secret_refs ?? {}).filter(
+          ([, name]) => SecretEnvName.safeParse(name).success,
+        ),
+      );
     }
     const renderer = this.deps.renderers.get(kind);
     const parsedKind = AvailableChannelKind.safeParse(kind);

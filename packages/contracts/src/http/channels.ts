@@ -224,6 +224,12 @@ export const ChannelPreviewRequest = z
     kind: AvailableChannelKind.optional(),
     mode: z.string().max(32).nullable().optional(),
     target: NotificationChannelTarget.optional(),
+    /**
+     * A draft's secret parameters as variable NAMES (never values): decide capabilities (an ntfy
+     * reply topic from a variable) and show the names in the rendered paths. Entries that are not
+     * valid variable names are ignored.
+     */
+    secret_refs: z.record(z.string().max(64), z.string().max(256)).optional(),
     rules: NotificationChannelRules.optional(),
     sample: PreviewSample.default('attention'),
   })

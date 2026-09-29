@@ -11984,6 +11984,13 @@
               "maxLength": 2048
             }
           },
+          "secret_refs": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 256
+            }
+          },
           "rules": {
             "type": "object",
             "properties": {

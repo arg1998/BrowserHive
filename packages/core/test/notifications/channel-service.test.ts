@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
 import type { DomainEvents } from '../../src/app/events/catalog.ts';
 import { ChannelRegistry } from '../../src/app/notifications/channel-registry.ts';
-import { ChannelService } from '../../src/app/notifications/channel-service.ts';
+import { ChannelService, targetHint } from '../../src/app/notifications/channel-service.ts';
 import { createPublicLinkBuilder } from '../../src/app/notifications/links.ts';
 import { CHANNEL_RENDERERS, channelFactories } from '../../src/infra/notifications/index.ts';
 import { AppError } from '../../src/kernel/errors/app-error.ts';
@@ -332,6 +332,25 @@ describe('ChannelService test send, preview and the delivery log', () => {
     expect(bot.capabilities.act_buttons).toBe(true);
     expect(JSON.stringify(bot.requests)).toContain('bh1:preview-reject');
     expect(bot.notes.some((n) => n.includes('allow-list'))).toBe(true);
+    // A draft's ntfy reply topic from a variable enables the answer buttons; a pasted value is ignored.
+    const ntfy = service.preview({
+      kind: 'ntfy',
+      target: { topic: 'bh-alerts' },
+      secret_refs: { reply_topic: 'BH_REPLY', token: 'tk_pasted value' },
+      rules: { act_buttons: true },
+      sample: 'attention',
+    });
+    expect(ntfy.capabilities.act_buttons).toBe(true);
+    expect(JSON.stringify(ntfy.requests)).toContain('{BH_REPLY}');
+    expect(JSON.stringify(ntfy.requests)).not.toContain('tk_pasted');
+    expect(
+      targetHint({
+        kind: 'discord',
+        mode: 'bot',
+        target: { channel_id: '112233445566778899', channel_name: 'alerts', guild_name: 'Home' },
+        secretRefs: { token: 'BH_BOT' },
+      }),
+    ).toBe('bot · #alerts in Home');
     const off = service.preview({ kind: 'discord', mode: 'bot', sample: 'attention' });
     expect(off.capabilities.act_buttons).toBe(false);
     expect(fakes.requests).toHaveLength(0);
