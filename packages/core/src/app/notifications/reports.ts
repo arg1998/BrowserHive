@@ -214,7 +214,7 @@ function reportInfo(
 /** The "sent late" / "skipped" / "on demand" note, or `null`. */
 function timingNote(ctx: ReportContext, noun: string): Inline[] | null {
   const parts: Inline[] = [];
-  if (ctx.manual) parts.push(text('Sent on demand; the schedule is unchanged.'));
+  if (ctx.manual) parts.push(text('Sent on demand.'));
   if (ctx.late) {
     parts.push(
       text(

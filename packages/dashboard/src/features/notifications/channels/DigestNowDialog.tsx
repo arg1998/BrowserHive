@@ -114,6 +114,12 @@ export function DigestNowDialog({ channel, open, onOpenChange }: DigestNowDialog
               </span>
             ) : send.error !== null ? (
               <span className="text-danger-text">{toAppError(send.error).message}</span>
+            ) : channel.status === 'paused' ? (
+              <span className="text-muted-foreground">Resume the channel to send it.</span>
+            ) : !channel.ready ? (
+              <span className="text-muted-foreground">
+                {channel.problem ?? 'The channel cannot send yet.'}
+              </span>
             ) : null}
           </div>
           <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>

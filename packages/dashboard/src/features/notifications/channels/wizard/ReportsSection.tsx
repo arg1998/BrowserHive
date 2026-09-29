@@ -15,6 +15,7 @@ import { SimpleSelect } from '@/components/ui/select.tsx';
 import { Switch } from '@/components/ui/switch.tsx';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group.tsx';
 import { ICONS } from '@/lib/icons.ts';
+import { useServerNow } from '@/lib/server-now.ts';
 import { cn } from '@/lib/utils.ts';
 import { formatInZone, nextDigestAt, WEEKDAY_LABEL, zoneLabel } from '../model.ts';
 import { Field } from './fields.tsx';
@@ -41,8 +42,10 @@ export function ReportsSection({
   hostZone,
   readOnly,
   errors,
-  now = Date.now(),
+  now: nowProp,
 }: ReportsSectionProps) {
+  const serverNow = useServerNow(30_000);
+  const now = nowProp ?? serverNow;
   const id = useId();
   const digest = rules.digest;
   const frequency: Frequency = digest === undefined ? 'off' : digest.every;

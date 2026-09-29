@@ -129,4 +129,70 @@ test.describe('notification channels', () => {
       await new Promise<void>((resolve) => receiver.server.close(() => resolve()));
     }
   });
+
+  test('schedule a daily digest in a time zone, send one now, see it in the log', async ({
+    page,
+  }, testInfo) => {
+    const receiver = await startReceiver();
+    const name = `e2e-digest-${testInfo.project.name}`.slice(0, 32);
+    try {
+      await signIn(page);
+      await page.goto('/notifications/channels/new');
+      await page.locator('label').filter({ hasText: 'POSTs the notification' }).click();
+      await page.getByRole('button', { name: 'Continue' }).click();
+      await page.getByRole('button', { name: 'Continue' }).click();
+      await page.getByLabel('URL', { exact: true }).fill(receiver.url);
+      await page.getByRole('button', { name: 'Continue' }).click();
+      // 4. What to send: the Daily digest preset switches the digest and the anomaly alerts on.
+      await page.getByLabel('Name', { exact: true }).fill(name);
+      await page.locator('label').filter({ hasText: 'A summary every morning' }).click();
+      await expect(page.getByRole('button', { name: 'Every day' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      await expect(page.getByText('Next digest:')).toBeVisible();
+      await expect(
+        page.getByRole('switch', { name: 'Tell me when something looks off' }),
+      ).toBeChecked();
+      // A zone of its own: type to search.
+      const zone = page.getByLabel(/Time zone/);
+      await zone.fill('Tokyo');
+      await page.getByRole('option', { name: 'Asia/Tokyo' }).click();
+      await expect(page.getByText(/in Asia\/Tokyo/)).toBeVisible();
+      await page.getByRole('button', { name: 'Continue' }).click();
+      await page.getByRole('button', { name: 'Save channel' }).click();
+      await expect(page.getByText(`${name} is saved`)).toBeVisible();
+
+      // The card shows the next digest and sends one on demand.
+      await page.goto('/notifications/channels');
+      const card = page.locator('article').filter({ has: page.getByRole('heading', { name }) });
+      await expect(card.getByText('Daily digest', { exact: true })).toBeVisible();
+      await expect(card.getByText(/\(Asia\/Tokyo\)/)).toBeVisible();
+      await expect(card.getByText('Watching for anomalies')).toBeVisible();
+      await card.getByRole('button', { name: 'Send now' }).click();
+      const dialog = page.getByRole('dialog', { name: 'Send a digest now' });
+      await expect(dialog.locator('[data-platform="webhook"]')).toBeVisible();
+      await dialog.getByRole('button', { name: /Send now/ }).click();
+      await expect(dialog.getByText(/Digest sent/)).toBeVisible();
+      await expect.poll(() => receiver.bodies.length).toBeGreaterThan(0);
+      const body = receiver.bodies.at(-1) as {
+        message?: { kind?: string; report?: { manual?: boolean; time_zone?: string } };
+      };
+      expect(body.message?.kind).toBe('digest.daily');
+      expect(body.message?.report).toMatchObject({ manual: true, time_zone: 'Asia/Tokyo' });
+      await dialog.getByRole('button', { name: 'Done' }).click();
+
+      // The delivery log marks it as sent on demand.
+      await page.goto('/notifications/log');
+      await expect(page.getByText('on demand').first()).toBeVisible();
+
+      await page.goto('/notifications/channels');
+      await card.getByRole('button', { name: `More actions for ${name}` }).click();
+      await page.getByRole('menuitem', { name: /Delete/ }).click();
+      await page.getByRole('button', { name: 'Delete channel' }).click();
+      await expect(page.getByRole('heading', { name })).toHaveCount(0);
+    } finally {
+      await new Promise<void>((resolve) => receiver.server.close(() => resolve()));
+    }
+  });
 });
