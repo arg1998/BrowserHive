@@ -1,0 +1,33 @@
+{
+  "kind": "telegram",
+  "variant": "digest-weekly",
+  "mode": null,
+  "requests": [
+    {
+      "method": "POST",
+      "path": "sendRichMessage",
+      "encoding": "json",
+      "body": {
+        "chat_id": "-1001234567890",
+        "rich_message": {
+          "html": "<h3>ℹ️ Weekly digest · 14–21 Sep</h3><p>84 sessions (2 live) · 23,884 tool calls · 476 errors (2%)</p><table compact><tr><td><b>Sessions</b></td><td>84 started · 2 live now</td></tr><tr><td><b>Tool calls</b></td><td>23,884 · 476 errors (2%) · was 1.2%</td></tr><tr><td><b>Attention</b></td><td>28 requests · 21 answered (median 1m 36s) · 7 timed out</td></tr><tr><td><b>Vault fills</b></td><td>63 · 56 ok · 7 origin mismatch</td></tr><tr><td><b>Blocked requests</b></td><td>189 · top <code>*.doubleclick.net</code> (133)</td></tr><tr><td><b>Slowest tool (p95)</b></td><td><code>navigate</code> 4.2 s (was 2.9 s)</td></tr><tr><td><b>Open problems</b></td><td><code>RETENTION_FAILED</code> since 21 Sep 10:13</td></tr></table><p><b>Tool calls per 6 hours</b> <code>▁▁▁▁▁▁▁▁▃▅▆▆▄▅▇█▇▅▄▃▂▂▂▁▁▁▁▁</code> peak 2,060 calls</p><h4>Top errors</h4><table bordered striped compact><tr><th>Error</th><th>Tool</th><th>Count</th><th>Sessions</th></tr><tr><td><code>NAVIGATION_TIMEOUT</code></td><td><code>navigate</code></td><td>217</td><td>4</td></tr><tr><td><code>ELEMENT_NOT_FOUND</code></td><td><code>click</code></td><td>154</td><td>6</td></tr><tr><td><code>CAPTCHA_DETECTED</code></td><td><code>navigate</code></td><td>105</td><td>2</td></tr></table><h4>By harness</h4><table bordered striped compact><tr><th>Harness</th><th>Sessions</th><th>Tool calls</th><th>Errors</th></tr><tr><td>Claude Code</td><td>56</td><td>16,870</td><td>357</td></tr><tr><td>Cursor</td><td>21</td><td>6,160</td><td>105</td></tr><tr><td>Unknown</td><td>7</td><td>854</td><td>14</td></tr></table><footer>14 Sep 16:13 → 21 Sep 16:13 · Europe/Berlin</footer>",
+          "skip_entity_detection": true
+        },
+        "disable_notification": false,
+        "reply_markup": {
+          "inline_keyboard": [
+            [
+              {
+                "text": "Open Overview",
+                "url": "https://bh.example.net/overview?since=1789395200000&until=1790000000000",
+                "style": "primary"
+              }
+            ]
+          ]
+        }
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}

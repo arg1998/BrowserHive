@@ -1,0 +1,67 @@
+{
+  "kind": "webhook",
+  "variant": "anomaly-resolved-edit",
+  "mode": null,
+  "requests": [
+    {
+      "method": "POST",
+      "path": "https://hooks.example.net/bh",
+      "encoding": "json",
+      "body": {
+        "schema": 1,
+        "event": "notification",
+        "op": "edit",
+        "delivered_at": 1790000000000,
+        "channel": null,
+        "links": {},
+        "local_links": false,
+        "message": {
+          "schema": 1,
+          "id": "n-sample000001",
+          "revision": 2,
+          "thread": "anomaly:sample",
+          "kind": "report.anomaly",
+          "category": "reports",
+          "severity": "info",
+          "state": "resolved",
+          "alert": false,
+          "at": {
+            "created": 1790000000000,
+            "updated": 1790000000000
+          },
+          "title": "Back to normal",
+          "summary": "Every check is back under its threshold since 16:13 · it lasted 2h 05m.",
+          "blocks": [
+            {
+              "type": "footer",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Checked 15:13–16:13 · Europe/Berlin"
+                }
+              ]
+            }
+          ],
+          "actions": [],
+          "entities": {},
+          "privacy": {
+            "level": "titles",
+            "has_image": false
+          },
+          "report": {
+            "window": {
+              "since": 1789996400000,
+              "until": 1790000000000
+            },
+            "time_zone": "Europe/Berlin",
+            "late": false,
+            "skipped": 0,
+            "manual": false
+          }
+        }
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}

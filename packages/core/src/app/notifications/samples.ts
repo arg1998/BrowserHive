@@ -1,7 +1,14 @@
 /** @module app/notifications/samples — realistic sample notifications built through the real producers, for the channel preview, the test send and the renderer goldens (spec 03 §4.8.1). Pure: fixed ids and times. */
 
-import type { Block } from '@browserhive/contracts/notifications';
-import { NotificationMessage, type PreviewSample } from '@browserhive/contracts/notifications';
+import type { NotificationContentLevel } from '@browserhive/contracts/enums';
+import {
+  type Block,
+  DEFAULT_CONTENT_LEVEL,
+  DEFAULT_DIGEST_AT,
+  type DigestRule,
+  NotificationMessage,
+  type PreviewSample,
+} from '@browserhive/contracts/notifications';
 import {
   AttentionCreatedEvent,
   AttentionResolvedEvent,
@@ -13,6 +20,14 @@ import {
 import type { DomainEvents } from '../events/catalog.ts';
 import { buildMessage, reviseMessage, time } from './message.ts';
 import { draftFor, type ProducedEvent, revisionFor } from './producers.ts';
+import {
+  type AnomalyFacts,
+  buildAnomaly,
+  buildDigest,
+  type DigestFacts,
+  evaluateAnomalies,
+  reportMessage,
+} from './reports.ts';
 
 /** Session id of every sample. */
 export const SAMPLE_SESSION_ID = 'checkout-a1b2c3d4';
@@ -31,6 +46,107 @@ export interface SampleOptions {
   readonly now?: number;
   /** Add a screenshot block (attention, vault confirm, crash); default none. */
   readonly image?: 'none' | 'masked' | 'unmasked';
+  /** Content level the report samples are built at (reports are built per level); default `titles`. */
+  readonly level?: NotificationContentLevel;
+  /** Zone of the report samples; default {@link SAMPLE_ZONE}. */
+  readonly zone?: string;
+  /** Schedule of the digest sample; default daily at 09:00. */
+  readonly digest?: DigestRule;
+  /** The digest sample was sent late, with this many earlier windows skipped. */
+  readonly late?: { readonly skipped: number };
+  /** The anomaly sample as its "Back to normal" revision. */
+  readonly resolved?: boolean;
+}
+
+/** Zone of the report samples (stable goldens). */
+export const SAMPLE_ZONE = 'Europe/Berlin';
+
+const HOUR = 3_600_000;
+
+/**
+ * Figures of the digest sample: a busy day on a small fleet (the research's R3 example).
+ *
+ * @returns Digest facts for the window that ends at `until`.
+ */
+export function sampleDigestFacts(until: number, rule: DigestRule): DigestFacts {
+  const weekly = rule.every === 'week';
+  const span = weekly ? 7 * 24 * HOUR : 24 * HOUR;
+  const step = weekly ? 6 * HOUR : HOUR;
+  const n = span / step;
+  const shape = [
+    2, 1, 0, 0, 0, 1, 4, 18, 96, 212, 305, 280, 190, 240, 330, 412, 380, 260, 150, 120, 88, 60, 40,
+    23,
+  ];
+  const values = Array.from(
+    { length: n },
+    (_, i) => (shape[i % shape.length] ?? 0) * (weekly ? 5 : 1),
+  );
+  const scale = weekly ? 7 : 1;
+  return {
+    window: { since: until - span, until },
+    sessionsStarted: 12 * scale,
+    sessionsLive: 2,
+    toolCalls: 3412 * scale,
+    errors: 68 * scale,
+    previous: { toolCalls: 2980 * scale, errors: 36 * scale },
+    attention: {
+      created: 4 * scale,
+      resolved: 3 * scale,
+      rejected: 0,
+      timedOut: 1 * scale,
+      cancelled: 0,
+      pending: 0,
+      medianWaitMs: 96_000,
+    },
+    vault: [
+      { result: 'success', count: 8 * scale },
+      { result: 'origin_mismatch', count: 1 * scale },
+    ],
+    blocked: {
+      count: 27 * scale,
+      topPattern: { pattern: '*.doubleclick.net', count: 19 * scale },
+      topDomain: { domain: 'ads.example.net', count: 12 * scale },
+    },
+    slowest: { tool: 'navigate', p95Ms: 4180, previousP95Ms: 2900 },
+    topErrors: [
+      { errorCode: 'NAVIGATION_TIMEOUT', tool: 'navigate', count: 31 * scale, sessions: 4 },
+      { errorCode: 'ELEMENT_NOT_FOUND', tool: 'click', count: 22 * scale, sessions: 6 },
+      { errorCode: 'CAPTCHA_DETECTED', tool: 'navigate', count: 15 * scale, sessions: 2 },
+    ],
+    degradations: [
+      {
+        code: 'RETENTION_FAILED',
+        severity: 'error',
+        message: 'retention sweep failed: database is locked',
+        since: until - 6 * HOUR,
+      },
+    ],
+    harnesses: [
+      { harness: 'claude-code', sessions: 8 * scale, toolCalls: 2410 * scale, errors: 51 * scale },
+      { harness: 'cursor', sessions: 3 * scale, toolCalls: 880 * scale, errors: 15 * scale },
+      { harness: 'unknown', sessions: 1 * scale, toolCalls: 122 * scale, errors: 2 * scale },
+    ],
+    chart: { start: until - span, stepMs: step, values },
+  };
+}
+
+/**
+ * Facts of the anomaly sample: failing tool calls and a request nobody answered.
+ *
+ * @returns Anomaly facts for the hour that ends at `now`.
+ */
+export function sampleAnomalyFacts(now: number): AnomalyFacts {
+  return {
+    window: { since: now - HOUR, until: now },
+    toolCalls: 212,
+    errors: 72,
+    blocked: 18,
+    blockedBaselinePerHour: 11,
+    attentionWaiting: [{ sessionSlug: 'checkout', waitedMs: 47 * 60_000 }],
+    live: 3,
+    maxSessions: 10,
+    degradations: [],
+  };
 }
 
 function request(kind: 'attention' | 'vault_confirm', now: number, extra: object) {
@@ -244,6 +360,57 @@ function testMessage(now: number): NotificationMessage {
   });
 }
 
+function reportContext(now: number, options: SampleOptions) {
+  return {
+    zone: options.zone ?? SAMPLE_ZONE,
+    level: options.level ?? DEFAULT_CONTENT_LEVEL,
+    scheduledAt: now,
+    late: options.late !== undefined,
+    skipped: options.late?.skipped ?? 0,
+    manual: false,
+    quiet: false,
+  };
+}
+
+function digestSample(now: number, options: SampleOptions): NotificationMessage {
+  const rule: DigestRule = options.digest ?? { every: 'day', at: DEFAULT_DIGEST_AT };
+  const ctx = reportContext(now, options);
+  const content = buildDigest(sampleDigestFacts(now, rule), rule, ctx);
+  return NotificationMessage.parse(
+    reportMessage(content, {
+      id: SAMPLE_NOTIFICATION_ID,
+      thread: `digest:sample:${now}`,
+      revision: 1,
+      createdAt: now,
+      updatedAt: now,
+      level: ctx.level,
+    }),
+  );
+}
+
+function anomalySample(now: number, options: SampleOptions): NotificationMessage {
+  const facts = sampleAnomalyFacts(now);
+  const evaluation = evaluateAnomalies(facts, {}, {}, now);
+  const ctx = reportContext(now, options);
+  const content =
+    options.resolved === true
+      ? buildAnomaly(
+          { facts, active: {}, fired: [], resolvedSince: now - 2 * HOUR - 5 * 60_000 },
+          ctx,
+        )
+      : buildAnomaly({ facts, active: evaluation.active, fired: evaluation.fired }, ctx);
+  return NotificationMessage.parse(
+    reportMessage(content, {
+      id: SAMPLE_NOTIFICATION_ID,
+      thread: 'anomaly:sample',
+      revision: options.resolved === true ? 2 : 1,
+      createdAt: now,
+      updatedAt: now,
+      level: ctx.level,
+    }),
+  );
+}
+
 /**
  * A realistic notification of the given sample kind, built through the real producers so a
  * preview or a golden shows exactly what a real notification would carry.
@@ -293,6 +460,10 @@ export function sampleMessage(
     case 'test':
       message = testMessage(now);
       break;
+    case 'digest':
+      return digestSample(now, options);
+    case 'anomaly':
+      return anomalySample(now, options);
   }
   if (image !== 'none' && imagePath !== null) {
     message = withImage(message, image === 'masked', now, imagePath);

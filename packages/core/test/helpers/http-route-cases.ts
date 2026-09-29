@@ -866,6 +866,17 @@ export const ROUTE_CASES: readonly RouteCase[] = [
     invalid: { method: 'POST', path: api('/channels/bad/test') },
   },
   {
+    operationId: 'sendChannelDigest',
+    setup: webhookChannel,
+    success: {
+      method: 'POST',
+      path: (ctx) => api(`/channels/${ctx.state['channel'] ?? ''}/digest`),
+      body: { send: false },
+      status: 200,
+    },
+    invalid: { method: 'POST', path: api('/channels/bad/digest'), body: { send: 'yes' } },
+  },
+  {
     operationId: 'getPublicUrlStatus',
     success: { path: api('/system/public-url?refresh=true'), status: 200 },
     invalid: { path: api('/system/public-url?refresh=maybe') },

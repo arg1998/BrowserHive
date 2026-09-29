@@ -50,6 +50,8 @@ export interface ChannelRegistryDeps {
   readonly env?: (name: string) => string | undefined;
   /** Registers a resolved secret with the redactor (`SecretRegistry.add`). */
   readonly registerSecret?: (value: string) => void;
+  /** Called after a startup channel no longer declared was removed (its cursors go with it). */
+  readonly onRemoved?: (channelId: string) => Promise<void>;
 }
 
 /**
@@ -112,6 +114,7 @@ export class ChannelRegistry {
     for (const row of existing) {
       if (row.source === 'startup' && !declared.has(row.name)) {
         await this.deps.repo.remove(row.channelId);
+        await this.deps.onRemoved?.(row.channelId);
         this.log.info('startup channel removed', { channel: row.name });
       }
     }

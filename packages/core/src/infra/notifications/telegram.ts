@@ -67,6 +67,7 @@ export const RICH_PHOTO_ID = 'shot';
 export const TELEGRAM_CAPABILITIES: ChannelCapabilities = {
   richBlocks: true,
   tables: true,
+  charts: false,
   images: true,
   actButtons: false,
   openLinks: true,
@@ -247,6 +248,7 @@ function renderBlock(block: Block, links: LinkBuilder, budget: number): Frag {
       return wrap('i', inlineRun(block.content, links, budget));
     case 'image':
     case 'divider':
+    case 'chart':
       return EMPTY;
   }
 }
@@ -545,6 +547,9 @@ function richBlock(block: Block, links: LinkBuilder): string {
     }
     case 'divider':
       return '<hr/>';
+    case 'chart':
+      // Charts arrive as text (`degrade`, capability `charts: false`).
+      return '';
     case 'footer': {
       const inner = richInline(block.content, links);
       return inner === '' ? '' : `<footer>${inner}</footer>`;

@@ -73,6 +73,31 @@ describe.skipIf(SERVER === undefined)('ntfy adapter against a real server', () =
     expect(events.at(-1)).toMatchObject({ event: 'message_delete', sequence_id: 'n-sample000001' });
   });
 
+  it('carries a digest and an anomaly alert, then replaces the alert with "Back to normal" (D-43, D-44)', async () => {
+    const server = (SERVER ?? '').replace(/\/+$/, '');
+    const topic = `bh-ci-${randomBytes(6).toString('hex')}`;
+    const channel = createNtfyChannel(platformRecord('ntfy', { target: { server, topic } }), {
+      token: null,
+      topic: null,
+      images: SAMPLE_IMAGES,
+    });
+    await channel.send(delivery('digest', NTFY_CAPABILITIES, { late: { skipped: 1 } }));
+    let events = (await poll(server, topic)).filter((e) => e.event === 'message');
+    expect(events[0]?.title).toMatch(/^Daily digest · /);
+    expect(events[0]?.message).toContain('Sent late: BrowserHive was not running');
+    expect(events[0]?.message).toContain('Tool calls per hour ');
+    expect(events[0]?.priority).toBe(3);
+    const alert = await channel.send(delivery('anomaly', NTFY_CAPABILITIES));
+    await channel.edit?.(alert.ref, delivery('anomaly', NTFY_CAPABILITIES, { resolved: true }));
+    events = (await poll(server, topic)).filter((e) => e.event === 'message');
+    expect(events.map((e) => e.title)).toEqual([
+      events[0]?.title,
+      'Something looks off: 2 checks',
+      'Back to normal',
+    ]);
+    expect(events[2]?.priority).toBe(2);
+  });
+
   it('refuses a fourth action like ntfy does, by never sending more than three', async () => {
     const server = (SERVER ?? '').replace(/\/+$/, '');
     const topic = `bh-ci-${randomBytes(6).toString('hex')}`;

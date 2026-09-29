@@ -4,6 +4,8 @@ import type { DomainEvents } from '../../src/app/events/catalog.ts';
 import { ChannelRegistry } from '../../src/app/notifications/channel-registry.ts';
 import { ChannelService, targetHint } from '../../src/app/notifications/channel-service.ts';
 import { createPublicLinkBuilder } from '../../src/app/notifications/links.ts';
+import { ReportScheduler } from '../../src/app/notifications/report-scheduler.ts';
+import { sampleAnomalyFacts, sampleDigestFacts } from '../../src/app/notifications/samples.ts';
 import { CHANNEL_RENDERERS, channelFactories } from '../../src/infra/notifications/index.ts';
 import { AppError } from '../../src/kernel/errors/app-error.ts';
 import type { TelegramSetup } from '../../src/ports/notification-channel.ts';
@@ -71,7 +73,24 @@ async function kit(options: { readonly startup?: boolean } = {}): Promise<Kit> {
       };
     },
   };
+  const reports = new ReportScheduler({
+    registry,
+    facts: {
+      digest: async (window, rule) => sampleDigestFacts(window.until, rule),
+      anomaly: async (now) => sampleAnomalyFacts(now),
+    },
+    uow: new InMemoryUnitOfWork(repos),
+    repos,
+    outbox: { plan: () => [], kick: () => undefined },
+    clock,
+    ids,
+    logger,
+    hostZone: () => 'Europe/Berlin',
+  });
   const service = new ChannelService({
+    reports,
+    cursors: repos.notificationCursors,
+    hostZone: () => 'Europe/Berlin',
     repos,
     uow: new InMemoryUnitOfWork(repos),
     registry,
@@ -405,5 +424,101 @@ describe('ChannelService env check and Telegram connect', () => {
     });
     expect(await codeOf(service.telegramConnect('BH_NOPE'))).toBe('CHANNEL_NOT_READY');
     expect(code(() => service.telegramConnectStatus('unknownid1'))).toBe('NOT_FOUND');
+  });
+});
+
+describe('ChannelService reports (D-43, D-44)', () => {
+  async function hook(k: Kit, rules: Parameters<ChannelService['create']>[0]['rules']) {
+    return k.service.create({
+      name: 'hook',
+      kind: 'webhook',
+      target: { url: fakes.webhookUrl },
+      secret_refs: {},
+      rules,
+    });
+  }
+
+  it('shows the schedule, the zone and the host zone', async () => {
+    const k = await kit();
+    const view = await hook(k, { digest: { every: 'week', at: '08:30', day: 'fri' } });
+    expect(view.reports).toMatchObject({
+      time_zone: 'Europe/Berlin',
+      host_zone: true,
+      digest: { every: 'week', at: '08:30', day: 'fri', last_until: null },
+      anomaly: null,
+    });
+    expect(k.service.hostTimeZone()).toBe('Europe/Berlin');
+    const plain = await k.service.update(view.channel_id, { rules: { time_zone: 'Asia/Tokyo' } });
+    expect(plain.reports).toEqual({
+      time_zone: 'Asia/Tokyo',
+      host_zone: false,
+      digest: null,
+      anomaly: null,
+    });
+  });
+
+  it('refuses an unknown time zone and a weekday on a daily digest', async () => {
+    const k = await kit();
+    expect(await codeOf(hook(k, { time_zone: 'Mars/Olympus' }))).toBe('VALIDATION_FAILED');
+    expect(await codeOf(hook(k, { digest: { every: 'day', at: '09:00', day: 'mon' } }))).toBe(
+      'VALIDATION_FAILED',
+    );
+  });
+
+  it('previews the digest of the period ending now, then sends it as a manual report', async () => {
+    const k = await kit();
+    const view = await hook(k, { digest: { every: 'day', at: '09:00' } });
+    const preview = await k.service.digest(view.channel_id, false);
+    expect(preview).toMatchObject({ sent: false, ok: true, empty: false, delivery: null });
+    expect(preview.window.until - preview.window.since).toBe(24 * 3_600_000);
+    expect(preview.preview.message.kind).toBe('digest.daily');
+    expect(fakes.of('webhook')).toHaveLength(0);
+    const sent = await k.service.digest(view.channel_id, true);
+    expect(sent.ok).toBe(true);
+    expect(sent.delivery).toMatchObject({
+      status: 'sent',
+      reason: 'manual',
+      notification_kind: 'digest.daily',
+      report: { manual: true, late: false, time_zone: 'Europe/Berlin' },
+    });
+    const [post] = fakes.of('webhook');
+    const body = post?.json as {
+      message: { report: { manual: boolean }; blocks: { type: string }[] };
+    };
+    expect(body.message.report.manual).toBe(true);
+    // The generic webhook receives the chart as data.
+    expect(body.message.blocks.some((b) => b.type === 'chart')).toBe(true);
+    // The row is kept out of the inbox.
+    const row = [...k.repos.notifications.rows.values()].find((r) => r.kind === 'digest.daily');
+    expect(row?.dismissedAt).not.toBeNull();
+  });
+
+  it('renders the report samples at the channel level and zone', async () => {
+    const k = await kit();
+    const digest = k.service.preview({
+      kind: 'webhook',
+      rules: { content: 'counts' },
+      sample: 'digest',
+    });
+    expect(digest.message.privacy.level).toBe('counts');
+    expect(JSON.stringify(digest.message)).not.toContain('NAVIGATION_TIMEOUT');
+    expect(digest.notes.some((n) => n.includes('made-up figures'))).toBe(true);
+    const anomaly = k.service.preview({ kind: 'telegram', sample: 'anomaly' });
+    expect(anomaly.message.kind).toBe('report.anomaly');
+    expect(anomaly.capabilities.charts).toBe(false);
+  });
+
+  it('removes the channel cursors with the channel', async () => {
+    const k = await kit();
+    const view = await hook(k, { anomaly: {} });
+    for (const key of [
+      `ntfy:${view.channel_id}`,
+      `digest:${view.channel_id}`,
+      `anomaly:${view.channel_id}`,
+    ]) {
+      await k.repos.notificationCursors.set(key, '{}', 1);
+    }
+    await k.service.remove(view.channel_id);
+    expect(k.repos.notificationCursors.rows.size).toBe(0);
   });
 });

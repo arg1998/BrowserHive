@@ -53,6 +53,7 @@ export const DISCORD_LIMITS = {
 export const DISCORD_WEBHOOK_CAPABILITIES: ChannelCapabilities = {
   richBlocks: true,
   tables: false,
+  charts: false,
   images: true,
   actButtons: false,
   openLinks: true,
@@ -87,15 +88,28 @@ export function discordColor(message: Pick<NotificationMessage, 'severity' | 'st
   }
 }
 
-/** Escapes Discord markdown (and mention/timestamp syntax) in user text. */
-export function escapeMarkdown(text: string): string {
-  return text.replace(/([\\*_~`|<>[\]()])/g, '\\$1').replace(/^(\s*)([#+-]|\d+\.)/gm, '$1\\$2');
+/**
+ * Escapes Discord markdown (and mention/timestamp syntax) in user text. A heading, list or quote
+ * marker is escaped only where a line starts (`lineStart` says whether the text itself begins a
+ * line); an ordered-list marker is escaped on its dot (`1\.`), since a backslash before a digit
+ * shows as a backslash.
+ */
+export function escapeMarkdown(text: string, lineStart = true): string {
+  return text
+    .replace(/([\\*_~`|<>[\]()])/g, '\\$1')
+    .replace(
+      /(^|\n)(\s*)(?:([#+-])|(\d+)\.)/g,
+      (match, nl: string, ws: string, mark, digits, offset: number) => {
+        if (offset === 0 && nl === '' && !lineStart) return match;
+        return mark !== undefined ? `${nl}${ws}\\${mark}` : `${nl}${ws}${digits}\\.`;
+      },
+    );
 }
 
-function inlineNode(node: Inline, links: LinkBuilder): string {
+function inlineNode(node: Inline, links: LinkBuilder, lineStart: boolean): string {
   switch (node.type) {
     case 'text':
-      return escapeMarkdown(node.text);
+      return escapeMarkdown(node.text, lineStart);
     case 'bold':
       return `**${escapeMarkdown(node.text)}**`;
     case 'italic':
@@ -104,7 +118,7 @@ function inlineNode(node: Inline, links: LinkBuilder): string {
       return `\`${node.text.replace(/`/g, 'ʼ')}\``;
     case 'link':
       return links.local
-        ? escapeMarkdown(node.text)
+        ? escapeMarkdown(node.text, lineStart)
         : `[${escapeMarkdown(node.text)}](${links.url(node.path).replace(/\)/g, '%29')})`;
     case 'time':
       return `<t:${Math.floor(node.at / 1000)}:${node.style === 'relative' ? 'R' : 't'}>`;
@@ -112,7 +126,7 @@ function inlineNode(node: Inline, links: LinkBuilder): string {
 }
 
 function inline(run: readonly Inline[], links: LinkBuilder): string {
-  return run.map((node) => inlineNode(node, links)).join('');
+  return run.map((node, i) => inlineNode(node, links, i === 0)).join('');
 }
 
 function block(b: Block, links: LinkBuilder): string {
@@ -144,6 +158,7 @@ function block(b: Block, links: LinkBuilder): string {
     case 'table':
     case 'image':
     case 'divider':
+    case 'chart':
       return '';
   }
 }

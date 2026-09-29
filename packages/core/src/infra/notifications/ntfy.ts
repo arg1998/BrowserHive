@@ -44,6 +44,7 @@ export const NTFY_ACTIONS_MAX = 3;
 export const NTFY_CAPABILITIES: ChannelCapabilities = {
   richBlocks: true,
   tables: false,
+  charts: false,
   images: true,
   actButtons: false,
   openLinks: true,
@@ -122,6 +123,7 @@ function blockText(b: Block): string {
     case 'table':
     case 'image':
     case 'divider':
+    case 'chart':
       return '';
   }
 }

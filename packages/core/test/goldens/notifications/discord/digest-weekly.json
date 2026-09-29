@@ -1,0 +1,82 @@
+{
+  "kind": "discord",
+  "variant": "digest-weekly",
+  "mode": "webhook",
+  "requests": [
+    {
+      "method": "POST",
+      "path": "{secret:webhook}?wait=true&with_components=true",
+      "encoding": "json",
+      "body": {
+        "content": null,
+        "allowed_mentions": {
+          "parse": []
+        },
+        "components": [
+          {
+            "type": 1,
+            "components": [
+              {
+                "type": 2,
+                "style": 5,
+                "label": "Open Overview",
+                "url": "https://bh.example.net/overview?since=1789395200000&until=1790000000000"
+              }
+            ]
+          }
+        ],
+        "embeds": [
+          {
+            "title": "ℹ️ Weekly digest · 14–21 Sep",
+            "description": "84 sessions \\(2 live\\) · 23,884 tool calls · 476 errors \\(2%\\)\n\n**Tool calls per 6 hours** `▁▁▁▁▁▁▁▁▃▅▆▆▄▅▇█▇▅▄▃▂▂▂▁▁▁▁▁` peak 2,060 calls\n\n**Top errors**\n\n- **Error:** `NAVIGATION_TIMEOUT` · **Tool:** `navigate` · **Count:** 217 · **Sessions:** 4\n- **Error:** `ELEMENT_NOT_FOUND` · **Tool:** `click` · **Count:** 154 · **Sessions:** 6\n- **Error:** `CAPTCHA_DETECTED` · **Tool:** `navigate` · **Count:** 105 · **Sessions:** 2\n\n**By harness**\n\n- **Harness:** Claude Code · **Sessions:** 56 · **Tool calls:** 16,870 · **Errors:** 357\n- **Harness:** Cursor · **Sessions:** 21 · **Tool calls:** 6,160 · **Errors:** 105\n- **Harness:** Unknown · **Sessions:** 7 · **Tool calls:** 854 · **Errors:** 14\n\n-# 14 Sep 16:13 → 21 Sep 16:13 · Europe/Berlin",
+            "url": "https://bh.example.net/overview?since=1789395200000&until=1790000000000",
+            "color": 3900150,
+            "fields": [
+              {
+                "name": "Sessions",
+                "value": "84 started · 2 live now",
+                "inline": true
+              },
+              {
+                "name": "Tool calls",
+                "value": "23,884 · 476 errors \\(2%\\) · was 1.2%",
+                "inline": true
+              },
+              {
+                "name": "Attention",
+                "value": "28 requests · 21 answered \\(median 1m 36s\\) · 7 timed out",
+                "inline": true
+              },
+              {
+                "name": "Vault fills",
+                "value": "63 · 56 ok · 7 origin mismatch",
+                "inline": true
+              },
+              {
+                "name": "Blocked requests",
+                "value": "189 · top `*.doubleclick.net` \\(133\\)",
+                "inline": true
+              },
+              {
+                "name": "Slowest tool (p95)",
+                "value": "`navigate` 4.2 s \\(was 2.9 s\\)",
+                "inline": true
+              },
+              {
+                "name": "Open problems",
+                "value": "`RETENTION_FAILED` since 21 Sep 10:13",
+                "inline": true
+              }
+            ],
+            "footer": {
+              "text": "BrowserHive"
+            },
+            "timestamp": "2026-09-21T14:13:20.000Z"
+          }
+        ]
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}

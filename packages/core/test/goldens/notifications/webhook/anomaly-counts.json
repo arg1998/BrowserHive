@@ -1,0 +1,156 @@
+{
+  "kind": "webhook",
+  "variant": "anomaly-counts",
+  "mode": null,
+  "requests": [
+    {
+      "method": "POST",
+      "path": "https://hooks.example.net/bh",
+      "encoding": "json",
+      "body": {
+        "schema": 1,
+        "event": "notification",
+        "op": "send",
+        "delivered_at": 1790000000000,
+        "channel": null,
+        "links": {
+          "overview": "https://bh.example.net/overview?range=24h"
+        },
+        "local_links": false,
+        "message": {
+          "schema": 1,
+          "id": "n-sample000001",
+          "revision": 1,
+          "thread": "anomaly:sample",
+          "kind": "report.anomaly",
+          "category": "reports",
+          "severity": "warn",
+          "state": "open",
+          "alert": true,
+          "at": {
+            "created": 1790000000000,
+            "updated": 1790000000000
+          },
+          "title": "Something looks off: 2 checks",
+          "summary": "34% of tool calls failed in the last hour · An attention request has waited 47 min",
+          "blocks": [
+            {
+              "type": "table",
+              "columns": [
+                "Check",
+                "Now",
+                "Threshold",
+                "Since"
+              ],
+              "rows": [
+                [
+                  [
+                    {
+                      "type": "text",
+                      "text": "Tool-call error rate"
+                    },
+                    {
+                      "type": "text",
+                      "text": " "
+                    },
+                    {
+                      "type": "bold",
+                      "text": "new"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "text",
+                      "text": "34%"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "text",
+                      "text": "≥ 20%"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "text",
+                      "text": "16:13"
+                    }
+                  ]
+                ],
+                [
+                  [
+                    {
+                      "type": "text",
+                      "text": "Attention waiting"
+                    },
+                    {
+                      "type": "text",
+                      "text": " "
+                    },
+                    {
+                      "type": "bold",
+                      "text": "new"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "text",
+                      "text": "47 min"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "text",
+                      "text": "≥ 30 min"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "text",
+                      "text": "16:13"
+                    }
+                  ]
+                ]
+              ]
+            },
+            {
+              "type": "footer",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Checked 15:13–16:13 · Europe/Berlin"
+                }
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "kind": "open",
+              "id": "overview",
+              "label": "Open Overview",
+              "style": "primary",
+              "path": "/overview?range=24h"
+            }
+          ],
+          "entities": {},
+          "privacy": {
+            "level": "counts",
+            "has_image": false
+          },
+          "report": {
+            "window": {
+              "since": 1789996400000,
+              "until": 1790000000000
+            },
+            "time_zone": "Europe/Berlin",
+            "late": false,
+            "skipped": 0,
+            "manual": false
+          }
+        }
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "kind": "ntfy",
+  "variant": "anomaly-counts",
+  "mode": null,
+  "requests": [
+    {
+      "method": "POST",
+      "path": "/",
+      "encoding": "json",
+      "body": {
+        "topic": "bh-alerts",
+        "title": "Something looks off: 2 checks",
+        "message": "34% of tool calls failed in the last hour · An attention request has waited 47 min\n\n• Check: Tool-call error rate new · Now: 34% · Threshold: ≥ 20% · Since: 16:13\n• Check: Attention waiting new · Now: 47 min · Threshold: ≥ 30 min · Since: 16:13\n\nChecked 15:13–16:13 · Europe/Berlin",
+        "priority": 4,
+        "tags": [
+          "warning"
+        ],
+        "click": "https://bh.example.net/overview?range=24h",
+        "actions": [
+          {
+            "action": "view",
+            "label": "Open Overview",
+            "url": "https://bh.example.net/overview?range=24h",
+            "clear": false
+          }
+        ],
+        "markdown": false,
+        "sequence_id": "n-sample000001"
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}

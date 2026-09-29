@@ -12,7 +12,9 @@ export {
   ChannelRegistry,
   ChannelService,
   createLocalLinkBuilder,
+  createReportFacts,
   type DeliveryCounter,
+  forgetChannelCursors,
   imageVariants,
   linkBuilderFor,
   NotificationActionListeners,
@@ -21,6 +23,9 @@ export {
   NotificationService,
   PublicUrlChecker,
   publicUrlHost,
+  type ReportCounter,
+  ReportScheduler,
+  runtimeZone,
 } from '../app/notifications/index.ts';
 export { Recorder } from '../app/observability/recorder.ts';
 export { SystemStatusService } from '../app/observability/system-status.ts';

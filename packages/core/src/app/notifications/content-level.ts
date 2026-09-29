@@ -17,7 +17,8 @@ const RANK: { readonly [L in NotificationContentLevel]: number } = {
  *   tables, lists, images or paragraphs, where free text and screenshots live);
  * - `counts`: the kind's generic title (with the group count when the title had one), the session
  *   slug as the summary, no blocks, the actions, and only the session entities.
- * A message already at a lower level is never raised.
+ * A message already at a lower level is never raised, and one already at `level` is returned as it
+ * is: a report is built at its channel's level by its producer (spec 03 §9.7).
  *
  * @returns The restricted message.
  */
@@ -26,7 +27,7 @@ export function restrictContent(
   level: NotificationContentLevel,
 ): NotificationMessage {
   const target = RANK[level] < RANK[message.privacy.level] ? level : message.privacy.level;
-  if (target === 'full') return message;
+  if (target === 'full' || target === message.privacy.level) return message;
   if (target === 'titles') {
     const blocks = message.blocks.filter((b) => b.type === 'fields' || b.type === 'footer');
     return { ...message, blocks, privacy: { level: 'titles', has_image: false } };

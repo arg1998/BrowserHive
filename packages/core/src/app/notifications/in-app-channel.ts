@@ -16,6 +16,7 @@ export const IN_APP_CHANNEL = 'in-app';
 export const IN_APP_CAPABILITIES: ChannelCapabilities = {
   richBlocks: true,
   tables: true,
+  charts: true,
   images: true,
   actButtons: true,
   openLinks: true,

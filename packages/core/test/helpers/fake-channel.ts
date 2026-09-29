@@ -14,6 +14,7 @@ export function capabilities(overrides: Partial<ChannelCapabilities> = {}): Chan
   return {
     richBlocks: true,
     tables: false,
+    charts: false,
     images: true,
     actButtons: false,
     openLinks: true,

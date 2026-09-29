@@ -298,6 +298,8 @@ export type ChannelsPort = Pick<
   | 'pause'
   | 'resume'
   | 'test'
+  | 'digest'
+  | 'hostTimeZone'
   | 'preview'
   | 'deliveries'
   | 'delivery'

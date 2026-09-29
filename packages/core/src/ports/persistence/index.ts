@@ -6,11 +6,15 @@ export type {
   ActivityResult,
   ActivitySummary,
   AnalyticsQueries,
+  ReportWindow,
   TimelineItem,
   TimelineKind,
   TimelineQuery,
+  ToolLatencyRow,
   ToolMetricsQuery,
   ToolMetricsRow,
+  TopErrorRow,
+  WindowCounts,
 } from './analytics.ts';
 export type { BlockedRequestListRow, BlocklistAuditRepository } from './blocklist-audit.ts';
 export type {

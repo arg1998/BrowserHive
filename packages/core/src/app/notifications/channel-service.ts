@@ -3,6 +3,7 @@
 import type { NotificationCategory } from '@browserhive/contracts/enums';
 import {
   type ChannelCapabilitiesDto,
+  type ChannelDigestResponse,
   type ChannelInput,
   type ChannelPatch,
   type ChannelPreview,
@@ -51,6 +52,7 @@ import {
   type TelegramSetup,
   type TelegramStart,
 } from '../../ports/notification-channel.ts';
+import type { NotificationCursorRepository } from '../../ports/persistence/notification-actions.ts';
 import type {
   ChannelDeliveryStats,
   NotificationChannelRecord,
@@ -65,8 +67,11 @@ import { restrictContent } from './content-level.ts';
 import { degrade } from './degrade.ts';
 import { applyImageRule, wantsImages } from './images.ts';
 import { clip, decodeMessage, encodeMessage } from './message.ts';
+import type { ReportScheduler } from './report-scheduler.ts';
+import { forgetChannelCursors, reportsView } from './report-scheduler.ts';
 import { contentLevelOf, deleteWhenResolved, expiryFor } from './routing.ts';
 import { sampleMessage } from './samples.ts';
+import { runtimeZone, usableZone } from './schedule.ts';
 
 /** Window of the per-channel counts on the cards. */
 const STATS_WINDOW_MS = 24 * 60 * 60_000;
@@ -113,6 +118,12 @@ export interface ChannelServiceDeps {
   readonly redactor?: Redactor;
   /** Timer for debounced feed events (defaults to `setTimeout`). */
   readonly schedule?: (fn: () => void, ms: number) => void;
+  /** The scheduled reports (D-43, D-44): views, "Send a digest now", cursor cleanup. */
+  readonly reports?: Pick<ReportScheduler, 'view' | 'zoneOf' | 'manualDigest' | 'forget'>;
+  /** The channel cursors (removed with a channel). */
+  readonly cursors?: NotificationCursorRepository;
+  /** The host's IANA zone (the default of `rules.time_zone`); default the runtime's. */
+  readonly hostZone?: () => string;
 }
 
 /** A page of the delivery log. */
@@ -130,6 +141,15 @@ export interface DeliveryListInput {
   readonly statuses?: readonly NotificationDeliveryRecord['status'][];
   readonly ops?: readonly NotificationDeliveryRecord['op'][];
   readonly kinds?: readonly string[];
+}
+
+/** What a preview renders for: a saved channel's setup, or a draft's. */
+interface PreviewSetup {
+  readonly kind: string;
+  readonly mode: string | null;
+  readonly target: Readonly<Record<string, string>>;
+  readonly rules: NotificationChannelRules;
+  readonly secretRefs: Readonly<Record<string, string>>;
 }
 
 interface ConnectSession {
@@ -160,6 +180,7 @@ export function capabilitiesDto(c: ChannelCapabilities): ChannelCapabilitiesDto 
   return {
     rich_blocks: c.richBlocks,
     tables: c.tables,
+    charts: c.charts,
     images: c.images,
     act_buttons: c.actButtons,
     open_links: c.openLinks,
@@ -277,6 +298,11 @@ export class ChannelService {
   // Views
   // ---------------------------------------------------------------------------------------------
 
+  /** The zone a channel without `rules.time_zone` uses (`GET /channels`). */
+  hostTimeZone(): string {
+    return usableZone(this.deps.hostZone?.() ?? runtimeZone(), 'UTC');
+  }
+
   /** Every channel (dashboard and startup), by name. */
   async list(): Promise<readonly ChannelView[]> {
     const stats = await this.stats();
@@ -362,6 +388,8 @@ export class ChannelService {
         last_status: s?.lastStatus ?? null,
       },
       connection: this.deps.connection?.(r.channelId) ?? null,
+      reports:
+        this.deps.reports?.view(r) ?? reportsView(r, this.deps.clock.now(), this.hostTimeZone()),
     };
   }
 
@@ -503,6 +531,8 @@ export class ChannelService {
       throw new AppError('CHANNEL_READ_ONLY', { channel_id: channelId, name: current.name });
     }
     await this.deps.repos.notificationChannels.remove(channelId);
+    if (this.deps.cursors !== undefined) await forgetChannelCursors(this.deps.cursors, channelId);
+    this.deps.reports?.forget(channelId);
     await this.deps.registry.reload();
     this.log.info('channel removed', { channel: current.name });
     this.deps.bus.publish('channel.removed', { type: 'channel.removed', channel_id: channelId });
@@ -577,20 +607,7 @@ export class ChannelService {
    * @throws AppError `CHANNEL_NOT_FOUND`, `CHANNEL_NOT_READY`.
    */
   async test(channelId: string): Promise<ChannelTestResponse> {
-    const entry = this.entry(channelId);
-    const adapter = entry.adapter;
-    const capabilities = entry.capabilities;
-    const missing = this.missingOf(entry.record);
-    if (adapter === null || capabilities === null || missing.length > 0) {
-      throw new AppError('CHANNEL_NOT_READY', {
-        channel_id: channelId,
-        problem:
-          missing.length > 0
-            ? `${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} not set.`
-            : (entry.problem ?? 'the channel has no adapter.'),
-        missing,
-      });
-    }
+    const entry = this.readyEntry(channelId);
     const now = this.deps.clock.now();
     const notificationId = `n-${this.deps.ids.opaque(12)}`;
     const sample = sampleMessage('test', { now });
@@ -622,6 +639,89 @@ export class ChannelService {
       thread: message.thread,
       messageJson: encodeMessage(message),
     };
+    const sent = await this.sendNow(entry, message, record, 'test');
+    return { ok: sent.error === null, delivery: sent.delivery, error: sent.error };
+  }
+
+  /**
+   * "Send a digest now" (spec 03 §4.8.1, D-43): the channel's digest of the period that ends now,
+   * previewed (pure) or also sent at once outside the queue as a `manual` report; the schedule and
+   * its cursor are untouched.
+   *
+   * @throws AppError `CHANNEL_NOT_FOUND`, `CHANNEL_NOT_READY` (sending without an adapter).
+   */
+  async digest(channelId: string, send: boolean): Promise<ChannelDigestResponse> {
+    const reports = this.deps.reports;
+    const entry = send ? this.readyEntry(channelId) : this.entry(channelId);
+    if (reports === undefined) {
+      throw new AppError('CHANNEL_NOT_READY', {
+        channel_id: channelId,
+        problem: 'scheduled reports are not available in this process.',
+        missing: [],
+      });
+    }
+    const built = await reports.manualDigest(entry.record);
+    const r = entry.record;
+    const preview = this.render(
+      { kind: r.kind, mode: r.mode, target: r.target, secretRefs: r.secretRefs, rules: r.rules },
+      built.message,
+      'digest',
+    );
+    const base = { preview, window: built.window, empty: built.empty };
+    if (!send) return { ...base, sent: false, ok: true, delivery: null, error: null };
+    const sent = await this.sendNow(
+      this.readyEntry(channelId),
+      built.message,
+      built.record,
+      'manual',
+    );
+    return {
+      ...base,
+      sent: true,
+      ok: sent.error === null,
+      delivery: sent.delivery,
+      error: sent.error,
+    };
+  }
+
+  /** The channel, or `CHANNEL_NOT_READY` when it cannot send (no adapter, a variable unset). */
+  private readyEntry(channelId: string): RegisteredChannel & {
+    readonly adapter: NonNullable<RegisteredChannel['adapter']>;
+    readonly capabilities: ChannelCapabilities;
+  } {
+    const entry = this.entry(channelId);
+    const adapter = entry.adapter;
+    const capabilities = entry.capabilities;
+    const missing = this.missingOf(entry.record);
+    if (adapter === null || capabilities === null || missing.length > 0) {
+      throw new AppError('CHANNEL_NOT_READY', {
+        channel_id: channelId,
+        problem:
+          missing.length > 0
+            ? `${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} not set.`
+            : (entry.problem ?? 'the channel has no adapter.'),
+        missing,
+      });
+    }
+    return { ...entry, adapter, capabilities };
+  }
+
+  /**
+   * Stores a notification that only this channel receives, sends it through the adapter now
+   * (outside the outbox queue: the caller waits for the platform's answer) and records it in the
+   * delivery log with `reason` (`test`, `manual`).
+   *
+   * @returns The delivery row and the classified error, if any.
+   */
+  private async sendNow(
+    entry: ReturnType<ChannelService['readyEntry']>,
+    message: NotificationMessage,
+    record: NotificationRecord,
+    reason: string,
+  ): Promise<{ delivery: DeliveryRow | null; error: { code: string; message: string } | null }> {
+    const channelId = entry.record.channelId;
+    const notificationId = record.notificationId;
+    const now = this.deps.clock.now();
     await this.deps.uow.transaction(async (r) => {
       await r.notifications.insert(record);
       await r.notificationDeliveries.enqueue([
@@ -631,7 +731,7 @@ export class ChannelService {
           revision: 1,
           op: 'send',
           status: 'pending',
-          reason: 'test',
+          reason,
           nextAttemptAt: null,
           createdAt: now,
         },
@@ -640,17 +740,17 @@ export class ChannelService {
     const job = (
       await this.deps.repos.notificationDeliveries.list({ channelId, notificationId, limit: 1 })
     )[0];
-    if (job === undefined) throw new Error('test delivery was not recorded');
+    if (job === undefined) throw new Error('direct delivery was not recorded');
     await this.deps.repos.notificationDeliveries.claim(job.seq, now);
     const delivery: ChannelDelivery = {
-      message: this.shape(message, entry.record.rules, capabilities),
+      message: this.shape(message, entry.record.rules, entry.capabilities),
       links: this.deps.links,
       replyTo: null,
     };
     const started = this.deps.clock.now();
     let error: { code: string; message: string } | null = null;
     try {
-      const result = await adapter.send(delivery);
+      const result = await entry.adapter.send(delivery);
       const done = this.deps.clock.now();
       const rules = entry.record.rules;
       let expiresAt = expiryFor(rules, message, done);
@@ -658,7 +758,7 @@ export class ChannelService {
       await this.deps.uow.transaction(async (r) => {
         await r.notificationDeliveries.finish(job.seq, {
           status: 'sent',
-          reason: 'test',
+          reason,
           lastError: null,
           durationMs: Math.max(0, done - started),
           messageRef: result.ref,
@@ -676,7 +776,7 @@ export class ChannelService {
           deletedAt: null,
         });
       });
-      this.log.info('channel test sent', { channel: entry.record.name });
+      this.log.info('channel direct send', { channel: entry.record.name, reason });
     } catch (err) {
       const done = this.deps.clock.now();
       const code = err instanceof ChannelSendError ? err.code : 'unavailable';
@@ -691,14 +791,14 @@ export class ChannelService {
         durationMs: Math.max(0, done - started),
         updatedAt: done,
       });
-      this.log.warn('channel test failed', { channel: entry.record.name, code });
+      this.log.warn('channel direct send failed', { channel: entry.record.name, code });
     }
     const row = await this.deps.repos.notificationDeliveries.get(job.seq);
     const dto = row === null ? null : await this.deliveryRow(row, new Map());
     if (dto !== null)
       this.deps.bus.publish('delivery.updated', { type: 'delivery.updated', delivery: dto });
     this.scheduleChannel(channelId);
-    return { ok: error === null, delivery: dto, error };
+    return { delivery: dto, error };
   }
 
   private scrub(text: string): string {
@@ -712,46 +812,68 @@ export class ChannelService {
    * @throws AppError `CHANNEL_NOT_FOUND`, `CHANNEL_KIND_UNAVAILABLE`.
    */
   preview(request: ChannelPreviewRequest): ChannelPreview {
-    let kind: string;
-    let mode: string | null;
-    let target: Readonly<Record<string, string>>;
-    let rules: NotificationChannelRules;
-    let secretRefs: Readonly<Record<string, string>> = {};
+    let setup: PreviewSetup;
     if (request.channel_id !== undefined) {
       const r = this.entry(request.channel_id).record;
-      kind = r.kind;
-      mode = r.mode;
-      target = r.target;
-      rules = r.rules;
-      secretRefs = r.secretRefs;
+      setup = {
+        kind: r.kind,
+        mode: r.mode,
+        target: r.target,
+        rules: r.rules,
+        secretRefs: r.secretRefs,
+      };
     } else {
-      kind = request.kind ?? 'webhook';
       const spec = CHANNEL_KIND_SPECS[request.kind ?? 'webhook'];
-      mode = request.mode ?? spec.defaultMode;
-      target = request.target ?? {};
-      rules = request.rules ?? {};
-      // Names only; anything that is not a variable name (a pasted value) is never echoed back.
-      secretRefs = Object.fromEntries(
-        Object.entries(request.secret_refs ?? {}).filter(
-          ([, name]) => SecretEnvName.safeParse(name).success,
+      setup = {
+        kind: request.kind ?? 'webhook',
+        mode: request.mode ?? spec.defaultMode,
+        target: request.target ?? {},
+        rules: request.rules ?? {},
+        // Names only; anything that is not a variable name (a pasted value) is never echoed back.
+        secretRefs: Object.fromEntries(
+          Object.entries(request.secret_refs ?? {}).filter(
+            ([, name]) => SecretEnvName.safeParse(name).success,
+          ),
         ),
-      );
+      };
     }
+    const rules = setup.rules;
+    const now = this.deps.clock.now();
+    const options = {
+      now,
+      level: contentLevelOf(rules),
+      zone: this.deps.reports?.zoneOf(rules) ?? usableZone(rules.time_zone, this.hostTimeZone()),
+      ...(rules.digest !== undefined && { digest: rules.digest }),
+    };
+    const plain = sampleMessage(request.sample, options);
+    const withImage = wantsImages(rules, plain.category)
+      ? sampleMessage(request.sample, {
+          ...options,
+          image: rules.mask_images === true ? 'masked' : 'unmasked',
+        })
+      : plain;
+    return this.render(setup, withImage, request.sample);
+  }
+
+  /**
+   * Renders a message exactly as a channel (saved, or a draft) would send it: content level, image
+   * rule, degrade, the renderer, and the secrets of paths replaced by their variable names. Pure.
+   *
+   * @throws AppError `CHANNEL_KIND_UNAVAILABLE`.
+   */
+  private render(
+    setup: PreviewSetup,
+    message: NotificationMessage,
+    sample: PreviewSample,
+  ): ChannelPreview {
+    const { kind, mode, target, rules, secretRefs } = setup;
     const renderer = this.deps.renderers.get(kind);
     const parsedKind = AvailableChannelKind.safeParse(kind);
     if (renderer === undefined || !parsedKind.success) {
       throw new AppError('CHANNEL_KIND_UNAVAILABLE', { kind, mode_text: '' });
     }
     const capabilities = renderer.capabilities({ mode, target, secretRefs, rules });
-    const now = this.deps.clock.now();
-    const plain = sampleMessage(request.sample, { now });
-    const withImage = wantsImages(rules, plain.category)
-      ? sampleMessage(request.sample, {
-          now,
-          image: rules.mask_images === true ? 'masked' : 'unmasked',
-        })
-      : plain;
-    const shown = this.shape(withImage, rules, capabilities);
+    const shown = this.shape(message, rules, capabilities);
     const rendered = renderer.render(
       { message: shown, links: this.deps.links, replyTo: null },
       { mode, target, op: 'send', ref: null, actToken: (id) => `bh1:preview-${id}` },
@@ -775,19 +897,12 @@ export class ChannelService {
     return {
       kind: parsedKind.data,
       mode,
-      sample: request.sample,
+      sample,
       capabilities: capabilitiesDto(capabilities),
       message: shown,
       requests,
       local_links: this.deps.links.local,
-      notes: this.notes(
-        parsedKind.data,
-        rules,
-        capabilities,
-        plain.category,
-        request.sample,
-        target,
-      ),
+      notes: this.notes(parsedKind.data, rules, capabilities, message.category, sample, target),
     };
   }
 
@@ -821,6 +936,18 @@ export class ChannelService {
     }
     if (rules.images?.[category] === true && !wantsImages(rules, category)) {
       notes.push('Screenshots are on, but they need the content level "full".');
+    }
+    if (sample === 'digest') {
+      notes.push(
+        rules.digest === undefined
+          ? 'A sample with made-up figures. Turn on the daily digest to receive one on schedule.'
+          : 'A sample with made-up figures; the real digest counts what happened in the period, and a period with no activity sends nothing.',
+      );
+    }
+    if (sample === 'anomaly') {
+      notes.push(
+        'A sample alert. Real alerts are sent only when a check crosses its threshold, and the message is edited when things get back to normal.',
+      );
     }
     const server = (target['server'] ?? NTFY_DEFAULT_SERVER).replace(/\/+$/, '');
     if (kind === 'ntfy' && wantsImages(rules, category) && server === NTFY_DEFAULT_SERVER) {
@@ -913,6 +1040,10 @@ export class ChannelService {
       message_ref: row.messageRef === null ? null : { ...row.messageRef },
       created_at: row.createdAt,
       updated_at: row.updatedAt,
+      report:
+        n !== null && n.category === 'reports'
+          ? (decodeMessage(n.messageJson)?.report ?? null)
+          : null,
     });
   }
 

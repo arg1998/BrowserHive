@@ -1,0 +1,34 @@
+{
+  "kind": "ntfy",
+  "variant": "digest-weekly",
+  "mode": null,
+  "requests": [
+    {
+      "method": "POST",
+      "path": "/",
+      "encoding": "json",
+      "body": {
+        "topic": "bh-alerts",
+        "title": "Weekly digest · 14–21 Sep",
+        "message": "84 sessions (2 live) · 23,884 tool calls · 476 errors (2%)\n\nSessions: 84 started · 2 live now\nTool calls: 23,884 · 476 errors (2%) · was 1.2%\nAttention: 28 requests · 21 answered (median 1m 36s) · 7 timed out\nVault fills: 63 · 56 ok · 7 origin mismatch\nBlocked requests: 189 · top *.doubleclick.net (133)\nSlowest tool (p95): navigate 4.2 s (was 2.9 s)\nOpen problems: RETENTION_FAILED since 21 Sep 10:13\n\nTool calls per 6 hours ▁▁▁▁▁▁▁▁▃▅▆▆▄▅▇█▇▅▄▃▂▂▂▁▁▁▁▁ peak 2,060 calls\n\nTop errors\n\n• Error: NAVIGATION_TIMEOUT · Tool: navigate · Count: 217 · Sessions: 4\n• Error: ELEMENT_NOT_FOUND · Tool: click · Count: 154 · Sessions: 6\n• Error: CAPTCHA_DETECTED · Tool: navigate · Count: 105 · Sessions: 2\n\nBy harness\n\n• Harness: Claude Code · Sessions: 56 · Tool calls: 16,870 · Errors: 357\n• Harness: Cursor · Sessions: 21 · Tool calls: 6,160 · Errors: 105\n• Harness: Unknown · Sessions: 7 · Tool calls: 854 · Errors: 14\n\n14 Sep 16:13 → 21 Sep 16:13 · Europe/Berlin",
+        "priority": 3,
+        "tags": [
+          "information_source"
+        ],
+        "click": "https://bh.example.net/overview?since=1789395200000&until=1790000000000",
+        "actions": [
+          {
+            "action": "view",
+            "label": "Open Overview",
+            "url": "https://bh.example.net/overview?since=1789395200000&until=1790000000000",
+            "clear": false
+          }
+        ],
+        "markdown": false,
+        "sequence_id": "n-sample000001"
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}
