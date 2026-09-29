@@ -171,24 +171,29 @@ async function ntfy(): Promise<Outcome> {
           },
       );
   };
+  // ntfy.sh's cache can lag a publish by a moment: poll until the expected event shows up.
+  const until = async (
+    what: string,
+    found: (events: Awaited<ReturnType<typeof poll>>) => boolean,
+  ): Promise<void> => {
+    for (let attempt = 0; attempt < 20; attempt++) {
+      if (found(await poll())) return;
+      await Bun.sleep(500);
+    }
+    check(false, what);
+  };
   const { ref } = await channel.send(deliveryOf(channel, 'attention', true));
   const sequence = String(ref['sequence_id']);
-  let events = await poll();
-  check(
-    events.some(
-      (e) => e.event === 'message' && e.sequence_id === sequence && e.attachment !== undefined,
-    ),
-    'the upload',
-  );
+  const mine = (events: Awaited<ReturnType<typeof poll>>) =>
+    events.filter((e) => e.event === 'message' && e.sequence_id === sequence);
+  await until('the upload', (events) => mine(events).some((e) => e.attachment !== undefined));
   await channel.edit?.(ref, deliveryOf(channel, 'attention-resolved', false));
-  events = await poll();
-  const latest = events.filter((e) => e.event === 'message' && e.sequence_id === sequence).at(-1);
-  check((latest?.message ?? '').includes('Resolved'), 'the replacement');
+  await until('the replacement', (events) =>
+    (mine(events).at(-1)?.message ?? '').includes('Resolved'),
+  );
   await channel.delete?.(ref);
-  events = await poll();
-  check(
+  await until('the delete event', (events) =>
     events.some((e) => e.event === 'message_delete' && e.sequence_id === sequence),
-    'the delete event',
   );
   return {
     platform: 'ntfy',
