@@ -353,7 +353,7 @@ export function buildDigest(
   if (!empty && facts.chart.values.length > 0) {
     blocks.push({
       type: 'chart',
-      label: weekly ? 'Tool calls per 6 hours' : 'Tool calls per hour',
+      label: weekly ? 'Tool calls per 12 hours' : 'Tool calls per hour',
       values: facts.chart.values.slice(0, 48),
       start: facts.chart.start,
       step_ms: facts.chart.stepMs,

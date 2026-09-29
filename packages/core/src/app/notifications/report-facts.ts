@@ -62,7 +62,7 @@ export function createReportFacts(deps: ReportFactsDeps): ReportFacts {
         analytics.activity({
           since: window.since,
           until: window.until - 1,
-          bucketMs: rule.every === 'week' ? 6 * HOUR : HOUR,
+          bucketMs: rule.every === 'week' ? 12 * HOUR : HOUR,
         }),
       ]);
       const slowest = latency

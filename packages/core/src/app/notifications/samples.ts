@@ -71,7 +71,7 @@ const HOUR = 3_600_000;
 export function sampleDigestFacts(until: number, rule: DigestRule): DigestFacts {
   const weekly = rule.every === 'week';
   const span = weekly ? 7 * 24 * HOUR : 24 * HOUR;
-  const step = weekly ? 6 * HOUR : HOUR;
+  const step = weekly ? 12 * HOUR : HOUR;
   const n = span / step;
   const shape = [
     2, 1, 0, 0, 0, 1, 4, 18, 96, 212, 305, 280, 190, 240, 330, 412, 380, 260, 150, 120, 88, 60, 40,
