@@ -40,6 +40,9 @@ const IMAGES: NotificationImageReader = {
       : null,
 };
 /** Links point at the public website so every platform accepts them as buttons. */
+/** Notification ids of the report checks (distinct from the samples' id: ntfy replaces by id). */
+const DIGEST_ID = 'n-livedigest01';
+const ANOMALY_ID = 'n-liveanomaly1';
 const LINKS: LinkBuilder = { local: false, url: (path) => `https://browserhive.ai${path}` };
 
 type Outcome = { platform: string; status: 'passed' | 'failed' | 'skipped'; detail: string };
@@ -68,9 +71,18 @@ function deliveryOf(
   channel: NotificationChannel,
   sample: PreviewSample,
   image: boolean,
+  options: { readonly id?: string; readonly resolved?: boolean } = {},
 ): ChannelDelivery {
-  const message = sampleMessage(sample, { now: Date.now(), image: image ? 'masked' : 'none' });
-  const marked = { ...message, title: `Live check · ${message.title}`.slice(0, 120) };
+  const message = sampleMessage(sample, {
+    now: Date.now(),
+    image: image ? 'masked' : 'none',
+    ...(options.resolved === true && { resolved: true }),
+  });
+  const marked = {
+    ...message,
+    ...(options.id !== undefined && { id: options.id }),
+    title: `Live check · ${message.title}`.slice(0, 120),
+  };
   return {
     message: degrade(restrictContent(marked, 'full'), channel.capabilities),
     links: LINKS,
@@ -117,10 +129,22 @@ async function telegram(): Promise<Outcome> {
   check(text.ref['rich'] === 1, 'the text send was a Rich Message');
   await channel.edit?.(text.ref, deliveryOf(channel, 'tool-errors', false));
   await channel.delete?.(text.ref);
+  // Reports (D-43, D-44): the digest with its tables and chart, and an anomaly alert edited to
+  // "Back to normal".
+  const digest = await channel.send(deliveryOf(channel, 'digest', false, { id: DIGEST_ID }));
+  check(digest.ref['rich'] === 1, 'the digest was a Rich Message');
+  const alert = await channel.send(deliveryOf(channel, 'anomaly', false, { id: ANOMALY_ID }));
+  await channel.edit?.(
+    alert.ref,
+    deliveryOf(channel, 'anomaly', false, { id: ANOMALY_ID, resolved: true }),
+  );
+  await channel.delete?.(digest.ref);
+  await channel.delete?.(alert.ref);
   return {
     platform: 'Telegram',
     status: 'passed',
-    detail: 'Rich Messages with a screenshot and act buttons: send, edit (buttons removed), delete',
+    detail:
+      'Rich Messages with a screenshot and act buttons: send, edit (buttons removed), delete; a digest and an anomaly alert edited to back to normal',
   };
 }
 
@@ -133,7 +157,13 @@ async function discord(): Promise<Outcome> {
     images: IMAGES,
   });
   const read = async (id: string | number) => {
-    const response = await fetch(`${webhook.replace(/\/+$/, '')}/messages/${id}`);
+    let response = await fetch(`${webhook.replace(/\/+$/, '')}/messages/${id}`);
+    // A burst of calls can hit the webhook's rate limit: wait as Discord asks, then read again.
+    for (let i = 0; i < 3 && response.status === 429; i++) {
+      const wait = Number(response.headers.get('retry-after') ?? '1');
+      await Bun.sleep(Math.min(10, Math.max(0.5, wait)) * 1000);
+      response = await fetch(`${webhook.replace(/\/+$/, '')}/messages/${id}`);
+    }
     return {
       status: response.status,
       body: (await response.json().catch(() => null)) as Record<string, unknown> | null,
@@ -164,10 +194,31 @@ async function discord(): Promise<Outcome> {
   await channel.delete?.(ref);
   back = await read(id);
   check(back.status === 404, 'the message is gone after delete');
+  const digest = await channel.send(deliveryOf(channel, 'digest', false, { id: DIGEST_ID }));
+  const readDigest = await read(digest.ref['message_id'] ?? '');
+  const digestEmbed = (
+    (readDigest.body?.['embeds'] ?? []) as { title?: string; fields?: unknown[] }[]
+  )[0];
+  check((digestEmbed?.title ?? '').startsWith('📊'), 'the digest embed title');
+  check((digestEmbed?.fields ?? []).length >= 5, 'the digest facts as embed fields');
+  const alert = await channel.send(deliveryOf(channel, 'anomaly', false, { id: ANOMALY_ID }));
+  await channel.edit?.(
+    alert.ref,
+    deliveryOf(channel, 'anomaly', false, { id: ANOMALY_ID, resolved: true }),
+  );
+  const readAlert = await read(alert.ref['message_id'] ?? '');
+  const alertEmbed = ((readAlert.body?.['embeds'] ?? []) as { title?: string }[])[0];
+  check(
+    (alertEmbed?.title ?? '').includes('Back to normal'),
+    'the anomaly alert edited to back to normal',
+  );
+  await channel.delete?.(digest.ref);
+  await channel.delete?.(alert.ref);
   return {
     platform: 'Discord',
     status: 'passed',
-    detail: 'send, read back, edit (screenshot kept), delete',
+    detail:
+      'send, read back, edit (screenshot kept), delete; a digest (fields read back) and an anomaly alert edited to back to normal',
   };
 }
 
@@ -240,12 +291,15 @@ async function discordBot(): Promise<Outcome> {
     await channel.delete?.(ref);
     back = await read();
     check(back.status === 404, 'the message is gone after delete');
+    const digest = await channel.send(deliveryOf(channel, 'digest', false, { id: DIGEST_ID }));
+    check(typeof digest.ref['message_id'] === 'string', 'the bot sent the digest');
+    await channel.delete?.(digest.ref);
     stop?.();
     return {
       platform: 'Discord bot',
       status: 'passed',
       detail:
-        'gateway Ready (intents 0); send with screenshot and interactive buttons, read back, edit (buttons removed, screenshot kept), delete',
+        'gateway Ready (intents 0); send with screenshot and interactive buttons, read back, edit (buttons removed, screenshot kept), delete; a digest',
     };
   } finally {
     gateway.stop();
@@ -302,6 +356,30 @@ async function ntfy(): Promise<Outcome> {
   await until('the delete event', (events) =>
     events.some((e) => e.event === 'message_delete' && e.sequence_id === sequence),
   );
+  const digest = await channel.send(deliveryOf(channel, 'digest', false, { id: DIGEST_ID }));
+  await until('the digest', (events) =>
+    events.some(
+      (e) =>
+        e.event === 'message' &&
+        e.sequence_id === String(digest.ref['sequence_id']) &&
+        (e.message ?? '').includes('Tool calls per hour'),
+    ),
+  );
+  const alert = await channel.send(deliveryOf(channel, 'anomaly', false, { id: ANOMALY_ID }));
+  await channel.edit?.(
+    alert.ref,
+    deliveryOf(channel, 'anomaly', false, { id: ANOMALY_ID, resolved: true }),
+  );
+  await until('the anomaly alert replaced by back to normal', (events) =>
+    events.some(
+      (e) =>
+        e.event === 'message' &&
+        e.sequence_id === String(alert.ref['sequence_id']) &&
+        (e.message ?? '').includes('back under its threshold'),
+    ),
+  );
+  await channel.delete?.(digest.ref);
+  await channel.delete?.(alert.ref);
   // The reply topic (D-42): a throwaway topic B; post like the phone's `http` action does and
   // check the subscription receives the token.
   const reply = `bh-live-${randomBytes(9).toString('hex')}`;
@@ -325,7 +403,7 @@ async function ntfy(): Promise<Outcome> {
   return {
     platform: 'ntfy',
     status: 'passed',
-    detail: `send with screenshot, replace, delete and a reply-topic round trip on ${new URL(server).host}`,
+    detail: `send with screenshot, replace, delete, a digest, an anomaly alert replaced by back to normal, and a reply-topic round trip on ${new URL(server).host}`,
   };
 }
 
