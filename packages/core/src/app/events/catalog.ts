@@ -2,6 +2,7 @@
 
 import type { ToolName } from '@browserhive/contracts/tools';
 import type {
+  ActionRecordedEvent,
   AttentionCreatedEvent,
   AttentionResolvedEvent,
   BlocklistHitEvent,
@@ -165,6 +166,7 @@ export type DomainEvents = {
   readonly 'channel.changed': z.infer<typeof ChannelChangedEvent>;
   readonly 'channel.removed': z.infer<typeof ChannelRemovedEvent>;
   readonly 'delivery.updated': z.infer<typeof DeliveryUpdatedEvent>;
+  readonly 'action.recorded': z.infer<typeof ActionRecordedEvent>;
   // logs
   readonly 'log.record': z.infer<typeof LogRecordEvent>;
 } & AuthEvents; // auth (audit; never on the public feed): `auth.<auth_events.type>`

@@ -304,6 +304,11 @@ export type ChannelsPort = Pick<
   | 'env'
   | 'telegramConnect'
   | 'telegramConnectStatus'
+  | 'discordBot'
+  | 'discordChannels'
+  | 'discordConnect'
+  | 'discordConnectStatus'
+  | 'actions'
 >;
 
 /** The `publicUrl` check (a structural slice of `PublicUrlChecker`). */

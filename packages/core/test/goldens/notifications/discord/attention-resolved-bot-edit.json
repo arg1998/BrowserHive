@@ -1,0 +1,70 @@
+{
+  "kind": "discord",
+  "variant": "attention-resolved-bot-edit",
+  "mode": "bot",
+  "requests": [
+    {
+      "method": "PATCH",
+      "path": "/channels/112233445566778899/messages/1101",
+      "encoding": "json",
+      "body": {
+        "content": null,
+        "allowed_mentions": {
+          "parse": []
+        },
+        "components": [],
+        "embeds": [
+          {
+            "title": "✅ Attention requested",
+            "description": "Resolved by admin after 2m 10s\n\n> CAPTCHA on the checkout page: please solve it, then resume",
+            "color": 2278750,
+            "fields": [
+              {
+                "name": "Mode",
+                "value": "takeover",
+                "inline": true
+              },
+              {
+                "name": "Session",
+                "value": "[checkout](https://bh.example.net/sessions/checkout-a1b2c3d4)",
+                "inline": true
+              },
+              {
+                "name": "Page",
+                "value": "`https://shop.example.com/checkout/payment`",
+                "inline": true
+              },
+              {
+                "name": "Tool",
+                "value": "`click`",
+                "inline": true
+              },
+              {
+                "name": "Waiting since",
+                "value": "<t:1790000000:t>",
+                "inline": true
+              },
+              {
+                "name": "Outcome",
+                "value": "resolved",
+                "inline": true
+              },
+              {
+                "name": "Settled",
+                "value": "<t:1790000130:t>",
+                "inline": true
+              }
+            ],
+            "footer": {
+              "text": "BrowserHive"
+            },
+            "timestamp": "2026-09-21T14:15:30.000Z"
+          }
+        ],
+        "attachments": []
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}

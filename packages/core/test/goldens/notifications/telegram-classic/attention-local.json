@@ -1,0 +1,23 @@
+{
+  "kind": "telegram-classic",
+  "variant": "attention-local",
+  "mode": null,
+  "requests": [
+    {
+      "method": "POST",
+      "path": "sendMessage",
+      "encoding": "json",
+      "body": {
+        "chat_id": "-1001234567890",
+        "parse_mode": "HTML",
+        "disable_notification": false,
+        "text": "⚠️ <b>Attention requested</b>\nCAPTCHA on the checkout page: please solve it, then resume · takeover — agent blocked, lease frozen\n\n<b>Mode:</b> takeover\n<b>Session:</b> checkout\n<b>Page:</b> <code>https://shop.example.com/checkout/payment</code>\n<b>Tool:</b> <code>click</code>\n<b>Waiting since:</b> <tg-time unix=\"1790000000\" format=\"t\">14:13 UTC</tg-time>\n\n<b>🖥 Open on this computer</b>\nTake over: <code>http://127.0.0.1:9876/sessions/checkout-a1b2c3d4?live=1&amp;takeover=1</code>\nOpen in BrowserHive: <code>http://127.0.0.1:9876/sessions/checkout-a1b2c3d4?live=1</code>",
+        "link_preview_options": {
+          "is_disabled": true
+        }
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}

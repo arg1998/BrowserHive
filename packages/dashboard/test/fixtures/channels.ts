@@ -1270,6 +1270,7 @@ export const CAPTURED = {
           last_delivery_at: 1790643354956,
           last_status: 'dead',
         },
+        connection: null,
       },
       {
         channel_id: 'nc-y8ZbVpnQBhd4',
@@ -1310,6 +1311,7 @@ export const CAPTURED = {
           last_delivery_at: null,
           last_status: null,
         },
+        connection: null,
       },
       {
         channel_id: 'nc-pN3x-pHacQLB',
@@ -1357,6 +1359,7 @@ export const CAPTURED = {
           last_delivery_at: 1790643003083,
           last_status: 'dead',
         },
+        connection: null,
       },
       {
         channel_id: 'nc-wSL3LAc8pVPI',
@@ -1405,6 +1408,7 @@ export const CAPTURED = {
           last_delivery_at: 1790643373706,
           last_status: 'sent',
         },
+        connection: null,
       },
       {
         channel_id: 'nc-hEYoKcho1yzA',
@@ -1466,6 +1470,7 @@ export const CAPTURED = {
           last_delivery_at: 1790643003094,
           last_status: 'sent',
         },
+        connection: null,
       },
       {
         channel_id: 'nc-iK652M_vsrPO',
@@ -1514,6 +1519,7 @@ export const CAPTURED = {
           last_delivery_at: 1790643709295,
           last_status: 'sent',
         },
+        connection: null,
       },
       {
         channel_id: 'nc-R5_-8E_3n2IM',
@@ -1568,6 +1574,7 @@ export const CAPTURED = {
           last_delivery_at: 1790643003211,
           last_status: 'dead',
         },
+        connection: null,
       },
     ],
     now: 1790643735409,

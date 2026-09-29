@@ -1,13 +1,20 @@
 /** @module contracts/test/notification-platforms.test — the per-platform channel check shared by the API, the startup flag and the dashboard (spec 03 §9.5, D-33), the reason texts and the public-URL grammar */
 import { describe, expect, it } from 'bun:test';
 import { zPublicUrl } from '../src/config/index.ts';
+import { NotificationActionOutcome } from '../src/enums/index.ts';
 import { ChannelInput, ChannelPreviewRequest } from '../src/http/index.ts';
 import {
+  ACTION_OUTCOME_TEXT,
+  ACTION_PAYLOAD_RE,
   CHANNEL_KIND_SPECS,
   checkChannelConfig,
+  checkChannelRules,
+  DISCORD_BOT_PERMISSIONS,
   deliveryReasonText,
+  discordInviteUrl,
   looksLikeSecretValue,
   SUPPRESSION_REASONS,
+  supportsActButtons,
 } from '../src/notifications/index.ts';
 
 const check = (
@@ -65,6 +72,79 @@ describe('checkChannelConfig', () => {
         expect(looksLikeSecretValue(secret.suggestedEnv)).toBe(false);
       }
     }
+  });
+});
+
+describe('Discord modes and the ntfy reply topic', () => {
+  const channel = '112233445566778899';
+  it("accepts a bot-mode channel and refuses the other mode's keys", () => {
+    expect(check('discord', { channel_id: channel }, { token: 'BH_BOT' }, 'bot')).toEqual([]);
+    expect(check('discord', {}, { token: 'BH_BOT' }, 'bot')).toEqual(['target.channel_id']);
+    expect(check('discord', { channel_id: channel }, {}, 'bot')).toEqual(['secret_refs.token']);
+    expect(check('discord', { channel_id: channel }, { webhook: 'W', token: 'T' }, 'bot')).toEqual([
+      'secret_refs.webhook',
+    ]);
+    expect(check('discord', { channel_id: channel }, { webhook: 'W' }, 'webhook')).toEqual([
+      'target.channel_id',
+    ]);
+    expect(check('discord', { channel_id: 'general' }, { token: 'T' }, 'bot')).toEqual([
+      'target.channel_id',
+    ]);
+  });
+
+  it('checks the reply topic', () => {
+    expect(check('ntfy', { topic: 'a', reply_topic: 'b' }, {})).toEqual([]);
+    expect(
+      check('ntfy', { topic: 'a' }, { reply_topic: 'BH_REPLY', reply_token: 'BH_RT' }),
+    ).toEqual([]);
+    expect(check('ntfy', { topic: 'a', reply_topic: 'a' }, {})).toEqual(['target.reply_topic']);
+    expect(check('ntfy', { topic: 'a', reply_topic: 'b' }, { reply_topic: 'B' })).toEqual([
+      'target.reply_topic',
+    ]);
+    expect(check('ntfy', { topic: 'a', reply_topic: 'x y' }, {})).toEqual(['target.reply_topic']);
+  });
+
+  it('builds the invite link with the minimal permissions', () => {
+    expect(DISCORD_BOT_PERMISSIONS).toBe((1 << 10) | (1 << 11) | (1 << 14) | (1 << 15));
+    expect(discordInviteUrl('42')).toBe(
+      'https://discord.com/oauth2/authorize?client_id=42&scope=bot&permissions=52224',
+    );
+  });
+});
+
+describe('act-button rules', () => {
+  const rules = (kind: string, mode: string | null, r: object, target = {}, secretRefs = {}) =>
+    checkChannelRules({ kind, mode, target, secretRefs, rules: r }).map((p) => p.field);
+
+  it('allows act buttons only where presses can arrive', () => {
+    expect(rules('telegram', null, { act_buttons: true, allow_list: ['123'] })).toEqual([]);
+    expect(rules('discord', 'bot', { act_buttons: true })).toEqual([]);
+    expect(rules('discord', 'webhook', { act_buttons: true })).toEqual(['rules.act_buttons']);
+    expect(rules('ntfy', null, { act_buttons: true })).toEqual(['rules.act_buttons']);
+    expect(rules('ntfy', null, { act_buttons: true }, { reply_topic: 'b' })).toEqual([]);
+    expect(rules('ntfy', null, { act_buttons: true }, {}, { reply_topic: 'B' })).toEqual([]);
+    expect(rules('webhook', null, { act_buttons: true })).toEqual([]);
+    expect(rules('discord', 'webhook', { act_buttons: false })).toEqual([]);
+    expect(supportsActButtons({ kind: 'discord', mode: null, target: {}, secretRefs: {} })).toBe(
+      false,
+    );
+  });
+
+  it('takes numeric user ids, and no allow-list where presses have no identity', () => {
+    expect(rules('telegram', null, { allow_list: ['12', 'x1'] })).toEqual(['rules.allow_list']);
+    expect(rules('ntfy', null, { allow_list: ['12'] }, { reply_topic: 'b' })).toEqual([
+      'rules.allow_list',
+    ]);
+    expect(rules('discord', 'bot', { allow_list: ['112233445566778899'] })).toEqual([]);
+  });
+
+  it('explains every outcome and recognises button payloads', () => {
+    for (const outcome of NotificationActionOutcome.options) {
+      expect(ACTION_OUTCOME_TEXT[outcome]).toBeString();
+    }
+    expect(ACTION_PAYLOAD_RE.exec('bh1:AbC_-12345z')?.[1]).toBe('AbC_-12345z');
+    expect(ACTION_PAYLOAD_RE.test('bh1:short')).toBe(false);
+    expect(ACTION_PAYLOAD_RE.test('bh2:AbC_-12345z')).toBe(false);
   });
 });
 

@@ -46,6 +46,14 @@ function statusText(channel: ChannelView): string {
   return channel.source === 'startup' ? `${base} (from startup)` : base;
 }
 
+/** Whether presses reach BrowserHive (act buttons on): the listener's state, or `—`. */
+function answersText(channel: ChannelView): string {
+  if (channel.rules.act_buttons !== true) return '—';
+  const c = channel.connection;
+  if (c === null) return channel.kind === 'webhook' ? 'via your receiver' : 'not listening';
+  return c.state === 'offline' && c.detail !== null ? `offline (${c.detail})` : c.state;
+}
+
 function secretsText(channel: ChannelView): string {
   if (channel.secrets.length === 0) return '—';
   return channel.secrets.map((s) => `${s.env} ${s.set ? '✓' : '✗'}`).join(', ');
@@ -81,6 +89,7 @@ export async function runChannelsList(
       { header: 'STATUS' },
       { header: 'SENDS TO' },
       { header: 'SECRETS' },
+      { header: 'ANSWERS' },
       { header: 'LAST DELIVERY' },
       { header: '24H SENT/FAILED/SUPPRESSED' },
     ],
@@ -90,6 +99,7 @@ export async function runChannelsList(
       statusText(c),
       c.target_hint,
       secretsText(c),
+      answersText(c),
       c.stats.last_delivery_at === null
         ? 'never'
         : `${formatTimestamp(c.stats.last_delivery_at)} ${c.stats.last_status ?? ''}`.trim(),

@@ -23,7 +23,7 @@ const ROWS: readonly {
   {
     label: 'Setup',
     webhook: 'About 30 seconds: Channel settings → Integrations → Webhooks → copy the URL.',
-    bot: 'About 3 minutes: create an application and a bot in the Developer Portal, invite it, pick the channel.',
+    bot: 'About 3 minutes: discord.com/developers → New Application → Bot → Reset Token; make it private (Installation → Install Link: None, then Bot → Public Bot off); invite it with the link the wizard shows; pick the channel. No privileged intents.',
   },
   {
     label: 'Alerts, screenshots, updates, self-destruct',
@@ -33,17 +33,17 @@ const ROWS: readonly {
   {
     label: 'Buttons',
     webhook: 'Links that open BrowserHive (Take over, Open session).',
-    bot: 'Approve, Deny, Mark resolved right in Discord, plus the links.',
+    bot: 'Approve, Reject and Mark resolved answer right in Discord (only for the people you allow), plus the links.',
   },
   {
     label: 'Connection',
     webhook: 'None: BrowserHive only sends.',
-    bot: 'One outgoing connection to Discord while BrowserHive runs.',
+    bot: 'One outgoing connection to Discord while BrowserHive runs; nothing to open on your network. Presses made while BrowserHive is stopped fail in Discord.',
   },
   {
-    label: 'Available',
-    webhook: 'Now',
-    bot: 'With the act-buttons release',
+    label: 'Who can answer',
+    webhook: 'Nobody from Discord; answers happen in BrowserHive.',
+    bot: 'You, after pressing "This is me" in the setup, and anyone whose Discord id you add.',
   },
 ];
 
@@ -68,7 +68,12 @@ function ModeColumn({
   readonly title: string;
   readonly badge: string;
 }) {
-  const preview = useChannelPreview({ kind: 'discord', mode, sample: 'attention' });
+  // Bot mode is drawn with act buttons on, as a bot channel answers from Discord.
+  const preview = useChannelPreview(
+    mode === 'bot'
+      ? { kind: 'discord', mode, rules: { act_buttons: true }, sample: 'attention' }
+      : { kind: 'discord', mode, sample: 'attention' },
+  );
   return (
     <section aria-label={`${title} message`} className="flex min-w-0 flex-col gap-2">
       <div className="flex items-center gap-2">
@@ -76,9 +81,7 @@ function ModeColumn({
         <span
           className={cn(
             'rounded-full px-2 text-xs leading-5 font-medium',
-            mode === 'webhook'
-              ? 'bg-success-bg text-success-text'
-              : 'bg-muted text-muted-foreground',
+            mode === 'webhook' ? 'bg-muted text-muted-foreground' : 'bg-accent-bg text-accent-text',
           )}
         >
           {badge}
@@ -113,7 +116,7 @@ export function DiscordDifference({ open, onOpenChange }: DiscordDifferenceProps
         <DialogHeader>
           <DialogTitle>Webhook or bot: what's the difference?</DialogTitle>
           <DialogDescription>
-            A Discord channel uses one of the two. Both deliver the same alerts; a bot can also take
+            A Discord channel uses one of the two. Both deliver the same alerts; a bot also takes
             your decision from a button. You can switch later without losing the rules.
           </DialogDescription>
         </DialogHeader>
@@ -159,8 +162,8 @@ export function DiscordDifference({ open, onOpenChange }: DiscordDifferenceProps
             </table>
           </div>
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-            <ModeColumn mode="webhook" title="Webhook message" badge="available" />
-            <ModeColumn mode="bot" title="Bot message" badge="coming later" />
+            <ModeColumn mode="webhook" title="Webhook message" badge="links only" />
+            <ModeColumn mode="bot" title="Bot message" badge="answer from Discord" />
           </div>
           <p className="text-xs text-muted-foreground">
             Both messages are drawn by BrowserHive's own renderer for a sample attention request, in

@@ -11,6 +11,10 @@ import {
   type ChannelView,
   type DeliveryRow,
   DeliveryRow as DeliveryRowSchema,
+  type DiscordBotInfo,
+  type DiscordChannelsResponse,
+  type DiscordConnectResponse,
+  type DiscordConnectStatus,
   type PlatformRequest,
   type TelegramConnectResponse,
   type TelegramConnectStatus,
@@ -19,10 +23,13 @@ import {
   AvailableChannelKind,
   CHANNEL_KIND_SPECS,
   checkChannelConfig,
+  checkChannelRules,
+  discordInviteUrl,
   type NotificationChannelRules,
   type NotificationMessage,
   NTFY_DEFAULT_SERVER,
   type PreviewSample,
+  SecretEnvName,
   TELEGRAM_TTL_MAX_MS,
 } from '@browserhive/contracts/notifications';
 import { AppError } from '../../kernel/errors/app-error.ts';
@@ -38,7 +45,9 @@ import {
   type ChannelDelivery,
   type ChannelRenderer,
   ChannelSendError,
+  type DiscordSetup,
   type LinkBuilder,
+  type ListenerStatus,
   type TelegramSetup,
   type TelegramStart,
 } from '../../ports/notification-channel.ts';
@@ -50,6 +59,7 @@ import type {
 } from '../../ports/persistence/records.ts';
 import type { Repositories, UnitOfWork } from '../../ports/persistence/unit-of-work.ts';
 import type { DomainEvents } from '../events/catalog.ts';
+import type { ActionListInput, ActionPage, NotificationActionService } from './actions.ts';
 import type { ChannelRegistry, RegisteredChannel } from './channel-registry.ts';
 import { restrictContent } from './content-level.ts';
 import { degrade } from './degrade.ts';
@@ -94,6 +104,12 @@ export interface ChannelServiceDeps {
   /** Registers a secret value with the redactor before it is used. */
   readonly registerSecret?: (value: string) => void;
   readonly telegram?: TelegramSetup;
+  /** The Discord bot-mode setup calls (D-38). */
+  readonly discord?: DiscordSetup;
+  /** The press listener state of a channel (`ChannelView.connection`), or `null` without one. */
+  readonly connection?: (channelId: string) => ListenerStatus | null;
+  /** The act-button audit (`GET /channels/actions`). */
+  readonly actions?: Pick<NotificationActionService, 'list'>;
   readonly redactor?: Redactor;
   /** Timer for debounced feed events (defaults to `setTimeout`). */
   readonly schedule?: (fn: () => void, ms: number) => void;
@@ -124,6 +140,17 @@ interface ConnectSession {
   readonly abort: AbortController;
   status: TelegramConnectStatus['status'];
   start: TelegramStart | null;
+  error: string | null;
+  endedAt: number | null;
+}
+
+interface DiscordConnectSession {
+  readonly id: string;
+  readonly tokenEnv: string;
+  readonly expiresAt: number;
+  readonly abort: AbortController;
+  status: DiscordConnectStatus['status'];
+  user: { readonly id: string; readonly name: string } | null;
   error: string | null;
   endedAt: number | null;
 }
@@ -178,8 +205,14 @@ export function targetHint(
           : `chat ${last(chat, 4)}`;
       return t['thread_id'] === undefined ? base : `${base} · topic ${t['thread_id']}`;
     }
-    case 'discord':
-      return `${record.mode ?? 'webhook'} from $${s['webhook'] ?? '?'}`;
+    case 'discord': {
+      if (record.mode === 'bot') {
+        const room =
+          t['channel_name'] ?? (t['channel_id'] === undefined ? '?' : last(t['channel_id'], 4));
+        return `bot · #${room}${t['guild_name'] === undefined ? '' : ` in ${t['guild_name']}`}`;
+      }
+      return `webhook from $${s['webhook'] ?? '?'}`;
+    }
     case 'ntfy': {
       const server = hostPath(t['server'] ?? NTFY_DEFAULT_SERVER);
       const topic = t['topic'] ?? (s['topic'] === undefined ? '?' : `$${s['topic']}`);
@@ -232,6 +265,7 @@ function decodeCursor(cursor: string): number {
 export class ChannelService {
   private readonly log: Logger;
   private readonly connects = new Map<string, ConnectSession>();
+  private readonly discordConnects = new Map<string, DiscordConnectSession>();
   private readonly pendingChannels = new Set<string>();
   private channelTimer = false;
 
@@ -327,6 +361,7 @@ export class ChannelService {
         last_delivery_at: s?.lastAt ?? null,
         last_status: s?.lastStatus ?? null,
       },
+      connection: this.deps.connection?.(r.channelId) ?? null,
     };
   }
 
@@ -341,19 +376,15 @@ export class ChannelService {
     readonly secretRefs: Readonly<Record<string, string>>;
     readonly rules: NotificationChannelRules;
   }): void {
-    if (input.kind === 'discord' && input.mode === 'bot') {
-      throw new AppError('CHANNEL_KIND_UNAVAILABLE', {
-        kind: 'discord',
-        mode: 'bot',
-        mode_text: ' in bot mode',
-      });
-    }
-    const issues = checkChannelConfig({
-      kind: input.kind,
-      mode: input.mode,
-      target: input.target,
-      secretRefs: input.secretRefs,
-    }).map((p) => ({ path: p.field, message: p.message, code: 'custom' }));
+    const issues = [
+      ...checkChannelConfig({
+        kind: input.kind,
+        mode: input.mode,
+        target: input.target,
+        secretRefs: input.secretRefs,
+      }),
+      ...checkChannelRules(input),
+    ].map((p) => ({ path: p.field, message: p.message, code: 'custom' }));
     if (input.kind === 'telegram') {
       for (const [category, ms] of Object.entries(input.rules.ttl_ms ?? {})) {
         if (ms !== undefined && ms > TELEGRAM_TTL_MAX_MS) {
@@ -699,13 +730,19 @@ export class ChannelService {
       mode = request.mode ?? spec.defaultMode;
       target = request.target ?? {};
       rules = request.rules ?? {};
+      // Names only; anything that is not a variable name (a pasted value) is never echoed back.
+      secretRefs = Object.fromEntries(
+        Object.entries(request.secret_refs ?? {}).filter(
+          ([, name]) => SecretEnvName.safeParse(name).success,
+        ),
+      );
     }
     const renderer = this.deps.renderers.get(kind);
     const parsedKind = AvailableChannelKind.safeParse(kind);
     if (renderer === undefined || !parsedKind.success) {
       throw new AppError('CHANNEL_KIND_UNAVAILABLE', { kind, mode_text: '' });
     }
-    const capabilities = renderer.capabilities(mode);
+    const capabilities = renderer.capabilities({ mode, target, secretRefs, rules });
     const now = this.deps.clock.now();
     const plain = sampleMessage(request.sample, { now });
     const withImage = wantsImages(rules, plain.category)
@@ -743,7 +780,14 @@ export class ChannelService {
       message: shown,
       requests,
       local_links: this.deps.links.local,
-      notes: this.notes(parsedKind.data, rules, capabilities, plain.category, request.sample),
+      notes: this.notes(
+        parsedKind.data,
+        rules,
+        capabilities,
+        plain.category,
+        request.sample,
+        target,
+      ),
     };
   }
 
@@ -753,6 +797,7 @@ export class ChannelService {
     caps: ChannelCapabilities,
     category: NotificationCategory,
     sample: PreviewSample,
+    target: Readonly<Record<string, string>>,
   ): string[] {
     const notes: string[] = [];
     if (this.deps.links.local) {
@@ -760,14 +805,25 @@ export class ChannelService {
         'Links open only on this computer. To open them from your phone, set publicUrl to the address where you reach this dashboard.',
       );
     }
-    if (!caps.actButtons && (sample === 'attention' || sample === 'vault-confirm')) {
+    const answerable = sample === 'attention' || sample === 'vault-confirm';
+    if (answerable && caps.actButtons && kind !== 'webhook') {
+      notes.push(
+        kind === 'ntfy'
+          ? 'Tapping a button answers the request: ntfy posts it to the reply topic, BrowserHive acts and updates the notification.'
+          : "Pressing a button answers the request from the chat; only the people on the channel's allow-list can.",
+      );
+    } else if (answerable && caps.actButtons) {
+      notes.push(
+        'The act actions are sent as they are in the contract; your receiver answers through the BrowserHive API.',
+      );
+    } else if (answerable) {
       notes.push('Approve and Reject open BrowserHive, where you answer the request.');
     }
     if (rules.images?.[category] === true && !wantsImages(rules, category)) {
       notes.push('Screenshots are on, but they need the content level "full".');
     }
-    if (kind === 'ntfy' && wantsImages(rules, category)) {
-      const server = NTFY_DEFAULT_SERVER;
+    const server = (target['server'] ?? NTFY_DEFAULT_SERVER).replace(/\/+$/, '');
+    if (kind === 'ntfy' && wantsImages(rules, category) && server === NTFY_DEFAULT_SERVER) {
       notes.push(
         `On ${server.replace('https://', '')} attachments are stored on the public server for 3 hours; a self-hosted ntfy keeps screenshots private.`,
       );
@@ -982,6 +1038,8 @@ export class ChannelService {
   stop(): void {
     for (const session of this.connects.values()) session.abort.abort();
     this.connects.clear();
+    for (const session of this.discordConnects.values()) session.abort.abort();
+    this.discordConnects.clear();
   }
 
   private pruneConnects(): void {
@@ -990,6 +1048,158 @@ export class ChannelService {
       if (session.endedAt !== null && now - session.endedAt > CONNECT_KEEP_MS)
         this.connects.delete(id);
     }
+    for (const [id, session] of this.discordConnects) {
+      if (session.endedAt !== null && now - session.endedAt > CONNECT_KEEP_MS)
+        this.discordConnects.delete(id);
+    }
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Discord bot setup (D-38)
+  // ---------------------------------------------------------------------------------------------
+
+  private discordToken(tokenEnv: string): { setup: DiscordSetup; token: string } {
+    const setup = this.deps.discord;
+    if (setup === undefined) {
+      throw new AppError('CHANNEL_KIND_UNAVAILABLE', {
+        kind: 'discord',
+        mode: 'bot',
+        mode_text: ' in bot mode',
+      });
+    }
+    const token = this.deps.env(tokenEnv);
+    if (token === undefined || token === '') {
+      throw new AppError('CHANNEL_NOT_READY', {
+        problem: `${tokenEnv} is not set.`,
+        missing: [tokenEnv],
+      });
+    }
+    this.deps.registerSecret?.(token);
+    return { setup, token };
+  }
+
+  private platformError(kind: string, err: unknown): AppError {
+    const code = err instanceof ChannelSendError ? err.code : 'unavailable';
+    return new AppError('CHANNEL_PLATFORM_ERROR', {
+      kind,
+      code,
+      detail: this.scrub(serializeError(err).message),
+    });
+  }
+
+  /**
+   * Who the bot is, its invite link (minimal permissions) and the servers it is in.
+   *
+   * @throws AppError `CHANNEL_NOT_READY` (unset variable), `CHANNEL_PLATFORM_ERROR`.
+   */
+  async discordBot(tokenEnv: string): Promise<DiscordBotInfo> {
+    const { setup, token } = this.discordToken(tokenEnv);
+    try {
+      const bot = await setup.bot(token);
+      return {
+        application_id: bot.applicationId,
+        bot_id: bot.botId,
+        bot_username: bot.username,
+        invite_url: discordInviteUrl(bot.applicationId),
+        guilds: bot.guilds.map((g) => ({ id: g.id, name: g.name })),
+      };
+    } catch (err) {
+      throw this.platformError('discord', err);
+    }
+  }
+
+  /**
+   * The text channels of one of the bot's servers.
+   *
+   * @throws AppError `CHANNEL_NOT_READY`, `CHANNEL_PLATFORM_ERROR`.
+   */
+  async discordChannels(tokenEnv: string, guildId: string): Promise<DiscordChannelsResponse> {
+    const { setup, token } = this.discordToken(tokenEnv);
+    try {
+      const channels = await setup.channels(token, guildId);
+      return { channels: channels.map((c) => ({ ...c })) };
+    } catch (err) {
+      throw this.platformError('discord', err);
+    }
+  }
+
+  /**
+   * Starts the Discord account link: the bot posts a "This is me" button in the channel and the
+   * server waits up to two minutes for its press. A new link for the same variable cancels the
+   * previous one.
+   *
+   * @throws AppError `CHANNEL_NOT_READY`, `CHANNEL_PLATFORM_ERROR`.
+   */
+  async discordConnect(tokenEnv: string, channelId: string): Promise<DiscordConnectResponse> {
+    const { setup, token } = this.discordToken(tokenEnv);
+    this.pruneConnects();
+    for (const session of this.discordConnects.values()) {
+      if (session.tokenEnv === tokenEnv && session.status === 'waiting') {
+        session.abort.abort();
+        session.status = 'expired';
+        session.endedAt = this.deps.clock.now();
+      }
+    }
+    const id = this.deps.ids.opaque(16);
+    const expiresAt = this.deps.clock.now() + TELEGRAM_CONNECT_MS;
+    const session: DiscordConnectSession = {
+      id,
+      tokenEnv,
+      expiresAt,
+      abort: new AbortController(),
+      status: 'waiting',
+      user: null,
+      error: null,
+      endedAt: null,
+    };
+    this.discordConnects.set(id, session);
+    void setup
+      .claim(token, channelId, { signal: session.abort.signal, deadline: expiresAt })
+      .then((user) => {
+        if (session.status !== 'waiting') return;
+        session.user = user;
+        session.status = user === null ? 'expired' : 'connected';
+        session.endedAt = this.deps.clock.now();
+        if (user !== null) this.log.info('discord account linked', {});
+      })
+      .catch((err: unknown) => {
+        if (session.status !== 'waiting') return;
+        session.status = 'failed';
+        session.error = this.scrub(serializeError(err).message);
+        session.endedAt = this.deps.clock.now();
+      });
+    return { connect_id: id, expires_at: expiresAt };
+  }
+
+  /**
+   * The state of one Discord account link.
+   *
+   * @throws AppError `NOT_FOUND` for an unknown or forgotten id.
+   */
+  discordConnectStatus(connectId: string): DiscordConnectStatus {
+    this.pruneConnects();
+    const session = this.discordConnects.get(connectId);
+    if (session === undefined) throw new AppError('NOT_FOUND', {});
+    if (session.status === 'waiting' && this.deps.clock.now() > session.expiresAt + 5_000) {
+      session.status = 'expired';
+      session.endedAt = this.deps.clock.now();
+    }
+    return {
+      status: session.status,
+      user: session.user,
+      error: session.error,
+      expires_at: session.expiresAt,
+    };
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Act-button audit (D-41)
+  // ---------------------------------------------------------------------------------------------
+
+  /** A page of the press audit, newest first. */
+  async actions(input: ActionListInput): Promise<ActionPage> {
+    if (this.deps.actions === undefined) return { items: [], nextCursor: null };
+    return this.deps.actions.list(input);
   }
 
   // ---------------------------------------------------------------------------------------------

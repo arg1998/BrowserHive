@@ -42,6 +42,8 @@ export interface MockButton {
 /** What the Telegram mock draws. */
 export interface TelegramView {
   readonly html: string;
+  /** A Rich Message (`rich_message.html`, D-40) rather than classic `parse_mode: HTML` text. */
+  readonly rich: boolean;
   readonly photo: { readonly name: string } | null;
   readonly rows: readonly (readonly MockButton[])[];
   readonly silent: boolean;
@@ -53,7 +55,9 @@ export interface TelegramView {
 /** Reads a Telegram `sendMessage` / `sendPhoto` / edit request. */
 export function readTelegram(request: PlatformRequest): TelegramView {
   const body = request.body;
-  const text = str(body['text']) ?? str(body['caption']) ?? '';
+  const richMessage = parsed(body['rich_message']);
+  const richHtml = isRecord(richMessage) ? str(richMessage['html']) : null;
+  const text = richHtml ?? str(body['text']) ?? str(body['caption']) ?? '';
   const markup = parsed(body['reply_markup']);
   const keyboard = isRecord(markup) ? arr(markup['inline_keyboard']) : [];
   const rows = keyboard.map((row) =>
@@ -61,14 +65,24 @@ export function readTelegram(request: PlatformRequest): TelegramView {
       if (!isRecord(b)) return [];
       const label = str(b['text']) ?? '';
       const url = str(b['url']);
-      return [{ label, url, style: url === null ? 'secondary' : 'link' }];
+      const tint = str(b['style']);
+      const style: MockButton['style'] =
+        tint === 'success' || tint === 'danger' || tint === 'primary'
+          ? tint
+          : url === null
+            ? 'secondary'
+            : 'link';
+      return [{ label, url, style }];
     }),
   );
   const method = request.path.replace(/^\//, '');
   return {
     html: text,
+    rich: richHtml !== null,
+    // A Rich Message places its screenshot inline (`<img src="tg://photo?…">`).
     photo:
-      request.file !== null || method === 'sendPhoto' || method === 'editMessageCaption'
+      richHtml === null &&
+      (request.file !== null || method === 'sendPhoto' || method === 'editMessageCaption')
         ? { name: request.file?.name ?? 'screenshot.jpg' }
         : null,
     rows: rows.filter((r) => r.length > 0),
@@ -172,6 +186,7 @@ export function readDiscord(request: PlatformRequest): DiscordView {
 export interface NtfyAction {
   readonly label: string;
   readonly url: string | null;
+  /** `view`, `http` (an answer posted to the reply topic, D-42), `broadcast`, `copy`. */
   readonly kind: string;
 }
 

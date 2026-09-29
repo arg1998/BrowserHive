@@ -1,4 +1,6 @@
-/** @module features/notifications/channels/api — notification channel queries and mutations over `/channels` (list, detail, create/update/delete, pause/resume, test, preview, env check, Telegram connect, delivery log) and `GET /system/public-url`; the `channels` WS topic patches the caches through the bridge (spec 03 §4.8.1, spec 04 §12.11.1) */
+/** @module features/notifications/channels/api — notification channel queries and mutations over `/channels` (list, detail, create/update/delete, pause/resume, test, preview, env check, Telegram connect, delivery log, Discord bot setup and account link, the act-button audit) and `GET /system/public-url`; the `channels` WS topic patches the caches through the bridge (spec 03 §4.8.1, spec 04 §12.11.1) */
+
+import type { NotificationActionOutcome } from '@browserhive/contracts/enums';
 import type {
   ChannelInput,
   ChannelPatch,
@@ -228,5 +230,111 @@ export function useDelivery(seq: number | null) {
     queryKey: keys.channels.delivery(seq ?? 0),
     queryFn: () => api.getDelivery({ params: { seq: seq ?? 0 } }),
     enabled: seq !== null,
+  });
+}
+
+/** `POST /channels/discord/bot`: who the bot is, its invite link and its servers (disabled without a set variable). */
+export function useDiscordBot(tokenEnv: string, enabled: boolean) {
+  const api = useApi();
+  return useQuery({
+    queryKey: keys.channels.discordBot(tokenEnv),
+    queryFn: () => api.getDiscordBot({ body: { token_env: tokenEnv } }),
+    enabled: enabled && tokenEnv !== '',
+    retry: false,
+    staleTime: 60_000,
+  });
+}
+
+/** `POST /channels/discord/channels`: the text channels of one server. */
+export function useDiscordChannels(tokenEnv: string, guildId: string | null) {
+  const api = useApi();
+  return useQuery({
+    queryKey: keys.channels.discordChannels(tokenEnv, guildId ?? ''),
+    queryFn: () =>
+      api.listDiscordChannels({ body: { token_env: tokenEnv, guild_id: guildId ?? '' } }),
+    enabled: tokenEnv !== '' && guildId !== null && guildId !== '',
+    retry: false,
+    staleTime: 60_000,
+  });
+}
+
+/** `POST /channels/discord/connect`: the bot posts "This is me" and the server waits for the press. */
+export function useStartDiscordConnect() {
+  const api = useApi();
+  return useMutation({
+    mutationFn: (input: { readonly tokenEnv: string; readonly channelId: string }) =>
+      api.startDiscordConnect({
+        body: { token_env: input.tokenEnv, channel_id: input.channelId },
+      }),
+  });
+}
+
+/** `GET /channels/discord/connect/{id}`, polled every 2 s while waiting. */
+export function useDiscordConnect(connectId: string | null) {
+  const api = useApi();
+  return useQuery({
+    queryKey: keys.channels.discordConnect(connectId ?? ''),
+    queryFn: () => api.getDiscordConnect({ params: { connect_id: connectId ?? '' } }),
+    enabled: connectId !== null,
+    refetchInterval: (query) => (query.state.data?.status === 'waiting' ? 2_000 : false),
+  });
+}
+
+/** Act-button audit filters (URL search, spec 04 §12.11.1). */
+export interface ActionFilters {
+  readonly channel?: string | undefined;
+  readonly outcome?: readonly string[] | undefined;
+  readonly notification?: string | undefined;
+}
+
+/** `GET /channels/actions` query for the filters (without cursor). */
+export function actionsQuery(filters: ActionFilters, limit: number) {
+  return {
+    limit,
+    ...(filters.channel !== undefined && { channel_id: filters.channel }),
+    ...(filters.notification !== undefined && { notification_id: filters.notification }),
+    ...(filters.outcome !== undefined &&
+      filters.outcome.length > 0 && {
+        outcome: [...filters.outcome] as NotificationActionOutcome[],
+      }),
+  };
+}
+
+/** One page of the act-button audit (newest first, keyset cursor). */
+export function useActionAudit(filters: ActionFilters, page: number, limit: number) {
+  const api = useApi();
+  const pager = useCursorPager();
+  const query = actionsQuery(filters, limit);
+  const filterKey = JSON.stringify(stableParams(query));
+  return useQuery({
+    queryKey: keys.channels.actions({ ...query, page }),
+    queryFn: () =>
+      pager.resolve(filterKey, page, (cursor) =>
+        api.listChannelActions({
+          query: { ...query, ...(cursor !== undefined && { cursor }) },
+        }),
+      ),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * Adds a platform user id to a channel's allow-list (the Actions view's "Allow this person"): reads
+ * the channel, appends the id (deduplicated) and saves the full rules.
+ */
+export function useAllowPresser() {
+  const api = useApi();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { readonly channelId: string; readonly userId: string }) => {
+      const { channel } = await api.getChannel({ params: { channel_id: input.channelId } });
+      const current = channel.rules.allow_list ?? [];
+      if (current.includes(input.userId)) return { channel };
+      return api.updateChannel({
+        params: { channel_id: input.channelId },
+        body: { rules: { ...channel.rules, allow_list: [...current, input.userId] } },
+      });
+    },
+    onSuccess: (result) => patchChannelCaches(queryClient, result.channel),
   });
 }

@@ -1,4 +1,4 @@
-/** @module features/notifications/channels/preview/telegram-html — parses the HTML subset of Telegram's `parse_mode: HTML` into a small tree the mock renders as React nodes; never `innerHTML`. Unknown tags and malformed markup stay visible as text, as Telegram would refuse them. */
+/** @module features/notifications/channels/preview/telegram-html — parses the HTML subset of Telegram's `parse_mode: HTML`, and (with `rich`) the block tags of Rich Messages (headings, paragraphs, tables, lists, footers, rules, media), into a small tree the mock renders as React nodes; never `innerHTML`. Unknown tags and malformed markup stay visible as text, as Telegram would refuse them. */
 
 /** A node of the parsed message. */
 export type TgNode =
@@ -11,6 +11,13 @@ export type TgNode =
       readonly language?: string;
       /** `<tg-time unix=…>`: the moment, shown in the reader's time zone. */
       readonly unix?: number;
+      /** `<h1>`…`<h6>`. */
+      readonly level?: number;
+      /** `<img src>` (rich): the media reference (`tg://photo?id=shot`). */
+      readonly src?: string;
+      /** `<table bordered>` / `compact` (rich). */
+      readonly bordered?: boolean;
+      readonly compact?: boolean;
       readonly children: readonly TgNode[];
     };
 
@@ -26,7 +33,23 @@ export type TgTag =
   | 'blockquote'
   | 'spoiler'
   | 'time'
-  | 'emoji';
+  | 'emoji'
+  // Rich Message blocks (D-40)
+  | 'h'
+  | 'p'
+  | 'br'
+  | 'hr'
+  | 'img'
+  | 'table'
+  | 'tr'
+  | 'td'
+  | 'th'
+  | 'ul'
+  | 'ol'
+  | 'li'
+  | 'footer'
+  | 'figure'
+  | 'figcaption';
 
 const ALIASES: Readonly<Record<string, TgTag>> = {
   b: 'b',
@@ -46,6 +69,33 @@ const ALIASES: Readonly<Record<string, TgTag>> = {
   'tg-time': 'time',
   'tg-emoji': 'emoji',
 };
+
+/** Block tags Rich Messages add (Bot API 10.1). */
+const RICH: Readonly<Record<string, TgTag>> = {
+  h1: 'h',
+  h2: 'h',
+  h3: 'h',
+  h4: 'h',
+  h5: 'h',
+  h6: 'h',
+  p: 'p',
+  br: 'br',
+  hr: 'hr',
+  img: 'img',
+  table: 'table',
+  tr: 'tr',
+  td: 'td',
+  th: 'th',
+  ul: 'ul',
+  ol: 'ol',
+  li: 'li',
+  footer: 'footer',
+  figure: 'figure',
+  figcaption: 'figcaption',
+};
+
+/** Tags without content or a closing tag. */
+const VOID: ReadonlySet<TgTag> = new Set(['br', 'hr', 'img']);
 
 const NAMED: Readonly<Record<string, string>> = {
   lt: '<',
@@ -111,6 +161,18 @@ function close(frame: Frame): TgNode {
     const unix = Number(frame.attrs['unix']);
     return Number.isFinite(unix) ? { ...base, unix } : base;
   }
+  if (frame.tag === 'h') return { ...base, level: Number(frame.name.slice(1)) || 3 };
+  if (frame.tag === 'img') {
+    const src = frame.attrs['src'];
+    return { ...base, ...(typeof src === 'string' && { src }) };
+  }
+  if (frame.tag === 'table') {
+    return {
+      ...base,
+      bordered: frame.attrs['bordered'] !== undefined,
+      compact: frame.attrs['compact'] !== undefined,
+    };
+  }
   if (frame.tag === 'code') {
     const cls = frame.attrs['class'];
     if (typeof cls === 'string' && cls.startsWith('language-')) {
@@ -124,7 +186,11 @@ function close(frame: Frame): TgNode {
  * Parses Telegram HTML into nodes. `<span class="tg-spoiler">` is a spoiler; tags outside the
  * subset, stray closing tags and unclosed tags are kept as literal text.
  */
-export function parseTelegramHtml(html: string): readonly TgNode[] {
+export function parseTelegramHtml(
+  html: string,
+  options: { readonly rich?: boolean } = {},
+): readonly TgNode[] {
+  const rich = options.rich === true;
   const root: Frame = { tag: null, name: '#root', attrs: {}, children: [] };
   const stack: Frame[] = [root];
   const top = () => stack[stack.length - 1] ?? root;
@@ -136,7 +202,7 @@ export function parseTelegramHtml(html: string): readonly TgNode[] {
     const closing = m[1] === '/';
     const name = (m[2] ?? '').toLowerCase();
     const attrs = parseAttrs(m[3] ?? '');
-    let tag: TgTag | undefined = ALIASES[name];
+    let tag: TgTag | undefined = ALIASES[name] ?? (rich ? RICH[name] : undefined);
     if (name === 'span' && attrs['class'] === 'tg-spoiler') tag = 'spoiler';
     if (name === 'span' && closing) {
       const open = [...stack].reverse().find((f) => f.name === 'span');
@@ -146,6 +212,11 @@ export function parseTelegramHtml(html: string): readonly TgNode[] {
       pushText(top(), m[0]);
       continue;
     }
+    if (!closing && VOID.has(tag)) {
+      top().children.push(close({ tag, name, attrs, children: [] }));
+      continue;
+    }
+    if (closing && VOID.has(tag)) continue;
     if (!closing) {
       stack.push({ tag, name, attrs, children: [] });
       continue;

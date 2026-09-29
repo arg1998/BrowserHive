@@ -1,4 +1,4 @@
-/** @module features/notifications/NotificationsNav — the Notifications area's section nav (Inbox · Channels · Delivery log): underline tabs made of real links under the page header (spec 04 §12.11.1) */
+/** @module features/notifications/NotificationsNav — the Notifications area's section nav (Inbox · Channels · Delivery log · Actions): underline tabs made of real links under the page header (spec 04 §12.11.1) */
 import { Link, useRouterState } from '@tanstack/react-router';
 import { ICONS, type IconName } from '@/lib/icons.ts';
 import { cn } from '@/lib/utils.ts';
@@ -11,12 +11,14 @@ const SECTIONS: readonly {
   { to: '/notifications', label: 'Inbox', icon: 'inbox' },
   { to: '/notifications/channels', label: 'Channels', icon: 'channels' },
   { to: '/notifications/log', label: 'Delivery log', icon: 'deliveryLog' },
+  { to: '/notifications/actions', label: 'Actions', icon: 'actions' },
 ];
 
 /** Which section a pathname belongs to. */
 export function activeSection(pathname: string): string {
   if (pathname.startsWith('/notifications/channels')) return '/notifications/channels';
   if (pathname.startsWith('/notifications/log')) return '/notifications/log';
+  if (pathname.startsWith('/notifications/actions')) return '/notifications/actions';
   return '/notifications';
 }
 

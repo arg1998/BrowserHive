@@ -1,4 +1,4 @@
-/** @module infra/notifications/telegram-setup — the setup-only Telegram calls of the connect flow (spec 03 §4.8.1): the bot's username and the wait for `/start <code>` over `getUpdates` long polling. The persistent callback loop of act buttons is N2's. */
+/** @module infra/notifications/telegram-setup — the setup-only Telegram calls of the connect flow (spec 03 §4.8.1): the bot's username and the wait for `/start <code>`, which goes through the bot's shared update poller (Telegram answers 409 to two concurrent `getUpdates`, D-41). */
 
 import {
   ChannelSendError,
@@ -7,9 +7,7 @@ import {
 } from '../../ports/notification-channel.ts';
 import { callPlatform, type FetchFn } from './http.ts';
 import { refineTelegram, TELEGRAM_API_BASE } from './telegram.ts';
-
-/** Longest single `getUpdates` wait (seconds). */
-const LONG_POLL_S = 25;
+import { TelegramUpdatesHub } from './telegram-updates.ts';
 
 /** Options of {@link createTelegramSetup}. */
 export interface TelegramSetupOptions {
@@ -17,6 +15,8 @@ export interface TelegramSetupOptions {
   readonly apiBase?: string;
   /** Wall clock (epoch ms); injectable for tests. */
   readonly now?: () => number;
+  /** The update pollers shared with the channels' act buttons (a private one otherwise). */
+  readonly updates?: TelegramUpdatesHub;
 }
 
 function obj(value: unknown): Record<string, unknown> | null {
@@ -50,7 +50,13 @@ export function isStartCommand(text: string, code: string): boolean {
 export function createTelegramSetup(options: TelegramSetupOptions = {}): TelegramSetup {
   const base = (options.apiBase ?? TELEGRAM_API_BASE).replace(/\/+$/, '');
   const fetchFn = options.fetch ?? fetch;
-  const now = options.now ?? Date.now;
+  const updates =
+    options.updates ??
+    new TelegramUpdatesHub({
+      ...(options.fetch !== undefined && { fetch: options.fetch }),
+      ...(options.apiBase !== undefined && { apiBase: options.apiBase }),
+      ...(options.now !== undefined && { now: options.now }),
+    });
   const call = (
     token: string,
     method: string,
@@ -82,65 +88,36 @@ export function createTelegramSetup(options: TelegramSetupOptions = {}): Telegra
     },
 
     async waitForStart(token, code, { signal, deadline }): Promise<TelegramStart | null> {
-      let offset: number | undefined;
-      while (!signal.aborted && now() < deadline) {
-        const wait = Math.max(0, Math.min(LONG_POLL_S, Math.floor((deadline - now()) / 1000)));
-        let answer: Awaited<ReturnType<typeof call>>;
-        try {
-          answer = await call(
-            token,
-            'getUpdates',
-            {
-              ...(offset !== undefined && { offset }),
-              timeout: wait,
-              allowed_updates: ['message', 'my_chat_member'],
-            },
-            (wait + 10) * 1000,
-            signal,
-          );
-        } catch (err) {
-          if (signal.aborted) return null;
-          throw err;
-        }
-        if (signal.aborted) return null;
-        const updates = obj(answer.json)?.['result'];
-        if (!Array.isArray(updates)) continue;
-        for (const raw of updates) {
-          const update = obj(raw);
-          const id = update?.['update_id'];
-          if (typeof id === 'number') offset = id + 1;
-          const message = obj(update?.['message']);
-          const text = message?.['text'];
-          if (message === null || typeof text !== 'string' || !isStartCommand(text, code)) continue;
-          const chat = obj(message['chat']);
-          const from = obj(message['from']);
-          const chatId = chat?.['id'];
-          if (typeof chatId !== 'number' && typeof chatId !== 'string') continue;
-          const type = typeof chat?.['type'] === 'string' ? chat['type'] : 'private';
-          const title =
-            typeof chat?.['title'] === 'string' ? chat['title'] : nameOf(chat) || String(chatId);
-          const thread = message['message_thread_id'];
-          // Acknowledge what was read, so the next connect does not see this /start again.
-          await call(token, 'getUpdates', { offset, timeout: 0 }).catch(() => undefined);
-          const userId = from?.['id'];
-          return {
-            chat: {
-              id: String(chatId),
-              title,
-              type,
-              threadId:
-                typeof thread === 'number' && message['is_topic_message'] === true
-                  ? String(thread)
-                  : null,
-            },
-            user:
-              typeof userId === 'number' || typeof userId === 'string'
-                ? { id: String(userId), name: nameOf(from) || String(userId) }
-                : null,
-          };
-        }
-      }
-      return null;
+      const message = await updates.waitForMessage(
+        token,
+        (m) => typeof m['text'] === 'string' && isStartCommand(m['text'], code),
+        { signal, deadline },
+      );
+      if (message === null) return null;
+      const chat = obj(message['chat']);
+      const from = obj(message['from']);
+      const chatId = chat?.['id'];
+      if (typeof chatId !== 'number' && typeof chatId !== 'string') return null;
+      const type = typeof chat?.['type'] === 'string' ? chat['type'] : 'private';
+      const title =
+        typeof chat?.['title'] === 'string' ? chat['title'] : nameOf(chat) || String(chatId);
+      const thread = message['message_thread_id'];
+      const userId = from?.['id'];
+      return {
+        chat: {
+          id: String(chatId),
+          title,
+          type,
+          threadId:
+            typeof thread === 'number' && message['is_topic_message'] === true
+              ? String(thread)
+              : null,
+        },
+        user:
+          typeof userId === 'number' || typeof userId === 'string'
+            ? { id: String(userId), name: nameOf(from) || String(userId) }
+            : null,
+      };
     },
   };
 }

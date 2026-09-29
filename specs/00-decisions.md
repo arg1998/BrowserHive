@@ -664,7 +664,7 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 - Every user brings their own Telegram bot, Discord webhook or bot and ntfy topic, and has full authority over it.
 - **Secrets live only in the environment.** A channel stores the *names* of environment variables (`secret_refs_json`, `token=env:BH_TG_TOKEN` in a startup channel), never a value, so a database backup never contains a token. An inline secret is refused: over the API with a validation error, on the command line with exit 64. The dashboard shows whether a variable is set, never its value. Names starting with `BROWSERHIVE_` are refused, because the config loader reserves that prefix.
 
-**Consequences.** Changing a token is an environment change plus a restart. Features that seem to need an inbound connection are designed without one (act buttons through Telegram callbacks, the Discord gateway or a second ntfy topic, D-38).
+**Consequences.** Changing a token is an environment change plus a restart. Features that seem to need an inbound connection are designed without one: act buttons arrive through Telegram long polling, the Discord gateway or a second ntfy topic (D-38, D-41, D-42).
 
 **Alternatives considered.** *A shared BrowserHive bot*: users would share a rate limit and trust a third party with every message. *Storing tokens encrypted in the database*: the key would have to live next to the database, so a backup would still carry both.
 
@@ -727,11 +727,19 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 
 **Status:** Accepted
 
-**Implementation:** webhook mode implemented in N1 (the renderer already draws bot mode for the setup's comparison); bot mode with act buttons in N2; `notification_channels.mode` since N0.
+**Implementation:** webhook mode since the first channels (N1); bot mode with act buttons since N2; `notification_channels.mode` since N0.
 
 **Context.** A Discord webhook takes 30 seconds to create and needs no connection, but its messages cannot carry interactive buttons. A bot needs a Developer Portal application and a gateway connection, and is the only way to receive button presses without a public endpoint (an Interactions Endpoint URL and the gateway are mutually exclusive).
 
-**Decision.** Each Discord channel uses exactly one mode: **webhook** (default: open links only; act buttons degrade to "Open in BrowserHive") or **bot** (opt-in: act buttons over the gateway WebSocket while BrowserHive runs). Switching mode is an edit of the channel and keeps its rules. The setup explains the difference with pictures of BrowserHive's own messages, never images copied from Discord or the web.
+**Decision.**
+- Each Discord channel uses exactly one mode: **webhook** (default: open links only; act buttons degrade to "Open in BrowserHive") or **bot** (opt-in: act buttons over the gateway WebSocket while BrowserHive runs). A webhook-mode channel names a `webhook` variable; a bot-mode channel names a `token` variable and a target `channel_id` (with `guild_id` and display names). Switching mode is an edit of the channel that replaces the other mode's variable and keeps the rules.
+- Bot mode sends, edits and deletes through the bot REST API (`POST /channels/{id}/messages`, `PATCH`/`DELETE …/messages/{id}`) with the same embed as webhook mode (D-40). The setup builds the invite link with the minimal permissions (View Channel, Send Messages, Embed Links, Attach Files: `52224`), lists the bot's servers and their text channels through the bot API, and links the operator's Discord account with a one-time "This is me" button, whose press becomes the first allow-list entry (D-41).
+- Presses arrive as `INTERACTION_CREATE` over the gateway, which BrowserHive implements itself (Hello, Identify with intents `0`, heartbeat with zombie detection, Resume, Reconnect, Invalid Session, fatal close codes) on Bun's WebSocket client with no dependency. Every press is answered within Discord's 3-second window: an ephemeral reply when the command finishes in 2 s, otherwise a deferred ephemeral reply edited when it does. The connection reconnects with backoff and resumes where Discord allows it; its state (connected, reconnecting, offline) shows on the channel card. One gateway connection serves every channel of the same bot.
+- The setup explains the two modes with pictures of BrowserHive's own messages, never images copied from Discord or the web.
+
+**Consequences.** A bot token is a secret like any other (D-33). While BrowserHive is stopped, Discord shows "This interaction failed" for a press; nothing is queued.
+
+**Alternatives considered.** *An Interactions Endpoint URL*: needs a public HTTPS endpoint (D-33). *discord.js*: a large dependency for four gateway opcodes.
 
 ## D-39 Startup channels come from command-line flags only and are read-only
 
@@ -745,18 +753,57 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 
 **Alternatives considered.** *A `notificationChannels` config key with a URI grammar* (the research's P1): secrets would sit in a file that gets committed, and per-channel rules would need a grammar the config ladder does not have. *Seeding the database from config on first run*: friendlier once, but the file would then lie about what is configured.
 
-## D-40 Platform message formats: Telegram HTML messages, Discord embeds
+## D-40 Platform message formats: Telegram Rich Messages with a classic fallback, Discord embeds
 
 **Status:** Accepted
 
-**Implementation:** the first external channels (N1).
+**Implementation:** Discord embeds and the classic Telegram renderer since the first channels (N1); Telegram Rich Messages since N2.
 
-**Context.** The plan preferred Telegram's Rich Messages (`sendRichMessage`, Bot API 10.1, June 2026) and left Discord's Components V2 against embeds to a spike. Rich Messages add headings, tables and footers, but they are three months old, their rendering on older Telegram clients is unverified, and no real bot was available to the first channels' build to check them on phones. Discord's documentation states that a webhook message with `IS_COMPONENTS_V2` may carry only components: `content`, `embeds` and `files[n]` fail with 400, so a V2 webhook message cannot upload a screenshot.
+**Context.** Telegram's Rich Messages (`sendRichMessage`, Bot API 10.1, June 2026; blocks and media 10.2; button rows and expandable quotes 10.3) add headings, real tables and footers. The first channels shipped classic HTML because the rendering on real clients was unverified; the owner has since checked Rich Messages on a phone (images, links, bold and italics, code blocks and buttons all render). Discord's documentation states that a webhook message with `IS_COMPONENTS_V2` may carry only components: `content`, `embeds` and `files[n]` fail with 400, so a V2 webhook message cannot upload a screenshot.
 
 **Decision.**
-- Telegram channels send classic messages: `sendMessage`/`sendPhoto` with `parse_mode: HTML` (escaping only `<`, `>`, `&`), an inline keyboard for links, `editMessageText`/`editMessageCaption` for revisions. `degrade` turns tables into lists for this renderer (`tables: false`); the renderer draws headings, fields and quotes itself (an expandable blockquote). Rich Messages stay a later, opt-in renderer once they are verified on real clients; the contract needs no change for it.
-- Discord webhooks send one embed (colour by severity, fields, image as `attachment://`) plus an action row of link buttons (`with_components=true`), not Components V2.
+- Telegram channels send **Rich Messages**: `sendRichMessage` with `rich_message.html` (headings, paragraphs, a bordered table for tables, a compact table for fields, an expandable blockquote, `pre`/`code`, `footer`, `tg-time`), the screenshot as a media block (`<img src="tg://photo?id=shot">` with `media: [{id, media: attach://shot}]`, multipart), `skip_entity_detection: true` so page text never becomes a mention or a command, and an inline keyboard for links and act buttons (`style` success/danger/primary). Revisions use `editMessageText` with `rich_message`, re-using the photo by its `file_id`. The capabilities declare `tables: true`.
+- **Classic HTML is the fallback only**: when Telegram rejects a rich call (400, or 404 from a Bot API server that does not know the method), the same delivery is sent as the classic `sendMessage`/`sendPhoto` with `parse_mode: HTML` (tables written as lines), and a 404 makes the channel classic for the rest of the run. Each message remembers its format in its ref, so messages sent classic (including every message from before N2) keep being edited classic.
+- Discord sends one embed (colour by severity, fields, image as `attachment://`) plus action rows (link buttons, and interactive buttons in bot mode), not Components V2, in both modes.
 
-**Consequences.** Every Telegram client renders the messages; tables arrive as lists. The Telegram renderer is swappable per channel later without touching producers or the outbox.
+**Consequences.** Tables arrive as tables on Telegram. A formatting mistake costs one extra call, not a lost message. The contract needed no change.
 
-**Alternatives considered.** *Rich Messages first*: better structure, unverifiable here, and a formatting mistake would fail every send with a 400. *Discord Components V2*: no screenshots through a webhook.
+**Alternatives considered.** *Classic HTML only*: no tables, no headings. *Rich `blocks` (JSON) instead of `html`*: the same result with a larger, less readable payload and preview. *Discord Components V2*: no screenshots through a webhook.
+
+## D-41 Act buttons: single-use command tokens, allow-lists, presses over outbound connections
+
+**Status:** Accepted
+
+**Implementation:** N2 (Telegram, Discord bot mode, ntfy; the generic webhook carries act actions as-is).
+
+**Context.** An attention request or a vault confirmation waits for a person who may be away from the dashboard. Answering from the chat is the fastest path, but a button in a chat is a remote control for the agent's browser: it must work only for the right person, once, while the request is still open, and it must not need a public endpoint (D-33).
+
+**Decision.**
+- **Opt-in per channel.** `rules.act_buttons` is off by default. With it on, a platform that can receive presses keeps the `act` actions (`degrade` otherwise turns them into their `open` fallback): Telegram, Discord in bot mode, ntfy with a reply topic (D-42). The generic webhook, with act buttons on, carries the `act` actions of the contract unchanged and without tokens; its consumer answers through the REST API with its own bearer token (`POST /api/v1/attention/{request_id}/resolve`, scope `attention:resolve`), so BrowserHive adds no callback endpoint.
+- **Command tokens.** Each act button carries `bh1:<token>`: 11 URL-safe characters (66 random bits) minted by the outbox just before the platform call and written first, so an early press finds its row. `notification_action_tokens` binds the token to its channel, notification, action, `op` and `args`, and stores it only as a SHA-256 hash, like API tokens and grants. A token is single use (claimed atomically) and expires after 24 h (Telegram keeps undelivered presses that long). Because only the hash is kept, every platform call that draws act buttons mints fresh tokens; an edit of a still-open message leaves the tokens it replaced valid until they expire, bound to the same command, so a press racing the edit still works.
+- **Checks, in order.** The token is known; it belongs to the channel the press came from, and the press came from that channel's chat (Telegram chat id, Discord channel id); act buttons are still on and the channel is active; the token is unused and unexpired; the notification is still `open`; the presser's platform user id is on the channel's **allow-list** (`rules.allow_list`; by default the person who connected the chat in the setup: the Telegram `/start`, or the Discord "This is me" button; more ids can be added). ntfy has no per-user identity (D-42). Then the command runs through the same application service as the dashboard route: `attention.resolve` (resolve or reject) and `vault.confirm.resolve` (approve or deny), the two ops producers put on buttons. `session.extend_lease` and `session.close` are reserved in the contract but no producer offers them (there is no operator-side lease extension), so a press of one is refused.
+- **Actor and audit.** The actor is `telegram:<user id>`, `discord:<user id>` or `ntfy:topic-b`; it is the request's `resolved_by`, so the revised message says who answered and from where. Every press of a known token writes one `notification_actions` row (audit class): when, channel, notification, action, op, actor and display name, outcome (`done`, `failed`, `not_allowed`, `used`, `expired`, `stale`, `wrong_channel`, `disabled`) and detail. A press with an unknown token is answered and counted, not stored, so a stranger cannot fill the audit table. The presser gets a short answer in the chat (a Telegram toast, an ephemeral Discord reply); a refusal names the reason, and a refused allow-list check names the presser's id so the operator can add it.
+- **The message follows the state.** A successful command settles the request; the settlement is a revision (03 §9.1) and the outbox's silent edit removes every button and shows the outcome and the actor. A press made while BrowserHive was stopped is processed at the next start if the platform kept it (Telegram 24 h, ntfy's cache 12 h) and refused as `stale` or `expired` when the request no longer waits (the startup reconcile settles orphaned requests first).
+- **Scopes.** A press acts with the authority of the operator who enabled act buttons (the single operator holds every scope, D-09); each op is tied to the scope of its dashboard route (`attention:resolve`, `vault:confirm`).
+- **Presses arrive only over outbound connections**: Telegram `getUpdates` long polling (one poller per bot token, shared with the setup's `/start` wait, its offset persisted so a press is handled once), the Discord gateway (D-38), an ntfy subscription (D-42). Their connection state shows on the channel card.
+
+**Consequences.** Tokens never appear in logs, the delivery log, previews (which show `bh1:preview-<action>`) or the API. Deleting a channel deletes its tokens; its audit rows keep the channel's name. `notification_actions` follows `auditRetentionDays`; used or expired tokens are pruned a day after they expire.
+
+**Alternatives considered.** *An HMAC-keyed token* (the plan's first wording): with 66 random bits, a 24-hour life and single use, a keyed hash protects nothing a plain SHA-256 does not, and it adds a key to generate, store and back up. *A signed URL on the dashboard* for the buttons to call: needs a public URL and exposes a callback to the internet (D-33). *Telegram webhooks*: a public HTTPS endpoint. *Act buttons on by default*: a chat is shared more casually than a dashboard login.
+
+## D-42 ntfy answers through a second, private topic
+
+**Status:** Accepted
+
+**Implementation:** N2, after a spike (2026-09-28) against `binwiederhier/ntfy:v2.28.0` and ntfy.sh.
+
+**Context.** ntfy has no bot identity and no callbacks; its `http` action makes the phone send a request when a button is tapped. The plan proposed pointing that request at ntfy itself. The spike showed: a notification whose `http` actions target the same server's topic B is accepted unchanged; a streaming subscription to topic B receives a phone-style `POST` within a second; `?since=<id>` returns only later messages; a notification is replaced by its `sequence_id`. ntfy documents the `http` action as supported on Android and iOS (iOS since app 1.1, May 2022).
+
+**Decision.**
+- An ntfy channel may name a **reply topic** ("topic B": a literal `reply_topic`, or one from a variable) on the same server, and an optional `reply_token` variable to read it (default: the channel's `token`). With act buttons on, each act button becomes an `http` action that POSTs `bh1:<token>` to `<server>/<reply topic>` and clears the notification; ntfy allows three actions, filled by importance (act buttons first, then links).
+- BrowserHive subscribes to topic B (`GET /<topic B>/json`, streaming, outbound), resumes after a restart or a dropped connection from the last message id it handled (`since=`; ntfy's cache keeps 12 h), ignores anything that is not `bh1:<token>`, and answers a valid press like any other (D-41). The resolution replaces the topic-A notification by sequence id (a silent revision). A refused press changes nothing on the phone.
+- ntfy has no per-user identity: the actor is `ntfy:topic-b` and there is no allow-list. **Whoever can read topic A can press its buttons**, so topic A must be private: an unguessable name on ntfy.sh, or access control on a self-hosted server. Topic B only needs to be writable by the phone: on a self-hosted server the recommended ACL is `everyone` write-only on topic B, with BrowserHive reading it with a token. Someone who learns only topic B can post to it (ignored unless it is a live token), replay used tokens (refused) and see tokens that were already used; they cannot guess a live token (66 bits) and so cannot act.
+
+**Consequences.** Two-way ntfy needs no BrowserHive endpoint. Presses made while BrowserHive was stopped for more than ntfy's cache time are lost (the request is settled by then anyway).
+
+**Alternatives considered.** *Open links only on ntfy*: the fallback if the spike had failed. *Putting an access token in the `http` action's headers*: anyone who reads topic A would get a write token.

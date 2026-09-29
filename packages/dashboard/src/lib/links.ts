@@ -41,6 +41,10 @@ export const DOCS_PAGES = {
   notificationChannels: { page: 'guide/notifications', anchor: 'channels' },
   channelTelegram: { page: 'guide/notifications', anchor: 'telegram' },
   channelDiscord: { page: 'guide/notifications', anchor: 'discord' },
+  discordBotTroubleshooting: {
+    page: 'guide/notifications',
+    anchor: 'troubleshooting-discord-bot-mode',
+  },
   channelNtfy: { page: 'guide/notifications', anchor: 'ntfy' },
   channelWebhook: { page: 'guide/notifications', anchor: 'webhook' },
   publicAddress: { page: 'guide/notifications', anchor: 'public-address' },

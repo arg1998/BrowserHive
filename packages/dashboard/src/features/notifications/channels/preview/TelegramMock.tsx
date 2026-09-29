@@ -1,4 +1,4 @@
-/** @module features/notifications/channels/preview/TelegramMock — a Telegram chat drawn from the renderer's `sendMessage`/`sendPhoto` request: the bot header, the message bubble with the HTML subset (bold, italic, code, links, expandable quotes, spoilers), an optional photo, the silent-send mark and the inline keyboard. Our own CSS; no Telegram assets. */
+/** @module features/notifications/channels/preview/TelegramMock — a Telegram chat drawn from the renderer's request: a Rich Message (`sendRichMessage` / `editMessageText` with `rich_message`: headings, paragraphs, tables, lists, expandable quotes, code, footers and the inline screenshot, D-40) or the classic `sendMessage`/`sendPhoto` HTML subset; the bot header, the silent-send mark and the inline keyboard with callback buttons tinted by style. Our own CSS; no Telegram assets. */
 import type { PlatformRequest } from '@browserhive/contracts/http';
 import { type ReactNode, useState } from 'react';
 import { ICONS } from '@/lib/icons.ts';
@@ -45,13 +45,27 @@ function Spoiler({ children }: { readonly children: ReactNode }) {
   );
 }
 
-function renderNodes(nodes: readonly TgNode[], key: string): ReactNode[] {
-  return nodes.map((node, i) => renderNode(node, `${key}.${i}`));
+/** What the node renderer needs besides the nodes. */
+interface RenderCtx {
+  readonly masked: boolean;
 }
 
-function renderNode(node: TgNode, k: string): ReactNode {
+function renderNodes(nodes: readonly TgNode[], key: string, ctx: RenderCtx): ReactNode[] {
+  return nodes.map((node, i) => renderNode(node, `${key}.${i}`, ctx));
+}
+
+const HEADING: Readonly<Record<number, string>> = {
+  1: 'text-[1.3rem] font-bold',
+  2: 'text-[1.18rem] font-bold',
+  3: 'text-[1.05rem] font-semibold',
+  4: 'text-[0.95rem] font-semibold',
+  5: 'text-[0.9rem] font-semibold',
+  6: 'text-[0.9rem] font-semibold',
+};
+
+function renderNode(node: TgNode, k: string, ctx: RenderCtx): ReactNode {
   if (node.type === 'text') return <span key={k}>{node.text}</span>;
-  const children = renderNodes(node.children, k);
+  const children = renderNodes(node.children, k, ctx);
   switch (node.tag) {
     case 'b':
       return (
@@ -128,8 +142,100 @@ function renderNode(node: TgNode, k: string): ReactNode {
       );
     case 'emoji':
       return <span key={k}>{children}</span>;
+    case 'h':
+      return (
+        <span key={k} className={cn('mt-1 mb-1.5 block leading-tight', HEADING[node.level ?? 3])}>
+          {children}
+        </span>
+      );
+    case 'p':
+      return (
+        <span key={k} className="mb-2 block last:mb-0">
+          {children}
+        </span>
+      );
+    case 'br':
+      return <br key={k} />;
+    case 'hr':
+      return <span key={k} aria-hidden="true" className="my-2 block h-px bg-tg-muted/35" />;
+    case 'img':
+      return (
+        <span key={k} className="-mx-3 my-2 block">
+          <MockScreenshot masked={ctx.masked} name="screenshot.jpg" />
+        </span>
+      );
+    case 'figure':
+      return (
+        <span key={k} className="my-2 block">
+          {children}
+        </span>
+      );
+    case 'figcaption':
+      return (
+        <span key={k} className="mt-1 block text-xs text-tg-muted">
+          {children}
+        </span>
+      );
+    case 'table':
+      return (
+        <span
+          key={k}
+          className={cn(
+            'my-2 block overflow-x-auto rounded-lg',
+            node.bordered === true && 'border border-tg-muted/30',
+          )}
+        >
+          <table className="w-full border-collapse text-[0.84rem]">
+            <tbody>{children}</tbody>
+          </table>
+        </span>
+      );
+    case 'tr':
+      return (
+        <tr key={k} className="border-b border-tg-muted/20 last:border-b-0">
+          {children}
+        </tr>
+      );
+    case 'th':
+      return (
+        <th key={k} className="px-2 py-1 text-left align-top font-semibold">
+          {children}
+        </th>
+      );
+    case 'td':
+      return (
+        <td key={k} className="px-2 py-1 align-top first:pl-0 [&:first-child>strong]:text-tg-muted">
+          {children}
+        </td>
+      );
+    case 'ul':
+      return (
+        <ul key={k} className="mb-2 list-disc pl-5">
+          {children}
+        </ul>
+      );
+    case 'ol':
+      return (
+        <ol key={k} className="mb-2 list-decimal pl-5">
+          {children}
+        </ol>
+      );
+    case 'li':
+      return <li key={k}>{children}</li>;
+    case 'footer':
+      return (
+        <span key={k} className="mt-2 block text-[0.78rem] text-tg-muted">
+          {children}
+        </span>
+      );
   }
 }
+
+const KEY_TINT: Readonly<Record<string, string>> = {
+  success: 'bg-tg-key-success text-white hover:brightness-110',
+  danger: 'bg-tg-key-danger text-white hover:brightness-110',
+  primary: 'bg-tg-key-primary text-white hover:brightness-110',
+};
 
 /** Props. */
 export interface TelegramMockProps {
@@ -144,7 +250,8 @@ export interface TelegramMockProps {
 /** The Telegram chat mock. */
 export function TelegramMock({ request, at, masked, botName, chatTitle }: TelegramMockProps) {
   const view = readTelegram(request);
-  const nodes = parseTelegramHtml(view.html);
+  const nodes = parseTelegramHtml(view.html, { rich: view.rich });
+  const ctx: RenderCtx = { masked };
   const time = new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const Silent = ICONS.notificationsOff;
   const Arrow = ICONS.arrowUpRight;
@@ -179,8 +286,13 @@ export function TelegramMock({ request, at, masked, botName, chatTitle }: Telegr
               </div>
             ) : null}
             {view.photo !== null ? <MockScreenshot masked={masked} name={view.photo.name} /> : null}
-            <div className="px-3 pt-2 pb-1.5 break-words whitespace-pre-wrap">
-              {renderNodes(nodes, 'm')}
+            <div
+              className={cn(
+                'px-3 pt-2 pb-1.5 break-words',
+                view.rich ? 'whitespace-normal' : 'whitespace-pre-wrap',
+              )}
+            >
+              {renderNodes(nodes, 'm', ctx)}
               <span className="float-right mt-1.5 ml-3 inline-flex translate-y-0.5 items-center gap-1 text-[0.7rem] text-tg-muted">
                 {view.edit ? 'edited ' : ''}
                 {view.silent ? <Silent aria-label="Sent silently" className="size-3" /> : null}
@@ -196,7 +308,10 @@ export function TelegramMock({ request, at, masked, botName, chatTitle }: Telegr
                     <MockAction
                       key={`${b.label}|${b.url ?? ''}`}
                       url={b.url}
-                      className="relative flex min-h-9 min-w-0 flex-1 cursor-pointer items-center justify-center rounded-lg bg-tg-key px-6 py-1.5 text-center text-[0.84rem] font-medium text-tg-key-text backdrop-blur-sm transition-colors hover:bg-tg-key/70 focus-ring"
+                      className={cn(
+                        'relative flex min-h-9 min-w-0 flex-1 cursor-pointer items-center justify-center rounded-lg px-6 py-1.5 text-center text-[0.84rem] font-medium backdrop-blur-sm transition focus-ring',
+                        KEY_TINT[b.style] ?? 'bg-tg-key text-tg-key-text hover:bg-tg-key/70',
+                      )}
                     >
                       <span className="truncate">{b.label}</span>
                       {b.url !== null ? (

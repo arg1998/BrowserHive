@@ -1,8 +1,8 @@
-/** @module test/helpers/fake-platforms — one `Bun.serve` faking the Telegram Bot API (`/tg`), Discord webhooks (`/api/webhooks`), an ntfy server (`/ntfy`) and a plain webhook receiver (`/hook`) (spec 09 §4). Every request is recorded; failures are scripted per route. */
+/** @module test/helpers/fake-platforms — one `Bun.serve` faking the Telegram Bot API (`/tg`, including Rich Messages, `getUpdates` with callback queries and `answerCallbackQuery`), Discord webhooks (`/api/webhooks`), the Discord bot REST API and a gateway subset (`/discord`), an ntfy server with streaming subscriptions (`/ntfy`) and a plain webhook receiver (`/hook`) (spec 09 §4). Every request is recorded; failures are scripted per route. */
 
 /** A request the fakes received. */
 export interface RecordedRequest {
-  readonly platform: 'telegram' | 'discord' | 'ntfy' | 'webhook';
+  readonly platform: 'telegram' | 'discord' | 'discord-bot' | 'ntfy' | 'webhook';
   readonly method: string;
   /** Path without the platform prefix (Telegram: the method name). */
   readonly path: string;
@@ -40,12 +40,36 @@ export type RouteKey = string;
 export interface FakeUpdate {
   readonly update_id: number;
   readonly message?: Record<string, unknown>;
+  readonly callback_query?: Record<string, unknown>;
+}
+
+/** A gateway payload the fake received from a client (`op`, and `d` for Identify/Resume). */
+export interface GatewayFrame {
+  readonly op: number;
+  readonly d: unknown;
+}
+
+/** One gateway client connection of the fake. */
+interface GatewayClient {
+  readonly ws: { send(data: string): void; close(code?: number, reason?: string): void };
+  seq: number;
 }
 
 /** Low-entropy fake credentials (gitleaks scans every commit). */
 export const FAKE_TG_TOKEN = `1234:${'a'.repeat(35)}`;
 /** Token part of the fake Discord webhook URL. */
 export const FAKE_DISCORD_TOKEN = 'b'.repeat(24);
+/** Low-entropy fake Discord bot token. */
+export const FAKE_DISCORD_BOT_TOKEN = 'c'.repeat(40);
+/** Ids the Discord bot fake answers with. */
+export const FAKE_DISCORD = {
+  applicationId: '100000000000000001',
+  botId: '100000000000000001',
+  guildId: '200000000000000002',
+  channelId: '300000000000000003',
+  categoryId: '300000000000000009',
+  userId: '400000000000000004',
+} as const;
 
 /**
  * The fakes. `start()` binds an ephemeral port; `stop()` releases it (hanging requests included).
@@ -55,12 +79,39 @@ export class FakePlatforms {
   readonly updates: FakeUpdate[] = [];
   private readonly scripts = new Map<RouteKey, ScriptedAnswer[]>();
   private readonly ntfyMessages = new Map<string, Record<string, unknown>[]>();
-  private server: ReturnType<typeof Bun.serve> | undefined;
+  private readonly ntfySubscribers = new Map<string, Set<(line: string) => void>>();
+  private server: ReturnType<typeof Bun.serve<{ gateway: true }, never>> | undefined;
   private counter = 100;
+  /** Frames gateway clients sent (heartbeats, Identify, Resume). */
+  readonly gatewayFrames: GatewayFrame[] = [];
+  private readonly gatewayClients = new Set<GatewayClient>();
+  /** Heartbeat interval the fake gateway announces in Hello. */
+  gatewayHeartbeatMs = 45_000;
+  /** When false, the fake gateway stops acknowledging heartbeats (a zombie connection). */
+  gatewayAcks = true;
+  /** Connections the fake gateway accepted. */
+  gatewayConnections = 0;
 
   /** Starts the server. */
   start(): this {
-    this.server = Bun.serve({ port: 0, hostname: '127.0.0.1', fetch: (req) => this.handle(req) });
+    this.server = Bun.serve<{ gateway: true }, never>({
+      port: 0,
+      hostname: '127.0.0.1',
+      fetch: (req, server) => {
+        if (new URL(req.url).pathname.startsWith('/discord/gateway')) {
+          if (server.upgrade(req, { data: { gateway: true } })) return undefined;
+          return new Response('upgrade failed', { status: 400 });
+        }
+        return this.handle(req);
+      },
+      websocket: {
+        open: (ws) => this.gatewayOpen(ws),
+        message: (ws, message) => this.gatewayMessage(ws, String(message)),
+        close: (ws) => {
+          for (const c of this.gatewayClients) if (c.ws === ws) this.gatewayClients.delete(c);
+        },
+      },
+    });
     return this;
   }
 
@@ -92,6 +143,108 @@ export class FakePlatforms {
   /** A receiver URL for the generic webhook. */
   get webhookUrl(): string {
     return `${this.url}/hook/bh`;
+  }
+
+  /** Bot REST base for the Discord bot fake (`apiBase`). */
+  get discordApi(): string {
+    return `${this.url}/discord/api/v10`;
+  }
+
+  /** Clients connected to the fake gateway. */
+  get gatewayClientCount(): number {
+    return this.gatewayClients.size;
+  }
+
+  /** Sends a dispatch (`op 0`) to every gateway client. */
+  gatewayDispatch(t: string, d: unknown): void {
+    for (const c of this.gatewayClients) {
+      c.seq += 1;
+      c.ws.send(JSON.stringify({ op: 0, t, s: c.seq, d }));
+    }
+  }
+
+  /** Sends a raw payload to every gateway client (Reconnect, Invalid Session). */
+  gatewaySend(payload: Record<string, unknown>): void {
+    for (const c of this.gatewayClients) c.ws.send(JSON.stringify(payload));
+  }
+
+  /** Drops every gateway connection with `code`. */
+  gatewayDrop(code = 4000): void {
+    for (const c of this.gatewayClients) c.ws.close(code, 'dropped');
+    this.gatewayClients.clear();
+  }
+
+  /**
+   * A button press: sends `INTERACTION_CREATE` for a message component with `custom_id`.
+   *
+   * @returns The interaction id (its callback lands on `/interactions/<id>/<token>/callback`).
+   */
+  discordPress(customId: string, options: { userId?: string; channelId?: string } = {}): string {
+    const id = String(this.next());
+    this.gatewayDispatch('INTERACTION_CREATE', {
+      id,
+      application_id: FAKE_DISCORD.applicationId,
+      type: 3,
+      token: `itoken${id}`,
+      channel_id: options.channelId ?? FAKE_DISCORD.channelId,
+      guild_id: FAKE_DISCORD.guildId,
+      member: {
+        user: {
+          id: options.userId ?? FAKE_DISCORD.userId,
+          username: 'operator',
+          global_name: 'Op Erator',
+        },
+      },
+      data: { custom_id: customId, component_type: 2 },
+    });
+    return id;
+  }
+
+  /** Publishes to an ntfy topic as a phone's `http` action does (`POST /<topic>`, text body). */
+  ntfyPost(topic: string, text: string): Record<string, unknown> {
+    const message = {
+      id: `m${this.next()}`,
+      time: Math.floor(Date.now() / 1000),
+      event: 'message',
+      topic,
+      message: text,
+    };
+    this.push(topic, message);
+    return message;
+  }
+
+  private gatewayOpen(ws: GatewayClient['ws']): void {
+    this.gatewayConnections += 1;
+    const client: GatewayClient = { ws, seq: 0 };
+    this.gatewayClients.add(client);
+    ws.send(JSON.stringify({ op: 10, d: { heartbeat_interval: this.gatewayHeartbeatMs } }));
+  }
+
+  private gatewayMessage(ws: GatewayClient['ws'], text: string): void {
+    const frame = JSON.parse(text) as GatewayFrame;
+    this.gatewayFrames.push(frame);
+    const client = [...this.gatewayClients].find((c) => c.ws === ws);
+    if (client === undefined) return;
+    if (frame.op === 1 && this.gatewayAcks) ws.send(JSON.stringify({ op: 11 }));
+    if (frame.op === 2) {
+      client.seq += 1;
+      ws.send(
+        JSON.stringify({
+          op: 0,
+          t: 'READY',
+          s: client.seq,
+          d: {
+            session_id: `session${this.gatewayConnections}`,
+            resume_gateway_url: `ws://127.0.0.1:${this.server?.port ?? 0}/discord/gateway`,
+            user: { id: FAKE_DISCORD.botId, username: 'bh_bot' },
+          },
+        }),
+      );
+    }
+    if (frame.op === 6) {
+      client.seq = Number((frame.d as { seq?: number }).seq ?? 0) + 1;
+      ws.send(JSON.stringify({ op: 0, t: 'RESUMED', s: client.seq, d: {} }));
+    }
   }
 
   /** Queues answers for the next calls of `route` (after them, the default success). */
@@ -186,6 +339,9 @@ export class FakePlatforms {
     const path = url.pathname;
     if (path.startsWith('/tg/bot')) return this.telegram(req, path);
     if (path.startsWith('/api/webhooks/')) return this.discord(req, path);
+    if (path.startsWith('/discord/api/v10/')) {
+      return this.discordBot(req, path.slice('/discord/api/v10'.length));
+    }
     if (path.startsWith('/ntfy')) return this.ntfy(req, path.slice('/ntfy'.length) || '/');
     if (path.startsWith('/hook')) {
       await this.record(req, 'webhook', path);
@@ -219,6 +375,21 @@ export class FakePlatforms {
             ok: true,
             result: { message_id: this.next(), chat, text: body['text'] },
           });
+        case 'sendRichMessage': {
+          const rich = parseRich(body['rich_message']);
+          return Response.json({
+            ok: true,
+            result: {
+              message_id: this.next(),
+              chat,
+              rich_message: {
+                blocks: rich?.media === undefined ? [] : [{ type: 'photo', photo: RICH_PHOTOS }],
+              },
+            },
+          });
+        }
+        case 'answerCallbackQuery':
+          return Response.json({ ok: true, result: true });
         case 'sendPhoto':
           return Response.json({
             ok: true,
@@ -229,11 +400,21 @@ export class FakePlatforms {
             },
           });
         case 'editMessageText':
-        case 'editMessageCaption':
+        case 'editMessageCaption': {
+          const rich = parseRich(body['rich_message']);
           return Response.json({
             ok: true,
-            result: { message_id: Number(body['message_id']), chat },
+            result: {
+              message_id: Number(body['message_id']),
+              chat,
+              ...(rich !== null && {
+                rich_message: {
+                  blocks: rich.media === undefined ? [] : [{ type: 'photo', photo: RICH_PHOTOS }],
+                },
+              }),
+            },
           });
+        }
         case 'deleteMessage':
           return Response.json({ ok: true, result: true });
         default:
@@ -274,9 +455,45 @@ export class FakePlatforms {
     const segments = path.split('/').filter(Boolean);
     if (req.method === 'GET') {
       const topic = segments[0] ?? '';
-      const lines = this.ntfyTopic(topic).map((m) => JSON.stringify(m));
-      return new Response(lines.join('\n'), {
-        headers: { 'content-type': 'application/x-ndjson' },
+      const since = recorded.query['since'];
+      const all = this.ntfyTopic(topic);
+      const index = since === undefined ? -1 : all.findIndex((m) => m['id'] === since);
+      const cached =
+        since === undefined
+          ? all
+          : index >= 0
+            ? all.slice(index + 1)
+            : all.filter((m) => Number(m['time'] ?? 0) >= Number(since));
+      const lines = cached.map((m) => JSON.stringify(m));
+      if (recorded.query['poll'] === '1') {
+        return new Response(lines.join('\n'), {
+          headers: { 'content-type': 'application/x-ndjson' },
+        });
+      }
+      return this.answer('ntfy:SUBSCRIBE', () => {
+        const encoder = new TextEncoder();
+        let push: ((line: string) => void) | undefined;
+        const stream = new ReadableStream<Uint8Array>({
+          start: (controller) => {
+            const open = JSON.stringify({ id: `o${this.next()}`, event: 'open', topic });
+            controller.enqueue(encoder.encode(`${open}\n`));
+            for (const line of lines) controller.enqueue(encoder.encode(`${line}\n`));
+            push = (line) => {
+              try {
+                controller.enqueue(encoder.encode(`${line}\n`));
+              } catch {
+                // closed
+              }
+            };
+            const set = this.ntfySubscribers.get(topic) ?? new Set();
+            set.add(push);
+            this.ntfySubscribers.set(topic, set);
+          },
+          cancel: () => {
+            if (push !== undefined) this.ntfySubscribers.get(topic)?.delete(push);
+          },
+        });
+        return new Response(stream, { headers: { 'content-type': 'application/x-ndjson' } });
       });
     }
     return this.answer(`ntfy:${req.method}`, () => {
@@ -315,6 +532,82 @@ export class FakePlatforms {
   }
 
   private push(topic: string, message: Record<string, unknown>): void {
-    this.ntfyMessages.set(topic, [...this.ntfyTopic(topic), message]);
+    const stamped = { time: Math.floor(Date.now() / 1000), ...message };
+    this.ntfyMessages.set(topic, [...this.ntfyTopic(topic), stamped]);
+    for (const push of this.ntfySubscribers.get(topic) ?? []) push(JSON.stringify(stamped));
   }
+
+  /** Drops every open ntfy subscription (a lost connection). */
+  ntfyDrop(): void {
+    this.ntfySubscribers.clear();
+  }
+
+  private async discordBot(req: Request, path: string): Promise<Response> {
+    const recorded = await this.record(req, 'discord-bot', path);
+    const segments = path.split('/').filter(Boolean);
+    return this.answer(`discord-bot:${req.method} ${segments[0] ?? ''}`, () => {
+      const ids = FAKE_DISCORD;
+      if (path === '/gateway/bot') {
+        return Response.json({
+          url: `ws://127.0.0.1:${this.server?.port ?? 0}/discord/gateway`,
+          shards: 1,
+        });
+      }
+      if (path === '/users/@me') return Response.json({ id: ids.botId, username: 'bh_bot' });
+      if (path === '/applications/@me') return Response.json({ id: ids.applicationId });
+      if (path === '/users/@me/guilds') return Response.json([{ id: ids.guildId, name: 'Home' }]);
+      if (segments[0] === 'guilds' && segments[2] === 'channels') {
+        return Response.json([
+          { id: ids.categoryId, type: 4, name: 'Alerts', position: 1 },
+          {
+            id: ids.channelId,
+            type: 0,
+            name: 'browserhive',
+            parent_id: ids.categoryId,
+            position: 2,
+          },
+          { id: '300000000000000005', type: 2, name: 'Voice', position: 3 },
+          { id: '300000000000000006', type: 5, name: 'news', position: 0 },
+        ]);
+      }
+      if (segments[0] === 'interactions') return new Response(null, { status: 204 });
+      if (segments[0] === 'webhooks') return Response.json({ id: 'followup' });
+      if (segments[0] === 'channels' && segments[2] === 'messages') {
+        if (req.method === 'DELETE') return new Response(null, { status: 204 });
+        const id = segments[3] ?? String(this.next());
+        const attachments = recorded.files.map((f, i) => ({ id: `90${i}${id}`, filename: f.name }));
+        const kept =
+          (recorded.json as { attachments?: { id: string | number }[] } | null)?.attachments ?? [];
+        return Response.json({
+          id,
+          channel_id: segments[1],
+          attachments: [
+            ...kept
+              .filter((a) => typeof a.id === 'string')
+              .map((a) => ({ id: a.id, filename: 'screenshot.jpg' })),
+            ...attachments,
+          ],
+        });
+      }
+      return Response.json({ message: 'Unknown', code: 0 }, { status: 404 });
+    });
+  }
+}
+
+/** Photo sizes a sent Rich Message reports (the largest `file_id` is re-used by edits). */
+const RICH_PHOTOS = [
+  { file_id: 'rp-small', width: 320, height: 180 },
+  { file_id: 'rp-large', width: 1280, height: 720 },
+];
+
+/** `rich_message` of a JSON body, or of a multipart field (a JSON string). */
+function parseRich(value: unknown): { html?: string; media?: unknown } | null {
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value) as { html?: string; media?: unknown };
+    } catch {
+      return null;
+    }
+  }
+  return value !== null && typeof value === 'object' ? (value as { html?: string }) : null;
 }

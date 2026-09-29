@@ -10,6 +10,11 @@ import type {
   PrincipalRepository,
 } from './identity.ts';
 import type {
+  NotificationActionRepository,
+  NotificationActionTokenRepository,
+  NotificationCursorRepository,
+} from './notification-actions.ts';
+import type {
   NotificationChannelMessageRepository,
   NotificationChannelRepository,
   NotificationDeliveryRepository,
@@ -54,6 +59,9 @@ export interface Repositories {
   readonly notificationChannels: NotificationChannelRepository;
   readonly notificationDeliveries: NotificationDeliveryRepository;
   readonly notificationChannelMessages: NotificationChannelMessageRepository;
+  readonly notificationActionTokens: NotificationActionTokenRepository;
+  readonly notificationActions: NotificationActionRepository;
+  readonly notificationCursors: NotificationCursorRepository;
   readonly preferences: PreferenceRepository;
   readonly systemEvents: SystemEventRepository;
   readonly idempotency: IdempotencyRepository;

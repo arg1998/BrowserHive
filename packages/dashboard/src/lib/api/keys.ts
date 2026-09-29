@@ -117,6 +117,12 @@ export const keys = {
     preview: (params?: KeyParams) => ['channels', 'preview', stableParams(params)] as const,
     env: (names: readonly string[]) => ['channels', 'env', [...names].sort()] as const,
     connect: (id: string) => ['channels', 'telegram-connect', id] as const,
+    discordBot: (env: string) => ['channels', 'discord-bot', env] as const,
+    discordChannels: (env: string, guild: string) =>
+      ['channels', 'discord-channels', env, guild] as const,
+    discordConnect: (id: string) => ['channels', 'discord-connect', id] as const,
+    actionLists: () => ['channels', 'actions'] as const,
+    actions: (params?: KeyParams) => ['channels', 'actions', stableParams(params)] as const,
     deliveryLists: () => ['channels', 'deliveries'] as const,
     deliveries: (params?: KeyParams) => ['channels', 'deliveries', stableParams(params)] as const,
     delivery: (seq: number) => ['channels', 'delivery', seq] as const,

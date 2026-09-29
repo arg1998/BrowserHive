@@ -5,8 +5,9 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { NotificationContentLevel } from '@browserhive/contracts/enums';
 import { PREVIEW_SAMPLES, type PreviewSample } from '@browserhive/contracts/notifications';
-import { CHANNEL_RENDERERS } from '../../src/infra/notifications/index.ts';
+import { CHANNEL_RENDERERS, telegramClassicRenderer } from '../../src/infra/notifications/index.ts';
 import type {
+  ChannelRenderer,
   LinkBuilder,
   PlatformMessageRef,
   RenderContext,
@@ -18,13 +19,22 @@ const UPDATE = process.env['UPDATE_GOLDENS'] === '1';
 
 const TARGETS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   telegram: { chat_id: '-1001234567890' },
+  'telegram-classic': { chat_id: '-1001234567890' },
   discord: {},
   ntfy: { server: 'https://ntfy.example.net', topic: 'bh-alerts' },
   webhook: { url: 'https://hooks.example.net/bh' },
 };
 
+/** Targets of the variants with act buttons on (a Discord bot channel, an ntfy reply topic). */
+const ACT_TARGETS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  ...TARGETS,
+  discord: { channel_id: '112233445566778899', guild_id: '998877665544332211' },
+  ntfy: { server: 'https://ntfy.example.net', topic: 'bh-alerts', reply_topic: 'bh-replies' },
+};
+
 const EDIT_REFS: Readonly<Record<string, PlatformMessageRef>> = {
-  telegram: { chat_id: -1001234567890, message_id: 101, photo: 0 },
+  telegram: { chat_id: -1001234567890, message_id: 101, photo: 0, rich: 1 },
+  'telegram-classic': { chat_id: -1001234567890, message_id: 101, photo: 0 },
   discord: { message_id: '1101', channel_id: '42' },
   ntfy: { id: 'm1', sequence_id: 'n-sample000001' },
   webhook: { notification_id: 'n-sample000001', revision: 1 },
@@ -32,7 +42,14 @@ const EDIT_REFS: Readonly<Record<string, PlatformMessageRef>> = {
 
 const IMAGE_EDIT_REFS: Readonly<Record<string, PlatformMessageRef>> = {
   ...EDIT_REFS,
-  telegram: { chat_id: -1001234567890, message_id: 101, photo: 1 },
+  telegram: {
+    chat_id: -1001234567890,
+    message_id: 101,
+    photo: 1,
+    rich: 1,
+    photo_file_id: 'photo-file-1',
+  },
+  'telegram-classic': { chat_id: -1001234567890, message_id: 101, photo: 1 },
   discord: {
     message_id: '1101',
     channel_id: '42',
@@ -49,6 +66,8 @@ interface Variant {
   readonly level?: NotificationContentLevel;
   readonly mode?: string;
   readonly edit?: boolean;
+  /** Act buttons on (D-41). */
+  readonly act?: boolean;
 }
 
 function variants(kind: string): Variant[] {
@@ -66,16 +85,48 @@ function variants(kind: string): Variant[] {
       edit: true,
     },
   );
-  if (kind === 'discord') out.push({ name: 'attention-bot', sample: 'attention', mode: 'bot' });
+  out.push(
+    { name: 'attention-act', sample: 'attention', act: true },
+    { name: 'vault-confirm-act', sample: 'vault-confirm', act: true },
+    { name: 'attention-image-act', sample: 'attention', image: 'masked', act: true },
+  );
+  if (kind === 'discord') {
+    out.push(
+      { name: 'attention-bot', sample: 'attention', mode: 'bot', act: true },
+      { name: 'attention-bot-no-act', sample: 'attention', mode: 'bot' },
+      {
+        name: 'attention-resolved-bot-edit',
+        sample: 'attention-resolved',
+        mode: 'bot',
+        act: true,
+        edit: true,
+      },
+    );
+  }
+  if (kind === 'telegram') {
+    out.push({ name: 'attention-classic-ref-edit', sample: 'attention-resolved', edit: true });
+  }
   return out;
 }
 
+/** Every renderer, plus the classic Telegram fallback (D-40) under its own golden folder. */
+const RENDERERS: [string, ChannelRenderer][] = [
+  ...CHANNEL_RENDERERS,
+  ['telegram-classic', telegramClassicRenderer],
+];
+
 describe('renderer goldens', () => {
-  for (const [kind, renderer] of CHANNEL_RENDERERS) {
+  for (const [kind, renderer] of RENDERERS) {
     for (const v of variants(kind)) {
       it(`${kind} ${v.name}`, () => {
         const mode = v.mode ?? (kind === 'discord' ? 'webhook' : null);
-        const capabilities = renderer.capabilities(mode);
+        const target = (v.act === true ? ACT_TARGETS : TARGETS)[kind] ?? {};
+        const capabilities = renderer.capabilities({
+          mode,
+          target,
+          secretRefs: {},
+          rules: v.act === true ? { act_buttons: true } : {},
+        });
         const d = delivery(v.sample, capabilities, {
           ...(v.image !== undefined && { image: v.image }),
           links: v.links ?? PUBLIC_LINKS,
@@ -83,13 +134,15 @@ describe('renderer goldens', () => {
         });
         const context: RenderContext = {
           mode,
-          target: TARGETS[kind] ?? {},
+          target,
           op: v.edit === true ? 'edit' : 'send',
           ref:
             v.edit === true
-              ? ((v.image === undefined ? EDIT_REFS : IMAGE_EDIT_REFS)[kind] ?? null)
+              ? v.name === 'attention-classic-ref-edit'
+                ? (EDIT_REFS['telegram-classic'] ?? null)
+                : ((v.image === undefined ? EDIT_REFS : IMAGE_EDIT_REFS)[kind] ?? null)
               : null,
-          actToken: () => 'bh1:preview',
+          actToken: (id) => `bh1:preview-${id}`,
         };
         const body = { kind, variant: v.name, mode, requests: renderer.render(d, context) };
         const dir = join(GOLDEN_DIR, kind);

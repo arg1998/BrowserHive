@@ -1,7 +1,9 @@
 name: notify-live
 
-# Live notification check (spec 09 §8): real Telegram, a Discord webhook and ntfy, through the
-# real adapters: send with a screenshot, read back where the platform allows, edit, delete. It
+# Live notification check (spec 09 §8): real Telegram (a Rich Message with act buttons), a Discord
+# webhook, a Discord bot (gateway and interactive buttons) and ntfy (with a reply-topic round
+# trip), through the real adapters: send with a screenshot, read back where the platform allows,
+# edit, delete. It
 # guards against the fakes drifting from the platforms. Runs weekly, on dispatch, and on pull
 # requests labelled `live-notify` from this repository (never from forks). The `notify-live`
 # environment holds the secrets and needs the owner's approval. A platform whose secrets are not
@@ -47,6 +49,8 @@ jobs:
           TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          DISCORD_CHANNEL_ID: ${{ secrets.DISCORD_CHANNEL_ID }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
         run: bun scripts/notify-live.ts
       - name: Open or update the drift issue

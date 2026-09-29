@@ -5,7 +5,7 @@
   "requests": [
     {
       "method": "POST",
-      "path": "{secret:webhook}?wait=true&with_components=true",
+      "path": "/channels/112233445566778899/messages",
       "encoding": "json",
       "body": {
         "content": null,
@@ -26,13 +26,13 @@
                 "type": 2,
                 "style": 2,
                 "label": "Mark resolved",
-                "custom_id": "bh1:preview"
+                "custom_id": "bh1:preview-resolve"
               },
               {
                 "type": 2,
                 "style": 4,
                 "label": "Reject",
-                "custom_id": "bh1:preview"
+                "custom_id": "bh1:preview-reject"
               }
             ]
           }

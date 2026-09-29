@@ -1,7 +1,11 @@
 /** @module ports/notification-channel — the delivery seam for notifications (D-16, D-32, spec 03 §9.3): what a channel can render, and send / edit / delete of one platform message. The in-app inbox and every platform adapter implement it. */
 
+import type { NotificationListenerState } from '@browserhive/contracts/enums';
 import type { Notification } from '@browserhive/contracts/http';
-import type { NotificationMessage } from '@browserhive/contracts/notifications';
+import type {
+  NotificationChannelRules,
+  NotificationMessage,
+} from '@browserhive/contracts/notifications';
 import type { PlatformMessageRef } from './persistence/records-notifications.ts';
 
 export type { PlatformMessageRef } from './persistence/records-notifications.ts';
@@ -57,6 +61,12 @@ export interface ChannelDelivery {
    * adapters never receive it and must not depend on it.
    */
   readonly inbox?: Notification;
+  /**
+   * The payload of each act button (`bh1:<token>`, D-41), by action id. Set by the outbox only
+   * when the channel receives presses and the message carries act actions; the tokens were written
+   * before the delivery was handed over.
+   */
+  readonly actTokens?: ReadonlyMap<string, string>;
 }
 
 /** What a successful send or edit returns: the platform's coordinates of the message. */
@@ -118,6 +128,76 @@ export interface NotificationChannel {
   edit?(ref: PlatformMessageRef, delivery: ChannelDelivery): Promise<ChannelSendResult>;
   /** Deletes a sent message. Required when `capabilities.delete`. */
   delete?(ref: PlatformMessageRef): Promise<void>;
+  /**
+   * The channel's press listener (Telegram poller, Discord gateway, ntfy reply topic; D-41), when
+   * act buttons are on and the platform can receive presses. Its buttons need command tokens.
+   */
+  readonly presses?: PressSource;
+}
+
+/** Who pressed an act button. */
+export interface PressActor {
+  readonly platform: 'telegram' | 'discord' | 'ntfy';
+  /** The platform user id (`null` on ntfy, which has no user identity). */
+  readonly id: string | null;
+  /** The platform's display name, when it gives one. */
+  readonly name: string | null;
+}
+
+/** One act-button press as a listener received it. */
+export interface PressEvent {
+  /** The token (the part after `bh1:`). Never logged. */
+  readonly token: string;
+  /** Where the press came from: the Telegram chat id, the Discord channel id; `null` on ntfy. */
+  readonly origin: string | null;
+  readonly actor: PressActor;
+}
+
+/** What the presser is told. */
+export interface PressAnswer {
+  /** The audit outcome, or `unknown` for a token BrowserHive never minted. */
+  readonly outcome: string;
+  /** Short text for the chat (a Telegram toast, an ephemeral Discord reply). */
+  readonly text: string;
+  /** Whether the answer is a refusal the presser should notice (a Telegram alert). */
+  readonly refused: boolean;
+}
+
+/** Handles one press: checks, runs the command, audits (D-41). Never throws. */
+export type PressHandler = (press: PressEvent) => Promise<PressAnswer>;
+
+/** A press listener's state (`ChannelView.connection`). */
+export interface ListenerStatus {
+  readonly state: NotificationListenerState;
+  readonly since: number;
+  /** Why it is offline or reconnecting; `null` when connected. */
+  readonly detail: string | null;
+}
+
+/**
+ * The inbound half of a channel that accepts act buttons. Listening is outbound only (D-33): a
+ * long poll, a gateway WebSocket, a streaming subscription. Several channels on one bot share one
+ * connection, which closes shortly after its last listener stops.
+ */
+export interface PressSource {
+  /**
+   * Starts delivering this channel's presses to `handler` and state changes to `onStatus`.
+   *
+   * @returns Stops listening.
+   */
+  listen(handler: PressHandler, onStatus: (status: ListenerStatus) => void): () => void;
+  /** The current state. */
+  status(): ListenerStatus;
+}
+
+/** What a renderer needs to know about a channel's setup to declare its capabilities. */
+export interface ChannelSetup {
+  /** Discord `webhook`/`bot`; `null` elsewhere. */
+  readonly mode: string | null;
+  readonly target: Readonly<Record<string, string>>;
+  /** Secret parameter → variable name (never a value). */
+  readonly secretRefs: Readonly<Record<string, string>>;
+  readonly rules: NotificationChannelRules;
 }
 
 /**
@@ -167,8 +247,8 @@ export interface RenderContext {
  */
 export interface ChannelRenderer {
   readonly kind: string;
-  /** What this platform renders in `mode`. */
-  capabilities(mode: string | null): ChannelCapabilities;
+  /** What this platform renders for a channel set up like this (mode, act buttons). */
+  capabilities(setup: ChannelSetup): ChannelCapabilities;
   /** The request(s) for one send or edit, in order. Throws only on a programming error. */
   render(delivery: ChannelDelivery, context: RenderContext): readonly RenderedRequest[];
 }
@@ -224,6 +304,43 @@ export interface TelegramSetup {
     code: string,
     options: { readonly signal: AbortSignal; readonly deadline: number },
   ): Promise<TelegramStart | null>;
+}
+
+/** Who the Discord bot is and where it is (the bot-mode setup, D-38). */
+export interface DiscordBotIdentity {
+  readonly applicationId: string;
+  readonly botId: string;
+  readonly username: string;
+  readonly guilds: readonly { readonly id: string; readonly name: string }[];
+}
+
+/** A text channel of a Discord server. */
+export interface DiscordChannelInfo {
+  readonly id: string;
+  readonly name: string;
+  readonly type: 'text' | 'announcement';
+  readonly category: string | null;
+}
+
+/**
+ * The Discord bot-mode setup calls (spec 03 §4.8.1): the bot's identity and servers, a server's
+ * text channels, and the one-time "This is me" claim that names the operator's account.
+ */
+export interface DiscordSetup {
+  /** Throws a `ChannelSendError` (`auth` for a refused token). */
+  bot(token: string): Promise<DiscordBotIdentity>;
+  channels(token: string, guildId: string): Promise<readonly DiscordChannelInfo[]>;
+  /**
+   * Posts a "This is me" button in `channelId` and waits (over the gateway) for its press until
+   * the signal aborts or `deadline` passes; the message is deleted afterwards.
+   *
+   * @returns Who pressed it, or `null` on timeout/abort.
+   */
+  claim(
+    token: string,
+    channelId: string,
+    options: { readonly signal: AbortSignal; readonly deadline: number },
+  ): Promise<{ readonly id: string; readonly name: string } | null>;
 }
 
 /** Outcome of one HTTP probe of `<publicUrl>/health` (spec 08 §5.8). */

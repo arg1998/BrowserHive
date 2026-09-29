@@ -12,7 +12,7 @@ import { CANCELLED_MESSAGE, TIMEOUT_MESSAGE } from '../../domain/operator-reques
 import type { OperatorRequestEvents } from '../../domain/operator-requests/types.ts';
 import type { EventPublisher } from '../../ports/event-bus.ts';
 import type { DomainEvents } from '../events/catalog.ts';
-import { AttentionService } from './attention-service.ts';
+import { AttentionService, agentVisibleActor } from './attention-service.ts';
 
 /** Compile-time: the composition root's `EventBus<DomainEvents>` satisfies the broker's publisher. */
 type BusFits =
@@ -43,6 +43,15 @@ function harness(transport: 'http' | 'stdio' = 'http') {
   });
   return { clock, repos, broker, service };
 }
+
+describe('agentVisibleActor (D-09, D-41)', () => {
+  it('keeps a principal and reduces a chat actor to its platform', () => {
+    expect(agentVisibleActor('admin')).toBe('admin');
+    expect(agentVisibleActor('telegram:123456789')).toBe('telegram');
+    expect(agentVisibleActor('discord:1')).toBe('discord');
+    expect(agentVisibleActor('ntfy:topic-b')).toBe('ntfy');
+  });
+});
 
 describe('AttentionService.request', () => {
   let h: ReturnType<typeof harness>;

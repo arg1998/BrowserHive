@@ -2,7 +2,7 @@
 
 # REST API reference
 
-The admin REST API served under `/api/v1` on the same port as MCP and the dashboard when `--admin` is on (101 operations), generated from `HTTP_ENDPOINTS` in `@browserhive/contracts/http`. Request and response schemas are in the OpenAPI 3.1 document the server serves at `/api/v1/openapi.json`, with an interactive reference UI at `/api/v1/docs`.
+The admin REST API served under `/api/v1` on the same port as MCP and the dashboard when `--admin` is on (106 operations), generated from `HTTP_ENDPOINTS` in `@browserhive/contracts/http`. Request and response schemas are in the OpenAPI 3.1 document the server serves at `/api/v1/openapi.json`, with an interactive reference UI at `/api/v1/docs`.
 
 Summaries come from `packages/contracts/generated/openapi.json`.
 
@@ -176,6 +176,11 @@ Summaries come from `packages/contracts/generated/openapi.json`.
 | GET | `/api/v1/channels/env` | `checkChannelEnv` | `channels:read` | cookie, bearer | Whether each named environment variable is set in the server (never its value). |
 | POST | `/api/v1/channels/telegram/connect` | `startTelegramConnect` | `channels:write` | cookie, bearer | Start the one-tap Telegram connect: a t.me link and a 2-minute wait for /start. |
 | GET | `/api/v1/channels/telegram/connect/{connect_id}` | `getTelegramConnect` | `channels:read` | cookie, bearer | State of a Telegram connect: waiting, connected (with the chat), expired or failed. |
+| POST | `/api/v1/channels/discord/bot` | `getDiscordBot` | `channels:write` | cookie, bearer | Who the Discord bot is, its invite link (minimal permissions) and the servers it is in. |
+| POST | `/api/v1/channels/discord/channels` | `listDiscordChannels` | `channels:write` | cookie, bearer | The text channels of one of the Discord bot's servers (the channel picker). |
+| POST | `/api/v1/channels/discord/connect` | `startDiscordConnect` | `channels:write` | cookie, bearer | Link your Discord account: the bot posts a "This is me" button and waits 2 minutes for it. |
+| GET | `/api/v1/channels/discord/connect/{connect_id}` | `getDiscordConnect` | `channels:read` | cookie, bearer | State of a Discord account link: waiting, connected (with the user), expired, failed. |
+| GET | `/api/v1/channels/actions` | `listChannelActions` | `channels:read` | cookie, bearer | The act-button audit newest first: who pressed what, from which chat, and the outcome. |
 | GET | `/api/v1/channels/{channel_id}` | `getChannel` | `channels:read` | cookie, bearer | One channel. |
 | PATCH | `/api/v1/channels/{channel_id}` | `updateChannel` | `channels:write` | cookie, bearer | Edit a dashboard channel (startup channels are read-only). |
 | DELETE | `/api/v1/channels/{channel_id}` | `deleteChannel` | `channels:write` | cookie, bearer | Delete a dashboard channel and its delivery log. |

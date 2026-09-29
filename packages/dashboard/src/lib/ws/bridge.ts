@@ -494,6 +494,36 @@ function upsertDelivery(qc: QueryClient, row: Record<string, unknown>): void {
   }
 }
 
+/**
+ * `action.recorded`: prepend the audited press on the first page of every cached act-button audit
+ * list whose filters it matches (newest first by `seq`; later pages refetch on navigation).
+ */
+function upsertAction(qc: QueryClient, row: Record<string, unknown>): void {
+  for (const [key, data] of qc.getQueriesData({ queryKey: keys.channels.actionLists() })) {
+    if (!isCachedPage(data)) continue;
+    const params = key[key.length - 1];
+    if (isRecord(params)) {
+      if (params['channel_id'] !== undefined && params['channel_id'] !== row['channel_id'])
+        continue;
+      if (
+        params['notification_id'] !== undefined &&
+        params['notification_id'] !== row['notification_id']
+      ) {
+        continue;
+      }
+      if (!inList(params['outcome'], row['outcome'])) continue;
+      if (params['page'] !== undefined && params['page'] !== 1) continue;
+    }
+    if (data.data.some((item) => item['seq'] === row['seq'])) continue;
+    const limit = isRecord(params) && typeof params['limit'] === 'number' ? params['limit'] : 50;
+    qc.setQueryData(key, {
+      ...data,
+      data: [row, ...data.data].slice(0, limit),
+      page: withTotal(data.page, 1),
+    });
+  }
+}
+
 /** The table (spec 04 §5). Add a row here for every new WS-driven update (spec 04 §15). */
 export const BRIDGE: { readonly [T in EventType]?: Patch<T> } = {
   'session.opened': ({ queryClient: qc }, { session }) => {
@@ -689,6 +719,9 @@ export const BRIDGE: { readonly [T in EventType]?: Patch<T> } = {
   },
   'delivery.updated': ({ queryClient: qc }, { delivery }) => {
     upsertDelivery(qc, delivery);
+  },
+  'action.recorded': ({ queryClient: qc }, { action }) => {
+    upsertAction(qc, action);
   },
 };
 

@@ -8,6 +8,7 @@ import {
   type ChannelRenderer,
   ChannelSendError,
   type ChannelSendResult,
+  type ChannelSetup,
   type NotificationChannel,
   type PlatformMessageRef,
   type RenderContext,
@@ -37,6 +38,18 @@ export const WEBHOOK_CAPABILITIES: ChannelCapabilities = {
   maxButtons: 5,
 };
 
+/**
+ * The capabilities of a webhook channel: with act buttons on, the `act` actions of the contract
+ * are carried as they are (no tokens); the receiver answers through the REST API (D-41).
+ *
+ * @returns The capabilities.
+ */
+export function webhookCapabilities(setup: Pick<ChannelSetup, 'rules'>): ChannelCapabilities {
+  return setup.rules.act_buttons === true
+    ? { ...WEBHOOK_CAPABILITIES, actButtons: true }
+    : WEBHOOK_CAPABILITIES;
+}
+
 /** The URL of the channel as rendered: the literal URL, or `{secret:url}` from a variable. */
 function urlOf(target: Readonly<Record<string, string>>): string {
   const literal = target['url'];
@@ -50,7 +63,7 @@ function urlOf(target: Readonly<Record<string, string>>): string {
  */
 export const webhookRenderer: ChannelRenderer = {
   kind: 'webhook',
-  capabilities: () => WEBHOOK_CAPABILITIES,
+  capabilities: webhookCapabilities,
   render(delivery: ChannelDelivery, context: RenderContext): readonly RenderedRequest[] {
     const { message, links } = delivery;
     const linkMap: Record<string, string> = {};
@@ -166,7 +179,7 @@ export function createWebhookChannel(
     id: record.channelId,
     name: record.name,
     kind: 'webhook',
-    capabilities: WEBHOOK_CAPABILITIES,
+    capabilities: webhookCapabilities(record),
     async send(delivery: ChannelDelivery): Promise<ChannelSendResult> {
       await post(delivery, 'send', null);
       return { ref: { notification_id: delivery.message.id, revision: delivery.message.revision } };

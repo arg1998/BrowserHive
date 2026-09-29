@@ -235,12 +235,21 @@ export class AttentionService {
   }
 }
 
+/**
+ * What the agent learns about who answered: a chat actor (`telegram:<user id>`, D-41) is reduced to
+ * its platform, because the agent is untrusted (D-09) and never learns the operator's chat identity.
+ */
+export function agentVisibleActor(resolvedBy: string): string {
+  const match = /^(telegram|discord|ntfy):/.exec(resolvedBy);
+  return match?.[1] ?? resolvedBy;
+}
+
 /** Projects a broker outcome onto the tool shape (`message`/`resolved_by` omitted when absent). */
 export function toAttentionOutcome(outcome: OperatorRequestOutcome): AttentionOutcome {
   return {
     status: outcome.status,
     ...(outcome.message !== null && { message: outcome.message }),
-    ...(outcome.resolvedBy !== null && { resolved_by: outcome.resolvedBy }),
+    ...(outcome.resolvedBy !== null && { resolved_by: agentVisibleActor(outcome.resolvedBy) }),
     resolved_at: outcome.resolvedAt,
     request_id: outcome.requestId,
   };

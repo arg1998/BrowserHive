@@ -5,25 +5,25 @@
   "requests": [
     {
       "method": "POST",
-      "path": "sendMessage",
+      "path": "sendRichMessage",
       "encoding": "json",
       "body": {
         "chat_id": "-1001234567890",
-        "parse_mode": "HTML",
+        "rich_message": {
+          "html": "<h3>🔴 The retention sweep failed: database is locked</h3><p>RETENTION_FAILED</p><table compact><tr><td><b>Code</b></td><td><code>RETENTION_FAILED</code></td></tr><tr><td><b>Since</b></td><td><tg-time unix=\"1790000000\" format=\"t\">14:13 UTC</tg-time></td></tr></table>",
+          "skip_entity_detection": true
+        },
         "disable_notification": false,
         "reply_markup": {
           "inline_keyboard": [
             [
               {
                 "text": "Open System",
-                "url": "https://bh.example.net/system"
+                "url": "https://bh.example.net/system",
+                "style": "primary"
               }
             ]
           ]
-        },
-        "text": "🔴 <b>The retention sweep failed: database is locked</b>\nRETENTION_FAILED\n\n<b>Code:</b> <code>RETENTION_FAILED</code>\n<b>Since:</b> <tg-time unix=\"1790000000\" format=\"t\">14:13 UTC</tg-time>",
-        "link_preview_options": {
-          "is_disabled": true
         }
       },
       "headers": {},

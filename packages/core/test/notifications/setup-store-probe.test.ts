@@ -65,8 +65,18 @@ describe('telegram setup', () => {
       chat: { id: '-1009', title: 'Ops', type: 'supergroup', threadId: '3' },
       user: { id: '77', name: 'Amir G' },
     });
+    // The shared poller acknowledges what it read with the next poll's offset.
+    const deadline = Date.now() + 2_000;
+    const acknowledged = () =>
+      fakes
+        .of('telegram')
+        .some((r) => r.path === 'getUpdates' && (r.json as { offset?: number }).offset === 12);
+    while (!acknowledged() && Date.now() < deadline) await Bun.sleep(10);
+    expect(acknowledged()).toBe(true);
     const polls = fakes.of('telegram').filter((r) => r.path === 'getUpdates');
-    expect(polls.at(-1)?.json).toMatchObject({ offset: 12 });
+    expect(polls[0]?.json).toMatchObject({
+      allowed_updates: ['message', 'callback_query', 'my_chat_member'],
+    });
   });
 
   it('gives up at the deadline and on abort', async () => {

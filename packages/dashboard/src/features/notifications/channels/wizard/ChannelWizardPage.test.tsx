@@ -5,6 +5,7 @@ import { CAPTURED } from '../../../../../test/fixtures/channels.ts';
 import { expectNoA11yViolations } from '../../../../../test/helpers/axe.ts';
 import { type RecordedRequest, renderPage } from '../../../../../test/helpers/page-harness.tsx';
 import { act, fireEvent } from '../../../../../test/helpers/render.tsx';
+import { pickOption } from '../../../../../test/helpers/select.ts';
 import { DRAFT_KEY, readDraft } from '../model.ts';
 import { wizardSearch } from '../search.ts';
 import { NewChannelPage } from './ChannelWizardPage.tsx';
@@ -21,8 +22,16 @@ async function until(check: () => boolean, timeoutMs = 3000): Promise<void> {
 }
 
 const text = () => document.body.textContent ?? '';
+/** The id of the Channel select (its label's `for`). */
+const channelTrigger = () =>
+  [...document.querySelectorAll('label')]
+    .find((l) => l.textContent === 'Channel')
+    ?.getAttribute('for') ?? '';
 
-function mount(url: string, options: { envSet?: () => boolean } = {}) {
+function mount(
+  url: string,
+  options: { envSet?: () => boolean; routes?: Record<string, unknown> } = {},
+) {
   let polls = 0;
   const created: unknown[] = [];
   const view = renderPage({
@@ -66,6 +75,7 @@ function mount(url: string, options: { envSet?: () => boolean } = {}) {
           },
         };
       },
+      ...options.routes,
     },
   });
   return { ...view, created, polls: () => polls };
@@ -87,6 +97,68 @@ const button = (label: RegExp) => {
 afterEach(() => localStorage.removeItem(DRAFT_KEY));
 
 describe('channel wizard', () => {
+  it('connects a Discord bot: invite, server and channel, "This is me"', async () => {
+    const GUILD = '111111111111111111';
+    const CHANNEL = '222222222222222222';
+    localStorage.setItem(
+      DRAFT_KEY,
+      JSON.stringify({
+        v: 1,
+        kind: 'discord',
+        mode: 'bot',
+        name: 'ops-bot',
+        target: {},
+        secretRefs: { token: 'BH_DISCORD_BOT_TOKEN' },
+        rules: { categories: ['needs-you'], act_buttons: true },
+      }),
+    );
+    let polled = 0;
+    const view = mount('/notifications/channels/new?step=connect', {
+      routes: {
+        'POST /channels/discord/bot': {
+          application_id: '333333333333333333',
+          bot_id: '333333333333333333',
+          bot_username: 'BrowserHive Bot',
+          invite_url:
+            'https://discord.com/oauth2/authorize?client_id=333333333333333333&scope=bot&permissions=52224',
+          guilds: [{ id: GUILD, name: 'Home' }],
+        },
+        'POST /channels/discord/channels': {
+          channels: [{ id: CHANNEL, name: 'alerts', type: 'text', category: null }],
+        },
+        'POST /channels/discord/connect': { connect_id: 'dx-demo-1234', expires_at: EXPIRES },
+        'GET /channels/discord/connect/dx-demo-1234': () => {
+          polled += 1;
+          return {
+            status: 'connected',
+            user: { id: '444444444444444444', name: 'Amir' },
+            error: null,
+            expires_at: EXPIRES,
+          };
+        },
+      },
+    });
+    await until(() => text().includes('BrowserHive Bot'));
+    const invite = [...document.querySelectorAll('a')].find((a) =>
+      a.textContent?.includes('Invite the bot'),
+    );
+    expect(invite?.getAttribute('href')).toContain('permissions=52224');
+    // The only server is picked; then the channel.
+    await until(() => readDraft()?.target['guild_id'] === GUILD);
+    expect(readDraft()?.target['guild_name']).toBe('Home');
+    await until(() => view.requests.some((r) => r.path.endsWith('/discord/channels')));
+    const trigger = () => document.getElementById(channelTrigger()) as HTMLElement;
+    await until(() => trigger() !== null && !trigger().hasAttribute('data-disabled'));
+    await pickOption(trigger(), '#alerts');
+    await until(() => readDraft()?.target['channel_id'] === CHANNEL);
+    expect(readDraft()?.target['channel_name']).toBe('alerts');
+    await click(button(/Send the link message/));
+    await until(() => text().includes('Connected as Amir'));
+    expect(polled).toBeGreaterThan(0);
+    expect(readDraft()?.rules.allow_list?.[0]).toBe('444444444444444444');
+    await expectNoA11yViolations(view.container);
+  }, 30_000);
+
   it('walks Telegram: platform, credentials, connect, rules', async () => {
     let set = false;
     const view = mount('/notifications/channels/new', { envSet: () => set });

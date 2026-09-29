@@ -3773,6 +3773,44 @@
                           "last_status"
                         ],
                         "additionalProperties": false
+                      },
+                      "connection": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "state": {
+                                "type": "string",
+                                "enum": [
+                                  "connecting",
+                                  "connected",
+                                  "reconnecting",
+                                  "offline"
+                                ]
+                              },
+                              "since": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "detail": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "state",
+                              "since",
+                              "detail"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       }
                     },
                     "required": [
@@ -3796,7 +3834,8 @@
                       "last_failure_at",
                       "created_at",
                       "updated_at",
-                      "stats"
+                      "stats",
+                      "connection"
                     ],
                     "additionalProperties": false
                   }
@@ -4010,6 +4049,113 @@
                 "required": [
                   "type",
                   "delivery"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "action.recorded"
+                  },
+                  "action": {
+                    "type": "object",
+                    "properties": {
+                      "seq": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "at": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "channel_id": {
+                        "type": "string"
+                      },
+                      "channel_name": {
+                        "type": "string"
+                      },
+                      "channel_kind": {
+                        "type": "string"
+                      },
+                      "notification_id": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "notification_title": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "action_id": {
+                        "type": "string"
+                      },
+                      "action_label": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "op": {
+                        "type": "string"
+                      },
+                      "actor": {
+                        "type": "string"
+                      },
+                      "actor_name": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "outcome": {
+                        "type": "string",
+                        "enum": [
+                          "done",
+                          "failed",
+                          "not_allowed",
+                          "used",
+                          "expired",
+                          "stale",
+                          "wrong_channel",
+                          "disabled"
+                        ]
+                      },
+                      "detail": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "seq",
+                      "at",
+                      "channel_id",
+                      "channel_name",
+                      "channel_kind",
+                      "notification_id",
+                      "notification_title",
+                      "action_id",
+                      "action_label",
+                      "op",
+                      "actor",
+                      "actor_name",
+                      "outcome",
+                      "detail"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "type",
+                  "action"
                 ],
                 "additionalProperties": false
               },
@@ -7826,6 +7972,44 @@
                   "last_status"
                 ],
                 "additionalProperties": false
+              },
+              "connection": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "state": {
+                        "type": "string",
+                        "enum": [
+                          "connecting",
+                          "connected",
+                          "reconnecting",
+                          "offline"
+                        ]
+                      },
+                      "since": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "detail": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "state",
+                      "since",
+                      "detail"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             },
             "required": [
@@ -7849,7 +8033,8 @@
               "last_failure_at",
               "created_at",
               "updated_at",
-              "stats"
+              "stats",
+              "connection"
             ],
             "additionalProperties": false
           }
@@ -8063,6 +8248,113 @@
         "required": [
           "type",
           "delivery"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "action.recorded"
+          },
+          "action": {
+            "type": "object",
+            "properties": {
+              "seq": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "at": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "channel_id": {
+                "type": "string"
+              },
+              "channel_name": {
+                "type": "string"
+              },
+              "channel_kind": {
+                "type": "string"
+              },
+              "notification_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "notification_title": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "action_id": {
+                "type": "string"
+              },
+              "action_label": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "op": {
+                "type": "string"
+              },
+              "actor": {
+                "type": "string"
+              },
+              "actor_name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "done",
+                  "failed",
+                  "not_allowed",
+                  "used",
+                  "expired",
+                  "stale",
+                  "wrong_channel",
+                  "disabled"
+                ]
+              },
+              "detail": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "seq",
+              "at",
+              "channel_id",
+              "channel_name",
+              "channel_kind",
+              "notification_id",
+              "notification_title",
+              "action_id",
+              "action_label",
+              "op",
+              "actor",
+              "actor_name",
+              "outcome",
+              "detail"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "type",
+          "action"
         ],
         "additionalProperties": false
       },

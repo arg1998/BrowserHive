@@ -3,8 +3,62 @@ import { CHANNEL_KIND_SPECS, type SecretParamSpec } from '@browserhive/contracts
 import type { ReactNode } from 'react';
 import { Callout } from '@/components/shared/Callout.tsx';
 import { ICONS } from '@/lib/icons.ts';
-import type { ChannelDraft } from '../model.ts';
+import { docsUrl } from '@/lib/links.ts';
+import { type ChannelDraft, CONNECT_SECRETS, modeSecrets } from '../model.ts';
 import { type EnvState, EnvVarField, LaunchInstructions, SwitchField } from './fields.tsx';
+
+const DISCORD_BOT_WHERE: ReactNode = (
+  <div className="flex flex-col gap-3 text-sm">
+    <ol className="flex list-decimal flex-col gap-2 pl-5">
+      <li>
+        Open{' '}
+        <a
+          className="text-link hover:underline"
+          href="https://discord.com/developers/applications"
+          target="_blank"
+          rel="noreferrer"
+        >
+          discord.com/developers
+        </a>{' '}
+        → <span className="font-medium">New Application</span> (name it BrowserHive) →{' '}
+        <span className="font-medium">Bot</span> tab →{' '}
+        <span className="font-medium">Reset Token</span>. Discord shows the token once: put it in
+        the variable below, never in this page.
+      </li>
+      <li>
+        Make the bot private, in this order: <span className="font-medium">Installation</span> tab →
+        Install Link → <span className="font-medium">None</span> → Save; only then{' '}
+        <span className="font-medium">Bot</span> tab → turn{' '}
+        <span className="font-medium">Public Bot</span> off → Save.
+      </li>
+      <li>
+        Leave every <span className="font-medium">Privileged Gateway Intent</span> off: button
+        presses arrive without them.
+      </li>
+    </ol>
+    <details className="rounded-lg border bg-card px-3 py-2">
+      <summary className="cursor-pointer rounded-sm font-medium focus-ring">
+        Discord says “Private application cannot have a default authorization link”
+      </summary>
+      <p className="mt-2 text-muted-foreground">
+        Public Bot was turned off while an install link was still set. Open the{' '}
+        <span className="font-medium">Installation</span> tab, set the Install Link to{' '}
+        <span className="font-medium">None</span>, Save, then turn Public Bot off again.{' '}
+        <a
+          className="text-link hover:underline"
+          href={docsUrl('discordBotTroubleshooting')}
+          target="_blank"
+          rel="noreferrer"
+        >
+          More fixes
+        </a>
+      </p>
+    </details>
+    <p className="text-muted-foreground">
+      The next step invites the bot with the least it needs and picks the channel for you.
+    </p>
+  </div>
+);
 
 const WHERE: Readonly<Record<string, ReactNode>> = {
   telegram: (
@@ -79,9 +133,10 @@ export function StepCredentials({
 }: StepCredentialsProps) {
   if (draft.kind === null) return null;
   const spec = CHANNEL_KIND_SPECS[draft.kind];
-  const params: readonly SecretParamSpec[] = spec.secrets.filter(
-    (s) => !spec.eitherTargetOrSecret.includes(s.param),
+  const params: readonly SecretParamSpec[] = modeSecrets(draft.kind, draft.mode).filter(
+    (s) => !spec.eitherTargetOrSecret.includes(s.param) && !CONNECT_SECRETS.has(s.param),
   );
+  const bot = draft.kind === 'discord' && draft.mode === 'bot';
   const names = params
     .map((p) => draft.secretRefs[p.param])
     .filter((n): n is string => n !== undefined && n !== '');
@@ -94,7 +149,7 @@ export function StepCredentials({
         className="flex flex-col gap-2 rounded-xl border bg-muted/40 p-4 dark:bg-white/[0.02]"
       >
         <h3 className="text-base font-medium">Where to get it</h3>
-        {WHERE[draft.kind]}
+        {bot ? DISCORD_BOT_WHERE : WHERE[draft.kind]}
       </section>
 
       <div className="flex flex-col gap-5">
@@ -131,7 +186,7 @@ export function StepCredentials({
           return (
             <EnvVarField
               key={p.param}
-              label={`Environment variable for the ${p.param === 'webhook' ? 'webhook URL' : p.param}`}
+              label={`Environment variable for the ${p.param === 'webhook' ? 'webhook URL' : bot ? 'bot token' : p.param}`}
               help={`${p.describe} Use any name you like; names starting with BROWSERHIVE_ are reserved for BrowserHive's own settings.`}
               value={current ?? ''}
               disabled={readOnly}

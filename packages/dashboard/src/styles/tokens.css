@@ -172,6 +172,9 @@
   --color-tg-quote: var(--tg-quote);
   --color-tg-key: var(--tg-key);
   --color-tg-key-text: var(--tg-key-text);
+  --color-tg-key-success: var(--tg-key-success);
+  --color-tg-key-danger: var(--tg-key-danger);
+  --color-tg-key-primary: var(--tg-key-primary);
   --color-dc-bg: var(--dc-bg);
   --color-dc-embed: var(--dc-embed);
   --color-dc-text: var(--dc-text);
@@ -363,6 +366,9 @@
   --tg-quote: oklch(0.6 0.13 235);
   --tg-key: oklch(0.36 0.04 150 / 0.32);
   --tg-key-text: oklch(0.99 0 0);
+  --tg-key-success: oklch(0.6 0.15 150);
+  --tg-key-danger: oklch(0.6 0.19 25);
+  --tg-key-primary: oklch(0.6 0.14 245);
   --dc-bg: oklch(0.985 0.002 270);
   --dc-embed: oklch(0.955 0.004 270);
   --dc-text: oklch(0.3 0.01 270);
@@ -500,6 +506,9 @@
   --tg-quote: oklch(0.72 0.12 235);
   --tg-key: oklch(1 0 0 / 0.12);
   --tg-key-text: oklch(0.97 0 0);
+  --tg-key-success: oklch(0.56 0.13 150);
+  --tg-key-danger: oklch(0.56 0.17 25);
+  --tg-key-primary: oklch(0.56 0.13 245);
   --dc-bg: oklch(0.27 0.008 270);
   --dc-embed: oklch(0.235 0.008 270);
   --dc-text: oklch(0.86 0.005 270);

@@ -1,5 +1,6 @@
 /** @module features/notifications/channels/wizard/StepRules — step 4: the channel's name and what it sends: preset cards (Needs me now, Problems, Wrap-ups, Everything) and an Advanced disclosure with categories, minimum severity, session globs, harness, quiet hours with a time zone, content level, screenshots per category with masking (need Full; the ntfy.sh warning), self-destruct per category (Never by default, Telegram at most 47 h) and delete-when-resolved (off by default) (D-35, D-36) */
 import type { NotificationCategory, NotificationContentLevel } from '@browserhive/contracts/enums';
+import type { ChannelConnection } from '@browserhive/contracts/http';
 import {
   CHANNEL_PRESETS,
   type NotificationChannelRules,
@@ -20,6 +21,7 @@ import {
   presetOf,
   ttlChoices,
 } from '../model.ts';
+import { ActButtonsSection } from './ActButtonsSection.tsx';
 import { Field, SwitchField } from './fields.tsx';
 import { RadioCard } from './StepPlatform.tsx';
 
@@ -67,6 +69,10 @@ export interface StepRulesProps {
   readonly onRules: (rules: NotificationChannelRules) => void;
   readonly errors: Readonly<Record<string, string>>;
   readonly readOnly: boolean;
+  /** The saved channel's press listener, when editing. */
+  readonly connection?: ChannelConnection | null;
+  /** Opens another wizard step (the act-button blockers point at Platform or Connect). */
+  readonly onStep?: (step: 'platform' | 'connect') => void;
 }
 
 function PerCategorySwitches({
@@ -109,11 +115,22 @@ function PerCategorySwitches({
 }
 
 /** Step 4. */
-export function StepRules({ draft, onName, onRules, errors, readOnly }: StepRulesProps) {
+export function StepRules({
+  draft,
+  onName,
+  onRules,
+  errors,
+  readOnly,
+  connection = null,
+  onStep,
+}: StepRulesProps) {
   const rules = draft.rules;
   const preset = presetOf(rules);
   const [advanced, setAdvanced] = useState(
-    preset === null || Object.keys(rules).some((k) => k !== 'categories'),
+    preset === null ||
+      Object.keys(rules).some(
+        (k) => k !== 'categories' && k !== 'act_buttons' && k !== 'allow_list',
+      ),
   );
   const nameId = useId();
   const categoriesId = useId();
@@ -172,6 +189,15 @@ export function StepRules({ draft, onName, onRules, errors, readOnly }: StepRule
           <p className="text-sm text-muted-foreground">Custom categories, set under Advanced.</p>
         ) : null}
       </fieldset>
+
+      <ActButtonsSection
+        draft={draft}
+        onRules={onRules}
+        errors={errors}
+        readOnly={readOnly}
+        connection={connection}
+        onStep={onStep}
+      />
 
       <div className="flex flex-col gap-5 rounded-xl border">
         <button

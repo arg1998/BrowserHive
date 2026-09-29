@@ -1,0 +1,44 @@
+{
+  "kind": "telegram",
+  "variant": "vault-confirm-act",
+  "mode": null,
+  "requests": [
+    {
+      "method": "POST",
+      "path": "sendRichMessage",
+      "encoding": "json",
+      "body": {
+        "chat_id": "-1001234567890",
+        "rich_message": {
+          "html": "<h3>⚠️ Vault fill awaiting confirm</h3><p>entry github — approve or deny the release</p><table compact><tr><td><b>Entry</b></td><td><code>github</code></td></tr><tr><td><b>Session</b></td><td><a href=\"https://bh.example.net/sessions/checkout-a1b2c3d4\">checkout</a></td></tr><tr><td><b>Page</b></td><td><code>https://github.com/login</code></td></tr><tr><td><b>Tool</b></td><td><code>vault_fill</code></td></tr><tr><td><b>Waiting since</b></td><td><tg-time unix=\"1790000000\" format=\"t\">14:13 UTC</tg-time></td></tr></table>",
+          "skip_entity_detection": true
+        },
+        "disable_notification": false,
+        "reply_markup": {
+          "inline_keyboard": [
+            [
+              {
+                "text": "Approve",
+                "callback_data": "bh1:preview-approve",
+                "style": "success"
+              },
+              {
+                "text": "Deny",
+                "callback_data": "bh1:preview-deny",
+                "style": "danger"
+              }
+            ],
+            [
+              {
+                "text": "Review",
+                "url": "https://bh.example.net/vault?tab=confirm"
+              }
+            ]
+          ]
+        }
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}

@@ -5,25 +5,25 @@
   "requests": [
     {
       "method": "POST",
-      "path": "sendMessage",
+      "path": "sendRichMessage",
       "encoding": "json",
       "body": {
         "chat_id": "-1001234567890",
-        "parse_mode": "HTML",
+        "rich_message": {
+          "html": "<h3>⚠️ Vault fill awaiting confirm</h3><p>entry github — approve or deny the release</p><table compact><tr><td><b>Entry</b></td><td><code>github</code></td></tr><tr><td><b>Session</b></td><td><a href=\"https://bh.example.net/sessions/checkout-a1b2c3d4\">checkout</a></td></tr><tr><td><b>Page</b></td><td><code>https://github.com/login</code></td></tr><tr><td><b>Tool</b></td><td><code>vault_fill</code></td></tr><tr><td><b>Waiting since</b></td><td><tg-time unix=\"1790000000\" format=\"t\">14:13 UTC</tg-time></td></tr></table>",
+          "skip_entity_detection": true
+        },
         "disable_notification": false,
         "reply_markup": {
           "inline_keyboard": [
             [
               {
                 "text": "Review in BrowserHive",
-                "url": "https://bh.example.net/vault?tab=confirm"
+                "url": "https://bh.example.net/vault?tab=confirm",
+                "style": "primary"
               }
             ]
           ]
-        },
-        "text": "⚠️ <b>Vault fill awaiting confirm</b>\nentry github — approve or deny the release\n\n<b>Entry:</b> <code>github</code>\n<b>Session:</b> <a href=\"https://bh.example.net/sessions/checkout-a1b2c3d4\">checkout</a>\n<b>Page:</b> <code>https://github.com/login</code>\n<b>Tool:</b> <code>vault_fill</code>\n<b>Waiting since:</b> <tg-time unix=\"1790000000\" format=\"t\">14:13 UTC</tg-time>",
-        "link_preview_options": {
-          "is_disabled": true
         }
       },
       "headers": {},

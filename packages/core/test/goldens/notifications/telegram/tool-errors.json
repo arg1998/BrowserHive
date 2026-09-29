@@ -5,25 +5,25 @@
   "requests": [
     {
       "method": "POST",
-      "path": "sendMessage",
+      "path": "sendRichMessage",
       "encoding": "json",
       "body": {
         "chat_id": "-1001234567890",
-        "parse_mode": "HTML",
+        "rich_message": {
+          "html": "<h3>⚠️ checkout · 3 tool errors</h3><p>navigate · NAVIGATION_TIMEOUT (30000 ms)</p><table compact><tr><td><b>Session</b></td><td><a href=\"https://bh.example.net/sessions/checkout-a1b2c3d4\">checkout</a></td></tr><tr><td><b>Errors</b></td><td>3</td></tr><tr><td><b>Latest</b></td><td><code>navigate · NAVIGATION_TIMEOUT</code></td></tr><tr><td><b>Duration</b></td><td>30 s</td></tr></table>",
+          "skip_entity_detection": true
+        },
         "disable_notification": true,
         "reply_markup": {
           "inline_keyboard": [
             [
               {
                 "text": "Open errors",
-                "url": "https://bh.example.net/sessions/checkout-a1b2c3d4?kinds=tool&errors_only=1"
+                "url": "https://bh.example.net/sessions/checkout-a1b2c3d4?kinds=tool&errors_only=1",
+                "style": "primary"
               }
             ]
           ]
-        },
-        "text": "⚠️ <b>checkout · 3 tool errors</b>\nnavigate · NAVIGATION_TIMEOUT (30000 ms)\n\n<b>Session:</b> <a href=\"https://bh.example.net/sessions/checkout-a1b2c3d4\">checkout</a>\n<b>Errors:</b> 3\n<b>Latest:</b> <code>navigate · NAVIGATION_TIMEOUT</code>\n<b>Duration:</b> 30 s",
-        "link_preview_options": {
-          "is_disabled": true
         }
       },
       "headers": {},

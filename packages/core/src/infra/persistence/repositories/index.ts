@@ -13,6 +13,11 @@ import { SqliteBlocklistAuditRepository } from './blocklist-audit.ts';
 import { SqliteEventLogRepository } from './event-log.ts';
 import { SqliteCredentialRepository, SqlitePrincipalRepository } from './identity.ts';
 import {
+  SqliteNotificationActionRepository,
+  SqliteNotificationActionTokenRepository,
+  SqliteNotificationCursorRepository,
+} from './notification-actions.ts';
+import {
   SqliteNotificationChannelMessageRepository,
   SqliteNotificationChannelRepository,
   SqliteNotificationDeliveryRepository,
@@ -60,6 +65,9 @@ export function createRepositories(db: Kysely<DB>): Repositories {
     notificationChannels: new SqliteNotificationChannelRepository(db),
     notificationDeliveries: new SqliteNotificationDeliveryRepository(db),
     notificationChannelMessages: new SqliteNotificationChannelMessageRepository(db),
+    notificationActionTokens: new SqliteNotificationActionTokenRepository(db),
+    notificationActions: new SqliteNotificationActionRepository(db),
+    notificationCursors: new SqliteNotificationCursorRepository(db),
     preferences: new SqlitePreferenceRepository(db),
     systemEvents: new SqliteSystemEventRepository(db),
     idempotency: new SqliteIdempotencyRepository(db),

@@ -5,8 +5,10 @@ import {
   BlockedSource,
   ClosedReason,
   LogLevel,
+  NotificationActionOutcome,
   NotificationChannelStatus,
   NotificationDeliveryStatus,
+  NotificationListenerState,
   NotificationState,
   NotificationType,
   OperatorRequestStatus,
@@ -20,10 +22,12 @@ import {
   VaultAccessResult,
 } from '@browserhive/contracts/http';
 import {
+  ACTION_OUTCOME,
   BLOCKED_SOURCE,
   CHANNEL_STATUS,
   CLOSED_REASON_STATE,
   DELIVERY_STATUS,
+  LISTENER_STATE,
   LOG_LEVEL,
   leaseTone,
   NOTIFICATION_STATE,
@@ -66,6 +70,8 @@ describe('status registry', () => {
     expectCovers(CHANNEL_STATUS, NotificationChannelStatus.options);
     expectCovers(DELIVERY_STATUS, NotificationDeliveryStatus.options);
     expectCovers(PUBLIC_URL_OUTCOME, PublicUrlOutcome.options);
+    expectCovers(ACTION_OUTCOME, NotificationActionOutcome.options);
+    expectCovers(LISTENER_STATE, NotificationListenerState.options);
     for (const reason of ClosedReason.options)
       expect(SESSION_STATE[CLOSED_REASON_STATE[reason]]).toBeDefined();
   });

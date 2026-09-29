@@ -1,0 +1,34 @@
+{
+  "kind": "telegram-classic",
+  "variant": "degraded",
+  "mode": null,
+  "requests": [
+    {
+      "method": "POST",
+      "path": "sendMessage",
+      "encoding": "json",
+      "body": {
+        "chat_id": "-1001234567890",
+        "parse_mode": "HTML",
+        "disable_notification": false,
+        "reply_markup": {
+          "inline_keyboard": [
+            [
+              {
+                "text": "Open System",
+                "url": "https://bh.example.net/system",
+                "style": "primary"
+              }
+            ]
+          ]
+        },
+        "text": "🔴 <b>The retention sweep failed: database is locked</b>\nRETENTION_FAILED\n\n<b>Code:</b> <code>RETENTION_FAILED</code>\n<b>Since:</b> <tg-time unix=\"1790000000\" format=\"t\">14:13 UTC</tg-time>",
+        "link_preview_options": {
+          "is_disabled": true
+        }
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}

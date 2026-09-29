@@ -432,4 +432,25 @@ describe('channels topic', () => {
       'member',
     );
   });
+
+  it('prepends an audited press on matching first pages of the Actions view', () => {
+    const qc = client();
+    const press = { seq: 7, channel_id: 'nc-a', notification_id: 'n-1', outcome: 'not_allowed' };
+    const all = keys.channels.actions({ limit: 50, page: 1 });
+    const refused = keys.channels.actions({ limit: 50, outcome: ['not_allowed'], page: 1 });
+    const done = keys.channels.actions({ limit: 50, outcome: ['done'], page: 1 });
+    const other = keys.channels.actions({ channel_id: 'nc-b', limit: 50, page: 1 });
+    const second = keys.channels.actions({ limit: 50, page: 2 });
+    for (const key of [all, refused, done, other, second]) qc.setQueryData(key, page([], 0));
+    const event = { type: 'action.recorded', action: press } as unknown as WsFeedEvent;
+    applyFeedEvent(qc, event, 'channels');
+    applyFeedEvent(qc, event, 'channels');
+    const seqs = (key: readonly unknown[]) =>
+      (qc.getQueryData(key) as { data: { seq: number }[] }).data.map((r) => r.seq);
+    expect(seqs(all)).toEqual([7]);
+    expect(seqs(refused)).toEqual([7]);
+    expect(seqs(done)).toEqual([]);
+    expect(seqs(other)).toEqual([]);
+    expect(seqs(second)).toEqual([]);
+  });
 });

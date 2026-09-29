@@ -150,6 +150,35 @@ describe('ChannelsPage', () => {
     await until(() => findCard('team') === null);
   });
 
+  it('shows who answers from the chat and the press listener', async () => {
+    const family = byName('family');
+    const team = byName('team');
+    mount({
+      'GET /channels': {
+        ...LIST,
+        data: [
+          {
+            ...family,
+            rules: { ...family.rules, act_buttons: true, allow_list: ['1', '2'] },
+            connection: { state: 'connected', since: 1, detail: null },
+          },
+          {
+            ...team,
+            mode: 'bot',
+            target: { channel_id: '9', channel_name: 'alerts', guild_name: 'Home' },
+            rules: { act_buttons: true },
+            connection: { state: 'offline', since: 1, detail: 'Discord refused the token (401)' },
+          },
+        ],
+      },
+    });
+    await until(() => findCard('team') !== null);
+    expect(within(card('family')).getByText('Answers from the chat')).toBeDefined();
+    expect(within(card('family')).getByText('2 people may answer')).toBeDefined();
+    expect(within(card('team')).getByText('Discord refused the token (401)')).toBeDefined();
+    expect(card('team').textContent).toContain('Discord bot · #alerts in Home');
+  });
+
   it('explains channels when there are none', async () => {
     mount({ 'GET /channels': { data: [], now: 1 } });
     expect(await screen.findByText('Get notified on your phone')).toBeDefined();

@@ -49,7 +49,7 @@ Outcomes:
 
 ## The operator's side
 
-A new request shows up as a notification, on the **Attention** page, and as a banner on the session's page.
+A new request shows up as a notification, on the **Attention** page, and as a banner on the session's page. With a [notification channel](notifications.md#channels) it reaches your phone too, and with act buttons on you can answer it there ([answer from your phone](notifications.md#answer-from-your-phone)); the agent's result then says `resolved_by: "telegram"` (or `discord`, `ntfy`), never your chat identity.
 
 1. Open the request. You see the reason, mode, options and how long the agent has been waiting.
 2. For `takeover` requests, click **Open live & take over**. The live view accepts your mouse, wheel, keyboard and touch input and sends it to the agent's browser. Input is allowed only while this request is open and is checked on every event.

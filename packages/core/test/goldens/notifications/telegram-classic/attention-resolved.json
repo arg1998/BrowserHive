@@ -1,0 +1,23 @@
+{
+  "kind": "telegram-classic",
+  "variant": "attention-resolved",
+  "mode": null,
+  "requests": [
+    {
+      "method": "POST",
+      "path": "sendMessage",
+      "encoding": "json",
+      "body": {
+        "chat_id": "-1001234567890",
+        "parse_mode": "HTML",
+        "disable_notification": true,
+        "text": "✅ <b>Attention requested</b>\nResolved by admin after 2m 10s\n\n<blockquote expandable>CAPTCHA on the checkout page: please solve it, then resume</blockquote>\n\n<b>Mode:</b> takeover\n<b>Session:</b> <a href=\"https://bh.example.net/sessions/checkout-a1b2c3d4\">checkout</a>\n<b>Page:</b> <code>https://shop.example.com/checkout/payment</code>\n<b>Tool:</b> <code>click</code>\n<b>Waiting since:</b> <tg-time unix=\"1790000000\" format=\"t\">14:13 UTC</tg-time>\n<b>Outcome:</b> resolved\n<b>Settled:</b> <tg-time unix=\"1790000130\" format=\"t\">14:15 UTC</tg-time>",
+        "link_preview_options": {
+          "is_disabled": true
+        }
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}

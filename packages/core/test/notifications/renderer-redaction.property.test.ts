@@ -112,7 +112,12 @@ describe('renderer redaction invariant', () => {
         if (message === null) continue;
         for (const [kind, renderer] of CHANNEL_RENDERERS) {
           for (const mode of kind === 'discord' ? ['webhook', 'bot'] : [null]) {
-            const capabilities = renderer.capabilities(mode);
+            const capabilities = renderer.capabilities({
+              mode,
+              target: { reply_topic: 'r', channel_id: '112233445566778899' },
+              secretRefs: {},
+              rules: { act_buttons: true },
+            });
             for (const level of LEVELS) {
               for (const links of [PUBLIC_LINKS, LOCAL_LINKS]) {
                 const requests = renderer.render(

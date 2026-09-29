@@ -58,7 +58,8 @@ class Sweep {
       | 'vault_access'
       | 'blocked_requests'
       | 'auth_events'
-      | 'operator_actions',
+      | 'operator_actions'
+      | 'notification_actions',
     col: string,
     cutoff: number,
   ): Promise<number> {
@@ -116,6 +117,9 @@ class Sweep {
     await this.step('auth_events', () => this.deleteWhere('auth_events', 'occurred_at', cutoff));
     await this.step('operator_actions', () =>
       this.deleteWhere('operator_actions', 'occurred_at', cutoff),
+    );
+    await this.step('notification_actions', () =>
+      this.deleteWhere('notification_actions', 'at', cutoff),
     );
     await this.step('operator_requests', async () => {
       const result = await this.ctx.db
@@ -233,6 +237,17 @@ class Sweep {
     });
   }
 
+  /** Act-button tokens (D-41) that expired before `cutoff`, used or not. */
+  async pruneActionTokens(cutoff: number): Promise<void> {
+    await this.step('notification_action_tokens', async () => {
+      const result = await this.ctx.db
+        .deleteFrom('notification_action_tokens')
+        .where('expires_at', '<', cutoff)
+        .executeTakeFirst();
+      return Number(result.numDeletedRows);
+    });
+  }
+
   async oldestTelemetryTs(): Promise<number | null> {
     const result = await sql<{ m: number | null }>`
       SELECT MIN(ts) AS m FROM (
@@ -270,6 +285,7 @@ export async function sweepRetention(
       now - (policy.notificationDays ?? 90) * DAY_MS,
     );
     await sweep.pruneNotificationDeliveries(now - (policy.notificationDeliveryDays ?? 30) * DAY_MS);
+    await sweep.pruneActionTokens(now - DAY_MS);
     await sweep.step('idempotency_keys', async () => {
       const result = await ctx.db
         .deleteFrom('idempotency_keys')

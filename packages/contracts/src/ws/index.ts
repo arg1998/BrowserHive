@@ -31,6 +31,7 @@ export {
 } from './envelope.ts';
 export type { WsFeedEventType } from './feed-events.ts';
 export {
+  ActionRecordedEvent,
   AttentionCreatedEvent,
   AttentionResolvedEvent,
   BlocklistHitEvent,

@@ -22,6 +22,7 @@ export type {
   ClosedReason,
   CredentialKind,
   McpTransport,
+  NotificationActionOutcome,
   NotificationChannelSource,
   NotificationChannelStatus,
   NotificationDeliveryOp,
@@ -52,6 +53,7 @@ export {
   CLOSED_REASONS,
   CREDENTIAL_KINDS,
   MCP_TRANSPORTS,
+  NOTIFICATION_ACTION_OUTCOMES,
   NOTIFICATION_CHANNEL_SOURCES,
   NOTIFICATION_CHANNEL_STATUSES,
   NOTIFICATION_DELIVERY_OPS,
@@ -91,6 +93,15 @@ export type {
   RetentionPolicy,
   RetentionResult,
 } from './maintenance.ts';
+export type {
+  NewNotificationAction,
+  NotificationActionListQuery,
+  NotificationActionRecord,
+  NotificationActionRepository,
+  NotificationActionTokenRecord,
+  NotificationActionTokenRepository,
+  NotificationCursorRepository,
+} from './notification-actions.ts';
 export type {
   NotificationChannelMessageRepository,
   NotificationChannelRepository,

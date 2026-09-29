@@ -1,17 +1,25 @@
-/** @module infra/notifications/telegram — the Telegram Bot API adapter (spec 03 §9.5, D-40): a pure renderer to classic `sendMessage`/`sendPhoto` with `parse_mode: HTML` and an inline keyboard, plus the transport (send, edit text or caption, delete within 48 h). */
+/** @module infra/notifications/telegram — the Telegram Bot API adapter (spec 03 §9.5, D-40, D-41): a pure renderer to Rich Messages (`sendRichMessage` / `editMessageText` with `rich_message`) with an inline keyboard of links and act buttons, the classic `sendMessage`/`sendPhoto` HTML renderer kept as the fallback, and the transport (send with fallback, edit in the message's own format, delete within 48 h, presses through the bot's update poller). */
 
-import type { Block, Inline, NotificationMessage } from '@browserhive/contracts/notifications';
+import type {
+  Block,
+  Inline,
+  NotificationAction,
+  NotificationMessage,
+} from '@browserhive/contracts/notifications';
 import { TELEGRAM_DELETE_WINDOW_MS } from '@browserhive/contracts/notifications';
+import type { Logger } from '../../ports/logger.ts';
 import {
   type ChannelCapabilities,
   type ChannelDelivery,
   type ChannelRenderer,
   ChannelSendError,
   type ChannelSendResult,
+  type ChannelSetup,
   type LinkBuilder,
   type NotificationChannel,
   type NotificationImageReader,
   type PlatformMessageRef,
+  type PressSource,
   type RenderContext,
   type RenderedRequest,
 } from '../../ports/notification-channel.ts';
@@ -29,6 +37,7 @@ import {
   firstImage,
   LOCAL_LINKS_LABEL,
   openLinks,
+  plainRun,
   SCREENSHOT_FILENAME,
   severityMark,
   utcTime,
@@ -43,15 +52,21 @@ export const TELEGRAM_CAPTION_MAX = 1024;
 /** Buttons per keyboard row: two keep labels like "Open in BrowserHive" readable on a phone. */
 const BUTTONS_PER_ROW = 2;
 
+/** Visible characters a Rich Message may hold (Bot API 10.1). */
+export const TELEGRAM_RICH_MAX = 32_768;
+/** The media id of the screenshot inside a Rich Message (`tg://photo?id=shot`). */
+export const RICH_PHOTO_ID = 'shot';
+
 /**
- * What the Telegram renderer supports. Rich blocks render natively (bold headings and labels,
- * expandable quotes, `<pre>`); tables become lists through `degrade`. The text budget leaves
- * room for the title line and the keyboard-less link section; a caption is clipped to 1024 by the
- * renderer itself.
+ * What the Telegram renderer supports. Rich Messages draw headings, tables (bordered), fields
+ * (compact tables), expandable quotes, code and footers natively (D-40); the classic fallback
+ * writes tables as lines. The text budget keeps messages readable on a phone; a classic caption is
+ * clipped to 1024 by the renderer itself. Act buttons depend on the channel's rules
+ * ({@link telegramCapabilities}).
  */
 export const TELEGRAM_CAPABILITIES: ChannelCapabilities = {
   richBlocks: true,
-  tables: false,
+  tables: true,
   images: true,
   actButtons: false,
   openLinks: true,
@@ -63,6 +78,18 @@ export const TELEGRAM_CAPABILITIES: ChannelCapabilities = {
   maxTextChars: 3500,
   maxButtons: 6,
 };
+
+/**
+ * The capabilities of a Telegram channel: act buttons when its rules switch them on (presses
+ * arrive through the bot's update poller, D-41).
+ *
+ * @returns The capabilities.
+ */
+export function telegramCapabilities(setup: Pick<ChannelSetup, 'rules'>): ChannelCapabilities {
+  return setup.rules.act_buttons === true
+    ? { ...TELEGRAM_CAPABILITIES, actButtons: true }
+    : TELEGRAM_CAPABILITIES;
+}
 
 /** Escapes text for Telegram HTML: only `<`, `>` and `&` (spec 03 §9.5). */
 export function escapeHtml(text: string): string {
@@ -196,9 +223,19 @@ function renderBlock(block: Block, links: LinkBuilder, budget: number): Frag {
       });
       return lines(out);
     }
-    case 'table':
-      // `degrade` turns tables into lists for this renderer (tables: false).
-      return EMPTY;
+    case 'table': {
+      // Rich Messages draw tables; the classic fallback writes one line per row.
+      const out: Frag[] = [];
+      let left = budget;
+      for (const row of block.rows) {
+        const cells = row.map((cell, i) => `${block.columns[i] ?? ''}: ${plainRun(cell)}`);
+        const line = plain(`• ${cells.join(' · ')}`, left);
+        if (line.visible === 0) break;
+        out.push(line);
+        left -= line.visible + 1;
+      }
+      return lines(out);
+    }
     case 'code': {
       const inner = plain(block.text, budget);
       if (block.language !== null && /^[A-Za-z0-9_+-]{1,32}$/.test(block.language)) {
@@ -284,22 +321,49 @@ function localLinks(message: NotificationMessage, links: LinkBuilder): Frag {
   ]);
 }
 
-/** The inline keyboard of a message (URL buttons; callback buttons where act buttons are on). */
+/** One inline keyboard button. */
+interface KeyboardButton {
+  text: string;
+  url?: string;
+  callback_data?: string;
+  style?: 'success' | 'danger' | 'primary';
+}
+
+/**
+ * The colour of a button: an act button's affirmative answer is green (`success`), a destructive
+ * one red; a primary link is blue. Others keep the app's default.
+ */
+function buttonStyle(action: NotificationAction): KeyboardButton['style'] | undefined {
+  if (action.style === 'danger') return 'danger';
+  if (action.style === 'primary') return action.kind === 'act' ? 'success' : 'primary';
+  return undefined;
+}
+
+/**
+ * The inline keyboard of a message: URL buttons, and a callback button for every act action (they
+ * survive `degrade` only where the channel receives presses).
+ */
 function keyboard(
   message: NotificationMessage,
   links: LinkBuilder,
-  capabilities: ChannelCapabilities,
   context: RenderContext,
-): { inline_keyboard: { text: string; url?: string; callback_data?: string }[][] } {
-  const buttons: { text: string; url?: string; callback_data?: string }[] = [];
+): { inline_keyboard: KeyboardButton[][] } {
+  const buttons: KeyboardButton[] = [];
   for (const action of message.actions) {
+    const style = buttonStyle(action);
     if (action.kind === 'open') {
-      if (!linksAsText(links)) buttons.push({ text: action.label, url: links.url(action.path) });
-    } else if (capabilities.actButtons) {
-      buttons.push({ text: action.label, callback_data: context.actToken(action.id) });
+      if (!linksAsText(links)) {
+        buttons.push({ text: action.label, url: links.url(action.path), ...(style && { style }) });
+      }
+    } else {
+      buttons.push({
+        text: action.label,
+        callback_data: context.actToken(action.id),
+        ...(style && { style }),
+      });
     }
   }
-  const rows: { text: string; url?: string; callback_data?: string }[][] = [];
+  const rows: KeyboardButton[][] = [];
   for (let i = 0; i < buttons.length; i += BUTTONS_PER_ROW) {
     rows.push(buttons.slice(i, i + BUTTONS_PER_ROW));
   }
@@ -310,21 +374,26 @@ function isPhotoRef(ref: PlatformMessageRef | null): boolean {
   return ref !== null && (ref['photo'] === 1 || ref['photo'] === '1');
 }
 
+/** Whether a message ref was sent as a Rich Message (messages from before N2 were not). */
+export function isRichRef(ref: PlatformMessageRef | null): boolean {
+  return ref !== null && (ref['rich'] === 1 || ref['rich'] === '1');
+}
+
 /**
- * The Telegram renderer: one request per send or edit.
+ * The classic Telegram renderer (the fallback, D-40): one request per send or edit.
  * - send: `sendPhoto` (multipart, caption ≤ 1024) when the message carries a screenshot, else
  *   `sendMessage` (≤ 4096);
  * - edit: `editMessageCaption` for a photo message, else `editMessageText`, always with the
  *   keyboard (an empty one removes the buttons).
  */
-export const telegramRenderer: ChannelRenderer = {
+export const telegramClassicRenderer: ChannelRenderer = {
   kind: 'telegram',
-  capabilities: () => TELEGRAM_CAPABILITIES,
+  capabilities: telegramCapabilities,
   render(delivery: ChannelDelivery, context: RenderContext): readonly RenderedRequest[] {
     const { message, links } = delivery;
     const chat = context.target['chat_id'] ?? '';
     const thread = context.target['thread_id'];
-    const markup = keyboard(message, links, TELEGRAM_CAPABILITIES, context);
+    const markup = keyboard(message, links, context);
     if (context.op === 'edit' && context.ref !== null) {
       const photo = isPhotoRef(context.ref);
       const html = telegramHtml(message, links, photo ? TELEGRAM_CAPTION_MAX : TELEGRAM_TEXT_MAX);
@@ -395,6 +464,219 @@ export const telegramRenderer: ChannelRenderer = {
   },
 };
 
+// ---------------------------------------------------------------------------------------------
+// Rich Messages (D-40)
+// ---------------------------------------------------------------------------------------------
+
+/** Rich HTML text: escaped, newlines kept as `<br>`. */
+function richText(text: string): string {
+  return escapeHtml(text).replace(/\r?\n/g, '<br>');
+}
+
+/** One inline node as Rich HTML. */
+function richNode(node: Inline, links: LinkBuilder): string {
+  switch (node.type) {
+    case 'text':
+      return richText(node.text);
+    case 'bold':
+      return `<b>${richText(node.text)}</b>`;
+    case 'italic':
+      return `<i>${richText(node.text)}</i>`;
+    case 'code':
+      return `<code>${escapeHtml(node.text)}</code>`;
+    case 'link':
+      return linksAsText(links)
+        ? richText(node.text)
+        : `<a href="${escapeAttr(links.url(node.path))}">${richText(node.text)}</a>`;
+    case 'time': {
+      const format = node.style === 'relative' ? 'r' : 't';
+      return `<tg-time unix="${Math.floor(node.at / 1000)}" format="${format}">${escapeHtml(utcTime(node.at))}</tg-time>`;
+    }
+  }
+}
+
+/** One inline run as Rich HTML. */
+function richInline(run: readonly Inline[], links: LinkBuilder): string {
+  return run.map((node) => richNode(node, links)).join('');
+}
+
+/** One block as Rich HTML (`''` when it has nothing to show). */
+function richBlock(block: Block, links: LinkBuilder): string {
+  switch (block.type) {
+    case 'text': {
+      const inner = richInline(block.content, links);
+      return inner === '' ? '' : `<p>${inner}</p>`;
+    }
+    case 'heading':
+      return block.text.trim() === '' ? '' : `<h4>${richText(block.text)}</h4>`;
+    case 'fields':
+      return `<table compact>${block.items
+        .map(
+          (item) =>
+            `<tr><td><b>${richText(item.label)}</b></td><td>${richInline(item.value, links) || '—'}</td></tr>`,
+        )
+        .join('')}</table>`;
+    case 'quote': {
+      const inner = richInline(block.content, links);
+      if (inner === '') return '';
+      return block.collapsible
+        ? `<blockquote expandable>${inner}</blockquote>`
+        : `<blockquote>${inner}</blockquote>`;
+    }
+    case 'list': {
+      const tag = block.ordered ? 'ol' : 'ul';
+      return `<${tag}>${block.items.map((item) => `<li>${richInline(item, links)}</li>`).join('')}</${tag}>`;
+    }
+    case 'table': {
+      const head = `<tr>${block.columns.map((c) => `<th>${richText(c)}</th>`).join('')}</tr>`;
+      const rows = block.rows
+        .map(
+          (row) => `<tr>${row.map((cell) => `<td>${richInline(cell, links)}</td>`).join('')}</tr>`,
+        )
+        .join('');
+      return `<table bordered striped compact>${head}${rows}</table>`;
+    }
+    case 'code': {
+      const code = escapeHtml(block.text);
+      if (block.language !== null && /^[A-Za-z0-9_+-]{1,32}$/.test(block.language)) {
+        return `<pre><code class="language-${block.language}">${code}</code></pre>`;
+      }
+      return `<pre>${code}</pre>`;
+    }
+    case 'divider':
+      return '<hr/>';
+    case 'footer': {
+      const inner = richInline(block.content, links);
+      return inner === '' ? '' : `<footer>${inner}</footer>`;
+    }
+    case 'image':
+      return '';
+  }
+}
+
+/**
+ * The Rich HTML of a message (D-40): the title as a heading with its severity or outcome mark,
+ * the summary, the screenshot (a media block named {@link RICH_PHOTO_ID}), the blocks, and the
+ * links as text when they only open on this computer.
+ *
+ * @returns The `rich_message.html` value.
+ */
+export function telegramRichHtml(
+  message: NotificationMessage,
+  links: LinkBuilder,
+  withImage: boolean,
+): string {
+  const parts: string[] = [`<h3>${richText(`${severityMark(message)} ${message.title}`)}</h3>`];
+  const summary = message.summary.trim();
+  if (summary !== '' && summary !== message.title) parts.push(`<p>${richText(summary)}</p>`);
+  if (withImage) parts.push(`<img src="tg://photo?id=${RICH_PHOTO_ID}"/>`);
+  for (const block of bodyBlocks(message)) {
+    const html = richBlock(block, links);
+    if (html !== '') parts.push(html);
+  }
+  if (linksAsText(links)) {
+    const resolved = openLinks(message, links);
+    if (resolved.length > 0) {
+      const title = links.local ? `🖥 ${LOCAL_LINKS_LABEL}` : '🔗 Links';
+      parts.push(
+        `<p><b>${richText(title)}</b><br>${resolved
+          .map((l) => `${richText(l.label)}: <code>${escapeHtml(l.url)}</code>`)
+          .join('<br>')}</p>`,
+      );
+    }
+  }
+  let html = parts.join('');
+  // The text budget of `degrade` keeps messages far below the limit; this is the last guard.
+  while (html.length > TELEGRAM_RICH_MAX - 64 && parts.length > 2) {
+    parts.splice(parts.length - 2, 1);
+    html = parts.join('');
+  }
+  return html;
+}
+
+/**
+ * The Telegram renderer (D-40): one Rich Message request per send or edit.
+ * - send: `sendRichMessage` (JSON; multipart with the screenshot as `attach://shot` when the
+ *   message carries one);
+ * - edit: `editMessageText` with `rich_message`, the screenshot re-used by the `file_id` stored in
+ *   the ref (or uploaded again), and the keyboard (an empty one removes the buttons). A message
+ *   sent classic (its ref has no `rich: 1`) is edited by the classic renderer.
+ */
+export const telegramRenderer: ChannelRenderer = {
+  kind: 'telegram',
+  capabilities: telegramCapabilities,
+  render(delivery: ChannelDelivery, context: RenderContext): readonly RenderedRequest[] {
+    if (context.op === 'edit' && context.ref !== null && !isRichRef(context.ref)) {
+      return telegramClassicRenderer.render(delivery, context);
+    }
+    const { message, links } = delivery;
+    const chat = context.target['chat_id'] ?? '';
+    const thread = context.target['thread_id'];
+    const markup = keyboard(message, links, context);
+    const image = firstImage(message);
+    const html = telegramRichHtml(message, links, image !== null);
+    const fileId =
+      context.ref !== null && typeof context.ref['photo_file_id'] === 'string'
+        ? context.ref['photo_file_id']
+        : null;
+    const upload = image !== null && (context.op === 'send' || fileId === null);
+    const media =
+      image === null
+        ? undefined
+        : [
+            {
+              id: RICH_PHOTO_ID,
+              media: { type: 'photo', media: upload ? `attach://${RICH_PHOTO_ID}` : fileId },
+            },
+          ];
+    const richMessage = { html, ...(media && { media }), skip_entity_detection: true };
+    const file =
+      upload && image !== null
+        ? { ref: image.ref, name: SCREENSHOT_FILENAME, content_type: 'image/jpeg' }
+        : null;
+    if (context.op === 'edit' && context.ref !== null) {
+      return [
+        {
+          method: 'POST',
+          path: 'editMessageText',
+          encoding: file === null ? 'json' : 'multipart',
+          body: {
+            chat_id: context.ref['chat_id'] ?? chat,
+            message_id: context.ref['message_id'],
+            rich_message: richMessage,
+            reply_markup: markup,
+          },
+          headers: {},
+          file,
+        },
+      ];
+    }
+    return [
+      {
+        method: 'POST',
+        path: 'sendRichMessage',
+        encoding: file === null ? 'json' : 'multipart',
+        body: {
+          chat_id: chat,
+          ...(thread !== undefined && thread !== '' && { message_thread_id: Number(thread) }),
+          rich_message: richMessage,
+          disable_notification: !message.alert,
+          ...(markup.inline_keyboard.length > 0 && { reply_markup: markup }),
+          ...(delivery.replyTo !== null &&
+            delivery.replyTo['message_id'] !== undefined && {
+              reply_parameters: {
+                message_id: Number(delivery.replyTo['message_id']),
+                allow_sending_without_reply: true,
+              },
+            }),
+        },
+        headers: {},
+        file,
+      },
+    ];
+  },
+};
+
 /**
  * Telegram's 400 descriptions: a vanished message, one too old to delete, an unchanged edit
  * (harmless), a bot removed from the chat (auth), and a bot with a webhook set (rejected with a
@@ -437,6 +719,12 @@ export interface TelegramChannelDeps {
   readonly fetch?: FetchFn;
   /** Bot API base; the fakes pass their own. */
   readonly apiBase?: string;
+  /**
+   * The bot's update pollers (`TelegramUpdatesHub`): the channel's presses arrive through them (act
+   * buttons, D-41).
+   */
+  readonly updates?: { pressSource(token: string, chatId: string): PressSource };
+  readonly logger?: Logger;
 }
 
 function messageOf(answer: PlatformAnswer): Record<string, unknown> | null {
@@ -448,8 +736,39 @@ function messageOf(answer: PlatformAnswer): Record<string, unknown> | null {
 }
 
 /**
- * A Telegram channel: sends, edits (text or caption) and deletes through the Bot API. A missing
- * screenshot (pruned) degrades to a text message instead of failing.
+ * The `file_id` of the largest photo a sent Rich Message carries (`rich_message.blocks[].photo`),
+ * so an edit can show the screenshot again without uploading it.
+ *
+ * @returns The file id, or `null`.
+ */
+export function richPhotoFileId(sent: Record<string, unknown> | null): string | null {
+  const blocks = (sent?.['rich_message'] as { blocks?: unknown } | undefined)?.blocks;
+  const stack: unknown[] = Array.isArray(blocks) ? [...blocks] : [];
+  while (stack.length > 0) {
+    const node = stack.shift();
+    if (node === null || typeof node !== 'object') continue;
+    const photo = (node as Record<string, unknown>)['photo'];
+    if (Array.isArray(photo) && photo.length > 0) {
+      const largest = photo[photo.length - 1] as Record<string, unknown> | undefined;
+      if (typeof largest?.['file_id'] === 'string') return largest['file_id'];
+    }
+    for (const value of Object.values(node as Record<string, unknown>)) {
+      if (value !== null && typeof value === 'object') stack.push(value);
+    }
+  }
+  return null;
+}
+
+/** A rich call Telegram refused as such (a 400 on the content, or a server without the method). */
+function richRefused(err: unknown): boolean {
+  return err instanceof ChannelSendError && err.code === 'rejected';
+}
+
+/**
+ * A Telegram channel: sends Rich Messages (falling back to classic HTML when Telegram refuses one,
+ * D-40), edits each message in the format it was sent in, deletes within 48 h, and listens for its
+ * act buttons through the bot's update poller when its rules switch them on (D-41). A missing
+ * screenshot (pruned) degrades to a message without it instead of failing.
  *
  * @returns The adapter.
  */
@@ -465,16 +784,39 @@ export function createTelegramChannel(
     platform: 'Telegram',
     refine: refineTelegram,
   };
+  const capabilities = telegramCapabilities(record);
   const url = (method: string) => `${base}/bot${deps.token}/${method}`;
-  const context = (op: 'send' | 'edit', ref: PlatformMessageRef | null): RenderContext => ({
+  // A Bot API server that does not know `sendRichMessage` (404) keeps this channel classic.
+  let classicOnly = false;
+  const context = (
+    op: 'send' | 'edit',
+    ref: PlatformMessageRef | null,
+    delivery: ChannelDelivery,
+  ): RenderContext => ({
     mode: record.mode,
     target: record.target,
     op,
     ref,
-    actToken: () => {
-      throw new ChannelSendError('rejected', 'act buttons are not available on Telegram yet');
+    actToken: (id) => {
+      const payload = delivery.actTokens?.get(id);
+      if (payload === undefined)
+        throw new ChannelSendError('rejected', 'act button without a token');
+      return payload;
     },
   });
+
+  /** The delivery without its screenshot when the image is gone (pruned). */
+  async function present(delivery: ChannelDelivery): Promise<ChannelDelivery> {
+    const image = firstImage(delivery.message);
+    if (image === null || (await deps.images.read(image.ref)) !== null) return delivery;
+    return {
+      ...delivery,
+      message: {
+        ...delivery.message,
+        blocks: delivery.message.blocks.filter((b) => b.type !== 'image'),
+      },
+    };
+  }
 
   async function perform(
     request: RenderedRequest,
@@ -488,7 +830,7 @@ export function createTelegramChannel(
             url: url(request.path),
             method: request.method,
             body: multipart(request.body, {
-              field: 'photo',
+              field: request.path === 'sendPhoto' ? 'photo' : RICH_PHOTO_ID,
               bytes: image.bytes,
               name: request.file.name,
               type: image.contentType,
@@ -498,21 +840,23 @@ export function createTelegramChannel(
           options,
         );
       }
-      const { caption, ...rest } = request.body;
-      return callPlatform(
-        {
-          url: url('sendMessage'),
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            ...rest,
-            text: caption,
-            link_preview_options: { is_disabled: true },
-          }),
-          addressesMessage,
-        },
-        options,
-      );
+      if (request.path === 'sendPhoto') {
+        const { caption, ...rest } = request.body;
+        return callPlatform(
+          {
+            url: url('sendMessage'),
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              ...rest,
+              text: caption,
+              link_preview_options: { is_disabled: true },
+            }),
+            addressesMessage,
+          },
+          options,
+        );
+      }
     }
     return callPlatform(
       {
@@ -526,36 +870,89 @@ export function createTelegramChannel(
     );
   }
 
+  function sentRef(answer: PlatformAnswer, rich: boolean, image: boolean): PlatformMessageRef {
+    const sent = messageOf(answer);
+    const chat = sent !== null ? Reflect.get(sent, 'chat') : null;
+    const chatId = chat !== null && typeof chat === 'object' ? Reflect.get(chat, 'id') : undefined;
+    const messageId = sent?.['message_id'];
+    if (typeof messageId !== 'number') {
+      throw new ChannelSendError('rejected', 'Telegram answered without a message id');
+    }
+    const fileId = rich && image ? richPhotoFileId(sent) : null;
+    return {
+      chat_id:
+        typeof chatId === 'number' || typeof chatId === 'string'
+          ? chatId
+          : String(record.target['chat_id'] ?? ''),
+      message_id: messageId,
+      photo: rich ? (image ? 1 : 0) : Array.isArray(sent?.['photo']) ? 1 : 0,
+      rich: rich ? 1 : 0,
+      ...(fileId !== null && { photo_file_id: fileId }),
+    };
+  }
+
+  function fallback(err: unknown, op: 'send' | 'edit'): void {
+    if (err instanceof ChannelSendError && op === 'send' && /Telegram 404/.test(err.message)) {
+      classicOnly = true;
+    }
+    deps.logger?.warn('rich message refused', {
+      channel: record.name,
+      op,
+      code: err instanceof ChannelSendError ? err.code : 'unavailable',
+    });
+  }
+
+  const presses: PressSource | undefined =
+    capabilities.actButtons && deps.updates !== undefined
+      ? deps.updates.pressSource(deps.token, String(record.target['chat_id'] ?? ''))
+      : undefined;
+
   return {
     id: record.channelId,
     name: record.name,
     kind: 'telegram',
-    capabilities: TELEGRAM_CAPABILITIES,
-    async send(delivery: ChannelDelivery): Promise<ChannelSendResult> {
-      const [request] = telegramRenderer.render(delivery, context('send', null));
-      if (request === undefined) throw new ChannelSendError('rejected', 'nothing to send');
-      const answer = await perform(request, false);
-      const sent = messageOf(answer);
-      const chat = sent !== null ? Reflect.get(sent, 'chat') : null;
-      const chatId =
-        chat !== null && typeof chat === 'object' ? Reflect.get(chat, 'id') : undefined;
-      const messageId = sent?.['message_id'];
-      if (typeof messageId !== 'number') {
-        throw new ChannelSendError('rejected', 'Telegram answered without a message id');
+    capabilities,
+    ...(presses !== undefined && { presses }),
+    async send(input: ChannelDelivery): Promise<ChannelSendResult> {
+      const delivery = await present(input);
+      const image = firstImage(delivery.message) !== null;
+      if (!classicOnly) {
+        const [request] = telegramRenderer.render(delivery, context('send', null, delivery));
+        if (request === undefined) throw new ChannelSendError('rejected', 'nothing to send');
+        try {
+          return { ref: sentRef(await perform(request, false), true, image) };
+        } catch (err) {
+          if (!richRefused(err)) throw err;
+          fallback(err, 'send');
+        }
       }
-      return {
-        ref: {
-          chat_id:
-            typeof chatId === 'number' || typeof chatId === 'string'
-              ? chatId
-              : String(record.target['chat_id'] ?? ''),
-          message_id: messageId,
-          photo: Array.isArray(sent?.['photo']) ? 1 : 0,
-        },
-      };
+      const [request] = telegramClassicRenderer.render(delivery, context('send', null, delivery));
+      if (request === undefined) throw new ChannelSendError('rejected', 'nothing to send');
+      return { ref: sentRef(await perform(request, false), false, image) };
     },
-    async edit(ref: PlatformMessageRef, delivery: ChannelDelivery): Promise<ChannelSendResult> {
-      const [request] = telegramRenderer.render(delivery, context('edit', ref));
+    async edit(ref: PlatformMessageRef, input: ChannelDelivery): Promise<ChannelSendResult> {
+      const delivery = await present(input);
+      if (isRichRef(ref)) {
+        const [request] = telegramRenderer.render(delivery, context('edit', ref, delivery));
+        if (request === undefined) return { ref };
+        try {
+          const answer = await perform(request, true);
+          const fileId = request.file === null ? null : richPhotoFileId(messageOf(answer));
+          return { ref: fileId === null ? ref : { ...ref, photo_file_id: fileId } };
+        } catch (err) {
+          if (!richRefused(err)) throw err;
+          fallback(err, 'edit');
+        }
+        // The rich message becomes a classic text message (its screenshot is dropped).
+        const classicRef = { ...ref, photo: 0, rich: 0 };
+        const [classic] = telegramClassicRenderer.render(
+          delivery,
+          context('edit', classicRef, delivery),
+        );
+        if (classic !== undefined) await perform(classic, true);
+        return { ref: classicRef };
+      }
+      const [request] = telegramClassicRenderer.render(delivery, context('edit', ref, delivery));
       if (request === undefined) return { ref };
       await perform(request, true);
       return { ref };

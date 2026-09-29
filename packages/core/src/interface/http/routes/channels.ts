@@ -1,6 +1,8 @@
-/** @module interface/http/routes/channels — notification channels: CRUD, pause/resume, test send, preview, the delivery log, the environment check and the Telegram connect flow (spec 03 §4.8.1). */
+/** @module interface/http/routes/channels — notification channels: CRUD, pause/resume, test send, preview, the delivery log, the environment check, the Telegram connect flow, the Discord bot setup and the act-button audit (spec 03 §4.8.1). */
 
 import {
+  ActionsPage,
+  ActionsQuery,
   ChannelEnvQuery,
   ChannelEnvResponse,
   ChannelIdParams,
@@ -15,6 +17,14 @@ import {
   DeliveriesQuery,
   DeliveryDetailResponse,
   DeliverySeqParams,
+  DiscordBotInfo,
+  DiscordBotRequest,
+  DiscordChannelsRequest,
+  DiscordChannelsResponse,
+  DiscordConnectParams,
+  DiscordConnectRequest,
+  DiscordConnectResponse,
+  DiscordConnectStatus,
   OkResponse,
   TelegramConnectParams,
   TelegramConnectRequest,
@@ -128,6 +138,85 @@ export const CHANNEL_ROUTES = [
     responses: { 200: TelegramConnectStatus },
     async handler({ input, services }) {
       return reply(200, services.channels.telegramConnectStatus(input.params.connect_id));
+    },
+  }),
+  defineRoute({
+    operationId: 'getDiscordBot',
+    tags,
+    summary:
+      'Who the Discord bot is, its invite link (minimal permissions) and the servers it is in.',
+    request: { body: DiscordBotRequest },
+    responses: { 200: DiscordBotInfo },
+    errors: ['CHANNEL_NOT_READY', 'CHANNEL_PLATFORM_ERROR'],
+    rateLimit: { limit: 20, windowMs: 60_000, key: 'principal' },
+    async handler({ input, services }) {
+      return reply(200, await services.channels.discordBot(input.body.token_env));
+    },
+  }),
+  defineRoute({
+    operationId: 'listDiscordChannels',
+    tags,
+    summary: "The text channels of one of the Discord bot's servers (the channel picker).",
+    request: { body: DiscordChannelsRequest },
+    responses: { 200: DiscordChannelsResponse },
+    errors: ['CHANNEL_NOT_READY', 'CHANNEL_PLATFORM_ERROR'],
+    rateLimit: { limit: 20, windowMs: 60_000, key: 'principal' },
+    async handler({ input, services }) {
+      return reply(
+        200,
+        await services.channels.discordChannels(input.body.token_env, input.body.guild_id),
+      );
+    },
+  }),
+  defineRoute({
+    operationId: 'startDiscordConnect',
+    tags,
+    summary:
+      'Link your Discord account: the bot posts a "This is me" button and waits 2 minutes for it.',
+    request: { body: DiscordConnectRequest },
+    responses: { 200: DiscordConnectResponse },
+    errors: ['CHANNEL_NOT_READY', 'CHANNEL_PLATFORM_ERROR'],
+    rateLimit: { limit: 6, windowMs: 60_000, key: 'principal' },
+    async handler({ input, services }) {
+      return reply(
+        200,
+        await services.channels.discordConnect(input.body.token_env, input.body.channel_id),
+      );
+    },
+  }),
+  defineRoute({
+    operationId: 'getDiscordConnect',
+    tags,
+    summary:
+      'State of a Discord account link: waiting, connected (with the user), expired, failed.',
+    request: { params: DiscordConnectParams },
+    responses: { 200: DiscordConnectStatus },
+    async handler({ input, services }) {
+      return reply(200, services.channels.discordConnectStatus(input.params.connect_id));
+    },
+  }),
+  defineRoute({
+    operationId: 'listChannelActions',
+    tags,
+    summary:
+      'The act-button audit newest first: who pressed what, from which chat, and the outcome.',
+    request: { query: ActionsQuery },
+    responses: { 200: ActionsPage },
+    async handler({ input, services, ctx }) {
+      const q = input.query;
+      const page = await services.channels.actions({
+        limit: q.limit,
+        ...(q.cursor !== undefined && { cursor: q.cursor }),
+        ...(q.channel_id !== undefined && { channelId: q.channel_id }),
+        ...(q.notification_id !== undefined && { notificationId: q.notification_id }),
+        ...(q.outcome !== undefined && { outcomes: q.outcome }),
+      });
+      return reply(200, {
+        data: [...page.items],
+        page: { next_cursor: page.nextCursor, limit: q.limit },
+        applied: { filters: appliedFilters(q), sort: { key: 'seq', dir: 'desc' } },
+        meta: { now: ctx.now },
+      });
     },
   }),
   defineRoute({

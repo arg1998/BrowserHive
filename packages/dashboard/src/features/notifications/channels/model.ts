@@ -7,8 +7,10 @@ import {
   CHANNEL_PRESETS,
   type ChannelConfigProblem,
   checkChannelConfig,
+  checkChannelRules,
   type NotificationChannelRules,
   NTFY_DEFAULT_SERVER,
+  type SecretParamSpec,
   TELEGRAM_TTL_MAX_MS,
 } from '@browserhive/contracts/notifications';
 import { readStorage, removeStorage, writeStorage } from '@/lib/storage.ts';
@@ -129,6 +131,7 @@ export function rulesSummary(rules: NotificationChannelRules): string {
     parts.push(rules.mask_images === true ? 'masked screenshots' : 'screenshots');
   const ttls = Object.values(rules.ttl_ms ?? {}).filter((v): v is number => typeof v === 'number');
   if (ttls.length > 0) parts.push(`self-destruct ${formatTtl(Math.min(...ttls))}`);
+  if (rules.act_buttons === true) parts.push('answer from the chat');
   return parts.join(' · ');
 }
 
@@ -201,6 +204,11 @@ export interface ChannelDraft {
   readonly target: Readonly<Record<string, string>>;
   readonly secretRefs: Readonly<Record<string, string>>;
   readonly rules: NotificationChannelRules;
+  /**
+   * Names of the people on the allow-list, by platform user id (who connected the chat in the
+   * setup). Kept in the draft only: the API stores ids.
+   */
+  readonly people?: Readonly<Record<string, string>>;
 }
 
 /** A blank draft. */
@@ -233,6 +241,7 @@ export function readDraft(): ChannelDraft | null {
       target: { ...(d.target ?? {}) },
       secretRefs: { ...(d.secretRefs ?? {}) },
       rules: { ...(d.rules ?? {}) },
+      people: { ...(d.people ?? {}) },
     };
   } catch {
     return null;
@@ -252,8 +261,8 @@ export function clearDraft(): void {
 const TOPIC_ALPHABET = 'abcdefghijkmnpqrstuvwxyz23456789';
 
 /** A hard-to-guess ntfy topic (`bh-` + 12 random characters): on a public server the topic is the password. */
-export function randomTopic(random: () => number = Math.random): string {
-  let out = 'bh-';
+export function randomTopic(random: () => number = Math.random, prefix = 'bh-'): string {
+  let out = prefix;
   for (let i = 0; i < 12; i++) out += TOPIC_ALPHABET[Math.floor(random() * TOPIC_ALPHABET.length)];
   return out;
 }
@@ -275,6 +284,21 @@ export function suggestName(kind: string, taken: readonly string[]): string {
   return `${base}-${i}`;
 }
 
+/** Secret parameters a platform uses in `mode` (Discord's are per mode, D-38). */
+export function modeSecrets(kind: AvailableChannelKind, mode: string | null): SecretParamSpec[] {
+  const spec = CHANNEL_KIND_SPECS[kind];
+  const current = mode ?? spec.defaultMode;
+  return spec.secrets.filter((s) => s.mode === undefined || s.mode === current);
+}
+
+/** Secret parameters the Connect step edits (the topic or URL from a variable, the ntfy reply topic). */
+export const CONNECT_SECRETS: ReadonlySet<string> = new Set([
+  'topic',
+  'url',
+  'reply_topic',
+  'reply_token',
+]);
+
 /** The draft after choosing a platform: its required secrets named, defaults filled, a preset. */
 export function draftForKind(
   draft: ChannelDraft,
@@ -284,7 +308,9 @@ export function draftForKind(
   if (draft.kind === kind) return draft;
   const spec = CHANNEL_KIND_SPECS[kind];
   const secretRefs: Record<string, string> = {};
-  for (const s of spec.secrets) if (s.required) secretRefs[s.param] = s.suggestedEnv;
+  for (const s of modeSecrets(kind, spec.defaultMode)) {
+    if (s.required) secretRefs[s.param] = s.suggestedEnv;
+  }
   const target: Record<string, string> = {};
   if (kind === 'ntfy') {
     target['server'] = NTFY_DEFAULT_SERVER;
@@ -298,6 +324,37 @@ export function draftForKind(
     target,
     secretRefs,
     rules: Object.keys(draft.rules).length > 0 ? draft.rules : applyPreset({}, 'needs-me'),
+  };
+}
+
+/**
+ * The draft after switching the Discord mode (D-38): the other mode's variable and settings are
+ * replaced by this mode's, and the rules are kept (act buttons go off in webhook mode, where no
+ * press can arrive).
+ */
+export function draftForMode(draft: ChannelDraft, mode: string): ChannelDraft {
+  if (draft.kind === null || draft.mode === mode) return { ...draft, mode };
+  const spec = CHANNEL_KIND_SPECS[draft.kind];
+  const secretRefs: Record<string, string> = {};
+  for (const [param, env] of Object.entries(draft.secretRefs)) {
+    const owner = spec.secrets.find((s) => s.param === param)?.mode;
+    if (owner === undefined || owner === mode) secretRefs[param] = env;
+  }
+  for (const s of modeSecrets(draft.kind, mode)) {
+    if (s.required && secretRefs[s.param] === undefined) secretRefs[s.param] = s.suggestedEnv;
+  }
+  const target: Record<string, string> = {};
+  for (const [key, value] of Object.entries(draft.target)) {
+    const owner = spec.target.find((t) => t.key === key)?.mode;
+    if (owner === undefined || owner === mode) target[key] = value;
+  }
+  const { act_buttons: _act, ...rest } = draft.rules;
+  return {
+    ...draft,
+    mode,
+    secretRefs,
+    target,
+    rules: mode === 'bot' ? draft.rules : rest,
   };
 }
 
@@ -368,6 +425,15 @@ export function draftProblems(draft: ChannelDraft): ChannelConfigProblem[] {
     target: draft.target,
     secretRefs: draft.secretRefs,
   });
+  problems.push(
+    ...checkChannelRules({
+      kind: draft.kind,
+      mode: draft.mode,
+      target: draft.target,
+      secretRefs: draft.secretRefs,
+      rules: draft.rules,
+    }),
+  );
   if (!NAME_RE.test(draft.name)) {
     problems.push({
       field: 'name',
@@ -395,9 +461,18 @@ export function stepProblems(draft: ChannelDraft, step: WizardStep): ChannelConf
     case 'platform':
       return all.filter((p) => p.field === 'kind' || p.field === 'mode');
     case 'credentials':
-      return all.filter((p) => p.field.startsWith('secret_refs'));
+      return all.filter(
+        (p) =>
+          p.field.startsWith('secret_refs.') &&
+          !CONNECT_SECRETS.has(p.field.slice('secret_refs.'.length)),
+      );
     case 'connect':
-      return all.filter((p) => p.field.startsWith('target'));
+      return all.filter(
+        (p) =>
+          p.field.startsWith('target') ||
+          (p.field.startsWith('secret_refs.') &&
+            CONNECT_SECRETS.has(p.field.slice('secret_refs.'.length))),
+      );
     case 'rules':
       return all.filter((p) => p.field === 'name' || p.field.startsWith('rules'));
     case 'preview':
@@ -452,4 +527,28 @@ export function ntfyLinks(
 /** Whether the ntfy server is the public ntfy.sh (attachments held 3 h on a public server, D-36). */
 export function isPublicNtfy(server: string | undefined): boolean {
   return (server ?? NTFY_DEFAULT_SERVER).replace(/\/+$/, '') === NTFY_DEFAULT_SERVER;
+}
+
+/** A hard-to-guess ntfy reply topic (`bh-reply-` + 12 random characters, D-42). */
+export function randomReplyTopic(random: () => number = Math.random): string {
+  return randomTopic(random, 'bh-reply-');
+}
+
+/** A numeric platform user id (Telegram, Discord). */
+export const USER_ID_RE = /^\d{1,21}$/;
+
+/**
+ * Where a channel sends, for cards and headers: the server's `target_hint`, except for a Discord
+ * bot ("#browserhive in Home"), whose hint names no webhook variable.
+ */
+export function channelWhere(
+  channel: Pick<ChannelView, 'kind' | 'mode' | 'target' | 'target_hint'>,
+): string {
+  if (channel.kind === 'discord' && channel.mode === 'bot') {
+    const room = channel.target['channel_name'] ?? channel.target['channel_id'] ?? 'a channel';
+    const server = channel.target['guild_name'];
+    return `#${room}${server !== undefined && server !== '' ? ` in ${server}` : ''}`;
+  }
+  if (channel.kind === 'discord') return channel.target_hint.replace(/^webhook /, '');
+  return channel.target_hint;
 }

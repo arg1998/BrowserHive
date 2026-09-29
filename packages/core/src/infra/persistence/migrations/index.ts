@@ -5,6 +5,7 @@ import { notificationGroups } from './0002-notification-groups.ts';
 import { harnessIdentity } from './0003-harness-identity.ts';
 import { sessionBrowser } from './0004-session-browser.ts';
 import { notificationOutbox } from './0005-notification-outbox.ts';
+import { notificationActions } from './0006-notification-actions.ts';
 import type { Migration } from './migration.ts';
 
 export type { Migration } from './migration.ts';
@@ -16,6 +17,7 @@ export const MIGRATIONS: readonly Migration[] = [
   harnessIdentity,
   sessionBrowser,
   notificationOutbox,
+  notificationActions,
 ];
 
 /** The schema version this binary writes. */
@@ -34,10 +36,13 @@ export const TABLES: readonly string[] = [
   'operator_requests',
   'resource_samples',
   'events',
+  'notification_action_tokens',
+  'notification_actions',
   'notification_deliveries',
   'notification_channel_messages',
   'notifications',
   'notification_channels',
+  'notification_cursors',
   'sessions',
   'grants',
   'auth_sessions',

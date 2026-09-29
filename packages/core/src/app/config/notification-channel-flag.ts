@@ -12,6 +12,7 @@ import {
   CHANNEL_KIND_SPECS,
   type ChannelKindSpec,
   checkChannelConfig,
+  checkChannelRules,
   NotificationChannelName,
   type NotificationChannelRules,
   NTFY_DEFAULT_SERVER,
@@ -46,10 +47,18 @@ const RULE_PARAMS = [
   'deleteWhenResolved',
   'images',
   'maskImages',
+  'actButtons',
+  'allow',
 ] as const;
 
-/** Secret parameters that must be `env:NAME` (topic and url may also be literal). */
-const ALWAYS_SECRET: ReadonlySet<string> = new Set(['token', 'webhook', 'secret', 'password']);
+/** Secret parameters that must be `env:NAME` (topics and url may also be literal). */
+const ALWAYS_SECRET: ReadonlySet<string> = new Set([
+  'token',
+  'webhook',
+  'secret',
+  'password',
+  'reply_token',
+]);
 
 const ENV_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const QUIET_RE = /^([01]\d|2[0-3]):([0-5]\d)-([01]\d|2[0-3]):([0-5]\d)$/;
@@ -62,12 +71,19 @@ function decode(value: string): string | null {
   }
 }
 
+/** The flag parameter of a secret (`reply` for `reply_topic`). */
+function flagOf(secret: ChannelKindSpec['secrets'][number]): string {
+  return secret.flag ?? secret.param;
+}
+
 function paramsOf(spec: ChannelKindSpec): readonly string[] {
   return [
-    ...RULE_PARAMS,
-    ...spec.target.map((t) => t.param),
-    ...spec.secrets.map((s) => s.param),
-    ...(spec.modes === null ? [] : ['mode']),
+    ...new Set([
+      ...RULE_PARAMS,
+      ...spec.target.map((t) => t.param),
+      ...spec.secrets.map(flagOf),
+      ...(spec.modes === null ? [] : ['mode']),
+    ]),
   ];
 }
 
@@ -159,11 +175,15 @@ function parseOne(
     const value = eq < 0 ? '' : part.slice(eq + 1).trim();
     const known = allowed.includes(key) || /^ttl\.[a-z-]+$/.test(key);
     if (!known) {
+      // A pasted secret without its `name=` is a "key": never echo anything that is not name-like.
+      const nameLike = /^[A-Za-z][A-Za-z.-]{0,31}$/.test(key);
       problems.push(
-        withSuggestion(
-          `${nth}: unknown parameter '${key}' for ${spec.label}.`,
-          suggest(key, allowed),
-        ),
+        nameLike
+          ? withSuggestion(
+              `${nth}: unknown parameter '${key}' for ${spec.label}.`,
+              suggest(key, allowed),
+            )
+          : `${nth}: a parameter is not written as name=value (not shown: it may be a secret).`,
       );
       continue;
     }
@@ -193,15 +213,17 @@ function parseOne(
   }
   const target: Record<string, string> = {};
   const secretRefs: Record<string, string> = {};
-  // Secrets and the literal-or-variable parameters.
-  const secretParams = new Set(spec.secrets.map((s) => s.param));
-  for (const [key, value] of params) {
-    if (!secretParams.has(key)) continue;
+  // Secrets and the literal-or-variable parameters (flag parameter → secret parameter).
+  const secretByFlag = new Map(spec.secrets.map((s) => [flagOf(s), s.param]));
+  const secretParams = new Set(secretByFlag.keys());
+  for (const [flag, value] of params) {
+    const key = secretByFlag.get(flag);
+    if (key === undefined) continue;
     const fromEnv = value.startsWith('env:');
     if (!fromEnv) {
       if (ALWAYS_SECRET.has(key)) {
         problems.push(
-          `${label}: ${key} must name an environment variable (${key}=env:NAME), never contain the secret: other users of this machine can read process arguments.`,
+          `${label}: ${flag} must name an environment variable (${flag}=env:NAME), never contain the secret: other users of this machine can read process arguments.`,
         );
         continue;
       }
@@ -218,19 +240,19 @@ function parseOne(
     }
     const envName = value.slice('env:'.length);
     if (!ENV_NAME_RE.test(envName)) {
-      problems.push(`${label}: ${key}=env:NAME needs a variable name ([A-Za-z_][A-Za-z0-9_]*).`);
+      problems.push(`${label}: ${flag}=env:NAME needs a variable name ([A-Za-z_][A-Za-z0-9_]*).`);
       continue;
     }
     if (envName.startsWith(RESERVED_ENV_PREFIX)) {
       problems.push(
-        `${label}: ${key}: variables starting with ${RESERVED_ENV_PREFIX} are reserved for configuration; use another name.`,
+        `${label}: ${flag}: variables starting with ${RESERVED_ENV_PREFIX} are reserved for configuration; use another name.`,
       );
       continue;
     }
     const current = env(envName);
     if (current === undefined || current === '') {
       problems.push(
-        `${label}: ${envName} is not set (${key}=env:${envName}). Set it in the environment that starts BrowserHive.`,
+        `${label}: ${envName} is not set (${flag}=env:${envName}). Set it in the environment that starts BrowserHive.`,
       );
       continue;
     }
@@ -242,27 +264,32 @@ function parseOne(
   }
   let mode: string | null = spec.defaultMode;
   const modeParam = params.get('mode');
-  if (modeParam !== undefined) {
-    if (modeParam === 'bot') {
-      problems.push(
-        `${label}: Discord bot mode is not available in this release; use mode=webhook (the default).`,
-      );
-    } else mode = modeParam;
-  }
+  if (modeParam !== undefined) mode = modeParam;
+  const inMode = (owner: string | undefined) => owner === undefined || owner === mode;
   const rules = parseRules(params, label, kind.data, problems);
   for (const t of spec.target) {
-    if (t.required && !params.has(t.param)) problems.push(`${label}: ${t.param} is required.`);
+    if (t.required && inMode(t.mode) && !params.has(t.param)) {
+      problems.push(
+        `${label}: ${t.param} is required${t.mode === undefined ? '' : ` in ${t.mode} mode`}.`,
+      );
+    }
   }
   for (const secret of spec.secrets) {
-    if (secret.required && !params.has(secret.param)) {
-      problems.push(`${label}: ${secret.param} is required (${secret.param}=env:NAME).`);
+    const flag = flagOf(secret);
+    if (secret.required && inMode(secret.mode) && !params.has(flag)) {
+      problems.push(
+        `${label}: ${flag} is required${secret.mode === undefined ? '' : ` in ${secret.mode} mode`} (${flag}=env:NAME).`,
+      );
     }
   }
   for (const key of spec.eitherTargetOrSecret) {
     if (!params.has(key)) problems.push(`${label}: ${key} is required.`);
   }
   if (problems.length === 0) {
-    for (const problem of checkChannelConfig({ kind: kind.data, mode, target, secretRefs })) {
+    for (const problem of [
+      ...checkChannelConfig({ kind: kind.data, mode, target, secretRefs }),
+      ...checkChannelRules({ kind: kind.data, mode, target, secretRefs, rules }),
+    ]) {
       problems.push(`${label}: ${paramForField(spec, problem.field)}: ${problem.message}`);
     }
   }
@@ -282,7 +309,11 @@ function parseOne(
 }
 
 function paramForField(spec: ChannelKindSpec, field: string): string {
+  if (field === 'rules.act_buttons') return 'actButtons';
+  if (field === 'rules.allow_list') return 'allow';
   const key = field.replace(/^(target|secret_refs)\./, '');
+  const secret = spec.secrets.find((s) => s.param === key);
+  if (field.startsWith('secret_refs.') && secret !== undefined) return flagOf(secret);
   return spec.target.find((t) => t.key === key)?.param ?? key;
 }
 
@@ -418,5 +449,13 @@ function parseRules(
     if (flag === null) problems.push(`${label}: maskImages must be true or false.`);
     else rules.mask_images = flag;
   }
+  const act = params.get('actButtons');
+  if (act !== undefined) {
+    const flag = parseBool(act);
+    if (flag === null) problems.push(`${label}: actButtons must be true or false.`);
+    else rules.act_buttons = flag;
+  }
+  const allow = params.get('allow');
+  if (allow !== undefined) rules.allow_list = list(allow);
   return rules;
 }

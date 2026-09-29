@@ -1,0 +1,23 @@
+{
+  "kind": "telegram-classic",
+  "variant": "test-local",
+  "mode": null,
+  "requests": [
+    {
+      "method": "POST",
+      "path": "sendMessage",
+      "encoding": "json",
+      "body": {
+        "chat_id": "-1001234567890",
+        "parse_mode": "HTML",
+        "disable_notification": false,
+        "text": "ℹ️ <b>BrowserHive test message</b>\nThis channel works. Tap \"Open dashboard\" on your phone to check that links reach BrowserHive.\n\n<b>Sent:</b> <tg-time unix=\"1790000000\" format=\"t\">14:13 UTC</tg-time>\n<b>Kind:</b> <code>test</code>\n\n<b>🖥 Open on this computer</b>\nOpen dashboard: <code>http://127.0.0.1:9876/notifications/channels</code>",
+        "link_preview_options": {
+          "is_disabled": true
+        }
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}

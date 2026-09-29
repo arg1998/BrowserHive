@@ -1,5 +1,6 @@
-/** @module scripts/notify-live — the live notification check (`notify-live.yml`, spec 09 §8): for each platform whose secrets are present, send a real message with a screenshot through the real adapter, read it back where the platform allows, edit it, and delete it. A platform without secrets is skipped with a note. Never prints a secret. */
+/** @module scripts/notify-live — the live notification check (`notify-live.yml`, spec 09 §8): for each platform whose secrets are present, send a real message with a screenshot through the real adapter, read it back where the platform allows, edit it, and delete it; Telegram as a Rich Message with act buttons, a Discord bot (when its secrets exist) with interactive buttons and a gateway connection, and ntfy's reply topic round trip (D-40..D-42). A platform without secrets is skipped with a note. Never prints a secret. */
 
+import { randomBytes } from 'node:crypto';
 import { appendFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { PreviewSample } from '../packages/contracts/src/notifications/index.ts';
@@ -9,7 +10,9 @@ import { SAMPLE_IMAGE_REF, sampleMessage } from '../packages/core/src/app/notifi
 import {
   createDiscordChannel,
   createNtfyChannel,
+  createNtfyReplySource,
   createTelegramChannel,
+  DiscordGatewayHub,
   scrubDetail,
 } from '../packages/core/src/infra/notifications/index.ts';
 import type {
@@ -21,9 +24,12 @@ import type {
 import type { NotificationChannelRecord } from '../packages/core/src/ports/persistence/records.ts';
 
 const env = process.env;
-const SECRETS = [env['TG_BOT_TOKEN'], env['DISCORD_WEBHOOK_URL'], env['NTFY_TOPIC']].filter(
-  (v): v is string => v !== undefined && v !== '',
-);
+const SECRETS = [
+  env['TG_BOT_TOKEN'],
+  env['DISCORD_WEBHOOK_URL'],
+  env['DISCORD_BOT_TOKEN'],
+  env['NTFY_TOPIC'],
+].filter((v): v is string => v !== undefined && v !== '');
 
 /** A real JPEG, so Telegram accepts the photo. */
 const JPEG = new Uint8Array(readFileSync(join(import.meta.dir, 'fixtures', 'notify-live.jpg')));
@@ -89,18 +95,33 @@ async function telegram(): Promise<Outcome> {
       status: 'skipped',
       detail: 'TG_BOT_TOKEN or TG_CHAT_ID not set',
     };
-  const channel = createTelegramChannel(record('telegram', { chat_id: chat }), {
-    token,
-    images: IMAGES,
+  // Act buttons on (D-41): the Rich Message carries callback buttons; the tokens here are dummies
+  // that no BrowserHive knows, so a stray press is answered "no longer valid".
+  const channel = createTelegramChannel(
+    { ...record('telegram', { chat_id: chat }), rules: { act_buttons: true } },
+    { token, images: IMAGES },
+  );
+  const withTokens = (d: ChannelDelivery): ChannelDelivery => ({
+    ...d,
+    actTokens: new Map(
+      d.message.actions.filter((a) => a.kind === 'act').map((a, i) => [a.id, `bh1:LIVECHECK0${i}`]),
+    ),
   });
-  const photo = await channel.send(deliveryOf(channel, 'attention', true));
-  check(photo.ref['photo'] === 1, 'the send result is a photo message');
+  const photo = await channel.send(withTokens(deliveryOf(channel, 'attention', true)));
+  check(photo.ref['rich'] === 1, 'the send was a Rich Message (not the classic fallback)');
+  check(photo.ref['photo'] === 1, 'the Rich Message carries the screenshot');
+  check(typeof photo.ref['photo_file_id'] === 'string', 'Telegram returned the photo file id');
   await channel.edit?.(photo.ref, deliveryOf(channel, 'attention-resolved', true));
   await channel.delete?.(photo.ref);
   const text = await channel.send(deliveryOf(channel, 'tool-errors', false));
+  check(text.ref['rich'] === 1, 'the text send was a Rich Message');
   await channel.edit?.(text.ref, deliveryOf(channel, 'tool-errors', false));
   await channel.delete?.(text.ref);
-  return { platform: 'Telegram', status: 'passed', detail: 'photo and text: send, edit, delete' };
+  return {
+    platform: 'Telegram',
+    status: 'passed',
+    detail: 'Rich Messages with a screenshot and act buttons: send, edit (buttons removed), delete',
+  };
 }
 
 async function discord(): Promise<Outcome> {
@@ -118,6 +139,14 @@ async function discord(): Promise<Outcome> {
       body: (await response.json().catch(() => null)) as Record<string, unknown> | null,
     };
   };
+  // A file an embed shows (`attachment://`) moves into the embed: the message's `attachments` list
+  // stays empty and `embeds[0].image.url` points at Discord's CDN.
+  const shown = (body: Record<string, unknown> | null) => {
+    const url = ((body?.['embeds'] ?? []) as { image?: { url?: string } }[])[0]?.image?.url ?? '';
+    return (
+      /^https:\/\/(cdn|media)\.discordapp\.(com|net)\//.test(url) && url.includes('screenshot.jpg')
+    );
+  };
   const { ref } = await channel.send(deliveryOf(channel, 'attention', true));
   const id = ref['message_id'] ?? '';
   let back = await read(id);
@@ -126,15 +155,12 @@ async function discord(): Promise<Outcome> {
     back.status === 200 && (embeds[0]?.title ?? '').includes('Attention requested'),
     'the embed title',
   );
-  check(
-    ((back.body?.['attachments'] ?? []) as unknown[]).length === 1,
-    'the screenshot attachment',
-  );
+  check(shown(back.body), 'the screenshot in the embed');
   await channel.edit?.(ref, deliveryOf(channel, 'attention-resolved', true));
   back = await read(id);
   const edited = (back.body?.['embeds'] ?? []) as { title?: string }[];
   check((edited[0]?.title ?? '').startsWith('✅'), 'the edited embed');
-  check(((back.body?.['attachments'] ?? []) as unknown[]).length === 1, 'the kept attachment');
+  check(shown(back.body), 'the screenshot kept by the edit');
   await channel.delete?.(ref);
   back = await read(id);
   check(back.status === 404, 'the message is gone after delete');
@@ -143,6 +169,87 @@ async function discord(): Promise<Outcome> {
     status: 'passed',
     detail: 'send, read back, edit (screenshot kept), delete',
   };
+}
+
+async function discordBot(): Promise<Outcome> {
+  const token = env['DISCORD_BOT_TOKEN'];
+  const channelId = env['DISCORD_CHANNEL_ID'];
+  if (!token || !channelId) {
+    return {
+      platform: 'Discord bot',
+      status: 'skipped',
+      detail: 'DISCORD_BOT_TOKEN or DISCORD_CHANNEL_ID not set',
+    };
+  }
+  const gateway = new DiscordGatewayHub({ lingerMs: 0 });
+  const channel = createDiscordChannel(
+    { ...record('discord', { channel_id: channelId }), mode: 'bot', rules: { act_buttons: true } },
+    { botToken: token, images: IMAGES, gateway },
+  );
+  try {
+    const presses = channel.presses;
+    check(presses !== undefined, 'bot mode with act buttons listens for presses');
+    const states: string[] = [];
+    const stop = presses?.listen(
+      async () => ({ outcome: 'unknown', text: 'Live check: nothing to do.', refused: true }),
+      (s) => states.push(s.state),
+    );
+    for (let i = 0; i < 100 && !states.includes('connected'); i++) await Bun.sleep(100);
+    check(states.includes('connected'), 'the gateway session became Ready');
+    const d = deliveryOf(channel, 'attention', true);
+    const { ref } = await channel.send({
+      ...d,
+      actTokens: new Map(
+        d.message.actions
+          .filter((a) => a.kind === 'act')
+          .map((a, i) => [a.id, `bh1:LIVECHECK0${i}`]),
+      ),
+    });
+    // Read back through the bot API (needs Read Message History).
+    const read = async () => {
+      const response = await fetch(
+        `https://discord.com/api/v10/channels/${channelId}/messages/${ref['message_id']}`,
+        { headers: { authorization: `Bot ${token}` } },
+      );
+      return {
+        status: response.status,
+        body: (await response.json().catch(() => null)) as {
+          embeds?: { title?: string; image?: { url?: string } }[];
+          components?: { components?: { custom_id?: string }[] }[];
+        } | null,
+      };
+    };
+    const onCdn = (url: string | undefined) =>
+      /^https:\/\/(cdn|media)\.discordapp\.(com|net)\//.test(url ?? '') &&
+      (url ?? '').includes('screenshot.jpg');
+    let back = await read();
+    check(back.status === 200, 'the bot can read its message back');
+    check(onCdn(back.body?.embeds?.[0]?.image?.url), 'the screenshot in the embed');
+    const ids = (back.body?.components ?? [])
+      .flatMap((r) => r.components ?? [])
+      .map((c) => c.custom_id);
+    check(
+      ids.includes('bh1:LIVECHECK00') && ids.includes('bh1:LIVECHECK01'),
+      'the interactive buttons',
+    );
+    await channel.edit?.(ref, deliveryOf(channel, 'attention-resolved', true));
+    back = await read();
+    check((back.body?.embeds?.[0]?.title ?? '').startsWith('✅'), 'the edited embed');
+    check((back.body?.components ?? []).length === 0, 'the buttons removed by the edit');
+    check(onCdn(back.body?.embeds?.[0]?.image?.url), 'the screenshot kept by the edit');
+    await channel.delete?.(ref);
+    back = await read();
+    check(back.status === 404, 'the message is gone after delete');
+    stop?.();
+    return {
+      platform: 'Discord bot',
+      status: 'passed',
+      detail:
+        'gateway Ready (intents 0); send with screenshot and interactive buttons, read back, edit (buttons removed, screenshot kept), delete',
+    };
+  } finally {
+    gateway.stop();
+  }
 }
 
 async function ntfy(): Promise<Outcome> {
@@ -195,10 +302,30 @@ async function ntfy(): Promise<Outcome> {
   await until('the delete event', (events) =>
     events.some((e) => e.event === 'message_delete' && e.sequence_id === sequence),
   );
+  // The reply topic (D-42): a throwaway topic B; post like the phone's `http` action does and
+  // check the subscription receives the token.
+  const reply = `bh-live-${randomBytes(9).toString('hex')}`;
+  const received: string[] = [];
+  const source = createNtfyReplySource({ server, topic: reply, token: null, cursorKey: 'live' });
+  const stop = source.listen(
+    async (p) => {
+      received.push(p.token);
+      return { outcome: 'done', text: '', refused: false };
+    },
+    () => undefined,
+  );
+  try {
+    for (let i = 0; i < 50 && source.status().state !== 'connected'; i++) await Bun.sleep(100);
+    await fetch(`${server}/${reply}`, { method: 'POST', body: 'bh1:LIVECHECK00' });
+    for (let i = 0; i < 100 && received.length === 0; i++) await Bun.sleep(100);
+    check(received[0] === 'LIVECHECK00', 'the reply topic delivered the token');
+  } finally {
+    stop();
+  }
   return {
     platform: 'ntfy',
     status: 'passed',
-    detail: `send with screenshot, replace, delete on ${new URL(server).host}`,
+    detail: `send with screenshot, replace, delete and a reply-topic round trip on ${new URL(server).host}`,
   };
 }
 
@@ -206,6 +333,7 @@ const outcomes: Outcome[] = [];
 for (const [name, run] of [
   ['Telegram', telegram],
   ['Discord', discord],
+  ['Discord bot', discordBot],
   ['ntfy', ntfy],
 ] as const) {
   try {

@@ -46,7 +46,10 @@ import { createVaultRepos } from './in-memory-vault-repos.ts';
 import { RecordingEventBus } from './recording-event-bus.ts';
 
 /** Environment the channel service sees in the HTTP suites (names only matter). */
-export const CHANNEL_ENV: Readonly<Record<string, string>> = { BH_TELEGRAM_TOKEN: 'a'.repeat(40) };
+export const CHANNEL_ENV: Readonly<Record<string, string>> = {
+  BH_TELEGRAM_TOKEN: 'a'.repeat(40),
+  BH_DISCORD_BOT_TOKEN: 'c'.repeat(40),
+};
 
 /** Operator password used by every suite. */
 export const PASSWORD = 'correct horse battery';
@@ -167,6 +170,19 @@ export async function createHttpKit(options: HttpKitOptions = {}) {
       botUsername: async () => 'bh_test_bot',
       waitForStart: async () => null,
     },
+    discord: {
+      bot: async () => ({
+        applicationId: '100000000000000001',
+        botId: '100000000000000001',
+        username: 'bh_bot',
+        guilds: [{ id: '200000000000000002', name: 'Home' }],
+      }),
+      channels: async () => [
+        { id: '300000000000000003', name: 'browserhive', type: 'text', category: 'Alerts' },
+      ],
+      claim: async () => null,
+    },
+    connection: () => null,
   });
   const publicUrl = new PublicUrlChecker({
     publicUrl: undefined,
