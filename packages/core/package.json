@@ -11,6 +11,7 @@
     "./config": "./src/app/config/index.ts",
     "./ports/*": "./src/ports/*.ts",
     "./persistence": "./src/infra/persistence/index.ts",
+    "./notifications": "./src/infra/notifications/index.ts",
     "./maintenance": "./src/app/maintenance/index.ts",
     "./runtime": "./src/public/runtime.ts",
     "./server": "./src/public/server.ts"
