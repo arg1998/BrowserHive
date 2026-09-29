@@ -90,13 +90,23 @@ Messages are an embed: a coloured bar by severity, the facts as fields, the scre
 
 **Bot mode, step by step:**
 
-1. Open the [Discord Developer Portal](https://discord.com/developers/applications) → **New Application**, name it (for example "BrowserHive").
-2. Open **Bot** → **Reset Token** → copy the token. Leave the privileged intents off: BrowserHive needs none.
-3. Put the token in a variable, for example `export BH_DISCORD_BOT_TOKEN='…'`, and restart BrowserHive.
-4. In the wizard choose **Bot**, then in **Connect**: **Invite the bot** opens Discord with the minimal permissions (View Channel, Send Messages, Embed Links, Attach Files); pick your server there. Back in the wizard, press **Refresh**, pick the server and the channel.
-5. **Link your Discord account**: the bot posts a message with a **This is me** button in that channel. Press it within two minutes; your account becomes the first one allowed to answer ([allow-list](#who-may-answer)). The bot deletes that message afterwards.
+1. **Create the bot.** Open [discord.com/developers](https://discord.com/developers/applications) → **New Application**, name it (for example "BrowserHive") → **Bot** tab → **Reset Token**. Discord shows the token once: copy it and put it in a variable where BrowserHive runs, for example `export BH_DISCORD_BOT_TOKEN='…'` (any name that does not start with `BROWSERHIVE_`), then restart BrowserHive.
+2. **Make it private** (recommended, so nobody else can add your bot to their server). The order matters: first **Installation** tab → **Install Link** → set it to **None** → **Save**; only then **Bot** tab → turn **Public Bot** off → **Save**. If you turn Public Bot off while an install link is still set, Discord refuses with *"Private application cannot have a default authorization link. Please check that the default authorization link is set to None in the installation tab."*: set the install link to None, save, and try again.
+3. **Leave every Privileged Gateway Intent off** (Bot tab). BrowserHive needs none: button presses arrive without them.
+4. **Invite the bot to your server.** In the wizard choose **Bot**; in **Connect**, **Invite the bot** opens Discord with the right link: scope `bot` and exactly the permissions BrowserHive needs, **View Channels, Send Messages, Embed Links, Attach Files**. Pick your server and **Authorize**. The link works for you even though the bot is private, because you own the application. By hand instead: Developer Portal → **OAuth2** → **URL Generator** → scope **bot** only (not `applications.commands` or anything else), **Guild Install** if asked, the four permissions above → open the generated URL → pick your server → **Authorize**. Read Message History is not needed (adding it does no harm).
+5. **Pick the channel.** Back in the wizard press **Refresh**, then pick the server and the channel from the lists (the bot fetches them). Without the wizard (a [startup channel](#startup-channels)), you need the channel id: Discord **Settings → Advanced → Developer Mode** on, then right-click the channel → **Copy Channel ID**, and pass `channel=<id>`.
+6. **Link your Discord account.** The bot posts a message with a **This is me** button in that channel. Press it within two minutes: your account becomes the first one allowed to answer ([allow-list](#who-may-answer)). The bot deletes that message afterwards. On a startup channel, list the user ids in `allow=` instead (Developer Mode → right-click your name → **Copy User ID**).
 
 The bot sends the same embed as a webhook, with **Mark resolved**/**Reject** buttons when act buttons are on. The channel card shows the gateway connection: **connected**, **reconnecting** (BrowserHive retries with growing pauses and resumes where Discord allows) or **offline** with the reason, such as a refused token.
+
+#### Troubleshooting Discord bot mode
+
+- **"Missing Access" or "Missing Permissions" when sending** (the delivery log shows `Discord 403`): the bot is not in that channel or lacks a permission there. It needs **View Channels** and **Send Messages** to post, **Embed Links** for the embed and **Attach Files** for screenshots; a channel's own permission overrides can take them away even when the server role has them. Re-run **Invite the bot**, or give the bot's role those permissions on that channel.
+- **"Unknown Channel"**: the channel was deleted, or the id belongs to another server the bot is not in. Pick the channel again.
+- **The card says offline: "Discord refused the bot token."** The token was reset or mistyped. Reset it in the Developer Portal (Bot → Reset Token), update the variable, restart BrowserHive.
+- **The card says reconnecting.** Discord or the network dropped the connection; BrowserHive reconnects by itself and resumes the session where it can. Presses made in the meantime fail on Discord's side (next point).
+- **"This interaction failed" after pressing a button.** Discord needs an answer within **3 seconds**. BrowserHive answers at once (and finishes slow commands in a follow-up), so this means BrowserHive was not running or not connected at that moment. Unlike Telegram, Discord does not keep the press: press again once the card shows connected.
+- **"Invalid Form Body"** in the delivery log names the field Discord refused; please report it as a bug.
 
 ### ntfy
 
