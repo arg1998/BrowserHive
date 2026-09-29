@@ -26,7 +26,7 @@ export function patchrightVersion(): string | null {
 
 /**
  * The OTel metrics consumers and the browser-memory sampler (spec 10 §7); only called with
- * telemetry on, so with `--otel` off nothing is subscribed, sampled or timed.
+ * `--otel` on and the `metrics` signal exported.
  */
 function wireMetricsFor(ctx: BootContext, logger: Logger): () => void {
   const { telemetry } = part(ctx.observability, 'observability');
@@ -155,7 +155,9 @@ export async function wireObserversPhase(ctx: BootContext): Promise<PhaseHandle>
     .refreshLastBackup()
     .catch((err: unknown) => logger.warn('backup scan failed', { err: serializeError(err) }));
   domain.sweeper.start();
-  const unwireMetrics = telemetry.enabled ? wireMetricsFor(ctx, logger) : () => undefined;
+  // Only with the metrics signal exported: otherwise nothing is subscribed, sampled or timed.
+  const metricsOn = telemetry.enabled && config.otelSignals.includes('metrics');
+  const unwireMetrics = metricsOn ? wireMetricsFor(ctx, logger) : () => undefined;
   ctx.observers = { status };
 
   return {
