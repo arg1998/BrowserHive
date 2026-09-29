@@ -1,9 +1,12 @@
 /** @module cli/deps — `CliDeps`: every effect the CLI performs, injected (process facts, filesystem, child processes, storage, server boot, probes) so the suites never touch the real host */
+
 import type { Channel } from '@browserhive/contracts/enums';
+import type { StartupNotificationChannel } from '@browserhive/contracts/notifications';
 import type { ConfigFs, ResolvedConfigBundle } from '@browserhive/core/config';
 import type { FileSystem } from '@browserhive/core/ports/file-system';
 import type { HostEnvironment } from '@browserhive/core/ports/host-environment';
 import type { ProcessRunner } from '@browserhive/core/ports/process-runner';
+import type { UrlProbeResult } from '@browserhive/core/runtime';
 import type {
   DetectedBrowser,
   SandboxEnvironment,
@@ -20,6 +23,10 @@ export interface ServeBootInput {
   readonly env: Readonly<Record<string, string | undefined>>;
   readonly appVersion: string;
   readonly installProcessHandlers: boolean;
+  /** Parsed `--notificationChannel` values (spec 08 §5.7). */
+  readonly startupChannels?: readonly StartupNotificationChannel[];
+  /** Warnings of those flags, logged at boot. */
+  readonly startupChannelWarnings?: readonly string[];
 }
 
 /** Structural `RunningServer` of the composition seam. */
@@ -111,6 +118,18 @@ export interface CliStorage {
   }): Promise<IssuedToken>;
   /** Revokes one token (credential id) and returns nothing. */
   revokeToken(credentialId: string): Promise<void>;
+  /**
+   * The configured notification channels (name, kind, source and the variables they name); empty
+   * for a database from before the channels table.
+   */
+  notificationChannels(): Promise<
+    readonly {
+      readonly name: string;
+      readonly kind: string;
+      readonly source: string;
+      readonly secretRefs: Readonly<Record<string, string>>;
+    }[]
+  >;
   close(): Promise<void>;
 }
 
@@ -176,6 +195,11 @@ export interface HostProbes {
   sandboxEnvironment(): Promise<SandboxEnvironment>;
   /** Whether an installed AppArmor profile names `path` (`null` off Linux or when unreadable). */
   apparmorCovers(path: string): Promise<boolean | null>;
+  /**
+   * One GET without following redirects (the `publicUrl` check): status, content type, location
+   * and at most 64 KiB of the body, or the network error.
+   */
+  fetchOnce(url: string, timeoutMs: number): Promise<UrlProbeResult>;
   /** HEAD request with a timeout; `ok` means any HTTP response arrived. */
   httpReachable(
     url: string,

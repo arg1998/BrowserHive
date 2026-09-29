@@ -1,0 +1,34 @@
+{
+  "kind": "ntfy",
+  "variant": "degraded",
+  "mode": null,
+  "requests": [
+    {
+      "method": "POST",
+      "path": "/",
+      "encoding": "json",
+      "body": {
+        "topic": "bh-alerts",
+        "title": "The retention sweep failed: database is locked",
+        "message": "RETENTION_FAILED\n\nCode: RETENTION_FAILED\nSince: 14:13 UTC",
+        "priority": 4,
+        "tags": [
+          "rotating_light"
+        ],
+        "click": "https://bh.example.net/system",
+        "actions": [
+          {
+            "action": "view",
+            "label": "Open System",
+            "url": "https://bh.example.net/system",
+            "clear": false
+          }
+        ],
+        "markdown": false,
+        "sequence_id": "n-sample000001"
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}

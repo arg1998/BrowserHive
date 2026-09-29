@@ -52,6 +52,22 @@ export interface NotificationDraft {
   readonly group?: NotificationGroup;
   /** Blocks, actions and entities of the message for a row holding `count` occurrences (1 unless grouped). */
   readonly content: (count: number) => MessageContent;
+  /**
+   * A screenshot this notification may carry (D-36): `live` captures the session's page now
+   * (attention, vault confirm: before the fill starts), `last` uses its last stored screenshot (a
+   * crash). Taken only when a channel wants it (spec 03 §9.5).
+   */
+  readonly image?: ImageRequest;
+}
+
+/** What screenshot a draft asks for. */
+export interface ImageRequest {
+  readonly sessionId: string;
+  readonly source: 'live' | 'last';
+  /** Alt text of the image block. */
+  readonly alt: string;
+  /** Dashboard page that shows the context (used where a channel cannot carry images). */
+  readonly path: string;
 }
 
 /** How a draft folds into an existing row. */
@@ -280,6 +296,12 @@ function attentionCreated(payload: DomainEvents['attention.created']): Notificat
     sourceEventId: d.request_id,
     dedupKey: `att:${d.request_id}`,
     content: () => ({ blocks, actions, entities: requestEntities(d) }),
+    image: {
+      sessionId: d.session_id,
+      source: 'live',
+      alt: 'The page when the agent asked for attention',
+      path: live,
+    },
   };
 }
 
@@ -334,6 +356,14 @@ function vaultConfirmCreated(payload: DomainEvents['vault.confirm.created']): No
     sourceEventId: d.request_id,
     dedupKey: `vault:${d.request_id}`,
     content: () => ({ blocks, actions, entities: requestEntities(d) }),
+    // Captured when the confirmation is created: the fill waits for it, so this is before the
+    // fill sequence starts (D-36); the capture refuses while a secret window is open.
+    image: {
+      sessionId: d.session_id,
+      source: 'live',
+      alt: 'The login page before the fill',
+      path: `/sessions/${d.session_id}`,
+    },
   };
 }
 
@@ -469,6 +499,12 @@ function sessionClosed(d: DomainEvents['session.closed']): NotificationDraft | n
     sourceEventId: null,
     dedupKey: `closed:${d.session_id}:${d.closed_at}`,
     content,
+    image: {
+      sessionId: d.session_id,
+      source: 'last',
+      alt: 'The last screenshot before the crash',
+      path: `/sessions/${d.session_id}`,
+    },
   };
 }
 

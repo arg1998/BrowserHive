@@ -1,4 +1,5 @@
 /** @module cli/commands/serve — `browserhive [serve]`: hands the resolved configuration to the composition root and waits for it to stop (spec 08 §7.1, §7.4) */
+import type { StartupNotificationChannel } from '@browserhive/contracts/notifications';
 import type { ResolvedConfigBundle } from '@browserhive/core/config';
 import type { CommandContext } from '../deps.ts';
 
@@ -13,11 +14,17 @@ import type { CommandContext } from '../deps.ts';
  */
 export async function runServe(
   context: CommandContext,
-  resolved: ResolvedConfigBundle,
+  invocation: {
+    readonly resolved: ResolvedConfigBundle;
+    readonly startupChannels: readonly StartupNotificationChannel[];
+    readonly channelWarnings: readonly string[];
+  },
 ): Promise<number> {
   const { deps, out } = context;
   const server = await deps.bootServer({
-    resolved,
+    resolved: invocation.resolved,
+    startupChannels: invocation.startupChannels,
+    startupChannelWarnings: invocation.channelWarnings,
     host: deps.host,
     output: out.sinks(),
     env: deps.env,

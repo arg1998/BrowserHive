@@ -1,0 +1,34 @@
+{
+  "kind": "ntfy",
+  "variant": "tool-errors",
+  "mode": null,
+  "requests": [
+    {
+      "method": "POST",
+      "path": "/",
+      "encoding": "json",
+      "body": {
+        "topic": "bh-alerts",
+        "title": "checkout · 3 tool errors",
+        "message": "navigate · NAVIGATION_TIMEOUT (30000 ms)\n\nSession: checkout\nErrors: 3\nLatest: navigate · NAVIGATION_TIMEOUT\nDuration: 30 s",
+        "priority": 2,
+        "tags": [
+          "warning"
+        ],
+        "click": "https://bh.example.net/sessions/checkout-a1b2c3d4?kinds=tool&errors_only=1",
+        "actions": [
+          {
+            "action": "view",
+            "label": "Open errors",
+            "url": "https://bh.example.net/sessions/checkout-a1b2c3d4?kinds=tool&errors_only=1",
+            "clear": false
+          }
+        ],
+        "markdown": false,
+        "sequence_id": "n-sample000001"
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}

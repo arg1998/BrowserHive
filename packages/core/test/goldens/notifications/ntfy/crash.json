@@ -1,0 +1,34 @@
+{
+  "kind": "ntfy",
+  "variant": "crash",
+  "mode": null,
+  "requests": [
+    {
+      "method": "POST",
+      "path": "/",
+      "encoding": "json",
+      "body": {
+        "topic": "bh-alerts",
+        "title": "Session crashed",
+        "message": "reason: crash\n\nSession: checkout\nReason: crash\nClosed: 14:13 UTC",
+        "priority": 4,
+        "tags": [
+          "rotating_light"
+        ],
+        "click": "https://bh.example.net/sessions/checkout-a1b2c3d4",
+        "actions": [
+          {
+            "action": "view",
+            "label": "Open session",
+            "url": "https://bh.example.net/sessions/checkout-a1b2c3d4",
+            "clear": false
+          }
+        ],
+        "markdown": false,
+        "sequence_id": "n-sample000001"
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}

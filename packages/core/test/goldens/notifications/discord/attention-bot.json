@@ -1,0 +1,84 @@
+{
+  "kind": "discord",
+  "variant": "attention-bot",
+  "mode": "bot",
+  "requests": [
+    {
+      "method": "POST",
+      "path": "{secret:webhook}?wait=true&with_components=true",
+      "encoding": "json",
+      "body": {
+        "content": null,
+        "allowed_mentions": {
+          "parse": []
+        },
+        "components": [
+          {
+            "type": 1,
+            "components": [
+              {
+                "type": 2,
+                "style": 5,
+                "label": "Take over",
+                "url": "https://bh.example.net/sessions/checkout-a1b2c3d4?live=1&takeover=1"
+              },
+              {
+                "type": 2,
+                "style": 2,
+                "label": "Mark resolved",
+                "custom_id": "bh1:preview"
+              },
+              {
+                "type": 2,
+                "style": 4,
+                "label": "Reject",
+                "custom_id": "bh1:preview"
+              }
+            ]
+          }
+        ],
+        "embeds": [
+          {
+            "title": "⚠️ Attention requested",
+            "description": "CAPTCHA on the checkout page: please solve it, then resume · takeover — agent blocked, lease frozen",
+            "url": "https://bh.example.net/sessions/checkout-a1b2c3d4?live=1&takeover=1",
+            "color": 16096779,
+            "fields": [
+              {
+                "name": "Mode",
+                "value": "takeover",
+                "inline": true
+              },
+              {
+                "name": "Session",
+                "value": "[checkout](https://bh.example.net/sessions/checkout-a1b2c3d4)",
+                "inline": true
+              },
+              {
+                "name": "Page",
+                "value": "`https://shop.example.com/checkout/payment`",
+                "inline": true
+              },
+              {
+                "name": "Tool",
+                "value": "`click`",
+                "inline": true
+              },
+              {
+                "name": "Waiting since",
+                "value": "<t:1790000000:t>",
+                "inline": true
+              }
+            ],
+            "footer": {
+              "text": "BrowserHive"
+            },
+            "timestamp": "2026-09-21T14:13:20.000Z"
+          }
+        ]
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}

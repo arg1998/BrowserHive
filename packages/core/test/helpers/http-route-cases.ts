@@ -37,6 +37,36 @@ export const IDEMPOTENCY_KEY = '5b3e6f2a-6d8f-4e8a-9d62-2b0d8a1d2c11';
 const api = (path: string) => `/api/v1${path}`;
 const s = (path: string) => api(`/sessions/${CLOSED_ID}${path}`);
 
+async function webhookChannel(ctx: CaseContext): Promise<void> {
+  const response = await ctx.kit.request('POST', api('/channels'), {
+    cookie: ctx.cookie,
+    body: { name: 'hook', kind: 'webhook', target: { url: 'https://hooks.example.net/bh' } },
+  });
+  // Under a pending password change the create is refused: a well-formed id keeps the path valid.
+  const body = (await response.json()) as { channel?: { channel_id: string } };
+  ctx.state['channel'] = body.channel?.channel_id ?? 'nc-placeholder01';
+}
+
+async function testedChannel(ctx: CaseContext): Promise<void> {
+  await webhookChannel(ctx);
+  const response = await ctx.kit.request(
+    'POST',
+    api(`/channels/${ctx.state['channel'] ?? ''}/test`),
+    { cookie: ctx.cookie },
+  );
+  const body = (await response.json()) as { delivery?: { seq: number } };
+  ctx.state['seq'] = String(body.delivery?.seq ?? 1);
+}
+
+async function telegramConnect(ctx: CaseContext): Promise<void> {
+  const response = await ctx.kit.request('POST', api('/channels/telegram/connect'), {
+    cookie: ctx.cookie,
+    body: { token_env: 'BH_TELEGRAM_TOKEN' },
+  });
+  const body = (await response.json()) as { connect_id?: string };
+  ctx.state['connect'] = body.connect_id ?? 'placeholder01';
+}
+
 async function liveSession(ctx: CaseContext): Promise<void> {
   const session = await ctx.kit.sessions.create({ slug: 'live' }, { subject: 'admin' });
   ctx.state['live'] = session.id;
@@ -644,6 +674,140 @@ export const ROUTE_CASES: readonly RouteCase[] = [
       status: 204,
     },
     invalid: { method: 'POST', path: api('/client-errors'), body: { message: '' } },
+  },
+  {
+    operationId: 'listChannels',
+    success: { path: api('/channels'), status: 200 },
+    invalid: null,
+  },
+  {
+    operationId: 'createChannel',
+    success: {
+      method: 'POST',
+      path: api('/channels'),
+      body: { name: 'ops', kind: 'webhook', target: { url: 'https://hooks.example.net/bh' } },
+      status: 201,
+    },
+    invalid: {
+      method: 'POST',
+      path: api('/channels'),
+      body: { name: 'Bad Name', kind: 'webhook' },
+    },
+  },
+  {
+    operationId: 'previewChannel',
+    success: {
+      method: 'POST',
+      path: api('/channels/preview'),
+      body: { kind: 'telegram', sample: 'attention' },
+      status: 200,
+    },
+    invalid: { method: 'POST', path: api('/channels/preview'), body: { sample: 'nope' } },
+  },
+  {
+    operationId: 'listDeliveries',
+    success: { path: api('/channels/deliveries'), status: 200 },
+    invalid: { path: api('/channels/deliveries?status=nope') },
+  },
+  {
+    operationId: 'getDelivery',
+    setup: testedChannel,
+    success: { path: (ctx) => api(`/channels/deliveries/${ctx.state['seq'] ?? ''}`), status: 200 },
+    invalid: { path: api('/channels/deliveries/abc') },
+  },
+  {
+    operationId: 'checkChannelEnv',
+    success: { path: api('/channels/env?names=BH_TELEGRAM_TOKEN,BH_MISSING'), status: 200 },
+    invalid: { path: api('/channels/env?names=BROWSERHIVE_TOKEN') },
+  },
+  {
+    operationId: 'startTelegramConnect',
+    success: {
+      method: 'POST',
+      path: api('/channels/telegram/connect'),
+      body: { token_env: 'BH_TELEGRAM_TOKEN' },
+      status: 200,
+    },
+    invalid: {
+      method: 'POST',
+      path: api('/channels/telegram/connect'),
+      body: { token_env: 'not a name' },
+    },
+  },
+  {
+    operationId: 'getTelegramConnect',
+    setup: telegramConnect,
+    success: {
+      path: (ctx) => api(`/channels/telegram/connect/${ctx.state['connect'] ?? ''}`),
+      status: 200,
+    },
+    invalid: { path: api('/channels/telegram/connect/x!') },
+  },
+  {
+    operationId: 'getChannel',
+    setup: webhookChannel,
+    success: { path: (ctx) => api(`/channels/${ctx.state['channel'] ?? ''}`), status: 200 },
+    invalid: { path: api('/channels/bad') },
+  },
+  {
+    operationId: 'updateChannel',
+    setup: webhookChannel,
+    success: {
+      method: 'PATCH',
+      path: (ctx) => api(`/channels/${ctx.state['channel'] ?? ''}`),
+      body: { rules: { min_severity: 'error' } },
+      status: 200,
+    },
+    invalid: {
+      method: 'PATCH',
+      path: (ctx) => api(`/channels/${ctx.state['channel'] ?? ''}`),
+      body: { kind: 'telegram' },
+    },
+  },
+  {
+    operationId: 'deleteChannel',
+    setup: webhookChannel,
+    success: {
+      method: 'DELETE',
+      path: (ctx) => api(`/channels/${ctx.state['channel'] ?? ''}`),
+      status: 200,
+    },
+    invalid: { method: 'DELETE', path: api('/channels/bad') },
+  },
+  {
+    operationId: 'pauseChannel',
+    setup: webhookChannel,
+    success: {
+      method: 'POST',
+      path: (ctx) => api(`/channels/${ctx.state['channel'] ?? ''}/pause`),
+      status: 200,
+    },
+    invalid: { method: 'POST', path: api('/channels/bad/pause') },
+  },
+  {
+    operationId: 'resumeChannel',
+    setup: webhookChannel,
+    success: {
+      method: 'POST',
+      path: (ctx) => api(`/channels/${ctx.state['channel'] ?? ''}/resume`),
+      status: 200,
+    },
+    invalid: { method: 'POST', path: api('/channels/bad/resume') },
+  },
+  {
+    operationId: 'testChannel',
+    setup: webhookChannel,
+    success: {
+      method: 'POST',
+      path: (ctx) => api(`/channels/${ctx.state['channel'] ?? ''}/test`),
+      status: 200,
+    },
+    invalid: { method: 'POST', path: api('/channels/bad/test') },
+  },
+  {
+    operationId: 'getPublicUrlStatus',
+    success: { path: api('/system/public-url?refresh=true'), status: 200 },
+    invalid: { path: api('/system/public-url?refresh=maybe') },
   },
 ];
 

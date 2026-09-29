@@ -1,10 +1,12 @@
 /** @module test/cli/helpers — fake `CliDeps` for the CLI suites: in-memory filesystem and config fs, scripted probes, fake storage, captured streams */
+
 import { dirname } from 'node:path';
 import type { Channel } from '@browserhive/contracts/enums';
 import type { ConfigFs } from '@browserhive/core/config';
 import type { FileStat, FileSystem } from '@browserhive/core/ports/file-system';
 import type { HostEnvironment } from '@browserhive/core/ports/host-environment';
 import type { ProcessRunner, ProcessRunResult } from '@browserhive/core/ports/process-runner';
+import type { UrlProbeResult } from '@browserhive/core/runtime';
 import type {
   DetectedBrowser,
   SandboxEnvironment,
@@ -151,6 +153,8 @@ export interface StorageState {
   resets: number;
   opened: { readOnly: boolean; migrate: boolean; owner: string }[];
   closed: number;
+  /** Configured notification channels. */
+  channels: { name: string; kind: string; source: string; secretRefs: Record<string, string> }[];
 }
 
 /** A default storage state (schema v1, no pending migrations). */
@@ -159,6 +163,7 @@ export function storageState(overrides: Partial<StorageState> = {}): StorageStat
     userVersion: 1,
     minReaderVersion: 1,
     applicationId: APPLICATION_ID,
+    channels: [],
     pending: [],
     tables: [
       { table: 'sessions', rows: 3 },
@@ -251,6 +256,7 @@ function fakeStorage(
     revokeToken: async (credentialId) => {
       state.tokens = state.tokens.filter((row) => row.credentialId !== credentialId);
     },
+    notificationChannels: async () => state.channels,
     close: async () => {
       state.closed += 1;
     },
@@ -268,6 +274,8 @@ export interface ProbeState {
   diskFree: number | null;
   modes: Record<string, number>;
   otlp: { ok: boolean; detail: string };
+  /** Answers of `fetchOnce` by URL (default: a network error). */
+  fetches: Record<string, UrlProbeResult>;
   /** Detected channels (bundled Chromium first). */
   browsers: DetectedBrowser[];
   /** Sandbox probe verdict per channel; missing channels answer `not-installed`. */
@@ -343,6 +351,7 @@ export function probeState(overrides: Partial<ProbeState> = {}): ProbeState {
     diskFree: 50 * 1000 ** 3,
     modes: {},
     otlp: { ok: true, detail: 'HTTP 405' },
+    fetches: {},
     browsers: [detected('chromium'), detected('chrome'), detected('edge')],
     sandbox: { chromium: { state: 'works', version: '153.0.8010.12' } },
     environment: sandboxEnvironment(),
@@ -364,6 +373,7 @@ function fakeProbes(state: ProbeState): HostProbes {
     pathMode: async (path) => state.modes[path] ?? 0o700,
     installCommand: (driver) => ({ command: '/usr/bin/bun', args: [`/pkg/${driver}/cli.js`] }),
     httpReachable: async () => state.otlp,
+    fetchOnce: async (url) => state.fetches[url] ?? { kind: 'error', detail: 'connection refused' },
     browsers: async () => state.browsers,
     sandbox: async (channel) => {
       state.probed.push(channel);

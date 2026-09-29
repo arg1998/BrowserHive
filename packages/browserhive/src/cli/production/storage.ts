@@ -158,6 +158,20 @@ export async function openCliStorage(
       return { password: result.password.reveal(), credentialsPath: result.credentialsPath };
     },
     listTokens: async () => (await storage.auth.listTokens()).map(tokenRow),
+    notificationChannels: async () => {
+      try {
+        const rows = await storage.repos.notificationChannels.list();
+        return rows.map((r) => ({
+          name: r.name,
+          kind: r.kind,
+          source: r.source,
+          secretRefs: r.secretRefs,
+        }));
+      } catch {
+        // A database from before schema v5 has no channels table.
+        return [];
+      }
+    },
     createToken: async ({ principal, expiresInMs }) => {
       const created = await storage.auth.createToken(CLI_ISSUER, {
         ownerKind: 'agent',

@@ -7,7 +7,7 @@ import type { HealthProbe, SystemFacts } from './services.ts';
 /** The health body and its status (200 only when `ready`). */
 export function healthOf(
   probe: HealthProbe,
-  facts: Pick<SystemFacts, 'version' | 'startedAt'>,
+  facts: Pick<SystemFacts, 'version' | 'startedAt' | 'instanceId'>,
   now: number,
 ): { status: 200 | 503; body: z.input<typeof HealthResponse> } {
   const snapshot = probe.snapshot();
@@ -18,6 +18,7 @@ export function healthOf(
       phase: snapshot.phase,
       version: facts.version,
       uptime_ms: Math.max(0, now - facts.startedAt),
+      ...(facts.instanceId !== undefined && { instance_id: facts.instanceId }),
       checks: { ...snapshot.checks },
     },
   };

@@ -1,0 +1,40 @@
+{
+  "kind": "ntfy",
+  "variant": "attention-counts",
+  "mode": null,
+  "requests": [
+    {
+      "method": "POST",
+      "path": "/",
+      "encoding": "json",
+      "body": {
+        "topic": "bh-alerts",
+        "title": "Attention requested",
+        "message": "Session checkout",
+        "priority": 4,
+        "tags": [
+          "warning"
+        ],
+        "click": "https://bh.example.net/sessions/checkout-a1b2c3d4?live=1&takeover=1",
+        "actions": [
+          {
+            "action": "view",
+            "label": "Take over",
+            "url": "https://bh.example.net/sessions/checkout-a1b2c3d4?live=1&takeover=1",
+            "clear": false
+          },
+          {
+            "action": "view",
+            "label": "Open in BrowserHive",
+            "url": "https://bh.example.net/sessions/checkout-a1b2c3d4?live=1",
+            "clear": false
+          }
+        ],
+        "markdown": false,
+        "sequence_id": "n-sample000001"
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}

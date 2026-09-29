@@ -1,0 +1,25 @@
+{
+  "kind": "ntfy",
+  "variant": "attention-resolved",
+  "mode": null,
+  "requests": [
+    {
+      "method": "POST",
+      "path": "/",
+      "encoding": "json",
+      "body": {
+        "topic": "bh-alerts",
+        "title": "Attention requested",
+        "message": "Resolved by admin after 2m 10s\n\n“CAPTCHA on the checkout page: please solve it, then resume”\n\nMode: takeover\nSession: checkout\nPage: https://shop.example.com/checkout/payment\nTool: click\nWaiting since: 14:13 UTC\nOutcome: resolved\nSettled: 14:15 UTC",
+        "priority": 2,
+        "tags": [
+          "white_check_mark"
+        ],
+        "markdown": false,
+        "sequence_id": "n-sample000001"
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}

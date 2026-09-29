@@ -4,6 +4,7 @@ import { API_PREFIX } from '@browserhive/contracts/http';
 import { WS_PATH } from '@browserhive/contracts/ws';
 import { Hono } from 'hono';
 import type { Authenticator } from '../../app/auth/authenticate.ts';
+import { publicUrlHost, publicUrlOrigin } from '../../app/notifications/public-url.ts';
 import { AppError } from '../../kernel/errors/app-error.ts';
 import type { Clock } from '../../ports/clock.ts';
 import type { IdGenerator } from '../../ports/id-generator.ts';
@@ -90,14 +91,19 @@ export function createHttpApp(deps: HttpAppDeps): HttpApp {
   );
   app.use('*', accessLog({ clock: deps.clock, logger: deps.logger }));
   app.use('*', secureHeaders());
+  const publicHost = publicUrlHost(config.publicUrl);
+  const publicOrigin = publicUrlOrigin(config.publicUrl);
   app.use(
     '*',
     hostGuard({
       host: config.host,
-      ...(config.allowedHosts !== undefined && { allowedHosts: config.allowedHosts }),
+      allowedHosts: [...(config.allowedHosts ?? []), ...(publicHost === null ? [] : [publicHost])],
     }),
   );
-  app.use(`${API_PREFIX}/*`, originGuard());
+  app.use(
+    `${API_PREFIX}/*`,
+    originGuard({ trustedOrigins: publicOrigin === null ? [] : [publicOrigin] }),
+  );
   app.onError(errorHandler(deps.logger));
 
   const health = (c: HttpContext) => {

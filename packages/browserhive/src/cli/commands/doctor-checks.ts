@@ -12,8 +12,10 @@ import {
   deriveMaxSessions,
   isJsonObject,
   parseJson,
+  parseNotificationChannelFlags,
   type ResolvedConfigBundle,
 } from '@browserhive/core/config';
+import { classifyPublicUrlProbe, isInsecurePublicUrl } from '@browserhive/core/runtime';
 import type { CliDeps } from '../deps.ts';
 import { databasePath, formatTimestamp, size } from './common.ts';
 
@@ -450,4 +452,107 @@ export function checkSecretsFile(deps: CliDeps, bundle: ResolvedConfigBundle): C
     );
   }
   return result('secrets', 'ok', `authTokens in ${path} (owner-only)`);
+}
+
+/** Timeout of the `publicUrl` probes. */
+export const PUBLIC_URL_TIMEOUT_MS = 5000;
+
+/**
+ * The `publicUrl` check (spec 08 §5.8): `<publicUrl>/health` compared with the running local
+ * server's `instance_id` when one answers. ✓ `ok`; ! `login`, `unreachable` and plain `http` on a
+ * public host; ✗ `elsewhere`.
+ */
+export async function checkPublicUrl(deps: CliDeps, config: ServerConfig): Promise<CheckResult> {
+  const url = config.publicUrl;
+  if (url === undefined) {
+    return result('publicUrl', 'ok', 'not set (notification links open on this computer only)');
+  }
+  const localHost =
+    config.host === '0.0.0.0' || config.host === '::' || config.host === ''
+      ? '127.0.0.1'
+      : config.host;
+  const local = await deps.probes.fetchOnce(
+    `http://${localHost.includes(':') ? `[${localHost}]` : localHost}:${config.port}/health`,
+    PUBLIC_URL_TIMEOUT_MS,
+  );
+  let instanceId: string | null = null;
+  if (local.kind === 'response') {
+    try {
+      const body: unknown = JSON.parse(local.body);
+      const id =
+        typeof body === 'object' && body !== null
+          ? (body as { instance_id?: unknown }).instance_id
+          : undefined;
+      instanceId = typeof id === 'string' ? id : null;
+    } catch {
+      instanceId = null;
+    }
+  }
+  const verdict = classifyPublicUrlProbe(
+    await deps.probes.fetchOnce(`${url}/health`, PUBLIC_URL_TIMEOUT_MS),
+    instanceId,
+  );
+  const insecure = isInsecurePublicUrl(url)
+    ? ' Plain http on a public host: links travel without TLS.'
+    : '';
+  const status: CheckStatus =
+    verdict.outcome === 'elsewhere'
+      ? 'fail'
+      : verdict.outcome === 'ok' && insecure === ''
+        ? 'ok'
+        : 'warn';
+  return result('publicUrl', status, `${url}: ${verdict.detail}${insecure}`);
+}
+
+/**
+ * Notification channels (spec 08 §7.1): every `--notificationChannel` parses, and every variable
+ * a startup or dashboard channel names is set (never showing a value).
+ */
+export async function checkNotificationChannels(
+  deps: CliDeps,
+  dataDir: string,
+  flags: readonly string[],
+): Promise<CheckResult> {
+  const parsed = parseNotificationChannelFlags(flags, (name) => deps.env[name]);
+  if (parsed.problems.length > 0) {
+    return result('notification channels', 'fail', parsed.problems.join(' '));
+  }
+  const missing: string[] = [];
+  let dashboard: readonly {
+    readonly name: string;
+    readonly secretRefs: Readonly<Record<string, string>>;
+    readonly source: string;
+  }[] = [];
+  if ((await deps.fs.stat(databasePath(dataDir))) !== null) {
+    try {
+      const storage = await deps.openStorage({
+        dataDir,
+        readOnly: true,
+        migrate: false,
+        owner: 'doctor',
+      });
+      try {
+        dashboard = (await storage.notificationChannels()).filter((c) => c.source === 'db');
+      } finally {
+        await storage.close();
+      }
+    } catch {
+      dashboard = [];
+    }
+  }
+  for (const channel of dashboard) {
+    for (const name of Object.values(channel.secretRefs)) {
+      const value = deps.env[name];
+      if (value === undefined || value === '') missing.push(`${channel.name}: ${name} is not set`);
+    }
+  }
+  const total = parsed.channels.length + dashboard.length;
+  if (missing.length > 0) return result('notification channels', 'fail', missing.join('; '));
+  if (total === 0) return result('notification channels', 'ok', 'none configured');
+  const warn = parsed.warnings.length > 0;
+  return result(
+    'notification channels',
+    warn ? 'warn' : 'ok',
+    `${parsed.channels.length} from flags, ${dashboard.length} from the dashboard; every variable is set${warn ? `. ${parsed.warnings.join(' ')}` : ''}`,
+  );
 }

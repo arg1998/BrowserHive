@@ -2,6 +2,7 @@
 
 import type { NotificationChannelStatus, NotificationDeliveryStatus } from './enums.ts';
 import type {
+  ChannelDeliveryStats,
   DeliveryFinishPatch,
   NewNotificationDelivery,
   NotificationChannelMessageRecord,
@@ -92,6 +93,8 @@ export interface NotificationDeliveryRepository {
   count(statuses: readonly NotificationDeliveryStatus[]): Promise<number>;
   /** The delivery log, newest first. */
   list(query: NotificationDeliveryListQuery): Promise<readonly NotificationDeliveryRecord[]>;
+  /** Per-channel counts: finished jobs since `since`, open jobs now, and the last finished job. */
+  stats(since: number): Promise<readonly ChannelDeliveryStats[]>;
 }
 
 /** Repository over `notification_channel_messages`. */

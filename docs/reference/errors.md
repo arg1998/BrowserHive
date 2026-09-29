@@ -2,7 +2,7 @@
 
 # Error reference
 
-Every error code BrowserHive can produce (99 codes), generated from `ERROR_REGISTRY` in `@browserhive/contracts/errors`. Each code has a stable anchor: `errors.md#<CODE>`, which is also the `type` URL of HTTP problem responses (`https://browserhive.ai/docs/errors#<CODE>`).
+Every error code BrowserHive can produce (106 codes), generated from `ERROR_REGISTRY` in `@browserhive/contracts/errors`. Each code has a stable anchor: `errors.md#<CODE>`, which is also the `type` URL of HTTP problem responses (`https://browserhive.ai/docs/errors#<CODE>`).
 
 ## How errors reach you
 
@@ -73,6 +73,13 @@ Returned by tools and the REST API when a request cannot be served (unknown sess
 | [`INVALID_ARGUMENTS`](#INVALID_ARGUMENTS) | Invalid arguments | 400 | different_args |
 | [`TRACE_UNAVAILABLE`](#TRACE_UNAVAILABLE) | Trace unavailable | 404 | never |
 | [`SCREENSHOT_UNAVAILABLE`](#SCREENSHOT_UNAVAILABLE) | Screenshot unavailable | 404 | never |
+| [`CHANNEL_NOT_FOUND`](#CHANNEL_NOT_FOUND) | Notification channel not found | 404 | never |
+| [`CHANNEL_NAME_TAKEN`](#CHANNEL_NAME_TAKEN) | Channel name in use | 409 | different_args |
+| [`CHANNEL_READ_ONLY`](#CHANNEL_READ_ONLY) | Startup channel is read-only | 409 | never |
+| [`CHANNEL_NOT_READY`](#CHANNEL_NOT_READY) | Channel is not ready | 409 | after_operator |
+| [`CHANNEL_KIND_UNAVAILABLE`](#CHANNEL_KIND_UNAVAILABLE) | Platform not available yet | 400 | different_args |
+| [`CHANNEL_PLATFORM_ERROR`](#CHANNEL_PLATFORM_ERROR) | The platform refused the request | 502 | backoff |
+| [`DELIVERY_NOT_FOUND`](#DELIVERY_NOT_FOUND) | Delivery not found | 404 | never |
 | [`INTERNAL_ERROR`](#INTERNAL_ERROR) | Internal error | 500 | backoff |
 
 <a id="SESSION_NOT_FOUND"></a>
@@ -1195,6 +1202,181 @@ Details:
 | Field | Type | Required | Constraints |
 |---|---|---|---|
 | `event_id` | `string` | yes | — |
+
+<a id="CHANNEL_NOT_FOUND"></a>
+### `CHANNEL_NOT_FOUND`
+
+| Property | Value |
+|---|---|
+| Title | Notification channel not found |
+| HTTP status | 404 |
+| Category | `domain` |
+| Retryable | `never` (do not retry; the request cannot succeed as sent) |
+
+Message: `Notification channel '{channel_id}' does not exist.`
+
+Hint: List the channels with GET /api/v1/channels.
+
+Cause: The channel was deleted, or the id is wrong.
+
+Resolution: Refresh the channel list.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `channel_id` | `string` | yes | — |
+
+<a id="CHANNEL_NAME_TAKEN"></a>
+### `CHANNEL_NAME_TAKEN`
+
+| Property | Value |
+|---|---|
+| Title | Channel name in use |
+| HTTP status | 409 |
+| Category | `domain` |
+| Retryable | `different_args` (retry only with different arguments) |
+
+Message: `A notification channel named '{name}' already exists.`
+
+Hint: Pick another name.
+
+Cause: Channel names are unique across dashboard and startup channels.
+
+Resolution: Choose a different name, or edit the existing channel.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `name` | `string` | yes | — |
+
+<a id="CHANNEL_READ_ONLY"></a>
+### `CHANNEL_READ_ONLY`
+
+| Property | Value |
+|---|---|
+| Title | Startup channel is read-only |
+| HTTP status | 409 |
+| Category | `domain` |
+| Retryable | `never` (do not retry; the request cannot succeed as sent) |
+
+Message: `Notification channel '{name}' comes from --notificationChannel and cannot be edited or deleted here.`
+
+Hint: Change or remove the --notificationChannel flag and restart; pausing is allowed.
+
+Cause: Startup channels are declared by a command-line flag (D-39); the flag is their truth.
+
+Resolution: Edit the flag and restart BrowserHive, or pause the channel from the dashboard.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `channel_id` | `string` | yes | — |
+| `name` | `string` | yes | — |
+
+<a id="CHANNEL_NOT_READY"></a>
+### `CHANNEL_NOT_READY`
+
+| Property | Value |
+|---|---|
+| Title | Channel is not ready |
+| HTTP status | 409 |
+| Category | `domain` |
+| Retryable | `after_operator` (retry after an operator acts (unlock the vault, resolve a request, change policy)) |
+
+Message: `The notification channel cannot send: {problem}`
+
+Hint: Set the missing environment variables and restart BrowserHive.
+
+Cause: An environment variable the channel names is not set in the server’s environment (secrets are never stored, D-33).
+
+Resolution: Export the variable where BrowserHive runs (shell, systemd, Docker) and restart it.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `channel_id` | `string` | no | — |
+| `problem` | `string` | yes | — |
+| `missing` | `string[]` | yes | — |
+
+<a id="CHANNEL_KIND_UNAVAILABLE"></a>
+### `CHANNEL_KIND_UNAVAILABLE`
+
+| Property | Value |
+|---|---|
+| Title | Platform not available yet |
+| HTTP status | 400 |
+| Category | `domain` |
+| Retryable | `different_args` (retry only with different arguments) |
+
+Message: `Notification channels of kind '{kind}'{mode_text} are not available in this release.`
+
+Hint: Use telegram, discord (webhook mode), ntfy or webhook.
+
+Cause: The platform (or Discord bot mode) is reserved for a later release.
+
+Resolution: Pick an available platform, or Discord in webhook mode.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `kind` | `string` | yes | — |
+| `mode` | `string` | no | — |
+| `mode_text` | `string` | yes | — |
+
+<a id="CHANNEL_PLATFORM_ERROR"></a>
+### `CHANNEL_PLATFORM_ERROR`
+
+| Property | Value |
+|---|---|
+| Title | The platform refused the request |
+| HTTP status | 502 |
+| Category | `domain` |
+| Retryable | `backoff` (retry later with backoff) |
+
+Message: `{kind} answered: {detail}`
+
+Hint: Check the credentials the channel names, then retry.
+
+Cause: The notification platform rejected the call (a wrong token, a network failure, a limit).
+
+Resolution: Read the detail; fix the token or URL in the environment and restart, or retry later.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `kind` | `string` | yes | — |
+| `code` | `string` | yes | — |
+| `detail` | `string` | yes | — |
+
+<a id="DELIVERY_NOT_FOUND"></a>
+### `DELIVERY_NOT_FOUND`
+
+| Property | Value |
+|---|---|
+| Title | Delivery not found |
+| HTTP status | 404 |
+| Category | `domain` |
+| Retryable | `never` (do not retry; the request cannot succeed as sent) |
+
+Message: `Delivery {seq} does not exist.`
+
+Hint: Delivery rows are kept for 30 days.
+
+Cause: The row was pruned by retention, or deleted with its channel.
+
+Resolution: Nothing to do.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `seq` | `number` | yes | — |
 
 <a id="INTERNAL_ERROR"></a>
 ### `INTERNAL_ERROR`

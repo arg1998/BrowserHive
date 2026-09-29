@@ -1,0 +1,72 @@
+{
+  "kind": "discord",
+  "variant": "vault-confirm",
+  "mode": "webhook",
+  "requests": [
+    {
+      "method": "POST",
+      "path": "{secret:webhook}?wait=true&with_components=true",
+      "encoding": "json",
+      "body": {
+        "content": null,
+        "allowed_mentions": {
+          "parse": []
+        },
+        "components": [
+          {
+            "type": 1,
+            "components": [
+              {
+                "type": 2,
+                "style": 5,
+                "label": "Review in BrowserHive",
+                "url": "https://bh.example.net/vault?tab=confirm"
+              }
+            ]
+          }
+        ],
+        "embeds": [
+          {
+            "title": "⚠️ Vault fill awaiting confirm",
+            "description": "entry github — approve or deny the release",
+            "url": "https://bh.example.net/vault?tab=confirm",
+            "color": 16096779,
+            "fields": [
+              {
+                "name": "Entry",
+                "value": "`github`",
+                "inline": true
+              },
+              {
+                "name": "Session",
+                "value": "[checkout](https://bh.example.net/sessions/checkout-a1b2c3d4)",
+                "inline": true
+              },
+              {
+                "name": "Page",
+                "value": "`https://github.com/login`",
+                "inline": true
+              },
+              {
+                "name": "Tool",
+                "value": "`vault_fill`",
+                "inline": true
+              },
+              {
+                "name": "Waiting since",
+                "value": "<t:1790000000:t>",
+                "inline": true
+              }
+            ],
+            "footer": {
+              "text": "BrowserHive"
+            },
+            "timestamp": "2026-09-21T14:13:20.000Z"
+          }
+        ]
+      },
+      "headers": {},
+      "file": null
+    }
+  ]
+}
