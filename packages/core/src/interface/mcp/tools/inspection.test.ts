@@ -1,7 +1,7 @@
 /** @module interface/mcp/tools/inspection.test — screenshot (image block, sandbox, archival), snapshot, get_content, evaluate (gate both ways, SCRIPT_ERROR, IIFE wrap). */
 
 import { afterEach, describe, expect, it } from 'bun:test';
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import type { FakeSessionHandle } from '../../../../test/helpers/fake-session-handle.ts';
 import {
@@ -31,7 +31,9 @@ describe('screenshot', () => {
     });
     const image = result.content.find((c) => c.type === 'image');
     expect(image).toMatchObject({ type: 'image', mimeType: 'image/png' });
-    const savedTo = join(h.dataDir, 'sessions', id, 'shot.png');
+    // The sandbox reports the resolved path, and a temp dir is often not one: macOS `/var` is a
+    // symlink to `/private/var`, a Windows runner's TEMP uses the 8.3 name `RUNNER~1`.
+    const savedTo = join(realpathSync.native(h.dataDir), 'sessions', id, 'shot.png');
     expect(result.content.find((c) => c.type === 'text')).toEqual({
       type: 'text',
       text: JSON.stringify({ saved_to: savedTo }),
