@@ -48,7 +48,12 @@ export const SAVE_FULL_PROFILE = defineTool({
   annotations: annotations(false, false, true, false),
   pack: 'authStates',
   capability: 'mutate',
-  errors: [...SESSION_ERRORS, 'INVALID_PERSISTENCE_CONFIG', 'PATH_NOT_ALLOWED'],
+  errors: [
+    ...SESSION_ERRORS,
+    'INVALID_PERSISTENCE_CONFIG',
+    'PATH_NOT_ALLOWED',
+    'PROFILE_FILE_LOCKED',
+  ],
   since: SINCE,
 });
 

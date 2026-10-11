@@ -1,6 +1,8 @@
 /** @module test/composition/adapters.test — HTTP port adapters, the degradation relay and the dashboard locator. */
 
 import { describe, expect, it } from 'bun:test';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { isAppError } from '@browserhive/core/runtime';
 import { DegradationRelay } from '../../src/composition/adapters/degradation-relay.ts';
 import { logLevelController } from '../../src/composition/adapters/http-ports.ts';
@@ -48,21 +50,26 @@ describe('DegradationRelay', () => {
 
 describe('resolveDashboardDir', () => {
   it('finds dist/dashboard next to a bundle and packages/dashboard/dist from source', () => {
-    const files = new Set([
-      '/pkg/dist/dashboard/index.html',
-      '/pkg/dist/dashboard/assets',
-      '/repo/packages/dashboard/dist/index.html',
-      '/repo/packages/dashboard/dist/assets',
-    ]);
-    const exists = (p: string) => files.has(p);
-    expect(resolveDashboardDir('file:///pkg/dist/index.js', exists)).toBe('/pkg/dist/dashboard');
+    // Host-absolute paths and their file: URLs (drive-less `file:///x` is not absolute on Windows).
+    const p = (posix: string) => resolve(posix);
+    const url = (posix: string) => pathToFileURL(p(posix)).href;
+    const files = new Set(
+      [
+        '/pkg/dist/dashboard/index.html',
+        '/pkg/dist/dashboard/assets',
+        '/repo/packages/dashboard/dist/index.html',
+        '/repo/packages/dashboard/dist/assets',
+      ].map(p),
+    );
+    const exists = (path: string) => files.has(path);
+    expect(resolveDashboardDir(url('/pkg/dist/index.js'), exists)).toBe(p('/pkg/dist/dashboard'));
     expect(
       resolveDashboardDir(
-        'file:///repo/packages/browserhive/src/composition/dashboard-dir.ts',
+        url('/repo/packages/browserhive/src/composition/dashboard-dir.ts'),
         exists,
       ),
-    ).toBe('/repo/packages/dashboard/dist');
-    expect(resolveDashboardDir('file:///elsewhere/x.js', () => false)).toBeUndefined();
+    ).toBe(p('/repo/packages/dashboard/dist'));
+    expect(resolveDashboardDir(url('/elsewhere/x.js'), () => false)).toBeUndefined();
   });
 });
 

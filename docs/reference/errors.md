@@ -2,7 +2,7 @@
 
 # Error reference
 
-Every error code BrowserHive can produce (107 codes), generated from `ERROR_REGISTRY` in `@browserhive/contracts/errors`. Each code has a stable anchor: `errors.md#<CODE>`, which is also the `type` URL of HTTP problem responses (`https://browserhive.ai/docs/errors#<CODE>`).
+Every error code BrowserHive can produce (108 codes), generated from `ERROR_REGISTRY` in `@browserhive/contracts/errors`. Each code has a stable anchor: `errors.md#<CODE>`, which is also the `type` URL of HTTP problem responses (`https://browserhive.ai/docs/errors#<CODE>`).
 
 ## How errors reach you
 
@@ -42,6 +42,7 @@ Returned by tools and the REST API when a request cannot be served (unknown sess
 | [`TAB_NOT_FOUND`](#TAB_NOT_FOUND) | Tab not found | 404 | different_args |
 | [`PATH_NOT_ALLOWED`](#PATH_NOT_ALLOWED) | Path outside the sandbox | 400 | different_args |
 | [`AUTH_STATE_NOT_FOUND`](#AUTH_STATE_NOT_FOUND) | Saved auth state not found | 404 | different_args |
+| [`PROFILE_FILE_LOCKED`](#PROFILE_FILE_LOCKED) | Profile file locked by the running browser | 409 | never |
 | [`EVALUATE_DISABLED`](#EVALUATE_DISABLED) | evaluate is disabled | 403 | never |
 | [`ELEMENT_NOT_ACTIONABLE`](#ELEMENT_NOT_ACTIONABLE) | Element not actionable | 422 | backoff |
 | [`ELEMENT_NOT_FOUND`](#ELEMENT_NOT_FOUND) | Element not found | 404 | different_args |
@@ -449,6 +450,30 @@ Details:
 |---|---|---|---|
 | `name` | `string` | yes | — |
 | `kind` | one of `storage`, `profile` | yes | — |
+
+<a id="PROFILE_FILE_LOCKED"></a>
+### `PROFILE_FILE_LOCKED`
+
+| Property | Value |
+|---|---|
+| Title | Profile file locked by the running browser |
+| HTTP status | 409 |
+| Category | `domain` |
+| Retryable | `never` (do not retry; the request cannot succeed as sent) |
+
+Message: `Cannot save a full profile of the live session: '{file}' is locked by the running browser.`
+
+Hint: Use save_storage_state to snapshot a live session's cookies, localStorage and IndexedDB.
+
+Cause: On Windows a running Chromium holds some profile databases (cookies, history) exclusively, so no other process can read them while the session is live.
+
+Resolution: Use save_storage_state for a live session. A full-profile snapshot needs the browser's files released, which happens when the session closes.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `file` | `string` | yes | — |
 
 <a id="EVALUATE_DISABLED"></a>
 ### `EVALUATE_DISABLED`

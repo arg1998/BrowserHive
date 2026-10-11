@@ -2,11 +2,12 @@
 
 import { Database } from 'bun:sqlite';
 import { describe, expect, it } from 'bun:test';
+import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { FakeClock, FakeLogger, tempDir } from '../../../test/persistence/helpers.ts';
 import { isAppError } from '../../kernel/errors/app-error.ts';
 import { APPLICATION_ID, MIGRATIONS, SCHEMA_VERSION } from './migrations/index.ts';
-import { openDatabase, REQUIRED_PRAGMAS } from './open.ts';
+import { closeRaw, openDatabase, REQUIRED_PRAGMAS } from './open.ts';
 import { pragmaNumber, pragmaString } from './pragma.ts';
 
 const clock = new FakeClock();
@@ -122,5 +123,49 @@ describe('openDatabase', () => {
     } finally {
       dir.dispose();
     }
+  });
+});
+
+describe('closing the database', () => {
+  it('releases the file at once, even with a prepared statement still alive', async () => {
+    const dir = tempDir();
+    try {
+      const path = join(dir.path, 'browserhive.db');
+      const handle = await open(path, dir.path);
+      // Kept alive on purpose: with the lazy close this left a zombie connection holding the file
+      // until GC, and Windows refused to remove it (EBUSY).
+      const statement = handle.raw.prepare('select 1 as one');
+      expect(statement.get()).toEqual({ one: 1 });
+      await handle.close();
+      for (const suffix of ['', '-wal', '-shm']) rmSync(`${path}${suffix}`, { force: true });
+      await handle.close();
+    } finally {
+      dir.dispose();
+    }
+  });
+
+  it('closeRaw closes strictly, and falls back to the lazy close with a warning when that throws', () => {
+    const strict: (boolean | undefined)[] = [];
+    closeRaw(
+      { close: (throwOnError?: boolean) => void strict.push(throwOnError) },
+      new FakeLogger(),
+    );
+    expect(strict).toEqual([true]);
+
+    const calls: (boolean | undefined)[] = [];
+    const logger = new FakeLogger();
+    closeRaw(
+      {
+        close: (throwOnError?: boolean) => {
+          calls.push(throwOnError);
+          if (throwOnError === true) throw new Error('statements pending');
+        },
+      },
+      logger,
+    );
+    expect(calls).toEqual([true, undefined]);
+    expect(
+      logger.records.some((r) => r.level === 'warn' && r.msg === 'database close deferred'),
+    ).toBe(true);
   });
 });

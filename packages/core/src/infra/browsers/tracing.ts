@@ -1,10 +1,11 @@
 /** @module infra/browsers/tracing — TracingHandle over Playwright tracing with chunk pause/resume for vault fills (D-13) and idempotent, deadline-capped stop. */
 
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { unzipSync, zipSync } from 'fflate';
 import { withDeadline } from '../../kernel/deadline.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
+import { removeTree } from '../../kernel/remove.ts';
 import type { LaunchWarning, TracingHandle } from '../../ports/browser-driver.ts';
 import type { Logger } from '../../ports/logger.ts';
 
@@ -45,7 +46,7 @@ const nodeFs: TracingFs = {
   },
   readFile: (path) => readFile(path),
   writeFile: (path, data) => writeFile(path, data, { mode: 0o600 }),
-  rm: (path) => rm(path, { recursive: true, force: true }),
+  rm: (path) => removeTree(path),
 };
 
 /** Dependencies of {@link PlaywrightTracingHandle}. */

@@ -2,6 +2,7 @@
 
 import { describe, expect, it } from 'bun:test';
 import { strFromU8, unzipSync, zipSync } from 'fflate';
+import { posixView } from '../../../test/helpers/posix-paths.ts';
 import { createCollectingLogger } from '../logging/collecting-logger.ts';
 import {
   mergeTraceParts,
@@ -72,7 +73,7 @@ describe('PlaywrightTracingHandle state machine', () => {
     await handle.stop('/out/trace.zip');
     await handle.stop('/out/trace.zip'); // idempotent
     expect(handle.status).toBe('stopped');
-    expect(calls).toEqual(['start:true:true:false', 'stop:/out/trace.zip']);
+    expect(posixView(calls)).toEqual(['start:true:true:false', 'stop:/out/trace.zip']);
     expect(files.has('/out/trace.zip')).toBe(true);
   });
 
@@ -89,7 +90,7 @@ describe('PlaywrightTracingHandle state machine', () => {
     await handle.stop('/out/trace.zip');
     // A full stop/start, with the original options replayed: `stopChunk` would keep the network
     // tracer running across the pause and capture the login POST body (verified on Playwright 1.63).
-    expect(calls).toEqual([
+    expect(posixView(calls)).toEqual([
       'start:true:true:false',
       'stop:/parts/part-0.zip',
       'start:true:true:false',
@@ -114,7 +115,7 @@ describe('PlaywrightTracingHandle state machine', () => {
     await handle.pauseChunk();
     await handle.stop('/out/trace.zip');
     // Already stopped by the pause: no second stop is issued.
-    expect(calls).toEqual(['start:true:true:false', 'stop:/parts/part-0.zip']);
+    expect(posixView(calls)).toEqual(['start:true:true:false', 'stop:/parts/part-0.zip']);
     expect(Object.keys(unzipSync(files.get('/out/trace.zip') ?? new Uint8Array()))).toContain(
       'trace.trace',
     );

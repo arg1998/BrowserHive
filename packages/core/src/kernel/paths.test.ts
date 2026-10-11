@@ -4,6 +4,7 @@ import { describe, expect, it } from 'bun:test';
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { posixPath, posixView } from '../../test/helpers/posix-paths.ts';
 import { isAppError } from './errors/app-error.ts';
 import {
   isSafeZipEntry,
@@ -39,13 +40,15 @@ describe('isWithin', () => {
 describe('realpathAllowingMissing', () => {
   it('canonicalises the existing prefix and re-appends the missing tail', async () => {
     const seen: string[] = [];
-    const realpath = async (p: string): Promise<string> => {
+    // POSIX paths in the fake; on Windows the code under test resolves them to `C:\…` first.
+    const realpath = async (native: string): Promise<string> => {
+      const p = posixPath(native);
       seen.push(p);
-      if (p === '/real' || p === '/') return p;
-      if (p === '/link') return '/real';
+      if (p === '/real' || p === '/') return resolve(p);
+      if (p === '/link') return resolve('/real');
       throw Object.assign(new Error('missing'), { code: 'ENOENT' });
     };
-    expect(await realpathAllowingMissing('/link/new/file.png', realpath)).toBe(
+    expect(posixPath(await realpathAllowingMissing('/link/new/file.png', realpath))).toBe(
       '/real/new/file.png',
     );
     expect(seen[0]).toBe('/link/new/file.png');
@@ -68,7 +71,8 @@ describe('resolveWithinRoots (real filesystem)', () => {
       await mkdir(root);
       await mkdir(outside);
       await writeFile(join(outside, 'secret.txt'), 'x');
-      await symlink(outside, join(root, 'escape'));
+      // A junction on Windows (no privilege needed); the type is ignored elsewhere.
+      await symlink(outside, join(root, 'escape'), 'junction');
 
       expect(await resolveWithinRoots('shot.png', { roots: [root] })).toBe(
         join(await realpathAllowingMissing(root), 'shot.png'),
@@ -89,13 +93,14 @@ describe('resolveWithinRoots (real filesystem)', () => {
   });
 
   it('accepts any of several roots and reports them in details', async () => {
-    const realpath = async (p: string): Promise<string> => {
-      if (p === '/' || p === '/r1' || p === '/r2') return p;
+    const realpath = async (native: string): Promise<string> => {
+      const p = posixPath(native);
+      if (p === '/' || p === '/r1' || p === '/r2') return resolve(p);
       throw Object.assign(new Error('missing'), { code: 'ENOENT' });
     };
-    expect(await resolveWithinRoots('/r2/x.png', { roots: ['/r1', '/r2'], realpath })).toBe(
-      '/r2/x.png',
-    );
+    expect(
+      posixPath(await resolveWithinRoots('/r2/x.png', { roots: ['/r1', '/r2'], realpath })),
+    ).toBe('/r2/x.png');
     try {
       await resolveWithinRoots('/r3/x.png', {
         roots: ['/r1', '/r2'],
@@ -106,9 +111,9 @@ describe('resolveWithinRoots (real filesystem)', () => {
     } catch (error) {
       expect(isAppError(error, 'PATH_NOT_ALLOWED')).toBe(true);
       if (isAppError(error, 'PATH_NOT_ALLOWED')) {
-        expect(error.details).toEqual({ path: '/r3/x.png', roots: ['/r1', '/r2'] });
+        expect(posixView(error.details)).toEqual({ path: '/r3/x.png', roots: ['/r1', '/r2'] });
         expect(error.publicMessage).toBe("Path '/r3/x.png' is outside the allowed sandbox roots.");
-        expect(error.message).toBe(
+        expect(posixView(error.message)).toBe(
           "Path '/r3/x.png' is outside the allowed sandbox roots. Allowed roots: '/r1', '/r2'. Pass an absolute path under one of these, or a relative path (e.g. x.png).",
         );
       }

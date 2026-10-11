@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'bun:test';
 import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
+import { posixView } from '../../../test/helpers/posix-paths.ts';
 import { withTempDir } from '../../../test/helpers/temp-dir.ts';
 import { secret } from '../../kernel/secret.ts';
 import { type CredentialsFs, createCredentialsFile } from './credentials-file.ts';
@@ -33,14 +34,14 @@ describe('credentials file (injected fs)', () => {
       },
     };
     const file = createCredentialsFile({ dataDir: '/data', fs });
-    expect(file.path).toBe('/data/admin/credentials.txt');
+    expect(posixView(file.path)).toBe('/data/admin/credentials.txt');
     expect(await file.exists()).toBe(false);
     await file.write(secret('pw'));
     expect(await file.exists()).toBe(true);
     await file.shred();
     await file.shred(); // missing file is not an error
     expect(await file.exists()).toBe(false);
-    expect(calls).toEqual([
+    expect(posixView(calls)).toEqual([
       'mkdir /data/admin 700',
       'write /data/admin/credentials.txt 600 3',
       'chmod /data/admin/credentials.txt 600',
@@ -56,8 +57,13 @@ describe('credentials file (real fs)', () => {
       const file = createCredentialsFile({ dataDir: dir });
       await file.write(secret('seed-password'));
       expect(await readFile(file.path, 'utf8')).toBe('seed-password\n');
-      expect((await stat(file.path)).mode & 0o777).toBe(0o600);
-      expect((await stat(join(dir, 'admin'))).mode & 0o777).toBe(0o700);
+      // Windows has no POSIX modes; the directory must still exist there.
+      if (process.platform === 'win32') {
+        expect((await stat(join(dir, 'admin'))).isDirectory()).toBe(true);
+      } else {
+        expect((await stat(file.path)).mode & 0o777).toBe(0o600);
+        expect((await stat(join(dir, 'admin'))).mode & 0o777).toBe(0o700);
+      }
       await file.shred();
       expect(await file.exists()).toBe(false);
     });

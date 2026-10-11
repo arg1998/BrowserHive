@@ -1,6 +1,7 @@
 /** @module app/maintenance/purge.test — inventory data (DB counts via the injected read-only open, directory sizes), rows, purge targets. */
 
 import { describe, expect, it } from 'bun:test';
+import { posixView } from '../../../test/helpers/posix-paths.ts';
 import type { PurgeInventory } from '../../ports/persistence/maintenance.ts';
 import { inventoryRows, purge, purgeInventory } from './purge.ts';
 import { MemoryFileSystem } from './test-support.ts';
@@ -38,7 +39,7 @@ describe('purgeInventory', () => {
         return DB_INVENTORY;
       },
     });
-    expect(opened).toEqual(['/data/browserhive.db']);
+    expect(posixView(opened)).toEqual(['/data/browserhive.db']);
     expect(inv.database).toMatchObject({ sizeBytes: 13, schemaVersion: 1, error: null });
     expect(inv.directories.map((d) => [d.name, d.exists, d.sizeBytes, d.files])).toEqual([
       ['sessions', true, 8, 2],
@@ -84,14 +85,18 @@ describe('purge', () => {
   it('deletes only the chosen targets (DB with side files)', async () => {
     const fs = populated();
     const removed = await purge('/data', ['database', 'uploads'], deps(fs));
-    expect(removed).toEqual(['/data/browserhive.db', '/data/browserhive.db-wal', '/data/uploads']);
+    expect(posixView(removed)).toEqual([
+      '/data/browserhive.db',
+      '/data/browserhive.db-wal',
+      '/data/uploads',
+    ]);
     expect(fs.files.has('/data/sessions/s1/trace.zip')).toBe(true);
   });
 
   it('all removes everything that exists', async () => {
     const fs = populated();
     const removed = await purge('/data', [], deps(fs), { all: true });
-    expect(removed).toEqual([
+    expect(posixView(removed)).toEqual([
       '/data/browserhive.db',
       '/data/browserhive.db-wal',
       '/data/sessions',

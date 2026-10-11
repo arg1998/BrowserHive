@@ -1,6 +1,6 @@
 /** @module test/cli/helpers — fake `CliDeps` for the CLI suites: in-memory filesystem and config fs, scripted probes, fake storage, captured streams */
 
-import { dirname } from 'node:path';
+import { posix } from 'node:path';
 import type { Channel } from '@browserhive/contracts/enums';
 import type { ConfigFs } from '@browserhive/core/config';
 import type { FileStat, FileSystem } from '@browserhive/core/ports/file-system';
@@ -29,6 +29,48 @@ import type {
 import { runCli } from '../../src/cli/run.ts';
 
 export const DATA_DIR = '/home/me/.local/share/browserhive';
+
+/**
+ * The suites state paths POSIX-style. On Windows the CLI builds them with `node:path` (`\home\me\…`,
+ * or `C:\…` once resolved), which is right there; these map them back so one expectation covers both.
+ * The identity on every other platform.
+ */
+export function posixPath(path: string): string {
+  if (process.platform !== 'win32') return path;
+  // `\\` too: JSON output escapes each separator.
+  return path.replace(/^[A-Za-z]:(?=[\\/])/, '').replace(/\\\\|\\/g, '/');
+}
+
+/**
+ * A Windows path inside a text: optional drive, then a separator (`\`, or `\\` in JSON) followed by a
+ * path character. A backslash before anything else (`\{` in a regex pattern) is left alone.
+ */
+const WINDOWS_PATH_IN_TEXT = /(?:\b[A-Za-z]:)?(?:\\\\|\\)(?=[\w.-])[^\s'"#,;)]*/g;
+
+/** {@link posixPath} for every absolute Windows path inside a text (CLI output). */
+export function posixPathsIn(text: string): string {
+  if (process.platform !== 'win32') return text;
+  return text.replace(WINDOWS_PATH_IN_TEXT, posixPath);
+}
+
+/** {@link posixPathsIn} over every string of plain data; functions return mapped results too. */
+export function posixView<T>(value: T): T {
+  if (process.platform !== 'win32') return value;
+  if (typeof value === 'string') return posixPathsIn(value) as T;
+  if (typeof value === 'function') {
+    const fn = value as (...args: unknown[]) => unknown;
+    return ((...args: unknown[]) => posixView(fn(...args))) as T;
+  }
+  if (Array.isArray(value)) return value.map((v) => posixView(v)) as T;
+  if (
+    value !== null &&
+    typeof value === 'object' &&
+    Object.getPrototypeOf(value) === Object.prototype
+  ) {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, posixView(v)])) as T;
+  }
+  return value;
+}
 export const APPLICATION_ID = 0x42484956;
 
 /** A fake host (Linux, 16 GiB). */
@@ -63,19 +105,23 @@ export class MemoryFs implements FileSystem {
     for (const [path, data] of Object.entries(files)) this.put(path, data);
   }
 
-  put(path: string, data: string, mode = 0o600): void {
-    this.ensureDir(dirname(path));
+  // Every path is keyed POSIX-style ({@link posixPath}): the suites inspect `entries` and `writes`
+  // with POSIX paths, and on Windows the CLI hands in native ones.
+  put(at: string, data: string, mode = 0o600): void {
+    const path = posixPath(at);
+    this.ensureDir(posix.dirname(path));
     this.entries.set(path, { kind: 'file', data, mode, mtimeMs: 1_700_000_000_000 });
   }
 
-  ensureDir(path: string, mode = 0o700): void {
+  ensureDir(at: string, mode = 0o700): void {
+    const path = posixPath(at);
     if (path === '/' || path === '.' || this.entries.has(path)) return;
-    this.ensureDir(dirname(path));
+    this.ensureDir(posix.dirname(path));
     this.entries.set(path, { kind: 'dir', data: '', mode, mtimeMs: 0 });
   }
 
   async stat(path: string): Promise<FileStat | null> {
-    const entry = this.entries.get(path);
+    const entry = this.entries.get(posixPath(path));
     if (entry === undefined) return null;
     return {
       isFile: entry.kind === 'file',
@@ -85,37 +131,42 @@ export class MemoryFs implements FileSystem {
     };
   }
 
-  async readdir(path: string): Promise<readonly string[]> {
+  async readdir(at: string): Promise<readonly string[]> {
+    const path = posixPath(at);
     const prefix = path.endsWith('/') ? path : `${path}/`;
     return [...this.entries.keys()]
       .filter((key) => key.startsWith(prefix) && !key.slice(prefix.length).includes('/'))
       .map((key) => key.slice(prefix.length));
   }
 
-  async unlink(path: string): Promise<void> {
+  async unlink(at: string): Promise<void> {
+    const path = posixPath(at);
     this.writes.push(`unlink ${path}`);
     this.entries.delete(path);
   }
 
-  async rm(path: string): Promise<void> {
+  async rm(at: string): Promise<void> {
+    const path = posixPath(at);
     this.writes.push(`rm ${path}`);
     for (const key of [...this.entries.keys()]) {
       if (key === path || key.startsWith(`${path}/`)) this.entries.delete(key);
     }
   }
 
-  async mkdir(path: string, options?: { readonly mode?: number }): Promise<void> {
+  async mkdir(at: string, options?: { readonly mode?: number }): Promise<void> {
+    const path = posixPath(at);
     this.writes.push(`mkdir ${path}`);
     this.ensureDir(path, options?.mode ?? 0o700);
   }
 
   async readFile(path: string): Promise<string> {
-    const entry = this.entries.get(path);
+    const entry = this.entries.get(posixPath(path));
     if (entry?.kind !== 'file') throw new Error(`ENOENT: ${path}`);
     return entry.data;
   }
 
-  async writeFile(path: string, data: string, options?: { readonly mode?: number }): Promise<void> {
+  async writeFile(at: string, data: string, options?: { readonly mode?: number }): Promise<void> {
+    const path = posixPath(at);
     this.writes.push(`write ${path}`);
     // Like the node adapter: the mode applies to a new file only.
     this.put(path, data, this.entries.get(path)?.mode ?? options?.mode ?? 0o644);
@@ -125,12 +176,12 @@ export class MemoryFs implements FileSystem {
   configFs(): ConfigFs {
     return {
       readFile: (path) => {
-        const entry = this.entries.get(path);
+        const entry = this.entries.get(posixPath(path));
         if (entry?.kind !== 'file') throw new Error(`ENOENT: no such file ${path}`);
         return entry.data;
       },
       stat: (path) => {
-        const entry = this.entries.get(path);
+        const entry = this.entries.get(posixPath(path));
         return entry === undefined
           ? undefined
           : { isFile: entry.kind === 'file', mode: entry.mode };
@@ -370,7 +421,7 @@ function fakeProbes(state: ProbeState): HostProbes {
     portFree: async () => state.portFree,
     which: async () => state.bw,
     diskFreeBytes: async () => state.diskFree,
-    pathMode: async (path) => state.modes[path] ?? 0o700,
+    pathMode: async (path) => state.modes[posixPath(path)] ?? state.modes[path] ?? 0o700,
     installCommand: (driver) => ({ command: '/usr/bin/bun', args: [`/pkg/${driver}/cli.js`] }),
     httpReachable: async () => state.otlp,
     fetchOnce: async (url) => state.fetches[url] ?? { kind: 'error', detail: 'connection refused' },
@@ -436,7 +487,7 @@ export async function cliHarness(options: HarnessOptions): Promise<HarnessResult
   let clock = 1_758_000_000_000;
   const runner: ProcessRunner = {
     run: async (command, args) => {
-      runs.push({ command, args });
+      runs.push({ command: posixPath(command), args: args.map(posixPathsIn) });
       if (options.run !== undefined) return options.run(command, args);
       return { code: 0, stdout: '', stderr: '', timedOut: false };
     },
@@ -495,7 +546,7 @@ export async function cliHarness(options: HarnessOptions): Promise<HarnessResult
     lock: {
       read: () => options.lock ?? null,
       acquire: (dataDir, owner) => {
-        locks.push(`${owner}@${dataDir}`);
+        locks.push(`${owner}@${posixPath(dataDir)}`);
         return { release: () => locks.push(`release ${owner}`) };
       },
     },
@@ -509,5 +560,18 @@ export async function cliHarness(options: HarnessOptions): Promise<HarnessResult
     applicationId: APPLICATION_ID,
   };
   const code = await runCli({ ...deps, ...options.overrides });
-  return { code, stdout, stderr, prompts, fs, storage, runs, locks, boots };
+  // Output is mapped to POSIX paths only over the in-memory tree; a suite on the real filesystem
+  // (`overrides.fs`) expects the host's own paths.
+  const view = options.overrides?.fs === undefined ? posixPathsIn : (text: string) => text;
+  return {
+    code,
+    stdout: view(stdout),
+    stderr: view(stderr),
+    prompts: prompts.map(view),
+    fs,
+    storage,
+    runs,
+    locks,
+    boots,
+  };
 }

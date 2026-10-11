@@ -11,7 +11,7 @@ import {
   ProcessSpawnError,
 } from '../../../ports/process-runner.ts';
 import { createCollectingLogger } from '../../logging/collecting-logger.ts';
-import { BitwardenBackend } from './bitwarden-backend.ts';
+import { BitwardenBackend, BW_PASSTHROUGH_ENV, BW_WINDOWS_ENV } from './bitwarden-backend.ts';
 
 interface Call {
   readonly command: string;
@@ -45,9 +45,9 @@ function fakeRunner(
   };
 }
 
-function host(env: Record<string, string> = {}): HostEnvironment {
+function host(env: Record<string, string> = {}, platform = 'linux'): HostEnvironment {
   return {
-    platform: 'linux',
+    platform,
     arch: 'x64',
     release: '6.0',
     homeDir: '/home/tester',
@@ -59,10 +59,14 @@ function host(env: Record<string, string> = {}): HostEnvironment {
   };
 }
 
-function make(runner: ProcessRunner, env: Record<string, string> = {}): BitwardenBackend {
+function make(
+  runner: ProcessRunner,
+  env: Record<string, string> = {},
+  platform = 'linux',
+): BitwardenBackend {
   return new BitwardenBackend({
     runner,
-    host: host(env),
+    host: host(env, platform),
     clock: new FakeClock(0),
     logger: createCollectingLogger({ level: 'trace' }),
     timeoutMs: 1234,
@@ -110,6 +114,52 @@ describe('BitwardenBackend — child invocation shape', () => {
     }));
     await make(runner, { BW_SESSION: 'tok' }).status();
     expect(calls[0]?.options.env['HOME']).toBe('/home/tester');
+  });
+
+  it('passes BITWARDENCLI_APPDATA_DIR when set, where an operator moved the CLI login', async () => {
+    const { runner, calls } = fakeRunner(() => ({
+      stdout: JSON.stringify({ status: 'unlocked' }),
+    }));
+    await make(runner, { BW_SESSION: 'tok', BITWARDENCLI_APPDATA_DIR: '/srv/bw' }).status();
+    expect(calls[0]?.options.env).toEqual({
+      PATH: '/usr/bin',
+      HOME: '/home/tester',
+      BW_SESSION: 'tok',
+      BITWARDENCLI_APPDATA_DIR: '/srv/bw',
+    });
+    expect(BW_PASSTHROUGH_ENV).toEqual(['BITWARDENCLI_APPDATA_DIR']);
+  });
+
+  it('on Windows also passes the locations bw needs there (APPDATA holds its login), never other vars', async () => {
+    const windows = {
+      BW_SESSION: 'tok',
+      APPDATA: 'C:/Users/t/AppData/Roaming',
+      LOCALAPPDATA: 'C:/Users/t/AppData/Local',
+      USERPROFILE: 'C:/Users/t',
+      SYSTEMROOT: 'C:/Windows',
+      TEMP: 'C:/Temp',
+      TMP: 'C:/Temp',
+      PATHEXT: '.COM;.EXE;.BAT;.CMD',
+    };
+    const { runner, calls } = fakeRunner(() => ({
+      stdout: JSON.stringify({ status: 'unlocked' }),
+    }));
+    await make(runner, windows, 'win32').status();
+    const env = calls[0]?.options.env ?? {};
+    expect(Object.keys(env).sort()).toEqual(
+      ['BW_SESSION', 'HOME', 'PATH', ...BW_WINDOWS_ENV].sort(),
+    );
+    expect(env['APPDATA']).toBe(windows.APPDATA);
+    expect(env['SECRET_VAR']).toBeUndefined();
+
+    // Elsewhere the Windows names are not passed even when present.
+    const posix = fakeRunner(() => ({ stdout: JSON.stringify({ status: 'unlocked' }) }));
+    await make(posix.runner, windows, 'darwin').status();
+    expect(Object.keys(posix.calls[0]?.options.env ?? {}).sort()).toEqual([
+      'BW_SESSION',
+      'HOME',
+      'PATH',
+    ]);
   });
 });
 

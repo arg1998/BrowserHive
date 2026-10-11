@@ -149,7 +149,7 @@ export function menuEntries(
     addSandboxLine(host, browser.channel, pros, cons);
     if (browser.channel === 'edge') {
       cons.push(
-        'Under stealth BrowserHive presents it as Google Chrome while its user agent says Edge; sites can notice. Prefer Google Chrome for stealth',
+        'Under stealth it presents itself as Microsoft Edge, coherently; Google Chrome blends into a larger crowd of real users',
       );
     }
     const ahead = major(browser.version);

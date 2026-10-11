@@ -321,7 +321,9 @@ describe('menu contents are computed for the host', () => {
     );
     expect(entries[1]?.pros).toContain('Sandbox works on this machine');
     expect(entries[2]?.cons).toContain('Cannot run sandboxed on this machine (AppArmor)');
-    expect(entries[2]?.cons.join(' ')).toContain('presents it as Google Chrome');
+    // Issue #18: Edge is no longer relabelled as Google Chrome; the con says what it is now.
+    expect(entries[2]?.cons.join(' ')).toContain('presents itself as Microsoft Edge');
+    expect(entries[2]?.cons.join(' ')).not.toContain('presents it as Google Chrome');
     const lines = renderMenu(entries);
     expect(lines[2]).toMatch(/^ {2}1\) Chromium \(bundled\) +← current$/);
   });

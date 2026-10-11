@@ -1,11 +1,13 @@
-/** @module infra/host/process-tree.test — process-tree RSS for `browserhive.browser.rss_bytes` (spec 10 §7): tree sums, `/proc` and `ps` parsing, and the real reader over this process. */
+/** @module infra/host/process-tree.test — process-tree RSS for `browserhive.browser.rss_bytes` (spec 10 §7): tree sums, `/proc`, `ps` and Windows table parsing, and the real reader over this process. */
 
 import { describe, expect, it } from 'bun:test';
 import {
   createProcessTreeReader,
   parseProcStatus,
   parsePsTable,
+  parseWindowsProcessTable,
   sumProcessTrees,
+  WINDOWS_PROCESS_TABLE_SCRIPT,
 } from './process-tree.ts';
 
 describe('sumProcessTrees', () => {
@@ -48,6 +50,21 @@ describe('parsers', () => {
     expect(parseProcStatus(3, 'garbage')).toBeNull();
   });
 
+  it('reads Windows `<pid> <ppid> <working set bytes>` rows (CRLF), skipping malformed ones', () => {
+    expect(
+      parseWindowsProcessTable(
+        '0 0 8192\r\n4 0 16089088\r\n\r\n 9120 4 1048576 \r\nx y z\r\n7 7\r\n',
+      ),
+    ).toEqual([
+      { pid: 0, ppid: 0, rssBytes: 8192 },
+      { pid: 4, ppid: 0, rssBytes: 16089088 },
+      { pid: 9120, ppid: 4, rssBytes: 1048576 },
+    ]);
+    // The System Idle process is its own parent; the tree walk must still terminate.
+    expect(sumProcessTrees(parseWindowsProcessTable('0 0 10\n5 0 20'), [0]).get(0)).toBe(30);
+    expect(WINDOWS_PROCESS_TABLE_SCRIPT).toContain('Win32_Process');
+  });
+
   it('reads `ps -A -o pid=,ppid=,rss=` rows in KiB', () => {
     expect(parsePsTable('    1     0  1200\n  501     1   64\n\n bad row\n')).toEqual([
       { pid: 1, ppid: 0, rssBytes: 1200 * 1024 },
@@ -57,11 +74,14 @@ describe('parsers', () => {
 });
 
 describe('createProcessTreeReader', () => {
-  it('has no reader on Windows', () => {
-    expect(createProcessTreeReader('win32')).toBeNull();
+  it('has a reader on Linux, macOS and Windows, none elsewhere', () => {
+    for (const platform of ['linux', 'darwin', 'win32'] as const) {
+      expect(createProcessTreeReader(platform)).not.toBeNull();
+    }
+    expect(createProcessTreeReader('freebsd')).toBeNull();
   });
 
-  it.if(process.platform === 'linux' || process.platform === 'darwin')(
+  it.if(['linux', 'darwin', 'win32'].includes(process.platform))(
     'reads the tree of this process',
     async () => {
       const reader = createProcessTreeReader();

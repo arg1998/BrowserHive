@@ -1,10 +1,10 @@
 /** @module test/helpers/fake-bw — helpers to put the fake `bw` on a child's PATH and build its env (spec 09 §4). */
 
 import { writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { delimiter, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-/** Directory containing the executable `bw` shim. */
+/** Directory containing the `bw` shims: `bw` (bash, POSIX) and `bw.cmd` (Windows). */
 export const FAKE_BW_DIR = dirname(fileURLToPath(import.meta.url));
 /** The only `BW_SESSION` the fake treats as unlocked (what `bw unlock --raw` would have printed). */
 export const FAKE_BW_TOKEN = 'fake-session-token';
@@ -50,9 +50,12 @@ export async function writeFakeBwConfig(home: string, config: FakeBwConfig): Pro
 
 /** A `HostEnvironment.env`-shaped record with the fake `bw` first on `PATH`. */
 export function fakeBwEnv(options: FakeBwEnvOptions = {}): Record<string, string> {
-  const base = options.basePath ?? '/usr/local/bin:/usr/bin:/bin';
+  const base =
+    options.basePath ??
+    (process.platform === 'win32' ? (process.env['PATH'] ?? '') : '/usr/local/bin:/usr/bin:/bin');
   return {
-    PATH: `${FAKE_BW_DIR}:${base}`,
+    // `delimiter`: Windows separates PATH entries with `;` (a `:` would split `C:\...`).
+    PATH: `${FAKE_BW_DIR}${delimiter}${base}`,
     HOME: options.home ?? '/tmp',
     ...(options.session !== undefined && { BW_SESSION: options.session }),
     ...(options.vaultPath !== undefined && { FAKE_BW_VAULT: options.vaultPath }),

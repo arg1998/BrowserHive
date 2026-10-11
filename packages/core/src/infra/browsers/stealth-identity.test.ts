@@ -6,6 +6,8 @@ import {
   deviceMemoryPayload,
   PRESENTED_DEVICE_MEMORY,
   platformVersionFor,
+  usableNativeUaCh,
+  vendorBrandFor,
 } from './stealth-identity.ts';
 
 /**
@@ -148,5 +150,140 @@ describe('platformVersionFor (derived from os.release() with fallback constants)
   ];
   it.each(table)('%s / %s → %s', (platform, release, expected) => {
     expect(platformVersionFor(platform, release)).toBe(expected);
+  });
+});
+
+/**
+ * Issue #18: Edge under stealth must present itself as Edge. The values below are what real Edge
+ * 155 reports on Windows (measured through Playwright, headless and headful alike).
+ */
+describe('Microsoft Edge identity (issue #18)', () => {
+  const edge = {
+    product: 'Edg/155.0.4283.45',
+    userAgent:
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36 Edg/155.0.0.0',
+    hostPlatform: 'win32',
+    hostArch: 'x64',
+  };
+  const native = {
+    brands: [
+      { brand: 'Microsoft Edge', version: '155' },
+      { brand: 'Chromium', version: '155' },
+      { brand: 'Not(A:Brand', version: '24' },
+    ],
+    fullVersionList: [
+      { brand: 'Microsoft Edge', version: '155.0.4283.45' },
+      { brand: 'Chromium', version: '155.0.8059.40' },
+      { brand: 'Not(A:Brand', version: '24.0.0.0' },
+    ],
+  };
+
+  it('recognises Edge from its product or its UA, and nothing else as Edge', () => {
+    expect(vendorBrandFor(edge)).toBe('Microsoft Edge');
+    expect(vendorBrandFor({ product: '', userAgent: edge.userAgent })).toBe('Microsoft Edge');
+    expect(vendorBrandFor({ product: 'Edg/155.0.4283.45', userAgent: '' })).toBe('Microsoft Edge');
+    expect(
+      vendorBrandFor({ product: 'HeadlessChrome/155.0.8059.40', userAgent: 'x Chrome/155.0.0.0' }),
+    ).toBe('Google Chrome');
+    expect(vendorBrandFor({ product: 'Chrome/1.0', userAgent: 'x Medge/1 Chrome/1' })).toBe(
+      'Google Chrome',
+    );
+  });
+
+  it('keeps the native lists: Microsoft Edge, the real Chromium version, the real GREASE', () => {
+    const { applied, override } = deriveCoherentIdentity({ ...edge, native });
+    const m = override.userAgentMetadata;
+    expect(m.brands).toEqual(native.brands);
+    expect(m.fullVersionList).toEqual(native.fullVersionList);
+    expect(m.brands.map((b) => b.brand)).not.toContain('Google Chrome');
+    expect(m.fullVersion).toBe('155.0.4283.45');
+    expect(applied.brands).toEqual(native.brands);
+    expect(applied.chromeMajor).toBe('155');
+    // The UA keeps saying Edge, and loses only the headless marker.
+    expect(override.userAgent).toContain('Edg/155.0.0.0');
+    expect(override.userAgent).not.toContain('HeadlessChrome');
+    // Copies, not the caller's objects.
+    expect(m.brands[0]).not.toBe(native.brands[0]);
+  });
+
+  it('without native lists, still says Microsoft Edge (never Google Chrome) at the UA major', () => {
+    // Absent, and read but unavailable.
+    for (const input of [edge, { ...edge, native: null }]) {
+      const { override } = deriveCoherentIdentity(input);
+      const m = override.userAgentMetadata;
+      expect(m.brands).toEqual([
+        { brand: 'Not_A Brand', version: '24' },
+        { brand: 'Chromium', version: '155' },
+        { brand: 'Microsoft Edge', version: '155' },
+      ]);
+      expect(m.fullVersionList.find((b) => b.brand === 'Microsoft Edge')?.version).toBe(
+        '155.0.4283.45',
+      );
+    }
+  });
+
+  it('ignores native lists that are not a coherent Edge base, and derives instead', () => {
+    const bad = [
+      // A headless or Chrome-branded list.
+      {
+        brands: [
+          { brand: 'HeadlessEdge', version: '155' },
+          { brand: 'Chromium', version: '155' },
+        ],
+        fullVersionList: native.fullVersionList,
+      },
+      { brands: native.brands, fullVersionList: [{ brand: 'Chromium', version: '155.0.1.2' }] },
+      // The vendor twice.
+      {
+        brands: [...native.brands, { brand: 'Microsoft Edge', version: '155' }],
+        fullVersionList: native.fullVersionList,
+      },
+      // A malformed version.
+      {
+        brands: native.brands,
+        fullVersionList: [
+          { brand: 'Microsoft Edge', version: 'latest' },
+          { brand: 'Chromium', version: '155.0.8059.40' },
+        ],
+      },
+    ];
+    for (const list of bad) {
+      expect(usableNativeUaCh(list, 'Microsoft Edge')).toBeNull();
+      const { override } = deriveCoherentIdentity({ ...edge, native: list });
+      expect(override.userAgentMetadata.brands.map((b) => b.brand)).toEqual([
+        'Not_A Brand',
+        'Chromium',
+        'Microsoft Edge',
+      ]);
+    }
+    expect(usableNativeUaCh(native, 'Microsoft Edge')).toBe(native);
+    expect(usableNativeUaCh(native, 'Google Chrome')).toBeNull();
+  });
+
+  it('never uses native lists for Chrome or the bundled Chromium (their derivation is unchanged)', () => {
+    const chromeNative = {
+      brands: [
+        { brand: 'Chromium', version: '131' },
+        { brand: 'Google Chrome', version: '131' },
+        { brand: 'Not?A_Brand', version: '99' },
+      ],
+      fullVersionList: [
+        { brand: 'Chromium', version: '131.0.6778.86' },
+        { brand: 'Google Chrome', version: '131.0.6778.86' },
+        { brand: 'Not?A_Brand', version: '99.0.0.0' },
+      ],
+    };
+    const { override } = deriveCoherentIdentity({
+      product: 'Chrome/131.0.6778.86',
+      userAgent: 'Mozilla/5.0 (X11; Linux x86_64) Chrome/131.0.0.0 Safari/537.36',
+      hostPlatform: 'linux',
+      hostArch: 'x64',
+      native: chromeNative,
+    });
+    expect(override.userAgentMetadata.brands.map((b) => b.brand)).toEqual([
+      'Not_A Brand',
+      'Chromium',
+      'Google Chrome',
+    ]);
   });
 });

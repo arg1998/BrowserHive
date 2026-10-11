@@ -2,6 +2,7 @@
 
 import { dirname, join, relative, sep } from 'node:path';
 import { unzipSync, zipSync } from 'fflate';
+import { AppError } from '../../kernel/errors/app-error.ts';
 import { resolveZipEntry } from '../../kernel/paths.ts';
 
 /** One directory entry as the zip helpers see it. */
@@ -42,13 +43,56 @@ async function collectRegularFiles(root: string, fs: ZipFs): Promise<Map<string,
 }
 
 /**
+ * Lock-marker files of a live profile: LevelDB's `LOCK` (Local Storage, IndexedDB, …) and the
+ * profile's own `lockfile`. Empty, recreated by every launch, and on Windows held open exclusively
+ * by the running browser, so a live snapshot cannot read them.
+ */
+export const PROFILE_LOCK_FILES: ReadonlySet<string> = new Set(['LOCK', 'lockfile']);
+
+/** Codes of a file another process holds open exclusively (Windows sharing violations). */
+const LOCKED_CODES: ReadonlySet<string> = new Set(['EBUSY', 'EPERM', 'EACCES']);
+
+function codeOf(error: unknown): string | undefined {
+  if (typeof error !== 'object' || error === null || !('code' in error)) return undefined;
+  return typeof error.code === 'string' ? error.code : undefined;
+}
+
+/** True when a read failure means "leave this file out" rather than "the snapshot failed". */
+function skippable(rel: string, error: unknown): boolean {
+  const code = codeOf(error);
+  // A live browser deletes temp and journal files all the time: listed, then gone before the read.
+  if (code === 'ENOENT') return true;
+  const base = rel.slice(rel.lastIndexOf('/') + 1);
+  return code !== undefined && LOCKED_CODES.has(code) && PROFILE_LOCK_FILES.has(base);
+}
+
+/**
  * Zips every regular file under `root` into one archive buffer. Synchronous fflate by design:
  * its async `zip`/`unzip` spawn a Web Worker whose message handshake is broken under Bun.
+ *
+ * A live profile is a moving target, so two read failures leave the file out instead of failing:
+ * a file that vanished after the listing, and a lock marker ({@link PROFILE_LOCK_FILES}) the running
+ * browser holds exclusively. A locked data file is `PROFILE_FILE_LOCKED` and anything else is
+ * rethrown: a snapshot never silently misses data.
+ *
+ * @throws `PROFILE_FILE_LOCKED` `{ file }` for a data file the running browser holds exclusively.
  */
 export async function zipDirectory(root: string, fs: ZipFs): Promise<Uint8Array> {
   const files = await collectRegularFiles(root, fs);
   const payload: Record<string, Uint8Array> = {};
-  for (const [rel, abs] of files) payload[rel] = await fs.readFile(abs);
+  for (const [rel, abs] of files) {
+    try {
+      payload[rel] = await fs.readFile(abs);
+    } catch (error) {
+      if (skippable(rel, error)) continue;
+      if (LOCKED_CODES.has(codeOf(error) ?? '')) {
+        // A data file the running browser holds exclusively (Windows: cookies, history). Leaving it
+        // out would be a silently incomplete snapshot; say which file and what to use instead.
+        throw new AppError('PROFILE_FILE_LOCKED', { file: rel }, { cause: error });
+      }
+      throw error;
+    }
+  }
   return zipSync(payload, { level: ZIP_LEVEL });
 }
 

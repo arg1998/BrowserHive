@@ -56,10 +56,33 @@ interface RunResult {
 }
 
 /**
+ * Non-secret variables passed to `bw` on every platform when set: `BITWARDENCLI_APPDATA_DIR` is
+ * where the CLI keeps its login when the operator moved it, and without it `bw` reads an empty
+ * data dir and reports itself logged out.
+ */
+export const BW_PASSTHROUGH_ENV: readonly string[] = ['BITWARDENCLI_APPDATA_DIR'];
+
+/**
+ * Windows-only additions. The CLI keeps its login under `%APPDATA%\Bitwarden CLI` (not `HOME`),
+ * Node-based executables need `SYSTEMROOT` for crypto and networking, and `PATHEXT` lets the shell
+ * resolve `bw.cmd`, the shim an npm install creates. Locations, never credentials.
+ */
+export const BW_WINDOWS_ENV: readonly string[] = [
+  'APPDATA',
+  'LOCALAPPDATA',
+  'USERPROFILE',
+  'SYSTEMROOT',
+  'TEMP',
+  'TMP',
+  'PATHEXT',
+];
+
+/**
  * `bw` as a subprocess. BrowserHive never asks for the master password: the operator runs
  * `bw unlock --raw` themselves and either exports `BW_SESSION` before start or pastes the token on
  * the dashboard. The token is the only secret retained, in a `Secret` field; it reaches child
- * processes only through `BW_SESSION` in a minimal env (`PATH`, `HOME`, `BW_SESSION`).
+ * processes only through `BW_SESSION` in a minimal env (`PATH`, `HOME`, `BW_SESSION`, plus the
+ * non-secret locations in {@link BW_PASSTHROUGH_ENV} and, on Windows, {@link BW_WINDOWS_ENV}).
  * Nothing from stdout/stderr is ever logged.
  */
 export class BitwardenBackend implements VaultBackend {
@@ -217,6 +240,14 @@ export class BitwardenBackend implements VaultBackend {
     const env: Record<string, string> = {};
     const path = this.deps.host.env['PATH'];
     if (path !== undefined) env['PATH'] = path;
+    const passthrough =
+      this.deps.host.platform === 'win32'
+        ? [...BW_PASSTHROUGH_ENV, ...BW_WINDOWS_ENV]
+        : BW_PASSTHROUGH_ENV;
+    for (const name of passthrough) {
+      const value = this.deps.host.env[name];
+      if (value !== undefined) env[name] = value;
+    }
     env['HOME'] = this.deps.host.env['HOME'] ?? this.deps.host.homeDir;
     if (this.session !== null) env['BW_SESSION'] = this.session.reveal();
     return env;

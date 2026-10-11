@@ -1,6 +1,7 @@
 /// <reference types="bun-types" />
 /** @module contracts/test/goldens/ws/protocol.test — JSON Schema of the envelope, commands, messages and feed payloads (spec 09 §3.1) */
 import { describe, expect, it } from 'bun:test';
+import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import {
   WsClientCommand,
@@ -9,7 +10,8 @@ import {
   WsServerMessage,
 } from '../../../src/ws/index.ts';
 
-const GOLDEN = new URL('./ws-protocol.json', import.meta.url).pathname;
+// `fileURLToPath`, not `.pathname`: that is `/C:/...` on Windows.
+const GOLDEN = fileURLToPath(new URL('./ws-protocol.json', import.meta.url).href);
 const UPDATE = Bun.env['UPDATE_GOLDENS'] === '1';
 
 function render(): string {

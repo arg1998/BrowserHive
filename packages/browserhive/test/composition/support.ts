@@ -5,13 +5,32 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ConfigOverrides, ResolvedConfigBundle } from '@browserhive/core/config';
 import { resolveConfig } from '@browserhive/core/config';
+import { TRANSIENT_REMOVE_CODES } from '@browserhive/core/kernel';
 import type { BootInput, OutputSinks } from '../../src/composition/index.ts';
 import { buildHostEnvironment, LOG_MODULES, nodeConfigFs } from '../../src/composition/index.ts';
+
+/**
+ * `rm -rf` that waits out Windows' transient locks: a stopped server's SQLite files and a closed
+ * Chromium's profile are released a moment after `stop()` resolves (the sync twin of core's
+ * `removeTree`; Bun's `rmSync` ignores `maxRetries`).
+ */
+export function removeTreeSync(path: string, retries = 10): void {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      rmSync(path, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      const code = (error as { code?: unknown }).code;
+      if (attempt >= retries || !TRANSIENT_REMOVE_CODES.has(String(code))) throw error;
+      Bun.sleepSync((attempt + 1) * 50);
+    }
+  }
+}
 
 /** A temp directory removed by `cleanup()`. */
 export function tempDir(prefix = 'bh-comp-'): { path: string; cleanup(): void } {
   const path = mkdtempSync(join(tmpdir(), prefix));
-  return { path, cleanup: () => rmSync(path, { recursive: true, force: true }) };
+  return { path, cleanup: () => removeTreeSync(path) };
 }
 
 /** Output sinks that collect lines. */

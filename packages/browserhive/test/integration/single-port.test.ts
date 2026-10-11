@@ -221,8 +221,41 @@ describe('single port: the browserhive executable', () => {
 
     const started = Date.now();
     child.kill('SIGTERM');
-    expect(await child.exited).toBe(0);
+    if (process.platform !== 'win32') {
+      expect(await child.exited).toBe(0);
+      expect(Date.now() - started).toBeLessThan(20_000);
+      own.cleanup();
+      return;
+    }
+
+    // Windows cannot deliver SIGTERM to another process: `kill` is TerminateProcess, so the daemon
+    // ends without its shutdown handler (Ctrl+Break and closing the console are its graceful paths,
+    // covered in process-handlers.test.ts). What must hold after a hard kill is recovery: the same
+    // data directory, with the dead process's lock file and an unclosed database, boots back to ready.
+    await child.exited;
     expect(Date.now() - started).toBeLessThan(20_000);
-    own.cleanup();
-  }, 60_000);
+    const again = Bun.spawn(
+      ['bun', bin, '--admin', '--auth', 'token', '--port', String(port), '--dataDir', own.path],
+      { stdout: 'pipe', stderr: 'pipe', env: { PATH: process.env['PATH'] ?? '', HOME: own.path } },
+    );
+    try {
+      let ready = false;
+      const until = Date.now() + 30_000;
+      while (!ready && Date.now() < until) {
+        ready = await fetch(`${origin}/health`)
+          .then(async (res) => ((await res.json()) as { status?: string }).status === 'ready')
+          .catch(() => false);
+        if (!ready) await Bun.sleep(200);
+      }
+      expect(ready).toBe(true);
+      const reclient = await mcpClient(token, origin);
+      const relisted = await reclient.callTool({ name: 'list_sessions', arguments: {} });
+      expect(relisted.isError).not.toBe(true);
+      await reclient.close();
+    } finally {
+      again.kill();
+      await again.exited;
+      own.cleanup();
+    }
+  }, 90_000);
 });

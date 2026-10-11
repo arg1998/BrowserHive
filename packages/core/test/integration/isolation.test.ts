@@ -166,7 +166,7 @@ describe('session isolation', () => {
     // Cached: the second read opens no new DevTools session.
     expect(await a.handle.browserPid?.()).toBe(pidA);
     const reader = createProcessTreeReader();
-    if (reader === null || pidA == null || pidB == null) return; // Windows: no reader (spec 10 §7).
+    if (reader === null || pidA == null || pidB == null) return; // A platform without a reader (spec 10 §7).
     const rss = await reader.rssOfTrees([pidA, pidB]);
     // A whole Chromium tree (browser, zygotes, renderer, GPU, network) is well above 10 MB.
     expect(rss.get(pidA)).toBeGreaterThan(10 * 1024 * 1024);

@@ -221,4 +221,20 @@ export const SESSION_ERRORS = {
     cause: 'No snapshot of the requested kind exists under that name in the auth-states directory.',
     resolution: 'Save one with save_storage_state or save_full_profile first.',
   }),
+  PROFILE_FILE_LOCKED: defineError({
+    code: 'PROFILE_FILE_LOCKED',
+    httpStatus: 409,
+    category: 'domain',
+    retryable: 'never',
+    title: 'Profile file locked by the running browser',
+    message:
+      "Cannot save a full profile of the live session: '{file}' is locked by the running browser.",
+    hint: "Use save_storage_state to snapshot a live session's cookies, localStorage and IndexedDB.",
+    details: z.object({ file: z.string() }),
+    docs: true,
+    cause:
+      'On Windows a running Chromium holds some profile databases (cookies, history) exclusively, so no other process can read them while the session is live.',
+    resolution:
+      "Use save_storage_state for a live session. A full-profile snapshot needs the browser's files released, which happens when the session closes.",
+  }),
 } as const;

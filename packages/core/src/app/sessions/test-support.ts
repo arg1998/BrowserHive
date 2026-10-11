@@ -1,5 +1,6 @@
 /** @module app/sessions/test-support — builders shared by the session suites (not a test). */
 
+import { posixPath } from '../../../test/helpers/posix-paths.ts';
 import type { CreateSessionRequest } from '../../domain/session/create-request.ts';
 import { Session } from '../../domain/session/session.ts';
 import type { SessionDirFs } from './profile-dir.ts';
@@ -55,13 +56,17 @@ export class FakeSessionDirFs implements SessionDirFs {
   readonly dirs = new Set<string>();
   failMkdir = false;
 
-  async mkdir(path: string, mode: number): Promise<void> {
+  // Paths are recorded POSIX-style (`posixPath`): the suites state `/data/…`, and on Windows the
+  // code under test hands in the `\data\…` that `node:path` builds there.
+  async mkdir(at: string, mode: number): Promise<void> {
+    const path = posixPath(at);
     this.ops.push(`mkdir ${path} ${mode.toString(8)}`);
     if (this.failMkdir) throw new Error('EACCES');
     this.dirs.add(path);
   }
 
-  async rm(path: string): Promise<void> {
+  async rm(at: string): Promise<void> {
+    const path = posixPath(at);
     this.ops.push(`rm ${path}`);
     for (const dir of [...this.dirs])
       if (dir === path || dir.startsWith(`${path}/`)) this.dirs.delete(dir);
@@ -72,7 +77,7 @@ export class FakeSessionDirFs implements SessionDirFs {
   }
 
   async exists(path: string): Promise<boolean> {
-    return this.dirs.has(path);
+    return this.dirs.has(posixPath(path));
   }
 }
 

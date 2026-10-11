@@ -47,7 +47,8 @@ describe('AuthStateStore', () => {
     const saved = await store.saveStorageState(source, 'first', 'demo-00000001', local);
     expect(saved.path).toBe(join(dir, 'auth-states', 'first.storage.json'));
     expect(storageStateCalls.at(-1)).toEqual({ path: saved.path, indexedDB: true });
-    expect((await stat(saved.path)).mode & 0o777).toBe(0o600);
+    // Windows has no POSIX modes; the file checks above still run there.
+    if (process.platform !== 'win32') expect((await stat(saved.path)).mode & 0o777).toBe(0o600);
     const manifest = JSON.parse(
       await readFile(join(dir, 'auth-states', 'first.meta.json'), 'utf8'),
     );
@@ -84,7 +85,15 @@ describe('AuthStateStore', () => {
     const userdata = join(dir, 'src');
     await mkdir(join(userdata, 'Default'), { recursive: true });
     await writeFile(join(userdata, 'Default', 'Local State'), 'state');
-    await symlink('/etc/passwd', join(userdata, 'SingletonLock'));
+    // A link the zip must skip. Windows needs a privilege for file symlinks, so there it is a
+    // junction to a directory: just as much a non-regular entry.
+    if (process.platform === 'win32') {
+      const target = join(dir, 'link-target');
+      await mkdir(target);
+      await symlink(target, join(userdata, 'SingletonLock'), 'junction');
+    } else {
+      await symlink('/etc/passwd', join(userdata, 'SingletonLock'));
+    }
     await store.saveFullProfile(userdata, 'work', 'prof-00000001', local);
     expect(await store.saveIdentitySeed('work', 'prof-00000001')).toBe(true);
     const dest = join(dir, 'dest');

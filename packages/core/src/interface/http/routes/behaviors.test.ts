@@ -16,6 +16,7 @@ import {
 } from '../../../../test/helpers/http-fixtures.ts';
 import { createHttpKit, type HttpKit } from '../../../../test/helpers/http-kit.ts';
 import { IDEMPOTENCY_KEY } from '../../../../test/helpers/http-route-cases.ts';
+import { posixView } from '../../../../test/helpers/posix-paths.ts';
 
 async function problemCode(response: Response): Promise<string> {
   return ProblemDetails.parse(await response.json()).code;
@@ -186,7 +187,7 @@ describe('sessions', () => {
   it('reveal opens the session directory through the Desktop port', async () => {
     const { kit, cookie } = await authed();
     await kit.request('POST', `/api/v1/sessions/${CLOSED_ID}/data-dir/reveal`, { cookie });
-    expect(kit.desktop.revealed).toEqual([`/data/sessions/${CLOSED_ID}`]);
+    expect(posixView(kit.desktop.revealed)).toEqual([`/data/sessions/${CLOSED_ID}`]);
   });
 });
 

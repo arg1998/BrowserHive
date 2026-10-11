@@ -1,9 +1,13 @@
 /** @module app/config/kinds.test — unit tests for kinds */
 import { describe, expect, it } from 'bun:test';
 import { CONFIG_KEYS, keyMeta } from '@browserhive/contracts/config';
-import { deriveMaxSessions, hostRamGib, osDefaultDataDir } from './data-dir.ts';
+import {
+  deriveMaxSessions,
+  hostRamGib,
+  osDefaultDataDir as osDefaultDataDirOf,
+} from './data-dir.ts';
 import { keyKind, PATH_KEYS, quoteRaw, renderValue } from './kinds.ts';
-import { fakeHost, GIB } from './test-support.ts';
+import { fakeHost, GIB, posixPathsIn } from './test-support.ts';
 
 describe('keyKind', () => {
   it('classifies the keys spec 08 §2.1 assigns a grammar to', () => {
@@ -70,6 +74,9 @@ describe('data-dir derivations', () => {
   });
 
   it('osDefaultDataDir follows D-24 per platform', () => {
+    // The fake hosts' platforms differ from this machine's, whose `node:path` joins them: compare POSIX-style.
+    const osDefaultDataDir = (host: Parameters<typeof osDefaultDataDirOf>[0]) =>
+      posixPathsIn(osDefaultDataDirOf(host));
     expect(osDefaultDataDir(fakeHost({ platform: 'darwin', homeDir: '/Users/me' }))).toBe(
       '/Users/me/Library/Application Support/BrowserHive',
     );

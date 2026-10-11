@@ -17,7 +17,7 @@
   "scripts": {
     "dev": "bun scripts/dev.ts",
     "build": "bun run --filter @browserhive/contracts build && bun run --filter @browserhive/core build && bun run --filter @browserhive/dashboard build && bun run --filter browserhive build",
-    "typecheck": "node_modules/typescript7/bin/tsc -b --pretty",
+    "typecheck": "bun node_modules/typescript7/bin/tsc -b --pretty",
     "lint": "biome ci --error-on-warnings .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
@@ -41,7 +41,7 @@
     "release:publish": "bun run build && bun run package:check && changeset publish",
     "sync:version": "bun scripts/sync-version.ts",
     "typecheck:tsc": "tsc -b --pretty",
-    "test:server": "bun test packages/contracts packages/core/src packages/core/test/persistence packages/core/test/notifications packages/core/test/lint packages/browserhive/src packages/browserhive/test/cli packages/browserhive/test/composition test/lint test/docs",
+    "test:server": "bun test packages/contracts packages/core/src packages/core/test/persistence packages/core/test/notifications packages/core/test/lint packages/browserhive/src packages/browserhive/test/cli packages/browserhive/test/composition packages/browserhive/test/stealth test/lint test/docs test/integration/preload.test.ts",
     "test:dashboard": "bun test packages/dashboard/src",
     "website:install": "bun install --cwd website --frozen-lockfile",
     "website:dev": "bun run --cwd website dev",

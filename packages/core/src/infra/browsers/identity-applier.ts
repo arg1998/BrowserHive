@@ -6,12 +6,27 @@ import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { AppliedDisplay, AppliedIdentity, GeoSeed } from '../../ports/browser-driver.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type { HostFacts } from './host-facts.ts';
-import { type CoherentIdentity, deriveCoherentIdentity } from './stealth-identity.ts';
+import {
+  type CoherentIdentity,
+  deriveCoherentIdentity,
+  type NativeUaCh,
+  vendorBrandFor,
+} from './stealth-identity.ts';
 
 const BrowserVersion = z.object({
   product: z.string().optional(),
   userAgent: z.string().optional(),
 });
+
+const BrandSchema = z.object({ brand: z.string(), version: z.string() });
+const NativeUaChSchema = z.object({
+  brands: z.array(BrandSchema),
+  fullVersionList: z.array(BrandSchema),
+});
+
+/** Where the throwaway page reads the native client hints (routed, never fetched). */
+export const NATIVE_UA_CH_URL = 'https://ua-ch.browserhive.invalid/';
+const NATIVE_UA_CH_TIMEOUT_MS = 5_000;
 
 interface PageState {
   readonly cdp: CDPSession | null;
@@ -96,14 +111,23 @@ export class IdentityApplier {
   async apply(page: Page, input: ApplyIdentityInput): Promise<AppliedIdentity> {
     const cdp = await this.context.newCDPSession(page);
     const version = BrowserVersion.parse(await cdp.send('Browser.getVersion'));
+    const product = version.product ?? '';
+    const userAgent = version.userAgent ?? '';
+    // Edge only: its `Chromium` brand version is not in `Browser.getVersion`, so read Edge's own
+    // lists before any override exists. Chrome and the bundled Chromium need nothing native.
+    const native =
+      vendorBrandFor({ product, userAgent }) === 'Microsoft Edge'
+        ? await this.readNativeUaCh()
+        : null;
     const derived = deriveCoherentIdentity({
-      product: version.product ?? '',
-      userAgent: version.userAgent ?? '',
+      product,
+      userAgent,
       hostPlatform: this.host.platform,
       hostArch: this.host.arch,
       hostRelease: this.host.release,
       geo: input.geo,
       display: input.display,
+      native,
     });
     this.override = derived.override;
     await cdp.send('Emulation.setUserAgentOverride', cdpParamsFor(derived.override));
@@ -144,6 +168,44 @@ export class IdentityApplier {
     this.disposed = true;
     this.override = undefined;
     for (const page of [...this.live]) await this.detach(page);
+  }
+
+  /**
+   * The browser's unmodified `navigator.userAgentData` lists, or `null` (logged at debug) when they
+   * cannot be read. `userAgentData` exists only in a secure context, and the launch page is an
+   * insecure `about:blank`, so a throwaway page loads a routed `https:` URL: Playwright fulfils it,
+   * nothing reaches the network, and the page closes before the session is handed out (so no tab
+   * listener ever sees it). `.invalid` is reserved and never resolves (RFC 2606).
+   */
+  private async readNativeUaCh(): Promise<NativeUaCh | null> {
+    let probe: Page | undefined;
+    try {
+      probe = await this.context.newPage();
+      await probe.route(NATIVE_UA_CH_URL, (route) =>
+        route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html>' }),
+      );
+      await probe.goto(NATIVE_UA_CH_URL, { timeout: NATIVE_UA_CH_TIMEOUT_MS });
+      const raw: unknown = await probe.evaluate(async () => {
+        // `userAgentData` is not in every DOM typing.
+        const data = (
+          navigator as Navigator & {
+            userAgentData?: {
+              brands: unknown;
+              getHighEntropyValues(hints: string[]): Promise<{ fullVersionList?: unknown }>;
+            };
+          }
+        ).userAgentData;
+        if (data === undefined) return null;
+        const high = await data.getHighEntropyValues(['fullVersionList']);
+        return { brands: data.brands, fullVersionList: high.fullVersionList };
+      });
+      return NativeUaChSchema.nullable().parse(raw);
+    } catch (err) {
+      this.logger.debug('native UA-CH unreadable', { err: serializeError(err) });
+      return null;
+    } finally {
+      await probe?.close().catch(() => undefined);
+    }
   }
 
   private async applyToPage(page: Page): Promise<void> {

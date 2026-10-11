@@ -91,11 +91,18 @@ describe('auth-state save + restore (real Chromium)', () => {
     const src = await h.launch({ slug: 'psrc', persistence_mode: 'persistent' });
     await h.callJson('navigate', { session_id: src, url: state.fixture.url('/') });
     await h.callJson('evaluate', { session_id: src, expression: setItem('profile', 'deep-state') });
-    const live = await h.callJson<{ name: string; size: number }>('save_full_profile', {
-      session_id: src,
-      name: 'live-profile',
-    });
-    expect(live.size).toBeGreaterThan(0);
+    const liveResult = await h.call('save_full_profile', { session_id: src, name: 'live-profile' });
+    const liveSaved = liveResult.isError !== true;
+    if (liveSaved) {
+      expect((JSON.parse(textOf(liveResult)) as { size: number }).size).toBeGreaterThan(0);
+    } else {
+      // Windows only: the running browser holds its cookie database exclusively, so a live save is
+      // refused with a typed, actionable error instead of an incomplete archive.
+      expect(process.platform).toBe('win32');
+      expect(textOf(liveResult)).toContain('PROFILE_FILE_LOCKED');
+      expect(textOf(liveResult)).toContain('is locked by the running browser');
+      expect(textOf(liveResult)).not.toContain('INTERNAL_ERROR');
+    }
     // A consistent snapshot comes from a flushed profile: closing commits Chromium's DOM storage to
     // disk, then the store zips the quiescent managed dir.
     expect(
@@ -120,7 +127,9 @@ describe('auth-state save + restore (real Chromium)', () => {
     });
     expect(restored.result).toBe('deep-state');
     const listed = await h.callJson<{ name: string; kind: string }[]>('list_saved_auths');
-    expect(listed.map((e) => e.name).sort()).toEqual(['live-profile', 'work-profile']);
+    expect(listed.map((e) => e.name).sort()).toEqual(
+      liveSaved ? ['live-profile', 'work-profile'] : ['work-profile'],
+    );
   });
 
   it('restoring a missing name fails with AUTH_STATE_NOT_FOUND', async () => {

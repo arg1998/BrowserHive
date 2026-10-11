@@ -49,10 +49,15 @@ describe('observability end-to-end (real Chromium + SQLite)', () => {
   });
 
   afterEach(async () => {
-    await h.close();
-    recorder.stop();
-    await queue.close();
-    await db.close();
+    // Sessions close first so their closing events are recorded; the database lives in the
+    // harness's data dir, so it must be closed before that dir is removed (Windows: EBUSY).
+    await h.close({
+      beforeRemove: async () => {
+        recorder.stop();
+        await queue.close();
+        await db.close();
+      },
+    });
     fixture.stop();
   });
 
