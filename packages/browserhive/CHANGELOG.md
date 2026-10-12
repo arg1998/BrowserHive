@@ -1,5 +1,23 @@
 # browserhive
 
+## 0.2.1
+
+### Patch Changes
+
+- [#35](https://github.com/arg1998/BrowserHive/pull/35) [`b6f8377`](https://github.com/arg1998/BrowserHive/commit/b6f837789008da0a833b14562b3ef60a058c85e9) Thanks [@arg1998](https://github.com/arg1998)! - Microsoft Edge under stealth now presents itself as Microsoft Edge.
+
+  - **Client hints match the browser.** With `channel: "edge"` and stealth on, `navigator.userAgentData` used to say `Google Chrome` (with Edge's version as the Chromium version) while the user agent said `Edg/`, a mismatch sites can check. BrowserHive now uses Edge's own client hints: `Microsoft Edge` at Edge's version, `Chromium` at the real Chromium version underneath, and Edge's own GREASE entry, exactly what real Edge sends. Chrome and the bundled Chromium are unchanged.
+  - **Checked on every run.** The stealth checks (`sandbox-matrix` and the sandbox parity test) now assert per channel that the vendor brand appears once, the other vendor never, and that brands, user agent and versions agree.
+
+- [#35](https://github.com/arg1998/BrowserHive/pull/35) [`b6f8377`](https://github.com/arg1998/BrowserHive/commit/b6f837789008da0a833b14562b3ef60a058c85e9) Thanks [@arg1998](https://github.com/arg1998)! - Windows fixes: a clean stop from the console, the Bitwarden vault, full-profile saves, and browser memory metrics.
+
+  - **Ctrl+Break and closing the console window stop BrowserHive cleanly** on Windows (sessions closed, database flushed), like Ctrl+C. Before, both ended the process at once.
+  - **The database file is released as soon as BrowserHive stops**, including after a failed start (for example a port already in use). On Windows the data directory used to stay locked until the process exited.
+  - **The Bitwarden vault works on Windows.** `bw` now gets the locations it needs there (`APPDATA`, where it keeps its login, plus `LOCALAPPDATA`, `USERPROFILE`, `SYSTEMROOT`, `TEMP`, `TMP` and `PATHEXT`), and on every platform `BITWARDENCLI_APPDATA_DIR` when you set it. Still no credentials in its environment besides `BW_SESSION`.
+  - **`save_full_profile` on a live session** skips the lock files a running browser holds and the temporary files it deletes while the snapshot is taken, instead of failing with `INTERNAL_ERROR`. On Windows, where a running browser locks its cookie database, it fails with the new `PROFILE_FILE_LOCKED` error naming the file and pointing to `save_storage_state`, instead of `INTERNAL_ERROR`.
+  - **`browserhive.browser.rss_bytes` reports on Windows too** (the working set of each session's browser and all its processes, every 10 seconds).
+  - **Session, trace and profile folders are removed reliably on Windows**, waiting out the moment a just-closed browser still holds its files.
+
 ## 0.2.0
 
 ### Minor Changes
