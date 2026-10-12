@@ -1,4 +1,6 @@
 * text=auto eol=lf
+# Batch files keep CRLF: cmd.exe misparses some LF-only scripts.
+*.cmd text eol=crlf
 *.png binary
 *.jpg binary
 *.zip binary

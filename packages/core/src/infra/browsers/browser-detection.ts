@@ -1,7 +1,7 @@
 /** @module infra/browsers/browser-detection — finds the bundled Chromium and the installed Google Chrome / Microsoft Edge the way Playwright's own launcher does, with their versions and any managed policies that block automation (plan Phase 1). */
 
 import { createRequire } from 'node:module';
-import { join, win32 } from 'node:path';
+import { posix, win32 } from 'node:path';
 import type { Channel } from '@browserhive/contracts/enums';
 import { z } from 'zod';
 
@@ -179,7 +179,8 @@ function linuxPolicies(dir: string, deps: BrowserDetectionDeps): ManagedPolicies
   let found = false;
   for (const name of deps.listDir(dir)) {
     if (!name.endsWith('.json')) continue;
-    const text = deps.readFile(join(dir, name));
+    // `posix`: a Linux path whatever the machine running this (tests inject the platform).
+    const text = deps.readFile(posix.join(dir, name));
     if (text === null) continue;
     try {
       const parsed = JsonObject.safeParse(JSON.parse(text));

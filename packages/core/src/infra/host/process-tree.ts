@@ -1,4 +1,4 @@
-/** @module infra/host/process-tree — resident memory of process trees (a browser and every descendant), read from `/proc` on Linux and `ps` on macOS (spec 10 §7 `browserhive.browser.rss_bytes`). */
+/** @module infra/host/process-tree — resident memory of process trees (a browser and every descendant), read from `/proc` on Linux, `ps` on macOS and `Win32_Process` on Windows (spec 10 §7 `browserhive.browser.rss_bytes`). */
 
 import { execFile } from 'node:child_process';
 import { readdir, readFile } from 'node:fs/promises';
@@ -90,6 +90,39 @@ async function linuxTable(): Promise<ProcessEntry[]> {
   return (await Promise.all(reads)).filter((e): e is ProcessEntry => e !== null);
 }
 
+/** Parses `<pid> <ppid> <working set bytes>` rows, the Windows table (working set is its RSS). */
+export function parseWindowsProcessTable(text: string): ProcessEntry[] {
+  const entries: ProcessEntry[] = [];
+  for (const line of text.split(/\r?\n/)) {
+    const [pid, ppid, bytes] = line.trim().split(/\s+/);
+    if (pid === undefined || ppid === undefined || bytes === undefined) continue;
+    const entry = { pid: Number(pid), ppid: Number(ppid), rssBytes: Number(bytes) };
+    if (
+      Number.isInteger(entry.pid) &&
+      Number.isInteger(entry.ppid) &&
+      Number.isFinite(entry.rssBytes)
+    )
+      entries.push(entry);
+  }
+  return entries;
+}
+
+/** The PowerShell that prints the Windows process table for {@link parseWindowsProcessTable}. */
+export const WINDOWS_PROCESS_TABLE_SCRIPT =
+  '$ProgressPreference = "SilentlyContinue"; ' +
+  'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId) $($_.ParentProcessId) $($_.WorkingSetSize)" }';
+
+function windowsTable(): Promise<ProcessEntry[]> {
+  return new Promise((resolve) => {
+    execFile(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-Command', WINDOWS_PROCESS_TABLE_SCRIPT],
+      { timeout: 10_000, maxBuffer: 8 * 1024 * 1024, windowsHide: true },
+      (err, stdout) => resolve(err === null ? parseWindowsProcessTable(stdout) : []),
+    );
+  });
+}
+
 function psTable(): Promise<ProcessEntry[]> {
   return new Promise((resolve) => {
     execFile(
@@ -102,13 +135,21 @@ function psTable(): Promise<ProcessEntry[]> {
 }
 
 /**
- * The reader for `platform`: `/proc` on Linux, `ps` on macOS, `null` elsewhere (Windows has no
- * cheap equivalent; the metric then has no data points, as spec 10 §7 says).
+ * The reader for `platform`: `/proc` on Linux, `ps` on macOS, `Win32_Process` through PowerShell on
+ * Windows (about half a second per sample, which is every 10 s and only while metrics are exported),
+ * `null` elsewhere (the metric then has no data points).
  */
 export function createProcessTreeReader(
   platform: NodeJS.Platform = process.platform,
 ): ProcessTreeReader | null {
-  const table = platform === 'linux' ? linuxTable : platform === 'darwin' ? psTable : null;
+  const table =
+    platform === 'linux'
+      ? linuxTable
+      : platform === 'darwin'
+        ? psTable
+        : platform === 'win32'
+          ? windowsTable
+          : null;
   if (table === null) return null;
   return {
     async rssOfTrees(roots) {

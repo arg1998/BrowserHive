@@ -66,6 +66,11 @@ export {
   scrubPatterns,
   TRUNCATED,
 } from './redact.ts';
+export {
+  type RemoveTreeOptions,
+  removeTree,
+  TRANSIENT_REMOVE_CODES,
+} from './remove.ts';
 export { type Err, err, type Ok, ok, type Result } from './result.ts';
 export { isSecret, SECRET_PLACEHOLDER, Secret, secret, unwrapSecret } from './secret.ts';
 export {

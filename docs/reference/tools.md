@@ -1152,7 +1152,7 @@ Result (JSON text block, mirrored in `structuredContent`):
 | `path` | `string` | yes |
 | `size` | `number` | yes |
 
-Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`INVALID_PERSISTENCE_CONFIG`](errors.md#INVALID_PERSISTENCE_CONFIG), [`PATH_NOT_ALLOWED`](errors.md#PATH_NOT_ALLOWED). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
+Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`INVALID_PERSISTENCE_CONFIG`](errors.md#INVALID_PERSISTENCE_CONFIG), [`PATH_NOT_ALLOWED`](errors.md#PATH_NOT_ALLOWED), [`PROFILE_FILE_LOCKED`](errors.md#PROFILE_FILE_LOCKED). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
 
 <a id="list_saved_auths"></a>
 ### `list_saved_auths`

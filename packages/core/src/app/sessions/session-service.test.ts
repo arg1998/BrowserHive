@@ -11,6 +11,7 @@ import { CollectingLogger } from '../../../test/helpers/collecting-logger.ts';
 import { FakeBrowserDriver } from '../../../test/helpers/fake-browser-driver.ts';
 import { FakeClock } from '../../../test/helpers/fake-clock.ts';
 import { FakeIdGenerator } from '../../../test/helpers/fake-id-generator.ts';
+import { posixView } from '../../../test/helpers/posix-paths.ts';
 import { LOCAL_PRINCIPAL, type SessionPrincipal } from '../../domain/session/principal.ts';
 import { isAppError } from '../../kernel/errors/app-error.ts';
 import { InProcessEventBus } from '../events/bus.ts';
@@ -165,7 +166,9 @@ describe('SessionService lifecycle', () => {
     const session = await service.create({ slug: 'shop' }, LOCAL_PRINCIPAL);
     const handle = driver.handles[0];
     expect(await service.close(session.id, 'operator', { deadlineMs: 250 })).toBe(true);
-    expect(handle?.tracing?.stopPaths).toEqual(['/data/sessions/shop-00000001/trace.zip']);
+    expect(posixView(handle?.tracing?.stopPaths)).toEqual([
+      '/data/sessions/shop-00000001/trace.zip',
+    ]);
     expect(handle?.closes).toEqual([{ deadlineMs: 250, aborted: false }]);
     expect(session.state.kind).toBe('closed');
     expect(session.closedReason).toBe('operator');

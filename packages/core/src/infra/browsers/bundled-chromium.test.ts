@@ -17,7 +17,8 @@ describe('bundledChromiumVersion', () => {
       lookups.push(`${specifier}<-${from}`);
       return `/nm/${specifier}/package.json`;
     };
-    const read = (path: string) => (path.endsWith('/browsers.json') ? manifest : null);
+    // Either separator: the path is joined with the host's `node:path`.
+    const read = (path: string) => (/[\\/]browsers\.json$/.test(path) ? manifest : null);
     expect(bundledChromiumVersion('playwright', { locate, read, from: '/app' })).toBe('150.0.1.2');
     expect(bundledChromiumVersion('patchright', { locate, read, from: '/app' })).toBe('150.0.1.2');
     expect(lookups).toEqual([

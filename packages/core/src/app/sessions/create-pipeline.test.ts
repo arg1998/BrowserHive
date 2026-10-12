@@ -4,6 +4,7 @@ import { CollectingLogger } from '../../../test/helpers/collecting-logger.ts';
 import { FakeBrowserDriver } from '../../../test/helpers/fake-browser-driver.ts';
 import { FakeClock } from '../../../test/helpers/fake-clock.ts';
 import { FakeIdGenerator } from '../../../test/helpers/fake-id-generator.ts';
+import { posixPath } from '../../../test/helpers/posix-paths.ts';
 import { LOCAL_PRINCIPAL } from '../../domain/session/principal.ts';
 import { AppError, isAppError } from '../../kernel/errors/app-error.ts';
 import type { LaunchWarning } from '../../ports/browser-driver.ts';
@@ -58,7 +59,9 @@ describe('create pipeline (D-21)', () => {
     expect(service.timings.map((t) => t.phase)).toEqual([...PIPELINE_PHASES]);
     expect(service.timings.every((t) => t.ms >= 0)).toBe(true);
     expect(driver.launches).toHaveLength(1);
-    expect(driver.launches[0]?.downloadsDir).toBe('/data/sessions/shop-00000001/downloads');
+    expect(posixPath(driver.launches[0]?.downloadsDir ?? '')).toBe(
+      '/data/sessions/shop-00000001/downloads',
+    );
     expect(driver.launches[0]?.userDataDir).toBeUndefined();
     expect(fs.ops.filter((op) => op.startsWith('mkdir'))).toEqual([
       'mkdir /data/sessions/shop-00000001 700',
@@ -74,7 +77,9 @@ describe('create pipeline (D-21)', () => {
   it('persistent mode creates userdata and passes the managed path to the driver', async () => {
     const { service, driver, fs } = setup();
     await service.create({ slug: 'shop', persistenceMode: 'persistent' }, LOCAL_PRINCIPAL);
-    expect(driver.launches[0]?.userDataDir).toBe('/data/sessions/shop-00000001/userdata');
+    expect(posixPath(driver.launches[0]?.userDataDir ?? '')).toBe(
+      '/data/sessions/shop-00000001/userdata',
+    );
     expect(fs.dirs.has('/data/sessions/shop-00000001/userdata')).toBe(true);
   });
 

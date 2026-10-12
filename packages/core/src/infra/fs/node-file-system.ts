@@ -1,6 +1,7 @@
 /** @module infra/fs/node-file-system — `node:fs/promises` adapter of the `FileSystem` port. */
 
 import { mkdir, readdir, readFile, rm, stat, unlink, writeFile } from 'node:fs/promises';
+import { removeTree } from '../../kernel/remove.ts';
 import type { FileStat, FileSystem, MkdirOptions, RemoveOptions } from '../../ports/file-system.ts';
 
 /** Default mode for directories created by the adapter (D-24: private data). */
@@ -53,7 +54,8 @@ export function createNodeFileSystem(): FileSystem {
       }
     },
     async rm(path: string, options: RemoveOptions = {}): Promise<void> {
-      await rm(path, { force: true, ...(options.recursive === true && { recursive: true }) });
+      if (options.recursive === true) await removeTree(path);
+      else await rm(path, { force: true });
     },
     async mkdir(path: string, options: MkdirOptions = {}): Promise<void> {
       await mkdir(path, { recursive: true, mode: options.mode ?? DIR_MODE });

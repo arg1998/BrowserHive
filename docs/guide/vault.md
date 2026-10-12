@@ -39,7 +39,7 @@ If unlock fails with [`VAULT_UNLOCK_FAILED`](../reference/errors.md#VAULT_UNLOCK
 
 **Lock** discards the token. **Sync** pulls changes from the Bitwarden server. While the vault is locked, `vault_fill` fails with [`VAULT_LOCKED`](../reference/errors.md#VAULT_LOCKED), which tells the agent to wait for an operator.
 
-BrowserHive runs `bw` with a minimal environment (`PATH`, `HOME`, `BW_SESSION`), passes entry names after `--` so they can never be read as options, and applies a timeout to every call.
+BrowserHive runs `bw` with a minimal environment (`PATH`, `HOME`, `BW_SESSION`, and `BITWARDENCLI_APPDATA_DIR` when set; on Windows also `APPDATA`, `LOCALAPPDATA`, `USERPROFILE`, `SYSTEMROOT`, `TEMP`, `TMP` and `PATHEXT`, because the CLI keeps its login under `%APPDATA%` there), passes entry names after `--` so they can never be read as options, and applies a timeout to every call.
 
 ## 4. Decide what agents may use
 

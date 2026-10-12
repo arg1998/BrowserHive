@@ -152,12 +152,28 @@ export async function openDatabase(options: OpenDatabaseOptions): Promise<Databa
             logger.warn('wal checkpoint failed', { error: String(error) });
           }
         }
-        raw.close();
+        closeRaw(raw, logger);
       },
     };
   } catch (error) {
     raw.close();
     throw error;
+  }
+}
+
+/**
+ * Closes the connection now. bun:sqlite's default `close()` is `sqlite3_close_v2`: with a prepared
+ * statement still alive it leaves a zombie connection that keeps the file open until garbage
+ * collection. POSIX does not notice; on Windows the data dir stays locked (a failed boot's unwind
+ * could not be followed by removing or reusing the directory). `close(true)` finalizes the
+ * statements and closes for real. Should it throw, the lazy close still runs.
+ */
+export function closeRaw(raw: Pick<Database, 'close'>, logger: Logger): void {
+  try {
+    raw.close(true);
+  } catch (error) {
+    logger.warn('database close deferred', { error: String(error) });
+    raw.close();
   }
 }
 

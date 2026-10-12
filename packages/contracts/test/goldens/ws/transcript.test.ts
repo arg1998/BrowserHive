@@ -1,10 +1,12 @@
 /// <reference types="bun-types" />
 /** @module contracts/test/goldens/ws/transcript.test — fixed client/server exchange validated against the schemas and blessed as JSON */
 import { describe, expect, it } from 'bun:test';
+import { fileURLToPath } from 'node:url';
 import { WS_SUBPROTOCOL, WsClientCommand, WsServerMessage } from '../../../src/ws/index.ts';
 import * as fx from '../../http/fixtures.ts';
 
-const GOLDEN = new URL('./transcript.json', import.meta.url).pathname;
+// `fileURLToPath`, not `.pathname`: that is `/C:/...` on Windows.
+const GOLDEN = fileURLToPath(new URL('./transcript.json', import.meta.url).href);
 const UPDATE = Bun.env['UPDATE_GOLDENS'] === '1';
 
 interface Frame {

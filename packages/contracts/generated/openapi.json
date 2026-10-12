@@ -144,6 +144,7 @@
               "TAB_NOT_FOUND",
               "PATH_NOT_ALLOWED",
               "AUTH_STATE_NOT_FOUND",
+              "PROFILE_FILE_LOCKED",
               "EVALUATE_DISABLED",
               "ELEMENT_NOT_ACTIONABLE",
               "ELEMENT_NOT_FOUND",

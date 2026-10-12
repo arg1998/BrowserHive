@@ -7,6 +7,7 @@ import {
   type ToolHarness,
   textOf,
 } from '../../../../test/helpers/fake-transport.ts';
+import { posixPath } from '../../../../test/helpers/posix-paths.ts';
 import { executeTool } from '../../../../test/helpers/tool-run.ts';
 import { agentPrincipal } from '../../../domain/auth/principal.ts';
 
@@ -29,7 +30,9 @@ describe('auth-state tools', () => {
       session_id: persistent,
       name: 'work',
     });
-    expect((profile.value as { path: string }).path).toEndWith('auth-states/work.profile.zip');
+    expect(posixPath((profile.value as { path: string }).path)).toEndWith(
+      'auth-states/work.profile.zip',
+    );
     const listed = await executeTool(h, 'list_saved_auths');
     expect((listed.value as { name: string; kind: string }[]).map((e) => [e.name, e.kind])).toEqual(
       [

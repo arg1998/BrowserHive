@@ -40,6 +40,9 @@ export {
   isStorageCorruption,
   type ProcessHandlerDeps,
   type SignalTarget,
+  STOP_SIGNALS,
+  stopSignalsFor,
+  WINDOWS_STOP_SIGNALS,
 } from './process-handlers.ts';
 export {
   type BootInput,

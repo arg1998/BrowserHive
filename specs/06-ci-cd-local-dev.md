@@ -58,6 +58,8 @@ Dev-only environment variables (never read by the published package; they are no
 |---|---|---|
 | `BHDEV_DASHBOARD` | `run-from-source.ts` | `dist`: no Vite; the daemon serves a bundle built again when stale |
 | `BHDEV_DAEMON_URL` | `vite.config.ts` | where Vite proxies API calls; set by the script, default `http://127.0.0.1:9876` |
+| `BHDEV_TEST_CHANNEL` | integration suites | the channel the real-browser suites launch sessions on (`chrome` in the weekly real-Chrome run); default `chromium` |
+| `BHDEV_TEST_TIMEOUT_MS` | `scripts/test-integration.ts` | per-test and per-hook limit of the real-browser suites; default 30000 (Bun's own 5 s is too short on macOS and Windows runners, issue #23) |
 
 `bun run doctor` (which calls `browserhive doctor` from source) reports Bun version, Chromium presence and version, Patchright presence, data dir permissions, and any unrecognised data file (such as an `events.db`) that BrowserHive does not read or migrate.
 
@@ -73,7 +75,7 @@ Dev-only environment variables (never read by the published package; they are no
 | `depcruise` | `depcruise --config .dependency-cruiser.cjs packages` |
 | `test` | `test:server` (contracts, core unit + persistence + lint, browserhive unit/cli/composition, `test/lint`, `test/docs`) then `test:dashboard` (`bun test packages/dashboard/src`); the root `test/preload.ts` (from `bunfig.toml`) registers happy-dom only for dashboard paths |
 | `test:watch` | `bun test --watch` |
-| `test:integration` | `bun test --preload ./test/integration/preload.ts packages/*/test/integration` (real Chromium, serial) |
+| `test:integration` | `scripts/test-integration.ts`: `bun test --preload ./test/integration/preload.ts --timeout 30000 --max-concurrency=1 packages/*/test/integration` (real Chromium, serial); extra arguments pass through |
 | `test:e2e` | `bunx playwright test` against a built dashboard served by the real server on a random port |
 | `test:goldens` | contract goldens (tool JSON Schemas, OpenAPI, WS transcripts, schema fingerprint); `UPDATE_GOLDENS=1` blesses |
 | `check` | `lint` + `typecheck` + `depcruise` + `test` + `gen:openapi --check` + `gen:docs --check` + `gen:db-types --check` |
@@ -144,9 +146,10 @@ Triggers: `pull_request`, `push` to `main`. Concurrency group `ci-${{ github.ref
 | `typecheck` | ubuntu | `tsc -b` (all projects, incl. dashboard and tests) | yes |
 | `depcruise` | ubuntu | `depcruise` + `contracts` platform-neutrality rule | yes |
 | `unit` | ubuntu | `bun test` (contracts, core, browserhive, dashboard) with coverage (`bun test --coverage`, lcov uploaded); ratcheting threshold in `bunfig.toml` | yes |
+| `unit-cross-os` | matrix `macos-latest`, `windows-latest`; `continue-on-error` on macOS until its system-SQLite differences are fixed (issue #23) | `test:server` and `test:dashboard` without coverage: the path, file-mode and process differences Ubuntu cannot show (issue #2) | no |
 | `goldens` | ubuntu | `test:goldens`, `gen:openapi --check`, `gen:docs --check`, `gen:db-types --check`, export snapshots | yes |
 | `build` | ubuntu | `build`; uploads `packages/browserhive/dist` and the packed tarball as artifacts | yes |
-| `integration` | matrix `ubuntu-latest`, `macos-latest`, `windows-latest` | Playwright cache (`~/.cache/ms-playwright`, `~/Library/Caches/ms-playwright`, `%LOCALAPPDATA%\ms-playwright`) keyed on the **resolved** Playwright version from `bun.lock`; `bunx playwright install chromium --with-deps` on miss; `test:integration` (isolation, stealth, tool surface, auth states, persistence, observability, migration fixtures) | yes (ubuntu); macos/windows required after the first release |
+| `integration` | matrix `ubuntu-latest`, `macos-latest`, `windows-latest` | Playwright cache (`~/.cache/ms-playwright`, `~/Library/Caches/ms-playwright`, `%LOCALAPPDATA%\ms-playwright`) keyed on the **resolved** Playwright version from `bun.lock`; `bunx playwright install chromium --with-deps` on miss; `test:integration` (isolation, stealth, tool surface, auth states, persistence, observability, migration fixtures), with a 30 s per-test and per-hook `--timeout` from `scripts/test-integration.ts` (Bun's 5 s was too short on the macOS and Windows runners, issue #23); every OS fails the workflow, none runs with `continue-on-error` | yes (ubuntu); macos/windows required after the first release |
 | `sandbox-matrix` | matrix `ubuntu-latest`, `macos-latest`, `windows-latest`; `continue-on-error` | `packages/browserhive/scripts/stealth-matrix.ts --sandbox config:off,config:auto,config:on,session --strict`: through BrowserHive (`createServer` → MCP → `launch_session` → `navigate` → `evaluate`) for the bundled Chromium and the runner's Google Chrome and Microsoft Edge, both stealth levels; the job summary gets one row per channel × stealth × sandbox request (sandboxed or not, measured on the browser process command lines; the page-visible stealth signals), the sandbox on/off parity verdict, and the raw sandboxed-launch error of any browser that could not sandbox; `--strict` fails on a stealth check miss or a parity difference; channels the runner lacks are reported as skipped. The evidence behind `sandbox=auto` as the default (D-27) | no |
 | `e2e` | ubuntu | needs `build`; starts the built server with a temp data dir; `bunx playwright test` (dashboard) with trace-on-failure artifact | yes |
 | `package` | ubuntu | needs `build`; `publint`, `attw --pack`, `smoke-installed` (pack → `bun add` into a clean temp project → `browserhive --version`, `--help`, stdio `initialize → tools/list` equals `ALL_TOOL_NAMES`, `serve` on a random port → `/health` ready → SIGTERM exits 0), `smoke-programmatic` (`import { createServer } from 'browserhive'`) | yes |

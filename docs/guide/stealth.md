@@ -42,7 +42,7 @@ The browser a session runs in matters as much as the patches applied to it. Thre
 
 - **`chromium`** (default): the Chrome for Testing build BrowserHive downloads and pins. It is identical everywhere and needs nothing installed, but it reports its pinned full version (for example `153.0.8010.12`), a build real users may not be running.
 - **`chrome`**: the Google Chrome installed on the machine, at the version real users run. **This is the recommended setup for stealth, together with Patchright** (Patchright recommends the same). On Ubuntu 23.10+ it is also the browser that can use Chromium's sandbox.
-- **`edge`**: the installed Microsoft Edge. See the ceiling below: under stealth it is presented as Google Chrome.
+- **`edge`**: the installed Microsoft Edge. Under stealth it presents itself as Microsoft Edge, with the client hints real Edge sends.
 
 BrowserHive **never fakes the browser version**: the client-hint version list is the real engine's. With real Chrome the brands read `Not_A Brand, Chromium, Google Chrome` exactly as Chrome's own do (`Google Chrome` appears once).
 
@@ -94,10 +94,10 @@ These are known and documented, not bugs:
 - **Out-of-process iframes** are not covered by the user-agent override; cross-origin frames may report the raw user agent.
 - **The hardest bot checks** (for example Cloudflare Turnstile in strict mode) can still detect DevTools-protocol automation and synthetic input. Use [human takeover](attention.md) for them.
 - **Canvas, audio and font entropy** are the host's own: a stable identity tied to your machine, not a rotating one.
-- **GREASE brand and platform version** are plausible values, not byte-exact copies of the installed Chrome.
+- **GREASE brand and platform version** are plausible values, not byte-exact copies of the installed Chrome (Edge sends its own).
 - **Headless sessions render WebGL in software.** The reported WebGL renderer is SwiftShader on Linux even on a machine with a GPU ("Microsoft Basic Render Driver" on a Windows VM), so a headless session looks like one without a GPU. Headed sessions use the real GPU. The same for all three channels.
 - **Headless sessions deny notification requests silently**: `Notification.requestPermission()` resolves `denied` after about 1.7 s without showing anything (both the bundled Chromium and Google Chrome). Before a request the Permissions API (`prompt`) and `Notification.permission` (`default`) agree.
-- **Edge is presented as Google Chrome.** With `channel: "edge"` and stealth on, the client-hint brands say `Google Chrome` (with Edge's own version number) while the user agent still says `Edg/`. A site that compares the two can tell. Use `chrome` for stealth.
+- **Edge opens one extra page at launch.** To copy Edge's own client hints, a stealth Edge session loads one local page before it starts (nothing goes over the network). With a persistent profile it can show in that profile's history.
 - **Without `--fingerprint`, headless sessions use Playwright's default 1280×720 screen**, a size real users rarely have. `--fingerprint` (on by default with `--stealth max`) picks a common display size instead.
 - **WebAuthn and passkeys** cannot be replayed from saved state.
 - **Firefox and WebKit** are not supported.

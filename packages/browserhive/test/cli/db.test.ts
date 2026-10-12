@@ -97,7 +97,8 @@ describe('db (temp file database)', () => {
     const auto = await cli(['db', 'backup']);
     expect(auto.code).toBe(0);
     expect(auto.stdout).toMatch(
-      new RegExp(`backups/browserhive-v${SCHEMA_VERSION}-\\d{8}T\\d{9}Z\\.db`),
+      // The host's separator: `/`, or `\` on Windows.
+      new RegExp(`backups[\\\\/]browserhive-v${SCHEMA_VERSION}-\\d{8}T\\d{9}Z\\.db`),
     );
   });
 
@@ -172,7 +173,11 @@ describe('admin (temp file database)', () => {
       .object({ password: z.string().length(24), credentials_path: z.string() })
       .parse(JSON.parse(run.stdout));
     expect(readFileSync(body.credentials_path, 'utf8').trim()).toBe(body.password);
-    expect(statSync(body.credentials_path).mode & 0o777).toBe(0o600);
+    // Windows has no POSIX modes (a file reports 0o666 or 0o444); the file and content checks above
+    // still run there.
+    if (process.platform !== 'win32') {
+      expect(statSync(body.credentials_path).mode & 0o777).toBe(0o600);
+    }
 
     const lock = acquireDataDirLock({ dataDir, owner: 'serve', now: 1 });
     try {

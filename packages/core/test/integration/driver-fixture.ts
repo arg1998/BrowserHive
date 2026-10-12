@@ -3,7 +3,7 @@
 
 import { afterEach, beforeEach } from 'bun:test';
 import { existsSync } from 'node:fs';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp } from 'node:fs/promises';
 import { arch, platform, release, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Page } from 'playwright';
@@ -13,6 +13,7 @@ import { resolveIdentity } from '../../src/infra/browsers/identity-resolver.ts';
 import { PlaywrightBrowserDriver } from '../../src/infra/browsers/playwright-browser-driver.ts';
 import { createSystemClock } from '../../src/infra/clock/system-clock.ts';
 import { createCollectingLogger } from '../../src/infra/logging/collecting-logger.ts';
+import { removeTree } from '../../src/kernel/remove.ts';
 import type { LaunchSpec, SessionHandle } from '../../src/ports/browser-driver.ts';
 import { type FixtureServer, startFixtureServer } from '../helpers/fixture-server.ts';
 import { integrationChannel } from '../helpers/integration-channel.ts';
@@ -141,7 +142,7 @@ export function useDriverFixtures(): { state: IntegrationState } {
   afterEach(async () => {
     for (const session of state.sessions) await session.close(10_000);
     state.fixture.stop();
-    await rm(state.dataDir, { recursive: true, force: true });
+    await removeTree(state.dataDir);
   });
 
   return { state };

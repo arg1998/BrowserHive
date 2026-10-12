@@ -1,6 +1,6 @@
 /** @module test/helpers/fake-transport — drives the real McpServer + ToolDispatcher in-process through the SDK's InMemoryTransport and Client, over a real SessionService on FakeBrowserDriver. */
 
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ToolPackId } from '@browserhive/contracts/tools';
@@ -29,6 +29,7 @@ import { createMcpServer } from '../../src/interface/mcp/server.ts';
 import type { ToolServices } from '../../src/interface/mcp/services.ts';
 import { createNodeToolFs } from '../../src/interface/mcp/tool-fs.ts';
 import { createRedactor, SecretRegistry } from '../../src/kernel/redact.ts';
+import { removeTree } from '../../src/kernel/remove.ts';
 import type { BrowserDriver } from '../../src/ports/browser-driver.ts';
 import type { PageActions } from '../../src/ports/page-actions.ts';
 import { FakeBrowserDriver } from './fake-browser-driver.ts';
@@ -91,7 +92,11 @@ export interface ToolHarness {
   launch(args?: Record<string, unknown>, client?: Client): Promise<string>;
   /** Every `tool.called` observation so far. */
   observations(): ToolObservation[];
-  close(): Promise<void>;
+  /**
+   * Closes every session and client, runs `beforeRemove` (release anything the test itself opened in
+   * `dataDir`, such as a database: Windows cannot remove an open file), then removes `dataDir`.
+   */
+  close(options?: { readonly beforeRemove?: () => Promise<void> | void }): Promise<void>;
 }
 
 /** The first text block of a result. */
@@ -282,7 +287,22 @@ export async function createToolHarness(options: ToolHarnessOptions = {}): Promi
   ) => {
     const result = await call(name, args, via);
     const text = textOf(result);
-    if (result.isError === true) throw new Error(text);
+    if (result.isError === true) {
+      // An INTERNAL_ERROR only carries a ref; put the server-side records that mention it into the
+      // failure, so a CI log shows the cause instead of an opaque id.
+      const ref = /\(ref ([^)\s]+)\)/.exec(text)?.[1];
+      const related =
+        ref === undefined
+          ? []
+          : logger.records.filter((r) => JSON.stringify(r.all ?? {}).includes(ref));
+      throw new Error(
+        related.length === 0
+          ? text
+          : `${text}\nserver log for ${ref}:\n${related
+              .map((r) => `  ${r.level} ${r.msg} ${JSON.stringify(r.all)}`)
+              .join('\n')}`,
+      );
+    }
     return JSON.parse(text) as T;
   };
   return {
@@ -308,11 +328,12 @@ export async function createToolHarness(options: ToolHarnessOptions = {}): Promi
       bus.published
         .filter((p) => p.name === 'tool.called')
         .map((p) => (p.payload as DomainEvents['tool.called']).observation),
-    close: async () => {
+    close: async (closeOptions = {}) => {
       await sessions.closeAll('shutdown', 10_000);
       await attentionBroker.shutdown();
       for (const c of clients) await c.close();
-      await rm(dataDir, { recursive: true, force: true });
+      await closeOptions.beforeRemove?.();
+      await removeTree(dataDir);
     },
   };
 }

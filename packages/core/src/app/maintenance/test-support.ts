@@ -1,10 +1,17 @@
 /** @module app/maintenance/test-support — in-memory `FileSystem` and manual interval scheduler for the maintenance suites (test support, not a test). */
 
-import { dirname } from 'node:path';
+import { posix } from 'node:path';
+import { posixPath } from '../../../test/helpers/posix-paths.ts';
 import type { FileStat, FileSystem, RemoveOptions } from '../../ports/file-system.ts';
 import type { IntervalScheduler } from './timer.ts';
 
-/** Map-backed filesystem: files are `path → content`, directories are implied or explicit. */
+const { dirname } = posix;
+
+/**
+ * Map-backed filesystem: files are `path → content`, directories are implied or explicit. Every
+ * path is keyed POSIX-style ({@link posixPath}): the suites state `/data/…`, and on Windows the code
+ * under test hands in the `\data\…` that `node:path` builds there. `calls` records the POSIX form.
+ */
 export class MemoryFileSystem implements FileSystem {
   readonly files = new Map<string, string>();
   readonly dirs = new Set<string>();
@@ -12,7 +19,8 @@ export class MemoryFileSystem implements FileSystem {
   readonly failing = new Set<string>();
   readonly calls: string[] = [];
 
-  addFile(path: string, content: string, mtimeMs = 0): void {
+  addFile(at: string, content: string, mtimeMs = 0): void {
+    const path = posixPath(at);
     this.files.set(path, content);
     this.mtimes.set(path, mtimeMs);
     for (let d = dirname(path); d !== dirname(d); d = dirname(d)) this.dirs.add(d);
@@ -20,7 +28,8 @@ export class MemoryFileSystem implements FileSystem {
 
   private readonly mtimes = new Map<string, number>();
 
-  async stat(path: string): Promise<FileStat | null> {
+  async stat(at: string): Promise<FileStat | null> {
+    const path = posixPath(at);
     const content = this.files.get(path);
     if (content !== undefined) {
       return {
@@ -34,7 +43,8 @@ export class MemoryFileSystem implements FileSystem {
     return null;
   }
 
-  async readdir(path: string): Promise<readonly string[]> {
+  async readdir(at: string): Promise<readonly string[]> {
+    const path = posixPath(at);
     const names = new Set<string>();
     for (const p of [...this.files.keys(), ...this.dirs]) {
       if (dirname(p) === path && p !== path) names.add(p.slice(path.length + 1));
@@ -42,13 +52,15 @@ export class MemoryFileSystem implements FileSystem {
     return [...names].sort();
   }
 
-  async unlink(path: string): Promise<void> {
+  async unlink(at: string): Promise<void> {
+    const path = posixPath(at);
     this.calls.push(`unlink ${path}`);
     if (this.failing.has(path)) throw new Error(`EBUSY: ${path}`);
     this.files.delete(path);
   }
 
-  async rm(path: string, options: RemoveOptions = {}): Promise<void> {
+  async rm(at: string, options: RemoveOptions = {}): Promise<void> {
+    const path = posixPath(at);
     this.calls.push(`rm${options.recursive === true ? ' -r' : ''} ${path}`);
     if (this.failing.has(path)) throw new Error(`EBUSY: ${path}`);
     for (const p of [...this.files.keys()])
@@ -56,11 +68,12 @@ export class MemoryFileSystem implements FileSystem {
     for (const d of [...this.dirs]) if (d === path || d.startsWith(`${path}/`)) this.dirs.delete(d);
   }
 
-  async mkdir(path: string): Promise<void> {
-    this.dirs.add(path);
+  async mkdir(at: string): Promise<void> {
+    this.dirs.add(posixPath(at));
   }
 
-  async readFile(path: string): Promise<string> {
+  async readFile(at: string): Promise<string> {
+    const path = posixPath(at);
     const content = this.files.get(path);
     if (content === undefined) throw new Error(`ENOENT: ${path}`);
     return content;

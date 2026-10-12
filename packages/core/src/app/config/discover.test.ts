@@ -1,7 +1,7 @@
 /** @module app/config/discover.test — unit tests for discover */
 import { describe, expect, it } from 'bun:test';
 import { discoverConfigFile, readConfigFile } from './discover.ts';
-import { memoryFs } from './test-support.ts';
+import { memoryFs, posixView } from './test-support.ts';
 
 const CWD_FILE = '/work/browserhive.config.json';
 const DATA_FILE = '/data/browserhive.config.json';
@@ -15,7 +15,7 @@ describe('discoverConfigFile', () => {
       dataDir: '/data',
       fs,
     });
-    expect(found).toMatchObject({
+    expect(posixView(found)).toMatchObject({
       ok: true,
       value: { path: '/etc/bh.json', origin: 'explicit', json: { port: 1 }, mode: 0o600 },
     });
@@ -48,12 +48,16 @@ describe('discoverConfigFile', () => {
 
   it('falls back to cwd, then the data dir, then nothing', () => {
     const both = memoryFs({ [CWD_FILE]: '{"port":2}', [DATA_FILE]: '{"port":3}' });
-    expect(discoverConfigFile({ cwd: '/work', dataDir: '/data', fs: both })).toMatchObject({
+    expect(
+      posixView(discoverConfigFile({ cwd: '/work', dataDir: '/data', fs: both })),
+    ).toMatchObject({
       ok: true,
       value: { path: CWD_FILE, origin: 'cwd', json: { port: 2 } },
     });
     const dataOnly = memoryFs({ [DATA_FILE]: '{"port":3}' });
-    expect(discoverConfigFile({ cwd: '/work', dataDir: '/data', fs: dataOnly })).toMatchObject({
+    expect(
+      posixView(discoverConfigFile({ cwd: '/work', dataDir: '/data', fs: dataOnly })),
+    ).toMatchObject({
       ok: true,
       value: { path: DATA_FILE, origin: 'dataDir', json: { port: 3 } },
     });

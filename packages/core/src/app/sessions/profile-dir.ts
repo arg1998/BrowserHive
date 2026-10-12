@@ -1,6 +1,7 @@
 /** @module app/sessions/profile-dir — D-24 per-session directory layout (`<data-dir>/sessions/<id>/{userdata,screenshots,downloads,trace.zip}`), 0700, prepare/cleanup through an injected fs. */
 
 import { join } from 'node:path';
+import { removeTree } from '../../kernel/remove.ts';
 
 /** Owner-only: a session directory holds cookies, tokens and screenshots (threat model). */
 export const DIR_MODE = 0o700;
@@ -113,8 +114,8 @@ export function createNodeSessionDirFs(): SessionDirFs {
       await mkdir(path, { recursive: true, mode });
     },
     async rm(path) {
-      const { rm } = await import('node:fs/promises');
-      await rm(path, { recursive: true, force: true });
+      // Retries Windows' transient locks: Chromium's helpers release the profile just after exit.
+      await removeTree(path);
     },
     async isEmptyOrMissing(path) {
       const { readdir } = await import('node:fs/promises');

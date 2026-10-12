@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'bun:test';
 import type { CliPlan } from '../../src/cli/invocation.ts';
 import { planCli } from '../../src/cli/plan.ts';
-import { DATA_DIR, fakeHost, MemoryFs } from './helpers.ts';
+import { DATA_DIR, fakeHost, MemoryFs, posixView } from './helpers.ts';
 
 function plan(
   argv: readonly string[],
@@ -10,11 +10,13 @@ function plan(
   files: Record<string, string> = {},
 ): CliPlan {
   const fs = new MemoryFs(files);
-  return planCli(argv, env, fs.configFs(), {
-    cwd: '/work',
-    host: fakeHost({ env }),
-    knownLogModules: ['sessions', 'http'],
-  });
+  return posixView(
+    planCli(argv, env, fs.configFs(), {
+      cwd: '/work',
+      host: fakeHost({ env }),
+      knownLogModules: ['sessions', 'http'],
+    }),
+  );
 }
 
 function exitOf(result: CliPlan): { code: number; text: string } {

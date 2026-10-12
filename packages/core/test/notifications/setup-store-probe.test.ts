@@ -113,8 +113,13 @@ describe('image store', () => {
       const ref = await store.put({ bytes: JPEG, contentType: 'image/jpeg', filename: 'x.jpg' });
       expect(ref).toMatch(/^nimg-[A-Za-z0-9_-]{16}$/);
       expect((await store.read(ref))?.bytes).toEqual(JPEG);
-      expect((await stat(join(dir, `${ref}.jpg`))).mode & 0o777).toBe(0o600);
-      expect((await stat(dir)).mode & 0o777).toBe(0o700);
+      // Windows has no POSIX modes; there the file must still be where the ref says.
+      if (process.platform === 'win32') {
+        expect((await stat(join(dir, `${ref}.jpg`))).isFile()).toBe(true);
+      } else {
+        expect((await stat(join(dir, `${ref}.jpg`))).mode & 0o777).toBe(0o600);
+        expect((await stat(dir)).mode & 0o777).toBe(0o700);
+      }
       expect(await store.read('../../etc/passwd')).toBeNull();
       expect(await store.read('nimg-doesnotexist12')).toBeNull();
       expect(await store.prune(Date.now() - 60_000)).toBe(0);

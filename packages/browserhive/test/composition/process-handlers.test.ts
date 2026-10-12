@@ -7,9 +7,12 @@ import {
   FORCED_EXIT_CODE,
   installProcessHandlers,
   isStorageCorruption,
+  STOP_SIGNALS,
+  stopSignalsFor,
+  WINDOWS_STOP_SIGNALS,
 } from '../../src/composition/index.ts';
 
-function rig() {
+function rig(platform: NodeJS.Platform = 'linux') {
   const target = new EventEmitter();
   const stops: number[] = [];
   const exits: number[] = [];
@@ -21,6 +24,7 @@ function rig() {
     output: { stderr: (line) => stderr.push(line) },
     exit: (code) => exits.push(code),
     unhandled: (error, kind) => unhandled.push({ kind, error }),
+    platform,
   });
   return { target, stops, exits, stderr, unhandled, uninstall };
 }
@@ -64,6 +68,37 @@ describe('installProcessHandlers', () => {
     for (const event of ['SIGINT', 'SIGTERM', 'uncaughtException', 'unhandledRejection']) {
       expect(r.target.listenerCount(event)).toBe(0);
     }
+  });
+
+  it('Windows: Ctrl+Break (SIGBREAK) and closing the console (SIGHUP) stop gracefully', () => {
+    for (const signal of WINDOWS_STOP_SIGNALS) {
+      const r = rig('win32');
+      r.target.emit(signal);
+      expect(r.stops).toEqual([0]);
+      expect(r.exits).toEqual([]);
+      expect(r.stderr[0]).toContain(`received ${signal}, shutting down`);
+      r.target.emit('SIGINT');
+      expect(r.exits).toEqual([FORCED_EXIT_CODE]);
+      r.uninstall();
+      expect(r.target.listenerCount(signal)).toBe(0);
+    }
+  });
+
+  it('POSIX leaves SIGHUP and SIGBREAK alone', () => {
+    for (const platform of ['linux', 'darwin'] as const) {
+      const r = rig(platform);
+      expect(r.target.listenerCount('SIGHUP')).toBe(0);
+      expect(r.target.listenerCount('SIGBREAK')).toBe(0);
+      r.target.emit('SIGHUP');
+      expect(r.stops).toEqual([]);
+      r.uninstall();
+    }
+  });
+
+  it('stopSignalsFor: SIGINT and SIGTERM everywhere, the console events only on Windows', () => {
+    expect(stopSignalsFor('linux')).toEqual([...STOP_SIGNALS]);
+    expect(stopSignalsFor('darwin')).toEqual([...STOP_SIGNALS]);
+    expect(stopSignalsFor('win32')).toEqual(['SIGINT', 'SIGTERM', 'SIGBREAK', 'SIGHUP']);
   });
 
   it('classifies corruption from raw SQLite errors', () => {

@@ -27,8 +27,12 @@
  * produce both correctly, natively — no init script, no `extraHTTPHeaders` (which `locale` silently
  * overrides anyway), and nothing for a later tool call to clobber.
  *
- * Known limitations (documented, not hidden): the UA-CH GREASE brand and `platformVersion` are
- * plausible values, not a byte-exact match to whatever the live Chrome build currently emits.
+ * Microsoft Edge keeps its own vendor brand (`Microsoft Edge`, never Google Chrome under an `Edg/` UA)
+ * and its native brand lists, which carry the real Chromium version underneath Edge (issue #18).
+ *
+ * Known limitations (documented, not hidden): for Chrome and the bundled Chromium, the UA-CH GREASE
+ * brand and `platformVersion` are plausible values, not a byte-exact match to whatever the live
+ * Chrome build currently emits.
  */
 
 import type {
@@ -65,6 +69,56 @@ export interface IdentityInput {
   readonly geo?: GeoSeed | null;
   /** The asserted display geometry, for metadata only — it is applied via context options. */
   readonly display?: AppliedDisplay | null;
+  /**
+   * The browser's own UA-CH lists, read from a page before any override ({@link NativeUaCh}). Used for
+   * Microsoft Edge, whose `Chromium` brand carries a version `Browser.getVersion` does not expose.
+   */
+  readonly native?: NativeUaCh | null;
+}
+
+/** `navigator.userAgentData` as the unmodified browser reports it (`brands`, `fullVersionList`). */
+export interface NativeUaCh {
+  readonly brands: readonly Brand[];
+  readonly fullVersionList: readonly Brand[];
+}
+
+/** The vendor brand a branded build lists next to `Chromium` in its client hints. */
+export type VendorBrand = 'Google Chrome' | 'Microsoft Edge';
+
+/**
+ * The vendor brand that matches the running browser. Edge says so in its UA (`Edg/`) and its
+ * `Browser.getVersion` product (`Edg/155.0.4283.45`); everything else (Chrome, the bundled Chromium)
+ * is presented as Google Chrome.
+ */
+export function vendorBrandFor(input: Pick<IdentityInput, 'product' | 'userAgent'>): VendorBrand {
+  return /(^|[\s/])Edg\//.test(input.product) || /\sEdg\//.test(input.userAgent)
+    ? 'Microsoft Edge'
+    : 'Google Chrome';
+}
+
+/**
+ * The native lists when they are a usable, coherent base for `vendor`: both lists name `Chromium`
+ * and the vendor exactly once, and nothing else besides one GREASE entry. `null` otherwise (absent,
+ * a headless brand, an unexpected shape), and the caller derives the lists itself.
+ */
+export function usableNativeUaCh(
+  native: NativeUaCh | null | undefined,
+  vendor: VendorBrand,
+): NativeUaCh | null {
+  if (native === null || native === undefined) return null;
+  const valid = (list: readonly Brand[]): boolean => {
+    const names = list.map((b) => b.brand);
+    const known = names.filter((n) => n === 'Chromium' || n === vendor);
+    const others = names.filter((n) => n !== 'Chromium' && n !== vendor);
+    return (
+      known.length === 2 &&
+      new Set(known).size === 2 &&
+      others.length <= 1 &&
+      others.every((n) => !/chrom|edg/i.test(n)) &&
+      list.every((b) => /^\d+(\.\d+){0,3}$/.test(b.version))
+    );
+  };
+  return valid(native.brands) && valid(native.fullVersionList) ? native : null;
 }
 
 /** The exact CDP `Emulation.setUserAgentOverride` parameters. */
@@ -181,7 +235,8 @@ export function parseChromeVersion(product: string): { major: string; full: stri
 }
 
 /**
- * Derive a host-coherent Google-Chrome identity from the real browser version + host OS. Pure and
+ * Derive a host-coherent identity from the real browser version + host OS: Google Chrome, or Microsoft
+ * Edge when the browser is Edge (from its native lists when the caller read them). Pure and
  * synchronous — the caller supplies the CDP/host values so this stays unit-testable without a browser.
  */
 export function deriveCoherentIdentity(input: IdentityInput): CoherentIdentity {
@@ -192,17 +247,26 @@ export function deriveCoherentIdentity(input: IdentityInput): CoherentIdentity {
   const platformVersion = platformVersionFor(input.hostPlatform, input.hostRelease);
   const arch = archFor(input.hostArch);
 
-  // Brand order mirrors Chrome: GREASE + Chromium + Google Chrome, all sharing the major version.
-  // Adding **Google Chrome** is the point — bundled Chromium reports only Chromium + GREASE.
-  const brands: readonly Brand[] = [
+  // The vendor brand follows the real browser: a UA that says `Edg/` next to client hints that say
+  // Google Chrome is a contradiction a site can check (issue #18).
+  const vendor = vendorBrandFor(input);
+  // Edge: its own lists, read from the browser, are already coherent (GREASE, `Microsoft Edge` at
+  // Edge's version, `Chromium` at the real Chromium version underneath). Rebuilding them would have
+  // to guess that Chromium version, which `Browser.getVersion` does not report.
+  const native = vendor === 'Microsoft Edge' ? usableNativeUaCh(input.native, vendor) : null;
+  // Otherwise the order mirrors Chrome: GREASE + Chromium + vendor, all sharing the major version.
+  // Adding **Google Chrome** is the point — bundled Chromium reports only Chromium + GREASE. Without
+  // its native lists, Edge gets the same shape under its own name (Chromium then carries Edge's
+  // version: the best available, and still coherent with the UA's `Edg/` major).
+  const brands: readonly Brand[] = native?.brands.map((b) => ({ ...b })) ?? [
     GREASE,
     { brand: 'Chromium', version: major },
-    { brand: 'Google Chrome', version: major },
+    { brand: vendor, version: major },
   ];
-  const fullVersionList: readonly Brand[] = [
+  const fullVersionList: readonly Brand[] = native?.fullVersionList.map((b) => ({ ...b })) ?? [
     GREASE_FULL,
     { brand: 'Chromium', version: full },
-    { brand: 'Google Chrome', version: full },
+    { brand: vendor, version: full },
   ];
 
   const userAgentMetadata: UaChMetadata = {

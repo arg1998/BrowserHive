@@ -220,31 +220,88 @@ export async function rawSandboxError(channel: ProbeChannel): Promise<string | n
  * @returns The failed checks, empty when all passed.
  */
 export function stealthProblems(
-  _channel: ProbeChannel,
+  channel: ProbeChannel,
   stealth: ProbeStealth,
   signals: PageSignals,
   engine: string | null,
 ): string[] {
   const problems: string[] = [];
   if (signals.ua.includes('HeadlessChrome')) problems.push('UA contains HeadlessChrome');
-  // Every channel is presented as Google Chrome today, Edge included (a known incoherence with
-  // Edge's `Edg/` UA, plan §11): the check pins that behaviour so a change is noticed, and that
-  // real Chrome's own brand is not duplicated by the relabel.
-  const branded = (signals.brands ?? []).filter((b) => b.startsWith('Google Chrome/')).length;
-  if (branded !== 1) problems.push(`brands list Google Chrome ${branded} times`);
+  problems.push(...brandProblems(channel, signals, engine));
   if (signals.webdriver !== false) problems.push(`navigator.webdriver is ${signals.webdriver}`);
   if (signals.chrome !== 'object') problems.push(`window.chrome is ${signals.chrome}`);
   if (signals.plugins !== 5) problems.push(`plugins.length is ${signals.plugins}`);
   if (signals.pdfViewerEnabled !== true) problems.push('pdfViewerEnabled is not true');
   if (signals.h264 !== 'probably') problems.push(`H.264 is '${signals.h264}'`);
   if (signals.aac !== 'probably') problems.push(`AAC is '${signals.aac}'`);
-  if (engine !== null) {
-    const listed = (signals.fullVersionList ?? []).filter((b) => !b.startsWith('Not'));
-    const wrong = listed.filter((b) => b.split('/')[1] !== engine);
-    if (listed.length === 0 || wrong.length > 0)
-      problems.push(`fullVersionList ${JSON.stringify(signals.fullVersionList)} != ${engine}`);
-  }
   if (stealth === 'max' && signals.screen === '1280x720') problems.push('max: screen is 1280x720');
+  return problems;
+}
+
+/** The vendor brand a channel must present, and the one it must never show. */
+const VENDOR: Readonly<Record<ProbeChannel, { readonly is: string; readonly not: string }>> = {
+  chromium: { is: 'Google Chrome', not: 'Microsoft Edge' },
+  chrome: { is: 'Google Chrome', not: 'Microsoft Edge' },
+  edge: { is: 'Microsoft Edge', not: 'Google Chrome' },
+};
+
+/**
+ * Brand and version coherence of the client hints with the UA and the engine (issue #18): the
+ * channel's vendor brand appears exactly once and the other vendor never; a UA that says `Edg/` comes
+ * with `Microsoft Edge` and only then; every brand's major equals the UA's `Chrome/` major; the
+ * vendor's full version and `uaFullVersion` equal the engine's version. For Chrome and Chromium the
+ * `Chromium` brand carries that same version; for Edge it carries the Chromium build underneath,
+ * which has Edge's major but its own build numbers.
+ *
+ * @returns The failed checks, empty when coherent.
+ */
+export function brandProblems(
+  channel: ProbeChannel,
+  signals: Pick<PageSignals, 'ua' | 'brands' | 'fullVersionList' | 'uaFullVersion'>,
+  engine: string | null,
+): string[] {
+  const problems: string[] = [];
+  const vendor = VENDOR[channel];
+  const split = (list: readonly string[] | null) =>
+    (list ?? []).map((entry) => {
+      const at = entry.lastIndexOf('/');
+      return { brand: entry.slice(0, at), version: entry.slice(at + 1) };
+    });
+  const brands = split(signals.brands);
+  const full = split(signals.fullVersionList);
+  const count = (list: typeof brands, name: string) => list.filter((b) => b.brand === name).length;
+
+  const vendorCount = count(brands, vendor.is);
+  if (vendorCount !== 1) problems.push(`brands list ${vendor.is} ${vendorCount} times`);
+  if (count(brands, vendor.not) > 0 || count(full, vendor.not) > 0)
+    problems.push(`client hints claim ${vendor.not}`);
+  if (count(brands, 'Chromium') !== 1) problems.push('brands do not list Chromium exactly once');
+  const uaSaysEdge = /\sEdg\//.test(signals.ua);
+  if (uaSaysEdge !== (vendor.is === 'Microsoft Edge'))
+    problems.push(
+      `UA ${uaSaysEdge ? 'says' : 'does not say'} Edg/ while the brand is ${vendor.is}`,
+    );
+
+  const uaMajor = /\sChrome\/(\d+)\./.exec(signals.ua)?.[1] ?? null;
+  for (const b of [...brands, ...full]) {
+    if (b.brand.startsWith('Not')) continue;
+    if (b.version.split('.')[0] !== uaMajor)
+      problems.push(`${b.brand}/${b.version} has not the UA's major ${uaMajor}`);
+  }
+
+  if (engine !== null) {
+    const vendorFull = full.find((b) => b.brand === vendor.is)?.version;
+    if (vendorFull !== engine)
+      problems.push(`fullVersionList ${JSON.stringify(signals.fullVersionList)} != ${engine}`);
+    if (signals.uaFullVersion !== null && signals.uaFullVersion !== engine)
+      problems.push(`uaFullVersion ${signals.uaFullVersion} != ${engine}`);
+    const chromium = full.find((b) => b.brand === 'Chromium')?.version;
+    if (chromium === undefined) problems.push('fullVersionList has no Chromium');
+    else if (vendor.is === 'Google Chrome' && chromium !== engine)
+      problems.push(`Chromium ${chromium} != ${engine}`);
+    else if (!/^\d+\.\d+\.\d+\.\d+$/.test(chromium))
+      problems.push(`Chromium ${chromium} is not a full version`);
+  }
   return problems;
 }
 
