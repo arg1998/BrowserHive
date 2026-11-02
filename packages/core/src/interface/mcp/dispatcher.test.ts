@@ -13,6 +13,7 @@ import {
   textOf,
 } from '../../../test/helpers/fake-transport.ts';
 import { agentPrincipal } from '../../domain/auth/principal.ts';
+import { MAX_TOOL_INPUT_ELEMENTS } from './input-limit.ts';
 import { ERROR_META_KEY } from './shape.ts';
 
 let h: ToolHarness;
@@ -44,6 +45,18 @@ describe('ToolDispatcher invariants', () => {
     expect(obs[0]?.sessionId).toBeNull();
     expect(obs[2]?.principal).toBe('alice');
     expect(new Set(obs.map((o) => o.eventId)).size).toBe(4);
+  });
+
+  it('refuses arguments over the element cap before validating them', async () => {
+    h = await createToolHarness();
+    const id = await h.launch();
+    const headers = Object.fromEntries(
+      Array.from({ length: MAX_TOOL_INPUT_ELEMENTS }, (_, i) => [`x-h${i}`, 'v']),
+    );
+    const over = await h.call('set_extra_http_headers', { session_id: id, headers });
+    expect(over.isError).toBe(true);
+    expect(textOf(over)).toStartWith('[INVALID_ARGUMENTS] input: arguments contain more than');
+    expect(h.observations().at(-1)?.errorCode).toBe('INVALID_ARGUMENTS');
   });
 
   it('observation carries the spec 02 §2.3 shape', async () => {

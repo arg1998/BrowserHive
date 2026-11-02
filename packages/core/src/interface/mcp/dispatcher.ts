@@ -16,6 +16,7 @@ import type { Logger } from '../../ports/logger.ts';
 import type { ToolCallContext } from './context.ts';
 import type { PolicyContext, ToolFacts, ToolResult } from './definition.ts';
 import type { ResolvedIdentity } from './identity.ts';
+import { exceedsInputElements, MAX_TOOL_INPUT_ELEMENTS } from './input-limit.ts';
 import { publishObservation, type TerminalOutcome } from './observe.ts';
 import type { ToolRegistry } from './registry.ts';
 import type { ToolServices } from './services.ts';
@@ -81,6 +82,16 @@ export function invalidArguments(error: z.ZodError): AppError<'INVALID_ARGUMENTS
     'INVALID_ARGUMENTS',
     { issues },
     { publicMessage: `${first.path}: ${first.message}` },
+  );
+}
+
+/** `INVALID_ARGUMENTS` for arguments over {@link MAX_TOOL_INPUT_ELEMENTS}. */
+function tooManyInputElements(): AppError<'INVALID_ARGUMENTS'> {
+  const message = `arguments contain more than the maximum of ${MAX_TOOL_INPUT_ELEMENTS} elements`;
+  return new AppError(
+    'INVALID_ARGUMENTS',
+    { issues: [{ path: 'input', message }] },
+    { publicMessage: `input: ${message}` },
   );
 }
 
@@ -214,6 +225,8 @@ export class ToolDispatcher {
           },
         );
       }
+      // Counted before validation, which is what a huge input would make expensive (02 §2.3, D-46).
+      if (exceedsInputElements(rawArgs)) throw tooManyInputElements();
       const schema = registry.inputOf(name);
       let args: unknown;
       if (schema !== undefined) {

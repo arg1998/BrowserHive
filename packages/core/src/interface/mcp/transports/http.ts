@@ -1,5 +1,9 @@
 /** @module interface/mcp/transports/http — Streamable HTTP for `/mcp`: one web-standard SDK transport + server per MCP session, connection rows, DNS-rebinding protection (the dashboard's Host policy), resumable SSE (spec 02 §1.2–1.4). */
 
+import {
+  readRequestBody,
+  requestBodyTooLargeMessage,
+} from '@modelcontextprotocol/sdk/server/requestBody.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
@@ -19,6 +23,12 @@ import { InMemoryEventStore } from './event-store.ts';
 
 /** SSE keep-alive under the common 30 s idle cut of proxies. */
 export const MCP_KEEP_ALIVE_MS = 25_000;
+/**
+ * Largest `/mcp` request body (the SDK's default, set explicitly so the `initialize` body this
+ * handler reads itself has the same bound). Over it → 413; a batch over 100 messages → 400 (SDK).
+ * D-46.
+ */
+export const MCP_MAX_REQUEST_BODY_BYTES = 4 * 1024 * 1024;
 /** Header carrying the MCP session id. */
 export const MCP_SESSION_HEADER = 'mcp-session-id';
 
@@ -195,6 +205,7 @@ export function createMcpHttpHandler(options: McpHttpOptions): McpHttpHandler {
       // mapping or an SSH tunnel. `handleMcpRequest` applies the dashboard's port-agnostic policy.
       enableDnsRebindingProtection: false,
       keepAliveMs: options.keepAliveMs ?? MCP_KEEP_ALIVE_MS,
+      maxRequestBodySize: MCP_MAX_REQUEST_BODY_BYTES,
       onsessioninitialized: (sessionId) => {
         entry = { transport, connectionId, subject: principal.subject, closed: false };
         sessions.set(sessionId, entry);
@@ -276,9 +287,14 @@ export function createMcpHttpHandler(options: McpHttpOptions): McpHttpHandler {
       }
       let body: unknown;
       try {
-        body = await request.json();
+        // The SDK bounds the bodies it reads; this one is read here, so it gets the same bound.
+        const read = await readRequestBody(request, MCP_MAX_REQUEST_BODY_BYTES);
+        if (read.tooLarge) {
+          return jsonRpcError(413, -32000, requestBodyTooLargeMessage(MCP_MAX_REQUEST_BODY_BYTES));
+        }
+        body = JSON.parse(read.text);
       } catch {
-        // Malformed JSON is a protocol error, not a server fault.
+        // An unreadable body or malformed JSON is a protocol error, not a server fault.
         return jsonRpcError(400, -32700, 'Parse error: Invalid JSON');
       }
       if (!hasInitialize(body)) {

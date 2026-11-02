@@ -881,3 +881,18 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 **Consequences.** No migration: the copies are notification rows, the links reuse `source_event_id` and `thread`, the settings and watches live in `notification_cursors`. A report reaching three channels is four rows (the in-app copy and one per channel). The anomaly facts are still gathered once per hour, shared by every watch and channel.
 
 **Alternatives considered.** *A new notification type `report`*: the natural chip, but `notifications.type` has a `CHECK` constraint, so it needs a table rebuild for a filter the `category` column already expresses. *Showing each channel's copy in the inbox*: the same digest once per channel, at levels chosen for platforms. *A separate reports table*: a migration for data the notification rows already hold. *Toasting digests*: a summary scheduled at 09:00 would interrupt like an alarm. *Deduplicating by window only*: two zones would share a copy written in only one of them.
+
+## D-46 `/mcp` bounds request bodies, batches and tool-input elements
+
+**Status:** Accepted
+
+**Context.** `/mcp` bypasses the REST middleware stack (03 §2), including its body limit. Up to SDK 1.30.0 nothing bounded an MCP request: an HTTP request of any size, a JSON-RPC batch of any length, or a tool call whose arguments held millions of array elements could exhaust the daemon's memory (GHSA-f897-62hf-6gxq, GHSA-46jr-4wx8-v453). SDK 1.30.1 bounds the bodies its transport reads (4 MiB, `413`) and batch length (100, `400`); 1.32.0 adds an opt-in element cap, `maxToolInputElements`, which runs inside the SDK's own `tools/call` handler. BrowserHive reads the `initialize` body itself (to resolve identity before the transport exists) and replaces `tools/call` with the dispatcher (02 §2.3), so the SDK's limits do not reach either path on their own.
+
+**Decision.**
+- `/mcp` request bodies are capped at **4 MiB** (`MCP_MAX_REQUEST_BODY_BYTES`, the SDK default, passed explicitly as `maxRequestBodySize`); the `initialize` body BrowserHive reads itself uses the same bound and the same answer: HTTP `413` with JSON-RPC error `-32000`. Batches over 100 messages get HTTP `400` (SDK).
+- A tool call's arguments may hold at most **100,000** array elements and object members, counted at every depth (`MAX_TOOL_INPUT_ELEMENTS`). The dispatcher counts before validating; over the cap the call ends as `INVALID_ARGUMENTS` (`input: arguments contain more than the maximum of 100000 elements`), observed like any other validation failure. The cap is far above any real input (a full browser cookie jar for `set_cookies` is about 30,000).
+- Both caps are constants, not configuration.
+
+**Consequences.** Under D-12 these are new failures only for inputs no working agent sends; the error code is an existing one. stdio has no body limit (the client is the parent process), but the element cap applies to both transports because it lives in the dispatcher.
+
+**Alternatives considered.** *Setting `maxToolInputElements` on `McpServer`*: it has no effect, because the dispatcher replaces the SDK's `tools/call` handler. *A configurable cap*: no user has needed one, and a knob invites raising it past what is safe. *The REST stack's 1 MiB default*: MCP clients already rely on the SDK's 4 MiB.
