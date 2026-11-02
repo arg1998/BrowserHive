@@ -80,6 +80,7 @@ describe('TesterPanel', () => {
     const blocked = await screen.findByRole('listitem', { name: 'work.github: blocked' });
     expect(within(blocked).getByText('harness_not_allowed')).toBeTruthy();
     expect(within(blocked).getByText('harness: fail')).toBeTruthy();
+    expect(within(blocked).getByText(/refused by the binding's harness list/)).toBeTruthy();
     expect(screen.getByText('as Codex (declared "Codex Nightly")')).toBeTruthy();
     await waitFor(() =>
       expect(requests.find((r) => r.method === 'POST')?.body).toEqual({

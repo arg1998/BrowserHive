@@ -48,7 +48,7 @@ export function DecisionRow({ decision }: { readonly decision: TesterDecision })
         {decision.reason !== null ? (
           <span className="text-sm text-muted-foreground">
             <span className="font-mono">{decision.reason}</span> —{' '}
-            {REASON_TEXT[decision.reason] ?? decision.reason}
+            {decision.reasonText ?? REASON_TEXT[decision.reason] ?? decision.reason}
           </span>
         ) : null}
       </div>
@@ -104,7 +104,7 @@ const ANY_HARNESS = '';
 
 /** The harness select: Any, the known harnesses, Unknown. */
 const HARNESS_OPTIONS = [
-  { value: ANY_HARNESS, label: 'Any harness (lists not checked)' },
+  { value: ANY_HARNESS, label: 'Any harness' },
   ...PICKABLE_HARNESSES.map((slug) => ({ value: slug, label: HARNESS_LABELS[slug] })),
   { value: UNKNOWN_HARNESS, label: 'Unknown (not identified)' },
 ];
@@ -275,8 +275,8 @@ export function TesterPanel({ unlocked }: { readonly unlocked: boolean }) {
                 {unchecked > 0 ? (
                   <Callout tone="info" title="Harness lists were not checked">
                     {unchecked === 1 ? 'One binding has' : `${unchecked} bindings have`} a harness
-                    list on the binding or its folder. Pick a harness above to test it as an agent
-                    would be.
+                    list on the binding or its folder. Pick a harness above to test the lists as an
+                    agent would be.
                   </Callout>
                 ) : null}
                 {decisions.length === 0 ? (

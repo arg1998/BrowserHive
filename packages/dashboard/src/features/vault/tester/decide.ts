@@ -25,6 +25,8 @@ export interface TesterDecision {
   readonly handle: string;
   readonly decision: 'fill' | 'blocked';
   readonly reason: string | null;
+  /** Operator text for `reason` (a harness refusal names the list that refused). */
+  readonly reasonText: string | null;
   readonly chain: readonly Gate[];
 }
 
@@ -107,6 +109,7 @@ export function testerDecisions(
       handle,
       decision: 'fill' as const,
       reason: null,
+      reasonText: null,
       chain: [
         {
           gate: 'group policy' as const,
@@ -184,7 +187,11 @@ export function testerDecisions(
                   { gate: 'origin allow-list', outcome: 'pass', detail: 'origin allowed' },
                   { gate: 'fill gates', outcome: 'fail', detail: REASON_TEXT[reason] ?? reason },
                 ];
-      return { handle, decision: 'blocked' as const, reason, chain };
+      const reasonText =
+        reason === 'harness_not_allowed' && rule !== undefined
+          ? RULE_TEXT[rule]
+          : (REASON_TEXT[reason] ?? reason);
+      return { handle, decision: 'blocked' as const, reason, reasonText, chain };
     }),
   ];
   const needle = context.entry?.trim().toLowerCase() ?? '';
