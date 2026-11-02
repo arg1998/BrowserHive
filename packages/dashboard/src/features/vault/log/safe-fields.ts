@@ -12,6 +12,11 @@ export const SAFE_DETAIL_KEYS = [
   'decision',
   'duration_ms',
   'evaluate_enabled',
+  // A `harness_not_allowed` refusal (D-48): the session's launch harness, its declared name, and
+  // whether the binding or the folder refused it.
+  'harness',
+  'harness_declared',
+  'rule',
 ] as const;
 
 /** Whitelisted detail pairs as display strings (strings, numbers, booleans, arrays of strings only). */

@@ -574,6 +574,7 @@ describe('documented == recorded', () => {
       launchMs: 900,
       config: { channel: 'chromium', headless: true },
       harness: null,
+      harnessDeclared: null,
       sandboxed: null,
       browserVersion: null,
     });

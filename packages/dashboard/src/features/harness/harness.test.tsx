@@ -167,6 +167,31 @@ describe('ClientPanel', () => {
     await expectNoA11yViolations(view.container);
   });
 
+  it('shows the launch declared name when it differs from the slug (D-48)', async () => {
+    renderPage({
+      path: '/x',
+      component: () => (
+        <ClientPanel
+          session={sessionSummary(1, {
+            harness: 'nightly-scraper',
+            harness_declared: 'Nightly Scraper',
+            client: {
+              name: null,
+              version: null,
+              harness: 'nightly-scraper',
+              harness_source: 'env',
+            },
+          })}
+        />
+      ),
+      routes: {},
+      url: '/x',
+    });
+    const panel = await screen.findByRole('region', { name: /Client/ });
+    expect(within(panel).getByText('Declared as')).toBeDefined();
+    expect(within(panel).getByText('Nightly Scraper')).toBeDefined();
+  });
+
   it('shows Unknown and says no client was recorded', async () => {
     renderPage({
       path: '/x',

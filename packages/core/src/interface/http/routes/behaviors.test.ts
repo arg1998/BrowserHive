@@ -317,6 +317,70 @@ describe('operator requests and vault', () => {
     expect(created.status).toBe(200);
   });
 
+  it('harness lists (D-48): round-trip on PUT with the version rules, field-level 400s, the picker data', async () => {
+    const { kit, cookie } = await authed();
+    const path = '/api/v1/vault/bindings/work.github';
+    const set = await kit.request('PUT', path, {
+      cookie,
+      body: { harnesses: ['opencode', 'Claude-Code'] },
+      headers: { 'if-match': '1' },
+    });
+    expect(set.status).toBe(200);
+    const body = (await set.json()) as { binding: { harnesses?: string[]; version: number } };
+    expect(body.binding).toMatchObject({ harnesses: ['opencode', 'Claude-Code'], version: 2 });
+    const cleared = await kit.request('PUT', path, {
+      cookie,
+      body: { harnesses: null },
+      headers: { 'if-match': '2' },
+    });
+    expect(((await cleared.json()) as { binding: object }).binding).not.toHaveProperty('harnesses');
+
+    const bad = await kit.request('PUT', path, { cookie, body: { harnesses: ['bad\u0007name'] } });
+    expect(bad.status).toBe(400);
+    const problem = ProblemDetails.parse(await bad.json());
+    expect(problem.code).toBe('VALIDATION_FAILED');
+    expect(JSON.stringify(problem.details)).toContain('harnesses');
+    const policy = await kit.request('PUT', '/api/v1/vault/groups/__ungrouped__/policy', {
+      cookie,
+      body: { access_mode: 'manual', harnesses: Array.from({ length: 33 }, (_, i) => `h${i}`) },
+    });
+    expect(policy.status).toBe(400);
+
+    // The tester (D-48): a harness is checked like the broker does; a bad slug is a field-level 400.
+    const tested = await kit.request('POST', '/api/v1/vault/bindings/resolve', {
+      cookie,
+      body: { url: 'https://github.com/login', harness: 'opencode' },
+    });
+    expect(tested.status).toBe(200);
+    expect(await tested.json()).toMatchObject({ harness_lists_unchecked: [] });
+    const unchecked = await kit.request('POST', '/api/v1/vault/bindings/resolve', {
+      cookie,
+      body: { url: 'https://github.com/login' },
+    });
+    expect(
+      ((await unchecked.json()) as { harness_lists_unchecked: string[] }).harness_lists_unchecked,
+    ).toEqual([]);
+    const badSlug = await kit.request('POST', '/api/v1/vault/bindings/resolve', {
+      cookie,
+      body: { url: 'https://github.com/login', harness: 'Not A Slug' },
+    });
+    expect(badSlug.status).toBe(400);
+    expect(JSON.stringify(ProblemDetails.parse(await badSlug.json()).details)).toContain('harness');
+
+    const seen = await kit.request('GET', '/api/v1/vault/harnesses', { cookie });
+    expect(seen.status).toBe(200);
+    const picker = (await seen.json()) as {
+      data: { harness: string; label: string; declared: string | null }[];
+      principals: number;
+    };
+    expect(picker.data.map((d) => [d.harness, d.label, d.declared])).toContainEqual([
+      'nightly-scraper',
+      'nightly-scraper',
+      'Nightly Scraper',
+    ]);
+    expect(picker.principals).toBe(1);
+  });
+
   it('vault routes are 404 VAULT_NOT_CONFIGURED when vault=off', async () => {
     const kit = await createHttpKit({ vaultConfigured: false });
     const cookie = await kit.login();

@@ -11,6 +11,7 @@ import { ICONS } from '@/lib/icons.ts';
 import { useSearchState } from '@/lib/search/use-search-state.ts';
 import { cn } from '@/lib/utils.ts';
 import { useVaultGroups } from '../api.ts';
+import { HarnessRuleChip } from '../harnesses/HarnessRuleChip.tsx';
 import type { VaultSearch } from '../search.ts';
 import { GroupPolicyForm } from './GroupPolicyForm.tsx';
 
@@ -60,6 +61,7 @@ function GroupHeader({
           {p?.dashboard_confirm === true ? <Chip tone="vault">confirm</Chip> : null}
           {p?.require_no_evaluate === true ? <Chip tone="vault">no evaluate</Chip> : null}
           {p?.redact_username === true ? <Chip tone="vault">redact user</Chip> : null}
+          {p?.access_mode === 'reject_all' ? null : <HarnessRuleChip harnesses={p?.harnesses} />}
           <span className="ml-1 text-sm text-muted-foreground tabular-nums">
             {group.item_count} items · {group.bound_count} bound
           </span>

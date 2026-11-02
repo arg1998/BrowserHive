@@ -45,6 +45,7 @@ describe('SessionRepository', () => {
         workspace: null,
         modelSource: null,
         harnessSource: null,
+        harnessDeclared: null,
         conflicts: [],
         meta: {},
         ip: null,
@@ -64,6 +65,7 @@ describe('SessionRepository', () => {
       modelSource: 'header',
       harness: 'claude-code',
       harnessSource: 'client_info',
+      harnessDeclared: null,
     });
     await connection('c-silent', {});
     // A row written before schema v3: the raw header value, no source.

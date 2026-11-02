@@ -788,6 +788,9 @@
                         "minLength": 1,
                         "maxLength": 64
                       },
+                      "harness_declared": {
+                        "type": "string"
+                      },
                       "client": {
                         "anyOf": [
                           {
@@ -1157,6 +1160,9 @@
                         "type": "string",
                         "minLength": 1,
                         "maxLength": 64
+                      },
+                      "harness_declared": {
+                        "type": "string"
                       },
                       "client": {
                         "anyOf": [
@@ -5299,6 +5305,9 @@
                 "minLength": 1,
                 "maxLength": 64
               },
+              "harness_declared": {
+                "type": "string"
+              },
               "client": {
                 "anyOf": [
                   {
@@ -5668,6 +5677,9 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 64
+              },
+              "harness_declared": {
+                "type": "string"
               },
               "client": {
                 "anyOf": [

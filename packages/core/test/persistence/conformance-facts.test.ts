@@ -109,6 +109,7 @@ describe('ToolCallRepository', () => {
       workspace: null,
       modelSource: null,
       harnessSource: 'client_info',
+      harnessDeclared: null,
       conflicts: [],
       meta: {},
       ip: null,

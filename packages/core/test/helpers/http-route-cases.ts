@@ -586,6 +586,11 @@ export const ROUTE_CASES: readonly RouteCase[] = [
     invalid: { method: 'POST', path: api('/vault/bindings/resolve'), body: { url: 'not a url' } },
   },
   {
+    operationId: 'listVaultHarnesses',
+    success: { path: api('/vault/harnesses'), status: 200 },
+    invalid: null,
+  },
+  {
     operationId: 'listVaultLog',
     success: { path: api('/vault/log'), status: 200 },
     invalid: { path: api('/vault/log?evaluate=maybe') },

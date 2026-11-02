@@ -2,16 +2,17 @@
 import type { VaultAccessMode, VaultGroup } from '@browserhive/contracts/http';
 import { PutGroupPolicyRequest } from '@browserhive/contracts/http';
 import { useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { useConfirm } from '@/app/providers/ConfirmProvider.tsx';
 import { Callout } from '@/components/shared/Callout.tsx';
 import { Chip } from '@/components/shared/Chip.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { SimpleSelect } from '@/components/ui/select.tsx';
 import { Textarea } from '@/components/ui/textarea.tsx';
-import { usePutGroupPolicy } from '../api.ts';
+import { usePutGroupPolicy, useVaultHarnesses } from '../api.ts';
 import { parseLines } from '../bindings/binding-form.ts';
 import { FlagField, FormRow } from '../bindings/FlagField.tsx';
+import { HarnessRuleField } from '../harnesses/HarnessRuleField.tsx';
 
 interface PolicyForm {
   access_mode: VaultAccessMode;
@@ -20,6 +21,8 @@ interface PolicyForm {
   dashboard_confirm: boolean;
   require_no_evaluate: boolean;
   redact_username: boolean;
+  /** D-48: `null` = every harness, `[]` = none. */
+  harnesses: string[] | null;
 }
 
 function toForm(group: VaultGroup): PolicyForm {
@@ -31,6 +34,7 @@ function toForm(group: VaultGroup): PolicyForm {
     dashboard_confirm: p?.dashboard_confirm ?? false,
     require_no_evaluate: p?.require_no_evaluate ?? false,
     redact_username: p?.redact_username ?? false,
+    harnesses: p?.harnesses === undefined ? null : [...p.harnesses],
   };
 }
 
@@ -38,6 +42,7 @@ function toForm(group: VaultGroup): PolicyForm {
 export function GroupPolicyForm({ group }: { readonly group: VaultGroup }) {
   const confirm = useConfirm();
   const put = usePutGroupPolicy();
+  const seen = useVaultHarnesses();
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const form = useForm<PolicyForm>({ defaultValues: toForm(group) });
@@ -66,6 +71,7 @@ export function GroupPolicyForm({ group }: { readonly group: VaultGroup }) {
       dashboard_confirm: values.dashboard_confirm,
       require_no_evaluate: values.require_no_evaluate,
       redact_username: values.redact_username,
+      harnesses: values.harnesses,
     };
     const parsed = PutGroupPolicyRequest.safeParse(body);
     if (!parsed.success) {
@@ -135,6 +141,20 @@ export function GroupPolicyForm({ group }: { readonly group: VaultGroup }) {
           />
         )}
       </FormRow>
+      {mode === 'reject_all' ? null : (
+        <Controller
+          control={form.control}
+          name="harnesses"
+          render={({ field }) => (
+            <HarnessRuleField
+              noun="folder"
+              value={field.value}
+              onChange={(next) => field.onChange(next)}
+              seen={seen.data}
+            />
+          )}
+        />
+      )}
       <FlagField
         control={form.control}
         name="dashboard_confirm"

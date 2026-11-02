@@ -55,6 +55,7 @@ export function sessionFromRow(row: Selectable<Sessions>): SessionRecord {
     launchMs: row.launch_ms,
     config: parseJsonObject(row.config_json, where),
     harness: row.harness,
+    harnessDeclared: row.harness_declared,
     sandboxed: row.sandboxed === null ? null : intToBool(row.sandboxed),
     browserVersion: row.browser_version,
   };
@@ -93,6 +94,7 @@ export function sessionToRow(record: SessionRecord): Selectable<Sessions> {
     launch_ms: record.launchMs,
     config_json: toJson(record.config),
     harness: record.harness,
+    harness_declared: record.harnessDeclared,
     sandboxed: record.sandboxed === null ? null : boolToInt(record.sandboxed),
     browser_version: record.browserVersion,
   };

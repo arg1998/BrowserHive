@@ -2,6 +2,7 @@
 
 import type { OriginCheck } from '@browserhive/contracts/http';
 import { type CallerSubject, isCallerAuthorized } from './bindings.ts';
+import { checkHarnessRules, type HarnessRuleSource } from './harness-rule.ts';
 import { checkOrigin, type OriginCheckResult } from './origin.ts';
 import type { ResolvedEntry, VaultFillSession } from './types.ts';
 
@@ -22,13 +23,25 @@ export interface FillDecisionInput {
 /** Reasons a fill is refused before any credential is fetched. */
 export type BlockedReason = 'vault_disabled' | 'not_authorized' | 'evaluate_required_off';
 
+/**
+ * The operator-only truth behind a `not_authorized` refusal by a harness list (D-48): the agent
+ * sees `not_authorized`, the audit row records `harness_not_allowed` and the rule that refused.
+ */
+export interface HarnessRefusal {
+  readonly reason: 'harness_not_allowed';
+  readonly rule: HarnessRuleSource;
+}
+
 /** Outcome of {@link decideFill}. */
 export type FillDecision =
   | {
       readonly kind: 'blocked';
+      /** The agent-facing reason. */
       readonly reason: BlockedReason;
       readonly originCheck: Extract<OriginCheck, 'skipped'>;
       readonly entry: ResolvedEntry | undefined;
+      /** Present when gate 2c refused (audit only; never shown to the agent). */
+      readonly harness?: HarnessRefusal;
     }
   | {
       readonly kind: 'origin_mismatch';
@@ -57,8 +70,11 @@ export function evaluateEnabledFor(session: VaultFillSession, allowEvaluate: boo
  *
  * 1. session `vault_enabled`                          → blocked / `vault_disabled`
  * 2. handle resolves (binding or allow-all item)      → blocked / `not_authorized`
- * 2b. caller principal AND slug authorized (D-14)     → blocked / `not_authorized` (same text —
+ * 2a. caller principal, 2b. session slug (D-14)       → blocked / `not_authorized` (same text —
  *     an unknown handle and an unauthorized caller are indistinguishable, no enumeration oracle)
+ * 2c. the session's launch harness passes the binding's and the group's harness lists (D-48)
+ *                                                     → blocked / `not_authorized` (same text; the
+ *     audit-only `harness` field carries `harness_not_allowed`). Skipped with the subject check.
  * 3. `require_no_evaluate` while evaluate is permitted → blocked / `evaluate_required_off`
  * 4. origin re-check of the live page URL              → `origin_mismatch`
  * 5. `dashboard_confirm`                               → `proceed` with `confirmRequired`
@@ -71,9 +87,29 @@ export function decideFill(input: FillDecisionInput): FillDecision {
   if (entry === undefined) {
     return { kind: 'blocked', reason: 'not_authorized', originCheck: 'skipped', entry };
   }
-  const subject: CallerSubject = { principal: input.principal, slug: session.slug };
-  if (input.checkSubject !== false && !isCallerAuthorized(entry.rule, subject)) {
-    return { kind: 'blocked', reason: 'not_authorized', originCheck: 'skipped', entry };
+  const subject: CallerSubject = {
+    principal: input.principal,
+    slug: session.slug,
+    harness: session.harness,
+    harnessDeclared: session.harnessDeclared,
+  };
+  if (input.checkSubject !== false) {
+    if (!isCallerAuthorized(entry.rule, subject)) {
+      return { kind: 'blocked', reason: 'not_authorized', originCheck: 'skipped', entry };
+    }
+    const harness = checkHarnessRules(entry.harnessRules, {
+      harness: session.harness,
+      declared: session.harnessDeclared,
+    });
+    if (!harness.allowed) {
+      return {
+        kind: 'blocked',
+        reason: 'not_authorized',
+        originCheck: 'skipped',
+        entry,
+        harness: { reason: 'harness_not_allowed', rule: harness.rule },
+      };
+    }
   }
   const evaluateEnabled = evaluateEnabledFor(session, input.allowEvaluate);
   if (entry.requireNoEvaluate && evaluateEnabled) {

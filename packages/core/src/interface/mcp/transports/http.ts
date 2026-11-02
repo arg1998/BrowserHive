@@ -230,6 +230,7 @@ export function createMcpHttpHandler(options: McpHttpOptions): McpHttpHandler {
             modelSource: resolved.modelSource,
             harness: resolved.harness,
             harnessSource: resolved.harnessSource,
+            harnessDeclared: resolved.harnessDeclared,
             conflicts: columns.conflicts ?? [],
             meta: resolved.meta,
             ip: resolved.ip,

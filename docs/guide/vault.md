@@ -69,8 +69,30 @@ A binding makes one entry fillable under a stable **handle** (for example `work.
 | `dashboard_confirm` | Every fill waits for an operator to approve it on the dashboard. |
 | `require_no_evaluate` | The fill is refused unless `evaluate` is disabled for the session. |
 | `redact_username` | The username is redacted from tool results too, not only the password. |
+| Harnesses | Which agent harnesses may use it; all by default. See [Harness restrictions](#harness-restrictions). |
 
-Use **origin tester** on the Vault page to check which entries would fill on a given URL for a given session slug.
+### Harness restrictions
+
+A binding or a folder policy can also name the **harnesses** that may use it: the agent client connected over MCP, such as Claude Code, OpenCode, Codex or Cursor. BrowserHive recognises many of them on its own and shows the harness on every session ([how harnesses are recognised](mcp-clients.md#harness-identity)).
+
+For example, to let only your coding agents use the deployment credentials, open the **Deploy** folder on the Vault page and, under **Harnesses**, choose **OpenCode** and **Claude Code**. A fill from a session launched by any other harness, or by a client BrowserHive could not identify, is then refused, even when the principal and slug rules allow it.
+
+How the list works:
+
+- **All harnesses** (the default) is the same as no list: nothing changes.
+- A list allows only the harnesses it names. **Unknown** stands for sessions whose client could not be identified; leave it out to refuse them.
+- An **empty list allows nothing**. The editor warns you when you untick the last harness.
+- **Custom names** (**+ Add custom name**) are for harnesses BrowserHive does not know. They are **case-sensitive** and must equal the name the client declares: the `X-BH-Agent-Harness` header, the `BROWSERHIVE_HARNESS` variable, `?harness=` on the URL or `_meta['ai.browserhive/harness']`. The editor offers the names it has seen declared on this daemon, and warns when a custom name looks like a built-in harness (`Claude-Code` only matches a client that declares exactly `Claude-Code`; the built-in **Claude Code** matches however it was recognised).
+- A folder's list applies to every entry in the folder, including its bindings. When both the binding and its folder have a list, both must allow the harness.
+- The harness is the one the session was **launched** with. A client that changes its declared name halfway through a session is still judged by the name it launched with. Sessions from before this feature have no declared name, so only built-in harnesses and **Unknown** can match them.
+
+The agent sees a harness refusal exactly like any other: `vault_fill` returns `blocked` / `not_authorized`, and `vault_list_available` leaves the entry out. Only the [Vault log](#7-audit) records the real reason, `harness_not_allowed`, with the session's harness and declared name.
+
+> **What this does and does not protect against.** The harness name is reported by the client, and any client can claim any name. A harness list prevents mistakes, such as the wrong agent picking up the wrong credentials; it does not stop a client that lies. For a real boundary, give each agent its own API token (`browserhive admin tokens create <name>`, see [authentication tokens](mcp-clients.md#authentication-tokens)) and list its principal under **Authorized principals**. The editor reminds you when every recent session shares one principal.
+
+The `harnesses` field is part of the binding and policy JSON (`null` or missing means all harnesses, `[]` none) and round-trips through **Export** and **Import**.
+
+Use the **Tester** tab on the Vault page to check which entries would fill on a given URL, for a given session slug and harness. It runs the same checks as a real fill, in the same order, and tells you which one refused. To check a harness list, pick a **Harness** (or **Unknown**), and add the **Declared name** when a custom name is involved; a declared name on its own is read the way a client's declaration would be. With no harness picked, harness lists are not checked, and the tester says which bindings have one.
 
 Bindings and policies are stored in the database. **Export** and **Import** (merge or replace) move them as JSON, for backups or editing by hand. Edits use optimistic concurrency: if someone else changed a binding since you loaded it, saving returns [`CONFLICT`](../reference/errors.md#CONFLICT) and the dashboard reloads it.
 
@@ -118,7 +140,7 @@ A confirmation that nobody answers within `--attentionTimeout` (default 6 h) is 
 
 ## 7. Audit
 
-Every fill and every rejected listing writes one row to the **Vault log**: time, entry, result, origin check, whether `evaluate` was enabled, session, page URL and the reason. It never contains credentials.
+Every fill and every rejected listing writes one row to the **Vault log**: time, entry, result, origin check, whether `evaluate` was enabled, session, page URL and the reason. A fill refused by a harness list says `harness_not_allowed`, with the session's harness, its declared name and whether the binding or the folder refused it. It never contains credentials.
 
 ## Hardening checklist
 
@@ -126,4 +148,5 @@ Every fill and every rejected listing writes one row to the **Vault log**: time,
 - Use `require_no_evaluate` for sensitive entries, or run with `--allowEvaluate false`.
 - Use `clear_after_fill: true` in your agent's prompts.
 - Use `dashboard_confirm` for anything that moves money.
+- Give each agent its own token and authorize principals; use harness lists on top, to keep agents away from credentials that are not theirs.
 - Remember that the live view and screenshots show raw pixels.

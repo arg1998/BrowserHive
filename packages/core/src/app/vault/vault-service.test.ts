@@ -38,7 +38,14 @@ describe('VaultService — configuration', () => {
       service.fill(
         { entryName: 'x', usernameSelector: '#u', passwordSelector: '#p' },
         {
-          session: { sessionId: 's', slug: 's', disableEvaluate: false, vaultEnabled: true },
+          session: {
+            sessionId: 's',
+            slug: 's',
+            disableEvaluate: false,
+            vaultEnabled: true,
+            harness: null,
+            harnessDeclared: null,
+          },
           page: { url: () => '', fill: async () => undefined, click: async () => undefined },
           tracing: null,
           principal: 'local',
@@ -263,6 +270,37 @@ describe('VaultService.admin — bindings CRUD with optimistic versions', () => 
     ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
   });
 
+  it('harness lists (D-48): set, keep, clear and empty on PUT, versioned, round-trip through export', async () => {
+    const created = await h.service.admin.putBinding('deploy.aws', {
+      itemName: 'AWS',
+      harnesses: [' opencode', 'claude-code', 'opencode', 'Nightly Scraper'],
+    });
+    expect(created.harnesses).toEqual(['opencode', 'claude-code', 'Nightly Scraper']);
+    const kept = await h.service.admin.putBinding('deploy.aws', { title: 'AWS deploy' }, 1);
+    expect(kept).toMatchObject({
+      harnesses: ['opencode', 'claude-code', 'Nightly Scraper'],
+      version: 2,
+    });
+    await expect(
+      h.service.admin.putBinding('deploy.aws', { harnesses: null }, 1),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(
+      (await h.service.admin.putBinding('deploy.aws', { harnesses: [] }, 2)).harnesses,
+    ).toEqual([]);
+    await h.service.admin.putPolicy('f-deploy', { accessMode: 'manual', harnesses: ['opencode'] });
+
+    const doc = await h.service.admin.exportDocument();
+    expect(doc.bindings[0]?.harnesses).toEqual([]);
+    expect(doc.policies[0]?.harnesses).toEqual(['opencode']);
+    const fresh = harness();
+    await fresh.service.admin.importDocument(JSON.parse(JSON.stringify(doc)), 'merge');
+    expect(await fresh.service.admin.exportDocument()).toEqual(doc);
+
+    const cleared = await h.service.admin.putBinding('deploy.aws', { harnesses: null }, 3);
+    expect(cleared.harnesses).toBeNull();
+    expect((await h.service.admin.exportDocument()).bindings[0]).not.toHaveProperty('harnesses');
+  });
+
   it('tester reports would_fill / blocked per binding for a url and optional subject', async () => {
     await h.service.admin.putBinding('gh', {
       itemName: 'GitHub',
@@ -288,6 +326,7 @@ describe('VaultService.admin — bindings CRUD with optimistic versions', () => 
         { handle: 'li', reason: 'origin_mismatch' },
         { handle: 'rej', reason: 'not_authorized' },
       ],
+      harnessListsUnchecked: [],
     });
     expect(
       (await h.service.admin.tester({ url: 'https://www.github.com/login', sessionSlug: 'other' }))

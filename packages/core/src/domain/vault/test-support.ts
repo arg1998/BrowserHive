@@ -196,6 +196,8 @@ export function createVaultHarness(): VaultHarness {
           disableEvaluate: session.disableEvaluate ?? false,
           vaultEnabled: session.vaultEnabled ?? true,
           ...(session.humanize !== undefined && { humanize: session.humanize }),
+          harness: session.harness ?? null,
+          harnessDeclared: session.harnessDeclared ?? null,
         },
         page,
         tracing,
@@ -204,4 +206,220 @@ export function createVaultHarness(): VaultHarness {
       };
     },
   };
+}
+
+// --- D-48: one table of harness gate cases, run through the broker and the dashboard tester -----
+
+/** What a harness gate case expects: the same from `fill` and from the tester. */
+export interface HarnessGateExpectation {
+  readonly verdict: 'fill' | 'refused';
+  /** The operator-facing reason (`not_authorized`, `harness_not_allowed`), `null` for a fill. */
+  readonly reason: 'not_authorized' | 'harness_not_allowed' | null;
+  readonly rule?: 'binding' | 'group';
+}
+
+/** One case: a binding in folder `f-deploy`, a session subject, the expected verdict. */
+export interface HarnessGateCase {
+  readonly name: string;
+  readonly binding: {
+    readonly harnesses: readonly string[] | null;
+    readonly principals?: readonly string[];
+    readonly slugs?: readonly string[];
+  };
+  /** The folder policy's list (`null` = no list); the policy stays `manual`. */
+  readonly group: readonly string[] | null;
+  readonly principal: string;
+  readonly slug: string;
+  /** Launch harness slug; `null` = none recorded (reads `unknown`). */
+  readonly harness: string | null;
+  readonly declared: string | null;
+  readonly expected: HarnessGateExpectation;
+}
+
+/** The handle, item and page every harness gate case uses. */
+export const HARNESS_GATE_FIXTURE = {
+  handle: 'deploy.aws',
+  itemName: 'AWS',
+  groupId: 'f-deploy',
+  origin: 'console.aws.example',
+  pageUrl: 'https://console.aws.example/login',
+} as const;
+
+const fill: HarnessGateExpectation = { verdict: 'fill', reason: null };
+const notAuthorized: HarnessGateExpectation = { verdict: 'refused', reason: 'not_authorized' };
+const byBinding: HarnessGateExpectation = {
+  verdict: 'refused',
+  reason: 'harness_not_allowed',
+  rule: 'binding',
+};
+const byGroup: HarnessGateExpectation = {
+  verdict: 'refused',
+  reason: 'harness_not_allowed',
+  rule: 'group',
+};
+const base = { principal: 'local', slug: 'deploy-1' } as const;
+const claude = { harness: 'claude-code', declared: null } as const;
+
+/** Shared by `broker.test.ts` and `app/vault/vault-admin.test.ts`: the tester must agree with the broker. */
+export const HARNESS_GATE_CASES: readonly HarnessGateCase[] = [
+  {
+    name: 'no list anywhere',
+    binding: { harnesses: null },
+    group: null,
+    ...base,
+    ...claude,
+    expected: fill,
+  },
+  {
+    name: 'binding allows the slug',
+    binding: { harnesses: ['claude-code'] },
+    group: null,
+    ...base,
+    ...claude,
+    expected: fill,
+  },
+  {
+    name: 'binding refuses another slug',
+    binding: { harnesses: ['opencode'] },
+    group: null,
+    ...base,
+    ...claude,
+    expected: byBinding,
+  },
+  {
+    name: 'folder list covers its binding',
+    binding: { harnesses: null },
+    group: ['opencode'],
+    ...base,
+    ...claude,
+    expected: byGroup,
+  },
+  {
+    name: 'both lists must allow',
+    binding: { harnesses: ['claude-code'] },
+    group: ['opencode'],
+    ...base,
+    ...claude,
+    expected: byGroup,
+  },
+  {
+    name: 'binding named first when both refuse',
+    binding: { harnesses: ['codex'] },
+    group: ['opencode'],
+    ...base,
+    ...claude,
+    expected: byBinding,
+  },
+  {
+    name: 'empty binding list allows nothing',
+    binding: { harnesses: [] },
+    group: null,
+    ...base,
+    ...claude,
+    expected: byBinding,
+  },
+  {
+    name: 'empty folder list allows nothing',
+    binding: { harnesses: null },
+    group: [],
+    ...base,
+    ...claude,
+    expected: byGroup,
+  },
+  {
+    name: 'unknown matches an unidentified session',
+    binding: { harnesses: ['unknown'] },
+    group: null,
+    ...base,
+    harness: null,
+    declared: null,
+    expected: fill,
+  },
+  {
+    name: 'unknown does not match an identified one',
+    binding: { harnesses: ['unknown'] },
+    group: null,
+    ...base,
+    ...claude,
+    expected: byBinding,
+  },
+  {
+    name: 'custom name matches the declared name',
+    binding: { harnesses: ['Nightly Scraper'] },
+    group: null,
+    ...base,
+    harness: 'nightly-scraper',
+    declared: 'Nightly Scraper',
+    expected: fill,
+  },
+  {
+    name: 'custom name is case-sensitive',
+    binding: { harnesses: ['Nightly Scraper'] },
+    group: null,
+    ...base,
+    harness: 'nightly-scraper',
+    declared: 'nightly scraper',
+    expected: byBinding,
+  },
+  {
+    name: 'custom name never matches without a declared name',
+    binding: { harnesses: ['Nightly Scraper'] },
+    group: null,
+    ...base,
+    harness: 'nightly-scraper',
+    declared: null,
+    expected: byBinding,
+  },
+  {
+    name: 'lookalike custom name is not the slug',
+    binding: { harnesses: ['Claude-Code'] },
+    group: null,
+    ...base,
+    ...claude,
+    expected: byBinding,
+  },
+  {
+    name: 'principal is checked before the harness',
+    binding: { harnesses: ['opencode'], principals: ['p-agent'] },
+    group: null,
+    ...base,
+    ...claude,
+    principal: 'p-other',
+    expected: notAuthorized,
+  },
+  {
+    name: 'slug is checked before the harness',
+    binding: { harnesses: ['opencode'], slugs: ['ci-*'] },
+    group: null,
+    ...base,
+    ...claude,
+    expected: notAuthorized,
+  },
+  {
+    name: 'principal and slug pass, then the harness decides',
+    binding: { harnesses: ['claude-code'], principals: ['p-agent'], slugs: ['deploy-*'] },
+    group: null,
+    ...base,
+    principal: 'p-agent',
+    ...claude,
+    expected: fill,
+  },
+];
+
+/** Stores a case's binding (folder `f-deploy`, policy `manual`) and puts its item in the backend. */
+export async function seedHarnessCase(h: VaultHarness, c: HarnessGateCase): Promise<void> {
+  const fx = HARNESS_GATE_FIXTURE;
+  h.backend.entries.push({ id: 'i-aws', name: fx.itemName, groupId: fx.groupId, uris: [] });
+  h.backend.credentials.set('i-aws', { username: USER, password: SECRET });
+  await h.bind(fx.handle, {
+    itemName: fx.itemName,
+    itemId: 'i-aws',
+    groupId: fx.groupId,
+    allowedOrigins: [fx.origin],
+    allowAllSessions: c.binding.slugs === undefined,
+    authorizedSessionSlugs: c.binding.slugs ?? [],
+    authorizedPrincipals: c.binding.principals ?? [],
+    harnesses: c.binding.harnesses,
+  });
+  await h.policy(fx.groupId, { accessMode: 'manual', harnesses: c.group });
 }

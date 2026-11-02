@@ -13,6 +13,7 @@ import type {
 import type { VaultBackend } from '../../ports/vault-backend.ts';
 import { bindingRule, type CallerSubject, isCallerAuthorized } from './bindings.ts';
 import { publishVaultAccess } from './events.ts';
+import { checkHarnessRules, type EntryHarnessRules } from './harness-rule.ts';
 import { checkOrigin, domainKey, pageScope } from './origin.ts';
 import { PolicySet } from './policies.ts';
 import { allowAllEntries, enumerateBackend } from './resolve.ts';
@@ -91,6 +92,19 @@ export async function listAvailable(
   return { entries, scope: 'page', scopedTo: page.key };
 }
 
+/** Gates 2a–2c for a listing: principal, slug, then the harness lists (spec 02 §3.13, D-48). */
+function visibleTo(
+  caller: CallerSubject,
+  rule: Parameters<typeof isCallerAuthorized>[0],
+  harnessRules: EntryHarnessRules,
+): boolean {
+  return (
+    isCallerAuthorized(rule, caller) &&
+    checkHarnessRules(harnessRules, { harness: caller.harness, declared: caller.harnessDeclared })
+      .allowed
+  );
+}
+
 async function composeVisible(
   deps: ListDeps,
   caller: CallerSubject,
@@ -102,8 +116,10 @@ async function composeVisible(
 
   const bindings = await deps.bindings.list({ limit: 500 });
   for (const b of bindings.items) {
-    if (policies.get(b.groupId, now).accessMode === 'reject_all') continue;
-    if (!isCallerAuthorized(bindingRule(b), caller)) continue;
+    const policy = policies.get(b.groupId, now);
+    if (policy.accessMode === 'reject_all') continue;
+    if (!visibleTo(caller, bindingRule(b), { binding: b.harnesses, group: policy.harnesses }))
+      continue;
     out.set(b.handle, {
       entryName: b.handle,
       allowedOrigins: [...b.allowedOrigins],
@@ -116,7 +132,7 @@ async function composeVisible(
     try {
       const inventory = await enumerateBackend(deps.backend, signal);
       for (const e of allowAllEntries(inventory, policies, now)) {
-        if (!isCallerAuthorized(e.rule, caller)) continue;
+        if (!visibleTo(caller, e.rule, e.harnessRules)) continue;
         if (e.origins.length === 0) continue;
         if (out.has(e.handle)) continue;
         out.set(e.handle, {

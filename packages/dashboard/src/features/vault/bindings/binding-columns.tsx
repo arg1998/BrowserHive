@@ -6,6 +6,7 @@ import type { DataTableColumn } from '@/components/shared/use-data-table.ts';
 import { Button } from '@/components/ui/button.tsx';
 import { Hint } from '@/components/ui/tooltip.tsx';
 import { ICONS } from '@/lib/icons.ts';
+import { HarnessRuleChip } from '../harnesses/HarnessRuleChip.tsx';
 
 /** Render an origin chip; wildcards show a distinct `∗.` prefix. */
 export function OriginChip({
@@ -96,6 +97,7 @@ export function bindingColumns(options: {
           {!b.allow_all_sessions && b.authorized_session_slugs.length === 0 ? (
             <span className="text-sm text-muted-foreground">No sessions</span>
           ) : null}
+          <HarnessRuleChip harnesses={b.harnesses} />
         </span>
       ),
     },
@@ -245,6 +247,11 @@ export function BindingCard({
         {' · updated '}
         <RelativeTime at={b.updated_at} />
       </span>
+      {b.harnesses !== undefined ? (
+        <span className="flex flex-wrap gap-1">
+          <HarnessRuleChip harnesses={b.harnesses} />
+        </span>
+      ) : null}
     </div>
   );
 }

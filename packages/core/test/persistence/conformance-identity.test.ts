@@ -180,6 +180,7 @@ describe('McpConnectionRepository', () => {
     workspace: null,
     modelSource: null,
     harnessSource: null,
+    harnessDeclared: null,
     conflicts: [],
     meta: {},
     ip: '127.0.0.1',
@@ -213,6 +214,7 @@ describe('McpConnectionRepository', () => {
     const identity = {
       harness: 'claude-code',
       harnessSource: 'injected_env',
+      harnessDeclared: null,
       model: 'opus',
       modelSource: 'env',
       workspace: 'shop',

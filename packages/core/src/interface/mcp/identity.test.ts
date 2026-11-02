@@ -155,6 +155,69 @@ describe('resolveIdentity: the ladder (02 §1.4)', () => {
   }
 });
 
+describe('resolveIdentity: the declared name (D-48)', () => {
+  const rows: readonly (readonly [
+    string,
+    ConnectionSignals,
+    RequestSignals,
+    string,
+    string | null,
+  ])[] = [
+    [
+      'header keeps its case',
+      http({ 'x-bh-agent-harness': ' OpenCode ' }),
+      {},
+      'opencode',
+      'OpenCode',
+    ],
+    [
+      'env keeps its case',
+      { transport: 'stdio', env: { BROWSERHIVE_HARNESS: 'Nightly Scraper' } },
+      {},
+      'nightly-scraper',
+      'Nightly Scraper',
+    ],
+    [
+      '?harness= is declared',
+      http({}, {}, 'http://127.0.0.1:9876/mcp?harness=Claude-Code'),
+      {},
+      'claude-code',
+      'Claude-Code',
+    ],
+    [
+      '_meta is declared',
+      http(),
+      { meta: { 'ai.browserhive/harness': 'claude code' } },
+      'claude-code',
+      'claude code',
+    ],
+    [
+      'injected env is not declared',
+      { transport: 'stdio', env: { CLAUDECODE: '1' } },
+      {},
+      'claude-code',
+      null,
+    ],
+    ['clientInfo is not declared', withClient('codex-mcp-client'), {}, 'codex', null],
+    ['User-Agent is not declared', http({ 'user-agent': 'opencode/1.0' }), {}, 'opencode', null],
+    ['nothing is not declared', http(), {}, 'unknown', null],
+    [
+      'a declared value that loses to injected env is not the declared name',
+      { transport: 'stdio', env: { GEMINI_CLI: '1' } },
+      { meta: { 'ai.browserhive/harness': 'codex' } },
+      'gemini-cli',
+      null,
+    ],
+  ];
+  for (const [name, connection, request, harness, declared] of rows) {
+    it(name, () => {
+      const resolved = resolveIdentity(connection, request);
+      expect([resolved.harness, resolved.harnessDeclared]).toEqual([harness, declared]);
+      expect(clientOfIdentity(resolved).harnessDeclared).toBe(declared);
+    });
+  }
+});
+
 describe('resolveIdentity: conflicts, model, workspace, meta', () => {
   it('records lower signals that name another harness, once each', () => {
     const resolved = resolveIdentity(

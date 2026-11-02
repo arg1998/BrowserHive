@@ -94,6 +94,13 @@ export function toSessionMetadata(session: Session): SessionMetadataWithDriver {
   };
 }
 
+/** `SessionSummary.harness_declared`, present only when the launch declared a name (D-48). */
+export function declaredOf(
+  declared: string | null | undefined,
+): Pick<SessionSummary, 'harness_declared'> {
+  return declared === null || declared === undefined ? {} : { harness_declared: declared };
+}
+
 function present(value: string | null | undefined): value is string {
   return value !== null && value !== undefined;
 }
@@ -124,6 +131,11 @@ export function toWireClient(client: SessionClientInfo | null): SessionSummary['
 /** The launch harness a session records (`sessions.harness`): the identity resolved for `launch_session`. */
 export function launchHarnessOf(client: SessionClientInfo | null): string | null {
   return client?.harness ?? null;
+}
+
+/** The launch declared harness name a session records (`sessions.harness_declared`, D-48). */
+export function launchDeclaredHarnessOf(client: SessionClientInfo | null): string | null {
+  return client?.harnessDeclared ?? null;
 }
 
 /**
@@ -189,6 +201,7 @@ export function toSessionSummary(session: Session, now: number): SessionSummary 
     },
     has_live_viewers: false,
     harness: launchHarnessOf(request.client) ?? UNKNOWN_HARNESS,
+    ...declaredOf(launchDeclaredHarnessOf(request.client)),
     client: toWireClient(request.client),
   };
 }
@@ -250,6 +263,7 @@ export function toSessionRecord(session: Session): SessionRecord {
     launchMs: session.launchMs,
     config: configJson(session),
     harness: launchHarnessOf(request.client),
+    harnessDeclared: launchDeclaredHarnessOf(request.client),
     ...launchColumns(session),
   };
 }

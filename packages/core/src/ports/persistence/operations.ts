@@ -70,6 +70,7 @@ export type McpConnectionPatch = Partial<
     | 'modelSource'
     | 'harness'
     | 'harnessSource'
+    | 'harnessDeclared'
     | 'conflicts'
     | 'meta'
     | 'ip'

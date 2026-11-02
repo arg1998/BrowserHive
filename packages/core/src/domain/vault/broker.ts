@@ -1,5 +1,6 @@
 /** @module domain/vault/broker — the atomic `vault_fill` orchestrator: fixed gate order, one audit row per fill, confirm via the operator-request broker, trace-chunk exclusion, redaction windows. */
 
+import { UNKNOWN_HARNESS } from '@browserhive/contracts/harness';
 import { AppError, isAppError } from '../../kernel/errors/app-error.ts';
 import type { Clock } from '../../ports/clock.ts';
 import type { EventPublisher } from '../../ports/event-bus.ts';
@@ -80,7 +81,7 @@ interface ConfirmDecision {
  * `fill` is one atomic operation in this exact order; every branch writes exactly one
  * `vault_access` row and every fill-specific outcome is *returned*, never thrown:
  *
- * 1. `vault_enabled` gate → 2. handle + caller authorization → 3. `require_no_evaluate` →
+ * 1. `vault_enabled` gate → 2. handle + caller authorization (principal → slug → harness, D-48) → 3. `require_no_evaluate` →
  * 4. origin re-check → 5. dashboard confirm (D-15 broker) → 6. fetch credential →
  * 7. arm redaction BEFORE typing → 8. form-action defence, pause the trace chunk (D-13), type →
  * 9. optional submit (re-check action) → wait → optional clear → resume the chunk (finally) →
@@ -195,7 +196,20 @@ export class VaultBroker {
         entryLabel = request.entryName;
         handle = null;
       }
-      await audit('blocked', 'skipped', { reason: decision.reason });
+      // D-48: a harness refusal is audited with its real reason; the agent gets the same
+      // `not_authorized` as a principal or slug refusal, from the same code path.
+      await audit(
+        'blocked',
+        'skipped',
+        decision.harness === undefined
+          ? { reason: decision.reason }
+          : {
+              reason: decision.harness.reason,
+              harness: session.harness ?? UNKNOWN_HARNESS,
+              harness_declared: session.harnessDeclared,
+              rule: decision.harness.rule,
+            },
+      );
       return blocked(decision.reason);
     }
     if (decision.kind === 'origin_mismatch') {

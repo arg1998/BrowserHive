@@ -71,6 +71,18 @@ describe('binding form', () => {
       redact_username: false,
       require_no_evaluate: false,
       dashboard_confirm: true,
+      harnesses: null,
     });
+  });
+
+  it('carries the harness list (D-48): null clears to all, [] allows none, a list is copied', () => {
+    expect(toPutBody({ ...valid, harnesses: null }).harnesses).toBeNull();
+    expect(toPutBody({ ...valid, harnesses: [] }).harnesses).toEqual([]);
+    expect(toPutBody({ ...valid, harnesses: ['opencode', 'Nightly Scraper'] }).harnesses).toEqual([
+      'opencode',
+      'Nightly Scraper',
+    ]);
+    expect(errorPaths({ ...valid, harnesses: ['x'.repeat(65)] })).toContain('harnesses');
+    expect(errorPaths({ ...valid, harnesses: [] })).toEqual([]);
   });
 });

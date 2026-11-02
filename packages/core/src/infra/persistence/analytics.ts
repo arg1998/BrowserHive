@@ -8,8 +8,10 @@ import type {
   ActivityResult,
   ActivitySummary,
   AnalyticsQueries,
+  HarnessesSeen,
   HarnessMetricsRow,
   ReportWindow,
+  SeenHarnessRow,
   TimelineItem,
   TimelineKind,
   TimelineQuery,
@@ -392,6 +394,77 @@ export class SqliteAnalyticsQueries implements AnalyticsQueries {
           b.toolCalls - a.toolCalls ||
           a.harness.localeCompare(b.harness),
       );
+  }
+
+  async harnessesSeen(window: {
+    readonly since: number;
+    readonly until: number;
+  }): Promise<HarnessesSeen> {
+    await this.#drain();
+    const { since, until } = window;
+    const launched = await this.#db
+      .selectFrom('sessions')
+      .select([
+        sql<string>`COALESCE(harness, 'unknown')`.as('harness'),
+        'harness_declared as declared',
+        sql<number>`COUNT(*)`.as('n'),
+        sql<number>`MAX(created_at)`.as('last'),
+      ])
+      .where('created_at', '>=', since)
+      .where('created_at', '<=', until)
+      .groupBy([sql`COALESCE(harness, 'unknown')`, 'harness_declared'])
+      .execute();
+    const owners = await this.#db
+      .selectFrom('sessions')
+      .select(sql<number>`COUNT(DISTINCT owner)`.as('n'))
+      .where('created_at', '>=', since)
+      .where('created_at', '<=', until)
+      .executeTakeFirst();
+    const open = await this.#db
+      .selectFrom('mcp_connections')
+      .select([
+        'harness',
+        'harness_declared as declared',
+        sql<number>`MAX(last_seen_at)`.as('last'),
+      ])
+      .where('closed_at', 'is', null)
+      .groupBy(['harness', 'harness_declared'])
+      .execute();
+    const byKey = new Map<string, SeenHarnessRow>();
+    const keyOf = (harness: string, declared: string | null) => JSON.stringify([harness, declared]);
+    for (const row of launched) {
+      const harness = normalizeHarness(row.harness) ?? UNKNOWN_HARNESS;
+      const key = keyOf(harness, row.declared);
+      const prior = byKey.get(key);
+      byKey.set(key, {
+        harness,
+        declared: row.declared,
+        sessions: (prior?.sessions ?? 0) + asNumber(row.n),
+        lastSeenAt: Math.max(prior?.lastSeenAt ?? 0, asNumber(row.last)),
+      });
+    }
+    for (const row of open) {
+      // Rows written before schema v3 may hold a raw header value; fold it onto its slug.
+      const harness =
+        row.harness === null ? UNKNOWN_HARNESS : (normalizeHarness(row.harness) ?? UNKNOWN_HARNESS);
+      const key = keyOf(harness, row.declared);
+      const prior = byKey.get(key);
+      byKey.set(key, {
+        harness,
+        declared: row.declared,
+        sessions: prior?.sessions ?? 0,
+        lastSeenAt: Math.max(prior?.lastSeenAt ?? 0, asNumber(row.last)),
+      });
+    }
+    return {
+      rows: [...byKey.values()].sort(
+        (a, b) =>
+          b.lastSeenAt - a.lastSeenAt ||
+          a.harness.localeCompare(b.harness) ||
+          (a.declared ?? '').localeCompare(b.declared ?? ''),
+      ),
+      principals: asNumber(owners?.n),
+    };
   }
 
   async summary(now: number, windowMs: number): Promise<ActivitySummary> {

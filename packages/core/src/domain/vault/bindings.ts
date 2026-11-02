@@ -3,16 +3,24 @@
 import { VAULT_HANDLE_RE } from '@browserhive/contracts/http';
 import { matchesGlob } from '../../kernel/glob.ts';
 import type { VaultBindingRecord } from '../../ports/persistence/records.ts';
+import { normalizeHarnessList } from './harness-rule.ts';
 
 /** Maximum handle length admitted by {@link VAULT_HANDLE_RE}. */
 export const HANDLE_MAX_LENGTH = 128;
 /** Group label used when an item is ungrouped (the Bitwarden-style `'No Folder'`). */
 export const UNGROUPED_LABEL = 'No Folder';
 
-/** The subject a fill or listing is authorized against: the server-assigned principal + the session slug. */
+/**
+ * The subject a fill or listing is authorized against: the server-assigned principal + the session
+ * slug (D-14), and the session's launch harness and declared name for the harness lists (D-48).
+ */
 export interface CallerSubject {
   readonly principal: string;
   readonly slug: string;
+  /** The session's launch harness slug (`sessions.harness`); `null` reads `unknown`. */
+  readonly harness: string | null;
+  /** The session's launch declared harness name (`sessions.harness_declared`), or `null`. */
+  readonly harnessDeclared: string | null;
 }
 
 /** The authorization rule a binding or group policy expresses. */
@@ -87,7 +95,10 @@ export function isPrincipalAuthorized(rule: AuthorizationRule, principal: string
 }
 
 /** D-14: the principal AND the slug must both be authorized. */
-export function isCallerAuthorized(rule: AuthorizationRule, caller: CallerSubject): boolean {
+export function isCallerAuthorized(
+  rule: AuthorizationRule,
+  caller: Pick<CallerSubject, 'principal' | 'slug'>,
+): boolean {
   return isPrincipalAuthorized(rule, caller.principal) && isSlugAuthorized(rule, caller.slug);
 }
 
@@ -113,6 +124,8 @@ export interface VaultBindingInput {
   readonly redactUsername?: boolean;
   readonly requireNoEvaluate?: boolean;
   readonly dashboardConfirm?: boolean;
+  /** Harness list (D-48): absent keeps, `null` clears (every harness), `[]` allows none. */
+  readonly harnesses?: readonly string[] | null;
 }
 
 /**
@@ -145,6 +158,9 @@ export function mergeBinding(
     redactUsername: input.redactUsername ?? prior?.redactUsername ?? false,
     requireNoEvaluate: input.requireNoEvaluate ?? prior?.requireNoEvaluate ?? false,
     dashboardConfirm: input.dashboardConfirm ?? prior?.dashboardConfirm ?? false,
+    harnesses: normalizeHarnessList(
+      input.harnesses !== undefined ? input.harnesses : (prior?.harnesses ?? null),
+    ),
     version: prior?.version ?? 1,
     createdAt: prior?.createdAt ?? now,
     updatedAt: now,

@@ -248,6 +248,7 @@ export function mcpConnectionFromRow(row: Selectable<McpConnections>): McpConnec
     modelSource: row.model_source,
     harness: row.harness,
     harnessSource: row.harness_source,
+    harnessDeclared: row.harness_declared,
     conflicts: conflictsFromJson(row.harness_conflicts_json, where),
     meta: metaFromJson(row.meta_json, where),
     ip: row.ip,
@@ -276,6 +277,7 @@ export function mcpConnectionToRow(record: McpConnectionRecord): Selectable<McpC
     model_source: record.modelSource,
     harness: record.harness,
     harness_source: record.harnessSource,
+    harness_declared: record.harnessDeclared,
     harness_conflicts_json: conflictsToJson(record.conflicts),
     meta_json: metaToJson(record.meta),
     ip: record.ip,
@@ -304,6 +306,7 @@ export function mcpConnectionPatchToRow(patch: McpConnectionPatch): Updateable<M
     ...(patch.modelSource !== undefined && { model_source: patch.modelSource }),
     ...(patch.harness !== undefined && { harness: patch.harness }),
     ...(patch.harnessSource !== undefined && { harness_source: patch.harnessSource }),
+    ...(patch.harnessDeclared !== undefined && { harness_declared: patch.harnessDeclared }),
     ...(patch.conflicts !== undefined && {
       harness_conflicts_json: conflictsToJson(patch.conflicts),
     }),

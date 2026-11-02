@@ -1,5 +1,6 @@
 /** @module contracts/http/vault-bindings — bindings CRUD, origin resolver, access log, export/import (spec 03 §4.5) */
 import { z } from 'zod';
+import { HARNESS_SLUG_MAX } from '../harness/index.ts';
 import { EventId, SessionId } from '../ids/index.ts';
 import {
   Count,
@@ -11,7 +12,8 @@ import {
   sortable,
   windowQuery,
 } from './common.ts';
-import { VaultAccessMode, VaultGroupPolicy } from './vault.ts';
+import { HarnessSlug } from './sessions.ts';
+import { VaultAccessMode, VaultGroupPolicy, VaultHarnessList, VaultHarnessName } from './vault.ts';
 
 /** Binding handle grammar: lowercase slug-ish token derived from `<group>/<item>`. */
 export const VAULT_HANDLE_RE = /^[a-z0-9][a-z0-9._-]{0,127}$/;
@@ -39,6 +41,8 @@ export const VaultBinding = z.object({
   redact_username: z.boolean(),
   require_no_evaluate: z.boolean(),
   dashboard_confirm: z.boolean(),
+  /** Harness list (D-48); absent = every harness. */
+  harnesses: VaultHarnessList.optional(),
   created_at: EpochMs,
   updated_at: EpochMs,
   version: z.number().int().positive(),
@@ -76,6 +80,8 @@ export const PutVaultBindingRequest = z.strictObject({
   redact_username: z.boolean().optional(),
   require_no_evaluate: z.boolean().optional(),
   dashboard_confirm: z.boolean().optional(),
+  /** Harness list (D-48): absent keeps the stored one, `null` clears it (every harness), `[]` allows none. */
+  harnesses: VaultHarnessList.nullable().optional(),
 });
 /** `PUT /vault/bindings/{handle}` body. */
 export type PutVaultBindingRequest = z.infer<typeof PutVaultBindingRequest>;
@@ -90,11 +96,21 @@ export const DeleteVaultBindingResponse = z.object({ ok: z.literal(true), remove
 /** `DELETE /vault/bindings/{handle}` 200 body. */
 export type DeleteVaultBindingResponse = z.infer<typeof DeleteVaultBindingResponse>;
 
-/** `POST /vault/bindings/resolve` body — server-side origin tester. */
+/**
+ * `POST /vault/bindings/resolve` body — server-side dry run of the fill gates. `harness` is a
+ * harness slug (`unknown` included) and `harness_declared` the exact declared name; a declared name
+ * alone is normalised into the slug, as a declared signal would be (D-48).
+ */
 export const ResolveBindingsRequest = z.strictObject({
   url: z.url(),
   session_slug: z.string().min(1).max(64).optional(),
   principal: z.string().min(1).max(128).optional(),
+  harness: z
+    .string()
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'a harness slug: lower-case letters, digits and dashes')
+    .max(HARNESS_SLUG_MAX)
+    .optional(),
+  harness_declared: VaultHarnessName.optional(),
 });
 /** `POST /vault/bindings/resolve` body. */
 export type ResolveBindingsRequest = z.infer<typeof ResolveBindingsRequest>;
@@ -102,7 +118,19 @@ export type ResolveBindingsRequest = z.infer<typeof ResolveBindingsRequest>;
 /** `POST /vault/bindings/resolve` 200 body. */
 export const ResolveBindingsResponse = z.object({
   would_fill: z.array(VaultHandle),
-  blocked: z.array(z.object({ handle: VaultHandle, reason: z.string() })),
+  blocked: z.array(
+    z.object({
+      handle: VaultHandle,
+      reason: z.string(),
+      /** With `reason: 'harness_not_allowed'`: which list refused (D-48). */
+      rule: z.enum(['binding', 'group']).optional(),
+    }),
+  ),
+  /**
+   * Bindings whose binding or group harness list would have applied but was not checked, because no
+   * harness was given (D-48). Empty when a harness was given.
+   */
+  harness_lists_unchecked: z.array(VaultHandle),
 });
 /** `POST /vault/bindings/resolve` 200 body. */
 export type ResolveBindingsResponse = z.infer<typeof ResolveBindingsResponse>;
@@ -210,3 +238,34 @@ export const ImportVaultResponse = z.object({
 });
 /** `POST /vault/import` 200 body. */
 export type ImportVaultResponse = z.infer<typeof ImportVaultResponse>;
+
+/** One harness seen on this daemon (`GET /vault/harnesses`, D-48). */
+export const VaultSeenHarness = z.object({
+  /** Launch harness slug (`unknown` when nothing identified the client). */
+  harness: HarnessSlug,
+  /** Display label of `harness`. */
+  label: z.string(),
+  /** The raw declared name, exactly as sent (a custom rule entry matches it), or `null`. */
+  declared: z.string().nullable(),
+  /** Sessions launched in the window with this harness and declared name (`0`: an open connection only). */
+  sessions: Count,
+  last_seen_at: EpochMs,
+});
+/** One harness seen on this daemon. */
+export type VaultSeenHarness = z.infer<typeof VaultSeenHarness>;
+
+/** Days of history `GET /vault/harnesses` looks back over. */
+export const VAULT_HARNESSES_WINDOW_DAYS = 30;
+
+/**
+ * `GET /vault/harnesses` body: the harness picker's data and the inputs of its warnings. `principals`
+ * is the number of distinct principals that launched a session in the window.
+ */
+export const VaultHarnessesResponse = z.object({
+  data: z.array(VaultSeenHarness),
+  principals: Count,
+  window: z.object({ since: EpochMs, until: EpochMs }),
+  now: EpochMs,
+});
+/** `GET /vault/harnesses` body. */
+export type VaultHarnessesResponse = z.infer<typeof VaultHarnessesResponse>;

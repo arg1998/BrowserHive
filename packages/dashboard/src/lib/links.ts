@@ -58,6 +58,7 @@ export const DOCS_PAGES = {
   vault: { page: 'guide/vault' },
   vaultPolicies: { page: 'guide/vault', anchor: 'folder-policies' },
   vaultBindings: { page: 'guide/vault', anchor: 'bindings' },
+  vaultHarnesses: { page: 'guide/vault', anchor: 'harness-restrictions' },
   vaultConfirmations: { page: 'guide/vault', anchor: '6-confirmations' },
   vaultAudit: { page: 'guide/vault', anchor: '7-audit' },
   stealth: { page: 'guide/stealth' },

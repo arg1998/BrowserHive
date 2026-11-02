@@ -944,6 +944,9 @@
                   "minLength": 1,
                   "maxLength": 64
                 },
+                "harness_declared": {
+                  "type": "string"
+                },
                 "client": {
                   "type": [
                     "object",
@@ -1591,6 +1594,9 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 64
+              },
+              "harness_declared": {
+                "type": "string"
               },
               "client": {
                 "type": [
@@ -6147,6 +6153,16 @@
                     "redact_username": {
                       "type": "boolean"
                     },
+                    "harnesses": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64,
+                        "pattern": "^[^\\u0000-\\u001f\\u007f]*$"
+                      },
+                      "maxItems": 32
+                    },
                     "version": {
                       "type": "integer",
                       "exclusiveMinimum": 0
@@ -6268,6 +6284,16 @@
               "redact_username": {
                 "type": "boolean"
               },
+              "harnesses": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64,
+                  "pattern": "^[^\\u0000-\\u001f\\u007f]*$"
+                },
+                "maxItems": 32
+              },
               "version": {
                 "type": "integer",
                 "exclusiveMinimum": 0
@@ -6341,6 +6367,19 @@
           },
           "redact_username": {
             "type": "boolean"
+          },
+          "harnesses": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[^\\u0000-\\u001f\\u007f]*$"
+            },
+            "maxItems": 32
           }
         },
         "required": [
@@ -6564,6 +6603,16 @@
                 "dashboard_confirm": {
                   "type": "boolean"
                 },
+                "harnesses": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "pattern": "^[^\\u0000-\\u001f\\u007f]*$"
+                  },
+                  "maxItems": 32
+                },
                 "created_at": {
                   "type": "integer",
                   "minimum": 0
@@ -6773,6 +6822,16 @@
               "dashboard_confirm": {
                 "type": "boolean"
               },
+              "harnesses": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64,
+                  "pattern": "^[^\\u0000-\\u001f\\u007f]*$"
+                },
+                "maxItems": 32
+              },
               "created_at": {
                 "type": "integer",
                 "minimum": 0
@@ -6872,6 +6931,19 @@
           },
           "dashboard_confirm": {
             "type": "boolean"
+          },
+          "harnesses": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[^\\u0000-\\u001f\\u007f]*$"
+            },
+            "maxItems": 32
           }
         },
         "additionalProperties": false
@@ -6915,6 +6987,13 @@
                 },
                 "reason": {
                   "type": "string"
+                },
+                "rule": {
+                  "type": "string",
+                  "enum": [
+                    "binding",
+                    "group"
+                  ]
                 }
               },
               "required": [
@@ -6922,11 +7001,19 @@
                 "reason"
               ]
             }
+          },
+          "harness_lists_unchecked": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+            }
           }
         },
         "required": [
           "would_fill",
-          "blocked"
+          "blocked",
+          "harness_lists_unchecked"
         ]
       },
       "ResolveBindingsRequest": {
@@ -6945,12 +7032,96 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 128
+          },
+          "harness": {
+            "type": "string",
+            "maxLength": 32,
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "harness_declared": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[^\\u0000-\\u001f\\u007f]*$"
           }
         },
         "required": [
           "url"
         ],
         "additionalProperties": false
+      },
+      "VaultHarnessesResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "harness": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "label": {
+                  "type": "string"
+                },
+                "declared": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "sessions": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "last_seen_at": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "harness",
+                "label",
+                "declared",
+                "sessions",
+                "last_seen_at"
+              ]
+            }
+          },
+          "principals": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "window": {
+            "type": "object",
+            "properties": {
+              "since": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "until": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "since",
+              "until"
+            ]
+          },
+          "now": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "data",
+          "principals",
+          "window",
+          "now"
+        ]
       },
       "VaultExportDocument": {
         "type": "object",
@@ -7014,6 +7185,16 @@
                 },
                 "dashboard_confirm": {
                   "type": "boolean"
+                },
+                "harnesses": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "pattern": "^[^\\u0000-\\u001f\\u007f]*$"
+                  },
+                  "maxItems": 32
                 }
               },
               "required": [
@@ -7074,6 +7255,16 @@
                 },
                 "redact_username": {
                   "type": "boolean"
+                },
+                "harnesses": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "pattern": "^[^\\u0000-\\u001f\\u007f]*$"
+                  },
+                  "maxItems": 32
                 }
               },
               "required": [
@@ -8182,6 +8373,9 @@
                   "type": "string"
                 },
                 "harness_source": {
+                  "type": "string"
+                },
+                "harness_declared": {
                   "type": "string"
                 },
                 "model": {
@@ -28328,7 +28522,7 @@
         "tags": [
           "vault"
         ],
-        "summary": "Dry-run the fill gates of every binding against a URL.",
+        "summary": "Dry-run the fill gates of every binding against a URL, optionally as a given principal, slug and harness (D-48).",
         "security": [
           {
             "cookieAuth": []
@@ -28350,7 +28544,7 @@
         },
         "responses": {
           "200": {
-            "description": "Dry-run the fill gates of every binding against a URL.",
+            "description": "Dry-run the fill gates of every binding against a URL, optionally as a given principal, slug and harness (D-48).",
             "content": {
               "application/json": {
                 "schema": {
@@ -28401,6 +28595,86 @@
           },
           "413": {
             "description": "PAYLOAD_TOO_LARGE",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vault/harnesses": {
+      "get": {
+        "operationId": "listVaultHarnesses",
+        "tags": [
+          "vault"
+        ],
+        "summary": "Harnesses and declared names seen on this daemon in the last 30 days, for the harness lists of bindings and group policies (D-48).",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-browserhive-scope": "vault:read",
+        "responses": {
+          "200": {
+            "description": "Harnesses and declared names seen on this daemon in the last 30 days, for the harness lists of bindings and group policies (D-48).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VaultHarnessesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, PASSWORD_CHANGE_REQUIRED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "VAULT_NOT_CONFIGURED",
             "content": {
               "application/problem+json": {
                 "schema": {

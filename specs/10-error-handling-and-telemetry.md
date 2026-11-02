@@ -180,7 +180,7 @@ export function errorFrom(code, details, opts?): AppError;   // factory with typ
 |---|---|
 | Domain rule violated, precondition failed, resource missing | `throw new AppError(...)` in application/domain services |
 | Parsing, classification, matching | return `Result<T, E>` (`kernel/result.ts`, minimal `{ok:true,value}|{ok:false,error}`) — never throw for expected non-matches |
-| Agent-branchable task outcome (`vault_fill` status, `request_attention` status, `navigate` HTTP status, `set_extra_http_headers.rejected`) | return the status in the result; the outcome classifier (`tool-outcome.ts`) records an audit code |
+| Agent-branchable task outcome (`vault_fill` status, `request_attention` status, `navigate` HTTP status, `set_extra_http_headers.rejected`) | return the status in the result; the outcome classifier (`tool-outcome.ts`) records an audit code. A refusal returns the same generic reason to the agent whatever the gate (`not_authorized` for an unknown handle, a principal, a slug or a harness refusal, D-48); the real reason (`harness_not_allowed`, …) goes only to the operator-facing `vault_access` row. No error code exists for a harness refusal, and a malformed `harnesses` list is `VALIDATION_FAILED` |
 | Boundary adapters (HTTP handler, WS command, MCP dispatcher, CLI) | never let anything escape: map to a projection; unknown → `INTERNAL_ERROR` with `ref = request_id` |
 | Background timers (sweeper, retention, outbox, WS heartbeats) | `void tick().catch(reportDegradation)`; per-item try/catch inside sweeps; a failing item never aborts the sweep |
 | Session teardown, CDP detach, file cleanup | swallow-and-warn (`SessionWarning`), never throw from `stop()` |

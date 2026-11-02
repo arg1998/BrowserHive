@@ -1,5 +1,9 @@
 /** @module domain/vault/resolve — handle → fillable entry resolution (manual binding first, then allow-all groups). */
 
+import type {
+  VaultBindingRecord,
+  VaultGroupPolicyRecord,
+} from '../../ports/persistence/records.ts';
 import type { VaultBindingRepository } from '../../ports/persistence/vault-policy.ts';
 import type { VaultBackend, VaultEntrySummary, VaultGroup } from '../../ports/vault-backend.ts';
 import { bindingRule, deriveHandle } from './bindings.ts';
@@ -57,6 +61,7 @@ export function allowAllEntries(
       groupId: item.groupId,
       origins: originsFromUris(item.uris),
       rule: policyRule(policy),
+      harnessRules: { binding: null, group: policy.harnesses },
       redactUsername: policy.redactUsername,
       requireNoEvaluate: policy.requireNoEvaluate,
       dashboardConfirm: policy.dashboardConfirm,
@@ -64,6 +69,29 @@ export function allowAllEntries(
     });
   }
   return out;
+}
+
+/**
+ * A manual binding as a fill target under its group's policy: the binding's own rule and flags, and
+ * the harness lists of both (D-48). Shared by the broker and the dashboard tester, so they agree.
+ */
+export function manualEntry(
+  binding: VaultBindingRecord,
+  policy: VaultGroupPolicyRecord,
+): ResolvedEntry {
+  return {
+    handle: binding.handle,
+    itemName: binding.itemName,
+    itemId: binding.itemId,
+    groupId: binding.groupId,
+    origins: binding.allowedOrigins,
+    rule: bindingRule(binding),
+    harnessRules: { binding: binding.harnesses, group: policy.harnesses },
+    redactUsername: binding.redactUsername,
+    requireNoEvaluate: binding.requireNoEvaluate,
+    dashboardConfirm: binding.dashboardConfirm,
+    source: 'manual',
+  };
 }
 
 /**
@@ -85,19 +113,9 @@ export async function resolveEntry(
   const now = deps.now();
   const binding = await deps.bindings.get(handle);
   if (binding !== null) {
-    if (policies.get(binding.groupId, now).accessMode === 'reject_all') return undefined;
-    return {
-      handle: binding.handle,
-      itemName: binding.itemName,
-      itemId: binding.itemId,
-      groupId: binding.groupId,
-      origins: binding.allowedOrigins,
-      rule: bindingRule(binding),
-      redactUsername: binding.redactUsername,
-      requireNoEvaluate: binding.requireNoEvaluate,
-      dashboardConfirm: binding.dashboardConfirm,
-      source: 'manual',
-    };
+    const policy = policies.get(binding.groupId, now);
+    if (policy.accessMode === 'reject_all') return undefined;
+    return manualEntry(binding, policy);
   }
   if (!policies.hasAllowAll()) return undefined;
   const inventory = await enumerateBackend(deps.backend, signal);

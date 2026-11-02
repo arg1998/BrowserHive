@@ -89,6 +89,11 @@ export interface ResolvedIdentity {
   readonly harnessSource: HarnessSource;
   /** The winning signal's raw value (`null` for `none`). */
   readonly harnessValue: string | null;
+  /**
+   * The raw declared name: the winning value when its source is a declared one (`env`, `header`,
+   * `url`, `meta`), else `null` (D-48). Trimmed and capped at {@link DECLARED_VALUE_MAX}.
+   */
+  readonly harnessDeclared: string | null;
   readonly conflicts: readonly HarnessConflictRecord[];
   readonly model: string | null;
   readonly modelSource: DeclaredSource | null;
@@ -104,6 +109,14 @@ export interface ResolvedIdentity {
   readonly userAgent: string | null;
   readonly ip: string | null;
 }
+
+/** Sources whose value the client typed itself (spec 02 §1.4 steps 1, 3, 4): the declared name (D-48). */
+const DECLARED_HARNESS_SOURCES: ReadonlySet<HarnessSource> = new Set([
+  'env',
+  'header',
+  'url',
+  'meta',
+]);
 
 interface Candidate {
   readonly source: HarnessSource;
@@ -263,6 +276,8 @@ export function resolveIdentity(
     harness: winner?.harness ?? UNKNOWN_HARNESS,
     harnessSource: winner?.source ?? 'none',
     harnessValue: winner?.value ?? null,
+    harnessDeclared:
+      winner !== undefined && DECLARED_HARNESS_SOURCES.has(winner.source) ? winner.value : null,
     conflicts,
     model: model.value,
     modelSource: model.source,
@@ -293,6 +308,7 @@ export function clientOfIdentity(identity: ResolvedIdentity): SessionClientInfo 
     modelSource: identity.modelSource,
     harness: identity.harness,
     harnessSource: identity.harnessSource,
+    harnessDeclared: identity.harnessDeclared,
     protocolVersion: identity.protocolVersion,
     meta: identity.meta,
   };
@@ -303,6 +319,7 @@ export function connectionPatchOf(identity: ResolvedIdentity): McpConnectionPatc
   return {
     harness: identity.harness,
     harnessSource: identity.harnessSource,
+    harnessDeclared: identity.harnessDeclared,
     conflicts: identity.conflicts,
     model: identity.model,
     modelSource: identity.modelSource,

@@ -1,4 +1,4 @@
-/** @module domain/session/client-info — the self-reported identity of the MCP client that launched a session (spec 02 §1.4, D-30): shown in the dashboard, never used for access control or any other decision. */
+/** @module domain/session/client-info — the self-reported identity of the MCP client that launched a session (spec 02 §1.4, D-30): shown in the dashboard; the launch harness and declared name also feed the narrowing harness lists of vault rules (D-48), nothing else. */
 
 /** What a client said about itself (`clientInfo`, `X-BH-*` headers, `_meta`, the stdio environment) as resolved for one call. */
 export interface SessionClientInfo {
@@ -20,6 +20,8 @@ export interface SessionClientInfo {
   readonly harness?: string | null;
   /** How `harness` was recognised. */
   readonly harnessSource?: string | null;
+  /** The raw declared harness name (`env|header|url|meta` sources only), case kept (D-48). */
+  readonly harnessDeclared?: string | null;
   /** Requested protocol version. */
   readonly protocolVersion?: string | null;
   /** The capped meta bag. */

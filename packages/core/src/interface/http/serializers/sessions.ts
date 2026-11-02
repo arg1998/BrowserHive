@@ -3,7 +3,7 @@
 import { UNKNOWN_HARNESS } from '@browserhive/contracts/harness';
 import type { SessionFacets, SessionSummary, SessionsQuery } from '@browserhive/contracts/http';
 import type { z } from 'zod';
-import { toWireClient } from '../../../app/sessions/metadata.ts';
+import { declaredOf, toWireClient } from '../../../app/sessions/metadata.ts';
 import type {
   SessionFacets as RepoFacets,
   SessionListQuery,
@@ -57,6 +57,7 @@ export function sessionRowToSummary(
     counts: countsOf(row),
     has_live_viewers: hasLiveViewers,
     harness: row.harness ?? UNKNOWN_HARNESS,
+    ...declaredOf(row.harnessDeclared),
     client: toWireClient(row.client),
   };
 }

@@ -6,6 +6,7 @@ import { harnessIdentity } from './0003-harness-identity.ts';
 import { sessionBrowser } from './0004-session-browser.ts';
 import { notificationOutbox } from './0005-notification-outbox.ts';
 import { notificationActions } from './0006-notification-actions.ts';
+import { vaultHarnesses } from './0007-vault-harnesses.ts';
 import type { Migration } from './migration.ts';
 
 export type { Migration } from './migration.ts';
@@ -18,6 +19,7 @@ export const MIGRATIONS: readonly Migration[] = [
   sessionBrowser,
   notificationOutbox,
   notificationActions,
+  vaultHarnesses,
 ];
 
 /** The schema version this binary writes. */

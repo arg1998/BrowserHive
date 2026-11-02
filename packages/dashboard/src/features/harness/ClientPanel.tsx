@@ -1,4 +1,4 @@
-/** @module features/harness/ClientPanel — the session detail's "Client" panel (spec 04 §12.3, D-30): the launch harness and how it was recognised, the declared model ("not reported" when absent) and workspace, `clientInfo`, protocol version and the capped meta bag, under one self-reported explainer */
+/** @module features/harness/ClientPanel — the session detail's "Client" panel (spec 04 §12.3, D-30): the launch harness and how it was recognised, the launch declared name (D-48), the declared model ("not reported" when absent) and workspace, `clientInfo`, protocol version and the capped meta bag, under one self-reported explainer */
 import type { SessionSummary } from '@browserhive/contracts/http';
 import { KeyValue, type KeyValueItem } from '@/components/shared/KeyValue.tsx';
 import { Panel } from '@/components/shared/Section.tsx';
@@ -53,6 +53,14 @@ export function ClientPanel({ session }: { readonly session: SessionSummary }) {
       ),
     },
   ];
+  const declared = session.harness_declared;
+  if (declared !== undefined && declared !== session.harness) {
+    // The exact text a vault harness list's custom name must equal (D-48).
+    items.push({
+      key: 'Declared as',
+      value: <span className="font-mono text-sm [overflow-wrap:anywhere]">{declared}</span>,
+    });
+  }
   if (client !== null) {
     const modelSource = declaredSourcePhrase(client.model_source);
     items.push(

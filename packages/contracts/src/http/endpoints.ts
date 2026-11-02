@@ -104,6 +104,7 @@ export const HTTP_ENDPOINTS: readonly HttpEndpoint[] = [
   ep('putVaultBinding', 'put', '/vault/bindings/{handle}', 'vault:write'),
   ep('deleteVaultBinding', 'delete', '/vault/bindings/{handle}', 'vault:write'),
   ep('resolveVaultBindings', 'post', '/vault/bindings/resolve', 'vault:read'),
+  ep('listVaultHarnesses', 'get', '/vault/harnesses', 'vault:read'),
   ep('listVaultLog', 'get', '/vault/log', 'vault:read'),
   ep('exportVault', 'get', '/vault/export', 'vault:read'),
   ep('importVault', 'post', '/vault/import', 'vault:write'),

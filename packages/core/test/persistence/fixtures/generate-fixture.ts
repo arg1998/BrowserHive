@@ -89,6 +89,8 @@ export async function seedFixture(uow: SqliteUnitOfWork): Promise<void> {
       workspace: 'fixture-workspace',
       modelSource: 'header',
       harnessSource: 'header',
+      // Schema v7: the raw declared name (D-48).
+      harnessDeclared: 'Claude Code',
       conflicts: [{ source: 'client_info', value: 'fixture-client', harness: 'fixture-client' }],
       meta: { team: 'fixture' },
       ip: '127.0.0.1',
@@ -101,6 +103,7 @@ export async function seedFixture(uow: SqliteUnitOfWork): Promise<void> {
       sessionRecord({
         connectionId: 'c-1',
         harness: 'claude-code',
+        harnessDeclared: 'Claude Code',
         sandboxed: true,
         browserVersion: '154.0.8037.57',
       }),
@@ -180,6 +183,8 @@ export async function seedFixture(uow: SqliteUnitOfWork): Promise<void> {
       redactUsername: false,
       requireNoEvaluate: true,
       dashboardConfirm: false,
+      // Schema v7: a harness list (D-48).
+      harnesses: ['claude-code', 'Nightly Scraper'],
       version: 1,
       createdAt: at,
       updatedAt: at,
@@ -195,6 +200,7 @@ export async function seedFixture(uow: SqliteUnitOfWork): Promise<void> {
       dashboardConfirm: false,
       requireNoEvaluate: false,
       redactUsername: false,
+      harnesses: ['unknown'],
       version: 1,
       createdAt: at,
       updatedAt: at,

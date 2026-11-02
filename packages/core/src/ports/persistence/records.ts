@@ -113,6 +113,11 @@ export interface SessionRecord {
   /** The launch harness (spec 02 §1.4), written once; `null` for sessions created before schema v3. */
   readonly harness: string | null;
   /**
+   * The raw harness name the launching client declared, written once with `harness` (D-48); `null`
+   * when none was declared or the session was created before schema v7.
+   */
+  readonly harnessDeclared: string | null;
+  /**
    * Whether the session's browser ran inside Chromium's sandbox, recorded once it launched (D-31);
    * `null` = not recorded (created before schema v4, or the browser never launched).
    */

@@ -4,6 +4,7 @@ import type { VaultAccessEvent } from '@browserhive/contracts/ws';
 import type { z } from 'zod';
 import type { TracingHandle } from '../../ports/browser-driver.ts';
 import type { AuthorizationRule } from './bindings.ts';
+import type { EntryHarnessRules } from './harness-rule.ts';
 
 /** The minimal page surface the broker drives (a subset of Playwright's `Page`, for testability). */
 export interface VaultPage {
@@ -26,6 +27,10 @@ export interface VaultFillSession {
   readonly vaultEnabled: boolean;
   /** Whether this session types with human cadence. */
   readonly humanize?: boolean;
+  /** The launch harness slug (`sessions.harness`), fixed at launch; `null` reads `unknown` (D-48). */
+  readonly harness: string | null;
+  /** The launch declared harness name (`sessions.harness_declared`), or `null` (D-48). */
+  readonly harnessDeclared: string | null;
 }
 
 /** The `vault_fill` tool input (camelCase). */
@@ -70,6 +75,8 @@ export interface ResolvedEntry {
   /** Effective origin allow-list (binding origins or derived from the item's login URIs). */
   readonly origins: readonly string[];
   readonly rule: AuthorizationRule;
+  /** The harness lists that apply (D-48): the binding's own and its group policy's. */
+  readonly harnessRules: EntryHarnessRules;
   readonly redactUsername: boolean;
   readonly requireNoEvaluate: boolean;
   readonly dashboardConfirm: boolean;

@@ -162,6 +162,7 @@ export function mcpConnectionToWire(
     harness,
     harness_label: harnessLabel(harness),
     harness_source: source,
+    ...(row.harnessDeclared !== null && { harness_declared: row.harnessDeclared }),
     model: row.model,
     model_source: row.modelSource ?? (row.model === null ? null : 'header'),
     workspace: row.workspace ?? row.agentName,

@@ -42,8 +42,8 @@ export type SessionCounts = z.infer<typeof SessionCounts>;
 export const HarnessSlug = z.string().min(1).max(64);
 
 /**
- * Self-reported MCP client identity (spec 02 §1.4; observability only, never for access control,
- * D-30). Absent values are omitted. `agent_name` is the workspace, kept for compatibility.
+ * Self-reported MCP client identity (spec 02 §1.4; observability only, D-30; only vault harness
+ * lists read the session's launch harness, D-48). Absent values are omitted. `agent_name` is the workspace, kept for compatibility.
  */
 export const SessionClient = z.object({
   name: z.string().nullable(),
@@ -113,6 +113,8 @@ export const SessionSummary = z.object({
   has_live_viewers: z.boolean(),
   /** The harness that launched the session, fixed at launch; `unknown` when nothing identified it. */
   harness: HarnessSlug,
+  /** The raw harness name the launching client declared, fixed with `harness`; absent when none was declared (D-48). */
+  harness_declared: z.string().optional(),
   client: SessionClient.nullable(),
 });
 /** The one session shape used by lists, detail and WS. */

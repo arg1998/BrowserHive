@@ -62,6 +62,7 @@ export const keys = {
     items: (params?: KeyParams) => ['vault', 'items', stableParams(params)] as const,
     bindings: (params?: KeyParams) => ['vault', 'bindings', stableParams(params)] as const,
     confirms: () => ['vault', 'confirms'] as const,
+    harnesses: () => ['vault', 'harnesses'] as const,
     confirmCount: () => ['vault', 'confirm-count'] as const,
     logs: () => ['vault', 'log'] as const,
     log: (params?: KeyParams) => ['vault', 'log', stableParams(params)] as const,

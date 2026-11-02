@@ -77,6 +77,25 @@ export interface HarnessMetricsRow {
   readonly errors: number;
 }
 
+/** One harness seen on this daemon (`GET /vault/harnesses`, D-48). */
+export interface SeenHarnessRow {
+  /** Launch harness slug, `unknown` when absent. */
+  readonly harness: string;
+  /** The raw declared name, or `null`. */
+  readonly declared: string | null;
+  /** Sessions created in the window with this pair (`0` for an open connection only). */
+  readonly sessions: number;
+  readonly lastSeenAt: number;
+}
+
+/** The harness picker's data (D-48). */
+export interface HarnessesSeen {
+  /** Distinct (harness, declared) pairs, most recently seen first. */
+  readonly rows: readonly SeenHarnessRow[];
+  /** Distinct owners of the sessions created in the window. */
+  readonly principals: number;
+}
+
 /** A half-open window `[since, until)` of the report queries. */
 export interface ReportWindow {
   readonly since: number;
@@ -186,4 +205,10 @@ export interface AnalyticsQueries {
   toolLatency(window: ReportWindow): Promise<readonly ToolLatencyRow[]>;
   /** The most frequent error codes (with their tool) over `[since, until)`, most first. */
   topErrors(window: ReportWindow, limit: number): Promise<readonly TopErrorRow[]>;
+  /**
+   * Harnesses seen on this daemon (D-48): sessions created in `[since, until]` grouped by launch
+   * harness and declared name, plus open connections that launched nothing yet (`sessions: 0`);
+   * and the number of distinct session owners in the window.
+   */
+  harnessesSeen(window: { readonly since: number; readonly until: number }): Promise<HarnessesSeen>;
 }
