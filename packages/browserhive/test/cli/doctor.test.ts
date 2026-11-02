@@ -155,10 +155,10 @@ describe('doctor', () => {
       const run = await cliHarness({
         argv: ['doctor'],
         fs: healthyFs(),
-        probes: probeState({ shorthand: { kind: 'other', path: 'C:\\tools\\bh.ps1' } }),
+        probes: probeState({ shorthand: { kind: 'other', path: '/home/me/bin/bh' } }),
       });
       expect(run.code).toBe(2);
-      expect(run.stdout).toMatch(/!\s+bh\s+C:\\tools\\bh\.ps1 is not BrowserHive's/);
+      expect(run.stdout).toMatch(/!\s+bh\s+\/home\/me\/bin\/bh is not BrowserHive's/);
       expect(run.stdout).toContain('20 passed, 1 warnings, 0 failed');
     });
 
