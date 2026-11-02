@@ -3,6 +3,7 @@ browserhive 0.1.0 — local-first stealth browser MCP server
 USAGE
   browserhive [serve] [flags]
   browserhive <command> [flags]
+  bh is installed as a shorthand: bh <command> is browserhive <command>.
 
 COMMANDS
   serve     Start the MCP server (default)

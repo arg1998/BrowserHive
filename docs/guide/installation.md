@@ -26,6 +26,12 @@ pnpm add -g browserhive
 
 Without a global install, `bunx browserhive` (or `npx browserhive`, with Bun on `PATH`) works for every command below.
 
+### The `bh` shorthand
+
+A global install also gives you `bh`, a shorter name for the same command: `bh init` is `browserhive init`, `bh --admin` is `browserhive --admin`. On Windows, npm creates `bh.cmd` and `bh.ps1` next to `browserhive.cmd` and `browserhive.ps1`, and Bun creates `bh.exe`.
+
+The docs, help text and messages always say `browserhive`, and scripts, CI jobs and MCP client configurations should use it too: on another machine, `bh` may be something else. If you already have a `bh` of your own (a script earlier on `PATH`, a shell alias or function), whichever your shell finds first wins. `browserhive doctor` warns when the first `bh` on `PATH` is not BrowserHive's; it cannot see shell aliases and functions, so check those with `type bh` (bash, zsh) or `Get-Command bh` (PowerShell).
+
 ## Install the browser and prepare the data directory
 
 ```bash
@@ -105,6 +111,7 @@ browserhive doctor
 `doctor` prints a table with one row per check and the fix for each failure:
 
 - Bun version is at least 1.4.
+- The first `bh` on `PATH` is BrowserHive's [shorthand](#the-bh-shorthand) (a warning when it is another program; fine when there is none).
 - Chromium is installed for the resolved stealth driver (Playwright and Patchright), with exact versions.
 - Google Chrome and Microsoft Edge: version and path, or "not installed" (fine).
 - The configured `defaultChannel` is installed (a failure otherwise, with the install command).

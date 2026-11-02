@@ -1,4 +1,4 @@
-/** @module scripts/smoke-installed — installs the packed tarball into a clean project and exercises the CLI (spec 06 §6 "package"). */
+/** @module scripts/smoke-installed — installs the packed tarball into a clean project and exercises the CLI, including the `bh` shorthand (spec 06 §6 "package"). */
 import { spawn, spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -28,6 +28,13 @@ try {
   const version = spawnSync(bin, ['--version'], { cwd: dir, encoding: 'utf8' });
   if (version.status !== 0 || !/browserhive \d+\.\d+\.\d+/.test(version.stdout))
     fail(`--version: ${version.stdout}${version.stderr}`);
+  // `bh` is the shorthand bin (spec 08 §7): the same file, so the same output.
+  const shorthand = spawnSync(join(dir, 'node_modules/.bin/bh'), ['--version'], {
+    cwd: dir,
+    encoding: 'utf8',
+  });
+  if (shorthand.status !== 0 || shorthand.stdout !== version.stdout)
+    fail(`bh --version: ${shorthand.stdout}${shorthand.stderr} (browserhive: ${version.stdout})`);
   const help = spawnSync(bin, ['--help'], { cwd: dir, encoding: 'utf8' });
   if (help.status !== 0 || !help.stdout.includes('USAGE'))
     fail(`--help: ${help.stdout}${help.stderr}`);

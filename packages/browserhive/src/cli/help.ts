@@ -25,6 +25,8 @@ import {
 export const TAGLINE = 'local-first stealth browser MCP server';
 /** Docs link printed at the end of the global help. */
 export const DOCS_URL = 'https://browserhive.ai/docs/configuration';
+/** The one place help names the `bh` shorthand; everything else says `browserhive` (spec 08 §7). */
+export const SHORTHAND = 'bh is installed as a shorthand: bh <command> is browserhive <command>.';
 const PRECEDENCE =
   'Precedence: defaults < environment < browserhive.config.json < flags (rightmost wins).';
 const REFERENCES = 'References: a config-file value may contain {env:NAME} or {env:NAME:-default}.';
@@ -216,6 +218,7 @@ export function renderGlobalHelp(options: HelpOptions): readonly string[] {
     header('USAGE', style),
     `${INDENT}browserhive [serve] [flags]`,
     `${INDENT}browserhive <command> [flags]`,
+    ...wrapWords(SHORTHAND, options.width - INDENT.length).map((line) => `${INDENT}${line}`),
     '',
     header('COMMANDS', style),
     ...renderRows(

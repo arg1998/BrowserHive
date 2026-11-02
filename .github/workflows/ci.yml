@@ -398,6 +398,33 @@ jobs:
           path: packages/browserhive/dist
       - run: bun run package:check
 
+  # The packed tarball installed globally with npm and with Bun on every OS: `browserhive` and its
+  # `bh` shorthand print the same version, Windows gets the `.cmd`/`.ps1` (npm) and `.exe`/`.bunx`
+  # (Bun) shims for both names, and `doctor` recognises the installed `bh` (issue #37).
+  global-install:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: 'bun-${{ runner.os }}-${{ hashFiles(''bun.lock'') }}'
+      - run: bun install --frozen-lockfile
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: browserhive-tarball
+          path: dist-pack
+      - shell: bash
+        run: bun scripts/smoke-global-install.ts dist-pack/*.tgz --dir "$RUNNER_TEMP"
+
   licenses:
     needs: changes
     if: needs.changes.outputs.code == 'true'

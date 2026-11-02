@@ -112,7 +112,7 @@ tsdown with two entries: `src/bin.ts` (banner `#!/usr/bin/env bun`, output `dist
 {
   "name": "browserhive",
   "type": "module",
-  "bin": { "browserhive": "./dist/bin.js" },
+  "bin": { "browserhive": "./dist/bin.js", "bh": "./dist/bin.js" },  // `bh`: the shorthand (08 §7); both entries name the same file, asserted by a unit test
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }, "./package.json": "./package.json" },
@@ -152,7 +152,8 @@ Triggers: `pull_request`, `push` to `main`. Concurrency group `ci-${{ github.ref
 | `integration` | matrix `ubuntu-latest`, `macos-latest`, `windows-latest` | Playwright cache (`~/.cache/ms-playwright`, `~/Library/Caches/ms-playwright`, `%LOCALAPPDATA%\ms-playwright`) keyed on the **resolved** Playwright version from `bun.lock`; `bunx playwright install chromium --with-deps` on miss; `test:integration` (isolation, stealth, tool surface, auth states, persistence, observability, migration fixtures), with a 30 s per-test and per-hook `--timeout` from `scripts/test-integration.ts` (Bun's 5 s was too short on the macOS and Windows runners, issue #23); every OS fails the workflow, none runs with `continue-on-error` | yes (ubuntu); macos/windows required after the first release |
 | `sandbox-matrix` | matrix `ubuntu-latest`, `macos-latest`, `windows-latest`; `continue-on-error` | `packages/browserhive/scripts/stealth-matrix.ts --sandbox config:off,config:auto,config:on,session --strict`: through BrowserHive (`createServer` → MCP → `launch_session` → `navigate` → `evaluate`) for the bundled Chromium and the runner's Google Chrome and Microsoft Edge, both stealth levels; the job summary gets one row per channel × stealth × sandbox request (sandboxed or not, measured on the browser process command lines; the page-visible stealth signals), the sandbox on/off parity verdict, and the raw sandboxed-launch error of any browser that could not sandbox; `--strict` fails on a stealth check miss or a parity difference; channels the runner lacks are reported as skipped. The evidence behind `sandbox=auto` as the default (D-27) | no |
 | `e2e` | ubuntu | needs `build`; starts the built server with a temp data dir; `bunx playwright test` (dashboard) with trace-on-failure artifact | yes |
-| `package` | ubuntu | needs `build`; `publint`, `attw --pack`, `smoke-installed` (pack → `bun add` into a clean temp project → `browserhive --version`, `--help`, stdio `initialize → tools/list` equals `ALL_TOOL_NAMES`, `serve` on a random port → `/health` ready → SIGTERM exits 0), `smoke-programmatic` (`import { createServer } from 'browserhive'`) | yes |
+| `package` | ubuntu | needs `build`; `publint`, `attw --pack`, `smoke-installed` (pack → `bun add` into a clean temp project → `browserhive --version` and `bh --version` print the same line, `--help`, stdio `initialize → tools/list` equals `ALL_TOOL_NAMES`, `serve` on a random port → `/health` ready → SIGTERM exits 0), `smoke-programmatic` (`import { createServer } from 'browserhive'`) | yes |
+| `global-install` | matrix `ubuntu-latest`, `macos-latest`, `windows-latest` | needs `build`; `scripts/smoke-global-install.ts` on the packed tarball: `npm i -g` into a temp prefix and `bun add -g` into a temp `BUN_INSTALL`; for each, `browserhive --version` and `bh --version` print the same line, on Windows the `.cmd` and `.ps1` shims exist for both names (npm), and `browserhive doctor --json` reports the `bh` row ✓. Never touches the runner's real global prefix | no |
 | `licenses` | ubuntu | `license:check` over `dependencies` of `browserhive` and `dashboard` | yes |
 | `audit` | ubuntu | `bun audit --audit-level high` (non-blocking on PRs, blocking on `main`) | no on PRs |
 | `commitlint` | ubuntu (PR only) | PR title validated as a Conventional Commit (the squash title) | yes |
@@ -227,7 +228,7 @@ Each file begins with the generated-header comment; `gen:docs --check` fails CI 
 2. Review the generated `CHANGELOG.md` entry; fix changeset wording in the PR if needed.
 3. Merge the Version Packages PR; approve the `release` environment run.
 4. Verify: `npm view browserhive version`, provenance badge on npmjs, GitHub Release created, tag present.
-5. Post-release smoke on a clean machine: `bun add -g browserhive@latest && browserhive init && browserhive serve --admin` → dashboard login works; `browserhive --version` matches.
+5. Post-release smoke on a clean machine: `bun add -g browserhive@latest && browserhive init && browserhive serve --admin` → dashboard login works; `browserhive --version` matches, and `bh --version` prints the same.
 6. If broken: publish a patch (never unpublish beyond the 72-hour window; use `npm deprecate` for a bad version).
 
 ## Design notes

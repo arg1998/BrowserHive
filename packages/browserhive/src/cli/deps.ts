@@ -165,6 +165,16 @@ export interface BrowserInstall {
   readonly installed: boolean;
 }
 
+/**
+ * The first `bh` on `PATH` (spec 08 §7.1): none, BrowserHive's shorthand, someone else's command,
+ * or one that could not be read.
+ */
+export type ShorthandLookup =
+  | { readonly kind: 'absent' }
+  | { readonly kind: 'browserhive'; readonly path: string }
+  | { readonly kind: 'other'; readonly path: string }
+  | { readonly kind: 'unknown'; readonly path: string; readonly reason: string };
+
 /** Host probes used by `doctor`, `init` and `version`. */
 export interface HostProbes {
   bunVersion(): string;
@@ -176,6 +186,8 @@ export interface HostProbes {
   portFree(host: string, port: number): Promise<boolean>;
   /** Absolute path of `command` on PATH, or `null`. */
   which(command: string): Promise<string | null>;
+  /** The first `bh` on `PATH` and whether it is BrowserHive's. */
+  shorthand(): Promise<ShorthandLookup>;
   /** Free bytes on the filesystem holding `path` (or its nearest existing parent). */
   diskFreeBytes(path: string): Promise<number | null>;
   /** Permission bits of `path` (`0o700`), or `null` when missing. */

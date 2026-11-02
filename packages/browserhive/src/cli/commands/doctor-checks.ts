@@ -16,7 +16,7 @@ import {
   type ResolvedConfigBundle,
 } from '@browserhive/core/config';
 import { classifyPublicUrlProbe, isInsecurePublicUrl } from '@browserhive/core/runtime';
-import type { CliDeps } from '../deps.ts';
+import type { CliDeps, ShorthandLookup } from '../deps.ts';
 import { databasePath, formatTimestamp, size } from './common.ts';
 
 /** Outcome of one check. */
@@ -66,6 +66,39 @@ export function checkBun(deps: CliDeps): CheckResult {
   return compareVersions(version, MIN_BUN) >= 0
     ? result('bun', 'ok', `bun ${version}`)
     : result('bun', 'fail', `bun ${version}; BrowserHive needs bun >= ${MIN_BUN}`);
+}
+
+/**
+ * The `bh` shorthand (spec 08 §7.1): a warning when the first `bh` on `PATH` is not BrowserHive's,
+ * since `bh` then runs that program. Never a failure: `browserhive` always works, and a lookup
+ * error only says the check could not run.
+ */
+export async function checkShorthand(deps: CliDeps): Promise<CheckResult> {
+  let found: ShorthandLookup;
+  try {
+    found = await deps.probes.shorthand();
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : 'lookup failed';
+    return result('bh', 'ok', `could not check (${reason}); browserhive always works`);
+  }
+  switch (found.kind) {
+    case 'absent':
+      return result('bh', 'ok', 'not on PATH; use browserhive');
+    case 'browserhive':
+      return result('bh', 'ok', `shorthand for browserhive · ${found.path}`);
+    case 'unknown':
+      return result(
+        'bh',
+        'ok',
+        `could not check ${found.path} (${found.reason}); browserhive always works`,
+      );
+    case 'other':
+      return result(
+        'bh',
+        'warn',
+        `${found.path} is not BrowserHive's, so bh runs it; use browserhive, or rename or remove that bh`,
+      );
+  }
 }
 
 /** The resolver ran clean (or its first problems). */
