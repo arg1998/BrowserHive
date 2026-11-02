@@ -6,8 +6,9 @@ name: notify-live
 # edit, delete. It
 # guards against the fakes drifting from the platforms. Runs weekly, on dispatch, and on pull
 # requests labelled `live-notify` from this repository (never from forks). The `notify-live`
-# environment holds the secrets and needs the owner's approval. A platform whose secrets are not
-# set is skipped with a note. A failure opens (or comments on) an issue.
+# environment holds the secrets of dedicated test accounts and needs no approval, so the weekly run
+# is unattended. A platform whose secrets are not set is skipped with a note. A rate-limited call is
+# waited out and retried, as the outbox would. A failure opens (or comments on) an issue.
 
 on:
   schedule:
