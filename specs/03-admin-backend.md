@@ -97,7 +97,7 @@ All routes are under `/api/v1`. Breaking changes bump the prefix; additive chang
 | 12 | `etag` | Weak ETag on JSON GET responses; `If-None-Match` → 304. |
 | — | `errorHandler` (`app.onError`) | `AppError` → problem+json with its status; unknown → 500 `INTERNAL_ERROR`, private message logged with stack, public message generic. `notFound` → 404 problem; wrong method → 405 with `Allow`. |
 
-`/mcp` bypasses this REST stack (its own auth runs first) and, once authenticated, lifts Bun's per-connection idle timeout (default 10 s) for that request (`disableIdleTimeout` → `server.timeout(request, 0)`): a blocked tool call (`request_attention`, vault-confirm-gated `vault_fill`, `get_attention_result`) writes nothing to its SSE stream until an operator decides, and the 25 s keep-alive is slower than 10 s, so otherwise Bun cuts the stream and the result is never delivered. REST and static routes keep the default idle timeout.
+`/mcp` bypasses this REST stack (its own auth runs first; its body cap is the MCP transport's 4 MiB, 02 §1.2, D-46) and, once authenticated, lifts Bun's per-connection idle timeout (default 10 s) for that request (`disableIdleTimeout` → `server.timeout(request, 0)`): a blocked tool call (`request_attention`, vault-confirm-gated `vault_fill`, `get_attention_result`) writes nothing to its SSE stream until an operator decides, and the 25 s keep-alive is slower than 10 s, so otherwise Bun cuts the stream and the result is never delivered. REST and static routes keep the default idle timeout.
 
 Client IP: the socket address from `Bun.serve` unless the peer is in `--trustedProxies` (CIDR list), in which case the right-most untrusted `X-Forwarded-For` hop is used. `X-Forwarded-For` is otherwise ignored.
 

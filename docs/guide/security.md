@@ -31,6 +31,11 @@ Tokens:
 
 `--auth token` requires `--transport http`. Under stdio the only caller is the process that spawned BrowserHive.
 
+Size limits on `/mcp`, so one request cannot exhaust the daemon's memory:
+
+- A request body over 4 MiB gets HTTP 413; a JSON-RPC batch of more than 100 messages gets HTTP 400.
+- A tool call whose arguments hold more than 100,000 array elements and object members (counted at every depth) fails with [`INVALID_ARGUMENTS`](../reference/errors.md#INVALID_ARGUMENTS) before it is validated. This applies under stdio too.
+
 ### Operators (dashboard and REST API)
 
 The dashboard always requires a password, independent of `--auth`.

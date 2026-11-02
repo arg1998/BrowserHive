@@ -7,7 +7,12 @@ import { agentPrincipal, LOCAL_PRINCIPAL } from '../../../domain/auth/principal.
 import type { McpConnectionRepository } from '../../../ports/persistence/operations.ts';
 import type { McpConnectionRecord } from '../../../ports/persistence/records-identity.ts';
 import { InMemoryEventStore } from './event-store.ts';
-import { createMcpHttpHandler, type McpHttpHandler, type McpHttpOptions } from './http.ts';
+import {
+  createMcpHttpHandler,
+  MCP_MAX_REQUEST_BODY_BYTES,
+  type McpHttpHandler,
+  type McpHttpOptions,
+} from './http.ts';
 
 let h: ToolHarness | undefined;
 afterEach(async () => {
@@ -311,6 +316,30 @@ describe('MCP Streamable HTTP transport', () => {
       body: '{',
     });
     expect((await handler.handleMcpRequest(bad, LOCAL_PRINCIPAL)).status).toBe(400);
+  });
+
+  it('bounds request bodies (413) and batch length (400), initialize included', async () => {
+    const { handler } = await setup();
+    const padding = 'x'.repeat(MCP_MAX_REQUEST_BODY_BYTES);
+    const big = { ...initialize, params: { ...initialize.params, _meta: { padding } } };
+    const tooLarge = await handler.handleMcpRequest(post(big), LOCAL_PRINCIPAL);
+    expect(tooLarge.status).toBe(413);
+    expect(await tooLarge.json()).toMatchObject({ error: { code: -32000 } });
+    expect(handler.sessionCount).toBe(0);
+
+    const init = await handler.handleMcpRequest(post(initialize), LOCAL_PRINCIPAL);
+    const session = { 'mcp-session-id': init.headers.get('mcp-session-id') ?? '' };
+    const call = { jsonrpc: '2.0', id: 2, method: 'tools/list', params: { padding } };
+    const inSession = await handler.handleMcpRequest(post(call, session), LOCAL_PRINCIPAL);
+    expect(inSession.status).toBe(413);
+    const batch = Array.from({ length: 101 }, (_, i) => ({
+      jsonrpc: '2.0',
+      id: 10 + i,
+      method: 'tools/list',
+    }));
+    expect((await handler.handleMcpRequest(post(batch, session), LOCAL_PRINCIPAL)).status).toBe(
+      400,
+    );
   });
 
   it('DNS-rebinding protection rejects a foreign Host header', async () => {

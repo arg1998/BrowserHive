@@ -47,6 +47,7 @@ The stability contract of this spec: **an agent that works against a release of 
 | `keepAliveMs` | 25 000 | under the common 30 s idle proxies cut |
 | `enableJsonResponse` | `false` (SSE responses) | progress notifications for `request_attention` and `type_text` need a stream |
 | `eventStore` | in-memory ring per stream, bounded (256 events / 1 MiB), for `Last-Event-ID` resumption | reconnect during a long `request_attention` |
+| `maxRequestBodySize` | 4 MiB (`MCP_MAX_REQUEST_BODY_BYTES`, the SDK default, set explicitly); the `initialize` body `handleMcpRequest` reads itself gets the same bound. Over it → HTTP `413`, JSON-RPC `-32000`; a batch over 100 messages → HTTP `400` (SDK) | `/mcp` bypasses the REST body limit (03 §2); D-46 |
 
 Bun's per-connection idle timeout (default 10 s) is lifted for every authenticated `/mcp` request (`disableIdleTimeout`, 03 §2): the 25 s keep-alive and progress heartbeats are slower than 10 s, so without it Bun would cut the SSE stream of a blocked `request_attention` / confirm-gated `vault_fill` / `get_attention_result`, the SDK client would give up after its resumption attempts, and the result would never be delivered. Covered by `packages/browserhive/test/integration/attention-http.test.ts` (a 40 s wait, then a REST resolve).
 
@@ -156,6 +157,7 @@ One function wraps every tool; nothing registers with the SDK directly.
 ```
 resolve(name)             → TOOL_NOT_AVAILABLE if the pack is disabled by configuration
 mint eventId, open span "mcp.tool <name>" (parent from _meta traceparent)
+bound(args)               → INVALID_ARGUMENTS  when the arguments hold more than 100,000 array elements and object members (any depth), counted before validation (D-46)
 parse(args)               → INVALID_ARGUMENTS  (zod issues in details; text = "[INVALID_ARGUMENTS] <first issue path>: <message>")
 authorize(principal)      → ownership via sessions.get(session_id, principal) for every tool that names a session
 policies                  → URL_BLOCKED, EVALUATE_DISABLED, PATH_NOT_ALLOWED, UNSAFE_LAUNCH_ARG … (thrown before touching the browser)
