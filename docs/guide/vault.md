@@ -92,7 +92,7 @@ The agent sees a harness refusal exactly like any other: `vault_fill` returns `b
 
 The `harnesses` field is part of the binding and policy JSON (`null` or missing means all harnesses, `[]` none) and round-trips through **Export** and **Import**.
 
-Use **origin tester** on the Vault page to check which entries would fill on a given URL for a given session slug.
+Use the **Tester** tab on the Vault page to check which entries would fill on a given URL, for a given session slug and harness. It runs the same checks as a real fill, in the same order, and tells you which one refused. To check a harness list, pick a **Harness** (or **Unknown**), and add the **Declared name** when a custom name is involved; a declared name on its own is read the way a client's declaration would be. With no harness picked, harness lists are not checked, and the tester says which bindings have one.
 
 Bindings and policies are stored in the database. **Export** and **Import** (merge or replace) move them as JSON, for backups or editing by hand. Edits use optimistic concurrency: if someone else changed a binding since you loaded it, saving returns [`CONFLICT`](../reference/errors.md#CONFLICT) and the dashboard reloads it.
 
