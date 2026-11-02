@@ -19,6 +19,8 @@ export interface VaultBindingRecord {
   readonly redactUsername: boolean;
   readonly requireNoEvaluate: boolean;
   readonly dashboardConfirm: boolean;
+  /** Harness list (D-48): `null` = every harness, `[]` = none. */
+  readonly harnesses: readonly string[] | null;
   readonly version: number;
   readonly createdAt: number;
   readonly updatedAt: number;
@@ -36,6 +38,8 @@ export interface VaultGroupPolicyRecord {
   readonly dashboardConfirm: boolean;
   readonly requireNoEvaluate: boolean;
   readonly redactUsername: boolean;
+  /** Harness list (D-48): `null` = every harness, `[]` = none. */
+  readonly harnesses: readonly string[] | null;
   readonly version: number;
   readonly createdAt: number;
   readonly updatedAt: number;

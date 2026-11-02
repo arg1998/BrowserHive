@@ -2,6 +2,7 @@
 
 import type { Page } from 'playwright';
 import { safeCurrentUrl } from '../../../../app/sessions/metadata.ts';
+import type { Session } from '../../../../domain/session/session.ts';
 import type { VaultPage } from '../../../../domain/vault/types.ts';
 import { requireSession } from '../../context.ts';
 import { defineTool, json, type ToolPack } from '../../definition.ts';
@@ -19,6 +20,18 @@ export function vaultPage(page: Page): VaultPage {
   };
 }
 
+/**
+ * The session's launch harness and declared name (D-48). Never the per-call identity: a client that
+ * renames itself mid-session still meets the rules as the harness that launched the session.
+ */
+function launchHarness(session: Session): {
+  harness: string | null;
+  harnessDeclared: string | null;
+} {
+  const client = session.request.client;
+  return { harness: client?.harness ?? null, harnessDeclared: client?.harnessDeclared ?? null };
+}
+
 /** `vault_list_available`: scoped to the session's real page; `url` is the honesty probe. */
 export const vaultListAvailable = defineTool('vault_list_available', {
   requires: { vault: true },
@@ -26,7 +39,7 @@ export const vaultListAvailable = defineTool('vault_list_available', {
   async handler(ctx, args) {
     const session = requireSession(ctx);
     const result = await ctx.services.vault.listAvailable(
-      { principal: ctx.principal.subject, slug: session.slug },
+      { principal: ctx.principal.subject, slug: session.slug, ...launchHarness(session) },
       {
         currentUrl: safeCurrentUrl(session) ?? '',
         sessionId: session.id,
@@ -78,6 +91,7 @@ export const vaultFill = defineTool('vault_fill', {
           disableEvaluate: session.request.disableEvaluate,
           vaultEnabled: session.request.vaultEnabled,
           humanize: session.request.humanize,
+          ...launchHarness(session),
         },
         page: vaultPage(page),
         tracing: session.handle?.tracing ?? null,

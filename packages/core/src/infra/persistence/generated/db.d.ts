@@ -125,6 +125,7 @@ export interface McpConnections {
   connection_id: string;
   harness: string | null;
   harness_conflicts_json: string | null;
+  harness_declared: string | null;
   harness_source: string | null;
   ip: string | null;
   last_seen_at: number;
@@ -353,6 +354,7 @@ export interface Sessions {
   engine: Generated<string>;
   fingerprint: number;
   harness: string | null;
+  harness_declared: string | null;
   headless: number;
   humanize: number;
   identity_json: string | null;
@@ -432,6 +434,7 @@ export interface VaultBindings {
   dashboard_confirm: Generated<number>;
   group_id: string | null;
   handle: string;
+  harnesses_json: string | null;
   item_id: Generated<string>;
   item_name: string;
   redact_username: Generated<number>;
@@ -450,6 +453,7 @@ export interface VaultGroupPolicies {
   dashboard_confirm: Generated<number>;
   group_id: string | null;
   group_key: string;
+  harnesses_json: string | null;
   redact_username: Generated<number>;
   require_no_evaluate: Generated<number>;
   session_slug_globs_json: Generated<string>;

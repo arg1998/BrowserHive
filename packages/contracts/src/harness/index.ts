@@ -1,4 +1,4 @@
-/** @module contracts/harness — the agent-harness vocabulary (spec 02 §1.4, D-30): known slugs with display labels, the `clientInfo.name` and `User-Agent` alias tables, `normalizeHarness()`, the metric fold and the meta-bag caps. Self-reported observability only: nothing here is ever used for a decision. */
+/** @module contracts/harness — the agent-harness vocabulary (spec 02 §1.4, D-30): known slugs with display labels, the `clientInfo.name` and `User-Agent` alias tables, `normalizeHarness()`, the metric fold, the meta-bag caps, and the vault harness-rule matcher (D-48). Self-reported: the only decision built on it is the narrowing harness list of a vault rule, which removes access and is not a security boundary. */
 
 /** Known harness slugs, in display order. `other` and `unknown` are real, countable values. */
 export const HARNESS_SLUGS = [
@@ -24,6 +24,22 @@ export const HARNESS_SLUGS = [
   'n8n',
   'raycast',
   'crush',
+  'amp',
+  'kiro',
+  'amazon-q',
+  'warp',
+  'qwen-code',
+  'factory-droid',
+  'augment',
+  'antigravity',
+  'grok-cli',
+  'kimi-code',
+  'chatgpt',
+  'letta-code',
+  'cherry-studio',
+  'librechat',
+  'jan',
+  'mcp-inspector',
   'other',
   'unknown',
 ] as const;
@@ -59,6 +75,22 @@ export const HARNESS_LABELS: Readonly<Record<KnownHarness, string>> = {
   n8n: 'n8n',
   raycast: 'Raycast',
   crush: 'Crush',
+  amp: 'Amp',
+  kiro: 'Kiro',
+  'amazon-q': 'Amazon Q Developer CLI',
+  warp: 'Warp',
+  'qwen-code': 'Qwen Code',
+  'factory-droid': 'Factory Droid',
+  augment: 'Augment',
+  antigravity: 'Antigravity',
+  'grok-cli': 'Grok CLI',
+  'kimi-code': 'Kimi Code',
+  chatgpt: 'ChatGPT',
+  'letta-code': 'Letta Code',
+  'cherry-studio': 'Cherry Studio',
+  librechat: 'LibreChat',
+  jan: 'Jan',
+  'mcp-inspector': 'MCP Inspector',
   other: 'Other',
   unknown: 'Unknown',
 };
@@ -107,6 +139,9 @@ export const GENERIC_CLIENT_NAMES: readonly string[] = [
   'example-client',
   'test-client',
   'client',
+  'cli',
+  'rmcp',
+  'acp',
 ];
 
 /**
@@ -117,6 +152,7 @@ export const CLIENT_NAME_ALIASES: Readonly<Record<string, KnownHarness>> = {
   'claude-code': 'claude-code',
   'claude-ai': 'claude-desktop',
   'codex-mcp-client': 'codex',
+  'openai-mcp (codex)': 'codex',
   'cursor-vscode': 'cursor',
   'cursor-agent': 'cursor-cli',
   opencode: 'opencode',
@@ -124,21 +160,45 @@ export const CLIENT_NAME_ALIASES: Readonly<Record<string, KnownHarness>> = {
   'visual studio code': 'vscode',
   'visual studio code - insiders': 'vscode',
   'code - oss': 'vscode',
+  'visual-studio-code': 'vscode',
   'github-copilot-developer': 'copilot-cli',
   cline: 'cline',
   'roo-code': 'roo-code',
   'roo code': 'roo-code',
   'kilo-code': 'kilo-code',
   'kilo code': 'kilo-code',
+  kilo: 'kilo-code',
+  'kilo-debug': 'kilo-code',
   windsurf: 'windsurf',
+  'windsurf-client': 'windsurf',
   'continue-client': 'continue',
   'continue-cli-client': 'continue',
   zed: 'zed',
   'lm studio': 'lm-studio',
   lmstudio: 'lm-studio',
+  'lmstudio-mcp-server-session': 'lm-studio',
   junie: 'junie',
+  'junie-client': 'junie',
   'com.raycast.macos': 'raycast',
   crush: 'crush',
+  'amp-mcp-client': 'amp',
+  'q dev cli': 'amazon-q',
+  'q-dev-cli': 'amazon-q',
+  'q cli': 'amazon-q',
+  'qwen-code-mcp-client': 'qwen-code',
+  'factory-cli': 'factory-droid',
+  'augment-mcp-client': 'augment',
+  'antigravity-client': 'antigravity',
+  'kimi-code': 'kimi-code',
+  'openai-mcp': 'chatgpt',
+  chatgpt: 'chatgpt',
+  'letta-code': 'letta-code',
+  'cherry studio': 'cherry-studio',
+  '@librechat/api-client': 'librechat',
+  jan: 'jan',
+  'jan-streamable-client': 'jan',
+  'mcp-inspector': 'mcp-inspector',
+  'inspector-cli': 'mcp-inspector',
 };
 
 /** `clientInfo.name` prefixes (names that carry a variant or a build after a fixed stem). */
@@ -146,6 +206,11 @@ const CLIENT_NAME_PREFIXES: readonly (readonly [string, KnownHarness])[] = [
   ['goose', 'goose'],
   ['@n8n/', 'n8n'],
   ['jetbrains-', 'jetbrains'],
+  ['@cline/', 'cline'],
+  ['dev.warp.', 'warp'],
+  ['qwen-cli-mcp-client', 'qwen-code'],
+  ['grok-shell-', 'grok-cli'],
+  ['kiro', 'kiro'],
 ];
 
 /** `User-Agent` patterns that name a harness; any other User-Agent is no signal. */
@@ -362,3 +427,79 @@ export const RESERVED_META_NAMES: readonly string[] = [
 ];
 /** URL query parameter on `/mcp`. */
 export const HARNESS_QUERY_PARAM = 'harness';
+
+// --- vault harness rules (D-48) -------------------------------------------------------------------
+
+/** Most entries in a vault rule's harness list. */
+export const HARNESS_RULE_MAX_ENTRIES = 32;
+/** Longest entry (characters, after trimming). */
+export const HARNESS_RULE_NAME_MAX = 64;
+/** Control characters are never part of a harness name. */
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the point is to reject them
+const CONTROL_CHARS = /[\u0000-\u001f\u007f]/;
+
+/** The launch identity a vault rule is checked against (`sessions.harness`, `sessions.harness_declared`). */
+export interface HarnessSubject {
+  /** The launch harness slug; `null`/`undefined` reads `unknown` (sessions created before schema v3). */
+  readonly harness: string | null | undefined;
+  /** The raw declared name; `null` when none was declared (or the session predates schema v7). */
+  readonly declared: string | null | undefined;
+}
+
+/**
+ * Whether a list entry names a built-in harness (matched against the slug) rather than a custom
+ * name (matched exactly against the declared name).
+ */
+export function isHarnessRuleSlug(entry: string): boolean {
+  return KNOWN.has(entry);
+}
+
+/**
+ * Why an entry cannot be stored, or `null` when it can: blank, longer than
+ * {@link HARNESS_RULE_NAME_MAX}, or containing a control character. Callers trim first.
+ */
+export function harnessRuleEntryProblem(entry: string): string | null {
+  if (entry.length === 0) return 'a harness name cannot be empty';
+  if (entry.length > HARNESS_RULE_NAME_MAX)
+    return `a harness name has at most ${HARNESS_RULE_NAME_MAX} characters`;
+  if (CONTROL_CHARS.test(entry)) return 'a harness name cannot contain control characters';
+  return null;
+}
+
+/**
+ * One entry against a subject: a known slug matches the launch slug (`unknown` when absent); any
+ * other entry matches the declared name exactly and case-sensitively.
+ */
+export function harnessRuleEntryMatches(entry: string, subject: HarnessSubject): boolean {
+  if (isHarnessRuleSlug(entry)) {
+    const slug =
+      subject.harness === null || subject.harness === undefined || subject.harness === ''
+        ? UNKNOWN_HARNESS
+        : subject.harness;
+    return slug === entry;
+  }
+  return subject.declared !== null && subject.declared !== undefined && subject.declared === entry;
+}
+
+/**
+ * D-48: whether a harness list lets `subject` through. `null`/`undefined` (no list) allows every
+ * harness; an empty list allows none.
+ */
+export function isHarnessAllowed(
+  list: readonly string[] | null | undefined,
+  subject: HarnessSubject,
+): boolean {
+  if (list === null || list === undefined) return true;
+  return list.some((entry) => harnessRuleEntryMatches(entry, subject));
+}
+
+/**
+ * The built-in harness a custom name would mean if it were folded like a declared value
+ * (`Claude-Code` → `claude-code`), or `null` when it is a slug already or folds to nothing known.
+ * Drives the editor's "did you mean" warning; matching itself never folds.
+ */
+export function harnessRuleLookalike(entry: string): KnownHarness | null {
+  if (isHarnessRuleSlug(entry)) return null;
+  const folded = normalizeHarness(entry);
+  return folded !== null && isKnownHarness(folded) && folded !== OTHER_HARNESS ? folded : null;
+}

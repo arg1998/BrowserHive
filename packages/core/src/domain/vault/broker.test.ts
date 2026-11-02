@@ -605,7 +605,9 @@ describe('VaultBroker.listAvailable — composition + dedupe', () => {
       authorizedSessionSlugs: ['agent-7'],
     });
     await h.policy('f1', { accessMode: 'allow_all', sessionSlugGlobs: ['agent-*'] });
-    const result = await h.broker().listAvailable({ principal: 'local', slug: 'agent-7' });
+    const result = await h
+      .broker()
+      .listAvailable({ principal: 'local', slug: 'agent-7', harness: null, harnessDeclared: null });
     expect(result.scope).toBe('unscoped');
     expect(result.entries.map((e) => [e.entryName, e.allowedOrigins])).toEqual([
       ['work.extra', ['extra.example']],
@@ -625,15 +627,34 @@ describe('VaultBroker.listAvailable — composition + dedupe', () => {
     h.backend.entries = [{ id: 'i9', name: 'GitHub', groupId: 'f1', uris: ['https://github.com'] }];
     await h.policy('f1', { accessMode: 'allow_all', sessionSlugGlobs: ['agent-*'] });
     expect(
-      (await h.broker().listAvailable({ principal: 'local', slug: 'other-1' })).entries,
+      (
+        await h.broker().listAvailable({
+          principal: 'local',
+          slug: 'other-1',
+          harness: null,
+          harnessDeclared: null,
+        })
+      ).entries,
     ).toEqual([]);
     await bindLinkedin();
     h.backend.unlocked = false;
-    const degraded = await h.broker().listAvailable({ principal: 'local', slug: 'linkedin-agent' });
+    const degraded = await h.broker().listAvailable({
+      principal: 'local',
+      slug: 'linkedin-agent',
+      harness: null,
+      harnessDeclared: null,
+    });
     expect(degraded.entries.map((e) => e.entryName)).toEqual(['linkedin']);
     await h.policy(null, { accessMode: 'reject_all' });
     expect(
-      (await h.broker().listAvailable({ principal: 'local', slug: 'linkedin-agent' })).entries,
+      (
+        await h.broker().listAvailable({
+          principal: 'local',
+          slug: 'linkedin-agent',
+          harness: null,
+          harnessDeclared: null,
+        })
+      ).entries,
     ).toEqual([]);
   });
 });
@@ -653,7 +674,7 @@ describe('VaultBroker.listAvailable — page scoping + honesty probe', () => {
       authorizedSessionSlugs: ['agent-7'],
     });
   });
-  const caller = { principal: 'local', slug: 'agent-7' };
+  const caller = { principal: 'local', slug: 'agent-7', harness: null, harnessDeclared: null };
 
   it('scopes the list to the current page origin', async () => {
     const r = await h.broker().listAvailable(caller, {
@@ -735,5 +756,188 @@ describe('VaultBroker.listAvailable — page scoping + honesty probe', () => {
     expect(r.scope).toBe('rejected');
     expect(r.note).toContain('(no page loaded)');
     expect(h.repos.audit.rows).toHaveLength(0);
+  });
+});
+
+describe('VaultBroker — harness lists (D-48)', () => {
+  const page = () => new FakePage('https://linkedin.com/login');
+  const claude = { harness: 'claude-code', harnessDeclared: null };
+  const opencode = { harness: 'opencode', harnessDeclared: 'OpenCode' };
+  /** Every agent-facing value of this block: fill results and listings (the sentinel reads it). */
+  const agentFacing: unknown[] = [];
+  const fill = async (over: Parameters<VaultHarness['ctx']>[1], request = FILL) => {
+    const result = await h.broker().fill(request, h.ctx(page(), over));
+    agentFacing.push(result);
+    return result;
+  };
+  const list = async (caller: {
+    principal: string;
+    slug: string;
+    harness: string | null;
+    harnessDeclared: string | null;
+  }) => {
+    const result = await h.broker().listAvailable(caller, {
+      currentUrl: 'https://linkedin.com/login',
+      sessionId: 'demo-00000001',
+    });
+    agentFacing.push(result);
+    return result;
+  };
+
+  it('checks principal, then slug, then harness; only the audit row names the harness', async () => {
+    await bindLinkedin({ authorizedPrincipals: ['p-agent'], harnesses: ['opencode'] });
+    await fill({ principal: 'p-other', ...claude });
+    await fill({ principal: 'p-agent', slug: 'zzz', ...claude });
+    await fill({ principal: 'p-agent', ...claude });
+    expect((await fill({ principal: 'p-agent', ...opencode })).status).toBe('success');
+    expect(h.repos.audit.rows.map((r) => [r.result, r.reason])).toEqual([
+      ['blocked', 'not_authorized'],
+      ['blocked', 'not_authorized'],
+      ['blocked', 'harness_not_allowed'],
+      ['success', 'success'],
+    ]);
+    expect(h.repos.audit.rows[2]).toMatchObject({
+      entryName: 'linkedin',
+      handle: null,
+      originCheck: 'skipped',
+      principalId: 'p-agent',
+      details: {
+        reason: 'harness_not_allowed',
+        harness: 'claude-code',
+        harness_declared: null,
+        rule: 'binding',
+      },
+    });
+    expect(h.events.names().filter((n) => n === 'vault.access')).toHaveLength(4);
+  });
+
+  it('gives the agent the same result as a principal, slug or unknown-handle refusal', async () => {
+    await bindLinkedin({ authorizedPrincipals: ['p-agent'], harnesses: ['opencode'] });
+    const principal = await fill({ principal: 'p-other', ...opencode });
+    const slug = await fill({ principal: 'p-agent', slug: 'zzz', ...opencode });
+    const harness = await fill({ principal: 'p-agent', ...claude });
+    const missing = await fill({ principal: 'p-agent', ...claude }, { ...FILL, entryName: 'nope' });
+    expect(harness).toEqual({ status: 'blocked', redacted: true, reason: 'not_authorized' });
+    expect(principal).toEqual(harness);
+    expect(slug).toEqual(harness);
+    expect(missing).toEqual(harness);
+    expect(JSON.stringify(harness)).toBe(JSON.stringify(principal));
+    // No extra work before the refusal: the backend is never asked, exactly as for the others.
+    expect(h.backend.calls).toEqual([]);
+    expect(h.repos.audit.rows).toHaveLength(4);
+  });
+
+  it('a group list restricts the manual bindings in that group and its allow-all items', async () => {
+    h.backend.groups = [{ id: 'f-deploy', name: 'Deploy' }];
+    h.backend.entries = [
+      { id: 'i-aws', name: 'AWS', groupId: 'f-deploy', uris: ['https://linkedin.com/aws'] },
+    ];
+    await bindLinkedin({ groupId: 'f-deploy' });
+    await h.policy('f-deploy', { accessMode: 'manual', harnesses: ['opencode', 'claude-code'] });
+    expect((await fill({ harness: 'codex', harnessDeclared: null })).reason).toBe('not_authorized');
+    expect(h.repos.audit.rows.at(-1)?.details).toMatchObject({ rule: 'group', harness: 'codex' });
+    expect((await fill(claude)).status).toBe('success');
+
+    await h.policy('f-deploy', { accessMode: 'allow_all', allowAllSessions: true });
+    const aws = { ...FILL, entryName: 'deploy.aws' };
+    expect((await fill({ harness: 'codex', harnessDeclared: null }, aws)).reason).toBe(
+      'not_authorized',
+    );
+    expect(h.repos.audit.rows.at(-1)?.reason).toBe('harness_not_allowed');
+    expect((await fill(opencode, aws)).status).not.toBe('blocked');
+  });
+
+  it('both lists must allow: the binding narrows inside an allowed group', async () => {
+    await bindLinkedin({ harnesses: ['claude-code'] });
+    await h.policy(null, { accessMode: 'manual', harnesses: ['claude-code', 'opencode'] });
+    expect((await fill(opencode)).reason).toBe('not_authorized');
+    expect(h.repos.audit.rows.at(-1)?.details).toMatchObject({ rule: 'binding' });
+    expect((await fill(claude)).status).toBe('success');
+  });
+
+  it('an empty list allows nothing; no list allows everything', async () => {
+    await bindLinkedin({ harnesses: [] });
+    expect((await fill(claude)).reason).toBe('not_authorized');
+    expect((await fill({ harness: null, harnessDeclared: null })).reason).toBe('not_authorized');
+    await bindLinkedin({ harnesses: null });
+    expect((await fill(claude)).status).toBe('success');
+    expect((await fill({ harness: null, harnessDeclared: null })).status).toBe('success');
+  });
+
+  it('custom names match the declared name exactly; a session without one matches only slugs', async () => {
+    await bindLinkedin({ harnesses: ['Nightly Scraper', 'unknown'] });
+    const scraper = { harness: 'nightly-scraper', harnessDeclared: 'Nightly Scraper' };
+    expect((await fill(scraper)).status).toBe('success');
+    expect((await fill({ ...scraper, harnessDeclared: 'nightly scraper' })).reason).toBe(
+      'not_authorized',
+    );
+    // Created before schema v7: the slug is known, the declared name is not.
+    expect((await fill({ harness: 'nightly-scraper', harnessDeclared: null })).reason).toBe(
+      'not_authorized',
+    );
+    expect(h.repos.audit.rows.at(-1)?.details).toMatchObject({
+      harness: 'nightly-scraper',
+      harness_declared: null,
+    });
+    // Created before schema v3: no launch harness, which reads `unknown`.
+    expect((await fill({ harness: null, harnessDeclared: null })).status).toBe('success');
+    expect(h.repos.audit.rows.at(-1)?.reason).toBe('success');
+  });
+
+  it('vault_list_available leaves out entries the harness cannot use, like any other refusal', async () => {
+    await bindLinkedin({ harnesses: ['opencode'] });
+    const base = { principal: 'local', slug: 'linkedin-agent' };
+    expect((await list({ ...base, ...claude })).entries).toEqual([]);
+    expect((await list({ ...base, slug: 'zzz', ...opencode })).entries).toEqual([]);
+    expect((await list({ ...base, ...opencode })).entries.map((e) => e.entryName)).toEqual([
+      'linkedin',
+    ]);
+    const refusedByHarness = await list({ ...base, ...claude });
+    const refusedBySlug = await list({ ...base, slug: 'zzz', ...opencode });
+    expect(refusedByHarness).toEqual(refusedBySlug);
+    // Listing never writes an audit row for a hidden entry.
+    expect(h.repos.audit.rows).toHaveLength(0);
+
+    h.backend.groups = [{ id: 'f1', name: 'Work' }];
+    h.backend.entries = [{ id: 'i9', name: 'Li', groupId: 'f1', uris: ['https://linkedin.com'] }];
+    await h.policy('f1', {
+      accessMode: 'allow_all',
+      allowAllSessions: true,
+      harnesses: ['unknown'],
+    });
+    expect((await list({ ...base, ...claude })).entries).toEqual([]);
+    expect(
+      (await list({ ...base, harness: null, harnessDeclared: null })).entries.map(
+        (e) => e.entryName,
+      ),
+    ).toEqual(['work.li']);
+  });
+
+  it('sentinel: no agent-facing result of this suite mentions harnesses', async () => {
+    // Its own matrix too, so the check holds whatever order the tests run in.
+    await bindLinkedin({ authorizedPrincipals: ['p-agent'], harnesses: ['Nightly Scraper'] });
+    await h.policy(null, { accessMode: 'manual', harnesses: ['unknown', 'Nightly Scraper'] });
+    for (const over of [
+      { principal: 'p-other', ...claude },
+      { principal: 'p-agent', slug: 'zzz', ...claude },
+      { principal: 'p-agent', ...claude },
+      { principal: 'p-agent', ...opencode },
+      { principal: 'p-agent', harness: 'nightly-scraper', harnessDeclared: 'nightly scraper' },
+      { principal: 'p-agent', harness: null, harnessDeclared: null },
+    ]) {
+      await fill(over);
+      await list({
+        principal: over.principal,
+        slug: 'slug' in over ? over.slug : 'linkedin-agent',
+        harness: over.harness,
+        harnessDeclared: over.harnessDeclared,
+      });
+    }
+    expect(agentFacing.length).toBeGreaterThanOrEqual(12);
+    const text = JSON.stringify(agentFacing).toLowerCase();
+    expect(text).not.toContain('harness');
+    for (const name of ['claude', 'opencode', 'codex', 'nightly', 'scraper', 'unknown']) {
+      expect(text).not.toContain(name);
+    }
   });
 });

@@ -29,6 +29,7 @@ export function toWireExport(doc: VaultExportDocument): VaultExportWire {
       redact_username: b.redactUsername,
       require_no_evaluate: b.requireNoEvaluate,
       dashboard_confirm: b.dashboardConfirm,
+      ...(b.harnesses !== null && { harnesses: [...b.harnesses] }),
     })),
     policies: doc.policies.map((p) => ({
       group_id: p.groupId,
@@ -39,6 +40,7 @@ export function toWireExport(doc: VaultExportDocument): VaultExportWire {
       dashboard_confirm: p.dashboardConfirm,
       require_no_evaluate: p.requireNoEvaluate,
       redact_username: p.redactUsername,
+      ...(p.harnesses !== null && { harnesses: [...p.harnesses] }),
     })),
   };
 }
@@ -74,6 +76,7 @@ export function fromWireExport(body: unknown, now: number): VaultExportDocument 
         redactUsername: b.redact_username,
         requireNoEvaluate: b.require_no_evaluate,
         dashboardConfirm: b.dashboard_confirm,
+        harnesses: b.harnesses ?? null,
       },
       null,
       now,
@@ -91,6 +94,7 @@ export function fromWireExport(body: unknown, now: number): VaultExportDocument 
         dashboardConfirm: p.dashboard_confirm,
         requireNoEvaluate: p.require_no_evaluate,
         redactUsername: p.redact_username,
+        harnesses: p.harnesses ?? null,
       },
       null,
       now,

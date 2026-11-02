@@ -4,6 +4,7 @@ import { UNGROUPED_GROUP_KEY } from '@browserhive/contracts/http';
 import type { VaultAccessMode } from '../../ports/persistence/enums.ts';
 import type { VaultGroupPolicyRecord } from '../../ports/persistence/records.ts';
 import { type AuthorizationRule, dedupe } from './bindings.ts';
+import { normalizeHarnessList } from './harness-rule.ts';
 
 /** `vault_group_policies.group_key` for a group id (`null` → `__ungrouped__`). */
 export function groupKeyOf(groupId: string | null): string {
@@ -28,6 +29,7 @@ export function defaultPolicy(groupId: string | null, now: number): VaultGroupPo
     dashboardConfirm: false,
     requireNoEvaluate: false,
     redactUsername: false,
+    harnesses: null,
     version: 1,
     createdAt: now,
     updatedAt: now,
@@ -77,6 +79,8 @@ export interface VaultGroupPolicyInput {
   readonly dashboardConfirm?: boolean;
   readonly requireNoEvaluate?: boolean;
   readonly redactUsername?: boolean;
+  /** Harness list (D-48): absent keeps, `null` clears (every harness), `[]` allows none. */
+  readonly harnesses?: readonly string[] | null;
 }
 
 /**
@@ -100,6 +104,9 @@ export function mergePolicy(
     dashboardConfirm: input.dashboardConfirm ?? prior?.dashboardConfirm ?? false,
     requireNoEvaluate: input.requireNoEvaluate ?? prior?.requireNoEvaluate ?? false,
     redactUsername: input.redactUsername ?? prior?.redactUsername ?? false,
+    harnesses: normalizeHarnessList(
+      input.harnesses !== undefined ? input.harnesses : (prior?.harnesses ?? null),
+    ),
     version: prior?.version ?? 1,
     createdAt: prior?.createdAt ?? now,
     updatedAt: now,

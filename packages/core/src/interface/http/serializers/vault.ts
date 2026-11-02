@@ -54,10 +54,16 @@ export function policyToWire(record: VaultGroupPolicyRecord): z.input<typeof Vau
     dashboard_confirm: record.dashboardConfirm,
     require_no_evaluate: record.requireNoEvaluate,
     redact_username: record.redactUsername,
+    ...harnessesToWire(record.harnesses),
     version: record.version,
     created_at: record.createdAt,
     updated_at: record.updatedAt,
   };
+}
+
+/** `harnesses` on the wire: present only when set (absent = every harness, D-48). */
+export function harnessesToWire(list: readonly string[] | null): { harnesses?: string[] } {
+  return list === null ? {} : { harnesses: [...list] };
 }
 
 /** One backend group with coverage. */
@@ -99,6 +105,7 @@ export function bindingToWire(record: VaultBindingRecord): z.input<typeof VaultB
     redact_username: record.redactUsername,
     require_no_evaluate: record.requireNoEvaluate,
     dashboard_confirm: record.dashboardConfirm,
+    ...harnessesToWire(record.harnesses),
     created_at: record.createdAt,
     updated_at: record.updatedAt,
     version: record.version,
@@ -125,6 +132,7 @@ export function bindingInputFromWire(
     ...(body.redact_username !== undefined && { redactUsername: body.redact_username }),
     ...(body.require_no_evaluate !== undefined && { requireNoEvaluate: body.require_no_evaluate }),
     ...(body.dashboard_confirm !== undefined && { dashboardConfirm: body.dashboard_confirm }),
+    ...(body.harnesses !== undefined && { harnesses: body.harnesses }),
   };
 }
 
@@ -142,5 +150,6 @@ export function policyInputFromWire(
     ...(body.dashboard_confirm !== undefined && { dashboardConfirm: body.dashboard_confirm }),
     ...(body.require_no_evaluate !== undefined && { requireNoEvaluate: body.require_no_evaluate }),
     ...(body.redact_username !== undefined && { redactUsername: body.redact_username }),
+    ...(body.harnesses !== undefined && { harnesses: body.harnesses }),
   };
 }

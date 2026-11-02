@@ -1,5 +1,6 @@
 /** @module interface/http/routes/vault-bindings — bindings CRUD, origin tester, access log, export/import (spec 03 §4.5). */
 
+import { harnessLabel } from '@browserhive/contracts/harness';
 import {
   DeleteVaultBindingResponse,
   HandleParams,
@@ -9,9 +10,11 @@ import {
   PutVaultBindingResponse,
   ResolveBindingsRequest,
   ResolveBindingsResponse,
+  VAULT_HARNESSES_WINDOW_DAYS,
   VaultBindingsPage,
   VaultBindingsQuery,
   VaultExportDocument,
+  VaultHarnessesResponse,
   VaultLogPage,
   VaultLogQuery,
 } from '@browserhive/contracts/http';
@@ -93,6 +96,33 @@ export const VAULT_BINDING_ROUTES = [
       return reply(200, {
         would_fill: [...result.wouldFill],
         blocked: result.blocked.map((b) => ({ handle: b.handle, reason: b.reason })),
+      });
+    },
+  }),
+  defineRoute({
+    operationId: 'listVaultHarnesses',
+    tags,
+    summary:
+      'Harnesses and declared names seen on this daemon in the last 30 days, for the harness lists of bindings and group policies (D-48).',
+    request: {},
+    responses: { 200: VaultHarnessesResponse },
+    errors,
+    async handler({ services, ctx }) {
+      requireVault(services);
+      const until = ctx.now;
+      const since = until - VAULT_HARNESSES_WINDOW_DAYS * 86_400_000;
+      const seen = await services.analytics.harnessesSeen({ since, until });
+      return reply(200, {
+        data: seen.rows.map((r) => ({
+          harness: r.harness,
+          label: harnessLabel(r.harness),
+          declared: r.declared,
+          sessions: r.sessions,
+          last_seen_at: r.lastSeenAt,
+        })),
+        principals: seen.principals,
+        window: { since, until },
+        now: ctx.now,
       });
     },
   }),

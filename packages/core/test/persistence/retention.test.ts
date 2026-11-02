@@ -298,6 +298,7 @@ describe('retentionSweep', () => {
         workspace: null,
         modelSource: null,
         harnessSource: null,
+        harnessDeclared: null,
         conflicts: [],
         meta: {},
         ip: null,

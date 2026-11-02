@@ -57,6 +57,7 @@ export function allowAllEntries(
       groupId: item.groupId,
       origins: originsFromUris(item.uris),
       rule: policyRule(policy),
+      harnessRules: { binding: null, group: policy.harnesses },
       redactUsername: policy.redactUsername,
       requireNoEvaluate: policy.requireNoEvaluate,
       dashboardConfirm: policy.dashboardConfirm,
@@ -85,7 +86,8 @@ export async function resolveEntry(
   const now = deps.now();
   const binding = await deps.bindings.get(handle);
   if (binding !== null) {
-    if (policies.get(binding.groupId, now).accessMode === 'reject_all') return undefined;
+    const policy = policies.get(binding.groupId, now);
+    if (policy.accessMode === 'reject_all') return undefined;
     return {
       handle: binding.handle,
       itemName: binding.itemName,
@@ -93,6 +95,7 @@ export async function resolveEntry(
       groupId: binding.groupId,
       origins: binding.allowedOrigins,
       rule: bindingRule(binding),
+      harnessRules: { binding: binding.harnesses, group: policy.harnesses },
       redactUsername: binding.redactUsername,
       requireNoEvaluate: binding.requireNoEvaluate,
       dashboardConfirm: binding.dashboardConfirm,

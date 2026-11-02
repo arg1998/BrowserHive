@@ -9,6 +9,16 @@ import type {
 import type { VaultBindings, VaultGroupPolicies } from '../generated/db.d.ts';
 import { boolToInt, intToBool, parseEnum, parseStringArray, toJson } from './codec.ts';
 
+/** `harnesses_json` → list (`NULL` = every harness, D-48). */
+function harnessesFromJson(raw: string | null, where: string): readonly string[] | null {
+  return raw === null ? null : parseStringArray(raw, where);
+}
+
+/** List → `harnesses_json` (`null` stays `NULL`). */
+function harnessesToJson(list: readonly string[] | null): string | null {
+  return list === null ? null : toJson(list);
+}
+
 /** `vault_bindings` row → record. */
 export function vaultBindingFromRow(row: Selectable<VaultBindings>): VaultBindingRecord {
   const where = `vault_bindings.${row.handle}`;
@@ -26,6 +36,7 @@ export function vaultBindingFromRow(row: Selectable<VaultBindings>): VaultBindin
     redactUsername: intToBool(row.redact_username),
     requireNoEvaluate: intToBool(row.require_no_evaluate),
     dashboardConfirm: intToBool(row.dashboard_confirm),
+    harnesses: harnessesFromJson(row.harnesses_json, where),
     version: row.version,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -48,6 +59,7 @@ export function vaultBindingToRow(record: VaultBindingRecord): Selectable<VaultB
     redact_username: boolToInt(record.redactUsername),
     require_no_evaluate: boolToInt(record.requireNoEvaluate),
     dashboard_confirm: boolToInt(record.dashboardConfirm),
+    harnesses_json: harnessesToJson(record.harnesses),
     version: record.version,
     created_at: record.createdAt,
     updated_at: record.updatedAt,
@@ -70,6 +82,7 @@ export function vaultGroupPolicyFromRow(
     dashboardConfirm: intToBool(row.dashboard_confirm),
     requireNoEvaluate: intToBool(row.require_no_evaluate),
     redactUsername: intToBool(row.redact_username),
+    harnesses: harnessesFromJson(row.harnesses_json, where),
     version: row.version,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -91,6 +104,7 @@ export function vaultGroupPolicyToRow(
     dashboard_confirm: boolToInt(record.dashboardConfirm),
     require_no_evaluate: boolToInt(record.requireNoEvaluate),
     redact_username: boolToInt(record.redactUsername),
+    harnesses_json: harnessesToJson(record.harnesses),
     version: record.version,
     created_at: record.createdAt,
     updated_at: record.updatedAt,

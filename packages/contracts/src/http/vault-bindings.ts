@@ -11,7 +11,8 @@ import {
   sortable,
   windowQuery,
 } from './common.ts';
-import { VaultAccessMode, VaultGroupPolicy } from './vault.ts';
+import { HarnessSlug } from './sessions.ts';
+import { VaultAccessMode, VaultGroupPolicy, VaultHarnessList } from './vault.ts';
 
 /** Binding handle grammar: lowercase slug-ish token derived from `<group>/<item>`. */
 export const VAULT_HANDLE_RE = /^[a-z0-9][a-z0-9._-]{0,127}$/;
@@ -39,6 +40,8 @@ export const VaultBinding = z.object({
   redact_username: z.boolean(),
   require_no_evaluate: z.boolean(),
   dashboard_confirm: z.boolean(),
+  /** Harness list (D-48); absent = every harness. */
+  harnesses: VaultHarnessList.optional(),
   created_at: EpochMs,
   updated_at: EpochMs,
   version: z.number().int().positive(),
@@ -76,6 +79,8 @@ export const PutVaultBindingRequest = z.strictObject({
   redact_username: z.boolean().optional(),
   require_no_evaluate: z.boolean().optional(),
   dashboard_confirm: z.boolean().optional(),
+  /** Harness list (D-48): absent keeps the stored one, `null` clears it (every harness), `[]` allows none. */
+  harnesses: VaultHarnessList.nullable().optional(),
 });
 /** `PUT /vault/bindings/{handle}` body. */
 export type PutVaultBindingRequest = z.infer<typeof PutVaultBindingRequest>;
@@ -210,3 +215,34 @@ export const ImportVaultResponse = z.object({
 });
 /** `POST /vault/import` 200 body. */
 export type ImportVaultResponse = z.infer<typeof ImportVaultResponse>;
+
+/** One harness seen on this daemon (`GET /vault/harnesses`, D-48). */
+export const VaultSeenHarness = z.object({
+  /** Launch harness slug (`unknown` when nothing identified the client). */
+  harness: HarnessSlug,
+  /** Display label of `harness`. */
+  label: z.string(),
+  /** The raw declared name, exactly as sent (a custom rule entry matches it), or `null`. */
+  declared: z.string().nullable(),
+  /** Sessions launched in the window with this harness and declared name (`0`: an open connection only). */
+  sessions: Count,
+  last_seen_at: EpochMs,
+});
+/** One harness seen on this daemon. */
+export type VaultSeenHarness = z.infer<typeof VaultSeenHarness>;
+
+/** Days of history `GET /vault/harnesses` looks back over. */
+export const VAULT_HARNESSES_WINDOW_DAYS = 30;
+
+/**
+ * `GET /vault/harnesses` body: the harness picker's data and the inputs of its warnings. `principals`
+ * is the number of distinct principals that launched a session in the window.
+ */
+export const VaultHarnessesResponse = z.object({
+  data: z.array(VaultSeenHarness),
+  principals: Count,
+  window: z.object({ since: EpochMs, until: EpochMs }),
+  now: EpochMs,
+});
+/** `GET /vault/harnesses` body. */
+export type VaultHarnessesResponse = z.infer<typeof VaultHarnessesResponse>;

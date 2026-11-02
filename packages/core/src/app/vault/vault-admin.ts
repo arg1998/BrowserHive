@@ -8,6 +8,7 @@ import {
   type VaultBindingInput,
 } from '../../domain/vault/bindings.ts';
 import { decideFill } from '../../domain/vault/decide-fill.ts';
+import { NO_HARNESS_RULES } from '../../domain/vault/harness-rule.ts';
 import {
   groupIdOf,
   mergePolicy,
@@ -157,6 +158,8 @@ export class VaultAdmin {
           slugGlobs: b.authorizedSessionSlugs,
           principals: b.authorizedPrincipals,
         },
+        // The tester has no harness input (D-48): `checkSubject: false` skips gate 2c.
+        harnessRules: NO_HARNESS_RULES,
         redactUsername: b.redactUsername,
         requireNoEvaluate: b.requireNoEvaluate,
         dashboardConfirm: b.dashboardConfirm,
@@ -176,6 +179,8 @@ export class VaultAdmin {
           slug: input.sessionSlug ?? '',
           disableEvaluate: true,
           vaultEnabled: true,
+          harness: null,
+          harnessDeclared: null,
         },
         principal: input.principal ?? '',
         allowEvaluate: false,

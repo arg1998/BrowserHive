@@ -101,6 +101,7 @@ export function sessionRecord(overrides: Partial<SessionRecord> = {}): SessionRe
     launchMs: 500,
     config: { channel: 'chromium', headless: true },
     harness: null,
+    harnessDeclared: null,
     sandboxed: null,
     browserVersion: null,
     ...overrides,

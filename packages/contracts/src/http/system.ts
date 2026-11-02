@@ -288,6 +288,8 @@ export const McpConnectionRow = z.object({
   harness: HarnessSlug,
   harness_label: z.string(),
   harness_source: z.string(),
+  /** The raw declared harness name of the latest resolution; absent when none was declared (D-48). */
+  harness_declared: z.string().optional(),
   model: z.string().nullable(),
   model_source: z.string().nullable(),
   workspace: z.string().nullable(),

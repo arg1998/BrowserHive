@@ -106,6 +106,8 @@ export interface McpConnectionRecord {
   readonly harnessSource: string | null;
   /** Signals that named another harness. */
   readonly conflicts: readonly HarnessConflictRecord[];
+  /** The raw declared harness name of the latest resolution (D-48); `null` when none was declared. */
+  readonly harnessDeclared: string | null;
   /** The capped meta bag. */
   readonly meta: Readonly<Record<string, string>>;
   readonly ip: string | null;

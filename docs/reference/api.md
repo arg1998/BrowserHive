@@ -2,7 +2,7 @@
 
 # REST API reference
 
-The admin REST API served under `/api/v1` on the same port as MCP and the dashboard when `--admin` is on (111 operations), generated from `HTTP_ENDPOINTS` in `@browserhive/contracts/http`. Request and response schemas are in the OpenAPI 3.1 document the server serves at `/api/v1/openapi.json`, with an interactive reference UI at `/api/v1/docs`.
+The admin REST API served under `/api/v1` on the same port as MCP and the dashboard when `--admin` is on (112 operations), generated from `HTTP_ENDPOINTS` in `@browserhive/contracts/http`. Request and response schemas are in the OpenAPI 3.1 document the server serves at `/api/v1/openapi.json`, with an interactive reference UI at `/api/v1/docs`.
 
 Summaries come from `packages/contracts/generated/openapi.json`.
 
@@ -114,6 +114,7 @@ Summaries come from `packages/contracts/generated/openapi.json`.
 | PUT | `/api/v1/vault/bindings/{handle}` | `putVaultBinding` | `vault:write` | cookie, bearer | Create (item_name required) or update a binding (`If-Match: <version>`). |
 | DELETE | `/api/v1/vault/bindings/{handle}` | `deleteVaultBinding` | `vault:write` | cookie, bearer | Remove a binding. |
 | POST | `/api/v1/vault/bindings/resolve` | `resolveVaultBindings` | `vault:read` | cookie, bearer | Dry-run the fill gates of every binding against a URL. |
+| GET | `/api/v1/vault/harnesses` | `listVaultHarnesses` | `vault:read` | cookie, bearer | Harnesses and declared names seen on this daemon in the last 30 days, for the harness lists of bindings and group policies (D-48). |
 | GET | `/api/v1/vault/log` | `listVaultLog` | `vault:read` | cookie, bearer | Vault access audit log. |
 | GET | `/api/v1/vault/export` | `exportVault` | `vault:read` | cookie, bearer | Export bindings and policies as the v3 document. |
 | POST | `/api/v1/vault/import` | `importVault` | `vault:write` | cookie, bearer | Import a v3 document (`?mode=merge\|replace`). |

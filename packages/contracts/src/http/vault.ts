@@ -1,6 +1,7 @@
 /** @module contracts/http/vault — vault overview, unlock, sync, groups, policies and items (spec 03 §4.5, D-14) */
 import { z } from 'zod';
 import { VaultBackendKind } from '../enums/index.ts';
+import { HARNESS_RULE_MAX_ENTRIES, HARNESS_RULE_NAME_MAX } from '../harness/index.ts';
 import { Count, EpochMs, listQuery, OkResponse, page, QueryText, sortable } from './common.ts';
 
 /** Policy key of the ungrouped bucket (`vault_group_policies.group_key`). */
@@ -88,6 +89,29 @@ export const SyncVaultResponse = z.object({
 /** `POST /vault/sync` 200 body. */
 export type SyncVaultResponse = z.infer<typeof SyncVaultResponse>;
 
+/**
+ * One entry of a vault rule's harness list (D-48): a known harness slug (matched against the
+ * session's launch harness) or a custom name (matched exactly, case-sensitively, against the
+ * session's launch declared name). Trimmed; 1–64 characters; no control characters.
+ */
+export const VaultHarnessName = z
+  .string()
+  .trim()
+  .min(1, 'a harness name cannot be empty')
+  .max(HARNESS_RULE_NAME_MAX, `a harness name has at most ${HARNESS_RULE_NAME_MAX} characters`)
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: the point is to reject them
+  .regex(/^[^\u0000-\u001f\u007f]*$/, 'a harness name cannot contain control characters');
+
+/**
+ * A vault rule's harness list (D-48). Absent on a response = every harness; `[]` = none. It
+ * narrows the principal and slug rules; it is self-reported and not a security boundary.
+ */
+export const VaultHarnessList = z
+  .array(VaultHarnessName)
+  .max(HARNESS_RULE_MAX_ENTRIES, `at most ${HARNESS_RULE_MAX_ENTRIES} harnesses`);
+/** A vault rule's harness list. */
+export type VaultHarnessList = z.infer<typeof VaultHarnessList>;
+
 /** One group policy (`vault_group_policies` row); `group_id: null` = ungrouped. */
 export const VaultGroupPolicy = z.object({
   group_id: z.string().nullable(),
@@ -98,6 +122,8 @@ export const VaultGroupPolicy = z.object({
   dashboard_confirm: z.boolean(),
   require_no_evaluate: z.boolean(),
   redact_username: z.boolean(),
+  /** Harness list (D-48); absent = every harness. */
+  harnesses: VaultHarnessList.optional(),
   version: z.number().int().positive(),
   created_at: EpochMs,
   updated_at: EpochMs,
@@ -141,6 +167,8 @@ export const PutGroupPolicyRequest = z.strictObject({
   dashboard_confirm: z.boolean().optional(),
   require_no_evaluate: z.boolean().optional(),
   redact_username: z.boolean().optional(),
+  /** Harness list (D-48): absent keeps the stored one, `null` clears it (every harness), `[]` allows none. */
+  harnesses: VaultHarnessList.nullable().optional(),
 });
 /** `PUT /vault/groups/{group_id}/policy` body. */
 export type PutGroupPolicyRequest = z.infer<typeof PutGroupPolicyRequest>;

@@ -66,6 +66,22 @@ export class FakeAnalytics implements AnalyticsQueries {
     ];
   }
 
+  async harnessesSeen(_window: { readonly since: number; readonly until: number }) {
+    return {
+      rows: [
+        { harness: 'claude-code', declared: null, sessions: 2, lastSeenAt: NOW - 60_000 },
+        {
+          harness: 'nightly-scraper',
+          declared: 'Nightly Scraper',
+          sessions: 1,
+          lastSeenAt: NOW - 120_000,
+        },
+        { harness: 'unknown', declared: null, sessions: 1, lastSeenAt: NOW - 180_000 },
+      ],
+      principals: 1,
+    };
+  }
+
   async toolMetrics(_query: ToolMetricsQuery) {
     return [
       {

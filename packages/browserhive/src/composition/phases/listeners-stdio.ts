@@ -55,6 +55,7 @@ export async function openStdioListener(ctx: BootContext): Promise<PhaseHandle> 
       modelSource: resolved.modelSource,
       harness: resolved.harness,
       harnessSource: resolved.harnessSource,
+      harnessDeclared: resolved.harnessDeclared,
       conflicts: columns.conflicts ?? [],
       meta: resolved.meta,
       ip: null,

@@ -196,6 +196,8 @@ export function createVaultHarness(): VaultHarness {
           disableEvaluate: session.disableEvaluate ?? false,
           vaultEnabled: session.vaultEnabled ?? true,
           ...(session.humanize !== undefined && { humanize: session.humanize }),
+          harness: session.harness ?? null,
+          harnessDeclared: session.harnessDeclared ?? null,
         },
         page,
         tracing,
