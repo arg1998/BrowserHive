@@ -8,6 +8,7 @@ import {
   harnessRuleLookalike,
   isHarnessAllowed,
   isHarnessRuleSlug,
+  isKnownHarness,
   type KnownHarness,
   OTHER_HARNESS,
   UNKNOWN_HARNESS,
@@ -174,7 +175,7 @@ export function harnessWarnings(
   return out;
 }
 
-/** Declared names seen on this daemon that are not in the list and not a known slug: the "+ name" suggestions. */
+/** Declared names of unrecognised harnesses seen on this daemon, not yet in the list: the "+ name" suggestions. */
 export function seenSuggestions(
   list: HarnessList,
   seen: VaultHarnessesResponse | undefined,
@@ -182,7 +183,8 @@ export function seenSuggestions(
   const out: string[] = [];
   for (const row of seen?.data ?? []) {
     const name = row.declared;
-    if (name === null || isHarnessRuleSlug(name) || list?.includes(name) === true) continue;
+    // A name that resolved to a built-in harness is already a chip (`OpenCode` → OpenCode).
+    if (name === null || isKnownHarness(row.harness) || list?.includes(name) === true) continue;
     if (harnessRuleEntryProblem(name) !== null || out.includes(name)) continue;
     out.push(name);
   }

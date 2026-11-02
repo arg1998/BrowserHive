@@ -62,7 +62,7 @@ describe('binding editor', () => {
     expect(
       within(field).getByRole('button', { name: 'All harnesses' }).getAttribute('aria-pressed'),
     ).toBe('true');
-    await within(field).findByRole('button', { name: 'Add custom name OpenCode' });
+    await within(field).findByRole('button', { name: /^OpenCode \(seen recently\)/ });
     fireEvent.click(within(field).getByRole('button', { name: /^OpenCode/ }));
     fireEvent.click(within(field).getByRole('button', { name: /^Claude Code/ }));
     await expectNoA11yViolations(container);

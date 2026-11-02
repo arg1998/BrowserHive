@@ -241,7 +241,7 @@ export function HarnessRuleField({ value, onChange, noun, seen, disabled }: Harn
                 disabled={disabled}
                 aria-label={`Remove custom name ${name}`}
                 onClick={() => onChange((value ?? []).filter((entry) => entry !== name))}
-                className="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-full text-accent-text/80 transition-colors focus-ring hover:bg-accent-bg-hover hover:text-accent-text pointer-coarse:size-8"
+                className="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-full text-accent-text/80 transition-colors focus-ring-inset hover:bg-accent-bg-hover hover:text-accent-text pointer-coarse:size-8"
               >
                 <Close aria-hidden="true" className="size-3.5" />
               </button>
@@ -364,19 +364,21 @@ export function HarnessRuleField({ value, onChange, noun, seen, disabled }: Harn
                 key={`lookalike:${warning.entry}`}
                 tone="warn"
                 title={`"${warning.entry}" is matched exactly`}
-                action={
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => onChange(replaceEntry(value, warning.entry, warning.slug))}
-                  >
-                    Use {harnessLabel(warning.slug)}
-                  </Button>
-                }
               >
-                Did you mean the built-in {harnessLabel(warning.slug)}? A custom name only matches a
-                client that declares exactly this text.
+                {/* The fix sits under the text: the editors are narrow, a side column would squeeze it. */}
+                <p>
+                  Did you mean the built-in {harnessLabel(warning.slug)}? A custom name only matches
+                  a client that declares exactly this text.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="mt-2"
+                  onClick={() => onChange(replaceEntry(value, warning.entry, warning.slug))}
+                >
+                  Use {harnessLabel(warning.slug)}
+                </Button>
               </Callout>
             );
           case 'blocks-recent':

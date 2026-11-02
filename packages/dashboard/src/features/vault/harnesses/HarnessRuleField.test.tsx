@@ -135,6 +135,22 @@ describe('HarnessRuleField', () => {
     expect(screen.queryByRole('button', { name: 'Add custom name Nightly Scraper' })).toBeNull();
   });
 
+  it('does not suggest a declared name that already resolved to a built-in harness', () => {
+    renderField(null, {
+      ...SEEN,
+      data: [
+        {
+          harness: 'opencode',
+          label: 'OpenCode',
+          declared: 'OpenCode',
+          sessions: 1,
+          last_seen_at: 1,
+        },
+      ],
+    });
+    expect(screen.queryByText('Declared here recently:')).toBeNull();
+  });
+
   it('warns about a custom name that folds to a built-in harness, and swaps it', () => {
     const { changes } = renderField(['Claude-Code']);
     expect(screen.getByText('"Claude-Code" is matched exactly')).toBeTruthy();
