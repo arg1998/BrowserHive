@@ -2,7 +2,7 @@
 import type { VaultBinding, VaultGroup, VaultItem } from '@browserhive/contracts/http';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { Chip } from '@/components/shared/Chip.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { Input } from '@/components/ui/input.tsx';
@@ -16,6 +16,8 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet.tsx';
 import { Textarea } from '@/components/ui/textarea.tsx';
+import { useVaultHarnesses } from '../api.ts';
+import { HarnessRuleField } from '../harnesses/HarnessRuleField.tsx';
 import {
   type BindingFormValues,
   bindingFormSchema,
@@ -60,6 +62,7 @@ export function BindingDrawer({
       form.reset(draft ?? (binding !== undefined ? bindingToForm(binding) : EMPTY_BINDING_FORM));
   }, [open, binding, draft, form]);
   const errors = form.formState.errors;
+  const seen = useVaultHarnesses(open);
   const allowAll = form.watch('allow_all_sessions');
   const [pickedItem, setPickedItem] = useState<string | null>(null);
   const pickItem = (itemId: string) => {
@@ -216,6 +219,23 @@ export function BindingDrawer({
               />
             )}
           </FormRow>
+          <Controller
+            control={form.control}
+            name="harnesses"
+            render={({ field }) => (
+              <HarnessRuleField
+                noun="binding"
+                value={field.value}
+                onChange={(next) => field.onChange(next)}
+                seen={seen.data}
+              />
+            )}
+          />
+          {errors.harnesses?.message !== undefined ? (
+            <p role="alert" className="-mt-2 text-sm text-danger-text">
+              {errors.harnesses.message}
+            </p>
+          ) : null}
           <FlagField
             control={form.control}
             name="dashboard_confirm"

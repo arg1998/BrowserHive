@@ -153,6 +153,7 @@ import {
   VaultConfirmQuery,
   VaultExportDocument,
   VaultGroupsResponse,
+  VaultHarnessesResponse,
   VaultItemsPage,
   VaultItemsQuery,
   VaultLogPage,
@@ -287,6 +288,7 @@ export const OPERATIONS = {
   },
   deleteVaultBinding: { params: HandleParams, response: DeleteVaultBindingResponse },
   resolveVaultBindings: { body: ResolveBindingsRequest, response: ResolveBindingsResponse },
+  listVaultHarnesses: { response: VaultHarnessesResponse },
   listVaultLog: { query: VaultLogQuery, response: VaultLogPage },
   exportVault: { response: VaultExportDocument },
   importVault: {

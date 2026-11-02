@@ -55,6 +55,8 @@ export const bindingFormSchema = z
     redact_username: z.boolean(),
     require_no_evaluate: z.boolean(),
     dashboard_confirm: z.boolean(),
+    /** D-48: `null` = every harness, `[]` = none. */
+    harnesses: z.array(z.string()).nullable(),
   })
   .superRefine((values, ctx) => {
     const bad = parseLines(values.allowed_origins).find((o) => !ORIGIN_RE.test(o));
@@ -93,6 +95,7 @@ export const EMPTY_BINDING_FORM: BindingFormValues = {
   redact_username: false,
   require_no_evaluate: false,
   dashboard_confirm: false,
+  harnesses: null,
 };
 
 /** Form values for an existing binding. */
@@ -110,6 +113,7 @@ export function bindingToForm(binding: VaultBinding): BindingFormValues {
     redact_username: binding.redact_username,
     require_no_evaluate: binding.require_no_evaluate,
     dashboard_confirm: binding.dashboard_confirm,
+    harnesses: binding.harnesses === undefined ? null : [...binding.harnesses],
   };
 }
 
@@ -129,6 +133,7 @@ export function toPutBody(values: BindingFormValues): z.input<typeof PutVaultBin
     redact_username: values.redact_username,
     require_no_evaluate: values.require_no_evaluate,
     dashboard_confirm: values.dashboard_confirm,
+    harnesses: values.harnesses === null ? null : [...values.harnesses],
   };
 }
 
@@ -152,6 +157,7 @@ export function optimisticBinding(
     redact_username: values.redact_username,
     require_no_evaluate: values.require_no_evaluate,
     dashboard_confirm: values.dashboard_confirm,
+    ...(values.harnesses !== null && { harnesses: [...values.harnesses] }),
     created_at: previous?.created_at ?? now,
     updated_at: now,
     version: (previous?.version ?? 0) + 1,

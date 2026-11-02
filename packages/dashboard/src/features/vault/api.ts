@@ -83,6 +83,20 @@ export function useVaultBindings(
   });
 }
 
+/**
+ * Harnesses and declared names seen on this daemon (D-48): the Harnesses field's suggestions and
+ * warnings. Fetched once an editor opens; a minute stale is fine.
+ */
+export function useVaultHarnesses(enabled = true) {
+  const api = useApi();
+  return useQuery({
+    queryKey: keys.vault.harnesses(),
+    queryFn: () => api.listVaultHarnesses(),
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
 /** Pending vault confirms (the bridge keeps this list current from `vault.confirm.*`). */
 export function useVaultConfirms(enabled = true) {
   const api = useApi();
