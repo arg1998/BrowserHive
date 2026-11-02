@@ -2,7 +2,6 @@
 
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { generate, KyselyBunSqliteDialect } from 'kysely-codegen';
 import { openDatabase } from '../packages/core/src/infra/persistence/open.ts';
 
 const OUT = join(
@@ -31,6 +30,12 @@ const clock = {
   now: () => Date.now(),
   sleep: (ms: number) => new Promise<void>((r) => setTimeout(r, ms)),
 };
+
+// kysely-codegen is CommonJS and `require`s kysely, which is ESM-only. Imported statically next to
+// `open.ts` (which imports kysely as ESM), that `require` can run while Bun is still loading kysely
+// and fails with "require() async module … is unsupported", depending on load timing (it broke the
+// `goldens` job on cold runners). Importing it only after `open.ts` has loaded kysely removes the race.
+const { generate, KyselyBunSqliteDialect } = await import('kysely-codegen');
 
 // kysely-codegen's `--dialect bun-sqlite` (alias of `worker-bun-sqlite`) and `kysely-bun-sqlite`
 // both require third-party dialect packages we do not ship; the programmatic API accepts any
