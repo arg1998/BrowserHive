@@ -38,6 +38,7 @@ describe('doctor', () => {
     expect(run.code).toBe(0);
     expect(rows.map((r) => r.check)).toEqual([
       'bun',
+      'bh',
       'config',
       'chromium (playwright)',
       'chromium (patchright)',
@@ -71,7 +72,7 @@ describe('doctor', () => {
     expect(run.stdout).toMatch(/^\s+CHECK\s+DETAIL/m);
     expect(run.stdout).toContain('✓  bun');
     expect(run.stdout).toContain('config: maxSessions=4 (cli) shadows env=2');
-    expect(run.stdout).toContain('20 passed, 0 warnings, 0 failed');
+    expect(run.stdout).toContain('21 passed, 0 warnings, 0 failed');
   });
 
   it.each([
@@ -122,6 +123,66 @@ describe('doctor', () => {
     const { run, byName } = await doctorJson({ argv: [], fs: healthyFs(), ...overrides });
     expect(byName.get(check)?.status).toBe(status);
     expect(run.code).toBe(status === 'fail' ? 1 : 2);
+  });
+
+  describe('bh shorthand', () => {
+    it("BrowserHive's bh is ✓ and names its path", async () => {
+      const { byName, run } = await doctorJson({ argv: [], fs: healthyFs() });
+      expect(byName.get('bh')).toEqual({
+        check: 'bh',
+        status: 'ok',
+        detail: 'shorthand for browserhive · /usr/local/bin/bh',
+      });
+      expect(run.code).toBe(0);
+    });
+
+    it("someone else's bh first on PATH is a warning (exit 2), never a failure", async () => {
+      const { byName, run } = await doctorJson({
+        argv: [],
+        fs: healthyFs(),
+        probes: probeState({ shorthand: { kind: 'other', path: '/home/me/bin/bh' } }),
+      });
+      expect(byName.get('bh')).toEqual({
+        check: 'bh',
+        status: 'warn',
+        detail:
+          "/home/me/bin/bh is not BrowserHive's, so bh runs it; use browserhive, or rename or remove that bh",
+      });
+      expect(run.code).toBe(2);
+    });
+
+    it('the warning shows in the text table', async () => {
+      const run = await cliHarness({
+        argv: ['doctor'],
+        fs: healthyFs(),
+        probes: probeState({ shorthand: { kind: 'other', path: '/home/me/bin/bh' } }),
+      });
+      expect(run.code).toBe(2);
+      expect(run.stdout).toMatch(/!\s+bh\s+\/home\/me\/bin\/bh is not BrowserHive's/);
+      expect(run.stdout).toContain('20 passed, 1 warnings, 0 failed');
+    });
+
+    it.each([
+      ['no bh on PATH', { kind: 'absent' } as const, 'not on PATH; use browserhive'],
+      [
+        'an unreadable match',
+        { kind: 'unknown', path: '/opt/bin/bh', reason: 'EACCES' } as const,
+        'could not check /opt/bin/bh (EACCES); browserhive always works',
+      ],
+      [
+        'a probe that throws',
+        new Error('PATH walk failed'),
+        'could not check (PATH walk failed); browserhive always works',
+      ],
+    ])('%s is ✓', async (_name, shorthand, detail) => {
+      const { byName, run } = await doctorJson({
+        argv: [],
+        fs: healthyFs(),
+        probes: probeState({ shorthand }),
+      });
+      expect(byName.get('bh')).toEqual({ check: 'bh', status: 'ok', detail });
+      expect(run.code).toBe(0);
+    });
   });
 
   it('patchright required but missing is a failure', async () => {
@@ -306,7 +367,7 @@ describe('doctor', () => {
         detail: "maxSessions: BH_MAX is not set (or empty), so the config file's default is used",
       },
     ]);
-    expect(rows.map((r) => r.check).slice(0, 3)).toEqual(['bun', 'config', 'reference']);
+    expect(rows.map((r) => r.check).slice(0, 4)).toEqual(['bun', 'bh', 'config', 'reference']);
     expect(run.code).toBe(2);
   });
 

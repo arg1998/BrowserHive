@@ -1,4 +1,4 @@
-/** @module cli/production/probes — real host probes for `doctor`, `init` and `version`: Bun and SQLite versions, Chromium installs per driver, port, PATH lookup, disk, file modes, OTLP reachability */
+/** @module cli/production/probes — real host probes for `doctor`, `init` and `version`: Bun and SQLite versions, Chromium installs per driver, port, PATH lookup (and the `bh` shorthand), disk, file modes, OTLP reachability */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { stat, statfs } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -8,6 +8,7 @@ import type { Channel } from '@browserhive/contracts/enums';
 import type { Logger } from '@browserhive/core/runtime';
 import { z } from 'zod';
 import type { BrowserInstall, HostProbes } from '../deps.ts';
+import { findShorthand, nodeShorthandFs } from './shorthand.ts';
 
 const PackageJson = z.object({ version: z.string() });
 const SqliteVersionRow = z.object({ v: z.string() });
@@ -137,6 +138,8 @@ export function createHostProbes(options: {
         });
       }),
     which: async (command) => Bun.which(command),
+    shorthand: async () =>
+      findShorthand({ platform: process.platform, env: process.env, fs: nodeShorthandFs }),
     diskFreeBytes: async (path) => {
       let current = path;
       for (let depth = 0; depth < 64; depth += 1) {

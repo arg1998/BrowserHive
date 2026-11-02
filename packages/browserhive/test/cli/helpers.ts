@@ -24,6 +24,7 @@ import type {
   MigrationRef,
   ServeBootInput,
   ServeRunningServer,
+  ShorthandLookup,
   TokenRow,
 } from '../../src/cli/deps.ts';
 import { runCli } from '../../src/cli/run.ts';
@@ -325,6 +326,8 @@ export interface ProbeState {
   diskFree: number | null;
   modes: Record<string, number>;
   otlp: { ok: boolean; detail: string };
+  /** The first `bh` on PATH, or an error the probe throws. */
+  shorthand: ShorthandLookup | Error;
   /** Answers of `fetchOnce` by URL (default: a network error). */
   fetches: Record<string, UrlProbeResult>;
   /** Detected channels (bundled Chromium first). */
@@ -402,6 +405,7 @@ export function probeState(overrides: Partial<ProbeState> = {}): ProbeState {
     diskFree: 50 * 1000 ** 3,
     modes: {},
     otlp: { ok: true, detail: 'HTTP 405' },
+    shorthand: { kind: 'browserhive', path: '/usr/local/bin/bh' },
     fetches: {},
     browsers: [detected('chromium'), detected('chrome'), detected('edge')],
     sandbox: { chromium: { state: 'works', version: '153.0.8010.12' } },
@@ -420,6 +424,10 @@ function fakeProbes(state: ProbeState): HostProbes {
     patchright: async () => state.patchright,
     portFree: async () => state.portFree,
     which: async () => state.bw,
+    shorthand: async () => {
+      if (state.shorthand instanceof Error) throw state.shorthand;
+      return state.shorthand;
+    },
     diskFreeBytes: async () => state.diskFree,
     pathMode: async (path) => state.modes[posixPath(path)] ?? state.modes[path] ?? 0o700,
     installCommand: (driver) => ({ command: '/usr/bin/bun', args: [`/pkg/${driver}/cli.js`] }),

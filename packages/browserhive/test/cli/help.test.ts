@@ -60,6 +60,9 @@ describe('help layout', () => {
       expect(text).toContain(section);
     }
     for (const key of CONFIG_KEYS) expect(text).toContain(`--${key}`);
+    expect(text).toContain(
+      'USAGE\n  browserhive [serve] [flags]\n  browserhive <command> [flags]\n  bh is installed as a shorthand: bh <command> is browserhive <command>.\n',
+    );
     expect(text).toContain('default: 9876');
     expect(text).toContain('[secret]');
     expect(text).toContain('Precedence: defaults < environment < browserhive.config.json < flags');
