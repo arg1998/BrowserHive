@@ -6,7 +6,11 @@ import {
   PagesPage,
   SCREENSHOT_CACHE_CONTROL,
   SessionsPage,
+  SessionToolCallsPage,
+  TOOL_ARGS_CAP_BYTES,
+  ToolCallDetail,
   ToolCallsPage,
+  TruncatedToolArgs,
 } from '@browserhive/contracts/http';
 import {
   ARCHIVED_ID,
@@ -17,6 +21,7 @@ import {
 import { createHttpKit, type HttpKit } from '../../../../test/helpers/http-kit.ts';
 import { IDEMPOTENCY_KEY } from '../../../../test/helpers/http-route-cases.ts';
 import { posixView } from '../../../../test/helpers/posix-paths.ts';
+import { capToolArgs } from '../../../app/observability/tool-args-policy.ts';
 
 async function problemCode(response: Response): Promise<string> {
   return ProblemDetails.parse(await response.json()).code;
@@ -222,6 +227,33 @@ describe('fleet lists', () => {
     expect(await ids('')).toContain(null);
     expect(await ids('&has_session=true')).not.toContain(null);
     expect(await ids('&has_session=false')).toEqual([null]);
+  });
+
+  it('serves capped arguments as the truncation marker in every detail view (D-47)', async () => {
+    const { kit, cookie } = await authed();
+    const stored = await kit.repos.toolCalls.get(EVENT_OK);
+    if (stored === null) throw new Error('fixture tool call missing');
+    const { sessionSlug: _slug, hasScreenshot: _shot, ...record } = stored;
+    const eventId = 'e-01J00000000000000000000098';
+    const args = capToolArgs({ text: 'a'.repeat(4 * 1024 * 1024) });
+    await kit.repos.toolCalls.insert({ ...record, eventId, args, seq: 98 });
+    const base = `/api/v1/sessions/${CLOSED_ID}/tool-calls`;
+    const detail = ToolCallDetail.parse(
+      await (await kit.request('GET', `${base}/${eventId}`, { cookie })).json(),
+    );
+    const listed = SessionToolCallsPage.parse(
+      await (await kit.request('GET', `${base}?expand=detail`, { cookie })).json(),
+    ).data.find((row) => row.event_id === eventId);
+    const fleet = ToolCallsPage.parse(
+      await (await kit.request('GET', '/api/v1/tool-calls?expand=detail', { cookie })).json(),
+    ).data.find((row) => row.event_id === eventId);
+    for (const value of [detail.args_json, listed?.args_json, fleet?.args_json]) {
+      const marker = TruncatedToolArgs.parse(value);
+      expect(marker.bytes).toBe(4 * 1024 * 1024 + 11);
+      expect(new TextEncoder().encode(JSON.stringify(marker)).length).toBeLessThanOrEqual(
+        TOOL_ARGS_CAP_BYTES,
+      );
+    }
   });
 });
 

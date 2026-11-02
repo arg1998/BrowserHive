@@ -1,5 +1,10 @@
-/** @module features/sessions/activity/ActivityDetail — the expanded body of an Activity row: facts, error, where a call landed, parameters, result and screenshot for tool calls; the full record for pages, attention, vault fills and blocked requests; Copy JSON; a failed call's result is hidden when it only echoes the error */
-import type { TimelineItem, ToolCallDetail } from '@browserhive/contracts/http';
+/** @module features/sessions/activity/ActivityDetail — the expanded body of an Activity row: facts, error, where a call landed, parameters (with a note when they were truncated when recorded, D-47), result and screenshot for tool calls; the full record for pages, attention, vault fills and blocked requests; Copy JSON; a failed call's result is hidden when it only echoes the error */
+import {
+  type TimelineItem,
+  TOOL_ARGS_CAP_BYTES,
+  type ToolCallDetail,
+  TruncatedToolArgs,
+} from '@browserhive/contracts/http';
 import type { ReactNode } from 'react';
 import { useApi } from '@/app/providers/AuthProvider.tsx';
 import { CopyButton, CopyValue } from '@/components/shared/CopyButton.tsx';
@@ -10,6 +15,7 @@ import { Skeleton } from '@/components/ui/skeleton.tsx';
 import { toAppError } from '@/lib/api/errors.ts';
 import { formatBytes } from '@/lib/format/bytes.ts';
 import { formatAbsolute, formatMs } from '@/lib/format/time.ts';
+import { ICONS } from '@/lib/icons.ts';
 import { cn } from '@/lib/utils.ts';
 import { HarnessName } from '../../harness/HarnessName.tsx';
 import { useToolCallDetailQuery } from '../api.ts';
@@ -103,6 +109,37 @@ function hasArgs(args: unknown): boolean {
   return true;
 }
 
+/** The D-47 marker when the call's arguments were over the recording cap, else `null`. */
+export function truncatedArgs(args: unknown): TruncatedToolArgs | null {
+  const parsed = TruncatedToolArgs.safeParse(args);
+  return parsed.success ? parsed.data : null;
+}
+
+/** Parameters: the JSON tree, or for truncated ones a note and the kept start as plain text. */
+export function Parameters({ args }: { readonly args: unknown }) {
+  const truncated = truncatedArgs(args);
+  if (truncated !== null) {
+    const Info = ICONS.info;
+    return (
+      <>
+        <p className="flex items-start gap-1.5 text-sm text-muted-foreground">
+          <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+          <span>
+            Truncated when recorded: the parameters were {formatBytes(truncated.bytes)}, over the{' '}
+            {formatBytes(TOOL_ARGS_CAP_BYTES)} limit. The start is shown as text.
+          </span>
+        </p>
+        <JsonView value={truncated.preview} className="max-h-96 overflow-y-auto" />
+      </>
+    );
+  }
+  return hasArgs(args) ? (
+    <JsonView value={args} collapseAt={3} />
+  ) : (
+    <p className="text-sm text-muted-foreground">No parameters.</p>
+  );
+}
+
 function ToolBody({
   sessionId,
   entry,
@@ -157,11 +194,7 @@ function ToolBody({
       ) : null}
       <div className="grid min-w-0 gap-4 @3xl:grid-cols-2">
         <Block label="Parameters">
-          {hasArgs(detail.args_json) ? (
-            <JsonView value={detail.args_json} collapseAt={3} />
-          ) : (
-            <p className="text-sm text-muted-foreground">No parameters.</p>
-          )}
+          <Parameters args={detail.args_json} />
         </Block>
         {result !== null ? (
           <Block label="Result">

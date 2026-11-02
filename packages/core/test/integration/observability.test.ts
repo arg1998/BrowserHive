@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { stat } from 'node:fs/promises';
 import { join } from 'node:path';
+import { TOOL_ARGS_CAP_BYTES, TruncatedToolArgs } from '@browserhive/contracts/http';
 import { Recorder } from '../../src/app/observability/recorder.ts';
 import { createSystemClock } from '../../src/infra/clock/system-clock.ts';
 import { createCollectingLogger } from '../../src/infra/logging/collecting-logger.ts';
@@ -102,5 +103,24 @@ describe('observability end-to-end (real Chromium + SQLite)', () => {
     const all = await uow.repos.toolCalls.listAll({ errorCodes: ['INVALID_ARGUMENTS'] });
     expect(all.items).toHaveLength(1);
     expect(all.items[0]?.sessionId).toBeNull();
+  });
+
+  it('a rejected 4 MiB call stores at most 64 KiB of arguments, as the truncation marker (D-47)', async () => {
+    const blob = 'a'.repeat(4 * 1024 * 1024);
+    const rejected = await h.call('navigate', { session_id: 'ghost-12345678', blob });
+    expect(rejected.isError).toBe(true);
+    await queue.drain();
+    const eventId = h.observations().at(-1)?.eventId ?? '';
+    const raw = await db.db
+      .selectFrom('tool_calls')
+      .select(['args_json', 'error_code'])
+      .where('event_id', '=', eventId)
+      .executeTakeFirstOrThrow();
+    expect(raw.error_code).toBe('INVALID_ARGUMENTS');
+    expect(new TextEncoder().encode(raw.args_json).length).toBeLessThanOrEqual(TOOL_ARGS_CAP_BYTES);
+    const marker = TruncatedToolArgs.parse(JSON.parse(raw.args_json));
+    expect(marker.bytes).toBeGreaterThan(blob.length);
+    expect(marker.preview).toStartWith('{"session_id":"ghost-12345678","blob":"aaa');
+    expect((await uow.repos.toolCalls.get(eventId))?.args).toEqual(marker);
   });
 });

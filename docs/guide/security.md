@@ -85,7 +85,7 @@ Local-first means you own the records. With the defaults:
 
 | Recorded | Not recorded |
 |---|---|
-| Every tool call: name, arguments, timing, outcome, error code, trace id | Cookie **values**. Only name, domain, path and expiry are stored or shown. |
+| Every tool call: name, arguments (up to 64 KiB; larger ones keep their size and as much of their start as fits in 64 KiB), timing, outcome, error code, trace id | Cookie **values**. Only name, domain, path and expiry are stored or shown. |
 | Tool results as text, capped at 16 KiB | URL query strings and fragments, unless the parameter is in `--urlQueryAllowlist` |
 | Navigations, blocked attempts, attention requests, vault access (without secrets) | Passwords, tokens, vault credentials, `Authorization` headers |
 | Screenshots taken by the agent; one frame per tool call with `--screenshotTrace` | Fields marked sensitive in the contracts, redacted before any sink |

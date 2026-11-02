@@ -19,6 +19,28 @@ import { HarnessSlug } from './sessions.ts';
 /** Tool name as recorded (frozen catalog; a plain string on the wire so rows recorded under a name outside the current catalog still parse). */
 export const ToolName = z.string().min(1).max(64);
 
+/**
+ * Cap on a call's stored arguments: 64 KiB of serialized UTF-8 JSON (D-47). Real arguments are far
+ * smaller; the cap bounds what one oversized call (up to 4 MiB on `/mcp`, D-46) adds to the history.
+ */
+export const TOOL_ARGS_CAP_BYTES = 64 * 1024;
+
+/**
+ * What `args_json` holds when the arguments were over {@link TOOL_ARGS_CAP_BYTES} (D-47): the full
+ * size of their redacted serialization and its longest prefix that keeps this object within the cap.
+ * The preview is a cut of JSON text, so it is shown as text, never parsed.
+ */
+export const TruncatedToolArgs = z.strictObject({
+  _truncated: z.literal(true),
+  bytes: Bytes,
+  preview: z.string(),
+});
+/** Stored arguments that were over the cap. */
+export type TruncatedToolArgs = z.infer<typeof TruncatedToolArgs>;
+
+const ARGS_JSON_DESCRIPTION =
+  'The arguments as recorded (capture policy, then redaction). Over 64 KiB serialized, the marker `{"_truncated": true, "bytes": <full size>, "preview": "<prefix of the serialization>"}` (D-47).';
+
 /** One recorded tool call (`tool_calls` row). `args_json`/`result_text` only with `?expand=detail`. */
 export const ToolCallRow = z.object({
   event_id: EventId,
@@ -35,7 +57,7 @@ export const ToolCallRow = z.object({
   has_screenshot: z.boolean(),
   /** Harness of the call (its connection's, else its session's launch harness, else `unknown`). */
   harness: HarnessSlug.optional(),
-  args_json: z.unknown().optional(),
+  args_json: z.unknown().describe(ARGS_JSON_DESCRIPTION).optional(),
   result_text: z.string().nullable().optional(),
 });
 /** One recorded tool call. */
@@ -48,7 +70,7 @@ export type FleetToolCallRow = z.infer<typeof FleetToolCallRow>;
 
 /** `GET …/tool-calls/{event_id}` body: full row plus its screenshot when one exists. */
 export const ToolCallDetail = ToolCallRow.extend({
-  args_json: z.unknown(),
+  args_json: z.unknown().describe(ARGS_JSON_DESCRIPTION),
   result_text: z.string().nullable(),
   screenshot: ScreenshotRow.optional(),
 });
