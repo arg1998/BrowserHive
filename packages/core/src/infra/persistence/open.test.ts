@@ -112,6 +112,27 @@ describe('openDatabase', () => {
     }
   });
 
+  it('opens read-only a database without its WAL files (a restored copy) and never writes', async () => {
+    const dir = tempDir();
+    try {
+      const path = join(dir.path, 'browserhive.db');
+      const writer = await open(path, dir.path);
+      await writer.close();
+      // Where the WAL is persistent (macOS) a clean close keeps them; a restore or a copy has none.
+      for (const suffix of ['-wal', '-shm']) rmSync(`${path}${suffix}`, { force: true });
+      const before = new Uint8Array(await Bun.file(path).arrayBuffer());
+      const reader = await open(path, dir.path, { readOnly: true });
+      expect(reader.migrationsApplied).toEqual([]);
+      expect(reader.schemaVersion).toBe(SCHEMA_VERSION);
+      expect(pragmaNumber(reader.raw, 'query_only')).toBe(1);
+      expect(() => reader.raw.run('DELETE FROM schema_migrations')).toThrow();
+      await reader.close();
+      expect(new Uint8Array(await Bun.file(path).arrayBuffer())).toEqual(before);
+    } finally {
+      dir.dispose();
+    }
+  });
+
   it('closes idempotently and checkpoints the WAL', async () => {
     const dir = tempDir();
     try {
@@ -119,7 +140,10 @@ describe('openDatabase', () => {
       const handle = await open(path, dir.path);
       await handle.close();
       await handle.close();
-      expect(await Bun.file(`${path}-wal`).exists()).toBe(false);
+      // The TRUNCATE checkpoint leaves no WAL content. SQLite then deletes the file, except where the
+      // WAL is persistent: Apple's system SQLite, which bun:sqlite uses on macOS, keeps it empty.
+      const wal = Bun.file(`${path}-wal`);
+      expect((await wal.exists()) ? wal.size : 0).toBe(0);
     } finally {
       dir.dispose();
     }

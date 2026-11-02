@@ -177,9 +177,20 @@ export function closeRaw(raw: Pick<Database, 'close'>, logger: Logger): void {
   }
 }
 
+/**
+ * Opens the connection. A read-only open of a file whose WAL files are absent (a restored or copied
+ * database; nothing has it open, since a live WAL connection keeps both) opens it read-write
+ * without create instead: Apple's system SQLite, which bun:sqlite uses on macOS, cannot create
+ * `-wal`/`-shm` from a read-only connection and fails the first read with `SQLITE_CANTOPEN`. The
+ * open stays read-only in effect: `query_only` is set before any read, nothing migrates, and a
+ * write-protected file still opens read-only (SQLite falls back).
+ */
 function openRaw(path: string, readOnly: boolean, inMemory: boolean): Database {
   try {
     if (!inMemory && !readOnly) mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+    if (readOnly && !inMemory && !walFilesPresent(path)) {
+      return new Database(path, { readwrite: true, create: false, strict: true });
+    }
     return new Database(path, { create: !readOnly, readonly: readOnly, strict: true });
   } catch (cause) {
     throw new AppError(
@@ -188,6 +199,10 @@ function openRaw(path: string, readOnly: boolean, inMemory: boolean): Database {
       { message: `cannot open database ${path}: ${String(cause)}`, cause },
     );
   }
+}
+
+function walFilesPresent(path: string): boolean {
+  return existsSync(`${path}-wal`) && existsSync(`${path}-shm`);
 }
 
 function applyPragmas(raw: Database, readOnly: boolean, inMemory: boolean): void {

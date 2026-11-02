@@ -136,7 +136,8 @@ function psTable(): Promise<ProcessEntry[]> {
 
 /**
  * The reader for `platform`: `/proc` on Linux, `ps` on macOS, `Win32_Process` through PowerShell on
- * Windows (about half a second per sample, which is every 10 s and only while metrics are exported),
+ * Windows (half a second to a few seconds per sample: about 2.3 s on a CI runner; sampled every 10 s
+ * and only while metrics are exported),
  * `null` elsewhere (the metric then has no data points).
  */
 export function createProcessTreeReader(
