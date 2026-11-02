@@ -25,6 +25,7 @@ import {
   checkPublicUrl,
   checkReferenceDefaults,
   checkSecretsFile,
+  checkShorthand,
   checkUnrecognisedDataFiles,
   checkVault,
 } from './doctor-checks.ts';
@@ -67,6 +68,7 @@ export async function runChecks(
   const { resolution, dataDir } = invocation;
   const results: CheckResult[] = [
     checkBun(deps),
+    await checkShorthand(deps),
     checkConfig(resolution),
     ...checkReferenceDefaults(resolution),
   ];

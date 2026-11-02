@@ -10,6 +10,9 @@ It prints a ✓ or ✗ per check and the fix for each ✗. Every error code, its
 
 ## Startup
 
+**`bh` runs something else, or `doctor` says "is not BrowserHive's, so bh runs it"**
+Another `bh` comes first on your `PATH`, or your shell has a `bh` alias or function (which `doctor` cannot see). `browserhive` always works. To make `bh` ours, rename or remove the other one, or move BrowserHive's bin directory earlier on `PATH`. `type -a bh` (bash, zsh) or `Get-Command bh -All` (PowerShell) lists every candidate. See [the `bh` shorthand](installation.md#the-bh-shorthand).
+
 **[`BROWSER_NOT_INSTALLED`](../reference/errors.md#BROWSER_NOT_INSTALLED)**
 Run `browserhive init`. If you keep browsers elsewhere, set `PLAYWRIGHT_BROWSERS_PATH` the same way for `init` and the server. With `--stealthDriver patchright`, Patchright's Chromium must be installed too. For `--defaultChannel chrome` (or a session asking for `channel: "chrome"`), install Google Chrome: `browserhive init --installChrome`. BrowserHive never falls back to another browser when the one asked for is missing.
 

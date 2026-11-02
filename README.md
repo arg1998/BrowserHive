@@ -51,6 +51,8 @@ browserhive init            # downloads Chromium, creates the data directory, ch
 browserhive --admin         # MCP at http://127.0.0.1:9876/mcp, dashboard at http://127.0.0.1:9876/
 ```
 
+The install also adds `bh`, a shorthand for `browserhive` (`bh init`, `bh --admin`). Scripts and MCP client configurations should keep the full name.
+
 The first start prints a one-time dashboard password. Then connect your agent.
 
 **Claude Code:**
