@@ -1,7 +1,10 @@
-/** @module features/vault/tester/TesterPanel — dry-run of the fill gates: URL (Enter runs, Esc clears), optional session slug and entry filter in the URL, per-binding decision + reason chain (spec 04 §12.7) */
+/** @module features/vault/tester/TesterPanel — dry-run of the fill gates: URL (Enter runs, Esc clears), optional session slug, harness and declared name (D-48) and entry filter in the URL, per-binding decision + reason chain, and a note when harness lists were not checked (spec 04 §12.7) */
+
+import { HARNESS_LABELS, harnessLabel, UNKNOWN_HARNESS } from '@browserhive/contracts/harness';
 import { useQuery } from '@tanstack/react-query';
 import { type FormEvent, useEffect, useId, useState } from 'react';
 import { useApi } from '@/app/providers/AuthProvider.tsx';
+import { Callout } from '@/components/shared/Callout.tsx';
 import { Chip, VaultChip } from '@/components/shared/Chip.tsx';
 import { DataPanel } from '@/components/shared/DataPanel.tsx';
 import { EmptyState } from '@/components/shared/EmptyState.tsx';
@@ -11,9 +14,11 @@ import { useCursorPager } from '@/components/shared/use-cursor-pages.ts';
 import { Button } from '@/components/ui/button.tsx';
 import { Input } from '@/components/ui/input.tsx';
 import { Label } from '@/components/ui/label.tsx';
+import { SimpleSelect } from '@/components/ui/select.tsx';
 import { useSearchState } from '@/lib/search/use-search-state.ts';
 import type { Tone } from '@/lib/status-registry.ts';
 import { useVaultBindings, useVaultGroups } from '../api.ts';
+import { PICKABLE_HARNESSES } from '../harnesses/harness-rule.ts';
 import type { VaultSearch } from '../search.ts';
 import {
   type GateOutcome,
@@ -70,34 +75,65 @@ export function DecisionRow({ decision }: { readonly decision: TesterDecision })
 }
 
 /** The dry-run for the URL state (shared with the bindings table, which highlights `would_fill` handles). */
-export function useTesterResult(search: Pick<VaultSearch, 'tester' | 'slug'>) {
+export function useTesterResult(
+  search: Pick<VaultSearch, 'tester' | 'slug' | 'harness' | 'declared'>,
+) {
   const api = useApi();
   const url = normalizeTesterUrl(search.tester ?? '');
   const slug = search.slug !== undefined && search.slug !== '' ? search.slug : undefined;
+  const harness = search.harness;
+  const declared = search.declared;
   const result = useQuery({
-    queryKey: ['vault', 'tester', { url, slug }],
+    queryKey: ['vault', 'tester', { url, slug, harness, declared }],
     queryFn: () =>
       api.resolveVaultBindings({
-        body: { url: url ?? '', ...(slug !== undefined && { session_slug: slug }) },
+        body: {
+          url: url ?? '',
+          ...(slug !== undefined && { session_slug: slug }),
+          ...(harness !== undefined && { harness }),
+          ...(declared !== undefined && { harness_declared: declared }),
+        },
       }),
     enabled: url !== null,
   });
   return { url, slug, result };
 }
 
+/** "Any harness" in the select: harness lists are then not checked. */
+const ANY_HARNESS = '';
+
+/** The harness select: Any, the known harnesses, Unknown. */
+const HARNESS_OPTIONS = [
+  { value: ANY_HARNESS, label: 'Any harness (lists not checked)' },
+  ...PICKABLE_HARNESSES.map((slug) => ({ value: slug, label: HARNESS_LABELS[slug] })),
+  { value: UNKNOWN_HARNESS, label: 'Unknown (not identified)' },
+];
+
+/** What the result is tested as, for the chain and the summary line. */
+function testedAs(search: Pick<VaultSearch, 'harness' | 'declared'>): string | undefined {
+  if (search.harness !== undefined) {
+    const label = harnessLabel(search.harness);
+    return search.declared === undefined ? label : `${label} (declared "${search.declared}")`;
+  }
+  return search.declared === undefined ? undefined : `"${search.declared}"`;
+}
+
 /** Tester panel. */
 export function TesterPanel({ unlocked }: { readonly unlocked: boolean }) {
   const { search, set } = useSearchState<VaultSearch>();
-  const ids = { url: useId(), slug: useId(), entry: useId() };
-  const [draft, setDraft] = useState({
+  const ids = { url: useId(), slug: useId(), harness: useId(), declared: useId(), entry: useId() };
+  const fromSearch = () => ({
     url: search.tester ?? '',
     slug: search.slug ?? '',
+    harness: search.harness ?? ANY_HARNESS,
+    declared: search.declared ?? '',
     entry: search.entry ?? '',
   });
+  const [draft, setDraft] = useState(fromSearch);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-sync only when the URL state changes
   useEffect(
-    () =>
-      setDraft({ url: search.tester ?? '', slug: search.slug ?? '', entry: search.entry ?? '' }),
-    [search.tester, search.slug, search.entry],
+    () => setDraft(fromSearch()),
+    [search.tester, search.slug, search.harness, search.declared, search.entry],
   );
   const { url, slug, result } = useTesterResult(search);
   const pager = useCursorPager();
@@ -108,20 +144,30 @@ export function TesterPanel({ unlocked }: { readonly unlocked: boolean }) {
     set({
       tester: draft.url.trim() || undefined,
       slug: draft.slug.trim() || undefined,
+      harness: draft.harness === ANY_HARNESS ? undefined : draft.harness,
+      declared: draft.declared.trim() || undefined,
       entry: draft.entry.trim() || undefined,
       page: search.page,
     });
   };
   const clearAll = () =>
-    set({ tester: undefined, slug: undefined, entry: undefined, page: search.page });
+    set({
+      tester: undefined,
+      slug: undefined,
+      harness: undefined,
+      declared: undefined,
+      entry: undefined,
+      page: search.page,
+    });
+  const asHarness = testedAs(search);
   return (
     <div className="flex flex-col gap-4">
       <form
-        className="grid gap-3 rounded-xl border bg-card p-4 shadow-xs md:grid-cols-[2fr_1fr_1fr_auto] md:items-end dark:shadow-none"
+        className="grid gap-x-3 gap-y-4 rounded-xl border bg-card p-4 shadow-xs sm:grid-cols-2 lg:grid-cols-4 dark:shadow-none"
         onSubmit={run}
         onKeyDown={(e) => (e.key === 'Escape' ? clearAll() : undefined)}
       >
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1.5 sm:col-span-2 lg:col-span-3">
           <Label htmlFor={ids.url}>Page URL or host</Label>
           <Input
             id={ids.url}
@@ -131,17 +177,7 @@ export function TesterPanel({ unlocked }: { readonly unlocked: boolean }) {
             onChange={(e) => setDraft({ ...draft, url: e.target.value })}
           />
         </div>
-        <div className="flex flex-col gap-1">
-          <Label htmlFor={ids.slug}>Session slug</Label>
-          <Input
-            id={ids.slug}
-            className="font-mono"
-            placeholder="agent-1"
-            value={draft.slug}
-            onChange={(e) => setDraft({ ...draft, slug: e.target.value })}
-          />
-        </div>
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1.5 sm:col-span-2 lg:col-span-1">
           <Label htmlFor={ids.entry}>Entry</Label>
           <Input
             id={ids.entry}
@@ -151,8 +187,48 @@ export function TesterPanel({ unlocked }: { readonly unlocked: boolean }) {
             onChange={(e) => setDraft({ ...draft, entry: e.target.value })}
           />
         </div>
-        <div className="flex gap-2">
-          <Button type="submit">Test</Button>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={ids.slug}>Session slug</Label>
+          <Input
+            id={ids.slug}
+            className="font-mono"
+            placeholder="agent-1"
+            value={draft.slug}
+            onChange={(e) => setDraft({ ...draft, slug: e.target.value })}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={ids.harness}>Harness</Label>
+          <SimpleSelect
+            id={ids.harness}
+            className="w-full"
+            value={draft.harness}
+            options={HARNESS_OPTIONS}
+            onValueChange={(value) => setDraft({ ...draft, harness: value })}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={ids.declared}>Declared name</Label>
+          <Input
+            id={ids.declared}
+            className="font-mono"
+            placeholder="optional, exact"
+            maxLength={64}
+            autoComplete="off"
+            spellCheck={false}
+            aria-describedby={`${ids.declared}-hint`}
+            value={draft.declared}
+            onChange={(e) => setDraft({ ...draft, declared: e.target.value })}
+          />
+          <span id={`${ids.declared}-hint`} className="sr-only">
+            The exact name the client declares; custom harness names are matched against it,
+            case-sensitively.
+          </span>
+        </div>
+        <div className="flex items-end gap-2">
+          <Button type="submit" className="flex-1 sm:flex-none">
+            Test
+          </Button>
           {search.tester !== undefined ? (
             <Button type="button" variant="ghost" onClick={clearAll}>
               Clear
@@ -181,7 +257,9 @@ export function TesterPanel({ unlocked }: { readonly unlocked: boolean }) {
               groups: groups.data?.data ?? [],
               slug,
               entry: search.entry,
+              harness: asHarness,
             });
+            const unchecked = data.harness_lists_unchecked.length;
             return (
               <div className="flex flex-col gap-2">
                 <p className="flex flex-wrap items-center gap-2 text-sm">
@@ -190,7 +268,17 @@ export function TesterPanel({ unlocked }: { readonly unlocked: boolean }) {
                     : 'No binding allows an origin match for'}
                   <Chip className="font-mono">{new URL(url).host}</Chip>
                   {data.would_fill.length === 0 ? '— a fill on that host would be blocked.' : null}
+                  {asHarness !== undefined ? (
+                    <span className="text-muted-foreground">as {asHarness}</span>
+                  ) : null}
                 </p>
+                {unchecked > 0 ? (
+                  <Callout tone="info" title="Harness lists were not checked">
+                    {unchecked === 1 ? 'One binding has' : `${unchecked} bindings have`} a harness
+                    list on the binding or its folder. Pick a harness above to test it as an agent
+                    would be.
+                  </Callout>
+                ) : null}
                 {decisions.length === 0 ? (
                   <EmptyState
                     kind="zero-results"

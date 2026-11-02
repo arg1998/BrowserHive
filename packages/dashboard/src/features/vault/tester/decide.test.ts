@@ -25,6 +25,7 @@ const result = {
     { handle: 'slug.one', reason: 'not_authorized' },
     { handle: 'eval.one', reason: 'evaluate_required_off' },
   ],
+  harness_lists_unchecked: [],
 };
 
 describe('tester decisions', () => {
@@ -45,10 +46,51 @@ describe('tester decisions', () => {
     ]);
     const outcomes = (handle: string) =>
       decisions.find((d) => d.handle === handle)?.chain.map((g) => g.outcome);
-    expect(outcomes('work.github')).toEqual(['pass', 'pass', 'pass', 'pass']);
-    expect(outcomes('blocked.one')).toEqual(['fail', 'skipped', 'skipped', 'skipped']);
-    expect(outcomes('slug.one')).toEqual(['pass', 'fail', 'skipped', 'skipped']);
-    expect(outcomes('eval.one')).toEqual(['pass', 'pass', 'pass', 'fail']);
+    expect(outcomes('work.github')).toEqual(['pass', 'pass', 'pass', 'pass', 'pass']);
+    expect(outcomes('blocked.one')).toEqual(['fail', 'skipped', 'skipped', 'skipped', 'skipped']);
+    expect(outcomes('slug.one')).toEqual(['pass', 'fail', 'skipped', 'skipped', 'skipped']);
+    expect(outcomes('eval.one')).toEqual(['pass', 'pass', 'pass', 'pass', 'fail']);
+  });
+
+  it('adds a harness gate (D-48): a refusal names its list; unchecked lists read "not checked"', () => {
+    const withHarness = testerDecisions(
+      {
+        would_fill: ['work.github'],
+        blocked: [
+          { handle: 'slug.one', reason: 'harness_not_allowed', rule: 'group' },
+          { handle: 'eval.one', reason: 'harness_not_allowed', rule: 'binding' },
+        ],
+        harness_lists_unchecked: [],
+      },
+      { bindings, groups, slug: 'agent-1', harness: 'Codex' },
+    );
+    const gate = (handle: string) =>
+      withHarness.find((d) => d.handle === handle)?.chain.find((g) => g.gate === 'harness');
+    expect(gate('work.github')).toEqual({
+      gate: 'harness',
+      outcome: 'pass',
+      detail: 'Codex allowed',
+    });
+    expect(gate('slug.one')).toMatchObject({
+      outcome: 'fail',
+      detail: "refused by the folder's harness list",
+    });
+    expect(gate('eval.one')?.detail).toBe("refused by the binding's harness list");
+    expect(withHarness.find((d) => d.handle === 'slug.one')?.chain.map((g) => g.outcome)).toEqual([
+      'pass',
+      'pass',
+      'fail',
+      'skipped',
+      'skipped',
+    ]);
+
+    const unchecked = testerDecisions(
+      { ...result, harness_lists_unchecked: ['work.github'] },
+      { bindings, groups },
+    );
+    expect(
+      unchecked.find((d) => d.handle === 'work.github')?.chain.find((g) => g.gate === 'harness'),
+    ).toEqual({ gate: 'harness', outcome: 'skipped', detail: 'not checked: no harness given' });
   });
 
   it('narrows by entry over handle and item name', () => {

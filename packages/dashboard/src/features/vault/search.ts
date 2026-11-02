@@ -1,4 +1,4 @@
-/** @module features/vault/search — `/vault` search params: `tab`, bindings table params + `group`, tester inputs (`tester`, `slug`, `entry`) (spec 04 §12.7) */
+/** @module features/vault/search — `/vault` search params: `tab`, bindings table params + `group`, tester inputs (`tester`, `slug`, `harness`, `declared`, `entry`) (spec 04 §12.7) */
 import { z } from 'zod';
 import { queryParam, tableSearchSchema } from '@/lib/search/table.ts';
 
@@ -19,6 +19,15 @@ export const vaultSearch = tableSearchSchema(BINDING_SORT_KEYS).extend({
   folder: z.string().min(1).max(128).optional().catch(undefined),
   tester: shortText,
   slug: z.string().trim().max(64).optional().catch(undefined),
+  /** Tester: the harness slug to test as (D-48). */
+  harness: z
+    .string()
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+    .max(32)
+    .optional()
+    .catch(undefined),
+  /** Tester: the exact declared harness name. */
+  declared: z.string().trim().min(1).max(64).optional().catch(undefined),
   entry: queryParam,
 });
 /** Parsed search. */

@@ -1,4 +1,4 @@
-/** @module features/vault/tester/decide — pure shaping of the server dry-run (`POST /vault/bindings/resolve`) into per-binding decisions with a gate-by-gate reason chain */
+/** @module features/vault/tester/decide — pure shaping of the server dry-run (`POST /vault/bindings/resolve`) into per-binding decisions with a gate-by-gate reason chain (group policy → session → harness (D-48) → origin → fill gates) */
 import type {
   ResolveBindingsResponse,
   VaultBinding,
@@ -10,7 +10,12 @@ export type GateOutcome = 'pass' | 'fail' | 'skipped';
 
 /** One step of the reason chain. */
 export interface Gate {
-  readonly gate: 'group policy' | 'session authorized' | 'origin allow-list' | 'fill gates';
+  readonly gate:
+    | 'group policy'
+    | 'session authorized'
+    | 'harness'
+    | 'origin allow-list'
+    | 'fill gates';
   readonly outcome: GateOutcome;
   readonly detail: string;
 }
@@ -33,7 +38,14 @@ export const REASON_TEXT: Readonly<Record<string, string>> = {
   vault_locked: 'the backend is locked',
   vault_disabled: 'the vault is disabled for this session',
   dashboard_denied: 'an operator denied the fill',
+  harness_not_allowed: 'this harness is not on the harness list',
 };
+
+/** Which list refused, as the reason chain says it. */
+const RULE_TEXT = {
+  binding: "refused by the binding's harness list",
+  group: "refused by the folder's harness list",
+} as const;
 
 /** Normalise tester input to an absolute URL (`app.example.com` → `https://app.example.com/`); `null` when unusable. */
 export function normalizeTesterUrl(input: string): string | null {
@@ -55,8 +67,21 @@ export function testerDecisions(
     readonly groups: readonly VaultGroup[];
     readonly slug?: string | undefined;
     readonly entry?: string | undefined;
+    /** The harness tested as (its label), or `undefined` when none was given (D-48). */
+    readonly harness?: string | undefined;
   },
 ): TesterDecision[] {
+  const unchecked = new Set(result.harness_lists_unchecked);
+  /** The harness gate of a binding that got past the session gate. */
+  const harnessGate = (handle: string): Gate =>
+    unchecked.has(handle)
+      ? { gate: 'harness', outcome: 'skipped', detail: 'not checked: no harness given' }
+      : {
+          gate: 'harness',
+          outcome: 'pass',
+          detail: context.harness === undefined ? 'no harness list' : `${context.harness} allowed`,
+        };
+  const harnessSkipped: Gate = { gate: 'harness', outcome: 'skipped', detail: '—' };
   const byHandle = new Map(context.bindings.map((b) => [b.handle, b]));
   const policyOf = (handle: string) => {
     const groupId = byHandle.get(handle)?.group_id;
@@ -89,16 +114,18 @@ export function testerDecisions(
           detail: policyOf(handle) ?? 'no group policy',
         },
         slugGate('pass'),
+        harnessGate(handle),
         { gate: 'origin allow-list' as const, outcome: 'pass' as const, detail: 'origin allowed' },
         { gate: 'fill gates' as const, outcome: 'pass' as const, detail: 'would fill' },
       ],
     })),
-    ...result.blocked.map(({ handle, reason }) => {
+    ...result.blocked.map(({ handle, reason, rule }) => {
       const rejectAll = reason === 'not_authorized' && policyOf(handle) === 'reject_all';
       const chain: Gate[] = rejectAll
         ? [
             { gate: 'group policy', outcome: 'fail', detail: 'reject_all' },
             slugGate('skipped'),
+            harnessSkipped,
             { gate: 'origin allow-list', outcome: 'skipped', detail: '—' },
             { gate: 'fill gates', outcome: 'skipped', detail: '—' },
           ]
@@ -110,10 +137,11 @@ export function testerDecisions(
                 detail: policyOf(handle) ?? 'no group policy',
               },
               slugGate('fail'),
+              harnessSkipped,
               { gate: 'origin allow-list', outcome: 'skipped', detail: '—' },
               { gate: 'fill gates', outcome: 'skipped', detail: '—' },
             ]
-          : reason === 'origin_mismatch'
+          : reason === 'harness_not_allowed'
             ? [
                 {
                   gate: 'group policy',
@@ -122,22 +150,40 @@ export function testerDecisions(
                 },
                 slugGate('pass'),
                 {
-                  gate: 'origin allow-list',
+                  gate: 'harness',
                   outcome: 'fail',
-                  detail: REASON_TEXT['origin_mismatch'] ?? reason,
+                  detail: rule === undefined ? (REASON_TEXT[reason] ?? reason) : RULE_TEXT[rule],
                 },
+                { gate: 'origin allow-list', outcome: 'skipped', detail: '—' },
                 { gate: 'fill gates', outcome: 'skipped', detail: '—' },
               ]
-            : [
-                {
-                  gate: 'group policy',
-                  outcome: 'pass',
-                  detail: policyOf(handle) ?? 'no group policy',
-                },
-                slugGate('pass'),
-                { gate: 'origin allow-list', outcome: 'pass', detail: 'origin allowed' },
-                { gate: 'fill gates', outcome: 'fail', detail: REASON_TEXT[reason] ?? reason },
-              ];
+            : reason === 'origin_mismatch'
+              ? [
+                  {
+                    gate: 'group policy',
+                    outcome: 'pass',
+                    detail: policyOf(handle) ?? 'no group policy',
+                  },
+                  slugGate('pass'),
+                  harnessGate(handle),
+                  {
+                    gate: 'origin allow-list',
+                    outcome: 'fail',
+                    detail: REASON_TEXT['origin_mismatch'] ?? reason,
+                  },
+                  { gate: 'fill gates', outcome: 'skipped', detail: '—' },
+                ]
+              : [
+                  {
+                    gate: 'group policy',
+                    outcome: 'pass',
+                    detail: policyOf(handle) ?? 'no group policy',
+                  },
+                  slugGate('pass'),
+                  harnessGate(handle),
+                  { gate: 'origin allow-list', outcome: 'pass', detail: 'origin allowed' },
+                  { gate: 'fill gates', outcome: 'fail', detail: REASON_TEXT[reason] ?? reason },
+                ];
       return { handle, decision: 'blocked' as const, reason, chain };
     }),
   ];
