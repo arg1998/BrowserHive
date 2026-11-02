@@ -174,29 +174,60 @@ Requests whose `Host` header names something other than the bind address, `local
 
 BrowserHive notes which agent is on the other end of each MCP connection (Claude Code, Codex, Cursor, OpenCode, Gemini CLI and others), plus a model and a workspace label when the client declares them. The dashboard shows it on each session, counts sessions and tool calls per harness on the Overview, lets you filter the sessions list by harness, and lists live and recent connections on the System page.
 
-All of this is reported by the client or by your configuration. BrowserHive can't verify it, so it is shown for information and never used to allow or refuse anything.
+All of this is reported by the client or by your configuration. BrowserHive can't verify it, so it is shown for information. The one exception is optional: a [vault binding or folder can be limited to some harnesses](vault.md#harness-restrictions). That only ever takes access away and guards against mistakes, not against a client that lies about its name.
 
 ### With nothing configured
 
 Many agents are recognised on their own. Anything BrowserHive can't place is shown as **Unknown**, which is counted and filterable like any other harness.
 
-| Harness | stdio | Streamable HTTP | How we know |
-|---|---|---|---|
-| Claude Code | sets `CLAUDECODE` for the servers it starts | `clientInfo.name` `claude-code`; User-Agent `claude-code/<version>` | seen against BrowserHive with Claude Code 2.1.282 |
-| OpenCode | `clientInfo.name` `opencode` | the same, and User-Agent `opencode/<version>` | seen against BrowserHive with OpenCode 1.18.31 |
-| Gemini CLI | sets `GEMINI_CLI=1` for the servers it starts | `clientInfo.name` `gemini-cli-mcp-client` | source: `google-gemini/gemini-cli`, `packages/core/src/tools/mcp-client.ts` |
-| Codex | `clientInfo.name` `codex-mcp-client` | the same, and User-Agent `codex-mcp-client/<version>` | source: `openai/codex`, `codex-rs/codex-mcp/src/rmcp_client.rs` and `codex-rs/rmcp-client/src/utils.rs` |
-| VS Code | `clientInfo.name` `Visual Studio Code` | the same | source: `microsoft/vscode`, `src/vs/workbench/contrib/mcp/common/mcpServerRequestHandler.ts` |
-| Cline | `clientInfo.name` `Cline` | the same | source: `cline/cline`, `apps/vscode/src/services/mcp/McpHub.ts` |
-| Continue | `clientInfo.name` `continue-client` | the same | source: `continuedev/continue`, `core/context/mcp/MCPConnection.ts` |
-| Zed | `clientInfo.name` `Zed` | the same | source: `zed-industries/zed`, `crates/context_server/src/context_server.rs` |
-| Cursor | `clientInfo.name` `cursor-vscode` | the same, and User-Agent `Cursor/<version>` | captured by [apify/mcp-client-capabilities](https://github.com/apify/mcp-client-capabilities) |
+Each row says how the name was established: **verified live** means we watched the client connect to BrowserHive; **from source** cites the line in the client's code that sets the name; **capture** cites a published recording of what the client sends on the wire.
 
-Checked on 2026-09-24; harnesses change their names now and then, so a new release may show up as its own name or as Unknown until this table catches up. A client that sends the SDK's default name (`mcp`, `mcp-client`, `example-client`) is Unknown. Version numbers are shown as sent; some clients always send `1.0.0`.
+| Harness | Slug | stdio | Streamable HTTP | How we know |
+|---|---|---|---|---|
+| Claude Code | `claude-code` | sets `CLAUDECODE` for the servers it starts | `clientInfo.name` `claude-code`; User-Agent `claude-code/<version>` | verified live with Claude Code 2.1.282 |
+| OpenCode | `opencode` | `clientInfo.name` `opencode` | the same, and User-Agent `opencode/<version>` | verified live with OpenCode 1.18.31 |
+| Gemini CLI | `gemini-cli` | sets `GEMINI_CLI=1` for the servers it starts | `clientInfo.name` `gemini-cli-mcp-client` | from source: `google-gemini/gemini-cli`, `packages/core/src/tools/mcp-client.ts` |
+| Codex | `codex` | `clientInfo.name` `codex-mcp-client` | the same, and User-Agent `codex-mcp-client/<version>`; the Codex app sends `openai-mcp (Codex)` | from source: `openai/codex`, `codex-rs/codex-mcp/src/rmcp_client.rs` and `codex-rs/rmcp-client/src/utils.rs`; app: capture ([MCPJam host templates](https://github.com/MCPJam/inspector)) |
+| VS Code | `vscode` | `clientInfo.name` `Visual Studio Code` | the same | from source: `microsoft/vscode`, `src/vs/workbench/contrib/mcp/common/mcpServerRequestHandler.ts` |
+| Cline | `cline` | `clientInfo.name` `Cline` (`@cline/…` from the Cline SDK) | the same | from source: `cline/cline`, `apps/vscode/src/services/mcp/McpHub.ts` |
+| Continue | `continue` | `clientInfo.name` `continue-client` | the same | from source: `continuedev/continue`, `core/context/mcp/MCPConnection.ts` |
+| Zed | `zed` | `clientInfo.name` `Zed` | the same | from source: `zed-industries/zed`, `crates/context_server/src/context_server.rs` |
+| Cursor | `cursor` | `clientInfo.name` `cursor-vscode` | the same, and User-Agent `Cursor/<version>` | capture: [apify/mcp-client-capabilities](https://github.com/apify/mcp-client-capabilities) |
+| Cursor CLI | `cursor-cli` | sends `Cursor`, so it shows as **Cursor** | the same | capture ([plur-ai/plur](https://github.com/plur-ai/plur) fixtures, 2026-10); declare `cursor-cli` to tell them apart |
+| Claude Desktop | `claude-desktop` | `clientInfo.name` `claude-ai` (claude.ai connectors send the same) | the same | capture: apify/mcp-client-capabilities, MCPJam |
+| GitHub Copilot CLI | `copilot-cli` | `clientInfo.name` `copilot-cli` (older: `github-copilot-developer`) | the same | capture: [railwayapp/cli#1294](https://github.com/railwayapp/cli/pull/1294) telemetry, apify |
+| Roo Code | `roo-code` | `clientInfo.name` `Roo Code` | the same | from source: `RooCodeInc/Roo-Code`, `src/services/mcp/McpHub.ts` |
+| Kilo Code | `kilo-code` | `clientInfo.name` `kilo` (older extension: `Kilo-Code`) | the same | from source: `Kilo-Org/kilocode`, `packages/opencode/src/mcp/index.ts` |
+| Windsurf | `windsurf` | `clientInfo.name` `Windsurf` or `windsurf-client` | the same | capture: apify |
+| Goose | `goose` | `clientInfo.name` `goose-cli` / `goose-desktop` | the same, and User-Agent `goose/<version>` | from source: `block/goose`, `crates/goose/src/agents/extension_manager/mod.rs` |
+| LM Studio | `lm-studio` | `clientInfo.name` `lmstudio-mcp-server-session` | the same | capture: [gridctl](https://github.com/gridctl/gridctl) `pkg/mcp/clientid.go` |
+| JetBrains | `jetbrains` | `clientInfo.name` `JetBrains-…` (seen from the GitHub Copilot plugin in JetBrains IDEs) | the same | capture: apify |
+| Junie | `junie` | `clientInfo.name` `junie-client` | the same | capture: railwayapp/cli#1294 |
+| n8n | `n8n` | `clientInfo.name` `@n8n/…` (the node type) | the same | from source: `n8n-io/n8n`, `packages/@n8n/nodes-langchain/nodes/mcp/shared/utils.ts` |
+| Raycast | `raycast` | `clientInfo.name` `com.raycast.macos` | the same | capture: apify |
+| Crush | `crush` | `clientInfo.name` `crush` | the same | from source: `charmbracelet/crush`, `internal/agent/tools/mcp/init.go` |
+| Amp | `amp` | `clientInfo.name` `amp-mcp-client` | the same | capture: apify, railwayapp/cli#1294 |
+| Kiro | `kiro` | `clientInfo.name` starting with `kiro` | the same | capture: railwayapp/cli#959 (prefix only) |
+| Amazon Q Developer CLI | `amazon-q` | `clientInfo.name` `Q DEV CLI` | the same | from source: `aws/amazon-q-developer-cli`, `crates/chat-cli/src/mcp_client/client.rs` |
+| Warp | `warp` | `clientInfo.name` `dev.warp.Warp-Stable` (and other `dev.warp.` builds) | the same | from source: `warpdotdev/warp`, `crates/mcp/src/runtime.rs` |
+| Qwen Code | `qwen-code` | `clientInfo.name` `qwen-cli-mcp-client-<server>` | the same | from source: `QwenLM/qwen-code`, `packages/core/src/tools/mcp-client.ts` |
+| Factory Droid | `factory-droid` | `clientInfo.name` `factory-cli` | the same | capture: apify, railwayapp/cli#1294 |
+| Augment | `augment` | `clientInfo.name` `augment-mcp-client` | the same | capture: railwayapp/cli#1294 |
+| Antigravity | `antigravity` | `clientInfo.name` `antigravity-client` | the same | capture: apify, railwayapp/cli#959 |
+| Grok CLI | `grok-cli` | `clientInfo.name` `grok-shell-<server>` | the same | capture: railwayapp/cli#1294 |
+| Kimi Code | `kimi-code` | `clientInfo.name` `kimi-code` | the same | capture: railwayapp/cli#1294 |
+| ChatGPT | `chatgpt` | — (connects from OpenAI's cloud) | `clientInfo.name` `openai-mcp` | capture: MCPJam host templates |
+| Letta Code | `letta-code` | `clientInfo.name` `letta-code` | the same | from source: `letta-ai/letta-code`, `src/mcp-client.ts` |
+| Cherry Studio | `cherry-studio` | `clientInfo.name` `Cherry Studio` | the same | from source: `CherryHQ/cherry-studio`, `src/main/ai/mcp/servers/factory.ts` |
+| LibreChat | `librechat` | `clientInfo.name` `@librechat/api-client` | the same | from source: `danny-avila/LibreChat`, `packages/api/src/mcp/connection.ts` |
+| Jan | `jan` | `clientInfo.name` `Jan` | the same | from source: `janhq/jan`, `src-tauri/src/core/mcp/helpers.rs` |
+| MCP Inspector | `mcp-inspector` | `clientInfo.name` `inspector-cli` | `mcp-inspector` | from source: `modelcontextprotocol/inspector`, `clients/web/src/hooks/useConnectionLifecycle.ts` |
+
+Checked on 2026-11-02; harnesses change their names now and then, so a new release may show up as its own name or as Unknown until this table catches up. A client that sends an SDK's default name (`mcp`, `mcp-client`, `example-client`, `cli`, `rmcp`, `acp`) is Unknown: today that includes Mistral Vibe, OpenHands and Kimi CLI, which you can name yourself as below. Version numbers are shown as sent; some clients always send `1.0.0`.
 
 ### Naming your agent
 
-One setting names any agent, and wins over everything detected. Use a known name (`claude-code`, `codex`, `cursor`, `opencode`, `gemini-cli`, `vscode`, …) or any label of your own; labels are lower-cased to letters, digits and dashes.
+One setting names any agent, and wins over everything detected. Use a known name (`claude-code`, `codex`, `cursor`, `opencode`, `gemini-cli`, `vscode`, …) or any label of your own; labels are lower-cased to letters, digits and dashes. The name exactly as you sent it is kept too, as the session's *declared* name, which is what a [custom name in a vault harness list](vault.md#harness-restrictions) is matched against.
 
 | Where | Harness | Model | Workspace |
 |---|---|---|---|
