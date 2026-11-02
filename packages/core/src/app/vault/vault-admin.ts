@@ -1,6 +1,11 @@
 /** @module app/vault/vault-admin — operator-side policy administration: bindings and group policies CRUD (optimistic version), tester, export/import. */
 
 import {
+  type HarnessSubject,
+  normalizeHarness,
+  UNKNOWN_HARNESS,
+} from '@browserhive/contracts/harness';
+import {
   isPrincipalAuthorized,
   isSlugAuthorized,
   isValidHandle,
@@ -8,14 +13,14 @@ import {
   type VaultBindingInput,
 } from '../../domain/vault/bindings.ts';
 import { decideFill } from '../../domain/vault/decide-fill.ts';
-import { NO_HARNESS_RULES } from '../../domain/vault/harness-rule.ts';
+import { checkHarnessRules, type HarnessRuleSource } from '../../domain/vault/harness-rule.ts';
 import {
   groupIdOf,
   mergePolicy,
   PolicySet,
   type VaultGroupPolicyInput,
 } from '../../domain/vault/policies.ts';
-import type { ResolvedEntry } from '../../domain/vault/types.ts';
+import { manualEntry } from '../../domain/vault/resolve.ts';
 import { AppError } from '../../kernel/errors/app-error.ts';
 import type { Clock } from '../../ports/clock.ts';
 import type { Page, VaultBindingListQuery } from '../../ports/persistence/queries.ts';
@@ -43,12 +48,25 @@ export interface TesterInput {
   readonly url: string;
   readonly sessionSlug?: string;
   readonly principal?: string;
+  /** Harness slug of the session to stand in for (D-48). */
+  readonly harness?: string;
+  /** Its exact declared name; alone, it is normalised into `harness`. */
+  readonly harnessDeclared?: string;
+}
+
+/** One binding the dry run would refuse; `rule` names the harness list that refused. */
+export interface TesterBlocked {
+  readonly handle: string;
+  readonly reason: string;
+  readonly rule?: HarnessRuleSource;
 }
 
 /** `POST /vault/bindings/resolve` result. */
 export interface TesterResult {
   readonly wouldFill: readonly string[];
-  readonly blocked: readonly { readonly handle: string; readonly reason: string }[];
+  readonly blocked: readonly TesterBlocked[];
+  /** Bindings with a harness list that was not checked because no harness was given. */
+  readonly harnessListsUnchecked: readonly string[];
 }
 
 /** Bindings / policies administration. Authorization (`vault:write`) is the HTTP layer's job. */
@@ -133,45 +151,45 @@ export class VaultAdmin {
   }
 
   /**
-   * Dry-run of the fill gates for every binding against `url` (the dashboard tester). The subject
-   * parts are checked only when supplied; the evaluate gate is not applied.
+   * Dry run of the fill gates for every binding against `url` (the dashboard tester), in the
+   * broker's order: group `reject_all` → principal → slug → harness (D-48) → origin. The subject
+   * parts are checked only when supplied; the evaluate gate is not applied. The harness check is the
+   * broker's own `checkHarnessRules` over the same entry (`manualEntry`), so the two always agree;
+   * without a harness, bindings whose lists would have applied are reported as unchecked.
    */
   async tester(input: TesterInput): Promise<TesterResult> {
     const now = this.deps.clock.now();
     const policies = new PolicySet(await this.deps.policies.list());
     const bindings = await this.deps.bindings.list({ limit: 500 });
+    const subject = testerHarness(input);
     const wouldFill: string[] = [];
-    const blocked: { handle: string; reason: string }[] = [];
+    const blocked: TesterBlocked[] = [];
+    const unchecked: string[] = [];
     for (const b of bindings.items) {
-      if (policies.get(b.groupId, now).accessMode === 'reject_all') {
+      const policy = policies.get(b.groupId, now);
+      if (policy.accessMode === 'reject_all') {
         blocked.push({ handle: b.handle, reason: 'not_authorized' });
         continue;
       }
-      const entry: ResolvedEntry = {
-        handle: b.handle,
-        itemName: b.itemName,
-        itemId: b.itemId,
-        groupId: b.groupId,
-        origins: b.allowedOrigins,
-        rule: {
-          allowAllSessions: b.allowAllSessions,
-          slugGlobs: b.authorizedSessionSlugs,
-          principals: b.authorizedPrincipals,
-        },
-        // The tester has no harness input (D-48): `checkSubject: false` skips gate 2c.
-        harnessRules: NO_HARNESS_RULES,
-        redactUsername: b.redactUsername,
-        requireNoEvaluate: b.requireNoEvaluate,
-        dashboardConfirm: b.dashboardConfirm,
-        source: 'manual',
-      };
-      const slugOk =
-        input.sessionSlug === undefined || isSlugAuthorized(entry.rule, input.sessionSlug);
+      const entry = manualEntry(b, policy);
       const principalOk =
         input.principal === undefined || isPrincipalAuthorized(entry.rule, input.principal);
-      if (!slugOk || !principalOk) {
+      const slugOk =
+        input.sessionSlug === undefined || isSlugAuthorized(entry.rule, input.sessionSlug);
+      if (!principalOk || !slugOk) {
         blocked.push({ handle: b.handle, reason: 'not_authorized' });
         continue;
+      }
+      if (subject === null) {
+        if (entry.harnessRules.binding !== null || entry.harnessRules.group !== null) {
+          unchecked.push(b.handle);
+        }
+      } else {
+        const verdict = checkHarnessRules(entry.harnessRules, subject);
+        if (!verdict.allowed) {
+          blocked.push({ handle: b.handle, reason: 'harness_not_allowed', rule: verdict.rule });
+          continue;
+        }
       }
       const decision = decideFill({
         session: {
@@ -179,18 +197,31 @@ export class VaultAdmin {
           slug: input.sessionSlug ?? '',
           disableEvaluate: true,
           vaultEnabled: true,
-          harness: null,
-          harnessDeclared: null,
+          harness: subject?.harness ?? null,
+          harnessDeclared: subject?.declared ?? null,
         },
         principal: input.principal ?? '',
         allowEvaluate: false,
         pageUrl: input.url,
         entry,
+        // Principal, slug and harness were checked above, each only when supplied.
         checkSubject: false,
       });
       if (decision.kind === 'proceed') wouldFill.push(b.handle);
       else blocked.push({ handle: b.handle, reason: decision.reason });
     }
-    return { wouldFill, blocked };
+    return { wouldFill, blocked, harnessListsUnchecked: unchecked };
   }
+}
+
+/**
+ * The launch identity the tester stands in for, or `null` when none was given. A declared name
+ * alone is normalised into its slug exactly as a declared signal is when a session launches.
+ */
+export function testerHarness(input: TesterInput): HarnessSubject | null {
+  if (input.harness === undefined && input.harnessDeclared === undefined) return null;
+  return {
+    harness: input.harness ?? normalizeHarness(input.harnessDeclared) ?? UNKNOWN_HARNESS,
+    declared: input.harnessDeclared ?? null,
+  };
 }

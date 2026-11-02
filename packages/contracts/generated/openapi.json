@@ -6987,6 +6987,13 @@
                 },
                 "reason": {
                   "type": "string"
+                },
+                "rule": {
+                  "type": "string",
+                  "enum": [
+                    "binding",
+                    "group"
+                  ]
                 }
               },
               "required": [
@@ -6994,11 +7001,19 @@
                 "reason"
               ]
             }
+          },
+          "harness_lists_unchecked": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+            }
           }
         },
         "required": [
           "would_fill",
-          "blocked"
+          "blocked",
+          "harness_lists_unchecked"
         ]
       },
       "ResolveBindingsRequest": {
@@ -7017,6 +7032,17 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 128
+          },
+          "harness": {
+            "type": "string",
+            "maxLength": 32,
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "harness_declared": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[^\\u0000-\\u001f\\u007f]*$"
           }
         },
         "required": [
@@ -28496,7 +28522,7 @@
         "tags": [
           "vault"
         ],
-        "summary": "Dry-run the fill gates of every binding against a URL.",
+        "summary": "Dry-run the fill gates of every binding against a URL, optionally as a given principal, slug and harness (D-48).",
         "security": [
           {
             "cookieAuth": []
@@ -28518,7 +28544,7 @@
         },
         "responses": {
           "200": {
-            "description": "Dry-run the fill gates of every binding against a URL.",
+            "description": "Dry-run the fill gates of every binding against a URL, optionally as a given principal, slug and harness (D-48).",
             "content": {
               "application/json": {
                 "schema": {

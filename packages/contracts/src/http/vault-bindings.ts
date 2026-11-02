@@ -1,5 +1,6 @@
 /** @module contracts/http/vault-bindings — bindings CRUD, origin resolver, access log, export/import (spec 03 §4.5) */
 import { z } from 'zod';
+import { HARNESS_SLUG_MAX } from '../harness/index.ts';
 import { EventId, SessionId } from '../ids/index.ts';
 import {
   Count,
@@ -12,7 +13,7 @@ import {
   windowQuery,
 } from './common.ts';
 import { HarnessSlug } from './sessions.ts';
-import { VaultAccessMode, VaultGroupPolicy, VaultHarnessList } from './vault.ts';
+import { VaultAccessMode, VaultGroupPolicy, VaultHarnessList, VaultHarnessName } from './vault.ts';
 
 /** Binding handle grammar: lowercase slug-ish token derived from `<group>/<item>`. */
 export const VAULT_HANDLE_RE = /^[a-z0-9][a-z0-9._-]{0,127}$/;
@@ -95,11 +96,21 @@ export const DeleteVaultBindingResponse = z.object({ ok: z.literal(true), remove
 /** `DELETE /vault/bindings/{handle}` 200 body. */
 export type DeleteVaultBindingResponse = z.infer<typeof DeleteVaultBindingResponse>;
 
-/** `POST /vault/bindings/resolve` body — server-side origin tester. */
+/**
+ * `POST /vault/bindings/resolve` body — server-side dry run of the fill gates. `harness` is a
+ * harness slug (`unknown` included) and `harness_declared` the exact declared name; a declared name
+ * alone is normalised into the slug, as a declared signal would be (D-48).
+ */
 export const ResolveBindingsRequest = z.strictObject({
   url: z.url(),
   session_slug: z.string().min(1).max(64).optional(),
   principal: z.string().min(1).max(128).optional(),
+  harness: z
+    .string()
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'a harness slug: lower-case letters, digits and dashes')
+    .max(HARNESS_SLUG_MAX)
+    .optional(),
+  harness_declared: VaultHarnessName.optional(),
 });
 /** `POST /vault/bindings/resolve` body. */
 export type ResolveBindingsRequest = z.infer<typeof ResolveBindingsRequest>;
@@ -107,7 +118,19 @@ export type ResolveBindingsRequest = z.infer<typeof ResolveBindingsRequest>;
 /** `POST /vault/bindings/resolve` 200 body. */
 export const ResolveBindingsResponse = z.object({
   would_fill: z.array(VaultHandle),
-  blocked: z.array(z.object({ handle: VaultHandle, reason: z.string() })),
+  blocked: z.array(
+    z.object({
+      handle: VaultHandle,
+      reason: z.string(),
+      /** With `reason: 'harness_not_allowed'`: which list refused (D-48). */
+      rule: z.enum(['binding', 'group']).optional(),
+    }),
+  ),
+  /**
+   * Bindings whose binding or group harness list would have applied but was not checked, because no
+   * harness was given (D-48). Empty when a harness was given.
+   */
+  harness_lists_unchecked: z.array(VaultHandle),
 });
 /** `POST /vault/bindings/resolve` 200 body. */
 export type ResolveBindingsResponse = z.infer<typeof ResolveBindingsResponse>;

@@ -82,7 +82,8 @@ export const VAULT_BINDING_ROUTES = [
   defineRoute({
     operationId: 'resolveVaultBindings',
     tags,
-    summary: 'Dry-run the fill gates of every binding against a URL.',
+    summary:
+      'Dry-run the fill gates of every binding against a URL, optionally as a given principal, slug and harness (D-48).',
     request: { body: ResolveBindingsRequest },
     responses: { 200: ResolveBindingsResponse },
     errors,
@@ -92,10 +93,19 @@ export const VAULT_BINDING_ROUTES = [
         url: input.body.url,
         ...(input.body.session_slug !== undefined && { sessionSlug: input.body.session_slug }),
         ...(input.body.principal !== undefined && { principal: input.body.principal }),
+        ...(input.body.harness !== undefined && { harness: input.body.harness }),
+        ...(input.body.harness_declared !== undefined && {
+          harnessDeclared: input.body.harness_declared,
+        }),
       });
       return reply(200, {
         would_fill: [...result.wouldFill],
-        blocked: result.blocked.map((b) => ({ handle: b.handle, reason: b.reason })),
+        blocked: result.blocked.map((b) => ({
+          handle: b.handle,
+          reason: b.reason,
+          ...(b.rule !== undefined && { rule: b.rule }),
+        })),
+        harness_lists_unchecked: [...result.harnessListsUnchecked],
       });
     },
   }),

@@ -326,6 +326,7 @@ describe('VaultService.admin — bindings CRUD with optimistic versions', () => 
         { handle: 'li', reason: 'origin_mismatch' },
         { handle: 'rej', reason: 'not_authorized' },
       ],
+      harnessListsUnchecked: [],
     });
     expect(
       (await h.service.admin.tester({ url: 'https://www.github.com/login', sessionSlug: 'other' }))

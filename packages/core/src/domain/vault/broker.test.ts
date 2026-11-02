@@ -8,7 +8,11 @@ import {
   createVaultHarness,
   FakePage,
   FakeTracing,
+  HARNESS_GATE_CASES,
+  HARNESS_GATE_FIXTURE,
+  type HarnessGateExpectation,
   SECRET,
+  seedHarnessCase,
   USER,
   type VaultHarness,
 } from './test-support.ts';
@@ -940,4 +944,36 @@ describe('VaultBroker — harness lists (D-48)', () => {
       expect(text).not.toContain(name);
     }
   });
+});
+
+describe('VaultBroker — the shared harness gate cases (the tester runs the same table, D-48)', () => {
+  for (const c of HARNESS_GATE_CASES) {
+    it(c.name, async () => {
+      await seedHarnessCase(h, c);
+      const fx = HARNESS_GATE_FIXTURE;
+      const result = await h.broker().fill(
+        { entryName: fx.handle, usernameSelector: '#u', passwordSelector: '#p' },
+        h.ctx(new FakePage(fx.pageUrl), {
+          principal: c.principal,
+          slug: c.slug,
+          harness: c.harness,
+          harnessDeclared: c.declared,
+        }),
+      );
+      const row = h.repos.audit.rows.at(-1);
+      const rule = (row?.details as { rule?: 'binding' | 'group' } | undefined)?.rule;
+      const actual: HarnessGateExpectation =
+        result.status === 'success'
+          ? { verdict: 'fill', reason: null }
+          : {
+              verdict: 'refused',
+              reason: row?.reason as HarnessGateExpectation['reason'],
+              ...(rule !== undefined && { rule }),
+            };
+      expect(actual).toEqual(c.expected);
+      expect(h.repos.audit.rows).toHaveLength(1);
+      // The agent never sees which gate refused.
+      if (result.status !== 'success') expect(result.reason).toBe('not_authorized');
+    });
+  }
 });

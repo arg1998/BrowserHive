@@ -4,6 +4,8 @@ import { describe, expect, it } from 'bun:test';
 import {
   PutGroupPolicyRequest,
   PutVaultBindingRequest,
+  ResolveBindingsRequest,
+  ResolveBindingsResponse,
   VaultBinding,
   VaultExportDocument,
   VaultGroupPolicy,
@@ -88,5 +90,28 @@ describe('harnesses on vault rules (D-48)', () => {
         now: 2,
       }).data,
     ).toHaveLength(2);
+  });
+
+  it('lets the tester stand in for a harness, and reports the refusing rule (additive)', () => {
+    const url = 'https://github.com/login';
+    expect(ResolveBindingsRequest.parse({ url, harness: 'unknown' }).harness).toBe('unknown');
+    expect(
+      ResolveBindingsRequest.parse({
+        url,
+        harness: 'nightly-scraper',
+        harness_declared: 'Nightly Scraper',
+      }),
+    ).toMatchObject({ harness_declared: 'Nightly Scraper' });
+    for (const harness of ['Claude Code', 'claude_code', '-x', 'x'.repeat(33)]) {
+      expect(ResolveBindingsRequest.safeParse({ url, harness }).success).toBe(false);
+    }
+    expect(ResolveBindingsRequest.safeParse({ url, harness_declared: '' }).success).toBe(false);
+    expect(
+      ResolveBindingsResponse.parse({
+        would_fill: [],
+        blocked: [{ handle: 'work.github', reason: 'harness_not_allowed', rule: 'group' }],
+        harness_lists_unchecked: ['work.github'],
+      }).blocked[0]?.rule,
+    ).toBe('group');
   });
 });

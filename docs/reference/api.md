@@ -113,7 +113,7 @@ Summaries come from `packages/contracts/generated/openapi.json`.
 | GET | `/api/v1/vault/bindings` | `listVaultBindings` | `vault:read` | cookie, bearer | Stored bindings, ordered by handle. |
 | PUT | `/api/v1/vault/bindings/{handle}` | `putVaultBinding` | `vault:write` | cookie, bearer | Create (item_name required) or update a binding (`If-Match: <version>`). |
 | DELETE | `/api/v1/vault/bindings/{handle}` | `deleteVaultBinding` | `vault:write` | cookie, bearer | Remove a binding. |
-| POST | `/api/v1/vault/bindings/resolve` | `resolveVaultBindings` | `vault:read` | cookie, bearer | Dry-run the fill gates of every binding against a URL. |
+| POST | `/api/v1/vault/bindings/resolve` | `resolveVaultBindings` | `vault:read` | cookie, bearer | Dry-run the fill gates of every binding against a URL, optionally as a given principal, slug and harness (D-48). |
 | GET | `/api/v1/vault/harnesses` | `listVaultHarnesses` | `vault:read` | cookie, bearer | Harnesses and declared names seen on this daemon in the last 30 days, for the harness lists of bindings and group policies (D-48). |
 | GET | `/api/v1/vault/log` | `listVaultLog` | `vault:read` | cookie, bearer | Vault access audit log. |
 | GET | `/api/v1/vault/export` | `exportVault` | `vault:read` | cookie, bearer | Export bindings and policies as the v3 document. |

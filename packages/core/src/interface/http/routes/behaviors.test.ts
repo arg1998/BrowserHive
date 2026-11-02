@@ -346,6 +346,27 @@ describe('operator requests and vault', () => {
     });
     expect(policy.status).toBe(400);
 
+    // The tester (D-48): a harness is checked like the broker does; a bad slug is a field-level 400.
+    const tested = await kit.request('POST', '/api/v1/vault/bindings/resolve', {
+      cookie,
+      body: { url: 'https://github.com/login', harness: 'opencode' },
+    });
+    expect(tested.status).toBe(200);
+    expect(await tested.json()).toMatchObject({ harness_lists_unchecked: [] });
+    const unchecked = await kit.request('POST', '/api/v1/vault/bindings/resolve', {
+      cookie,
+      body: { url: 'https://github.com/login' },
+    });
+    expect(
+      ((await unchecked.json()) as { harness_lists_unchecked: string[] }).harness_lists_unchecked,
+    ).toEqual([]);
+    const badSlug = await kit.request('POST', '/api/v1/vault/bindings/resolve', {
+      cookie,
+      body: { url: 'https://github.com/login', harness: 'Not A Slug' },
+    });
+    expect(badSlug.status).toBe(400);
+    expect(JSON.stringify(ProblemDetails.parse(await badSlug.json()).details)).toContain('harness');
+
     const seen = await kit.request('GET', '/api/v1/vault/harnesses', { cookie });
     expect(seen.status).toBe(200);
     const picker = (await seen.json()) as {
