@@ -645,7 +645,11 @@ describe('documented == recorded', () => {
     await sampler.sample();
     await telemetry.forceFlush();
     received = receivedMetrics(bodies);
-  });
+    // Two real process-table reads. On Windows each one is a PowerShell `Get-CimInstance
+    // Win32_Process` that takes about 2.3 s on a CI runner (the process-tree reader test measures
+    // one), so the whole setup needs more than bun's default 5 s there; elsewhere it takes well
+    // under a second.
+  }, 30_000);
 
   afterAll(async () => {
     for (const stop of stops.reverse()) await stop();
