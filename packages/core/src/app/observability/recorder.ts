@@ -1,4 +1,4 @@
-/** @module app/observability/recorder — the event → DB projection: subscribes to the bus and enqueues typed rows through the WriteQueue; applies D-20 (result policy, 16 KiB cap, URL sanitizing, redaction); never throws. */
+/** @module app/observability/recorder — the event → DB projection: subscribes to the bus and enqueues typed rows through the WriteQueue; applies D-20 (result policy, 16 KiB cap, URL sanitizing, redaction) and D-47 (64 KiB cap on stored arguments, after redaction); never throws. */
 
 import type { RecordToolResults } from '@browserhive/contracts/enums';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
@@ -25,6 +25,7 @@ import {
   type PublishedEvent,
   sessionIdOf,
 } from '../events/catalog.ts';
+import { capToolArgs } from './tool-args-policy.ts';
 import { applyResultPolicy } from './tool-result-policy.ts';
 
 /** The `ServerConfig` keys the recorder consumes. */
@@ -194,7 +195,8 @@ export class Recorder {
   }
 
   private toolCallRecord(o: DomainEvents['tool.called']['observation']): ToolCallRecord {
-    const args = toJsonObject(this.deps.redactor.redactValue(o.args)) ?? {};
+    // Redaction first, then the cap (10 §9, D-47): the cut never sees an unredacted value.
+    const args = capToolArgs(toJsonObject(this.deps.redactor.redactValue(o.args)) ?? {});
     return {
       eventId: o.eventId,
       sessionId: o.sessionId,

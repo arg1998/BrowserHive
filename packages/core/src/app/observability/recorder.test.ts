@@ -1,5 +1,6 @@
 /** @module app/observability/recorder.test — event → DB projection through in-memory repos (D-20). */
 import { describe, expect, it } from 'bun:test';
+import { TOOL_ARGS_CAP_BYTES, TruncatedToolArgs } from '@browserhive/contracts/http';
 import { EventId, SessionId, TabId } from '@browserhive/contracts/ids';
 import { CollectingLogger } from '../../../test/helpers/collecting-logger.ts';
 import { FakeClock } from '../../../test/helpers/fake-clock.ts';
@@ -10,9 +11,17 @@ import type { DomainEvents, ToolObservation } from '../events/catalog.ts';
 import { toSessionPatch, toSessionRecord, toSessionSummary } from '../sessions/metadata.ts';
 import { testSession } from '../sessions/test-support.ts';
 import { Recorder } from './recorder.ts';
+import { capToolArgs } from './tool-args-policy.ts';
 import { RESULT_TEXT_CAP_BYTES } from './tool-result-policy.ts';
 
 const T0 = 1_700_000_000_000;
+const MIB = 1024 * 1024;
+
+function registryWith(secret: string): SecretRegistry {
+  const registry = new SecretRegistry({ now: () => T0 });
+  registry.add(secret);
+  return registry;
+}
 const SID = SessionId.parse('shop-00000001');
 const EID = EventId.parse('e-00000000000000000000000001');
 
@@ -142,6 +151,49 @@ describe('Recorder projection', () => {
     );
     expect(repos.events.rows[0]?.actorKind).toBe('agent');
     expect(JSON.stringify(repos.events.rows[0]?.payload)).not.toContain('hunter2secret');
+  });
+
+  it('stores at most 64 KiB of a rejected 4 MiB call, redacted before the cut (D-47)', async () => {
+    const { bus, repos, queue } = setup('full');
+    const args = { password: 'hunter2secret', note: 'hunter2secret', url: 'a'.repeat(4 * MIB) };
+    publishTool(
+      bus,
+      observation({
+        args,
+        ok: false,
+        errorCode: 'INVALID_ARGUMENTS',
+        errorMessage: 'url: Invalid URL',
+        resultText: '[INVALID_ARGUMENTS] url: Invalid URL',
+      }),
+    );
+    await queue.drain();
+    const stored = repos.toolCalls.rows.get(EID);
+    expect(stored?.errorCode).toBe('INVALID_ARGUMENTS');
+    const marker = TruncatedToolArgs.parse(stored?.args);
+    expect(new TextEncoder().encode(JSON.stringify(marker)).length).toBeLessThanOrEqual(
+      TOOL_ARGS_CAP_BYTES,
+    );
+    const redacted = { password: '[REDACTED]', note: '[REDACTED]', url: args.url };
+    expect(marker.bytes).toBe(new TextEncoder().encode(JSON.stringify(redacted)).length);
+    expect(marker.preview).toStartWith('{"password":"[REDACTED]","note":"[REDACTED]","url":"aaa');
+    expect(marker.preview).not.toContain('hunter2');
+  });
+
+  it('a registered literal across the cut is redacted, which cutting first would miss (D-47)', async () => {
+    const { bus, repos, queue } = setup('full');
+    const secret = 'hunter2secret';
+    // Put the literal across the point where a cut of the unredacted arguments would fall.
+    const cut = TruncatedToolArgs.parse(capToolArgs({ blob: 'a'.repeat(4 * MIB) })).preview.length;
+    const before = cut - '{"blob":"'.length - 6;
+    const args = { blob: `${'a'.repeat(before)}${secret}${'a'.repeat(4 * MIB)}` };
+    // Cut first, then redact: the literal's first characters survive in the preview.
+    const wrongOrder = createRedactor(registryWith(secret)).redactValue(capToolArgs(args));
+    expect(JSON.stringify(wrongOrder)).toContain('hunter');
+    publishTool(bus, observation({ args }));
+    await queue.drain();
+    const marker = TruncatedToolArgs.parse(repos.toolCalls.rows.get(EID)?.args);
+    expect(marker.preview).not.toContain('hunter');
+    expect(marker.preview).toContain('[REDA');
   });
 
   it('shape and none modes never store the result text', async () => {

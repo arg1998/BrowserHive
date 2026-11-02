@@ -1900,7 +1900,9 @@
                   "minLength": 1,
                   "maxLength": 64
                 },
-                "args_json": {},
+                "args_json": {
+                  "description": "The arguments as recorded (capture policy, then redaction). Over 64 KiB serialized, the marker `{\"_truncated\": true, \"bytes\": <full size>, \"preview\": \"<prefix of the serialization>\"}` (D-47)."
+                },
                 "result_text": {
                   "type": [
                     "string",
@@ -2107,7 +2109,9 @@
             "minLength": 1,
             "maxLength": 64
           },
-          "args_json": {},
+          "args_json": {
+            "description": "The arguments as recorded (capture policy, then redaction). Over 64 KiB serialized, the marker `{\"_truncated\": true, \"bytes\": <full size>, \"preview\": \"<prefix of the serialization>\"}` (D-47)."
+          },
           "result_text": {
             "type": [
               "string",
@@ -3304,7 +3308,9 @@
                           "minLength": 1,
                           "maxLength": 64
                         },
-                        "args_json": {},
+                        "args_json": {
+                          "description": "The arguments as recorded (capture policy, then redaction). Over 64 KiB serialized, the marker `{\"_truncated\": true, \"bytes\": <full size>, \"preview\": \"<prefix of the serialization>\"}` (D-47)."
+                        },
                         "result_text": {
                           "type": [
                             "string",
@@ -4365,7 +4371,9 @@
                   "minLength": 1,
                   "maxLength": 64
                 },
-                "args_json": {},
+                "args_json": {
+                  "description": "The arguments as recorded (capture policy, then redaction). Over 64 KiB serialized, the marker `{\"_truncated\": true, \"bytes\": <full size>, \"preview\": \"<prefix of the serialization>\"}` (D-47)."
+                },
                 "result_text": {
                   "type": [
                     "string",
