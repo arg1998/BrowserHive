@@ -14,7 +14,7 @@ A dashboard session expires after 15 minutes of inactivity or 8 hours in total. 
 
 ## Layout and keyboard
 
-A sidebar lists the pages (collapsed to icons on medium screens, a drawer on phones). The header shows connection health and notifications.
+A sidebar lists the pages (collapsed to icons on medium screens, a drawer on phones). The header shows connection health and notifications. The connection pill reads **Live** while the realtime connection is up, **Degraded** when a request could not reach a working BrowserHive (a network error, a timeout or a server error), and **Offline** when the realtime connection is down. A page left idle stays Live. Its popover shows the realtime state, REST, when BrowserHive last answered, and the version.
 
 | Key | Action |
 |---|---|
@@ -42,7 +42,7 @@ The header shows the session id, state and actions: terminate, open the trace vi
 Tabs:
 
 - **Live.** The screencast of the agent's browser. Controls: start/stop, stream size (fit, 720p, 1080p, native; per viewer), **Resize agent browser** (changes the agent's real viewport), fullscreen. While an attention request is open for this session you can take over: mouse, wheel, keyboard and touch input go to the page. Outside that window input is refused. See [Human takeover](attention.md).
-- **Timeline.** Every tool call with parameters, result, duration, error code and screenshot, plus navigations, vault access, blocked URLs and attention requests. Filter by kind, follow live, expand rows. When [telemetry](telemetry.md) is on, each call shows its `trace_id` and, with `--otelTraceUrlTemplate`, a link into your tracing backend.
+- **Timeline.** Every tool call with parameters, result, duration, error code and screenshot, plus navigations, vault access, blocked URLs and attention requests. Filter by kind, follow live, expand rows. Arguments larger than 64 KiB were shortened when recorded: the row gives their full size and shows their start as text. When [telemetry](telemetry.md) is on, each call shows its `trace_id` and, with `--otelTraceUrlTemplate`, a link into your tracing backend.
 - **Vault.** This session's vault access log and pending confirmations.
 - **Identity.** What the browser presents to websites: user agent, client-hint brands, platform, Chrome version, locale, timezone, screen and viewport, and whether fingerprinting and humanized input are on. See [Stealth](stealth.md).
 - **Files.** Data directory path, `trace.zip` with size, download, and **Open trace viewer** (Playwright Trace Viewer with DOM snapshots, network and console, served by BrowserHive), screenshots, downloads, and the command to open the trace locally.
@@ -65,9 +65,9 @@ Available with `--vault bitwarden`.
 
 - **Status and unlock:** lock state, unlock by pasting a session token from `bw unlock --raw` (the dashboard never asks for your master password), sync.
 - **Confirmations:** fills waiting for your approval, with the requesting session, target URL and tool. Approve, or deny with a reason recorded in the audit log only.
-- **Origin tester:** type a URL and see which entries would fill there.
-- **Folders:** each vault folder has a policy (manual, allow all, reject all) and folder-wide flags.
-- **Bindings:** per entry, the allowed origins, authorized sessions and flags.
+- **Origin tester:** type a URL, and optionally the harness to test as, and see which entries would fill there and why.
+- **Folders:** each vault folder has a policy (manual, allow all, reject all), folder-wide flags and the harnesses that may use it.
+- **Bindings:** per entry, the allowed origins, authorized sessions, flags and harnesses. See [Harness restrictions](vault.md#harness-restrictions).
 
 Details in the [vault guide](vault.md).
 
