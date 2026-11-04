@@ -1,6 +1,7 @@
-/** @module app/shell/HealthPill — connection pill: realtime socket state + REST freshness; a real button opening a details popover, reachable on touch and keyboard */
+/** @module app/shell/HealthPill — connection pill: realtime socket state + REST failures (not idleness, issue #50); a real button opening a details popover, reachable on touch and keyboard */
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { useApi } from '@/app/providers/AuthProvider.tsx';
 import { useSocketState } from '@/app/providers/SocketProvider.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import {
@@ -10,11 +11,14 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from '@/components/ui/popover.tsx';
-import { useServerClock } from '@/lib/server-now.ts';
+import type { AppError } from '@/lib/api/errors.ts';
+import { REST_HEALTH_UNKNOWN, type RestHealth, watchRestHealth } from '@/lib/api/rest-health.ts';
+import { browserClock } from '@/lib/clock.ts';
+import { formatRelative } from '@/lib/format/time.ts';
 import { cn } from '@/lib/utils.ts';
 
-/** REST is healthy when any query succeeded in the last 30 s. */
-const REST_FRESH_MS = 30_000;
+/** How often the open popover refreshes its "Last answer" text. */
+const LAST_ANSWER_TICK_MS = 5000;
 
 /** Text for the offline reason. */
 export function offlineReasonLabel(reason: string | null): string {
@@ -55,36 +59,28 @@ const DOT = {
 export function HealthPill({ compact = false }: { readonly compact?: boolean }) {
   const socket = useSocketState();
   const queryClient = useQueryClient();
-  const clock = useServerClock();
-  const [restOk, setRestOk] = useState(true);
+  const api = useApi();
+  const [failure, setFailure] = useState<AppError | null>(null);
+  const health = useRef<() => RestHealth>(() => REST_HEALTH_UNKNOWN);
   useEffect(() => {
-    const check = () => {
-      const latest = Math.max(
-        0,
-        ...queryClient
-          .getQueryCache()
-          .getAll()
-          .map((q) => q.state.dataUpdatedAt),
-      );
-      setRestOk(latest === 0 || clock.now() - latest <= REST_FRESH_MS + 1000);
-    };
-    check();
-    // Cache events fire while a component renders a new query; defer so no other component updates mid-render.
-    const unsubscribe = queryClient.getQueryCache().subscribe(() => queueMicrotask(check));
-    const timer = setInterval(check, 5000);
-    return () => {
-      unsubscribe();
-      clearInterval(timer);
-    };
-  }, [queryClient, clock]);
-  const { label, tone } = healthState(socket.status, restOk);
+    const watcher = watchRestHealth(queryClient, {
+      // Cache events fire while a component renders a new query; defer so no other component updates mid-render.
+      onChange: (next) => queueMicrotask(() => setFailure(next.failure)),
+      probe: () => api.getHealth(),
+    });
+    health.current = watcher.current;
+    setFailure(watcher.current().failure);
+    return watcher.dispose;
+  }, [queryClient, api]);
+  const { label, tone } = healthState(socket.status, failure === null);
   const realtime =
     socket.status === 'offline'
       ? `Offline (${offlineReasonLabel(socket.reason)})`
       : capitalise(socket.status);
-  const rows: readonly (readonly [string, string])[] = [
+  const rows: readonly (readonly [string, ReactNode])[] = [
     ['Realtime', realtime],
-    ['REST', restOk ? 'Healthy' : 'No recent answer'],
+    ['REST', failure === null ? 'Healthy' : `Failing (${failure.title.toLowerCase()})`],
+    ['Last answer', <LastAnswer key="last" read={() => health.current().lastAnswerAt} />],
     ...(socket.serverVersion !== null ? [['Daemon', `v${socket.serverVersion}`] as const] : []),
   ];
   return (
@@ -135,6 +131,18 @@ export function HealthPill({ compact = false }: { readonly compact?: boolean }) 
       </PopoverContent>
     </Popover>
   );
+}
+
+/** "just now" / "2m ago", browser clock against browser clock; re-read while the popover is open. */
+function LastAnswer({ read }: { readonly read: () => number | null }) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setTick((tick) => tick + 1), LAST_ANSWER_TICK_MS);
+    return () => clearInterval(timer);
+  }, []);
+  const at = read();
+  // Read the clock at render: an answer newer than the last tick must not read "in a moment".
+  return at === null ? 'none yet' : formatRelative(at, browserClock());
 }
 
 function capitalise(value: string): string {
