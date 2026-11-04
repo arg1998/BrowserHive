@@ -15,11 +15,12 @@ import {
   DiscordGatewayHub,
   scrubDetail,
 } from '../packages/core/src/infra/notifications/index.ts';
-import type {
-  ChannelDelivery,
-  LinkBuilder,
-  NotificationChannel,
-  NotificationImageReader,
+import {
+  type ChannelDelivery,
+  ChannelSendError,
+  type LinkBuilder,
+  type NotificationChannel,
+  type NotificationImageReader,
 } from '../packages/core/src/ports/notification-channel.ts';
 import type { NotificationChannelRecord } from '../packages/core/src/ports/persistence/records.ts';
 
@@ -98,6 +99,43 @@ function check(condition: boolean, what: string): void {
   if (!condition) throw new Error(`read-back: ${what}`);
 }
 
+/** Rate-limited calls retried per channel call: the outbox would retry them too (03 §9.4). */
+const RATE_LIMIT_RETRIES = 3;
+
+/** Runs `call`, waiting out a `rate_limited` answer as the platform asks, like the outbox does. */
+async function waitOut<T>(call: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await call();
+    } catch (err) {
+      if (!(err instanceof ChannelSendError) || err.code !== 'rate_limited') throw err;
+      if (attempt >= RATE_LIMIT_RETRIES) throw err;
+      await Bun.sleep(Math.min(10_000, Math.max(500, err.retryAfterMs ?? 1_000)));
+    }
+  }
+}
+
+/**
+ * The adapter with its send, edit and delete retried on `rate_limited`. The check makes a burst of
+ * calls to one webhook or chat (send, read back, edit, delete, a digest, an alert), which can hit a
+ * platform's per-route limit; in BrowserHive the outbox waits and retries, so a 429 here is not a
+ * platform drift.
+ */
+function patient(channel: NotificationChannel): NotificationChannel {
+  const edit = channel.edit?.bind(channel);
+  const remove = channel.delete?.bind(channel);
+  return {
+    id: channel.id,
+    name: channel.name,
+    kind: channel.kind,
+    capabilities: channel.capabilities,
+    ...(channel.presses !== undefined && { presses: channel.presses }),
+    send: (delivery) => waitOut(() => channel.send(delivery)),
+    ...(edit !== undefined && { edit: (ref, delivery) => waitOut(() => edit(ref, delivery)) }),
+    ...(remove !== undefined && { delete: (ref) => waitOut(() => remove(ref)) }),
+  };
+}
+
 async function telegram(): Promise<Outcome> {
   const token = env['TG_BOT_TOKEN'];
   const chat = env['TG_CHAT_ID'];
@@ -109,9 +147,11 @@ async function telegram(): Promise<Outcome> {
     };
   // Act buttons on (D-41): the Rich Message carries callback buttons; the tokens here are dummies
   // that no BrowserHive knows, so a stray press is answered "no longer valid".
-  const channel = createTelegramChannel(
-    { ...record('telegram', { chat_id: chat }), rules: { act_buttons: true } },
-    { token, images: IMAGES },
+  const channel = patient(
+    createTelegramChannel(
+      { ...record('telegram', { chat_id: chat }), rules: { act_buttons: true } },
+      { token, images: IMAGES },
+    ),
   );
   const withTokens = (d: ChannelDelivery): ChannelDelivery => ({
     ...d,
@@ -152,10 +192,12 @@ async function discord(): Promise<Outcome> {
   const webhook = env['DISCORD_WEBHOOK_URL'];
   if (!webhook)
     return { platform: 'Discord', status: 'skipped', detail: 'DISCORD_WEBHOOK_URL not set' };
-  const channel = createDiscordChannel(record('discord', {}), {
-    webhookUrl: webhook,
-    images: IMAGES,
-  });
+  const channel = patient(
+    createDiscordChannel(record('discord', {}), {
+      webhookUrl: webhook,
+      images: IMAGES,
+    }),
+  );
   const read = async (id: string | number) => {
     let response = await fetch(`${webhook.replace(/\/+$/, '')}/messages/${id}`);
     // A burst of calls can hit the webhook's rate limit: wait as Discord asks, then read again.
@@ -237,9 +279,15 @@ async function discordBot(): Promise<Outcome> {
     };
   }
   const gateway = new DiscordGatewayHub({ lingerMs: 0 });
-  const channel = createDiscordChannel(
-    { ...record('discord', { channel_id: channelId }), mode: 'bot', rules: { act_buttons: true } },
-    { botToken: token, images: IMAGES, gateway },
+  const channel = patient(
+    createDiscordChannel(
+      {
+        ...record('discord', { channel_id: channelId }),
+        mode: 'bot',
+        rules: { act_buttons: true },
+      },
+      { botToken: token, images: IMAGES, gateway },
+    ),
   );
   try {
     const presses = channel.presses;
@@ -314,11 +362,13 @@ async function ntfy(): Promise<Outcome> {
   const topic = env['NTFY_TOPIC'];
   if (!topic) return { platform: 'ntfy', status: 'skipped', detail: 'NTFY_TOPIC not set' };
   const server = (env['NTFY_SERVER'] || 'https://ntfy.sh').replace(/\/+$/, '');
-  const channel = createNtfyChannel(record('ntfy', { server }), {
-    token: null,
-    topic,
-    images: IMAGES,
-  });
+  const channel = patient(
+    createNtfyChannel(record('ntfy', { server }), {
+      token: null,
+      topic,
+      images: IMAGES,
+    }),
+  );
   const since = Math.floor(Date.now() / 1000) - 5;
   const poll = async () => {
     const response = await fetch(`${server}/${topic}/json?poll=1&since=${since}`);
