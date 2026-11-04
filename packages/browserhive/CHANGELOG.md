@@ -1,5 +1,38 @@
 # browserhive
 
+## 0.2.2
+
+### Patch Changes
+
+- [#45](https://github.com/arg1998/BrowserHive/pull/45) [`00f7d57`](https://github.com/arg1998/BrowserHive/commit/00f7d579ab3d44a0bb03b30bf29f014ff4e7246f) Thanks [@arg1998](https://github.com/arg1998)! - Installing BrowserHive now also gives you `bh`, a shorthand for the `browserhive` command: `bh init`, `bh doctor` and `bh --admin` work exactly like the full name. It is a second `bin` entry for the same file, so a global npm, pnpm or Bun install creates both commands (on Windows, the `.cmd` and `.ps1` shims for npm and the `.exe` launcher for Bun).
+
+  - `browserhive` stays the documented name: help text, error messages and the docs keep using it, and scripts, CI jobs and MCP client configurations should too, since `bh` may be something else on another machine.
+  - `browserhive doctor` has a new `bh` row. It warns (exit code 2) when the first `bh` on `PATH` is not BrowserHive's, for example a script of your own, and names its path. It is never a failure, and it is fine when there is no `bh` at all. Shell aliases and functions are not visible to `doctor`; `type -a bh` or `Get-Command bh -All` lists them.
+
+- [#40](https://github.com/arg1998/BrowserHive/pull/40) [`54ce912`](https://github.com/arg1998/BrowserHive/commit/54ce912bfb5125697d420a00349ccdc65eefd2ae) Thanks [@arg1998](https://github.com/arg1998)! - Security updates for dependencies with high-severity advisories, and size limits on `/mcp`.
+
+  - **MCP SDK 1.30.0 → 1.32.2.** Request bodies the MCP transport reads are capped at 4 MiB (HTTP 413) and JSON-RPC batches at 100 messages (HTTP 400), GHSA-f897-62hf-6gxq. The `initialize` body, which BrowserHive reads itself, now has the same 4 MiB cap; before, it had none.
+  - **Tool-input element cap.** A tool call whose arguments hold more than 100,000 array elements and object members fails with `INVALID_ARGUMENTS` before it is validated, so one request cannot exhaust memory during validation (GHSA-46jr-4wx8-v453). Real inputs are far below the cap.
+  - **zod 4.6.5 → 4.6.7** (GHSA-mrhx-c7xc-m3w5) and **hono 4.13.8 → 4.13.11**. The MCP SDK's own `express`/`body-parser` (GHSA-27r3-jxmh-p828) are updated with it.
+
+- [#51](https://github.com/arg1998/BrowserHive/pull/51) [`e8e08cc`](https://github.com/arg1998/BrowserHive/commit/e8e08cc35fff86e13af8ebbc1432894f784f4fb5) Thanks [@arg1998](https://github.com/arg1998)! - The dashboard's connection pill no longer turns **Degraded** when a page is left idle. It used to count "no request in the last 30 seconds" as a REST failure, so quiet pages such as System or Settings flipped to Degraded after about half a minute and back to Live on the next click. It also compared a browser timestamp with a server-anchored one, so clock skew between host and browser shifted that window.
+
+  - REST is now marked failing only when a request actually fails: a network error, a timeout, or a 5xx where the daemon could not answer (for example a proxy's 502). 4xx answers and failed operations the daemon reports (a navigation that failed, a channel test the platform refused) do not count.
+  - The next successful request clears it. While failing, the dashboard checks `GET /health` every 15 seconds, so a single blip on a quiet page clears itself.
+  - The popover shows when the daemon last answered ("2m ago") and, when REST is failing, why ("Failing (network error)").
+
+- [#39](https://github.com/arg1998/BrowserHive/pull/39) [`15edc49`](https://github.com/arg1998/BrowserHive/commit/15edc4907b9d2dc38ec6f4dde2272568863b8934) Thanks [@arg1998](https://github.com/arg1998)! - On macOS, read-only commands now work on a database that was just restored or copied.
+
+  - **`admin tokens list`, `db status`, `db backup`, `purge` and `doctor` no longer fail with `DB_OPEN_FAILED`** ("unable to open database file") on macOS when the database has no `-wal`/`-shm` files beside it, as after `browserhive db restore` or after copying the database. macOS's own SQLite cannot create those files from a read-only connection; BrowserHive now opens such a file without the read-only flag while still refusing every write, and never migrates it.
+
+- [#43](https://github.com/arg1998/BrowserHive/pull/43) [`ab26ed3`](https://github.com/arg1998/BrowserHive/commit/ab26ed3bd85d259613518d6be127e2510b427fde) Thanks [@arg1998](https://github.com/arg1998)! - Tool-call history stores at most 64 KiB of each call's arguments (D-47). Before, every call's arguments were stored whole, so an agent looping on oversized calls (up to 4 MiB each, including calls rejected with `INVALID_ARGUMENTS`) could grow the database by gigabytes and slow the session timeline.
+
+  - Larger arguments are stored as `{"_truncated": true, "bytes": <full size>, "preview": "<start of the arguments>"}`, which `GET …/tool-calls?expand=detail` and `GET …/tool-calls/{event_id}` return in `args_json`. The dashboard shows them with a note giving the full size, and the start as text.
+  - Redaction still runs first: the cut only ever sees redacted arguments.
+  - Tool results keep their 16 KiB cap. Rows recorded before this release are left as they are until retention removes them.
+
+- [#46](https://github.com/arg1998/BrowserHive/pull/46) [`55aa579`](https://github.com/arg1998/BrowserHive/commit/55aa57974b0265f2363a4824d2dcb0bf89a25def) Thanks [@arg1998](https://github.com/arg1998)! - Vault bindings and folder policies can now be limited to specific agent harnesses. In the dashboard's binding and folder editors, a new **Harnesses** field lets you pick known harnesses (Claude Code, OpenCode, Codex, Cursor and more), **Unknown**, or a case-sensitive custom name; **All harnesses** stays the default, so existing rules are unchanged. The check runs after the principal and slug rules and only ever takes access away. Harness names are reported by the client, so this guards against mistakes, not against a client that lies: per-agent tokens remain the real boundary. An agent sees a harness refusal exactly like any other `not_authorized`; the Vault log records the real reason, `harness_not_allowed`. The database gains four nullable columns (schema v7, compatible), the REST API an optional `harnesses` field on bindings, policies and the export document, and `GET /vault/harnesses`. The vault **Tester** tab takes an optional harness and declared name and checks harness lists exactly as a fill would, naming the binding's or the folder's list when it refuses; without a harness it says which bindings have a list it did not check. The harness list recognises 16 more clients, among them Amp, Kiro, Warp, Qwen Code, Factory Droid and ChatGPT.
+
 ## 0.2.1
 
 ### Patch Changes
