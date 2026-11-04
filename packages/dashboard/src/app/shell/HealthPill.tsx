@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/popover.tsx';
 import type { AppError } from '@/lib/api/errors.ts';
 import { REST_HEALTH_UNKNOWN, type RestHealth, watchRestHealth } from '@/lib/api/rest-health.ts';
+import { browserClock } from '@/lib/clock.ts';
 import { formatRelative } from '@/lib/format/time.ts';
 import { cn } from '@/lib/utils.ts';
 
@@ -141,7 +142,7 @@ function LastAnswer({ read }: { readonly read: () => number | null }) {
   }, []);
   const at = read();
   // Read the clock at render: an answer newer than the last tick must not read "in a moment".
-  return at === null ? 'none yet' : formatRelative(at, Date.now());
+  return at === null ? 'none yet' : formatRelative(at, browserClock());
 }
 
 function capitalise(value: string): string {

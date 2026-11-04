@@ -1,5 +1,6 @@
 /** @module lib/api/rest-health — REST health from how requests ended, never from how long ago one ran: an idle page stays healthy; a network error, timeout or daemon 5xx marks it failing until a later answer (issue #50) */
 import type { QueryClient } from '@tanstack/react-query';
+import { browserClock } from '../clock.ts';
 import { type AppError, isAppError } from './errors.ts';
 
 /** What the connection pill knows about REST. */
@@ -69,7 +70,7 @@ export function watchRestHealth(
   client: QueryClient,
   options: WatchRestHealthOptions,
 ): { readonly current: () => RestHealth; readonly dispose: () => void } {
-  const now = options.now ?? Date.now;
+  const now = options.now ?? browserClock;
   const probeMs = options.probeMs ?? REST_PROBE_MS;
   let state = initialRestHealth(client);
   let probeTimer: ReturnType<typeof setTimeout> | null = null;
