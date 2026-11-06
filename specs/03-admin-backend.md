@@ -718,9 +718,14 @@ Writes are enqueued (FIFO, one transaction per drain, statements prepared once);
 
 - Hashed assets (`/assets/*`): `Cache-Control: public, max-age=31536000, immutable`, `ETag`, gzip/brotli pre-compressed variants served when accepted.
 - `index.html`: templated per request (CSP nonce, `<meta name="browserhive-version">`), `Cache-Control: no-cache`, `ETag`.
-- SPA fallback: any GET not matching `/api`, `/mcp`, `/health`, `/trace-viewer`, or an existing asset returns `index.html`, including paths with dots (route parameters such as URLs or domains may contain them, so a dot is never taken to mean "file").
+- SPA fallback: any GET not matching a reserved prefix (`NON_SPA_PREFIXES` in `@browserhive/contracts/http`: `/api`, `/mcp`, `/health`, `/trace-viewer`) or an existing asset returns `index.html`, including paths with dots (route parameters such as URLs or domains may contain them, so a dot is never taken to mean "file").
+- Installable-app files (D-49, 04 §18): `/manifest.webmanifest` (`application/manifest+json`), `/sw.js` (`text/javascript`), `/offline.html`, `/offline-theme.js` and `/icons/*` are ordinary bundle files. They are served by the same asset path, unauthenticated, with `no-cache`; no route, header or CSP change is involved. Because they exist in the bundle, they never fall back to `index.html`. A bundle without them (older builds) falls back as before, which a browser rejects as a worker script, harmlessly.
 - Source maps are not shipped in the package (`dashboard` build emits none for production).
-- Without `admin=true`, `/` returns a small server-rendered status page (version, transport, MCP URL, how to enable the dashboard) and every dashboard route 404s.
+- Without `admin=true`:
+  - `/` returns a small server-rendered status page (version, transport, MCP URL, how to enable the dashboard).
+  - A **browser navigation** to any other non-reserved path returns the same page with status **404**. A navigation is a `GET`/`HEAD` with `Sec-Fetch-Mode: navigate`, or, when that header is absent, an `Accept` that lists `text/html`. An installed app launched or reloaded on `/sessions` therefore explains itself instead of showing a JSON error (D-49).
+  - Every other request to a dashboard path, including `/sw.js` and `/manifest.webmanifest`, gets the usual JSON 404. A browser that already has the worker keeps it, because the update fetch fails.
+  - The status page carries `<meta name="viewport">`, light and dark styles through `prefers-color-scheme` (inline `<style>`, allowed by the CSP's `style-src 'unsafe-inline'`), no script, and the sentence "The dashboard is turned off. Restart BrowserHive with `--admin` to use it."
 - The daemon has no development mode for the dashboard: in a source checkout, hot reload comes from a Vite dev server in front of the daemon that proxies API paths to it (06 §2.1).
 - Trace viewer: `playwright-core`'s `lib/vite/traceViewer` located at startup; served under `/trace-viewer/` behind operator auth with the sandboxed CSP; `/trace-viewer/ping` answers `ok`. The viewer loads `trace.zip` through a grant token because its service worker cannot send the cookie.
 

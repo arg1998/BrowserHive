@@ -141,18 +141,68 @@ One suite per user-visible guarantee, plus the single-port smoke. All use `Playw
 - `single-port.test.ts` (`packages/browserhive/test/integration/`) — spawn `bun src/bin.ts --admin --auth token` on an ephemeral port with a temp data dir: MCP `initialize` → `tools/list` equals the catalog golden → `tools/call list_sessions`; `GET /health` is `ready`; `GET /api/v1/openapi.json` parses; WS handshake without a cookie closes 4401, with a login cookie receives `ready`; SIGTERM exits 0 within `shutdownTimeout`.
 - `sandbox-stealth.test.ts` (`packages/browserhive/test/integration/`) — through BrowserHive (`createServer` → MCP → `launch_session` → `navigate` → `evaluate`) for every installed channel: `sandbox=auto` never fails a launch, `off` stays unsandboxed, every launched session passes the page-visible stealth checks (no `HeadlessChrome`, `Google Chrome` exactly once, `webdriver === false`, `window.chrome`, 5 plugins, `pdfViewerEnabled`, H.264/AAC, `fullVersionList` equal to the engine's real version), sandboxed and unsandboxed sessions report identical signals, and a required sandbox either works or fails as `SANDBOX_UNAVAILABLE`, `retryable: never`. Channels not installed skip with the reason printed; the bundled Chromium is never skipped. Sandbox state is read from the browser processes' command lines. The weekly `real-chrome` job runs the whole suite with `BHDEV_TEST_CHANNEL=chrome` (sessions on the installed Chrome, 06 §6.1).
 - `stdio-handshake.test.ts` — spawn with `--transport stdio`; stdout carries only JSON-RPC frames (a test injects a `console.log` in a hook and asserts it lands on stderr).
+- `dashboard-offline.test.ts` (`packages/browserhive/test/integration/`, D-49, 04 §18) — needs the built dashboard. A missing `packages/dashboard/dist/sw.js` fails the test with "run `bun run build` first", never a skip (§8). The test:
+  1. Spawns the daemon with `--admin` on a free port with a temp data dir, and opens `/login` in Playwright Chromium (a context with service workers allowed).
+  2. Waits until `navigator.serviceWorker.controller` is set and the `bh-offline-*` cache holds every `SW_PRECACHE` path (read from `sw.js`).
+  3. Sends the daemon SIGTERM and waits for the port to close, then reloads `/sessions`: the offline page shows the `not-running` heading and the start command with `--port <p>`. The URL stays `/sessions`, and no request reaches a reserved prefix through the worker.
+  4. Restarts the daemon on the same port and data dir: within 15 s the page reloads itself into the dashboard (the `/login` redirect).
+  5. Replaces the daemon with a plain HTTP server on the same port that answers `/` with `200 text/plain` and `/health` with `404`, and reloads: `foreign`. It then replaces it with a server that accepts connections and never answers, and reloads: the offline page appears after the 10 s navigation timeout, in state `not-responding`.
+  6. Restarts the daemon **without** `--admin` and navigates to `/sessions`: the status page, HTTP 404, `text/html`.
+
+  Single worker; 90 s timeout.
 
 ### 3.5 Dashboard
 
 - Unit: status registry (every state maps to a tone and label; no string tones); URL-state rules (reset to page 1 on filter change, omit defaults, comma lists, 3-way sort cycle) via the router's `validateSearch`; `JsonView` renders agent-controlled strings as text nodes (regression for the innerHTML surface); `RelativeTime` server-anchored; notification producers; WS bridge patches the Query cache from fat events and invalidates on thin ones; resync on `connecting → connected`.
 - Component (RTL + happy-dom + axe): `DataTable` (sort gating, `aria-sort`, selection with indeterminate, card-collapse under `sm`, pager clamps and never unmounts), `FilterBar`, `ConfirmDialog` (focus trap, return, Escape), `CommandPalette` (combobox/listbox roles, scrollIntoView), toast region (`role=status`, pause on hover), theme provider (system/light/dark, no FOUC bootstrap), auth machine (`error`/`offline`, 401 interceptor). Every component test runs `axe` with zero violations.
 - End-to-end (Playwright, against `bun run build` + `browserhive --admin --vault bitwarden` with the fake `bw`): login with the seed password → forced change → sessions list with URL filters (paste URL reproduces state) → session detail → start live view → agent calls `request_attention` (driven through the MCP endpoint from the test) → takeover input accepted, `input_rejected` shown when no attention is open → resolve → vault confirm approve with visible rollback on a forced failure → blocklist page shows a hit → notifications persist across reload → logout closes the socket. Responsive screenshot suite at 390, 768, 1280, 1920 for every route (visual goldens with a tolerance, updated through §7). Clipboard fallback on an insecure non-localhost origin (Playwright with `http://127.0.0.2`).
+- **Installable app and offline page (D-49, 04 §18).**
+  - **Unit:**
+    - `routeRequest`: every row of 04 §18.5.4, including prefix boundaries (`/api` vs `/apix`, `/health` vs `/healthz`), non-`GET`, cross-origin, `navigate` vs `no-cors`/`cors` modes, `/sw.js` itself.
+    - The worker's event handlers, in a fake-global harness (in-memory `CacheStorage`, scripted `fetch`, fake timers):
+      - `install` stores only `ok`, non-redirected, `basic` responses and rejects on any failure;
+      - `activate` deletes only stale `bh-offline-*` caches;
+      - a navigation returns the network response for 200/404/500/opaque redirect, `offline.html` on rejection and on the 10 s timeout, and `Response.error()` when the cache lacks it;
+      - precached paths go to the network first, then the cache.
+    - The kill-switch worker unregisters and deletes its caches.
+    - `classifyProbe`: every row of 04 §18.6.1, including a 503 `degraded`, a 200 with a non-BrowserHive JSON body, and HTML.
+    - `daemonHelp`: default port, other ports, an empty port by scheme, loopback names (`localhost`, `127.0.0.5`, `[::1]`) vs remote hosts, every command word in `COMMAND_NAMES` and every flag a known config key.
+    - The offline backoff schedule, the hidden-page pause and the loop guard (3 reloads in 60 s, an unreadable `sessionStorage`).
+    - `installSupport`: a UA fixture per row of 04 §18.8.2 (Chrome, Edge, Brave, Opera, Vivaldi on Windows/macOS/Linux; Chrome Android; Firefox Windows/Linux/macOS/Android; Safari macOS and iOS; Chrome on iOS; an unknown UA), plus `standalone`, `insecure` and `prompt` precedence.
+    - The prompt store: an event captured before mount; `prompt()` used once; `appinstalled` clears the event and toasts.
+    - `launchTarget`: absent, cross-origin, reserved prefix, `/`, same path, a shortcut path.
+    - The manifest: valid JSON with exactly the members of 04 §18.2; every icon file exists with its declared PNG size; the colours equal `THEME_COLORS.light`; the shortcut URLs are route-table paths.
+    - `index.html` carries the manifest and apple-touch-icon links.
+    - `NON_SPA_PREFIXES` equals `vite.config.ts`'s `PROXIED_PATHS`.
+    - `offline-theme.js` gives the same `data-theme` as `resolveTheme` for every stored value × system preference.
+    - The new `links.ts` anchors exist in the guides.
+  - **Component (RTL + axe):**
+    - `PrincipalMenu` shows Install app for every kind except `standalone`, and the palette action follows the same rule;
+    - `InstallAppDialog`, one render per dialog kind;
+    - `prompt` calls the event's `prompt()` and opens no dialog;
+    - `DaemonUnreachableBanner` appears only after 10 s of failed probes, hides `AuthRetryBanner`, and clears on the first BrowserHive answer;
+    - the offline page in happy-dom per state, with copy buttons and the OS tablist keyboard.
+  - **Core:**
+    - With `admin=false`: navigations to `/sessions` (by `Sec-Fetch-Mode: navigate`, and by `Accept: text/html` alone) get the status page with 404; `fetch`-style requests and `/sw.js` get the JSON 404; `/` is unchanged.
+    - With `admin=true`: `/sw.js` and `/manifest.webmanifest` are served from the bundle with their MIME types and `no-cache`, not as `index.html`.
+  - **E2E** (`pwa.e2e.ts`, desktop project only, the one project with `serviceWorkers: 'allow'`; every other project sets `serviceWorkers: 'block'`, so the worker never interferes with existing journeys):
+    - CDP `Page.getAppManifest` returns the manifest with no `errors`, and `Page.getInstallabilityErrors` returns an empty list;
+    - the worker activates and controls the page;
+    - Install app opens the instructions dialog when no prompt event is available (Playwright never gets one), and that dialog passes axe.
+
+    The stop-the-daemon journey is the integration test `dashboard-offline.test.ts` (§3.4), because the shared e2e daemon cannot be stopped.
 
 ### 3.6 Package gate (`scripts/`)
 
 - `publint` and `@arethetypeswrong/cli --pack` on the built `browserhive` package.
 - `smoke-installed.ts`: `npm pack` → clean directory → `bun install <tarball>` → `browserhive --version` → stdio handshake (`initialize`, `tools/list` equals the catalog golden, `list_sessions`) → `import { createServer } from 'browserhive'` and `listen()`/`stop()` on port 0.
 - Tarball content assertions: contains `dist/`, `README.md`, `LICENSE`, dashboard assets; excludes `src/`, `test/`, `.tsbuildinfo`, sourcemaps.
+- Installable-app assertions (D-49) on `dist/dashboard`:
+  - `manifest.webmanifest`, `sw.js`, `offline.html`, `offline-theme.js` and the six icons exist;
+  - every `SW_PRECACHE` path in `sw.js` exists;
+  - every `url(…)` in the precached CSS is itself precached;
+  - the precache totals at most 400 KB;
+  - `sw.js` contains no `import`/`importScripts`.
 - `release-dry-run` = build + gate, run on tags and on demand.
 
 ## 4. Test doubles
