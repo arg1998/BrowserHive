@@ -159,22 +159,31 @@ function WhatToDoDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl" showCloseButton={false}>
-        <DialogHeader className="pr-0">
-          <DialogTitle className="flex items-center gap-2">
-            {back ? 'BrowserHive is back' : (copy?.heading ?? '')}
-          </DialogTitle>
-          <DialogDescription className="text-base text-pretty">
-            {back
-              ? 'The dashboard reconnected by itself. You can close this.'
-              : segments(copy?.body ?? [])}
-          </DialogDescription>
+        <DialogHeader className="flex-row items-start gap-3 pr-0">
+          <span
+            aria-hidden="true"
+            className={cn(
+              'flex size-10 shrink-0 items-center justify-center rounded-xl',
+              back ? 'bg-success-bg text-success-text' : 'bg-danger-bg text-danger-text',
+            )}
+          >
+            {back ? <ICONS.success className="size-5" /> : <ICONS.disconnect className="size-5" />}
+          </span>
+          <div className="flex min-w-0 flex-col gap-1">
+            <DialogTitle>{back ? 'BrowserHive is back' : (copy?.heading ?? '')}</DialogTitle>
+            <DialogDescription className="text-pretty">
+              {back
+                ? 'The dashboard reconnected by itself. You can close this.'
+                : segments(copy?.body ?? [])}
+            </DialogDescription>
+          </div>
         </DialogHeader>
         {help !== null && commands.length > 0 ? (
           <DialogBody className="flex min-w-0 flex-col gap-4 pb-1">
             <Commands help={help} commands={commands} />
           </DialogBody>
         ) : null}
-        <DialogFooter className="items-center sm:justify-between">
+        <DialogFooter className="flex-row items-center justify-between sm:justify-between">
           <a
             href={docsUrl('troubleshootingNotRunning')}
             target="_blank"
