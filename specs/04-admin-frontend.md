@@ -864,7 +864,7 @@ In `vite.config.ts`:
 
 - **`probeHealth({ fetch, timers })`.** Both are injectable (defaults: global `fetch`, `browserTimers`). It calls `fetch('/health', { cache: 'no-store' })` with a 5 s timeout. It returns the raw outcome: rejected, timed out, or `{ status, marked, body }`, where `marked` means the response carries `X-BrowserHive-Version`. Both the offline page and the dashboard (§18.7) use it.
 - **`isDaemonAnswer(outcome)`** = `outcome.marked`. Any response carrying the marker, healthy or not, proves the daemon is reachable. Rejections, timeouts and unmarked responses (`foreign`, `proxy-unreachable`) are not daemon answers.
-- **`classifyProbe(outcome)`** (pure).
+- **`classifyProbe(outcome, { online })`** (pure; the caller passes `navigator.onLine`, so the module reads no DOM global).
   - **What counts as BrowserHive.** A JSON object with `status` ∈ `starting|ready|degraded|stopping` and a string `version`. The check is hand-written, not zod, so the offline build stays small.
   - **Consistency.** A test asserts it recognises every `HealthResponse` fixture, including one without `instance_id` (older daemons).
 
@@ -1045,6 +1045,7 @@ Launch handling (`launch_handler`, `launchQueue`) is deferred (D-49).
     - `src/styles/tokens.css`.
   - `src/sw/**` may import only `src/sw/**` and `@browserhive/contracts/paths`.
   - `src/lib/daemon-help/{probe,commands}.ts` and `src/lib/install/{support,steps}.ts` import no React.
+  - These rules see local files and unresolved `@/` aliases only: npm packages are outside the graph (`exclude: node_modules`). `src/lib/daemon-help/boundaries.test.ts` therefore asserts that `probe.ts` and `commands.ts` import only relative `.ts` files; `src/lib/install/` gets the same test when it lands.
 - **Folder structure (§3)** gains:
   - `src/sw/`, `src/offline/`, `src/lib/install/`, `src/lib/daemon-help/`, `src/assets/app-icon/`;
   - `src/dev-proxy.ts`, `src/lib/clipboard.ts`, `src/theme/resolve.ts`, `src/features/install/`;
