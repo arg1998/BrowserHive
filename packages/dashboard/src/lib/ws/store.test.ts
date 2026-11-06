@@ -1,7 +1,7 @@
 /** @module lib/ws/store.test — handshake, resubscribe with cursors on reconnect, dedupe, bounded backoff, protocol/epoch mismatch, close codes, commands, drops */
 import { describe, expect, it } from 'bun:test';
 import { FakeSocket, FakeTimers } from '../../../test/helpers/fake-socket.ts';
-import { type SocketHooks, SocketStore } from './store.ts';
+import { CONNECT_TIMEOUT_MS, type SocketHooks, SocketStore } from './store.ts';
 
 function setup(
   hooks: SocketHooks = {},
@@ -203,6 +203,59 @@ describe('SocketStore', () => {
       payload: { code: 'INPUT_NOT_PERMITTED', title: 'Not permitted' },
     });
     await expect(failing).rejects.toMatchObject({ title: 'Not permitted' });
+  });
+
+  it('closes an attempt without hello after 10 s and counts it as failed, up to offline', () => {
+    expect(CONNECT_TIMEOUT_MS).toBe(10_000);
+    const { store, timers, sockets, latest } = setup();
+    store.connect();
+    // The daemon accepts the TCP connection and even the upgrade, but never says hello.
+    latest().open();
+    timers.advance(9_999);
+    expect(latest().closedWith).toBeNull();
+    expect(store.getState().status).toBe('connecting');
+    timers.advance(1);
+    expect(sockets[0]?.closedWith?.code).toBe(4008);
+    expect(store.getState().attempt).toBe(1);
+    expect(timers.pending()).toEqual([500]);
+    // Attempts that never even open (a hung listener) time out the same way.
+    // Each round: the backoff delay opens a new attempt, then its 10 s timeout fails it.
+    const waits: number[] = [];
+    for (let i = 0; i < 6; i += 1) {
+      const wait = timers.pending()[0] ?? 0;
+      waits.push(wait);
+      timers.advance(wait);
+    }
+    expect(waits).toEqual([500, 10_000, 1_000, 10_000, 2_000, 10_000]);
+    expect(store.getState().status).toBe('offline');
+    expect(store.getState().reason).toBe('network');
+    expect(sockets.length).toBe(4);
+  });
+
+  it('ignores the late close event of a timed-out attempt', () => {
+    const { store, timers, sockets, latest } = setup();
+    store.connect();
+    const first = latest();
+    const onclose = first.onclose;
+    timers.advance(CONNECT_TIMEOUT_MS);
+    expect(first.onclose).toBeNull();
+    onclose?.({ code: 1006, reason: '' });
+    expect(store.getState().attempt).toBe(1);
+    timers.advance(timers.pending()[0] ?? 0);
+    expect(sockets.length).toBe(2);
+  });
+
+  it('cancels the connect timeout on hello and on a close', () => {
+    const { store, timers, latest } = setup();
+    store.connect();
+    latest().hello('e1');
+    timers.advance(CONNECT_TIMEOUT_MS * 2);
+    expect(latest().closedWith).toBeNull();
+    expect(store.getState().status).toBe('connected');
+    latest().serverClose(1006);
+    expect(timers.pending()).toEqual([500]);
+    store.dispose();
+    expect(timers.pending()).toEqual([]);
   });
 
   it('pings every 20 s and closes a stale socket after 45 s of silence', () => {
