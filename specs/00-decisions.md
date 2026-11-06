@@ -945,28 +945,65 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 
 **Status:** Proposed
 
-**Context.** Operators reach the dashboard by typing or bookmarking `http://127.0.0.1:9876`. They want it in their app launcher and taskbar like any desktop app, and installed from the dashboard itself through the browser's own install flow. The daemon serves the dashboard on its single port (D-02), so when the daemon is stopped nothing answers at that address: an installed app, or a bookmark, opens on the browser's "can't connect" page with no hint about what went wrong or what to run. Browsers differ widely here. Chromium-based browsers (Chrome, Edge, Brave, Opera, Vivaldi, Arc) install a site that has a web app manifest and let the page trigger the install (`beforeinstallprompt`). Firefox can install sites on Windows only (since 143; Linux was in Nightly in 2026; macOS has no date), and only from its own UI. Safari on macOS 14+ installs any page through File › Add to Dock, also only from its own UI. No browser lets an outside program install a web app without the user, except through enterprise policy.
+**Context.**
+- **The ask.** Operators reach the dashboard by typing or bookmarking `http://127.0.0.1:9876`. They want it in their app launcher and taskbar like a desktop app, installed from the dashboard itself through the browser's own install flow.
+- **The gap.** The daemon serves the dashboard on its single port (D-02). When the daemon is stopped nothing answers at that address, so an installed app or a bookmark opens on the browser's "can't connect" page, with no hint of what went wrong or what to run.
+- **What browsers allow (checked 2026-11):**
+  - Chromium-based browsers (Chrome, Edge, Brave, Opera, Vivaldi) install any secure-context site with a valid manifest: `http://127.0.0.1` and `http://localhost` qualify, and no service worker is required since Chrome 112. They let the page trigger the install (`beforeinstallprompt`).
+  - Firefox installs sites as web apps on Windows only (since 143, from an address-bar button). On Linux it exists but is off by default; on macOS it doesn't exist. Firefox has no page API to trigger an install.
+  - Safari 17+ on macOS installs any page through File › Add to Dock, from its own menu only. The web app gets a copy of Safari's cookies and nothing else: no storage, no service worker.
+  - No browser lets an outside program install a web app, except through enterprise policy.
 
 **Decision.**
-- **Installable from the dashboard, never from the CLI.** The dashboard ships a web app manifest, app icons and a service worker (04 §18). The account menu and the command palette offer **Install app**: on a browser that has offered an install prompt it opens the browser's native install dialog; everywhere else it opens a dialog with the exact steps for that browser, or says plainly that the browser cannot install apps and what to use instead. There is **no CLI command or flag** for it: a command could only open a browser window, which does not install anything.
-- **A static manifest in the bundle.** `manifest.webmanifest` is a file in `packages/dashboard/public`, with relative URLs, `id: "/"` and the name "BrowserHive". The daemon gains no manifest route and no per-instance template. An installed app's identity is its origin (scheme, host and port) plus `id`, so the same file yields one app per address. This works unchanged behind `publicUrl`, through the Vite dev server and from any port, and keeps the daemon's dashboard serving a plain file server (03 §8).
-- **A service worker whose only job is the offline page.** `/sw.js` (scope `/`) precaches `offline.html` and the static files it needs, and nothing else. It answers a page navigation from the network and falls back to `offline.html` only when the network fails (nothing listening) or no response arrives within 10 s. It never caches or answers `/api`, `/mcp`, `/health`, `/trace-viewer`, any non-`GET` request, or anything cross-origin. It holds no operator data, so it needs no sign-out cleanup and cannot serve a stale dashboard.
-- **The offline page diagnoses.** It probes `/health` and tells apart: nothing listening ("BrowserHive isn't running"), no answer ("isn't responding"), the daemon starting (503 with a BrowserHive body), and something else on the port. It shows copyable commands for the visitor's OS (start, `doctor`, `config show`, who holds the port), polls with backoff and reloads by itself when the daemon answers ready. The dashboard shows the same help in a banner and dialog when the daemon goes away while a page is open.
-- **Without `--admin`, navigations get the status page.** A browser navigation to any non-API path of a daemon running without the dashboard gets the status page (404 off `/`), not a JSON 404, so an installed app launched against such a daemon explains itself.
-- **Deferred:** the app-icon badge for pending attention requests (Badging API), window-controls overlay, link capturing, push notifications, a per-instance app name.
+- **Installable from the dashboard, never from the CLI.**
+  - The dashboard ships a web app manifest, app icons and a service worker (04 §18).
+  - The account menu and the command palette offer **Install app**. Where the browser has offered an install prompt, it opens the browser's native install dialog. Everywhere else it opens a dialog with that browser's steps, or says plainly that the browser can't install apps and what to use instead.
+  - There is **no CLI command or flag**: a command could only open a browser window, which installs nothing.
+- **A static manifest in the bundle.**
+  - `manifest.webmanifest` is a file in `packages/dashboard/public`, with relative URLs, `id: "/"` and the name "BrowserHive".
+  - The daemon gains no manifest route and no per-instance template.
+  - An installed app's identity is its origin (scheme, host, port) plus `id`, so the one file yields one app per address. It works unchanged behind `publicUrl`, through the Vite dev server and on any port.
+- **A service worker whose only job is the offline page.**
+  - `/sw.js` (scope `/`) precaches `offline.html` and the content-hashed files that page needs, and nothing else: not the manifest, the icons, the app shell or any API data.
+  - It sends page navigations to the network untouched. It falls back to `offline.html` only in two cases:
+    - nothing answers within 10 s, or the connection fails;
+    - a proxy answers 502, 503 or 504 without BrowserHive's marker header.
+  - It never touches `/api`, `/mcp`, `/health`, `/trace-viewer`, non-`GET` requests or other origins.
+  - It holds no operator data, so it needs no sign-out cleanup and cannot serve a stale dashboard.
+- **The daemon marks its responses.** Every daemon response carries `X-BrowserHive-Version`. A successful HTML navigation without it means another program now owns the address. The worker then deletes its caches and unregisters itself, so it never haunts another app on a reused port. The offline page also has a **Forget this address** button that does the same on demand.
+- **The offline page diagnoses.**
+  - It probes `/health` and tells apart:
+    - nothing answering ("isn't running");
+    - no answer in time ("isn't responding");
+    - the daemon starting;
+    - a proxy whose upstream is down;
+    - another program on the address.
+  - It shows copyable commands for the visitor's OS, polls every few seconds while visible, and reloads itself when the daemon is ready.
+  - The running dashboard shows the same help in a banner and dialog when the daemon goes away while a page is open.
+- **Without `--admin`, browser navigations get the status page.** A navigation to any non-reserved path of a daemon running without the dashboard gets the status page (404 off `/`), not a JSON 404, so an installed app launched against such a daemon explains itself.
+- **Deferred:**
+  - the app-icon badge for pending attention requests (Badging API);
+  - `launch_handler` and the `launchQueue` consumer;
+  - window-controls overlay, link capturing and push;
+  - a per-instance app name.
 
 **Consequences.**
-- The offline page appears only in a browser profile that has loaded the dashboard at that exact origin at least once since the service worker shipped. That always holds for an installed app, which had to be loaded to be installed. A fresh profile, cleared site data, a private window, or another spelling of the address (`localhost` vs `127.0.0.1`) still shows the browser's own error page.
-- `127.0.0.1` and `localhost` are separate origins, so they make separate apps. The docs say to install from the address the startup banner prints.
-- Service workers and installs need a secure context. Loopback over `http` qualifies; a LAN address over plain `http` does not, so there the dashboard works as before, with no offline page, and Install app explains how to reach it securely (loopback, or an `https` `publicUrl`, D-37).
-- Two daemons on two ports install as two apps both named "BrowserHive"; the window title (the page title) tells them apart.
-- Firefox on Linux and macOS cannot install the dashboard today, and no page can change that. The dialog says so and offers the address to open in a Chromium browser.
-- The bundle gains `sw.js`, `offline.html`, the offline assets, the manifest and the icons. The daemon gains only the navigation rule for `admin=false`.
+- **First visit required.** The offline page works only in a browser context that has loaded the dashboard at that exact origin at least once since the worker shipped.
+  - For a Chromium-installed app that is always true: the app shares the profile that installed it.
+  - A Safari Dock app has its own storage, so it needs one launch while the daemon runs.
+  - A fresh profile, cleared site data, a private window or another spelling of the address (`localhost` vs `127.0.0.1`) still shows the browser's own error page.
+- **Two spellings, two apps.** `127.0.0.1` and `localhost` are separate origins and so separate apps. The docs say to install from the address the startup banner prints.
+- **Secure context needed.** Service workers and installs need a secure context. A LAN address over plain `http` gets neither; the dashboard works there as before, and Install app explains how to reach it securely (loopback, or an `https` `publicUrl`, D-37).
+- **Two daemons on two ports** install as two apps both named "BrowserHive". The window title tells them apart.
+- **Firefox on Linux (by default) and macOS** can't install the dashboard, and no page can change that. The dialog says so.
+- **Navigation cost.** Every in-scope navigation now passes through the worker: one worker start-up when it is idle (milliseconds), then the same network request.
+- **Port grabbing.** A program that takes the port while BrowserHive is down could register its own worker on that origin. That is already true today, with or without this feature; the security guide says so.
 
 **Alternatives considered.**
-- *A CLI command* (`browserhive open --install`, or `--open`): it can only open a browser at the dashboard. Rejected per the owner: a command named "install" that does not install is misleading.
-- *Writing OS launcher files* (`.desktop`, an `.app` shim, a `.lnk` running `chrome --app=…`): duplicates what the browser's own install does, per platform, with no update path. Rejected.
-- *A daemon-generated manifest* (instance name, port in the name, `publicUrl` start URL): the start URL must be relative to whatever origin the operator installs from anyway, and the only real gain, a port in the name, does not change identity. It would add a route, a dev-proxy entry and a second source of truth. Rejected.
-- *Caching the whole app shell* for an offline-capable dashboard: the page is templated per request (CSP nonce, version meta), so caching it reuses nonces. Every screen also needs the live daemon, and a cached shell risks showing an old bundle after an upgrade. Rejected.
-- *vite-plugin-pwa / Workbox*: a large generated worker for a job that fits in about 100 audited lines. Rejected; a small Vite plugin writes the precache list.
-- *Custom install banners that nag*: the browser already shows its own install icon in the address bar. The dashboard offers install where the operator looks for account actions, and never interrupts.
+- *A CLI command* (`browserhive open --install`, `--open`): it can only open a browser. Rejected per the owner: a command named "install" that doesn't install misleads.
+- *Writing OS launcher files* (`.desktop`, an `.app` shim, a `.lnk` running `chrome --app=…`): duplicates the browser's own install per platform, with no update path. Rejected.
+- *A daemon-generated manifest* (instance name, port in the name): the start URL must be relative to the installing origin anyway. The one gain, a port in the name, doesn't change identity, and it would add a route, a dev-proxy entry and a second source of truth. Rejected.
+- *Caching the whole app shell* for an offline-capable dashboard: `index.html` is templated per request (CSP nonce, version meta), so caching it reuses nonces. Every screen also needs the live daemon, and a cached shell risks an old bundle after an upgrade. Rejected.
+- *vite-plugin-pwa / Workbox*: a large generated worker for a job that fits in about 150 audited lines. Rejected; a small Vite plugin writes the precache list.
+- *A topbar install button or banner*: the browser already shows its own install icon in the address bar, and the owner chose the account area. Rejected as nagging.
+- *Navigation preload*: it saves the worker start-up on a navigation, but adds a header, an enable step and a second response path to reason about. Rejected for now; it can be added without changing anything else.
