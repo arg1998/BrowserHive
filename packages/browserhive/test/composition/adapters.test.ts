@@ -7,7 +7,10 @@ import { isAppError } from '@browserhive/core/runtime';
 import { DegradationRelay } from '../../src/composition/adapters/degradation-relay.ts';
 import { logLevelController } from '../../src/composition/adapters/http-ports.ts';
 import { resolveDashboardDir } from '../../src/composition/index.ts';
-import { cancelAttentionOf } from '../../src/composition/phases/listeners-http.ts';
+import {
+  cancelAttentionOf,
+  startingResponse,
+} from '../../src/composition/phases/listeners-http.ts';
 
 describe('logLevelController', () => {
   it('applies a spec and returns the normalised form; rejects bad specs and unknown modules', () => {
@@ -89,5 +92,14 @@ describe('cancelAttentionOf', () => {
     };
     expect(await cancelAttentionOf(broker as never, 'agent-1')).toBe(2);
     expect(cancelled).toEqual(['a-1', 'a-3']);
+  });
+});
+
+describe('startingResponse', () => {
+  it('is a 503 "starting" carrying the version marker (D-49)', async () => {
+    const response = startingResponse('9.8.7');
+    expect(response.status).toBe(503);
+    expect(response.headers.get('x-browserhive-version')).toBe('9.8.7');
+    expect(await response.text()).toBe('starting');
   });
 });

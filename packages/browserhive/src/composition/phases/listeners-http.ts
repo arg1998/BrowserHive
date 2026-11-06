@@ -27,6 +27,7 @@ import {
   playwrightBridgeFactory,
   publicUrlHost,
   sessionDirLayout,
+  VERSION_HEADER,
 } from '@browserhive/core/server';
 import {
   blocklistPort,
@@ -79,6 +80,14 @@ export function bindError(err: unknown, host: string, port: number): AppError {
     { host, port, errno },
     { cause: err, publicMessage: `Cannot listen on ${host}:${port} (${errno}).` },
   );
+}
+
+/**
+ * The answer before the Hono app exists. It runs outside the middleware chain, so it sets the
+ * version marker itself: the dashboard's offline page reads a marked 503 as "starting" (D-49).
+ */
+export function startingResponse(version: string): Response {
+  return new Response('starting', { status: 503, headers: { [VERSION_HEADER]: version } });
 }
 
 /** URL authority for a host (IPv6 literals in brackets). */
@@ -179,9 +188,7 @@ export async function openHttpListener(
       hostname: config.host,
       port: config.port,
       fetch: (request, bunServer) =>
-        app === undefined
-          ? new Response('starting', { status: 503 })
-          : app.fetch(request, bunServer),
+        app === undefined ? startingResponse(ctx.input.appVersion) : app.fetch(request, bunServer),
       websocket: realtime.websocket,
     });
   } catch (err) {

@@ -27,6 +27,34 @@ describe('directory assets', () => {
     });
   });
 
+  it('maps the installable-app files (D-49) to their MIME types, revalidated outside assets/', async () => {
+    await withTempDir(async (dir) => {
+      mkdirSync(join(dir, 'icons'));
+      writeFileSync(join(dir, 'index.html'), '<html></html>');
+      writeFileSync(join(dir, 'sw.js'), 'self.addEventListener("fetch", () => {})');
+      writeFileSync(join(dir, 'sw-precache.json'), '{"version":"abc","paths":[]}');
+      writeFileSync(join(dir, 'manifest.webmanifest'), '{"id":"/"}');
+      writeFileSync(join(dir, 'offline.html'), '<html></html>');
+      writeFileSync(join(dir, 'icons', 'app-192.png'), 'PNG');
+      const assets = createBunStaticAssets(dir);
+      const expected = {
+        'sw.js': 'text/javascript; charset=utf-8',
+        'sw-precache.json': 'application/json; charset=utf-8',
+        'manifest.webmanifest': 'application/manifest+json; charset=utf-8',
+        'offline.html': 'text/html; charset=utf-8',
+        'icons/app-192.png': 'image/png',
+      };
+      for (const [path, type] of Object.entries(expected)) {
+        const file = await assets.get(path);
+        expect({ path, type: file?.contentType, immutable: file?.immutable }).toEqual({
+          path,
+          type,
+          immutable: false,
+        });
+      }
+    });
+  });
+
   it('a missing directory is unavailable', async () => {
     const assets = createDirectoryAssets('/definitely/not/here');
     expect(assets.available).toBe(false);
