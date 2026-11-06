@@ -977,6 +977,8 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
     - no answer in time ("isn't responding");
     - the daemon starting;
     - a proxy whose upstream is down;
+    - BrowserHive refusing the address (host guard);
+    - the device being offline;
     - another program on the address.
   - It shows copyable commands for the visitor's OS, polls every few seconds while visible, and reloads itself when the daemon is ready.
   - The running dashboard shows the same help in a banner and dialog when the daemon goes away while a page is open.

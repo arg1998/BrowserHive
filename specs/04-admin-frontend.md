@@ -126,7 +126,7 @@ State machine (`app/providers/auth-machine.ts`, pure): `loading → login | chan
 
 An injectable class (constructed in `SocketProvider`, replaceable in tests) exposing `useSocketState()`, `subscribe(topic, handler)` (refcounted; first subscriber sends `subscribe`, last sends `unsubscribe`), `command(name, params) → Promise<reply>` (correlated by `corr`), and binary screencast frames. Behavior:
 
-- Connects to `/api/v1/ws`; heartbeat `ping` every 20 s; dead if no frame for 45 s.
+- Connects to `/api/v1/ws`; heartbeat `ping` every 20 s; dead if no frame for 45 s. An attempt that has not received the server's `hello` within 10 s of opening the connection (`CONNECT_TIMEOUT_MS`) is closed and counts as a failed attempt, so a daemon that accepts connections but never answers still drives the store to `offline` (D-49, §18.7).
 - Handshake: mismatch on `protocol` → banner "Dashboard is out of date, reload"; `epoch` change or `resync_required` → invalidate all topic-bound queries.
 - Reconnect: backoff 500 ms·2ⁿ capped 8 s + jitter; on reconnect re-send every active subscription with its last cursor and invalidate all active queries.
 - Bounded dedupe set (last 1 000 seq per topic). The `logs` topic is exempt: its frames carry the feed head as `seq` (many records share one), so they are neither deduped nor used as a resume cursor; the logs page resumes through REST (§12.9).
@@ -856,13 +856,14 @@ In `vite.config.ts`:
 
 - **No framework.** `src/offline/main.ts` builds the DOM with `createElement` and `textContent` only, never `innerHTML`.
 - **Styles and fonts.** The design tokens and Geist. The CSS comes from `src/offline/offline.css`, which imports `styles/tokens.css` and uses Tailwind with `source(none)` and `@source "./"`.
-- **Theme.** The CSS follows `prefers-color-scheme`. `main.ts` then applies an explicit `localStorage['bh.theme']` through `resolveTheme` (the function moves to a React-free `src/theme/resolve.ts`, imported by both).
+- **Theme.** The tokens define dark only under `:root[data-theme="dark"]`, so `main.ts` always sets `data-theme` (and `color-scheme`) first thing. The value is `resolveTheme(stored preference, matchMedia('(prefers-color-scheme: dark)').matches)`, and it follows `change` events. `resolveTheme` moves to a React-free `src/theme/resolve.ts`, imported by both the dashboard and the offline page. The very first paint may show the light tokens for one frame when the result is dark; `offline.html` sets `<meta name="color-scheme" content="light dark">` and a dark `background` under `prefers-color-scheme: dark` in a small `<style>` block, which the CSP allows, so even that frame is dark.
 - **No inline script.** The page is served without a nonce, so it contains none.
 - **Brand mark.** Built in `main.ts` with `createElementNS`, so no icon request is needed.
 
 #### 18.6.1 Probe (`src/lib/daemon-help/probe.ts`)
 
-- **`probeHealth()`.** `fetch('/health', { cache: 'no-store' })` with a 5 s timeout. It returns the raw outcome: rejected, timed out, or `{ status, marked, body }`, where `marked` means the response carries `X-BrowserHive-Version`. Both the offline page and the dashboard (§18.7) use it.
+- **`probeHealth({ fetch, timers })`.** Both are injectable (defaults: global `fetch`, `browserTimers`). It calls `fetch('/health', { cache: 'no-store' })` with a 5 s timeout. It returns the raw outcome: rejected, timed out, or `{ status, marked, body }`, where `marked` means the response carries `X-BrowserHive-Version`. Both the offline page and the dashboard (§18.7) use it.
+- **`isDaemonAnswer(outcome)`** = `outcome.marked`. Any response carrying the marker, healthy or not, proves the daemon is reachable. Rejections, timeouts and unmarked responses (`foreign`, `proxy-unreachable`) are not daemon answers.
 - **`classifyProbe(outcome)`** (pure).
   - **What counts as BrowserHive.** A JSON object with `status` ∈ `starting|ready|degraded|stopping` and a string `version`. The check is hand-written, not zod, so the offline build stays small.
   - **Consistency.** A test asserts it recognises every `HealthResponse` fixture, including one without `instance_id` (older daemons).
@@ -875,7 +876,8 @@ In `vite.config.ts`:
 | BrowserHive body, `ready` or `degraded` | `ready` → reload (§18.6.4) |
 | BrowserHive body, `starting` | `starting` |
 | BrowserHive body, `stopping` | `not-running` (it will be in a moment) |
-| marked, not a health body (e.g. `421 HOST_NOT_ALLOWED`) | `refused` |
+| marked, not a health body, status 503 (the listener's pre-app fallback) | `starting` |
+| marked, not a health body, any other status (e.g. `421 HOST_NOT_ALLOWED`) | `refused`. The worker returns such a response untouched on a navigation, so this state is reached mainly by a direct visit to `/offline.html` or when the host guard changes while the page is open. |
 | not marked, any 5xx | `proxy-unreachable` |
 | anything else | `foreign` |
 
@@ -953,12 +955,13 @@ Shown for `not-running`, `not-responding`, `starting` (start command omitted), `
 
 - **One watcher.** `DaemonReachabilityProvider` (`src/lib/daemon-help/reachability.tsx`, mounted in `AppShell`) owns every `/health` probe the shell makes. It hosts the REST-failure probing that today lives in `HealthPill`'s effect, with the same rules (§6.1), now calling `probeHealth()`. `HealthPill` and the banner both read it, so there is never a second poller.
 - **When it probes.**
-  - Every 5 s from the moment the socket store first reports `offline`. The store's reconnect backoff (500 ms, 1 s, 2 s) gets there about 3.5 s after the daemon stops.
-  - Otherwise, as §6.1 says: every 15 s while REST is failing.
-  - It stops once any daemon answer arrives.
-- **When it shows.** After **3 consecutive** probes classified `not-running`, `not-responding` or `proxy-unreachable`. Gaps are measured from probe start to probe start, and any gap over 15 s resets the count, so sleep, resume and a throttled background tab never show it on wake. The banner appears about 14–19 s after the daemon stops.
-- **When it hides.** On any daemon answer: a BrowserHive probe body, the socket reaching `connected`, or a successful REST request. The socket store's reconnect resyncs (§4.2), with no reload.
-- **`DaemonUnreachableBanner`.**
+  - The **outage cadence** starts the moment the socket store first reports `offline`. The store's reconnect backoff (500 ms, 1 s, 2 s, plus the 10 s connect timeout of §4.2 against a hung daemon) gets there about 3.5 s after the daemon stops, or about 33 s when it hangs. Each probe starts 5 s after the previous one started, or when it settles, whichever is later.
+  - Otherwise, as §6.1 says: every 15 s while REST is failing. These probes update `HealthPill` but never count toward the banner.
+  - Probing stops on the first daemon answer (`isDaemonAnswer`), which also clears the REST failure in `HealthPill`. An unmarked 502 from a proxy keeps it failing; a malformed but marked 200 clears it.
+- **When it shows.** After **3 consecutive outage-cadence** probes classified `not-running`, `not-responding` or `proxy-unreachable`. Gaps are measured from probe start to probe start, and any gap over 15 s resets the count, so sleep, resume and a throttled background tab never show it on wake. The banner appears about 15–20 s after the daemon stops (later for a hung daemon: connect timeout plus three 5 s probe timeouts).
+- **When it hides.** On any daemon answer: a marked probe response, the socket reaching `connected`, or a successful REST request. The socket store's reconnect resyncs (§4.2), with no reload.
+- **Testing seam.** `test/helpers/page-harness.tsx` mounts `DaemonReachabilityProvider` inside `SocketProvider` with the harness's `fetchImpl` and fake timers, so `HealthPill.test.tsx` and page tests keep working.
+- **`DaemonUnreachableBanner`** (`src/app/shell/DaemonUnreachableBanner.tsx`).
   - **Placement.** Rendered under the topbar; while shown it takes precedence over `AuthRetryBanner`.
   - **Text.** "Can't reach BrowserHive at `host`. It may have stopped."
   - **What to do.** A button that opens a dialog with the §18.6.2 body for the current state and the §18.6.3 commands. They are rendered with `CodeBlock`, promoted from `features/notifications/channels/wizard/fields.tsx` to `components/shared` (§7.2), and with `CopyButton`.
@@ -973,7 +976,7 @@ Shown for `not-running`, `not-responding`, `starting` (start command omitted), `
   - `preventDefault()` only stops mobile Chromium's mini-infobar; desktop keeps its address-bar icon.
   - Components read the store with `useSyncExternalStore`.
 - **Prompting.** After `prompt()` the event is dropped whatever the outcome; Chromium may offer a new one later.
-- **`appinstalled`.** The store clears the event and emits an `installed` signal. `InstallToastBridge`, mounted once in `AppShell`, turns that signal into the toast "BrowserHive is installed. Open it from your app launcher or taskbar." (Toasts need the React context.)
+- **`appinstalled`.** The store clears the event and emits an `installed` signal. `InstallToastBridge` (`src/app/shell/InstallToastBridge.tsx`), mounted once in `AppShell`, turns that signal into the toast "BrowserHive is installed. Open it from your app launcher or taskbar." (Toasts need the React context.)
 
 #### 18.8.2 What the browser supports (`installSupport`, pure, `src/lib/install/support.ts`)
 
@@ -1015,7 +1018,7 @@ Each entry records the source and the browser version it was checked against. Th
 - **Account menu** (`PrincipalMenu`): **Install app**, with `ICONS.installApp` (lucide `MonitorDown`, added to `lib/icons.ts`), placed between Keyboard shortcuts and Log out. It is hidden only for `standalone`.
 - **Command palette**, Actions section: "Install BrowserHive as an app" (keywords `install app pwa desktop dock taskbar home screen`). It has the same visibility and the same handler.
 - **Nowhere else:** no banner, card or reminder. The browser's address-bar icon is the ambient affordance.
-- **`InstallAppDialog`** (shared `Dialog`):
+- **`InstallAppDialog`** (`src/features/install/InstallAppDialog.tsx`, shared `Dialog`):
   - title "Install BrowserHive";
   - the row's text;
   - the address as a `CopyValue` where the row says so;
@@ -1044,7 +1047,8 @@ Launch handling (`launch_handler`, `launchQueue`) is deferred (D-49).
   - `src/lib/daemon-help/{probe,commands}.ts` and `src/lib/install/{support,steps}.ts` import no React.
 - **Folder structure (§3)** gains:
   - `src/sw/`, `src/offline/`, `src/lib/install/`, `src/lib/daemon-help/`, `src/assets/app-icon/`;
-  - `src/dev-proxy.ts`, `src/lib/clipboard.ts`, `src/theme/resolve.ts`;
+  - `src/dev-proxy.ts`, `src/lib/clipboard.ts`, `src/theme/resolve.ts`, `src/features/install/`;
+  - `tsconfig.sw.json`;
   - `offline.html`;
   - `scripts/offline-sw-plugin.ts`, `scripts/gen-app-icons.ts`;
   - `public/manifest.webmanifest`, `public/icons/`.

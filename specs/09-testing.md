@@ -173,7 +173,8 @@ One suite per user-visible guarantee, plus the single-port smoke. All use `Playw
       - `Response.error()` when `offline.html` is missing.
     - The kill-switch worker: unregisters and deletes its caches, with no fetch listener.
     - `classifyProbe`:
-      - every row of 04 §18.6.1, including `navigator.onLine === false`, a marked `421` (`refused`) and an unmarked `530` (`proxy-unreachable`);
+      - every row of 04 §18.6.1, including `navigator.onLine === false`, a marked `421` (`refused`), a marked plain-text `503` (`starting`) and an unmarked `530` (`proxy-unreachable`);
+      - `isDaemonAnswer`: true only for marked responses;
       - a BrowserHive body without `instance_id`;
       - a 200 non-BrowserHive JSON, a 502 HTML and a 404 HTML;
       - recognises every `HealthResponse` fixture of the contracts goldens.
@@ -204,7 +205,8 @@ One suite per user-visible guarantee, plus the single-port smoke. All use `Playw
     - `InstallAppDialog`: one render per dialog kind.
     - `prompt` calls the event's `prompt()` and opens no dialog.
     - `InstallToastBridge` toasts on `installed`.
-    - `DaemonReachabilityProvider` is the only `/health` caller: `HealthPill` and the banner both read it.
+    - `DaemonReachabilityProvider` is the only `/health` caller: `HealthPill` and the banner both read it, only outage-cadence probes count toward the banner, and the existing `HealthPill.test.tsx` cases still pass through the harness.
+    - The socket store's connect timeout: an attempt with no `hello` within 10 s closes and counts toward `offline`.
     - `DaemonUnreachableBanner`:
       - appears only after 3 consecutive failed probes;
       - a gap over 15 s resets the count;
@@ -228,7 +230,7 @@ One suite per user-visible guarantee, plus the single-port smoke. All use `Playw
 - `publint` and `@arethetypeswrong/cli --pack` on the built `browserhive` package.
 - `smoke-installed.ts`: `npm pack` → clean directory → `bun install <tarball>` → `browserhive --version` → stdio handshake (`initialize`, `tools/list` equals the catalog golden, `list_sessions`) → `import { createServer } from 'browserhive'` and `listen()`/`stop()` on port 0.
 - Tarball content assertions: contains `dist/`, `README.md`, `LICENSE`, dashboard assets; excludes `src/`, `test/`, `.tsbuildinfo`, sourcemaps.
-- Installable-app assertions (D-49) on `dist/dashboard`: `manifest.webmanifest`, `sw.js`, `sw-precache.json`, `offline.html` and the six icons exist; every `sw-precache.json` path exists, and its `version` appears in `sw.js`; every `url(…)` in the precached CSS is itself precached; the precache totals ≤ 300 KB; `sw.js` contains no `import`, `importScripts` or `zod`; `icons.stamp.json` is **not** in the bundle.
+- Installable-app assertions (D-49) on `dist/dashboard`: `manifest.webmanifest`, `sw.js`, `sw-precache.json`, `offline.html` and the six icons exist; every `sw-precache.json` path exists, and its `version` appears in `sw.js`; every `url(…)` in the precached CSS other than a `data:` URI is itself precached; the precache totals ≤ 300 KB; `sw.js` contains no `import`, `importScripts` or `zod`; `icons.stamp.json` is **not** in the bundle.
 - `release-dry-run` = build + gate, run on tags and on demand.
 
 ## 4. Test doubles
