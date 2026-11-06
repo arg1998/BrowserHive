@@ -235,3 +235,14 @@ export function helpCommandsFor(help: DaemonHelp, state: HelpState): readonly He
       return [];
   }
 }
+
+/** Groups consecutive commands with the same purpose (the three port-holder lines share one). */
+export function groupByPurpose(commands: readonly HelpCommand[]): HelpCommand[][] {
+  const groups: HelpCommand[][] = [];
+  for (const command of commands) {
+    const last = groups.at(-1);
+    if (last !== undefined && last[0]?.purpose === command.purpose) last.push(command);
+    else groups.push([command]);
+  }
+  return groups;
+}

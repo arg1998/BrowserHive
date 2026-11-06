@@ -1,7 +1,5 @@
-/** @module app/shell/HealthPill — connection pill: realtime socket state + REST failures (not idleness, issue #50); a real button opening a details popover, reachable on touch and keyboard */
-import { useQueryClient } from '@tanstack/react-query';
-import { type ReactNode, useEffect, useRef, useState } from 'react';
-import { useApi } from '@/app/providers/AuthProvider.tsx';
+/** @module app/shell/HealthPill — connection pill: realtime socket state + REST failures (not idleness, issue #50) from `DaemonReachabilityProvider`; a real button opening a details popover, reachable on touch and keyboard */
+import { type ReactNode, useEffect, useState } from 'react';
 import { useSocketState } from '@/app/providers/SocketProvider.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import {
@@ -11,9 +9,8 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from '@/components/ui/popover.tsx';
-import type { AppError } from '@/lib/api/errors.ts';
-import { REST_HEALTH_UNKNOWN, type RestHealth, watchRestHealth } from '@/lib/api/rest-health.ts';
 import { browserClock } from '@/lib/clock.ts';
+import { useDaemonReachability } from '@/lib/daemon-help/reachability.tsx';
 import { formatRelative } from '@/lib/format/time.ts';
 import { cn } from '@/lib/utils.ts';
 
@@ -58,20 +55,8 @@ const DOT = {
 /** Health pill. `compact` shows only the dot (the label is in the accessible name and the popover). */
 export function HealthPill({ compact = false }: { readonly compact?: boolean }) {
   const socket = useSocketState();
-  const queryClient = useQueryClient();
-  const api = useApi();
-  const [failure, setFailure] = useState<AppError | null>(null);
-  const health = useRef<() => RestHealth>(() => REST_HEALTH_UNKNOWN);
-  useEffect(() => {
-    const watcher = watchRestHealth(queryClient, {
-      // Cache events fire while a component renders a new query; defer so no other component updates mid-render.
-      onChange: (next) => queueMicrotask(() => setFailure(next.failure)),
-      probe: () => api.getHealth(),
-    });
-    health.current = watcher.current;
-    setFailure(watcher.current().failure);
-    return watcher.dispose;
-  }, [queryClient, api]);
+  // REST health and its `/health` rechecks live in the reachability watcher (04 §18.7).
+  const { restFailure: failure, lastAnswerAt } = useDaemonReachability();
   const { label, tone } = healthState(socket.status, failure === null);
   const realtime =
     socket.status === 'offline'
@@ -80,7 +65,7 @@ export function HealthPill({ compact = false }: { readonly compact?: boolean }) 
   const rows: readonly (readonly [string, ReactNode])[] = [
     ['Realtime', realtime],
     ['REST', failure === null ? 'Healthy' : `Failing (${failure.title.toLowerCase()})`],
-    ['Last answer', <LastAnswer key="last" read={() => health.current().lastAnswerAt} />],
+    ['Last answer', <LastAnswer key="last" read={lastAnswerAt} />],
     ...(socket.serverVersion !== null ? [['Daemon', `v${socket.serverVersion}`] as const] : []),
   ];
   return (

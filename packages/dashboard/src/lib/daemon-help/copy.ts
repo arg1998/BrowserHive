@@ -1,5 +1,5 @@
-/** @module offline/copy — what the offline page says for each state (04 §18.6.2) and the "last used" line. Pure. */
-import type { DaemonState } from '../lib/daemon-help/probe.ts';
+/** @module lib/daemon-help/copy — what the offline page and the banner's dialog say for each state (04 §18.6.2) and the "last used" line. Pure. */
+import type { DaemonState } from './probe.ts';
 
 /** Every state the page shows: the daemon states plus the reload loop guard (04 §18.6.4). */
 export type PageState = DaemonState | 'loop-guard';

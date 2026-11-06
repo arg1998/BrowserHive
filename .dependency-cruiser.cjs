@@ -96,7 +96,7 @@ module.exports = {
       name: 'daemon-help-no-react',
       severity: 'error',
       from: {
-        path: '^packages/dashboard/src/lib/(daemon-help/(probe|commands|keys)|install/(support|steps))\\.ts$',
+        path: '^packages/dashboard/src/lib/(daemon-help/(probe|commands|keys|copy)|install/(support|steps))\\.ts$',
       },
       to: { path: ['\\.tsx$', '^@/', '(^|/)node_modules/(react|react-dom)/'] },
     },
@@ -107,7 +107,7 @@ module.exports = {
       to: {
         pathNot: [
           '^packages/dashboard/src/offline/',
-          '^packages/dashboard/src/lib/daemon-help/(probe|commands|keys)\\.ts$',
+          '^packages/dashboard/src/lib/daemon-help/(probe|commands|keys|copy)\\.ts$',
           '^packages/dashboard/src/lib/(clock|links|storage|clipboard)\\.ts$',
           '^packages/dashboard/src/theme/resolve\\.ts$',
           '^packages/dashboard/src/styles/tokens\\.css$',

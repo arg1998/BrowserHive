@@ -1,6 +1,6 @@
 /** @module features/notifications/channels/wizard/fields — form pieces of the channel wizard: a labelled field row, the environment-variable name field with its live set/missing state (never the value), a copyable code block, and the per-launch-method instructions */
 import { type ReactNode, useId, useState } from 'react';
-import { CopyButton } from '@/components/shared/CopyButton.tsx';
+import { CodeBlock } from '@/components/shared/CodeBlock.tsx';
 import { Input } from '@/components/ui/input.tsx';
 import { Spinner } from '@/components/ui/spinner.tsx';
 import { Switch } from '@/components/ui/switch.tsx';
@@ -121,21 +121,6 @@ export function EnvVarField({
         {value !== '' ? <EnvStatePill state={state} checking={checking} /> : null}
       </div>
     </Field>
-  );
-}
-
-/** A code block with a copy button. */
-export function CodeBlock({ code, label }: { readonly code: string; readonly label: string }) {
-  return (
-    <div
-      data-reveal-scope=""
-      className="relative min-w-0 rounded-lg border bg-muted/50 dark:bg-black/20"
-    >
-      <pre className="overflow-x-auto p-3 pr-12 font-mono text-sm leading-relaxed">{code}</pre>
-      <div className="absolute top-1.5 right-1.5">
-        <CopyButton value={code} label={`Copy ${label}`} visibility="always" />
-      </div>
-    </div>
   );
 }
 

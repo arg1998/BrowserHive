@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { useCallback, useMemo } from 'react';
 import { useApi, useAuth } from '@/app/providers/AuthProvider.tsx';
+import { useInstallApp } from '@/features/install/install-app.tsx';
 import { keys } from '@/lib/api/keys.ts';
 import type { IconName } from '@/lib/icons.ts';
 import { docsUrl, ISSUES_URL, REPO_URL, WEBSITE_URL } from '@/lib/links.ts';
@@ -48,6 +49,17 @@ export const PALETTE_GROUPS: readonly PaletteGroup[] = [
 ];
 
 const RECENT_KEY = 'bh.palette.recent';
+
+/** Keywords of the Install app action (04 §18.8.4). */
+export const INSTALL_KEYWORDS: readonly string[] = [
+  'install',
+  'app',
+  'pwa',
+  'desktop',
+  'dock',
+  'taskbar',
+  'home screen',
+];
 const RECENT_LIMIT = 5;
 
 /** Opens an outbound link in a new tab. */
@@ -158,6 +170,7 @@ export function usePaletteCommands(
   const theme = useTheme();
   const [sidebar, setSidebar] = useSidebarPreference();
   const items = useNavItems();
+  const install = useInstallApp();
   const search = useQuery({
     queryKey: keys.search(debouncedQuery),
     queryFn: () => api.search({ query: { q: debouncedQuery, limit: 6 } }),
@@ -282,6 +295,18 @@ export function usePaletteCommands(
         keywords: ['account', 'security'],
         run: () => void navigate({ to: '/change-password', search: { voluntary: true } }),
       },
+      ...(install?.visible === true
+        ? [
+            {
+              id: 'action:install-app',
+              group: 'Actions',
+              label: 'Install BrowserHive as an app',
+              icon: 'installApp',
+              keywords: INSTALL_KEYWORDS,
+              run: install.run,
+            } satisfies PaletteCommand,
+          ]
+        : []),
       ...DOCS_COMMANDS,
       {
         id: 'action:logout',
@@ -306,6 +331,7 @@ export function usePaletteCommands(
     go,
     navigate,
     debouncedQuery,
+    install,
   ]);
   return { commands, searching: search.isFetching || sessionList.isFetching };
 }

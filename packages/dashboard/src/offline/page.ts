@@ -9,9 +9,17 @@ import {
   type DaemonHelp,
   daemonHelp,
   detectPlatform,
+  groupByPurpose,
   type HelpCommand,
   helpCommandsFor,
 } from '../lib/daemon-help/commands.ts';
+import {
+  lastUsedText,
+  type PageState,
+  type Segment,
+  stateCopy,
+  type Tone,
+} from '../lib/daemon-help/copy.ts';
 import { LAST_SEEN_KEY, parseLastSeen } from '../lib/daemon-help/keys.ts';
 import { classifyProbe, type ProbeOutcome } from '../lib/daemon-help/probe.ts';
 import { docsUrl } from '../lib/links.ts';
@@ -23,7 +31,6 @@ import {
   THEME_COLORS,
   THEME_STORAGE_KEY,
 } from '../theme/resolve.ts';
-import { lastUsedText, type PageState, type Segment, stateCopy, type Tone } from './copy.ts';
 import { type Child, el, replaceChildren } from './dom.ts';
 import { brandMark, icon } from './icons.ts';
 import { Poller } from './poller.ts';
@@ -122,17 +129,6 @@ function timeOfDay(ms: number): string {
     minute: '2-digit',
     second: '2-digit',
   });
-}
-
-/** Groups consecutive commands with the same purpose (the three port-holder lines share one). */
-function groupByPurpose(commands: readonly HelpCommand[]): HelpCommand[][] {
-  const groups: HelpCommand[][] = [];
-  for (const command of commands) {
-    const last = groups.at(-1);
-    if (last !== undefined && last[0]?.purpose === command.purpose) last.push(command);
-    else groups.push([command]);
-  }
-  return groups;
 }
 
 /** Mounts the page into `root` and starts probing. */
