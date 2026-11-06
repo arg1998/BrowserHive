@@ -106,6 +106,12 @@ Records are pruned after `--retentionDays` (default 7) or when the database and 
 
 The data directory is `0700` and secret files are `0600`. Saved logins (`auth-states/`) contain real cookies and storage; protect them like passwords. They are protected by your OS user account, not encrypted by BrowserHive.
 
+## The installed app's service worker
+
+The dashboard registers a small service worker so an installed app (or a tab) can show a help page when BrowserHive isn't running. It stores only that page's own public files: the HTML, script, stylesheet and fonts that ship with BrowserHive. It stores no API responses, sessions, cookies or other operator data, so there is nothing to clear on sign-out. It never handles `/api`, `/mcp`, `/health` or `/trace-viewer`, other origins or anything but `GET`. It removes itself and its cache when a program other than BrowserHive answers on the address. **Forget this address** on the help page, or the browser's site settings, remove it on demand.
+
+A program that takes BrowserHive's port while BrowserHive is stopped can serve its own pages, and register its own service worker, on that address. That was already true before the app existed: an address is only as trustworthy as whatever listens on it. Keep the default `127.0.0.1` bind on shared machines, and install the app from the address the startup banner prints.
+
 ## The blocklist is not an egress firewall
 
 `--blocklist` stops navigations at the tool boundary and aborts document requests in the browser. Subresources still load, and an agent with `evaluate` can `fetch()` a blocked URL. Use it to keep agents off pages, not to contain them.

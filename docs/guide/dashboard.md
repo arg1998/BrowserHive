@@ -95,7 +95,9 @@ The dashboard installs as an app: it opens in its own window with its own icon i
 
 The app is only a window onto the dashboard: BrowserHive itself must be running, and every screen still comes from it.
 
-**Install it.** Open **Install app** in the account menu (top right) or the command palette. Where the browser can install directly (Chrome, Edge and other Chromium browsers), it shows its own install dialog; otherwise the dashboard shows the steps for your browser:
+If BrowserHive stops while the dashboard is open (in the app or in a tab), a banner under the top bar says *Can't reach BrowserHive* after about 15–20 seconds. **What to do** shows the same explanation and commands as the help page. The banner clears by itself, without a reload, as soon as BrowserHive answers again.
+
+**Install it.** Open **Install app** in the account menu (top right) or run *Install BrowserHive as an app* from the command palette (`⌘K` / `Ctrl K`). Inside the installed app the item is hidden. Where the browser can install directly (Chrome, Edge and other Chromium browsers), it shows its own install dialog; otherwise the dashboard shows the steps for your browser:
 
 - **Chrome:** the install icon at the right of the address bar, or ⋮ › *Cast, save, and share* › *Install page as app…*
 - **Edge:** *App available* in the address bar, or … › *More tools* › *Apps* › *Install this site as an app*.
@@ -103,7 +105,7 @@ The app is only a window onto the dashboard: BrowserHive itself must be running,
 - **Android (Chrome):** ⋮ › *Add to Home screen* or *Install app*.
 - **iPhone and iPad:** Share › *Add to Home Screen*.
 - **Safari on macOS:** File › *Add to Dock*. Then open the new app once while BrowserHive is running: from then on it can show the help page when BrowserHive is stopped.
-- **Firefox on Windows:** the web-apps icon in the address bar, then *Add to taskbar*. Firefox on Linux and macOS cannot install websites as apps; open the address in a Chromium browser instead, or bookmark it.
+- **Firefox on Windows:** the web-apps icon in the address bar, then *Add to taskbar*. Firefox on Linux (unless that feature is turned on) and on macOS cannot install websites as apps; open the address in a Chromium browser instead, or bookmark it. Firefox on Android: *Install* or *Add to Home screen* in its menu.
 
 **Use the address the startup banner prints.** An app belongs to one exact address: `http://127.0.0.1:9876` and `http://localhost:9876` are two different apps. Two BrowserHive daemons on two ports install as two apps.
 
