@@ -207,6 +207,7 @@ One suite per user-visible guarantee, plus the single-port smoke. All use `Playw
     - `InstallToastBridge` toasts on `installed`.
     - `DaemonReachabilityProvider` is the only `/health` caller: `HealthPill` and the banner both read it, only outage-cadence probes count toward the banner, and the existing `HealthPill.test.tsx` cases still pass through the harness.
     - The socket store's connect timeout: an attempt with no `hello` within 10 s closes and counts toward `offline`.
+    - The reachability watcher on its own (`lib/daemon-help/watcher.test.ts`, manual timers): the former `watchRestHealth` cases (idle stays healthy, failures, 4xx, mutations, realtime writes, rechecks until a daemon answer, the initial cache state), the cadence, the gap reset and every hide condition.
     - `DaemonUnreachableBanner`:
       - appears only after 3 consecutive failed probes;
       - a gap over 15 s resets the count;
@@ -221,7 +222,7 @@ One suite per user-visible guarantee, plus the single-port smoke. All use `Playw
   - **E2E** (`pwa.e2e.ts`, a dedicated `pwa` Playwright project with `serviceWorkers: 'allow'` and `testMatch: pwa.e2e.ts`; the `desktop` and `phone` projects set `serviceWorkers: 'block'` and `testIgnore` it, so the worker never touches existing journeys):
     - In a **persistent context with `channel: 'chromium'`** (the only mode where installability is reported faithfully: the default headless shell returns `[]` for anything, and an ordinary context reports `in-incognito`):
       - CDP `Page.getAppManifest` reports no `errors`, and `Page.getInstallabilityErrors` returns `[]`;
-      - a negative control page without a manifest reports `no-manifest`;
+      - a negative control page without a manifest reports `no-manifest` (an HTML page fulfilled by `page.route` under a reserved prefix, `/api/no-manifest-control`: once the worker controls the origin, an SPA path is fetched by the worker and gets `index.html`, manifest included);
       - after a click, `beforeinstallprompt` arrives, and Install app calls `prompt()` (Playwright then dismisses it with Escape).
     - In an ordinary context: the worker activates and controls the page; with no prompt available, Install app opens the instructions dialog, which passes axe.
 

@@ -126,7 +126,7 @@ State machine (`app/providers/auth-machine.ts`, pure): `loading → login | chan
 
 An injectable class (constructed in `SocketProvider`, replaceable in tests) exposing `useSocketState()`, `subscribe(topic, handler)` (refcounted; first subscriber sends `subscribe`, last sends `unsubscribe`), `command(name, params) → Promise<reply>` (correlated by `corr`), and binary screencast frames. Behavior:
 
-- Connects to `/api/v1/ws`; heartbeat `ping` every 20 s; dead if no frame for 45 s. An attempt that has not received the server's `hello` within 10 s of opening the connection (`CONNECT_TIMEOUT_MS`) is closed and counts as a failed attempt, so a daemon that accepts connections but never answers still drives the store to `offline` (D-49, §18.7).
+- Connects to `/api/v1/ws`; heartbeat `ping` every 20 s; dead if no frame for 45 s. An attempt that has not received the server's `hello` within 10 s of opening the connection (`CONNECT_TIMEOUT_MS`) is closed (client close code 4008, application range; the late `close` event of that socket is ignored) and counts as a failed attempt, so a daemon that accepts connections but never answers still drives the store to `offline` (D-49, §18.7). The timer starts when the socket is created, so it also covers an upgrade that never completes.
 - Handshake: mismatch on `protocol` → banner "Dashboard is out of date, reload"; `epoch` change or `resync_required` → invalidate all topic-bound queries.
 - Reconnect: backoff 500 ms·2ⁿ capped 8 s + jitter; on reconnect re-send every active subscription with its last cursor and invalidate all active queries.
 - Bounded dedupe set (last 1 000 seq per topic). The `logs` topic is exempt: its frames carry the feed head as `seq` (many records share one), so they are neither deduped nor used as a resume cursor; the logs page resumes through REST (§12.9).
@@ -953,18 +953,19 @@ Shown for `not-running`, `not-responding`, `starting` (start command omitted), `
 
 `HealthPill` turns Offline when the socket gives up (§6.1). The banner adds an explanation and the same help as the offline page.
 
-- **One watcher.** `DaemonReachabilityProvider` (`src/lib/daemon-help/reachability.tsx`, mounted in `AppShell`) owns every `/health` probe the shell makes. It hosts the REST-failure probing that today lives in `HealthPill`'s effect, with the same rules (§6.1), now calling `probeHealth()`. `HealthPill` and the banner both read it, so there is never a second poller.
+- **One watcher.** `DaemonReachabilityProvider` (`src/lib/daemon-help/reachability.tsx`, mounted in `AppShell` inside `SocketProvider`) owns every `/health` probe the shell makes. The logic is the framework-free `DaemonReachability` class in `src/lib/daemon-help/watcher.ts`, which follows the query cache (`followRestOutcomes`, `lib/api/rest-health.ts`) and replaces the REST-failure probing that lived in `HealthPill`'s effect (`watchRestHealth`), with the same rules (§6.1), now calling `probeHealth()`. The provider takes the socket state as a `socket` prop (`AppShell` passes `useSocketState()`), so `lib/` never imports `app/`. `HealthPill` and the banner both read it through `useDaemonReachability()`, so there is never a second poller, and at most one probe is in flight.
 - **When it probes.**
-  - The **outage cadence** starts the moment the socket store first reports `offline`. The store's reconnect backoff (500 ms, 1 s, 2 s, plus the 10 s connect timeout of §4.2 against a hung daemon) gets there about 3.5 s after the daemon stops, or about 33 s when it hangs. Each probe starts 5 s after the previous one started, or when it settles, whichever is later.
+  - The **outage cadence** starts the moment the socket store first reports `offline` with reason `network` (offline for `unauthorized`, `password_change` or `protocol` means the daemon answered). The store's reconnect backoff (500 ms, 1 s, 2 s, plus the 10 s connect timeout of §4.2 against a hung daemon) gets there about 3.5 s after the daemon stops, or about 33 s when it hangs. Each probe starts 5 s after the previous one started, or when it settles, whichever is later.
   - Otherwise, as §6.1 says: every 15 s while REST is failing. These probes update `HealthPill` but never count toward the banner.
   - Probing stops on the first daemon answer (`isDaemonAnswer`), which also clears the REST failure in `HealthPill`. An unmarked 502 from a proxy keeps it failing; a malformed but marked 200 clears it.
 - **When it shows.** After **3 consecutive outage-cadence** probes classified `not-running`, `not-responding` or `proxy-unreachable`. Gaps are measured from probe start to probe start, and any gap over 15 s resets the count, so sleep, resume and a throttled background tab never show it on wake. The banner appears about 15–20 s after the daemon stops (later for a hung daemon: connect timeout plus three 5 s probe timeouts).
 - **When it hides.** On any daemon answer: a marked probe response, the socket reaching `connected`, or a successful REST request. The socket store's reconnect resyncs (§4.2), with no reload.
-- **Testing seam.** `test/helpers/page-harness.tsx` mounts `DaemonReachabilityProvider` inside `SocketProvider` with the harness's `fetchImpl` and fake timers, so `HealthPill.test.tsx` and page tests keep working.
+- **Testing seam.** `test/helpers/page-harness.tsx` mounts `DaemonReachabilityProvider` inside `SocketProvider` with the harness's `fetchImpl` and fake timers, so `HealthPill.test.tsx` and page tests keep working. The harness's fake daemon marks every response with `X-BrowserHive-Version`, like the real one.
+- **Banner state.** It first shows for a counted state; while shown it follows the latest outage probe (e.g. `device-offline`), so the dialog describes the current state. If the daemon answers while the dialog is open, the dialog stays and says "BrowserHive is back".
 - **`DaemonUnreachableBanner`** (`src/app/shell/DaemonUnreachableBanner.tsx`).
   - **Placement.** Rendered under the topbar; while shown it takes precedence over `AuthRetryBanner`.
   - **Text.** "Can't reach BrowserHive at `host`. It may have stopped."
-  - **What to do.** A button that opens a dialog with the §18.6.2 body for the current state and the §18.6.3 commands. They are rendered with `CodeBlock`, promoted from `features/notifications/channels/wizard/fields.tsx` to `components/shared` (§7.2), and with `CopyButton`.
+  - **What to do.** A button that opens a dialog with the §18.6.2 body for the current state and the §18.6.3 commands. They are rendered with `CodeBlock`, promoted from `features/notifications/channels/wizard/fields.tsx` to `components/shared` (§7.2), and with `CopyButton`. `CodeBlock` gains `overflow: 'scroll' | 'wrap'`: `wrap` keeps one command's copy button beside its first line and wraps only between words. The body text is `stateCopy` from `src/lib/daemon-help/copy.ts` (moved from `src/offline/`, shared with the offline page). One Close button, no corner ✕; Learn more → `docsUrl('troubleshootingNotRunning')`.
   - **Announcement.** The text is written into a `role="status"` region the shell mounts permanently, so it is announced once.
   - **Never modal.** The operator can still read the page.
 
@@ -975,6 +976,7 @@ Shown for `not-running`, `not-responding`, `starting` (start command omitted), `
 - **The store.** `src/lib/install/prompt-store.ts` adopts `window.__bhInstallPrompt` (from the inline bootstrap, §18.2) and listens for later `beforeinstallprompt` events, calling `preventDefault()`.
   - `preventDefault()` only stops mobile Chromium's mini-infobar; desktop keeps its address-bar icon.
   - Components read the store with `useSyncExternalStore`.
+  - The store takes the event off `window` when it adopts it (and clears the global when its own listener receives one), so a later mount never adopts a used event; `stop()` puts an unused one back. `src/lib/install/install-prompt.d.ts` declares `BeforeInstallPromptEvent`, the `beforeinstallprompt`/`appinstalled` window events and `window.__bhInstallPrompt`.
 - **Prompting.** After `prompt()` the event is dropped whatever the outcome; Chromium may offer a new one later.
 - **`appinstalled`.** The store clears the event and emits an `installed` signal. `InstallToastBridge` (`src/app/shell/InstallToastBridge.tsx`), mounted once in `AppShell`, turns that signal into the toast "BrowserHive is installed. Open it from your app launcher or taskbar." (Toasts need the React context.)
 
@@ -996,7 +998,7 @@ The first matching row wins:
 | 6 | Chromium, desktop | `chromium` | Dialog: the brand's steps (§18.8.3), then "Already installed? Your browser shows an *Open in app* button in the address bar instead." |
 | 7 | `Firefox/` in the UA, Windows | `firefox-windows` | Dialog: the Firefox steps (§18.8.3) |
 | 8 | `Firefox/`, Linux | `firefox-linux` | Dialog: "Firefox on Linux doesn't install websites as apps unless that is turned on. Open this address in Chrome, Edge or another Chromium browser to install BrowserHive, or bookmark it here." The address is a copy button |
-| 9 | `Firefox/`, macOS or other | `firefox-unsupported` | Dialog: "Firefox can't install websites as apps on this system. Open this address in Chrome, Edge or another Chromium browser to install BrowserHive, or bookmark it here." The address is a copy button |
+| 9 | `Firefox/`, macOS or other desktop (Firefox for Android installs from its menu and falls to row 11) | `firefox-unsupported` | Dialog: "Firefox can't install websites as apps on this system. Open this address in Chrome, Edge or another Chromium browser to install BrowserHive, or bookmark it here." The address is a copy button |
 | 10 | Safari (`Safari/` and `Version/`, none of `Chrome/`, `Chromium/`, `Edg/`, `OPR/`, `Firefox/`), macOS | `safari-macos` | Dialog: "In the menu bar choose File › Add to Dock. Then open the new app once while BrowserHive is running: from then on it can show you help when BrowserHive is stopped." |
 | 11 | anything else | `unknown` | Dialog: "Look for *Install* or *Add to Home screen* in your browser's menu. If there isn't one, this browser can't install websites as apps." |
 
@@ -1004,7 +1006,7 @@ The UA only picks which instructions to show. Installing never depends on it: ro
 
 #### 18.8.3 Browser-specific steps (`src/lib/install/steps.ts`)
 
-Each entry records the source and the browser version it was checked against. The manual gate (§18.12) re-checks Chrome and Edge.
+Each entry records the source and the browser version it was checked against. The manual gate (§18.12) re-checks Chrome and Edge. As built, the recorded versions (Chrome 154, Edge 154, Chromium 153, Firefox 143+ on Windows, 2026-11) are where the source articles' wording was taken from; none was walked through in a real browser UI yet, which is exactly what the gate does.
 
 | Brand | Steps | Source |
 |---|---|---|
@@ -1017,13 +1019,15 @@ Each entry records the source and the browser version it was checked against. Th
 
 - **Account menu** (`PrincipalMenu`): **Install app**, with `ICONS.installApp` (lucide `MonitorDown`, added to `lib/icons.ts`), placed between Keyboard shortcuts and Log out. It is hidden only for `standalone`.
 - **Command palette**, Actions section: "Install BrowserHive as an app" (keywords `install app pwa desktop dock taskbar home screen`). It has the same visibility and the same handler.
+- **One handler.** `InstallAppProvider` (`src/features/install/install-app.tsx`, mounted once in `AppShell`) owns the prompt store and the dialog; `useInstallApp()` gives both entry points `{ visible, run }`. `run` re-reads `installSupport` on every call (the offer may have arrived since) and calls `prompt()` synchronously inside the click.
 - **Nowhere else:** no banner, card or reminder. The browser's address-bar icon is the ambient affordance.
 - **`InstallAppDialog`** (`src/features/install/InstallAppDialog.tsx`, shared `Dialog`):
   - title "Install BrowserHive";
   - the row's text;
-  - the address as a `CopyValue` where the row says so;
+  - the address as a copyable field (`CopyButton`, always visible) where the row says so;
   - "Learn more" → `docsUrl('dashboardInstall')`;
-  - one Close button.
+  - one Close button (no corner ✕);
+  - besides the row's text, a one-line description under the title (e.g. "It opens in its own window, from your app launcher or taskbar."), and for Chromium and Firefox on Windows the steps in a card under the browser's name.
 
 ### 18.9 Reserved
 
@@ -1039,13 +1043,13 @@ Launch handling (`launch_handler`, `launchQueue`) is deferred (D-49).
 - **dependency-cruiser rules** (added to `.dependency-cruiser.cjs`):
   - `src/offline/**` may import only:
     - `src/offline/**`;
-    - `src/lib/daemon-help/{probe,commands,keys}.ts`;
+    - `src/lib/daemon-help/{probe,commands,keys,copy}.ts`;
     - `src/lib/{clock,links,storage,clipboard}.ts`;
     - `src/theme/resolve.ts`;
     - `src/styles/tokens.css`.
   - `src/sw/**` may import only `src/sw/**` and `@browserhive/contracts/paths`.
-  - `src/lib/daemon-help/{probe,commands,keys}.ts` and `src/lib/install/{support,steps}.ts` import no React.
-  - These rules see local files and unresolved `@/` aliases only: npm packages are outside the graph (`exclude: node_modules`). `src/lib/daemon-help/boundaries.test.ts` therefore asserts that `probe.ts`, `commands.ts` and `keys.ts` import only relative `.ts` files; `src/lib/install/` gets the same test when it lands.
+  - `src/lib/daemon-help/{probe,commands,keys,copy}.ts` and `src/lib/install/{support,steps}.ts` import no React.
+  - These rules see local files and unresolved `@/` aliases only: npm packages are outside the graph (`exclude: node_modules`). `src/lib/daemon-help/boundaries.test.ts` therefore asserts that `probe.ts`, `commands.ts`, `keys.ts` and `copy.ts` import only relative `.ts` files, and `src/lib/install/boundaries.test.ts` the same for `support.ts` and `steps.ts`.
 - **Folder structure (§3)** gains:
   - `src/sw/`, `src/offline/`, `src/lib/install/`, `src/lib/daemon-help/`, `src/assets/app-icon/`;
   - `src/dev-proxy.ts`, `src/lib/clipboard.ts`, `src/theme/resolve.ts`, `src/features/install/`;
