@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from 'react';
 import { useApi } from '@/app/providers/AuthProvider.tsx';
 import { useConfirm } from '@/app/providers/ConfirmProvider.tsx';
 import { useToast } from '@/app/providers/ToastProvider.tsx';
-import { copyText } from '@/components/shared/CopyButton.tsx';
 import { PageHeader } from '@/components/shared/PageHeader.tsx';
 import { RelativeTime } from '@/components/shared/RelativeTime.tsx';
 import { StatusBadge } from '@/components/shared/StatusBadge.tsx';
@@ -20,6 +19,7 @@ import {
 import { Kbd } from '@/components/ui/kbd.tsx';
 import { Hint } from '@/components/ui/tooltip.tsx';
 import { toAppError } from '@/lib/api/errors.ts';
+import { copyText } from '@/lib/clipboard.ts';
 import { formatDuration } from '@/lib/format/time.ts';
 import { ICONS } from '@/lib/icons.ts';
 import { useServerNow } from '@/lib/server-now.ts';

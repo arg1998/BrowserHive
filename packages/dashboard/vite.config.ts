@@ -3,6 +3,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
+import { PROXIED_PATHS } from './src/dev-proxy.ts';
 
 /**
  * The daemon the dev server proxies to (spec 05 §13); `BHDEV_DAEMON_URL` points it at another instance.
@@ -10,8 +11,6 @@ import { defineConfig } from 'vite';
  * `changeOrigin: false` keeps the Origin gate happy.
  */
 const DAEMON_URL = process.env['BHDEV_DAEMON_URL'] ?? 'http://127.0.0.1:9876';
-/** Paths forwarded to the daemon in development; `/api` covers `/api/v1/ws` (`ws: true`). */
-const PROXIED_PATHS = ['/api', '/mcp', '/health', '/trace-viewer'] as const;
 
 const srcDir = new URL('./src', import.meta.url).pathname;
 

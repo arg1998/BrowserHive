@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu.tsx';
 import { Hint } from '@/components/ui/tooltip.tsx';
 import { ICONS } from '@/lib/icons.ts';
-import type { ThemePreference } from '@/theme/bootstrap.ts';
+import type { ThemePreference } from '@/theme/resolve.ts';
 import { useTheme } from '@/theme/ThemeProvider.tsx';
 
 const OPTIONS: readonly {

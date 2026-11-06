@@ -1,38 +1,11 @@
-/** @module components/shared/CopyButton — clipboard copy (execCommand fallback), revealed on hover/focus of its scope, tooltip + live-region confirmation */
+/** @module components/shared/CopyButton — clipboard copy (`copyText` from `lib/clipboard`), revealed on hover/focus of its scope, tooltip + live-region confirmation */
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button.tsx';
 import { Hint } from '@/components/ui/tooltip.tsx';
+import { copyText } from '@/lib/clipboard.ts';
 import { ICONS } from '@/lib/icons.ts';
 import { cn } from '@/lib/utils.ts';
 import { useRowControlTabIndex } from './row-context.ts';
-
-/** Copy text to the clipboard; falls back to a temporary textarea + `execCommand` when the API is unavailable. */
-export async function copyText(value: string, doc: Document = document): Promise<boolean> {
-  const clipboard = doc.defaultView?.navigator.clipboard;
-  if (clipboard !== undefined && doc.defaultView?.isSecureContext === true) {
-    try {
-      await clipboard.writeText(value);
-      return true;
-    } catch {
-      // fall through to the execCommand path
-    }
-  }
-  const area = doc.createElement('textarea');
-  area.value = value;
-  area.setAttribute('readonly', '');
-  area.setAttribute('aria-hidden', 'true');
-  area.className = 'sr-only';
-  doc.body.appendChild(area);
-  area.select();
-  let ok = false;
-  try {
-    ok = doc.execCommand('copy');
-  } catch {
-    ok = false;
-  }
-  area.remove();
-  return ok;
-}
 
 /** Props. */
 export interface CopyButtonProps {

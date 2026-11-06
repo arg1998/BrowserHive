@@ -3,9 +3,10 @@ import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
 import { Button, buttonVariants } from '@/components/ui/button.tsx';
 import type { AppError } from '@/lib/api/errors.ts';
+import { copyText } from '@/lib/clipboard.ts';
 import { ICONS } from '@/lib/icons.ts';
 import { cn } from '@/lib/utils.ts';
-import { CopyButton, copyText } from './CopyButton.tsx';
+import { CopyButton } from './CopyButton.tsx';
 
 /** Props. */
 export interface ErrorStateProps {
