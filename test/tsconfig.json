@@ -6,5 +6,10 @@
     "outDir": "../dist/test-types",
     "tsBuildInfoFile": "../dist/.test.tsbuildinfo"
   },
-  "include": ["**/*.ts"]
+  "include": ["**/*.ts"],
+  "references": [
+    { "path": "../packages/contracts" },
+    { "path": "../packages/dashboard" },
+    { "path": "../packages/browserhive" }
+  ]
 }

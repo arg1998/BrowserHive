@@ -1,13 +1,13 @@
 /** @module theme/theme-store — per-app theme store: preference in localStorage, `matchMedia` listener, `data-theme` + meta theme-color writes */
 import { readStorage, writeStorage } from '../lib/storage.ts';
+import { THEME_COLORS } from './bootstrap.ts';
 import {
   parsePreference,
   type ResolvedTheme,
   resolveTheme,
-  THEME_COLORS,
   THEME_STORAGE_KEY,
   type ThemePreference,
-} from './bootstrap.ts';
+} from './resolve.ts';
 
 /** Observable theme state. */
 export interface ThemeState {

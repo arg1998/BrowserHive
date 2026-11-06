@@ -10,13 +10,14 @@ import {
   Outlet,
   RouterProvider,
 } from '@tanstack/react-router';
-import type { ComponentType } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import { AuthProvider } from '@/app/providers/AuthProvider.tsx';
 import { ConfirmProvider } from '@/app/providers/ConfirmProvider.tsx';
 import { NotificationsProvider } from '@/app/providers/NotificationsProvider.tsx';
-import { SocketProvider } from '@/app/providers/SocketProvider.tsx';
+import { SocketProvider, useSocketState } from '@/app/providers/SocketProvider.tsx';
 import { ToastStack } from '@/app/shell/ToastStack.tsx';
 import type { FetchLike } from '@/lib/api/http.ts';
+import { DaemonReachabilityProvider } from '@/lib/daemon-help/reachability.tsx';
 import { SocketStore } from '@/lib/ws/store.ts';
 import { FakeSocket, FakeTimers } from './fake-socket.ts';
 import { act, render, testQueryClient } from './render.tsx';
@@ -34,12 +35,16 @@ export type FakeRoute =
   | unknown
   | ((request: RecordedRequest) => { readonly status?: number; readonly body: unknown } | unknown);
 
-/** Build a JSON response. */
+/** The version marker the fake daemon puts on every response, like the real one (03 §2). */
+export const FAKE_DAEMON_VERSION = '0.0.0-test';
+
+/** Build a JSON response from the fake daemon (marked with `X-BrowserHive-Version`). */
 export function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
       'content-type': status >= 400 ? 'application/problem+json' : 'application/json',
+      'x-browserhive-version': FAKE_DAEMON_VERSION,
     },
   });
 }
@@ -101,6 +106,29 @@ export function fakeFetch(routes: Record<string, FakeRoute>, scopes?: readonly s
   return { fetchImpl, requests };
 }
 
+/** `DaemonReachabilityProvider` as `AppShell` mounts it, on the harness's fetch and fake timers. */
+function Reachability({
+  children,
+  fetchImpl,
+  timers,
+}: {
+  readonly children: ReactNode;
+  readonly fetchImpl: FetchLike;
+  readonly timers: FakeTimers;
+}) {
+  const socket = useSocketState();
+  return (
+    <DaemonReachabilityProvider
+      socket={socket}
+      fetch={(input, init) => fetchImpl(input, init)}
+      timers={timers}
+      clock={() => timers.now}
+    >
+      {children}
+    </DaemonReachabilityProvider>
+  );
+}
+
 /** Options. */
 export interface PageHarnessOptions {
   readonly path: string;
@@ -134,10 +162,12 @@ export function renderPage(options: PageHarnessOptions) {
   const root = createRootRoute({
     component: () => (
       <SocketProvider createStore={createStore}>
-        <NotificationsProvider>
-          <Outlet />
-          <ToastStack />
-        </NotificationsProvider>
+        <Reachability fetchImpl={fetchImpl} timers={timers}>
+          <NotificationsProvider>
+            <Outlet />
+            <ToastStack />
+          </NotificationsProvider>
+        </Reachability>
       </SocketProvider>
     ),
     staticData: { title: 'Test' },

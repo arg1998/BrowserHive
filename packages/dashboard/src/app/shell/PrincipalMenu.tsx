@@ -1,4 +1,4 @@
-/** @module app/shell/PrincipalMenu — account menu: identity header, Change password, Keyboard shortcuts, Log out (labels live in groups, the menu never throws) */
+/** @module app/shell/PrincipalMenu — account menu: identity header, Change password, Keyboard shortcuts, Install app (hidden inside the installed app), Log out (labels live in groups, the menu never throws) */
 import { Link } from '@tanstack/react-router';
 import { useAuth } from '@/app/providers/AuthProvider.tsx';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar.tsx';
@@ -12,6 +12,7 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu.tsx';
+import { useInstallApp } from '@/features/install/install-app.tsx';
 import { ICONS } from '@/lib/icons.ts';
 
 /** Principal menu. */
@@ -23,11 +24,13 @@ export function PrincipalMenu({
   readonly onOpenKeyboardMap?: () => void;
 }) {
   const { state, logout } = useAuth();
+  const install = useInstallApp();
   const display = state.principal?.display ?? 'operator';
   const kind = state.principal?.kind ?? 'operator';
   const LogOut = ICONS.logout;
   const Key = ICONS.lock;
   const Keyboard = ICONS.keyboard;
+  const InstallApp = ICONS.installApp;
   const Chevron = ICONS.chevronDown;
   const initial = display.slice(0, 1).toUpperCase();
   return (
@@ -78,6 +81,11 @@ export function PrincipalMenu({
             <DropdownMenuItem onClick={onOpenKeyboardMap}>
               <Keyboard aria-hidden="true" /> Keyboard shortcuts
               <DropdownMenuShortcut>?</DropdownMenuShortcut>
+            </DropdownMenuItem>
+          ) : null}
+          {install?.visible === true ? (
+            <DropdownMenuItem onClick={install.run}>
+              <InstallApp aria-hidden="true" /> Install app
             </DropdownMenuItem>
           ) : null}
         </DropdownMenuGroup>

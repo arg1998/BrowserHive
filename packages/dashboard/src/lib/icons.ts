@@ -76,6 +76,7 @@ import {
   Minimize,
   Minus,
   Monitor,
+  MonitorDown,
   MonitorPlay,
   Moon,
   MoonStar,
@@ -264,6 +265,8 @@ export const ICONS = {
   notFound: FileQuestion,
   filter: ListFilter,
   monitor: Monitor,
+  // Installable app (D-49)
+  installApp: MonitorDown,
   densityComfortable: Rows3,
   densityCompact: Rows4,
   minus: Minus,

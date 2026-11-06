@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#f9fafb" />
+    <meta name="referrer" content="same-origin" />
+    <title>BrowserHive</title>
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%234b8af0'/%3E%3Cstop offset='1' stop-color='%232459c9'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M16 3L27.26 9.5L27.26 22.5L16 29L4.74 22.5L4.74 9.5Z' fill='url(%23g)' stroke='url(%23g)' stroke-width='3' stroke-linejoin='round'/%3E%3Cg fill='%23fff' transform='translate(0 1.1)'%3E%3Cpath d='M16 7.71L19.38 9.66L19.38 13.56L16 15.51L12.62 13.56L12.62 9.66Z'/%3E%3Cpath d='M12.2 14.29L15.58 16.24L15.58 20.14L12.2 22.09L8.82 20.14L8.82 16.24Z' fill-opacity='.72'/%3E%3Cpath d='M19.8 14.29L23.18 16.24L23.18 20.14L19.8 22.09L16.42 20.14L16.42 16.24Z' fill-opacity='.72'/%3E%3C/g%3E%3C/svg%3E"
+    />
+    <!--
+      The offline page (spec 04 §18.6): served from the service worker's cache when BrowserHive does
+      not answer, without a CSP nonce, so it has no inline script. This style block (allowed by the
+      CSP's style-src 'unsafe-inline') makes even the first frame dark under a dark OS setting;
+      src/offline/main.ts then applies the operator's theme choice. Colours = the background token.
+    -->
+    <style>
+      html {
+        background: oklch(0.985 0.002 250);
+      }
+      @media (prefers-color-scheme: dark) {
+        html {
+          background: oklch(0.155 0.004 250);
+          color-scheme: dark;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>
+      <p>BrowserHive isn't answering at this address. Enable JavaScript to see what to do.</p>
+    </noscript>
+    <script type="module" src="/src/offline/main.ts"></script>
+  </body>
+</html>

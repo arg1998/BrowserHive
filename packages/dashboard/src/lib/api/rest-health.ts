@@ -1,6 +1,5 @@
 /** @module lib/api/rest-health — REST health from how requests ended, never from how long ago one ran: an idle page stays healthy; a network error, timeout or daemon 5xx marks it failing until a later answer (issue #50) */
 import type { QueryClient } from '@tanstack/react-query';
-import { browserClock } from '../clock.ts';
 import { type AppError, isAppError } from './errors.ts';
 
 /** What the connection pill knows about REST. */
@@ -37,11 +36,7 @@ export function isRestOutage(error: unknown): boolean {
 }
 
 /** The next state after a request ended (pure; exported for tests). */
-export function nextRestHealth(
-  state: RestHealth,
-  outcome: { readonly ok: true } | { readonly ok: false; readonly error: unknown },
-  at: number,
-): RestHealth {
+export function nextRestHealth(state: RestHealth, outcome: RestOutcome, at: number): RestHealth {
   if (outcome.ok) return { failure: null, lastAnswerAt: at };
   if (isRestOutage(outcome.error) && isAppError(outcome.error))
     return { failure: outcome.error, lastAnswerAt: state.lastAnswerAt };
@@ -49,63 +44,19 @@ export function nextRestHealth(
   return { failure: state.failure, lastAnswerAt: at };
 }
 
-/** Options for {@link watchRestHealth}. */
-export interface WatchRestHealthOptions {
-  /** Called when REST starts or stops failing (not on every answer: the pill must not re-render per request). */
-  readonly onChange: (health: RestHealth) => void;
-  /** A cheap request (`GET /health`) used to recheck while failing; it resolves or throws an `AppError`. */
-  readonly probe?: () => Promise<unknown>;
-  /** Browser clock (injectable for tests). */
-  readonly now?: () => number;
-  /** Probe interval while failing (injectable for tests). */
-  readonly probeMs?: number;
-}
+/** How one REST request ended, as {@link nextRestHealth} reads it. */
+export type RestOutcome = { readonly ok: true } | { readonly ok: false; readonly error: unknown };
 
 /**
- * Follows every query and mutation of `client` to completion and reports {@link RestHealth}. Cache
+ * Follows every query and mutation of `client` to completion and reports how each ended. Cache
  * writes from the realtime bridge (`setQueryData`, `manual`) are not REST answers and are ignored.
- * `current()` reads the latest state (including `lastAnswerAt`) at any time.
+ * Returns the unsubscribe function. The `/health` rechecks while failing live in the reachability
+ * watcher (`lib/daemon-help/reachability.tsx`, 04 §18.7), which owns every probe.
  */
-export function watchRestHealth(
+export function followRestOutcomes(
   client: QueryClient,
-  options: WatchRestHealthOptions,
-): { readonly current: () => RestHealth; readonly dispose: () => void } {
-  const now = options.now ?? browserClock;
-  const probeMs = options.probeMs ?? REST_PROBE_MS;
-  let state = initialRestHealth(client);
-  let probeTimer: ReturnType<typeof setTimeout> | null = null;
-  let disposed = false;
-
-  const apply = (next: RestHealth) => {
-    if (disposed) return;
-    const failureChanged = next.failure !== state.failure;
-    const failingChanged = (next.failure === null) !== (state.failure === null);
-    state = next;
-    if (failureChanged) options.onChange(state);
-    if (failingChanged) scheduleProbe();
-  };
-  const record = (
-    outcome: { readonly ok: true } | { readonly ok: false; readonly error: unknown },
-  ) => apply(nextRestHealth(state, outcome, now()));
-
-  const scheduleProbe = () => {
-    if (probeTimer !== null) clearTimeout(probeTimer);
-    probeTimer = null;
-    const probe = options.probe;
-    if (state.failure === null || probe === undefined || disposed) return;
-    probeTimer = setTimeout(() => {
-      probeTimer = null;
-      probe().then(
-        () => record({ ok: true }),
-        (error: unknown) => {
-          // Any answer from the daemon ends the outage; another outage keeps probing.
-          if (isRestOutage(error)) scheduleProbe();
-          else record({ ok: true });
-        },
-      );
-    }, probeMs);
-  };
-
+  record: (outcome: RestOutcome) => void,
+): () => void {
   const unsubscribeQueries = client.getQueryCache().subscribe((event) => {
     if (event.type !== 'updated') return;
     const { action } = event;
@@ -118,21 +69,14 @@ export function watchRestHealth(
     if (action.type === 'success') record({ ok: true });
     else if (action.type === 'error') record({ ok: false, error: action.error });
   });
-
-  scheduleProbe();
-  return {
-    current: () => state,
-    dispose: () => {
-      disposed = true;
-      unsubscribeQueries();
-      unsubscribeMutations();
-      if (probeTimer !== null) clearTimeout(probeTimer);
-    },
+  return () => {
+    unsubscribeQueries();
+    unsubscribeMutations();
   };
 }
 
 /** The state the cache already implies when the pill mounts after some queries finished. */
-function initialRestHealth(client: QueryClient): RestHealth {
+export function initialRestHealth(client: QueryClient): RestHealth {
   let lastAnswerAt = 0;
   let failure: AppError | null = null;
   let failureAt = 0;

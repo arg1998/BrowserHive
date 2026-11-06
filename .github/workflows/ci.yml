@@ -141,6 +141,8 @@ jobs:
       - run: bun run gen:openapi --check
       - run: bun run gen:docs --check
       - run: bun run gen:db-types --check
+      # Source hashes and PNG headers only, no browser (04 §18.3).
+      - run: bun run gen:icons --check
       # Docs link and spelling gates; also part of `unit`, repeated here for docs-only changes.
       - run: bun test test/docs
 
@@ -248,6 +250,9 @@ jobs:
         shell: bash
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then printf 'BROWSERHIVE_DATA_DIR=%s\\bh\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"; fi
+      # `dashboard-offline.test.ts` drives the built dashboard (its offline page and worker, D-49).
+      - if: env.RUN == 'true'
+        run: bun run --filter @browserhive/dashboard build
       - if: env.RUN == 'true'
         run: bun run test:integration
 

@@ -10,8 +10,8 @@ import type { Clock } from '../../ports/clock.ts';
 import type { IdGenerator } from '../../ports/id-generator.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type { StaticAssets, TraceViewerAssets } from '../../ports/static-assets.ts';
-import { serveSpa } from '../static/spa.ts';
-import { statusPageHtml } from '../static/status-page.ts';
+import { isSpaPath, serveSpa } from '../static/spa.ts';
+import { isBrowserNavigation, statusPageHtml } from '../static/status-page.ts';
 import { serveTraceViewer, TRACE_VIEWER_PREFIX } from '../static/trace-viewer.ts';
 import { upgradeHandler } from '../ws/upgrade.ts';
 import { type AnyRoute, pathPattern } from './define-route.ts';
@@ -90,7 +90,7 @@ export function createHttpApp(deps: HttpAppDeps): HttpApp {
     }),
   );
   app.use('*', accessLog({ clock: deps.clock, logger: deps.logger }));
-  app.use('*', secureHeaders());
+  app.use('*', secureHeaders(deps.version));
   const publicHost = publicUrlHost(config.publicUrl);
   const publicOrigin = publicUrlOrigin(config.publicUrl);
   app.use(
@@ -150,13 +150,16 @@ export function createHttpApp(deps: HttpAppDeps): HttpApp {
   app.on(['GET', 'HEAD'], '*', async (c, next) => {
     const path = new URL(c.req.url).pathname;
     if (!config.admin) {
-      if (path !== '/') return next();
+      // `/` is the status page; a browser navigation elsewhere gets it with a 404, so an installed
+      // app launched against this daemon explains itself. Everything else keeps the JSON 404 (D-49).
+      const navigation = path !== '/' && isSpaPath(path) && isBrowserNavigation(c.req.raw);
+      if (path !== '/' && !navigation) return next();
       const html = statusPageHtml({
         version: deps.version,
         transport: services.system.facts().transport,
         mcpUrl: `http://${config.host}:${config.port}/mcp`,
       });
-      return c.html(html);
+      return c.html(html, navigation ? 404 : 200);
     }
     const response = await serveSpa(
       { assets: deps.spa, version: deps.version },

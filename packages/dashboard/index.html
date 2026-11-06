@@ -8,6 +8,8 @@
     <meta name="referrer" content="same-origin" />
     <title>BrowserHive</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link
       rel="preload"
       as="font"
@@ -24,8 +26,11 @@
     />
     <script>
       // Theme bootstrap (spec 04 §2): resolve `localStorage['bh.theme']` (system|light|dark) before
-      // first paint so there is no flash. Mirrors `src/theme/bootstrap.ts#resolveTheme`; the meta
+      // first paint so there is no flash. Mirrors `src/theme/resolve.ts#resolveTheme`; the meta
       // theme-color values mirror `THEME_COLORS` in the same file.
+      // The browser's install offer can fire before the module graph runs: keep it for Install app
+      // (`window.__bhInstallPrompt`, spec 04 §18.2, §18.8.1).
+      addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); window.__bhInstallPrompt = e; });
       (() => {
         try {
           const stored = localStorage.getItem('bh.theme');

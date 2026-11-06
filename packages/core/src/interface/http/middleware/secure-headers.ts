@@ -3,6 +3,13 @@
 import type { MiddlewareHandler } from 'hono';
 import type { HttpEnv } from '../env.ts';
 
+/**
+ * Marks every daemon response with the running version (spec 03 §2, D-49): the dashboard's service
+ * worker and offline page tell this daemon from another program on the same address by it. The
+ * version is already public through `/health`.
+ */
+export const VERSION_HEADER = 'x-browserhive-version';
+
 /** CSP of the trace viewer: third-party code, sandboxed (spec 03 §2). */
 export const TRACE_VIEWER_CSP =
   "sandbox allow-scripts allow-same-origin; default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:";
@@ -30,14 +37,16 @@ export function dashboardCsp(nonce: string): string {
 /**
  * Sets `X-Content-Type-Options`, `X-Frame-Options` (`SAMEORIGIN` under `/trace-viewer`),
  * `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`, a default CSP when the
- * handler set none, and HSTS only for TLS behind a trusted proxy.
+ * handler set none, HSTS only for TLS behind a trusted proxy, and {@link VERSION_HEADER} on every
+ * response, errors and 404s included.
  */
-export function secureHeaders(): MiddlewareHandler<HttpEnv> {
+export function secureHeaders(version: string): MiddlewareHandler<HttpEnv> {
   return async (c, next) => {
     await next();
     const path = new URL(c.req.url).pathname;
     const traceViewer = path === '/trace-viewer' || path.startsWith('/trace-viewer/');
     const headers = c.res.headers;
+    headers.set(VERSION_HEADER, version);
     headers.set('x-content-type-options', 'nosniff');
     headers.set('x-frame-options', traceViewer ? 'SAMEORIGIN' : 'DENY');
     headers.set('referrer-policy', 'no-referrer');
