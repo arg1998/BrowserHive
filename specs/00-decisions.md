@@ -951,7 +951,7 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 - **What browsers allow (checked 2026-11):**
   - Chromium-based browsers (Chrome, Edge, Brave, Opera, Vivaldi) install any secure-context site with a valid manifest: `http://127.0.0.1` and `http://localhost` qualify, and no service worker is required since Chrome 112. They let the page trigger the install (`beforeinstallprompt`).
   - Firefox installs sites as web apps on Windows only (since 143, from an address-bar button). On Linux it exists but is off by default; on macOS it doesn't exist. Firefox has no page API to trigger an install.
-  - Safari 17+ on macOS installs any page through File › Add to Dock, from its own menu only. The web app gets a copy of Safari's cookies and nothing else: no storage, no service worker.
+  - Safari 17+ on macOS installs any page through File › Add to Dock, from its own menu only. The web app runs service workers and has its own storage, seeded only with a copy of Safari's cookies.
   - No browser lets an outside program install a web app, except through enterprise policy.
 
 **Decision.**
@@ -967,7 +967,7 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
   - `/sw.js` (scope `/`) precaches `offline.html` and the content-hashed files that page needs, and nothing else: not the manifest, the icons, the app shell or any API data.
   - It sends page navigations to the network untouched. It falls back to `offline.html` only in two cases:
     - nothing answers within 10 s, or the connection fails;
-    - a proxy answers 502, 503 or 504 without BrowserHive's marker header.
+    - a proxy answers a 5xx without BrowserHive's marker header.
   - It never touches `/api`, `/mcp`, `/health`, `/trace-viewer`, non-`GET` requests or other origins.
   - It holds no operator data, so it needs no sign-out cleanup and cannot serve a stale dashboard.
 - **The daemon marks its responses.** Every daemon response carries `X-BrowserHive-Version`. A successful HTML navigation without it means another program now owns the address. The worker then deletes its caches and unregisters itself, so it never haunts another app on a reused port. The offline page also has a **Forget this address** button that does the same on demand.

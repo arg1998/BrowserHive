@@ -146,10 +146,10 @@ One suite per user-visible guarantee, plus the single-port smoke. All use `Playw
   2. **Navigation headers.** Navigate to `/sessions`. The recorder saw the navigation with `Sec-Fetch-Mode: navigate` and `Sec-Fetch-Dest: document`: the worker forwards it unchanged.
   3. **Not running.** Stop the server and wait until the port refuses. Reload `/sessions`: the offline page's `h1` reads "BrowserHive isn't running", the start command shows `--port P`, the URL is still `/sessions`, and no request to a reserved prefix was answered by the worker.
   4. **Starting.** Boot again with `BootOverrides` holding the `ready` phase for 4 s. The page shows "BrowserHive is starting", then reloads itself into `/login` within 20 s of `ready`.
-  5. **Not responding.** Replace the daemon with a TCP server that accepts and never answers, then reload. Within 10 s + 2 s the offline page is fully rendered (its assets come from the cache) and reads "BrowserHive isn't responding".
+  5. **Not responding.** Replace the daemon with a TCP server that accepts and never answers, then reload. The offline page is fully rendered right after the 10 s navigation timeout (its assets come from the cache) and first shows "Checking BrowserHive at …". Within a further 5 s + 3 s it reads "BrowserHive isn't responding".
   6. **Proxy.** Replace it with an HTTP server answering every request `502 text/html` with no marker, then reload: "BrowserHive is unreachable behind …".
   7. **Status page.** Boot the daemon **without** `--admin` and navigate to `/sessions` through the worker: the status page, HTTP 404, `text/html`.
-  8. **Banner.** Boot with `--admin`, sign in through REST with the first-run password from the data dir's `admin/credentials.txt`, and open `/overview`. Stop the server: `DaemonUnreachableBanner` appears within 40 s and its dialog lists `browserhive doctor`. Restart: the banner disappears within 15 s, and the page was not reloaded (a `window` marker survives).
+  8. **Banner.** Boot with `--admin`, sign in through REST with the first-run password from the data dir's `admin/credentials.txt`, complete the forced password change through REST (otherwise every page redirects to `/change-password`, which has no shell), sign in with the new password, and open `/overview`. Stop the server: `DaemonUnreachableBanner` appears within 30 s and its dialog lists `browserhive doctor`. Restart: the banner disappears within 15 s, and the page was not reloaded (a `window` marker survives).
   9. **Retire.** Replace the daemon with an HTTP server answering `/` with `200 text/html` and no marker, then navigate: that page shows. Afterwards `navigator.serviceWorker.getRegistrations()` is empty and no `bh-offline-*` cache remains.
 
   Single worker; 150 s timeout.
@@ -161,19 +161,19 @@ One suite per user-visible guarantee, plus the single-port smoke. All use `Playw
 - End-to-end (Playwright, against `bun run build` + `browserhive --admin --vault bitwarden` with the fake `bw`): login with the seed password → forced change → sessions list with URL filters (paste URL reproduces state) → session detail → start live view → agent calls `request_attention` (driven through the MCP endpoint from the test) → takeover input accepted, `input_rejected` shown when no attention is open → resolve → vault confirm approve with visible rollback on a forced failure → blocklist page shows a hit → notifications persist across reload → logout closes the socket. Responsive screenshot suite at 390, 768, 1280, 1920 for every route (visual goldens with a tolerance, updated through §7). Clipboard fallback on an insecure non-localhost origin (Playwright with `http://127.0.0.2`).
 - **Installable app and offline page (D-49, 04 §18).**
   - **Unit, dashboard (`bun test`):**
-    - `routeRequest`: every row of 04 §18.5.4, including prefix boundaries (`/api` vs `/apix`, `/health` vs `/healthz`), non-`GET`, cross-origin, `navigate` vs other modes, and `/offline.html`, `/sw.js` and the manifest routed `pass`.
-    - `decideNavigation`: every row, marker present or absent × 200, 302 opaque redirect, 404, 500, 502, 503, 504 × HTML and non-HTML; rejection; timeout.
+    - `routeRequest`: every row of 04 §18.5.4, including prefix boundaries (`/api` vs `/apix`, `/health` vs `/healthz`), non-`GET`, cross-origin, `navigate` vs other modes, `/sw.js` and the manifest routed `pass`, and a direct `/offline.html` visit routed `navigate`.
+    - `decideNavigation`: every row, marker present or absent × 200, 302 opaque redirect, 404, 500, 502, 503, 504, 530 × HTML and non-HTML; rejection; timeout.
     - The worker's event handlers in a fake-global harness (in-memory `CacheStorage`, scripted `fetch`, fake timers):
       - `install` stores only `ok`, non-redirected, `basic`, marked responses, and rejects on any failure;
       - `activate` deletes only stale `bh-offline-*` caches;
       - the navigation `fetch` is called with the original `Request` object and **no** init;
       - the timer is cleared when the race settles;
       - an `asset` is served cache-first with `ignoreVary`;
-      - `retire()` deletes the caches and unregisters;
+      - `retire()` runs under `waitUntil`, deletes the caches and unregisters;
       - `Response.error()` when `offline.html` is missing.
     - The kill-switch worker: unregisters and deletes its caches, with no fetch listener.
     - `classifyProbe`:
-      - every row of 04 §18.6.1, including `navigator.onLine === false`;
+      - every row of 04 §18.6.1, including `navigator.onLine === false`, a marked `421` (`refused`) and an unmarked `530` (`proxy-unreachable`);
       - a BrowserHive body without `instance_id`;
       - a 200 non-BrowserHive JSON, a 502 HTML and a 404 HTML;
       - recognises every `HealthResponse` fixture of the contracts goldens.
@@ -204,6 +204,7 @@ One suite per user-visible guarantee, plus the single-port smoke. All use `Playw
     - `InstallAppDialog`: one render per dialog kind.
     - `prompt` calls the event's `prompt()` and opens no dialog.
     - `InstallToastBridge` toasts on `installed`.
+    - `DaemonReachabilityProvider` is the only `/health` caller: `HealthPill` and the banner both read it.
     - `DaemonUnreachableBanner`:
       - appears only after 3 consecutive failed probes;
       - a gap over 15 s resets the count;
