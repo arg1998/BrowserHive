@@ -8,6 +8,15 @@ export type ResolvedTheme = 'light' | 'dark';
 /** `localStorage` key (spec 04 §4.4). */
 export const THEME_STORAGE_KEY = 'bh.theme';
 
+/**
+ * `<meta name="theme-color">` values per theme; mirrored verbatim in `index.html`. The manifest's
+ * `background_color` and `theme_color` are the light one (04 §18.2).
+ */
+export const THEME_COLORS: { readonly [T in ResolvedTheme]: string } = {
+  light: '#f9fafb',
+  dark: '#0b0c0e',
+};
+
 /** Parse a stored preference; anything unknown is `system`. */
 export function parsePreference(raw: string | null | undefined): ThemePreference {
   return raw === 'light' || raw === 'dark' ? raw : 'system';
