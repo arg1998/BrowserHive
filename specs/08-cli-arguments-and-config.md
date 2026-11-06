@@ -360,25 +360,26 @@ A repeatable flag that declares a notification channel for this run (D-39, 03 §
 
 ### 5.9 Session templates and site packs (spec 13)
 
-All boot keys; they arrive with the PRs of spec 13 §17 (T1 for the `template*` keys, T3 for `sitePacks` and `sitePacksDir`, T4 for the remaining `sitePacks*` keys). Spec 13 §11.6 repeats this table with its context; this one is authoritative.
+All boot keys; they arrive with the PRs of spec 13 §17 (T1a for `templates`, `templateHostIdleTimeout`, `templateMaxPagesPerHost`, `templateRecycleAfter` and `templateDrainTimeout`; T1b for `templateKey`, `templateKeyPrevious`, `templateCheckpointInterval`, `templateVersionsKeep` and `templateRecycleRss`; T2 for `templateHealthInterval`; T3a for `sitePacks` and `sitePacksDir`; T4b for the remaining `sitePacks*` keys). Spec 13 §11.6 points here; this table is authoritative.
 
 | Key | Type | Default | Validation / notes | Consumer | Mode |
 |---|---|---|---|---|---|
 | `templates` | boolean | `true` | `false`: `list_templates` answers `TOOL_NOT_AVAILABLE`, `launch_session.template` answers `TEMPLATE_NOT_FOUND`, no host starts | template service | boot |
-| `templateKey` | string · **secret** | — | base64 of exactly 32 bytes (else `CONFIG_INVALID`); env-preferred (`BROWSERHIVE_TEMPLATE_KEY`) or an `{env:…}` reference; absent ⇒ `<data-dir>/admin/template.key` (0600, created with the first template) | template state store | boot |
+| `templateKey` | string · **secret** | — | base64 of exactly 32 bytes (else `CONFIG_INVALID`); from the environment (`BROWSERHIVE_TEMPLATE_KEY`) or an `{env:…}` reference; given as a flag it works but logs a warning (process arguments are readable by other users); absent ⇒ `<data-dir>/admin/template.key` (0600 in a 0700 `admin/`, created exclusively and only while no encrypted template file exists; never re-created, spec 13 §2.4) | template state store | boot |
+| `templateKeyPrevious` | string · **secret** | — | base64 of exactly 32 bytes; read-only key for files not yet re-encrypted by `browserhive templates rekey` (spec 13 §2.4) | template state store | boot |
 | `templateHostIdleTimeout` | duration | `1h` | `0` = never stop an idle template host | host supervisor | boot |
-| `templateMaxPagesPerHost` | integer 2–200 | `40` | pages per host, sentinel and parked pages included | admission | boot |
+| `templateMaxPagesPerHost` | integer 2–200 | `40` | agent pages per host (parked and maintenance pages excluded); each session may hold at most `max(2, floor(value / cap))` (spec 13 §6.3) | admission | boot |
 | `templateHealthInterval` | duration `30m`–`7d` | `6h` | default probe interval for new templates | health scheduler | boot |
-| `templateCheckpointInterval` | duration ≥ `1m` | `15m` | | host supervisor | boot |
-| `templateVersionsKeep` | integer 1–100 | `10` | pinned versions are kept in addition | template state store | boot |
+| `templateCheckpointInterval` | duration ≥ `1m` | `15m` | how often the rolling checkpoint is rewritten; versions are written at milestones only (spec 13 §3.9) | host supervisor | boot |
+| `templateVersionsKeep` | integer 1–100 | `10` | pinned versions and the newest fully signed-in version are kept in addition | template state store | boot |
 | `templateRecycleAfter` | duration ≥ `1h` | `24h` | host age that triggers a drain and restart | host supervisor | boot |
-| `templateRecycleRss` | bytes ≥ `512MiB` | `3GiB` | host resident memory that triggers a drain and restart | host supervisor | boot |
+| `templateRecycleRss` | bytes ≥ `512MiB` | `3GiB` | host resident memory that first trims the largest session, then drains and restarts the host (spec 13 §3.2); sampled without OTel | host supervisor | boot |
 | `templateDrainTimeout` | duration `1m`–`2h` | `15m` | | host supervisor | boot |
 | `sitePacks` | boolean | `true` | `false`: no site-pack data is used and no update check runs | site-pack registry | boot |
 | `sitePacksUpdateCheck` | boolean | `true` | the anonymous update check of D-55, made only while a template exists; `false` for air-gapped or opted-out hosts | registry client | boot |
-| `sitePacksAutoUpdate` | boolean | `false` | `true`: tightening and neutral pack updates apply without approval; loosening changes and new domains still wait | site-pack registry | boot |
+| `sitePacksAutoUpdate` | boolean | `false` | `true`: tightening and neutral pack updates apply without approval; loosening and restrictive changes and domain changes still wait | site-pack registry | boot |
 | `sitePacksUrl` | url | `https://browserhive.ai/registry/v1/` | `https:` only; a mirror must serve the same signed files | registry client | boot |
-| `sitePacksDir` | path | `<data-dir>/site-packs/local` | operator packs, unsigned, override every other source | site-pack registry | boot |
+| `sitePacksDir` | path | `<data-dir>/site-packs/local` | signed layouts (verified and queued like an import) and unsigned single-pack files (visible local overrides that win over every other source) (spec 13 §10.5) | site-pack registry | boot |
 
 ## 6. How the schema drives everything
 
@@ -428,8 +429,8 @@ browserhive db status|backup|restore <file>|migrate
 browserhive admin reset-password
 browserhive admin tokens list|create <principal>|revoke <principal>
 browserhive channels list | test <name> | preview <name> [--sample <kind>]
-browserhive templates list|show|create|finish|login|probe|versions|restore|host|disable|enable|rm   (spec 13 §11.5)
-browserhive sitepacks list|show|check|diff|approve|reject|pin|unpin|enable|disable|import|export|verify   (spec 13 §11.5)
+browserhive templates list|show|create|finish|seed|login|probe|versions|save|restore|host|disable|enable|rm|rekey   (spec 13 §11.5)
+browserhive sitepacks list|show|check|diff|approve|reject|pin|unpin|enable|disable|import|export|reload|unoverride|verify   (spec 13 §11.5)
 browserhive version | --version | -v
 browserhive --help | -h                 (also per command)
 ```
@@ -458,7 +459,7 @@ Positional rules: the first argument is the command if it is a known command wor
 
 **`channels list | test <name> | preview <name> [--sample <kind>]`** — notification channels (03 §9.5). `list` prints name, platform (with the Discord mode: `discord (bot)`), status (with "from startup" for startup channels), where it sends (`target_hint`), whether its secret variables are set, the answer state when act buttons are on (`answers: connected`, `reconnecting`, `offline (<reason>)`), a line under the table per channel with reports (`daily digest 09:00 → next Wed 30 Sep 09:00 Europe/Berlin · anomaly alerts on`, or `something looks off: error rate` while checks are active), the last delivery and the 24 h counts. `test <name>` sends a real test message through the channel and exits 0 when the platform accepted it, 1 otherwise (printing the classified error). `preview <name>` renders a sample notification exactly as the channel would send it and sends nothing; `--sample` is one of `attention` (default), `attention-resolved`, `vault-confirm`, `tool-errors`, `crash`, `degraded`, `test`, `digest`, `anomaly` (the report samples follow the channel's schedule, zone and content level); text mode prints the platform request (method, path without secrets, body), `--json` the whole `ChannelPreview`. All three talk to a running server over the REST API: `--url` (default `http://127.0.0.1:<port>` from the resolved configuration) with `--token` (an operator bearer with `channels:read`/`channels:write`) or `--cookie`; without a reachable server they fail with exit 1 and say so. `--json` everywhere.
 
-**`templates …` and `sitepacks …`** — session templates and site packs (spec 13 §11.5): every subcommand talks to a running server over the REST API with `--url`, `--token` or `--cookie` like `channels`, except the offline `sitepacks verify`; `templates create` and `templates login` open windows on the machine running the server; exit 0 success, 1 failure, 2 completed with attention needed (a site not signed in, updates pending), 64 usage; `--json` everywhere.
+**`templates …` and `sitepacks …`** — session templates and site packs (spec 13 §11.5): every subcommand talks to a running server over the REST API with `--url`, `--token` or `--cookie` like `channels`, except the offline `sitepacks verify` and `templates rekey` (local, with the server stopped); flags follow §1's camelCase (`--displayName`, `--maxConcurrent`, `--proxyUsername`, `--noLogin`, `--fromState`); `templates create` and `templates login` open windows on the machine running the server; exit 0 success, 1 failure, 2 completed with attention needed (a site not signed in, updates pending), 64 usage; `--json` everywhere.
 
 **`admin reset-password`** — generates a new seed password, marks `must_change_password`, prints it once, refuses while the server is running (lock file), writes `admin/credentials.txt` (0600).
 
@@ -551,7 +552,7 @@ Rules: colour per `color`; the seed password and seeded agent token are printed 
 
 ## 9. Programmatic API
 
-`createServer(options: CreateServerOptions)` in `browserhive` accepts the **typed** camelCase keys of the schema directly (`{ port: 9876, admin: true, sessionLease: '2h' | 7_200_000 }`), never strings that are re-parsed. The options object is one source with provenance `cli` (it plays the role of flags); `env` (default `process.env`, `{}` isolates), `configFile: false | string` (default: discovery per §3), `output: { stdout, stderr }` sinks, `logger` (external sink adapter), `hostMemory` (for tests) and `notificationChannels` (the `--notificationChannel` strings of §5.7) are the only extra fields. `createServer` resolves and validates eagerly (throws `ConfigError` with the same messages as the CLI), then returns `{ config, provenance, url, listen(), stop(deadline?) }`.
+`createServer(options: CreateServerOptions)` in `browserhive` accepts the **typed** camelCase keys of the schema directly (`{ port: 9876, admin: true, sessionLease: '2h' | 7_200_000 }`), never strings that are re-parsed. The options object is one source with provenance `cli` (it plays the role of flags); `env` (default `process.env`, `{}` isolates), `configFile: false | string` (default: discovery per §3), `output: { stdout, stderr }` sinks, `logger` (external sink adapter), `hostMemory` (for tests), `notificationChannels` (the `--notificationChannel` strings of §5.7) and `testing` are the only extra fields. `testing` is internal (`@internal`, its type exported only from the `browserhive/testing` entry point) and exists for BrowserHive's own suites: `hostResolverRules` and `ignoreCertificateErrorsSpkiList` (Chromium switches added to the hosts and exclusive sessions that server launches, so HTTPS fixture sites can use `*.test` names) and `sitePacksTrustRoot` (a test registry key); none of them is reachable from the CLI, the environment or a config file (spec 13 §10.2, §14). `createServer` resolves and validates eagerly (throws `ConfigError` with the same messages as the CLI), then returns `{ config, provenance, url, listen(), stop(deadline?) }`.
 
 ## 10. Scenario examples
 

@@ -28,7 +28,7 @@ These documents specify BrowserHive: a local-first, MCP-native daemon that runs 
 | 10 | [Error handling and telemetry](10-error-handling-and-telemetry.md) | Error registry and projections, handling rules, logging, request context, spans and metrics, OpenTelemetry wiring, redaction |
 | 11 | [Stealth](11-stealth.md) | Stealth pipeline, constants, config knobs, coherence rules, tests, blocklist and deny-list, the reserved proxy design, known ceilings |
 | 12 | [Usage](12-usage.md) | User documentation: install, quick start, MCP clients, dashboard tour, configuration, tools, security, telemetry, CLI, upgrades, FAQ |
-| 13 | [Session templates and site packs](13-session-templates.md) | Templates (pinned identity, encrypted versions), live mode (one shared browser per template, one window per session), sealing, access, recording, health and re-login, site packs and their signed registry, every surface they add, the PR program |
+| 13 | [Session templates and site packs](13-session-templates.md) | Prerequisite security fixes for every session (URL schemes, vault fill targets, auth-state names, reserved subjects); templates (pinned identity, encrypted versions), live mode (one shared browser per template, one window per session), sealing, access, recording, health and re-login, site packs and their signed registry, every surface they add, the PR program |
 
 Specs 00–11 and 13 are **normative**: the implementation follows them, and a divergence is a bug in one or the other. Spec 13 is delivered by the PR program in its §17; until a PR lands, the behaviour it changes is the one the other specs describe. Spec 12 and this index are **informative**.
 
@@ -90,7 +90,7 @@ Decisions: D-05 (wire), D-06 (config), D-23 (code and database).
 | **Data dir** | The directory holding everything BrowserHive stores (D-24): database, backups, session directories, auth states, uploads, session templates, site-pack caches. |
 | **Session template** (template) | An operator-recorded, named browser identity signed in to one or more sites, with a pinned fingerprint, network and locale, a policy, encrypted versions and per-site health; agents launch sessions from it with `launch_session({template})` (spec 13, D-49). |
 | **Template host** | The one shared browser of a session template, with a sentinel window that keeps it alive without sessions; the only writer of the template (D-50). |
-| **Sealing** | The default restriction of template sessions: cookie values hidden, `evaluate` off, cookie writes and state exports refused, unless the operator unseals the template (D-51). |
+| **Sealing** | The default restriction of template sessions that keeps the raw session material out of agent results: cookie values hidden and redacted, `evaluate` off, cookie writes, state exports and vault fills refused, unless the operator unseals the template (D-51). It does not stop an agent from acting as the account. |
 | **Site pack** | Signed, versioned per-site data (sign-in and signed-in detection, guards, challenges, pacing, write policy, requirements, strategy selections) applied to template sessions; data only, never code (D-54). |
 | **Strategy** | A per-site behaviour compiled into the binary that a site pack may select and parameterise within fixed bounds (spec 13 §9.4). |
 | **Probe** | A per-site check of a template's sign-in with the outcomes `signed_in`, `signed_out`, `challenged` and `inconclusive` (spec 13 §8.1). |

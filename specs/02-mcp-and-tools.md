@@ -18,7 +18,7 @@ related:
 > RFC 2119 when they appear in uppercase. `D-NN` identifiers refer to entries in the
 > [decision log](00-decisions.md). Terminology follows the [specification index](README.md#conventions).
 
-Scope: the MCP server (transports, auth, capabilities), the declarative tool layer and dispatcher, and the **stable catalog of 44 tools** (the 43 of 0.1.0 plus `list_templates`, spec 13 §5.1, added by its PR T1). Decisions: D-02 (single port, official SDK), D-05 (contracts, snake_case wire), D-07 (error registry), D-08 (telemetry), D-09 (principals), D-12 (stable tool contract), D-15 (operator requests).
+Scope: the MCP server (transports, auth, capabilities), the declarative tool layer and dispatcher, and the **stable catalog of 44 tools** (the 43 of 0.1.0 plus `list_templates`, spec 13 §5.1, added by its PR T1a). Decisions: D-02 (single port, official SDK), D-05 (contracts, snake_case wire), D-07 (error registry), D-08 (telemetry), D-09 (principals), D-12 (stable tool contract), D-15 (operator requests).
 
 The stability contract of this spec: **an agent that works against a release of BrowserHive MUST keep working, unchanged, against every later release with the same major version.** Names, parameter names, defaults, enums, result shapes and error codes are contract; changes are additive (D-12).
 
@@ -30,7 +30,7 @@ The stability contract of this spec: **an agent that works against a release of 
 
 - `serverInfo`: `{ name: 'browserhive', version: <generated version.ts> }`. `name` is overridable only through the programmatic API (`createServer({ name })`) for embedders.
 - Capabilities advertised: `tools: { listChanged: true }` (the list can change when a pack is enabled at runtime; today it only differs by configuration at boot), `logging: {}` (server → client `notifications/message`, level-gated per client, off by default), `completions` not advertised, `resources`/`prompts` **not** advertised (BrowserHive has none; adding them later is additive).
-- `instructions`: a short server-level instruction string: what BrowserHive is, that `launch_session` must precede page tools, that `request_attention` blocks, and the min-attention-wait floor when configured.
+- `instructions`: a short server-level instruction string: what BrowserHive is, that `launch_session` must precede page tools, that `request_attention` blocks, and the min-attention-wait floor when configured; with the `templates` pack enabled, one sentence on `list_templates` (spec 13 §5.1).
 - Protocol: whatever the pinned `@modelcontextprotocol/sdk` negotiates (2025-06-18 at the time of writing). The SDK is pinned exactly; upgrades are deliberate PRs with the tool goldens re-checked.
 
 ### 1.2 Transports
@@ -203,7 +203,7 @@ Conventions: `Timeout` = `int ≥ 0, default 30000` ms (`0` = no timeout); `TabI
 
 | Tool | Input | Output | Errors | RO/D/I/OW |
 |---|---|---|---|---|
-| `navigate` | `session_id` · `url: string` · `wait_until: WaitUntil='load'` · `timeout: Timeout` · `tab_id?` | `{ session_id, url: page.url(), status: number\|null }`; `navigation_count++`; HTTP 400–599 status is a **soft failure** (`HTTP_<n>` audit code, not an error) | session, `URL_BLOCKED` (before the browser is touched), `TAB_NOT_FOUND`, `NAVIGATION_TIMEOUT`, `NAVIGATION_FAILED` | no/no/no/yes |
+| `navigate` | `session_id` · `url: string` · `wait_until: WaitUntil='load'` · `timeout: Timeout` · `tab_id?` | `{ session_id, url: page.url(), status: number\|null }`; `navigation_count++`; HTTP 400–599 status is a **soft failure** (`HTTP_<n>` audit code, not an error) | session, `URL_SCHEME_NOT_ALLOWED` and `URL_BLOCKED` (both before the browser is touched; from PR T0d of spec 13 only `http:`, `https:`, exactly `about:blank`, and `data:` outside template sessions are accepted, D-57), `TAB_NOT_FOUND`, `NAVIGATION_TIMEOUT`, `NAVIGATION_FAILED` | no/no/no/yes |
 | `go_back` | `session_id` · `wait_until='load'` · `timeout` · `tab_id?` | `{ session_id, url }`; count++ | session, `TAB_NOT_FOUND`, `NAVIGATION_TIMEOUT`, `NAVIGATION_FAILED` | no/no/no/yes |
 | `go_forward` | same | same | same | no/no/no/yes |
 | `reload` | same | same | same | no/no/yes/yes |
@@ -217,7 +217,7 @@ Tab ids `t-<nanoid6 [0-9a-z]>`, stable, never reused; site-opened pages auto-reg
 
 | Tool | Input | Output | Errors | RO/D/I/OW |
 |---|---|---|---|---|
-| `new_tab` | `session_id` · `url?: string` · `wait_until='load'` · `timeout: int≥0=30000` | `{ session_id, tab_id, url }`; count++ only when `url` given; awaits per-page stealth override before navigating | session, `URL_BLOCKED`, `NAVIGATION_*` | no/no/no/yes |
+| `new_tab` | `session_id` · `url?: string` · `wait_until='load'` · `timeout: int≥0=30000` | `{ session_id, tab_id, url }`; count++ only when `url` given; awaits per-page stealth override before navigating | session, `URL_SCHEME_NOT_ALLOWED` (the `navigate` scheme rule, D-57), `URL_BLOCKED`, `NAVIGATION_*` | no/no/no/yes |
 | `close_tab` | `session_id` · `tab_id: string` (required) | `{ session_id, tab_id, closed: true }` | session, `TAB_NOT_FOUND` | no/yes/yes/no |
 | `switch_tab` | `session_id` · `tab_id` | `{ session_id, tab_id, url }` | session, `TAB_NOT_FOUND` | no/no/yes/no |
 | `list_tabs` | `session_id` | **bare array** `[{ tab_id, url, title (''\ on failure), active }]` insertion order | session | yes/no/yes/no |
@@ -310,25 +310,28 @@ Both raise `VAULT_NOT_CONFIGURED` before session lookup when no backend is confi
    - 2c. the session's **harness** passes every harness list that applies (D-48): the binding's own `harnesses` (manual bindings) and the `harnesses` of the policy of the entry's group, whatever its access mode. No list = all harnesses; an empty list = none. A known slug (`HARNESS_SLUGS`, with `unknown` and `other`) matches the session's launch slug (`sessions.harness`, `unknown` when absent); any other entry matches the session's launch declared name (`sessions.harness_declared`) exactly and case-sensitively. The per-call identity is never read. → else `not_authorized`. The agent's result is byte-identical to 2a/2b (same status, `reason`, shape, and no extra work before returning); only the audit row records `harness_not_allowed` with `details {harness, harness_declared, rule: 'binding'|'group'}`. It narrows; it is not a security boundary;
 3. `require_no_evaluate` while evaluate is permitted → `blocked` / `evaluate_required_off`;
 4. origin re-check of the live page URL → `origin_mismatch`;
+4b. (PR T0e of spec 13, D-58) the password selector matches exactly one enabled, writable `<input type="password">` and the username selector exactly one `<input>` of a text-like type → else `blocked` / `password_target_invalid`; repeated immediately before the value is entered;
 5. `dashboard_confirm` → held for the operator (D-15) → `dashboard_denied` / `confirm_timeout`;
 6. credential fetch, redaction armed before typing, form-action defence, typing with the trace chunk paused (D-13), optional submit.
+
+In a session template's virtual session every fill returns `blocked` / `not_authorized` (audit reason `template_session`) and `vault_list_available` returns no entries with a note (spec 13 §5.5, D-51); vault auto-relogin into a template host runs these gates as the principal `template:<template_id>` (spec 13 §8.4).
 
 `vault_list_available` lists exactly the entries for which gates 2 to 2c pass (manual bindings first, then `allow_all` items, deduplicated by handle); an entry refused by any of them is left out without a note, so a harness refusal is indistinguishable from a principal or slug one.
 
 | Tool | Input | Output | Errors | RO/D/I/OW |
 |---|---|---|---|---|
 | `vault_list_available` | `session_id` · `url?: string` (described: pass the domain of the login page, e.g. "github.com"; honesty probe) | `{ entries: [{ entry_name, allowed_origins: string[], redact_username, require_no_evaluate }], scope: 'unscoped'\|'page'\|'no_page'\|'rejected', scoped_to: string\|null, mismatch?: { declared, actual }, note? }` — never `dashboard_confirm` nor authorized slugs | `VAULT_NOT_CONFIGURED`, session errors | yes/no/yes/no |
-| `vault_fill` | `session_id` · `entry_name (min 1)` · `username_selector (min 1)` · `password_selector (min 1)` · `submit_selector?` · `after_submit_wait_ms?: int≥0` · `clear_after_fill?: boolean` (default false) · `tab_id?` | `{ status: 'success'\|'origin_mismatch'\|'auth_failed'\|'blocked', redacted: true, reason? }` — failures are **returned**, never thrown (reasons: `vault_disabled`, `not_authorized`, `evaluate_required_off`, `origin_mismatch`, `dashboard_denied`, `form_action_mismatch`, `fill_failed`, `submit_failed`, `entry_not_found`, `backend_error`, `confirm_timeout` (D-15)) | `VAULT_NOT_CONFIGURED`, `VAULT_LOCKED`, session errors | no/no/no/yes |
+| `vault_fill` | `session_id` · `entry_name (min 1)` · `username_selector (min 1)` · `password_selector (min 1)` · `submit_selector?` · `after_submit_wait_ms?: int≥0` · `clear_after_fill?: boolean` (default false) · `tab_id?` | `{ status: 'success'\|'origin_mismatch'\|'auth_failed'\|'blocked', redacted: true, reason? }` — failures are **returned**, never thrown (reasons: `vault_disabled`, `not_authorized`, `evaluate_required_off`, `origin_mismatch`, `dashboard_denied`, `form_action_mismatch`, `fill_failed`, `submit_failed`, `entry_not_found`, `backend_error`, `confirm_timeout` (D-15), `password_target_invalid` (D-58)) | `VAULT_NOT_CONFIGURED`, `VAULT_LOCKED`, session errors | no/no/no/yes |
 
 ### 3.14 Registration order (pinned)
 
-`launch_session, close_session, list_sessions, server_status, session_info, navigate, go_back, go_forward, reload, wait_for_url, new_tab, close_tab, switch_tab, list_tabs, click, type_text, fill, press_key, hover, select_option, scroll, drag_and_drop, screenshot, snapshot, get_content, evaluate, wait_for_selector, wait_for_load_state, accept_next_dialog, dismiss_next_dialog, get_cookies, set_cookies, set_viewport, set_extra_http_headers, upload_file, download_file, save_storage_state, save_full_profile, list_saved_auths, request_attention, get_attention_result, vault_list_available, vault_fill, list_templates` — 44 names (`list_templates` appended by spec 13 PR T1, so the first 43 keep their positions), checked by the stdio handshake test against `tools/list`.
+`launch_session, close_session, list_sessions, server_status, session_info, navigate, go_back, go_forward, reload, wait_for_url, new_tab, close_tab, switch_tab, list_tabs, click, type_text, fill, press_key, hover, select_option, scroll, drag_and_drop, screenshot, snapshot, get_content, evaluate, wait_for_selector, wait_for_load_state, accept_next_dialog, dismiss_next_dialog, get_cookies, set_cookies, set_viewport, set_extra_http_headers, upload_file, download_file, save_storage_state, save_full_profile, list_saved_auths, request_attention, get_attention_result, vault_list_available, vault_fill, list_templates` — 44 names (`list_templates` appended by spec 13 PR T1a, so the first 43 keep their positions), checked by the stdio handshake test against `tools/list`.
 
 ### 3.15 Templates
 
 | Tool | Input | Output | Errors | RO/D/I/OW |
 |---|---|---|---|---|
-| `list_templates` | *(none; registered without a schema)* | `{ templates: [{ name, display_name, description, sites: [{ site, title, status, checked_at }], mode: 'live', in_use, cap, availability: 'available'\|'busy'\|'needs_login'\|'unavailable', sealed }] }` — only the templates the caller may launch (spec 13 §5.1, §6.1) | `TOOL_NOT_AVAILABLE` (`templates=false`) | yes/no/yes/no |
+| `list_templates` | `{}` (strict empty object) | `{ templates: [{ name, display_name, description, sites: [{ site, title, status, checked_at }], availability: 'available'\|'busy'\|'needs_login'\|'unavailable', sealed }] }` — only the templates the caller may launch, and no count of other principals' sessions (spec 13 §5.1, §6.1) | `TOOL_NOT_AVAILABLE` (`templates=false`) | yes/no/yes/no |
 
 A template session is driven with the other tools as usual; how each behaves there (sealing, per-page headers, windows, guards) is the table of spec 13 §5.5.
 
@@ -346,7 +349,8 @@ Rules the dispatcher and tools enforce on top of the shapes in §3. They are par
 | No internals in error text | Playwright errors are mapped to registry codes with a public message; the private cause goes to logs only | `[NAVIGATION_TIMEOUT] …` etc. |
 | One slug message | schema regex message and `InvalidSlug` message are one text: `Invalid slug '<slug>'. Slugs must match /^[a-z][a-z0-9-]{1,31}$/` | same text from every path |
 | Cookie validation is typed | `set_cookies` maps Playwright validation failures to `INVALID_ARGUMENTS` with the field | |
-| Template sessions are sealed | unless the operator unseals the template: cookie values hidden, `evaluate` off, cookie writes and state exports refused (D-51, spec 13 §5.4) | `get_cookies` `sealed: true`, `EVALUATE_DISABLED`, `SESSION_SEALED` |
+| Template sessions are sealed | unless the operator unseals the template: cookie values hidden and redacted from text results, `evaluate` off, cookie writes, state exports and vault fills refused (D-51, spec 13 §5.4); sealing does not stop an agent from acting as the account | `get_cookies` `sealed: true`, `[sealed]`, `EVALUATE_DISABLED`, `SESSION_SEALED` |
+| Only web URLs are opened | `navigate` and `new_tab` accept `http:`, `https:`, `about:blank` and (outside template sessions) `data:`; `file:`, `chrome:`, `javascript:`, `view-source:` and every other scheme are refused before the browser is touched (D-57) | `URL_SCHEME_NOT_ALLOWED` |
 | Template access never leaks | an unauthorized or unknown template answers `TEMPLATE_NOT_FOUND` with one message and is absent from `list_templates` (D-52) | same text for both causes |
 
 ## 5. Attention model (agent view)

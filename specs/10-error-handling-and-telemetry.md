@@ -146,17 +146,18 @@ Decisions: D-07 (error model), D-08 (telemetry), D-20 (privacy).
 
 | Code | HTTP | Category | Retryable | Details |
 |---|---|---|---|---|
+| URL_SCHEME_NOT_ALLOWED | 400 | domain | different_args | `{scheme}` (PR T0d, every session, D-57) |
 | TEMPLATE_NOT_FOUND | 404 | domain | different_args | `{template}` (public message identical for unknown, unauthorized and still-recording templates) |
-| TEMPLATE_BUSY | 429 | domain | backoff | `{template, in_use, cap, limit_kind, retry_after_ms?}` |
-| TEMPLATE_NEEDS_LOGIN | 409 | domain | after_operator | `{template, sites[]}` |
+| TEMPLATE_BUSY | 429 | domain | backoff | `{template, limit_kind, limit_text, retry_after_ms, retry_after_s}` |
+| TEMPLATE_NEEDS_LOGIN | 409 | domain | after_operator | `{template, sites[], sites_text}` |
 | TEMPLATE_UNAVAILABLE | 503 | domain | backoff | `{template, reason:'starting'\|'restarting'\|'crashed', retry_after_ms}` |
-| TEMPLATE_DISABLED | 409 | domain | after_operator | `{template, reason:'disabled'\|'host_failed'\|'no_display'\|'proxy_unreachable'\|'key_unavailable'}` |
+| TEMPLATE_DISABLED | 409 | domain | after_operator | `{template, reason:'disabled'\|'host_failed'\|'no_display'\|'proxy_unreachable'\|'sandbox_unavailable'}` |
 | SESSION_SEALED | 403 | domain | never | `{session_id, tool}` |
-| SITE_OPERATOR_PENDING | 409 | domain | after_operator | `{session_id, site, request_id, reason:'challenge'\|'write_confirm'}` |
+| SITE_OPERATOR_PENDING | 409 | domain | after_operator | `{session_id, site, request_id\|null, reason:'challenge'\|'write_confirm'\|'stopped', wait_text}` |
 | SITE_ACTION_BLOCKED | 403 | domain | never | `{session_id, site, guard}` |
-| TEMPLATE_NAME_TAKEN, TEMPLATE_IN_USE, TEMPLATE_VERSION_NOT_FOUND, SITE_PACK_NOT_FOUND, SITE_PACK_INVALID, SITE_PACK_UPDATE_NOT_PENDING | 409, 409, 404, 404, 400, 409 | domain | different_args, different_args, never, never, different_args, never | REST only (spec 13 §12) |
-| TEMPLATE_HOST_FAILED, TEMPLATE_KEY_MISMATCH, SITE_PACKS_STALE, SITE_PACKS_FETCH_FAILED | — | boot | never, never, never, backoff | degradation records (§3) |
-| TEMPLATE_SITE_SIGNED_OUT, SITE_GUARD_WARNED, SITE_PACED | — | warning | — | `{session_id, message, details}` |
+| TEMPLATE_NAME_TAKEN, TEMPLATE_IN_USE, TEMPLATE_VERSION_NOT_FOUND, TEMPLATE_VERSION_UNREADABLE, SITE_PACK_NOT_FOUND, SITE_PACK_INVALID, SITE_PACK_UPDATE_NOT_PENDING | 409, 409, 404, 409, 404, 400, 409 | domain | different_args, different_args, never, after_operator, never, different_args, never | REST only (spec 13 §12) |
+| TEMPLATE_HOST_FAILED, TEMPLATE_KEY_MISSING, TEMPLATE_KEY_MISMATCH, TEMPLATE_CHECKPOINT_FAILED, TEMPLATE_CHECKPOINT_TOO_LARGE, SITE_PACKS_STALE, SITE_PACKS_FETCH_FAILED | — | boot | never, never, never, backoff, never, never, backoff | degradation records (§3) |
+| TEMPLATE_SITE_SIGNED_OUT, SESSION_RESOURCE_LIMIT, TEMPLATE_STATE_COPY, SITE_GUARD_WARNED, SITE_PACED, SITE_WRITE_HELD | — | warning | — | `{session_id, message, details}` |
 
 There is one listener (D-02), so bind failures are reported by exactly two codes: `PORT_IN_USE` when the address is taken (a policy-style refusal the operator fixes with `--port`) and `BIND_FAILED` for every other errno.
 
@@ -271,7 +272,7 @@ Boot errors print `browserhive: [CODE] <public message>` followed by the hint on
 
 ## 3. Degradations: `system_events`
 
-Background failures and non-fatal boot findings become rows (`code`, `severity`, `message`, `details`, `first_seen_at`, `last_seen_at`, `count`, `resolved_at`) aggregated in-process by `code` + a details fingerprint (so a retention failure repeating every 6 h is one row with `count`). Producers: retention, the artifact outbox, WS overload, unhandled rejections, DB `dropped_writes`, browser install missing, blocklist reload failure, OTel export failure, stale Chromium processes found at startup; with spec 13, a template host that reached `failed`, template versions unreadable with the current key, and a stale or unreachable site-pack registry. Rows appear on `/system.degradations`, on the `system` WS topic, in the dashboard System page, and as `system` notifications when severity is `error`. `resolved_at` is set when the producer reports recovery (e.g. next retention pass succeeds). A failing notification channel is **never** a degradation (D-34): it would be delivered through the failing channel again. Its breaker state shows on the channel and as an in-app-only `channel.broken` notification.
+Background failures and non-fatal boot findings become rows (`code`, `severity`, `message`, `details`, `first_seen_at`, `last_seen_at`, `count`, `resolved_at`) aggregated in-process by `code` + a details fingerprint (so a retention failure repeating every 6 h is one row with `count`). Producers: retention, the artifact outbox, WS overload, unhandled rejections, DB `dropped_writes`, browser install missing, blocklist reload failure, OTel export failure, stale Chromium processes found at startup; with spec 13, a template host that reached `failed`, a missing template key, template files unreadable with the current key, failed or oversized template checkpoints, and a stale or unreachable site-pack registry (stale template-host Chromium processes join the existing stale-process finding). Rows appear on `/system.degradations`, on the `system` WS topic, in the dashboard System page, and as `system` notifications when severity is `error`. `resolved_at` is set when the producer reports recovery (e.g. next retention pass succeeds). A failing notification channel is **never** a degradation (D-34): it would be delivered through the failing channel again. Its breaker state shows on the channel and as an in-app-only `channel.broken` notification.
 
 ---
 
@@ -349,7 +350,7 @@ All spans use `@opentelemetry/api`'s tracer `browserhive`; attributes use the `b
 | `notification.act` (one per act-button press of a known token, 03 §9.6) | `browserhive.channel_kind`, `browserhive.channel_id`, `browserhive.notification_id`, `browserhive.op`, `browserhive.outcome` — never the token or the presser's id |
 | `screencast.frame` (never exported; metrics only) | — |
 
-Session templates and site packs add the spans of spec 13 §11.7 (`template.host.start`, `template.host.stop`, `template.attach`, `template.probe`, `template.checkpoint`, `template.restore`, `site_packs.check`, and `site_guard.decide` under `--otelVerbose`) with the PRs that create them.
+Session templates and site packs add the spans of spec 13 §11.7 (`template.host.start`, `template.host.stop`, `template.attach`, `template.probe`, `template.checkpoint`, `template.restore`, `site_pack.check`, and `site_pack.guard_decide` under `--otelVerbose`) with the PRs that create them.
 
 `--otelSampleRatio` (default 1.0) applies a parent-based ratio sampler; `db.query` and `cdp.command` are additionally gated behind `--otelVerbose`.
 
@@ -385,7 +386,7 @@ This table is the single source of truth: `infra/telemetry/metrics.ts` defines e
 | `browserhive.process.heap_bytes` | gauge (observable) | `By` | — | JavaScript heap in use |
 | `browserhive.process.event_loop_lag` | gauge (observable) | `ms` | — | 99th percentile event-loop delay since the previous export |
 
-Session templates and site packs add the instruments of spec 13 §11.7 (`browserhive.template.hosts`, `browserhive.template.checkpoints`, `browserhive.template.probes`, `browserhive.template.relogins`, `browserhive.site_guard.hits`, `browserhive.site_challenges`, `browserhive.site_packs.checks`) and the `mode` attribute on `browserhive.sessions.active` and `browserhive.session.launch.duration`; each row joins the table above in the PR that records it, so the table always equals the catalogue.
+Session templates and site packs add the instruments of spec 13 §11.7 (`browserhive.template.hosts`, `browserhive.template.checkpoints`, `browserhive.template.probes`, `browserhive.template.relogins`, `browserhive.site_pack.guard_hits`, `browserhive.site_pack.challenges`, `browserhive.site_pack.checks`) and the `mode` attribute on `browserhive.sessions.active` and `browserhive.session.launch.duration`; each row joins the table above in the PR that records it, so the table always equals the catalogue.
 
 Instruments are only created and fed when `--otel` is on with the `metrics` signal: the consumers, the 10 s browser-memory sampler and the event-loop monitor are wired by the composition root in that case only, so with `--otel` off nothing is subscribed, sampled or timed. The sources themselves only keep plain running totals whether or not telemetry is on (the hub's dropped frames per channel, the write queue's dropped writes per table, next to the per-connection counters `/api/v1/system/realtime` already shows); the observable instruments read those at export time. `/api/v1/system` reads the same sources directly, never the meter.
 

@@ -51,7 +51,7 @@ Non-goals: managed proxy networks, hosted CAPTCHA farms, cloud identity, telemet
 
 The virtual sessions of a session template share one Chromium process, the template host, isolated from each other by page attribution (spec 13 §3, D-50).
 
-`--transport stdio` swaps the HTTP front door for the SDK's stdio transport; the dashboard, WS, attention, and vault-confirm are unavailable (the attention tools stay registered and return `ATTENTION_REQUIRES_HTTP`, so the tool catalog is identical on both transports, D-12).
+`--transport stdio` swaps the HTTP front door for the SDK's stdio transport; the dashboard, WS, attention, and vault-confirm are unavailable (the attention tools stay registered and return `ATTENTION_REQUIRES_HTTP`, so the tool catalog is identical on both transports, D-12). With session templates (spec 13 §9.3, §9.5), no operator can answer under stdio: a site-pack write `confirm` acts as `block` and challenges only mark a site's health. Agents that share the BrowserHive OS user, typical under stdio, are outside what template sealing protects (spec 13 §5.4).
 
 ## 3. Repository layout (D-03)
 
@@ -73,8 +73,8 @@ BrowserHive/
     │       ├── config/           serverConfigSchema, key registry (env/cli/json names, descriptions)
     │       ├── errors/           error registry (code → status/category/retryable/details schema)
     │       ├── enums/            Channel, PersistenceMode, ClosedReason, UrlCategory, AttentionMode…
-    │       ├── tools/            input/output zod schemas for all 44 tools (+ annotations, titles; `list_templates` since spec 13 T1)
-│       ├── site-packs/       site-pack and registry index schemas (spec 13 §9.2)
+    │       ├── tools/            input/output zod schemas for all 44 tools (+ annotations, titles; `list_templates` since spec 13 T1a)
+    │       ├── site-packs/       structural site-pack and registry index schemas (spec 13 §9.2; refinements and verification live in core)
     │       ├── http/             REST DTOs, PageQuery/Page<T>, problem+json schema
     │       ├── ws/               envelope, client commands, server messages, feed event payloads
     │       └── index.ts
@@ -170,7 +170,7 @@ PR → Changeset → merge to `main` → Changesets bot opens "Version Packages"
 | `AuthenticationProvider` chain, `Authorizer`, `tenant_id` | app/auth | better-auth, RBAC, orgs, OIDC/SAML |
 | `NotificationChannel` (`send`/`edit`/`delete`, capabilities) + `LinkBuilder`, fed by the notification outbox (D-34) | ports / app/notifications | Telegram, Discord, ntfy, webhook (next), Slack, Pushover, Teams, Apprise, email (later) |
 | `AdmissionPolicy` in the create pipeline | domain | resource governor, queueing, eviction |
-| `InterceptionChain` (blocklist route is the first handler; the method-aware request guard the second, spec 13 §9.3) | domain | security rules, egress firewall, Web Bot Auth signing |
+| `InterceptionChain` (one route per context with ordered handlers: a self-origin guard on template hosts, the blocklist, the method-aware request guard; spec 13 §3.8, built by its PR T0b) | domain | security rules, egress firewall, Web Bot Auth signing |
 | `SitePackSource`, `SiteStrategy` (closed set), `SitePackRegistry` | ports / app/site-packs | packs for every session, stealth defaults from packs (spec 13 §16) |
 | `ToolPack` registry with `requires` | interface/mcp | profile tools, proxy tools, captcha tools |
 | Event bus consumers | app/events | OTLP metrics, audit hash chain, session bundle export |
@@ -181,7 +181,8 @@ PR → Changeset → merge to `main` → Changesets bot opens "Version Packages"
 - The database schema evolves only through the forward-only migration runner (D-04): every upgrade takes a `VACUUM INTO` backup first, and an older binary refuses a database outside its compatibility window with `DB_NEWER_THAN_BINARY`, naming the backup and `browserhive db restore <file>`.
 - The tool catalog is a stable contract across upgrades (D-12); changes within a major version are additive.
 - Files in the data directory are those of the D-24 layout. BrowserHive does not read or convert files it does not recognise; `browserhive doctor` reports them.
-- Saved auth-state manifests without an `owner` field are treated as owned by `local` (02 §6).
+- Saved auth-state manifests without an `owner` field are treated as owned by `local` (02 §6). From spec 13's PR T0a, snapshots of other principals live under `auth-states/p/<hash>/`; an older binary does not see them.
+- Schema v9 (spec 13's PR T3a) is the first migration with `compatible: false`: a binary older than v9 refuses the upgraded database, and going back means restoring the pre-upgrade backup.
 
 ## 11. Dependency order of subsystems
 
