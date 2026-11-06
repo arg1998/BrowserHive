@@ -119,6 +119,8 @@ Log in, set a new password (minimum 12 characters), and the seed file is shredde
 | Logs | live tail of the server log with level/module/session filters and export |
 | System | version, bind, capacity, stealth posture, retention, database and schema version, telemetry, effective configuration with provenance |
 | Notifications | attention requested, tool errors, crashes, vault confirms; persisted |
+| Templates | session templates: record a signed-in browser once (a real window on the BrowserHive machine), see each site's sign-in health, re-login, versions, who may use it, sealing (spec 13) |
+| Site packs | the per-site knowledge templates use: catalog, pending updates with what changed, approve or reject, registry status (spec 13) |
 
 Keyboard: `⌘K` command palette (pages, sessions, actions), `⌘B` sidebar, `/` filter, `?` shortcuts. Theme: system, light or dark.
 
@@ -150,7 +152,7 @@ Full table with every key, type, validation and example: `docs/configuration.md`
 
 Data directory defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA%\BrowserHive` (Windows), `$XDG_DATA_HOME/browserhive` or `~/.local/share/browserhive` (Linux). Layout in D-24.
 
-## 8. Tool catalog (43 tools)
+## 8. Tool catalog (44 tools)
 
 | Group | Tools |
 |---|---|
@@ -167,6 +169,7 @@ Data directory defaults: `~/Library/Application Support/BrowserHive` (macOS), `%
 | Auth state | `save_storage_state` · `save_full_profile` · `list_saved_auths` |
 | Vault | `vault_list_available` · `vault_fill` |
 | Attention (HTTP only) | `request_attention` · `get_attention_result` |
+| Templates | `list_templates` (and `launch_session({ template })`) |
 
 Every page-targeting tool accepts an optional `tab_id`. Contracts, parameters and error codes: `docs/tools.md` (generated; spec in `02-mcp-and-tools.md`).
 
@@ -194,6 +197,8 @@ BrowserHive treats **the agent as untrusted and the operator as trusted**.
 - **The blocklist stops navigation, not egress.** Document loads are aborted; subresources are not. An `evaluate`-enabled agent can still `fetch()` a blocked URL.
 - **Cookie values are never stored** in the database or sent over the dashboard feed (D-20). Saved auth states on disk (`0600`) are your responsibility.
 - **WebAuthn/passkeys cannot be replayed** from saved state.
+- **A session template is a signed-in identity.** Agents can use its sign-ins but, sealed by default, cannot read cookie values, run `evaluate` or export it; sessions of one template share cookies, so one agent signing out signs all of them out. Template versions are encrypted with a key in `admin/template.key` or `--templateKey`; the live browser profile is protected by file permissions only (spec 13 §2.4).
+- **Site-pack updates.** While a template exists, BrowserHive checks `browserhive.ai/registry/v1/` for signed site-pack updates once a day, sending nothing about your install; updates apply only after you approve them. `--sitePacksUpdateCheck false` turns the check off (D-55).
 
 Every error code, its cause and resolution: `docs/errors.md` (generated).
 
@@ -240,6 +245,10 @@ browserhive purge [--all] [--dryRun] [--yes]
                                      delete local state after an inventory and a typed YES
 browserhive db status | backup [--to <file>] | restore <file> [--yes] | migrate [--dryRun]
 browserhive admin reset-password | tokens list | tokens create <name> | tokens revoke <name>
+browserhive templates list | create <name> --sites <site,…> | login <name> --site <site> | probe <name> | …
+                                     session templates (spec 13 §11.5)
+browserhive sitepacks list | check | diff <id> | approve <id> | import <dir|file> | …
+                                     site packs and their updates (spec 13 §11.5)
 browserhive version | -v             print versions (app, schema, Playwright, Chromium)
 browserhive help [command] | -h
 ```

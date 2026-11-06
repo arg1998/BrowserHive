@@ -15,9 +15,9 @@ These documents specify BrowserHive: a local-first, MCP-native daemon that runs 
 
 | # | Spec | Topic |
 |---|---|---|
-| 00 | [Decisions](00-decisions.md) | Architecture decision log: runtime, packages, persistence, contracts, config ladder, errors, telemetry, auth, realtime, dashboard stack, tool contract, stealth, vault, operator requests, notifications, testing, publishing, privacy, lifecycle, naming, data layout |
+| 00 | [Decisions](00-decisions.md) | Architecture decision log: runtime, packages, persistence, contracts, config ladder, errors, telemetry, auth, realtime, dashboard stack, tool contract, stealth, vault, operator requests, notifications, testing, publishing, privacy, lifecycle, naming, data layout, session templates, site packs |
 | 01 | [Overall architecture](01-overall-architecture.md) | Topology, repository layout, layering rules, subsystems, composition root, workflows, extension points, dependency order |
-| 02 | [MCP and tools](02-mcp-and-tools.md) | MCP server surface, tool definition model and dispatcher, the stable 43-tool contract, attention and auth-state models, goldens |
+| 02 | [MCP and tools](02-mcp-and-tools.md) | MCP server surface, tool definition model and dispatcher, the stable tool contract (43 tools, 44 with `list_templates`), attention and auth-state models, goldens |
 | 03 | [Admin backend](03-admin-backend.md) | HTTP layering and middleware, auth design, complete `/api/v1` reference, WebSocket protocol, live view, SQLite schema, repositories, retention, notifications |
 | 04 | [Admin frontend](04-admin-frontend.md) | Dashboard architecture, providers and data layer, design tokens, app shell, responsive rules, shared components, every page, UX rules, extension recipes |
 | 05 | [Coding standards](05-coding-standards.md) | TypeScript config and type rules, naming, module rules, error/async/logging rules, dependency policy, in-source docs, anti-pattern catalogue, definition of done |
@@ -28,8 +28,9 @@ These documents specify BrowserHive: a local-first, MCP-native daemon that runs 
 | 10 | [Error handling and telemetry](10-error-handling-and-telemetry.md) | Error registry and projections, handling rules, logging, request context, spans and metrics, OpenTelemetry wiring, redaction |
 | 11 | [Stealth](11-stealth.md) | Stealth pipeline, constants, config knobs, coherence rules, tests, blocklist and deny-list, the reserved proxy design, known ceilings |
 | 12 | [Usage](12-usage.md) | User documentation: install, quick start, MCP clients, dashboard tour, configuration, tools, security, telemetry, CLI, upgrades, FAQ |
+| 13 | [Session templates and site packs](13-session-templates.md) | Templates (pinned identity, encrypted versions), live mode (one shared browser per template, one window per session), sealing, access, recording, health and re-login, site packs and their signed registry, every surface they add, the PR program |
 
-Specs 00–11 are **normative**: the implementation follows them, and a divergence is a bug in one or the other. Spec 12 and this index are **informative**.
+Specs 00–11 and 13 are **normative**: the implementation follows them, and a divergence is a bug in one or the other. Spec 13 is delivered by the PR program in its §17; until a PR lands, the behaviour it changes is the one the other specs describe. Spec 12 and this index are **informative**.
 
 ## Conventions
 
@@ -60,7 +61,7 @@ Every spec starts with YAML front matter (`title`, `spec`, `status`, `scope`, `a
 | Files | kebab-case | `session-service.ts` |
 | Database columns | snake_case with unit suffixes: `*_at` epoch ms, `*_ms` durations, `*_bytes` sizes | `closed_at`, `duration_ms`, `size_bytes` |
 | Timestamps on the wire | epoch milliseconds as numbers | `1760000000000` |
-| Identifiers | prefixed grammars (D-23) | session `<slug>-<nanoid8>`, tab `t-<nanoid6>`, event `e-<ulid>`, operator request `a-<nanoid12>` |
+| Identifiers | prefixed grammars (D-23) | session `<slug>-<nanoid8>`, tab `t-<nanoid6>`, event `e-<ulid>`, operator request `a-<nanoid12>`, session template `tp-<nanoid10>` |
 
 Decisions: D-05 (wire), D-06 (config), D-23 (code and database).
 
@@ -69,7 +70,7 @@ Decisions: D-05 (wire), D-06 (config), D-23 (code and database).
 | Term | Meaning |
 |---|---|
 | **Hive**, **daemon** | One running BrowserHive process: one `Bun.serve` listener (or the stdio transport), its database and its browser sessions. |
-| **Session** | One isolated browser: one Chromium process and one browser context, created by `launch_session`, identified by `<slug>-<nanoid8>`. Not to be confused with an MCP session or an operator's auth session. |
+| **Session** | What `launch_session` creates, identified by `<slug>-<nanoid8>`. An **exclusive session** is one isolated browser: one Chromium process and one browser context. A **virtual session** is a set of windows in the shared browser of a session template, isolated from its siblings by page attribution (spec 13 §3, D-50). Not to be confused with an MCP session or an operator's auth session. |
 | **Slug** | The agent-chosen name part of a session id (`^[a-z][a-z0-9-]{1,31}$`); vault policies match slugs with globs. |
 | **Tab** | A page inside a session, identified by `t-<nanoid6>`; one tab is active and receives tool calls that omit `tab_id`. |
 | **Lease** | A session's sliding expiry; every tool call extends it, open operator requests pause it, and an expired lease closes the session. |
@@ -79,14 +80,20 @@ Decisions: D-05 (wire), D-06 (config), D-23 (code and database).
 | **MCP session** | One Streamable HTTP client connection (`m-<nanoid16>`, `Mcp-Session-Id`). Browser sessions outlive it; a reconnecting agent keeps its browser sessions. |
 | **Auth session** | An operator's login session (`browserhive_session` cookie, `auth_sessions` table). |
 | **Grant** | A short-lived, single-use token that opens one trace or screenshot where a cookie cannot be sent. |
-| **Operator request** | A durable request that blocks an agent until an operator decides: an **attention request** (`request_attention`, modes `takeover` and `notify`) or a **vault confirmation** (D-15). |
+| **Operator request** | A durable request that blocks an agent until an operator decides: an **attention request** (`request_attention`, modes `takeover` and `notify`), a **vault confirmation**, or a **security intercept** raised by a site pack for a challenge or a write that needs confirmation (D-15, D-54). |
 | **Takeover** | Operator input into a session's live view, permitted only while a `takeover` attention request is open. |
 | **Live view** | The CDP screencast of a session's active tab streamed to the dashboard over the WebSocket. |
 | **Vault** | The credential broker that fills logins without revealing secrets to the agent (D-14). |
 | **Vault binding** | The operator's record that exposes one backend entry to agents under a handle, with allowed origins, authorized principals and slugs, and fill options. |
 | **Group policy** | Access rules (`manual`, `allow_all`, `reject_all`, slug globs, confirmation) applied to the entries of one backend group. |
 | **Auth state** | A saved login snapshot under `auth-states/`: a Playwright storage state or a full persistent profile. |
-| **Data dir** | The directory holding everything BrowserHive stores (D-24): database, backups, session directories, auth states, uploads. |
+| **Data dir** | The directory holding everything BrowserHive stores (D-24): database, backups, session directories, auth states, uploads, session templates, site-pack caches. |
+| **Session template** (template) | An operator-recorded, named browser identity signed in to one or more sites, with a pinned fingerprint, network and locale, a policy, encrypted versions and per-site health; agents launch sessions from it with `launch_session({template})` (spec 13, D-49). |
+| **Template host** | The one shared browser of a session template, with a sentinel window that keeps it alive without sessions; the only writer of the template (D-50). |
+| **Sealing** | The default restriction of template sessions: cookie values hidden, `evaluate` off, cookie writes and state exports refused, unless the operator unseals the template (D-51). |
+| **Site pack** | Signed, versioned per-site data (sign-in and signed-in detection, guards, challenges, pacing, write policy, requirements, strategy selections) applied to template sessions; data only, never code (D-54). |
+| **Strategy** | A per-site behaviour compiled into the binary that a site pack may select and parameterise within fixed bounds (spec 13 §9.4). |
+| **Probe** | A per-site check of a template's sign-in with the outcomes `signed_in`, `signed_out`, `challenged` and `inconclusive` (spec 13 §8.1). |
 | **Observation** | The single record the tool dispatcher emits for every tool call, which becomes a `tool_calls` row and a feed event. |
 | **Soft failure** | A tool call that returns normally but reports failure (for example `vault_fill` status `blocked`, a navigation with HTTP 404); recorded with an audit code, not thrown. |
 | **Feed** | The ordered, resumable stream of domain events on WebSocket topics. |

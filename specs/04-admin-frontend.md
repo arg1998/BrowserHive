@@ -80,7 +80,8 @@ packages/dashboard/
     │   ├── __root.tsx, index.tsx (→ /overview), theme.tsx (dev only)
     │   ├── _auth.tsx            <Outlet/> inside AuthGate + AppShell
     │   ├── _auth/overview, sessions, sessions_.$id, sessions_.$id_.live (redirect), attention, websites, navigation (redirect),
-    │   │        blocklist, vault, vault_.log, logs, system, notifications, notifications_.channels(.new, .$channelId), notifications_.log
+    │   │        blocklist, vault, vault_.log, logs, system, notifications, notifications_.channels(.new, .$channelId), notifications_.log,
+    │   │        templates, templates_.new, templates_.$id, site-packs, site-packs_.$id (spec 13 §11.4)
     │   └── _public/login.tsx, change-password.tsx
     ├── features/
     │   ├── overview/            tiles, activity chart, panels, live-hold.ts (useLiveHold), NewRowsPill, window anchor
@@ -89,6 +90,7 @@ packages/dashboard/
     │   ├── vault/               bindings/, groups/, confirm/, status/, tester/, transfer/, log/
     │   ├── logs/  system/ (status/, tokens/, config/)  auth/  theme/
     │   ├── harness/             HarnessName, ClientPanel, HarnessesCard, McpConnectionsPanel (D-30; shared by sessions, overview, system)
+    │   ├── templates/  site-packs/   session templates and site packs (spec 13 §11.4; reuse vault/harnesses)
     ├── components/
     │   ├── ui/                  shadcn copies adapted to the tokens (button, select, tabs, tooltip, dialog, sheet, …)
     │   └── shared/              the §7 component set
@@ -198,7 +200,7 @@ Never: module-level mutable singletons holding server state.
   - Nav scroll region: `overflow-y-auto`, thin scrollbar, no `scrollbar-gutter`.
   - Brand: the hive hexagon `BrandMark` + "BrowserHive" wordmark (the rail shows the mark only).
   - Footer: a Shortcuts button (`?`; an icon in the rail; hidden on coarse pointers) and the daemon version.
-- **Nav groups**: primary items ordered by `staticData.nav.order` (Overview 10, Sessions 20, Websites 30, Blocklist 40, Attention 50, Vault 60, Vault log 65, Logs 80, System 90). Items whose `staticData.requires` (e.g. `vault`) is off in `/system` render in a "Not enabled" group; vault items render in no group until `/system` has loaded. Badges: Attention shows the open count; Vault shows the confirm count, and the confirm-count query never runs while the vault is disabled. Items carry `aria-current="page"` from the router's active match.
+- **Nav groups**: primary items ordered by `staticData.nav.order` (Overview 10, Sessions 20, Templates 25, Site packs 26, Websites 30, Blocklist 40, Attention 50, Vault 60, Vault log 65, Logs 80, System 90; Templates and Site packs from spec 13, their badges in spec 13 §11.4). Items whose `staticData.requires` (e.g. `vault`) is off in `/system` render in a "Not enabled" group; vault items render in no group until `/system` has loaded. Badges: Attention shows the open count; Vault shows the confirm count, and the confirm-count query never runs while the vault is disabled. Items carry `aria-current="page"` from the router's active match.
 - **Topbar** (`--topbar-height` 3.5rem = 56 px, sticky, translucent with backdrop blur):
   - Left: breadcrumbs on object pages only (`Sessions › slug`); list pages show nothing there because `PageHeader` carries the title. No "BrowserHive" root crumb. Under 768 px: menu button + brand mark instead.
   - Right: a search field-button ("Search sessions, pages…" + `Ctrl K`/`⌘K` by platform) that opens the palette (an icon button under 768 px), `HealthPill`, `NotificationBell`, `ThemeMenu`, `PrincipalMenu` (display name, Change password, Keyboard shortcuts, Log out).
@@ -604,6 +606,14 @@ Search: `kind` (csv of `digest.daily|digest.weekly|report.anomaly`), `channel` (
 
 `/theme` 404s outside `import.meta.env.DEV`; it renders every token in both themes with computed WCAG ratios. NotFound: inside the shell, "Page not found" with links to Overview and back.
 
+### 12.14 `/templates`, `/templates/new`, `/templates/$id` — session templates (spec 13)
+
+Search: `/templates` table params + `status` (csv), `host` (csv); `/templates/$id`: `tab` (`sites|sessions|versions|access|settings|activity`, default `sites`), `site`. The list, the five-step creation wizard (name, sites from the site catalog, identity and network, access, sign in with live per-site ticks), and the template page with its six tabs are specified in spec 13 §11.4 (and the wizard's steps in §7.1). The Access tab reuses `HarnessRuleField` (§12.7) unchanged. Topics: `templates`, `sessions`.
+
+### 12.15 `/site-packs`, `/site-packs/$id` — site packs (spec 13)
+
+Search: `tab` (`catalog|updates|history`, default `catalog`), `q`, `source` (csv). Catalog, the Updates tab (one card per pending update with its classified field-level diff and Approve / Reject / Pin), History, the Registry card and the pack page are specified in spec 13 §11.4 and §10.6. Pack text is always rendered as text nodes. Topic: `site-packs`.
+
 ## 13. Live-view protocol usage
 
 Wire format per `03-admin-backend.md` §6.5–6.7.
@@ -643,7 +653,7 @@ Not built; each is a deliberate scope boundary of the current dashboard, not a d
 - **No saved views or server-side page defaults.** A view is shared as a URL; `/me/preferences` holds notification toast preferences only (§4.6).
 - **Dashboard-traffic filtering is client-side.** `GET /logs` and `GET /logs/export` have no server-side equivalent of the Logs page's dashboard-traffic filter, so older pages are loaded to fill a filtered view and exports include dashboard traffic (§12.9).
 - **Error states do not link to the error reference.** `ErrorState` shows the code as a copyable token only; `AppError.docsUrl` already builds the `browserhive.ai` link for when it should.
-- **The operator cannot open a browser.** There is no `POST /sessions`; sessions come only from an agent's `launch_session`, so a dashboard with no agent connected has nothing to watch or drive.
+- **The operator cannot open a browser.** There is no `POST /sessions`; sessions come only from an agent's `launch_session`, so a dashboard with no agent connected has nothing to watch or drive. The one exception is a session template's recording and re-login windows, which open on the machine running BrowserHive (spec 13 §7, §8.4).
 - **Takeover starts only when an agent asks.** Input is gated per message on an open `takeover` attention request, which only `request_attention` creates; there is no operator-initiated takeover.
 - **Live-view input gaps.** No clipboard: Ctrl/Cmd combinations are left to the local browser (`shouldPreventKey`), so paste never reaches the remote page. No IME composition. A popup or `window.open` tab never becomes the watched tab (only the agent switching tabs retargets the stream) and there is no operator tab switcher, so OAuth popups are invisible. Native dialogs, file choosers and browser UI are not part of a CDP screencast. WebAuthn/passkeys cannot work: the authenticator is on the operator's machine, not in the remote browser.
 - **No `noindex` signal.** Neither `index.html` nor the daemon's responses carry `robots` meta or `X-Robots-Tag`; a dashboard exposed beyond loopback relies on authentication to keep its pages out of search indexes.

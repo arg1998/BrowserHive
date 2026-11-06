@@ -24,7 +24,7 @@ Scope: project and codebase structure, tooling, primary development, testing and
 
 ## 1. What BrowserHive is
 
-A local-first, MCP-native daemon that runs N isolated Chromium sessions (one browser process + one context per session) for LLM agents, with vault-backed credential injection the model never sees, a human-in-the-loop attention/takeover mechanism, a SQLite audit trail with Playwright trace replay, and an operator dashboard. HTTP is the first-class transport; stdio is a single-client fallback. The agent is untrusted; the operator is trusted.
+A local-first, MCP-native daemon that runs N isolated Chromium sessions (one browser process + one context per exclusive session; the virtual sessions of a session template share its one browser, each in its own windows, spec 13) for LLM agents, with vault-backed credential injection the model never sees, a human-in-the-loop attention/takeover mechanism, a SQLite audit trail with Playwright trace replay, and an operator dashboard. HTTP is the first-class transport; stdio is a single-client fallback. The agent is untrusted; the operator is trusted.
 
 Non-goals: managed proxy networks, hosted CAPTCHA farms, cloud identity, telemetry that leaves the host by default, horizontal multi-node scale.
 
@@ -49,6 +49,8 @@ Non-goals: managed proxy networks, hosted CAPTCHA farms, cloud identity, telemet
    chromium (session A)  chromium (session B) …          any OTel backend
 ```
 
+The virtual sessions of a session template share one Chromium process, the template host, isolated from each other by page attribution (spec 13 §3, D-50).
+
 `--transport stdio` swaps the HTTP front door for the SDK's stdio transport; the dashboard, WS, attention, and vault-confirm are unavailable (the attention tools stay registered and return `ATTENTION_REQUIRES_HTTP`, so the tool catalog is identical on both transports, D-12).
 
 ## 3. Repository layout (D-03)
@@ -71,7 +73,8 @@ BrowserHive/
     │       ├── config/           serverConfigSchema, key registry (env/cli/json names, descriptions)
     │       ├── errors/           error registry (code → status/category/retryable/details schema)
     │       ├── enums/            Channel, PersistenceMode, ClosedReason, UrlCategory, AttentionMode…
-    │       ├── tools/            input/output zod schemas for all 43 tools (+ annotations, titles)
+    │       ├── tools/            input/output zod schemas for all 44 tools (+ annotations, titles; `list_templates` since spec 13 T1)
+│       ├── site-packs/       site-pack and registry index schemas (spec 13 §9.2)
     │       ├── http/             REST DTOs, PageQuery/Page<T>, problem+json schema
     │       ├── ws/               envelope, client commands, server messages, feed event payloads
     │       └── index.ts
@@ -81,13 +84,13 @@ BrowserHive/
     │       ├── domain/           L1: session state machine, lease, identity, vault broker (pure), operator-request model, policies
     │       ├── ports/            L1: interfaces — BrowserDriver, repositories, UnitOfWork, VaultBackend, GeoSeedResolver, ProxyResolver, NotificationChannel, Clock
     │       ├── infra/            L2: adapters — browsers/ (playwright launcher, stealth cdp, fingerprint), persistence/ (kysely, migrations, repos), fs/ (DataDir), logging/, telemetry/, vault-backends/bitwarden
-    │       ├── app/              L3: application services — sessions, attention, vault, auth, blocklist, auth-states, notifications, observability; the event bus
+    │       ├── app/              L3: application services — sessions, attention, vault, auth, blocklist, auth-states, notifications, observability, templates, site-packs; the event bus
     │       ├── interface/        L4: mcp/ (tool definitions + dispatcher), http/ (routes, middleware, serializers), ws/ (hub, topics), static/
     │       └── index.ts          public surface (explicit exports; no export *)
     ├── dashboard/                @browserhive/dashboard (see 04-admin-frontend.md)
     └── browserhive/              published package
         └── src/
-            ├── cli/              command parser (schema-driven), commands: serve, init, doctor, purge, config, db, admin, version
+            ├── cli/              command parser (schema-driven), commands: serve, init, doctor, purge, config, db, admin, channels, templates, sitepacks, version
             ├── composition/      phased composition root with unwind stack (§6)
             ├── index.ts          programmatic API: createServer(options)
             └── bin.ts            #!/usr/bin/env bun
@@ -110,13 +113,15 @@ Concrete rules in `.dependency-cruiser.cjs`; violations fail CI. Two additional 
 
 - **Session subsystem** (`domain/session`, `app/sessions`): registry, state machine, lease (sliding, pausable), creation pipeline (D-21), tabs, ownership, warnings. Playwright appears only through `BrowserDriver`/`SessionHandle` ports; interaction still uses Playwright `Page` types (engine-neutral lifecycle, Playwright-typed interaction) until a second engine exists.
 - **Browser driver** (`infra/browsers`): launcher (channel map, arg merge, deny-list), stealth (Patchright resolution, CDP UA override per page, fingerprint init script, geo seed), tracing, blocklist route. Details in `11-stealth.md`.
-- **Tools** (`interface/mcp`): 43 declarative `ToolDefinition`s grouped in packs; one dispatcher (parse → authorize → policy → execute → map error → classify outcome → observe). Details in `02-mcp-and-tools.md`.
+- **Tools** (`interface/mcp`): 44 declarative `ToolDefinition`s grouped in packs (`list_templates` in the `templates` pack, spec 13 §5.1); one dispatcher (parse → authorize → policy → execute → map error → classify outcome → observe). Details in `02-mcp-and-tools.md`.
 - **HTTP/WS** (`interface/http`, `interface/ws`): admin API, realtime hub, static serving, auth middleware. Details in `03-admin-backend.md`.
 - **Persistence** (`infra/persistence`): Kysely dialect, migrations, repositories, analytics queries, retention, backups, purge inventory. Schema in `03-admin-backend.md` §Data model.
 - **Auth** (`app/auth`, `infra/auth`): provider chain, sessions, tokens, credentials, authorizer (D-09).
 - **Vault** (`domain/vault`, `app/vault`, `infra/vault-backends`): broker, bindings/policies repos, redaction, confirm via operator requests (D-14).
 - **Operator requests** (`domain/operator-requests`, `app/attention`): attention + vault confirm (D-15).
 - **Observability** (`infra/logging`, `infra/telemetry`, `app/observability`): logger, OTel, request context, recorder (event → DB rows), ring buffer, retention. Details in `10-error-handling-and-telemetry.md`.
+- **Session templates** (`app/templates`, `infra/browsers` template host): template store and encrypted versions, the host supervisor, page attribution, admission, health and re-login (spec 13 §2–§8, D-49 to D-53, D-56).
+- **Site packs** (`app/site-packs`, `infra/site-packs`): the `SitePackRegistry`, its sources (bundled, remote registry, local, import), the closed strategy set and the request guard (spec 13 §9–§10, D-54, D-55).
 - **Event bus** (`app/events`): typed, in-process, versioned event names (`session.opened`, `tool.called`, `page.visited`, `attention.created`, `vault.access`, `blocklist.hit`, `system.degraded`, …). Consumers: DB projection (first, synchronous enqueue), WS feed, notifications, OTLP metrics. Every mutation publishes through the bus; the WS layer never synthesizes events itself.
 
 ## 6. Composition root and lifecycle
@@ -157,18 +162,19 @@ PR → Changeset → merge to `main` → Changesets bot opens "Version Packages"
 
 | Seam | Where | Reserved for |
 |---|---|---|
-| `BrowserDriver.launch(spec) → SessionHandle{capabilities}` | ports | Firefox/WebKit/Camoufox engines, direct-CDP |
+| `BrowserDriver.launch(spec) → SessionView` over a `BrowserHost{capabilities}` (spec 13 §3.13; `SessionHandle` until PR T0c) | ports | Firefox/WebKit/Camoufox engines, direct-CDP; template hosts shared by virtual sessions (spec 13) |
 | `ProxyResolver`, `LaunchSpec.proxy`, `proxy_label` | ports/domain | managed pool, rotation, exit-geo |
 | `GeoSeedResolver` (`source: host|proxy`) | ports | proxy-exit geo |
 | `VaultBackend` + `capabilities` | ports | local vault, 1Password, HTTP vault, TOTP |
-| `OperatorRequestBroker.kind` | domain | security intercept, approval gates, CAPTCHA takeover |
+| `OperatorRequestBroker.kind` | domain | security intercept (built for site packs, spec 13 §9.5), approval gates, CAPTCHA takeover |
 | `AuthenticationProvider` chain, `Authorizer`, `tenant_id` | app/auth | better-auth, RBAC, orgs, OIDC/SAML |
 | `NotificationChannel` (`send`/`edit`/`delete`, capabilities) + `LinkBuilder`, fed by the notification outbox (D-34) | ports / app/notifications | Telegram, Discord, ntfy, webhook (next), Slack, Pushover, Teams, Apprise, email (later) |
 | `AdmissionPolicy` in the create pipeline | domain | resource governor, queueing, eviction |
-| `InterceptionChain` (blocklist route is the first handler) | domain | security rules, egress firewall, Web Bot Auth signing |
+| `InterceptionChain` (blocklist route is the first handler; the method-aware request guard the second, spec 13 §9.3) | domain | security rules, egress firewall, Web Bot Auth signing |
+| `SitePackSource`, `SiteStrategy` (closed set), `SitePackRegistry` | ports / app/site-packs | packs for every session, stealth defaults from packs (spec 13 §16) |
 | `ToolPack` registry with `requires` | interface/mcp | profile tools, proxy tools, captcha tools |
 | Event bus consumers | app/events | OTLP metrics, audit hash chain, session bundle export |
-| `PersistenceMode` enum | contracts | `blueprint` profiles |
+| `PersistenceMode` enum | contracts | `blueprint` profiles (signed-in identities are session templates instead, D-49) |
 
 ## 10. Upgrades and data compatibility
 
@@ -185,8 +191,8 @@ Each step depends only on the steps before it; a new contributor reading bottom-
 2. `core/kernel`, `infra/persistence` (dialect, runner, schema, repositories, conformance tests).
 3. `infra/logging` + `telemetry` + request context; error model.
 4. `domain/session` + `infra/browsers` + `app/sessions`; isolation and stealth integration suites.
-5. `interface/mcp` dispatcher + all 43 tools; stdio transport; tool-surface tests.
+5. `interface/mcp` dispatcher + all 44 tools; stdio transport; tool-surface tests.
 6. `app/auth`, `interface/http` (routes), `interface/ws`, static; `composition`; `browserhive` CLI.
-7. Vault, operator requests, auth states, blocklist, notifications, retention, purge.
+7. Vault, operator requests, auth states, blocklist, notifications, retention, purge; session templates and site packs (spec 13 §17).
 8. Dashboard foundation (shell, tokens, component set), then pages.
 9. Package gate, docs generation, release.

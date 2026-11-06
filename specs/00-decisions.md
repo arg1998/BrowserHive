@@ -34,7 +34,7 @@ related:
 | Status | Meaning |
 |---|---|
 | Proposed | Under discussion; not yet binding. |
-| Accepted | Binding; the codebase implements it. |
+| Accepted | Binding; the codebase implements it, or its **Implementation** line names the planned work that will (until that work lands, the entries it amends describe the running code). |
 | Deprecated | Still implemented, scheduled for removal; new code MUST NOT depend on it. |
 
 **Entry template.**
@@ -244,6 +244,8 @@ Details in `10-error-handling-and-telemetry.md`.
 - Nothing leaves the host unless `otel` is on.
 - Instrumentation is written once against the API; exporter packages load only when enabled.
 
+**Amended by D-55** (planned, spec 13 §10): the one default outbound request is the site-pack update check, an anonymous conditional `GET` of BrowserHive's public signed files while templates exist; it carries no data about the install, and `sitePacksUpdateCheck=false` turns it off.
+
 **Alternatives considered.**
 - *A vendor SDK or a custom metrics endpoint.* Locks operators to one backend; OTLP is accepted by all common ones.
 - *Logs only in files.* The dashboard needs a filterable live tail without shell access.
@@ -328,6 +330,8 @@ Details in `04-admin-frontend.md`.
 - Contract rules that are enforced regardless of history: ownership on every tool (D-09); `allowEvaluate=false` disables `evaluate`; argument-validation failures are recorded as observations like any other failure; `defaultHeadless` and `defaultChannel` are baked into the `launch_session` schema defaults.
 - Tools are declarative `ToolDefinition`s dispatched by one pipeline; the tool layer imports no Playwright.
 
+**Amended by D-49** (planned, spec 13 §5): the catalog grows to 44 tools with `list_templates` in the new `templates` pack, appended to the registration order, and `launch_session` gains the optional `template` parameter; both are additive.
+
 **Consequences.**
 - Result shapes that are unusual for the rest of the API (bare arrays from `list_tabs` and `list_sessions`, camelCase keys inside `identity`, argument-less tools advertised without an input schema) stay as they are, because existing agents parse them.
 - New capabilities arrive as new tools in new packs (D-25 seams), never by reshaping existing ones.
@@ -347,6 +351,8 @@ Details in `04-admin-frontend.md`.
 - **CAPTCHA:** `captcha` is `attention|off`; `solver` is a reserved value that fails fast at config time until a solver tier exists.
 - **Proxy seam:** `LaunchSpec.proxy` is a typed field with `source: 'byo'|'managed'` and a `ProxyResolver` port. The only implementation is bring-your-own pass-through with a forced loopback/RFC 1918 bypass, a `proxy_label` on session metadata and a `session.proxy_assigned` event. A managed pool, rotation and exit-geo are **not built**. Raw `--proxy-*` launch args remain allowed until a managed layer exists.
 - **Credentials never reach traces:** around a vault fill, the tracing handle performs a full `tracing.stop({path: part-N.zip})` and, after the fill, `tracing.start(originalOptions)`; parts are merged into `trace.zip` at session close. Playwright's `stopChunk`/`startChunk` would leave the network tracer running, so the login POST body would land in the resumed chunk. `clear_after_fill` semantics are unaffected. An integration test asserts no credential string appears anywhere in the merged trace.
+
+**Amended by D-51** (planned, spec 13 §5.4): virtual sessions of a session template have no trace in v1, so the guarantee holds there because nothing is recorded.
 
 **Consequences.**
 - The trace of a session with a vault fill consists of several parts that the trace viewer loads as one timeline.
@@ -386,6 +392,8 @@ Details in `04-admin-frontend.md`.
 **Context.** Two flows block an agent until a human decides: `request_attention` and dashboard confirmation of a vault fill. Both need the same guarantees, and a future security-intercept flow will need them too.
 
 **Decision.** `OperatorRequestBroker` with `kind: 'attention' | 'vault_confirm'` (reserved: `security_intercept`) provides for every kind: a durable row, a deadline, lease pause while pending, cancellation when the client disconnects, settlement when the session closes, orphan recovery at restart, idempotent request ids (`a-<nanoid12>`), a bounded queue, and a decision-grade payload (page URL, tool, event id). A vault confirmation nobody answers is denied with `confirm_timeout` after the same deadline as an attention request (`attentionTimeout`), so a fill is never held forever. `request_attention` blocks, heartbeats every 25 s, and applies a floor (`minAttentionWait`) and a cap (`attentionTimeout`).
+
+**Amended by D-54** (planned, spec 13 §9.5, schema v9): `security_intercept` is built for site-pack challenges and write confirmations on a session, with operator takeover permitted while one is open.
 
 **Consequences.**
 - Attention and vault confirmation share one table (`operator_requests`), one history view model, and one set of recovery tests.
@@ -478,6 +486,8 @@ Details in `04-admin-frontend.md`.
 
 **Consequences.** A failed launch unwinds exactly the phases that ran; `SESSION_LIMIT_REACHED` is reported before any browser starts; the `AdmissionPolicy` seam can grow into a resource governor (D-25).
 
+**Amended by D-50 and D-56** (planned, spec 13 §3, §6.3): a virtual session of a session template runs the same named phases in a shared browser (its template host) instead of launching its own; `maxSessions` bounds browsers (exclusive sessions and running hosts), and virtual sessions are counted as sessions.
+
 ## D-22 Blocklist
 
 **Status:** Accepted
@@ -488,13 +498,15 @@ Details in `04-admin-frontend.md`.
 
 **Consequences.** Sites opened by page scripts or redirects are blocked as reliably as direct navigations. Rules editable in the dashboard and stored in the DB belong to the security-intercept engine (D-25); not built.
 
+**Amended by D-54** (planned, spec 13 §9.3): the interception chain gains a second, method- and resource-type-aware handler (the request guard) for site-pack rules; the blocklist file, its grammar and its document-only enforcement are unchanged.
+
 ## D-23 Naming inside the codebase
 
 **Status:** Accepted
 
 **Context.** Consistent naming across TypeScript, files, wire, config and the database removes a whole class of review comments and mapping bugs.
 
-**Decision.** TypeScript: camelCase identifiers, PascalCase types, `SCREAMING_SNAKE` only for true constants. Files: kebab-case. Wire: snake_case (D-05). Config: camelCase (D-06). Database: snake_case columns with unit-bearing names (`*_at` epoch ms, `*_ms`, `*_bytes`). IDs: `<slug>-<nanoid8>` sessions, `t-<nanoid6>` tabs, `e-<ulid>` events (time-sortable, so event ids order like the events), `a-<nanoid12>` operator requests, `p-<nanoid12>` principals, `n-<nanoid12>` notifications, `m-<nanoid16>` MCP sessions, `c-<nanoid10>` realtime connections.
+**Decision.** TypeScript: camelCase identifiers, PascalCase types, `SCREAMING_SNAKE` only for true constants. Files: kebab-case. Wire: snake_case (D-05). Config: camelCase (D-06). Database: snake_case columns with unit-bearing names (`*_at` epoch ms, `*_ms`, `*_bytes`). IDs: `<slug>-<nanoid8>` sessions, `t-<nanoid6>` tabs, `e-<ulid>` events (time-sortable, so event ids order like the events), `a-<nanoid12>` operator requests, `p-<nanoid12>` principals, `n-<nanoid12>` notifications, `m-<nanoid16>` MCP sessions, `c-<nanoid10>` realtime connections, `tp-<nanoid10>` session templates (D-49).
 
 **Consequences.** ID grammars live in `contracts/ids` as branded schemas; one `IdGenerator` port mints them.
 
@@ -523,6 +535,8 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 
 **Consequences.** `browserhive purge` and `browserhive doctor` work from this layout; `doctor` reports files in the data directory that are not part of it.
 
+**Amended by D-49** (planned, spec 13 §2.4): the layout gains `templates/<template_id>/{userdata/,versions/,downloads/}`, `admin/template.key` and `site-packs/{cache/,local/}`.
+
 ## D-25 What is explicitly not built (seams only)
 
 **Status:** Accepted
@@ -532,6 +546,8 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 **Decision.** Not built: managed proxy pool and rotation; foreign fingerprint identities; profile blueprints (named, versioned, encrypted); local vault, TOTP, 1Password; extensions registry; security-intercept rule engine; resource governor and eviction; CAPTCHA detection and solving; Web Bot Auth; Tor egress; benchmark harness; multi-user, organisations and OIDC; Firefox and WebKit engines; standalone binaries. Each has a named seam in `01-overall-architecture.md` §9.
 
 **Consequences.** Reserved enum values and config values for these features fail fast with a clear message rather than silently doing nothing. External notification channels left this list in 0.2: they are built in stages from the contract and outbox up (D-32 to D-39).
+
+**Amended by D-49 and D-54** (planned, spec 13): named, versioned, encrypted signed-in identities are built as session templates rather than as a `blueprint` persistence mode (which stays reserved), and site packs are the first client of the security-intercept and extensions seams.
 
 ## D-26 Browser choice: bundled by default, installed browsers by choice, never a silent switch
 
@@ -611,6 +627,8 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 - **A small capped meta bag.** `X-BH-Meta-<Name>` headers and other `ai.browserhive/*` `_meta` keys are kept verbatim, at most 16 keys, 256 bytes per value and 4 KiB in total; the rest is dropped with one log line per connection. The bag is display-only: never a facet, a filter, a metric attribute or an input to any decision.
 - **The identity environment variables are not configuration.** `BROWSERHIVE_HARNESS`, `BROWSERHIVE_MODEL` and `BROWSERHIVE_WORKSPACE` describe one stdio process, not the server; the config collector skips exactly these three names (`IDENTITY_ENV_VARS`), so they appear in no config schema, `config show` or `--help` key list, and a misspelling still gets a "did you mean" (spec 08 §4).
 - **A session's harness is fixed at launch.** `sessions.harness` is written once when the session is created, so facets, filters and counts do not change when a connection row is updated or pruned. Sessions created before schema v3 read `unknown`. Since schema v7 the raw declared name rides next to it (`sessions.harness_declared`, and the latest one on `mcp_connections.harness_declared`; D-48).
+
+**Amended by D-52** (planned, spec 13 §6.1): a session template's grant may also carry a harness list, with D-48's semantics and the same "narrowing guard, not a boundary" wording.
 
 **Consequences.** With no configuration, Claude Code and Gemini CLI over stdio and Codex, OpenCode, Cursor, Claude Code and others over HTTP are recognised; everything else is `unknown` rather than an empty cell. One header, environment variable or query parameter names any other harness. Per-harness notification routing and per-harness template visibility can read `harness` from session and tool-call event payloads without a query. Metric series grow by at most the size of the known table.
 
@@ -935,8 +953,151 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 - **The tester agrees with the broker.** The dashboard tester (`POST /vault/bindings/resolve`) takes an optional harness (a slug, `unknown` included) and declared name; a declared name alone is normalised into its slug, as a declared signal would be. Given one, it runs the broker's own check (`checkHarnessRules` over the same binding + group lists, after principal and slug) and reports a refusal as `harness_not_allowed` with the rule that refused. Without one it checks no list and names the bindings whose rules carry one, so a "would fill" never silently ignores a list. This output is operator-only (`vault:read`); nothing changes for agents.
 - **Vocabulary for the pickers.** The known-slug table grows to the harnesses with evidence of the exact `clientInfo.name` they send (source code or a recent wire capture, recorded per row as verified live or from source in `docs/guide/mcp-clients.md`): Amp, Kiro, Amazon Q Developer CLI, Warp, Qwen Code, Factory Droid, Augment, Antigravity, Grok CLI, Kimi Code, ChatGPT, Letta Code, Cherry Studio, LibreChat, Jan and MCP Inspector, plus current names of existing ones (`kilo`, `windsurf-client`, `junie-client`, `lmstudio-mcp-server-session`, `openai-mcp (Codex)`, `Visual-Studio-Code`, `@cline/…`); `cli`, `rmcp` and `acp` join the generic SDK names. No injected environment variable is added: the candidates (`KILO`, `COPILOT_AGENT_SESSION_ID`) also reach shells and nested agents, and an injected variable outranks `clientInfo`. Harnesses with no distinctive name (Visual Studio, Mistral Vibe, OpenHands, Kimi CLI) stay `unknown` until they send one. The picker also offers every harness and declared name seen on this daemon.
 - **Room for a verified harness.** List entries stay plain strings. A later "verified harness only" option is a separate column checked against `harness_source = 'token'` (D-30); nothing here has to change for it.
-- **Out of scope.** A verified harness and a "verified only" rule; harness restrictions anywhere outside the vault (tools, sessions, notifications).
+- **Out of scope.** A verified harness and a "verified only" rule; harness restrictions anywhere outside the vault (tools, sessions, notifications), except session templates (**amended by D-52**, planned, spec 13 §6.1: a template's grant may carry a harness list with exactly these semantics).
 
 **Consequences.** Schema v7 (`0007-vault-harnesses`, `compatible: true`) adds the four nullable columns and backfills nothing: every existing rule keeps meaning "all harnesses" and every existing session has no declared name. A binary older than v7 can still read the database and ignores the lists; since they only narrow, such a downgrade can only widen access back to what the principal and slug rules allow, which is acceptable for a guard that is not a boundary. The harness vocabulary in `contracts/harness` now feeds a decision, so additions to it are reviewed like any other vault change; the alias tables still only identify, they never widen a rule.
 
 **Alternatives considered.** *Treating an empty list as "all"*: an operator who unticks the last harness expects nothing to pass; silently allowing everything is the dangerous reading. *Matching custom names case-insensitively, or through `normalizeHarness`*: a custom name exists precisely for values the slug table does not know, and folding would make `Claude-Code` the built-in Claude Code behind the operator's back; exact matching plus a warning is predictable. *Using the per-call harness*: a client could switch its header between calls to pass a rule. *A distinct agent-facing reason (`harness_not_allowed`)*: tells a misbehaving agent which name to claim. *Applying the group list only to `allow_all` items*: a "Deploy folder for OpenCode and Claude Code" would then not cover the folder's manual bindings, which is what operators mean. *A new error code*: refusals are returned statuses (10 §1.4) and malformed lists are ordinary validation failures.
+
+## D-49 Session templates are their own object
+
+**Status:** Accepted
+
+**Implementation:** planned: PR T1 of spec 13 §17 (schema v8, `0008-templates`).
+
+**Context.** With the vault, every agent signs in by itself: ten parallel agents on one site are ten sign-ins, slow and suspicious to the site. The owner asked for "templated sessions": an operator signs in once to several sites, saves the result, and agents launch sessions from it by name. Two existing ideas looked close. Saved auth states (`auth-states/`, 02 §6) are per-principal snapshots in one flat namespace with no policy, no versions, no health and no encryption, and a name collision lets one principal overwrite another's snapshot. The reserved "profile blueprints (named, versioned, encrypted)" of D-25 are a persistence mode, and `persistence_mode` is a frozen enum with a CHECK constraint (D-12, 03 §7). A template also has to pin a whole identity (fingerprint seed, Chrome major, client hints, screen, locale, timezone, geo, proxy), because a site that sees a new device on every launch signs the account out.
+
+**Decision.**
+- A **session template** is a first-class object: an id-keyed directory `<data-dir>/templates/<tp-id>/` (the live profile, encrypted versions, the host's downloads) plus rows in `templates`, `template_sites`, `template_versions` and `template_probes` (spec 13 §2). Identifiers are `tp-<nanoid10>`; agents address a template by its unique `name` (the slug grammar).
+- The identity and network are **pinned at creation** and never re-derived: seed, recorded Chrome major and client hints (never faked, D-26; a later drift is reported, not hidden), screen and window, locale, languages, timezone, operator-given geolocation, and the proxy (server and an environment variable *name* for its password, D-33). Launches are refused rather than sent from the host's IP when the pinned proxy is unreachable.
+- A template is **not** a persistence mode: `persistence=blueprint` and the key `profiles` stay reserved, and a template session reports `persistence_mode: 'memory'`. Saved auth states are unchanged, except that their names become per-principal (spec 13 §17, T0a) so one principal can no longer overwrite another's snapshot.
+- Sessions record their template in nullable columns (`sessions.template_id`, `template_name`, `template_version`, `template_mode`, `sealed`; migration `0008-templates`, `compatible: true`).
+
+**Consequences.** D-24's layout gains `templates/` and `site-packs/`; D-25's "profile blueprints" item is realised by templates for the signed-in-identity use case, with `blueprint` kept reserved for a persistence mode nobody needs yet. Spec 11 §6's reserved "profile ↔ fingerprint ↔ proxy pinning" is built here. The auth-state owner-overwrite bug is fixed as a prerequisite, independently of templates.
+
+**Alternatives considered.** *Extending auth states with a third kind*: `list_saved_auths` pins its `kind` enum and its flat file namespace is the bug above. *Building the D-25 blueprint persistence mode*: a fourth `persistence_mode` value needs a `sessions` table rebuild and breaks D-12, and a persistence mode cannot carry policy, health or versions. *Pinning only the seed*: geo and proxy drift are the logout triggers vendors name first.
+
+## D-50 Live mode: one shared browser per template, one window per session
+
+**Status:** Accepted
+
+**Implementation:** planned: PR T0c (the `BrowserHost`/`SessionView` split, no behaviour change) and PR T1 of spec 13 §17.
+
+**Context.** Two ways exist to run ten sessions from one sign-in. *Fork mode* gives each session its own browser seeded from a copy of the cookie jar: Google supersedes a copied snapshot within about 10 minutes, refresh-token rotation with reuse detection revokes the whole token family (RFC 9700 §4.14.2), device-bound session credentials (DBSC, on by default in Chrome on Windows since May 2026) cannot be copied at all, and every antidetect vendor therefore runs one profile on one device at a time behind a lock. *Shared mode* runs one browser per identity with a tab or window per task, which is what a person does and what Kernel's documentation recommends; it removes the token-rotation, DBSC and IP/fingerprint-mismatch risks. Measured on Playwright and Patchright 1.63 with headed Chromium: `Target.createTarget({newWindow: true, browserContextId})` opens a window Playwright adopts; focus emulation keeps every page visible and focused, so screenshots and the screencast work in background tabs and minimized windows; a renderer crash kills only its tab; ten sessions in one browser take about 1.3 GB against 2.3 GB as ten browsers. The cost is the session model itself: D-21, spec 11 §2.2 and the driver port say one session is one browser and one context.
+
+**Decision.**
+- **Live mode is the only concurrent template mode.** A template has at most one **host**: a persistent context on its `userdata/`, headed by default (headless allowed per template, with a warning, and refused for sites whose pack requires headed), with a **sentinel window** that keeps the browser alive without sessions. Serial checkout (one copy at a time, written back on close) is deferred; N concurrent copies of one jar are never built.
+- A **virtual session** is an ordinary session row whose browser is the host: it owns one or more windows (the first from `Target.createTarget({newWindow: true})`, `new_tab` as a tab in its window through an isolated-world `window.open(..., 'noopener')`), and `close_session` closes only its pages. **Amends D-21 and spec 11 §2.2**: "one session = one browser + one context" holds for *exclusive* sessions; a template host's browser and context are shared by its virtual sessions only, and two templates never share a browser.
+- **Page attribution is the isolation boundary**: every page of a host is attributed, before any session sees it, by claim, opener or window, or parked; an attribution never changes; no page is in two sessions (spec 13 §3.4). The driver port splits `SessionHandle` into `BrowserHost` and `SessionView` (spec 13 §3.13) in a PR of its own, with property tests of the invariant, before any template code depends on it.
+- The host is the **single writer**: only it opens `userdata/` (Chromium's `SingletonLock` would refuse a second opener anyway), it checkpoints an encrypted storage state on an interval and at shutdown, and a recycle drains its sessions before the browser restarts; there is no overlap.
+- A host crash fans out to every session of the template (`SESSION_DEAD`); the supervisor restarts it with backoff and marks it `failed` after 5 consecutive failures in 30 minutes.
+
+**Consequences.** Live mode loses per-session context settings (user agent, locale, timezone, permissions, proxy, routes, clock, downloads directory: spec 13 §4) and per-session tracing (D-51); agents can observe shared storage, sibling sign-outs and the shared crash (spec 13 §5.6). A headed host needs a display: Xvfb on Linux servers, a logged-in session on macOS and Windows; `doctor` checks it. The interception chain resolves the owner of each request instead of a fixed session id. The glossary, spec 01 §1, spec 11 §2.2 and the port's contract sentence are rewritten accordingly.
+
+**Alternatives considered.** *Fork mode as the concurrent mode*: the failure modes above are the vendors' reason for locks. *Tabs in one shared window, or tab groups*: background tabs run `requestAnimationFrame` at about 15 fps, and tab groups exist only through an extension API that is itself a fingerprint. *One window per agent tab*: every page in front, but a session with five tabs becomes five windows on the operator's desktop; one window per session was chosen, with `bringToFront()` on `switch_tab`. *Activating a window, then `createTarget` without `newWindow`*: races between agents, and window activation is not scriptable on Wayland.
+
+## D-51 Template sessions are sealed by default; tracing is off for virtual sessions
+
+**Status:** Accepted
+
+**Implementation:** planned: PR T1 of spec 13 §17.
+
+**Context.** A template is a bearer credential: its cookies bypass the password and MFA of every site in it. Every hosted product surveyed hands the agent full cookie access; the agent here is untrusted (D-09), and a prompt-injected page could ask it to export the sign-in. In live mode one jar serves every session, so `set_cookies` or a stray `localStorage.clear()` from `evaluate` changes every sibling. A Playwright tracer is per context: a host trace would record every agent, and the vault's stop/start of the trace around a fill (D-13) would cut sibling traces and could let a sibling's keystrokes into a resumed chunk.
+
+**Decision.**
+- Template sessions are **sealed** unless the operator unseals the template: `get_cookies` returns every cookie with an empty `value` and the additive key `sealed: true`; `disable_evaluate` is forced on (`EVALUATE_DISABLED`, `scope: 'session'`, byte-identical to an agent-requested `disable_evaluate`); `set_cookies` and `save_storage_state` answer the new `SESSION_SEALED`; `save_full_profile` answers `INVALID_PERSISTENCE_CONFIG` as for any non-persistent session; `set_extra_http_headers` applies to the session's own pages. Four unseal flags (`cookie_values`, `evaluate`, `cookie_writes`, `state_export`) relax one behaviour each, set by an operator per template and audited.
+- **Tracing is off for virtual sessions in v1** (`trace.enabled: false`, `TRACE_UNAVAILABLE`). This narrows D-13's scope: D-13's guarantee (credential keystrokes never land in `trace.zip`) holds trivially because there is no trace; a per-page trace split is deferred.
+
+**Consequences.** A sealed refusal tells an agent its session comes from a template; it does not tell it the mechanism. Agents that depend on `evaluate` need the operator's "Allow evaluate". Cookie values still never reach the database (D-20).
+
+**Alternatives considered.** *Unsealed by default, like other products*: the login would be one tool call away from leaving the machine. *Refusing `get_cookies` outright*: agents legitimately check whether a cookie exists; names, domains and expiry keep that working. *Reference-counted trace pauses on a shared tracer*: still records every agent into one file that some agent's session page would show.
+
+## D-52 Template access: operators manage, agents list and launch, grants by principal and harness
+
+**Status:** Accepted
+
+**Implementation:** planned: PR T1 of spec 13 §17.
+
+**Context.** Several agents share one daemon (D-30). An operator wants "only my job-hunting agent may use the LinkedIn template". The vault already has the shapes for this: an `AuthorizationRule` over principals (and slugs) and D-48's harness lists, decided with `checkHarnessRules`. D-30 and D-48 restrict the use of the self-reported harness to the vault ("Out of scope: harness restrictions anywhere outside the vault").
+
+**Decision.**
+- Operators create, edit, record, re-login, restore and delete templates, under the new scopes `templates:read`, `templates:write` and `templates:login` (the last for anything that drives a signed-in window or links a vault binding); site packs use `sitepacks:read` and `sitepacks:write`. Agents hold `mcp:tools` only and can only list and launch; no tool changes a template; no launch/edit/manage roles exist in v1.
+- A template's grant is `authorized_principals` (empty = any) plus an optional `harnesses` list with D-48's exact semantics (no list = all, empty = none, known slugs against the launch harness, custom names exactly against the launch declared name), checked principal → harness. **Amends D-30 and D-48**: harness lists may also narrow who can list and launch a template, with the same wording everywhere: a narrowing guard, not a security boundary; real separation is one token per agent.
+- A refusal is indistinguishable from absence (`TEMPLATE_NOT_FOUND`, and the template is left out of `list_templates`); the operator sees the reason in the access tester and the log. The rule shapes and `checkHarnessRules` move to a shared `domain/policies` module used by both the vault and templates.
+- New templates default to any principal and all harnesses, shown explicitly in the wizard.
+
+**Consequences.** The harness vocabulary in `contracts/harness` now feeds two decisions, so additions are reviewed as for the vault. Slug globs are not part of a template grant in v1 (a slug is chosen at launch, after listing).
+
+**Alternatives considered.** *GoLogin-style launch/edit/manage roles*: no second operator exists yet (D-09 builds one operator). *A new harness rule format for templates*: two matchers would drift; reuse keeps the tester and the broker identical. *Distinct agent-facing refusals*: would tell a misbehaving agent which principal or harness to claim (D-48).
+
+## D-53 Template state at rest: encrypted versions, the live profile protected by modes, honestly documented
+
+**Status:** Accepted
+
+**Implementation:** planned: PR T1 of spec 13 §17.
+
+**Context.** Nothing in BrowserHive is encrypted today; saved profile zips are effectively plaintext because Chromium under Playwright encrypts cookies with a published constant key, and their protection is file mode 0600. Templates will be backed up and copied around. Encryption with nowhere safe for the key is theatre, and a key the operator can lose turns a recoverable situation into data loss.
+
+**Decision.**
+- Every template version is an AES-256-GCM envelope (`BHTE`, format 1, key id, random 12-byte nonce, ciphertext, tag) whose additional data binds it to its template and version (spec 13 §2.4). The key is `templateKey` (a secret config key, base64 of 32 bytes, usually from the environment) or, by default, `<data-dir>/admin/template.key` (0600), created with the first template.
+- The **live profile is not encrypted**: it is the browser's working directory, protected by 0700/0600 like session directories. The docs state exactly what is protected (copies of version files without the key) and what is not (the live profile, a host where an attacker reads the data directory, a running process).
+- A version written with another key is reported (`TEMPLATE_KEY_MISMATCH`), never crashed on; the live profile keeps working. Saved auth states stay unencrypted in this program.
+
+**Consequences.** Backing up a template means copying its directory and its key together. `doctor` checks the key and its mode. An OS-keychain or passphrase key provider can be added behind `TemplateKeyProvider` later.
+
+**Alternatives considered.** *OS keychain by default*: breaks headless servers and containers. *A passphrase prompted at start*: an unattended restart could not use templates. *No encryption in v1*: versions are exactly the files that get copied into backups.
+
+## D-54 Site packs are signed data that select from a closed strategy set compiled into the binary
+
+**Status:** Accepted
+
+**Implementation:** planned: PR T0b (the method-aware request guard), PR T3 (local packs, strategies, guards, challenges, schema v9) and PR T4 (the registry) of spec 13 §17.
+
+**Context.** Each site detects automation, parallel logins, session sharing and tracking differently, signs accounts out through its own URLs (including `POST` forms and `fetch` calls the blocklist cannot match: it aborts documents only, without methods, and did not stop `linkedin.com/m/logout/`), challenges through its own pages and providers, and tolerates its own pace. The owner wants per-site optimisation so templated sessions behave like a human and stay signed in, added without touching BrowserHive's internals, possibly later for every session and for stealth. Updating code remotely (yt-dlp-style) would be remote code execution in a process that holds the vault and signed-in browsers; Firefox's password-manager site recipes show signed per-site *data* with a packaged copy has worked for about ten years.
+
+**Decision.**
+- A **site pack** is strict, versioned, declarative data about one registrable domain (spec 13 §9.2): sign-in, signed-in detection by cookie *names*, probe URL, redirect and landmarks, logins shared with other sites, human-only sign-in, method-aware request guards and element guards, challenges, concurrency and pacing labelled official or vendor with a source, browser and headedness, device binding per platform, geo/timezone/locale consistency, the terms clause and a write policy (`allow`, `warn`, `confirm`), and **per-site stealth and behaviour strategies chosen from a closed set compiled into the binary** (spec 13 §9.4). A pack never carries code, regular expressions, launch arguments, proxies, vault rules or any value BrowserHive sends anywhere.
+- Ports `SitePackSource` (bundled, remote, local, import) and `SiteStrategy`, and the `SitePackRegistry` service modelled on the blocklist's atomic hot reload (D-22). Precedence: local > approved remote or import > bundled. Matching by eTLD+1, like vault origins; a domain belongs to one pack.
+- Hook points: template creation, probes and keep-alive, before navigation and element actions (tool layer), every request (the **request guard**, `InterceptionChain` handler #2, method- and resource-type-aware; **amends D-22**: the blocklist file and its grammar are unchanged, and the chain gains a second, method-aware handler), challenges (the reserved `security_intercept` operator-request kind of **D-15, now built**, schema v9), and admission.
+- The binary enforces what makes malicious data harmless: URLs are paths inside the pack's own domains; patterns use spec 11's glob grammar; CSS selectors are capped and only ever queried; every number has a floor and a ceiling in the binary; every change is classified tightening, neutral or loosening, and **loosening changes and new domains always need the operator's approval**.
+- Packs apply to template sessions only in this program. **Amends D-25**: the security-intercept rule engine and the extensions registry gain their first concrete client; admin-editable rules are still not built.
+
+**Consequences.** Migration v9 rebuilds `operator_requests` for the new kind and is not backward compatible (`min_reader_version` 9). Every shipped pack field is verified against a live signed-in session first. Terms-of-service clauses are data the operator uses to set a write policy; they have no other effect.
+
+**Alternatives considered.** *Code plugins or remote scripts*: remote code execution with vault access. *Regular expressions in packs*: ReDoS surface. *Only guards, no strategies*: the owner's purpose includes behaving like a person on each site, which needs pacing, dwell, serialisation and humanized input; a closed, reviewed set keeps that in the binary.
+
+## D-55 Site-pack registry: signed static files, check on, apply after approval, auto-update off
+
+**Status:** Accepted
+
+**Implementation:** planned: PR T4 of spec 13 §17.
+
+**Context.** Packs go stale faster than releases (X moved its sign-in flow in 2026), so installs that do not upgrade need fresh site knowledge. D-08 says nothing leaves the host by default; D-33 says BrowserHive runs no server. The owner decided (spec 13, Q11): browserhive.ai or a CDN hosts a static, signed registry; BrowserHive downloads configuration from it and sends no instance data; the bundled snapshot and the update check are on by default; applying an update needs the operator's approval by default, with what changed shown; auto-update is off by default; the check can be turned off; packs can be downloaded by hand into a folder or imported from a file.
+
+**Decision.**
+- **Amends D-08**: by default BrowserHive makes exactly one kind of outbound request: an anonymous, conditional `GET` of BrowserHive's public, signed site-pack files at `sitePacksUrl` (default `https://browserhive.ai/registry/v1/`), at most every 24 h ± 2 h and only while at least one template exists. It carries no cookie, query, body, version or install identifier, and fetches the whole catalog so it never reveals which sites are used. Telemetry stays opt-in; no data about an install leaves the host by default.
+- **D-33 stands**: the registry is static files on the project's website (Cloudflare static assets), not a server BrowserHive runs.
+- Trust: Ed25519 (TUF-lite): two offline root keys pinned in the binary sign `keys.json`, which names a short-lived CI key (`not_after` ≤ 90 days) that signs `index.json` (monotonic `version`, `expires` ≤ 14 days, re-signed weekly); pack files are content-addressed and trusted through the index; rollback, freeze and fast-forward are refused; an expired index keeps the last good one and reports `SITE_PACKS_STALE`. Signing runs in an approval-gated GitHub environment separate from the deploy token.
+- Policy: `sitePacksUpdateCheck=true`, `sitePacksAutoUpdate=false`. Every candidate waits for the operator's approval in the dashboard, CLI and a notification, with a field-level diff; with auto-update on, tightening and neutral changes apply by themselves and loosening changes and new domains still wait. `sitePacksUpdateCheck=false`, `browserhive sitepacks import|export` and a local packs folder cover air-gapped and opted-out hosts.
+- Each npm release bundles a verified snapshot under `dist/site-packs/`, so an install never starts empty and works offline.
+
+**Consequences.** browserhive.ai's deploy gains the registry files and their cache headers. The owner holds the root keys and approves each signing run; a missed weekly re-sign makes installs report stale data after 14 days without breaking anything. `doctor`, the wizard and the security guide disclose the request. A compromised registry can at worst withhold updates.
+
+**Alternatives considered.** *Opt-in only*: installs that never upgrade would keep the shipped knowledge forever, which the owner rejected. *Release-only updates*: the same. *Auto-apply by default*: a bad limit could get accounts banned on every install at once. *Full TUF or Sigstore verification in the client*: heavier than one publisher needs and online-dependent; a build attestation is published in addition.
+
+## D-56 Capacity: a template host is one browser slot; virtual sessions count as sessions
+
+**Status:** Accepted
+
+**Implementation:** planned: PR T1 of spec 13 §17.
+
+**Context.** D-21 budgets 1.5 GiB of host RAM per session because each session is a browser. A virtual session costs one page (about 80–100 MB) in an existing browser, so counting it as a slot would refuse launches the host can afford, and not counting it at all would hide it from `server_status`.
+
+**Decision.**
+- `maxSessions` bounds **browsers**: each exclusive session and each running host takes one slot. **Amends D-21's admission rule** accordingly; the derived default is unchanged.
+- Virtual sessions are sessions everywhere sessions are counted (`server_status.sessions.count`, `/system`, `browserhive.sessions.active`); `server_status.sessions` gains the additive `browsers` that `limit` applies to.
+- Per template, at most `max_concurrent` virtual sessions (default 5, 1–20), further bounded by the sites' packs; per host, at most `templateMaxPagesPerHost` pages (default 40). Over a template limit: `TEMPLATE_BUSY`; no slot for a host start: `SESSION_LIMIT_REACHED`.
+
+**Consequences.** `sessions.count` may exceed `sessions.limit`; the tools guide says why. A recycle policy (age 24 h, resident memory 3 GiB) bounds a long-lived host's growth.
+
+**Alternatives considered.** *Weighted admission (a virtual session = a fraction of a slot)*: harder to explain than "a host is a browser". *Counting virtual sessions as slots*: wastes the memory advantage that motivates live mode.
