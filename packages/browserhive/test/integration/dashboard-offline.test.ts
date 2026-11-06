@@ -1,4 +1,4 @@
-/** @module test/integration/dashboard-offline.test — the installed dashboard's service worker and offline page against a real daemon, a hung port, a failing proxy, a daemon without --admin and a foreign server on the same port (spec 09 §3.4, 04 §18, D-49). Needs the built dashboard. */
+/** @module test/integration/dashboard-offline.test — the installed dashboard's service worker and offline page against a real daemon, a hung port, a failing proxy, a daemon without --admin, the daemon-unreachable banner and a foreign server on the same port (spec 09 §3.4, 04 §18, D-49). Needs the built dashboard. */
 
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { existsSync, readFileSync } from 'node:fs';
@@ -98,6 +98,32 @@ async function stopEverything(): Promise<void> {
     await Bun.sleep(50);
   }
   throw new Error(`port ${port} still answers`);
+}
+
+const JSON_HEADERS = () => ({ 'content-type': 'application/json', origin: base });
+
+/** The `name=value` pairs a response sets. */
+function setCookies(response: Response): { name: string; value: string }[] {
+  return response.headers.getSetCookie().map((line) => {
+    const pair = line.split(';')[0] ?? '';
+    const at = pair.indexOf('=');
+    return { name: pair.slice(0, at), value: pair.slice(at + 1) };
+  });
+}
+
+function cookieHeader(cookies: readonly { name: string; value: string }[]): string {
+  return cookies.map((c) => `${c.name}=${c.value}`).join('; ');
+}
+
+/** `POST /api/v1/auth/login`; returns the session cookies. */
+async function restLogin(password: string): Promise<{ name: string; value: string }[]> {
+  const response = await fetch(`${base}/api/v1/auth/login`, {
+    method: 'POST',
+    headers: JSON_HEADERS(),
+    body: JSON.stringify({ password }),
+  });
+  if (!response.ok) throw new Error(`login: HTTP ${response.status} ${await response.text()}`);
+  return setCookies(response);
 }
 
 /** Waits until the page's `h1` matches (the page is driven from Node: this package has no DOM types). */
@@ -302,8 +328,46 @@ describe('installed dashboard: service worker and offline page (D-49)', () => {
     STEP_TIMEOUT_MS,
   );
 
-  // Step 8 needs DaemonUnreachableBanner (04 §18.7), which phase 3 of D-49 adds.
-  it.todo('8. the daemon-unreachable banner appears and clears without a reload', () => undefined);
+  it(
+    '8. the daemon-unreachable banner appears, explains, and clears without a reload',
+    async () => {
+      await stopEverything();
+      server = await bootDaemon(true);
+      // Sign in through REST: first-run password, the forced change, then the new password.
+      const seed = readFileSync(join(dir.path, 'admin', 'credentials.txt'), 'utf8').trim();
+      const rotated = `${seed}-rotated-step8`;
+      const first = await restLogin(seed);
+      const changed = await fetch(`${base}/api/v1/auth/change-password`, {
+        method: 'POST',
+        headers: { ...JSON_HEADERS(), cookie: cookieHeader(first) },
+        body: JSON.stringify({ current_password: seed, new_password: rotated }),
+      });
+      expect(changed.status).toBeLessThan(300);
+      const cookies = await restLogin(rotated);
+      await context.addCookies(cookies.map((c) => ({ ...c, url: base })));
+      await page.goto(`${base}/overview`);
+      await page.getByRole('heading', { level: 1, name: 'Overview' }).waitFor({ timeout: 15_000 });
+      await page.evaluate('window.__bhStep8 = "same document"');
+      const banner = page.getByTestId('daemon-unreachable-banner');
+      expect(await banner.count()).toBe(0);
+
+      await stopEverything();
+      await banner.waitFor({ state: 'visible', timeout: 30_000 });
+      expect(await banner.textContent()).toContain(`Can't reach BrowserHive at 127.0.0.1:${port}.`);
+      await banner.getByRole('button', { name: 'What to do' }).click();
+      const dialog = page.getByRole('dialog');
+      await dialog.waitFor({ timeout: 5_000 });
+      expect(await dialog.locator('code').allTextContents()).toContain('browserhive doctor');
+      await page.keyboard.press('Escape');
+      await dialog.waitFor({ state: 'detached', timeout: 5_000 });
+
+      server = await bootDaemon(true);
+      await banner.waitFor({ state: 'detached', timeout: 15_000 });
+      expect(await page.evaluate<string | undefined>('window.__bhStep8')).toBe('same document');
+      expect(answeredByWorker).toEqual([]);
+    },
+    STEP_TIMEOUT_MS,
+  );
 
   it(
     '9. another program answers HTML on the port: its page shows and the worker retires',
