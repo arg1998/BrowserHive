@@ -159,7 +159,7 @@ describe('installed dashboard: service worker and offline page (D-49)', () => {
       await page.goto(`${base}/login`);
       // Polled from Node: `waitForFunction` with a string would `eval` under the page's CSP.
       const deadline = Date.now() + 20_000;
-      while (!(await page.evaluate('navigator.serviceWorker.controller !== null'))) {
+      while (!(await page.evaluate<boolean>('navigator.serviceWorker.controller !== null'))) {
         if (Date.now() > deadline) throw new Error('the worker never took control');
         await Bun.sleep(100);
       }
@@ -182,7 +182,9 @@ describe('installed dashboard: service worker and offline page (D-49)', () => {
       recorded.length = 0;
       await page.goto(`${base}/sessions`);
       // A controlled page's in-scope navigation always goes through the worker's fetch handler.
-      expect(await page.evaluate('navigator.serviceWorker.controller !== null')).toBe(true);
+      expect(await page.evaluate<boolean>('navigator.serviceWorker.controller !== null')).toBe(
+        true,
+      );
       const navigation = recorded.find((r) => r.method === 'GET' && r.path === '/sessions');
       expect(navigation?.headers['sec-fetch-mode']).toBe('navigate');
       // Chromium sends `Sec-Fetch-Dest: empty` for a worker's `fetch(event.request)` (measured
