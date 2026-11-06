@@ -88,3 +88,25 @@ Version, transport, uptime, bind address, sessions live versus the cap, open att
 Persisted notifications for attention requests, tool errors, crashed sessions and pending vault confirmations, grouped by day. Mark as read or dismiss, individually or all at once. Once an attention request or vault confirmation is settled (in the dashboard, by a timeout, or elsewhere), its row keeps its place and shows the outcome as a small pill (**resolved**, **expired**, or **closed** when the agent stopped waiting), and a toast still on screen for it closes. See [Notifications](notifications.md).
 
 **Channels** (Notifications → Channels) sends notifications to your phone through Telegram, Discord (webhook or bot), ntfy or a webhook: one card per channel with its status, last delivery, 24-hour counts and, when act buttons are on, whether answers from the chat reach BrowserHive; and an **Add channel** wizard with a live preview and a test message. Its **What to send** step switches **Answer from the chat** on and edits who may answer, and its **Reports** section sets a daily or weekly digest, the channel's time zone and the anomaly alerts; a card shows the next digest and **Send now** (a preview of the real digest, then a send on demand). The delivery log marks a digest sent after downtime as **late**. **Delivery log** lists every send, edit and delete, and says why anything was not sent. **Actions** lists every press of an act button: who, which button, from which chat, and what happened. **Reports** keeps every digest and anomaly alert once per period (the inbox's **Reports** chip shows the same), opens each as a page with its facts, chart and tables, and has **Reports in BrowserHive**: a digest and anomaly alerts for the dashboard itself, with no channel needed. See [Channels](notifications.md#channels), [Answer from your phone](notifications.md#answer-from-your-phone) and [Reports in BrowserHive](notifications.md#reports-in-browserhive).
+
+## Install as an app
+
+The dashboard installs as an app: it opens in its own window with its own icon in your launcher, dock or taskbar, with shortcuts to Sessions, Attention and Logs where your system shows them. When BrowserHive is not running, the app shows a help page that says why and which command starts it, and opens the dashboard as soon as BrowserHive is ready (see [The app says BrowserHive isn't running](troubleshooting.md#the-app-says-browserhive-isnt-running)).
+
+The app is only a window onto the dashboard: BrowserHive itself must be running, and every screen still comes from it.
+
+**Install it.** Open **Install app** in the account menu (top right) or the command palette. Where the browser can install directly (Chrome, Edge and other Chromium browsers), it shows its own install dialog; otherwise the dashboard shows the steps for your browser:
+
+- **Chrome:** the install icon at the right of the address bar, or ⋮ › *Cast, save, and share* › *Install page as app…*
+- **Edge:** *App available* in the address bar, or … › *More tools* › *Apps* › *Install this site as an app*.
+- **Other Chromium browsers:** the install icon in the address bar, or *Install* in the browser menu.
+- **Android (Chrome):** ⋮ › *Add to Home screen* or *Install app*.
+- **iPhone and iPad:** Share › *Add to Home Screen*.
+- **Safari on macOS:** File › *Add to Dock*. Then open the new app once while BrowserHive is running: from then on it can show the help page when BrowserHive is stopped.
+- **Firefox on Windows:** the web-apps icon in the address bar, then *Add to taskbar*. Firefox on Linux and macOS cannot install websites as apps; open the address in a Chromium browser instead, or bookmark it.
+
+**Use the address the startup banner prints.** An app belongs to one exact address: `http://127.0.0.1:9876` and `http://localhost:9876` are two different apps. Two BrowserHive daemons on two ports install as two apps.
+
+**A secure address is required.** Browsers install apps only from `https` addresses or from this computer (`127.0.0.1`, `localhost`). From another device, give BrowserHive an `https` address first (see [public address](notifications.md#public-address)).
+
+**Uninstall** the app from the browser's app settings (in Chrome, `chrome://apps`; in Edge, `edge://apps`) or from the app window's menu, like any installed web app.

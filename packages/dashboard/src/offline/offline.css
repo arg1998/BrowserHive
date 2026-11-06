@@ -1,0 +1,97 @@
+@import "tailwindcss" source(none);
+@import "@fontsource/geist-mono/latin-400.css";
+@import "../styles/tokens.css";
+
+@source "./";
+
+/*
+ * @module offline/offline — styles of the offline page (04 §18.6): the dashboard's tokens and Geist
+ * (latin only, so the precache stays small), Tailwind over this folder only, and the few base
+ * rules and utilities of `styles/globals.css` the page uses. Precached by the service worker.
+ */
+
+@font-face {
+  font-family: "Geist Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("../../../../node_modules/@fontsource-variable/geist/files/geist-latin-wght-normal.woff2")
+    format("woff2-variations");
+}
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    background-color: var(--background);
+  }
+
+  body {
+    @apply bg-background font-sans text-base text-foreground;
+    min-height: 100dvh;
+    font-feature-settings: "cv11", "ss01";
+  }
+
+  code {
+    @apply font-mono;
+  }
+
+  :focus-visible {
+    outline: var(--ring-width) solid var(--ring);
+    outline-offset: var(--ring-offset);
+  }
+
+  ::selection {
+    @apply bg-primary/25;
+  }
+}
+
+@utility focus-ring {
+  outline-style: none;
+  &:focus-visible {
+    outline: var(--ring-width) solid var(--ring);
+    outline-offset: var(--ring-offset);
+  }
+}
+
+@layer utilities {
+  .px-gutter {
+    padding-inline: var(--gutter);
+  }
+
+  .section-label {
+    font-size: var(--text-sm);
+    line-height: var(--text-sm--line-height);
+    font-weight: 500;
+    color: var(--muted-foreground);
+  }
+
+  .eyebrow {
+    font-size: var(--text-xs);
+    line-height: var(--text-xs--line-height);
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--subtle-foreground);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: no animation under reduced motion (04 §18.6.5) */
+    animation-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: 04 §18.6.5 */
+    animation-iteration-count: 1 !important;
+    /* biome-ignore lint/complexity/noImportantStyles: 04 §18.6.5 */
+    transition-duration: 0.01ms !important;
+  }
+}
