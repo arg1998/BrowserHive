@@ -749,14 +749,14 @@ The CSP (03 §2) is unchanged: `manifest-src` falls back to `default-src 'self'`
 - **Call.** `navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' })`. Update checks then bypass the HTTP cache for the script.
 - **Failures.** A rejected registration is ignored silently: no toast, no state, no `console` (Biome `noConsole`). The dashboard behaves the same without a worker.
 - **Signed out too.** It runs whether or not the operator is signed in. The login page registers the worker, so one visit is enough.
-- **Bookkeeping on each boot,** through `lib/storage.ts`, which gains `sessionStorage` helpers beside its `localStorage` ones:
+- **Bookkeeping on each boot,** through `lib/storage.ts`, which gains `sessionStorage` helpers beside its `localStorage` ones. Both keys and their validators live in `src/lib/daemon-help/keys.ts` (React-free, no imports), which the offline page shares:
   - writes `bh.daemon.lastSeen` = `{ version, seen_at }`, from `<meta name="browserhive-version">` and `browserClock`;
   - removes `bh.offline.reloads` from `sessionStorage` (§18.6.4).
 
 ### 18.5 Service worker (`/sw.js`)
 
 - **Shape.** A classic script (IIFE): no runtime imports, no `importScripts`.
-- **Code layout.** `src/sw/sw-core.ts` holds the pure logic (routing, the fallback decision, cache-name rules); `src/sw/sw.ts` wires it to the worker events.
+- **Code layout.** `src/sw/sw-core.ts` holds the pure logic (routing, the fallback decision, cache-name rules); `src/sw/sw.ts` wires it to the worker events (`startWorker(scope, constants)`); `src/sw/scope.ts` holds the part of `ServiceWorkerGlobalScope` both workers use and `retire()`. Each worker entry starts itself only when the plugin's `define`s exist (`typeof SW_VERSION === 'string'`), so tests import it and drive it through a fake scope.
 - **Typing.** `src/sw/**` is excluded from the dashboard's `tsconfig.json` and typed by `tsconfig.sw.json` (`lib: ["ES2023", "WebWorker"]`, `types: ["bun-types"]` for its tests). That config references the contracts project and is listed in the root `tsconfig.json` references.
 
 #### 18.5.1 Constants (injected at build)
@@ -770,7 +770,7 @@ The CSP (03 §2) is unchanged: `manifest-src` falls back to `default-src 'self'`
 
 #### 18.5.2 `install`
 
-- **Fetch.** For each `SW_PRECACHE` path: `fetch(new Request(path, { cache: 'reload', credentials: 'same-origin' }))`.
+- **Fetch.** For each `SW_PRECACHE` path: `fetch(url, { cache: 'reload', credentials: 'same-origin' })` (the same request as `new Request(path, …)`, with `path` made absolute against the worker's origin). Every response is fetched and checked before any is stored, so a failure leaves the cache as it was.
 - **Store.** A response is stored with `cache.put` only if it is `ok`, not `redirected`, of type `basic`, and carries `MARKER_HEADER`.
 - **Any failure rejects `install`.** The browser then discards the new worker and keeps any previous one, as the Service Worker spec requires for a failed install or update. This is what happens against a daemon running without `--admin`.
 - **Takeover.** On success it calls `self.skipWaiting()`. The worker has no state shared with pages.
@@ -849,14 +849,14 @@ In `vite.config.ts`:
   - on `activate`, deletes every `bh-offline-*` cache, then `self.registration.unregister()`, then `clients.claim()`;
   - has no `fetch` handler.
 
-  `src/sw/kill-switch.ts` holds it, built by a plugin flag and unit-tested now, so it is ready before it is needed.
+  `src/sw/kill-switch.ts` holds it, built in place of `sw.ts` by the plugin's `worker: 'kill-switch'` option (`BHDEV_SW_KILL_SWITCH=1 bun run --filter @browserhive/dashboard build`) and unit-tested now, so it is ready before it is needed.
 - **Manual removal** (troubleshooting guide): DevTools › Application › Service workers › Unregister, or clear the site data for the address.
 
 ### 18.6 Offline page (`/offline.html`)
 
 - **No framework.** `src/offline/main.ts` builds the DOM with `createElement` and `textContent` only, never `innerHTML`.
-- **Styles and fonts.** The design tokens and Geist. The CSS comes from `src/offline/offline.css`, which imports `styles/tokens.css` and uses Tailwind with `source(none)` and `@source "./"`.
-- **Theme.** The tokens define dark only under `:root[data-theme="dark"]`, so `main.ts` always sets `data-theme` (and `color-scheme`) first thing. The value is `resolveTheme(stored preference, matchMedia('(prefers-color-scheme: dark)').matches)`, and it follows `change` events. `resolveTheme` moves to a React-free `src/theme/resolve.ts`, imported by both the dashboard and the offline page. The very first paint may show the light tokens for one frame when the result is dark; `offline.html` sets `<meta name="color-scheme" content="light dark">` and a dark `background` under `prefers-color-scheme: dark` in a small `<style>` block, which the CSP allows, so even that frame is dark.
+- **Styles and fonts.** The design tokens and Geist, latin subsets only (the precache stays near 110 KB). The CSS comes from `src/offline/offline.css`, which imports `styles/tokens.css` and uses Tailwind with `source(none)` and `@source "./"`, plus the few base rules and utilities of `styles/globals.css` it needs (`focus-ring`, `section-label`, `eyebrow`, `px-gutter`). The tab icon is a `data:` URI of the favicon in `offline.html`, so it needs no request either. The layout follows the signed-out pages (`AuthLayout`): the brand mark above one card.
+- **Theme.** The tokens define dark only under `:root[data-theme="dark"]`, so `main.ts` always sets `data-theme` (and `color-scheme`) first thing. The value is `resolveTheme(stored preference, matchMedia('(prefers-color-scheme: dark)').matches)`, and it follows `change` events. `resolveTheme` and `THEME_COLORS` move to a React-free `src/theme/resolve.ts`, imported by both the dashboard and the offline page, which also sets `<meta name="theme-color">`. The very first paint may show the light tokens for one frame when the result is dark; `offline.html` sets `<meta name="color-scheme" content="light dark">` and a dark `background` under `prefers-color-scheme: dark` in a small `<style>` block, which the CSP allows, so even that frame is dark.
 - **No inline script.** The page is served without a nonce, so it contains none.
 - **Brand mark.** Built in `main.ts` with `createElementNS`, so no icon request is needed.
 
@@ -1039,13 +1039,13 @@ Launch handling (`launch_handler`, `launchQueue`) is deferred (D-49).
 - **dependency-cruiser rules** (added to `.dependency-cruiser.cjs`):
   - `src/offline/**` may import only:
     - `src/offline/**`;
-    - `src/lib/daemon-help/{probe,commands}.ts`;
+    - `src/lib/daemon-help/{probe,commands,keys}.ts`;
     - `src/lib/{clock,links,storage,clipboard}.ts`;
     - `src/theme/resolve.ts`;
     - `src/styles/tokens.css`.
   - `src/sw/**` may import only `src/sw/**` and `@browserhive/contracts/paths`.
-  - `src/lib/daemon-help/{probe,commands}.ts` and `src/lib/install/{support,steps}.ts` import no React.
-  - These rules see local files and unresolved `@/` aliases only: npm packages are outside the graph (`exclude: node_modules`). `src/lib/daemon-help/boundaries.test.ts` therefore asserts that `probe.ts` and `commands.ts` import only relative `.ts` files; `src/lib/install/` gets the same test when it lands.
+  - `src/lib/daemon-help/{probe,commands,keys}.ts` and `src/lib/install/{support,steps}.ts` import no React.
+  - These rules see local files and unresolved `@/` aliases only: npm packages are outside the graph (`exclude: node_modules`). `src/lib/daemon-help/boundaries.test.ts` therefore asserts that `probe.ts`, `commands.ts` and `keys.ts` import only relative `.ts` files; `src/lib/install/` gets the same test when it lands.
 - **Folder structure (§3)** gains:
   - `src/sw/`, `src/offline/`, `src/lib/install/`, `src/lib/daemon-help/`, `src/assets/app-icon/`;
   - `src/dev-proxy.ts`, `src/lib/clipboard.ts`, `src/theme/resolve.ts`, `src/features/install/`;
