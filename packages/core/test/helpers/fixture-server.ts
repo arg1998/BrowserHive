@@ -166,10 +166,16 @@ export function startFixtureServer(): FixtureServer {
               window.__setStorage = (v) => { localStorage.setItem(key, v); sessionStorage.setItem(key, v); document.cookie = key + '=' + v + '; path=/'; };
             </script>`,
           );
-        case '/set-cookie':
+        case '/set-cookie': {
+          // `max_age` makes it a persistent cookie (written to the profile's cookie database).
+          const maxAge = url.searchParams.get('max_age');
+          const name = url.searchParams.get('name') ?? 'fixture';
           return new Response('ok', {
-            headers: { 'set-cookie': `fixture=${url.searchParams.get('v') ?? '1'}; Path=/` },
+            headers: {
+              'set-cookie': `${name}=${url.searchParams.get('v') ?? '1'}; Path=/${maxAge === null ? '' : `; Max-Age=${maxAge}`}`,
+            },
           });
+        }
         case '/status': {
           const code = Number(url.searchParams.get('code') ?? '200');
           return html(`<p id="status">${code}</p>`).status === 200
