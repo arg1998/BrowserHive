@@ -122,11 +122,18 @@ vault_fill({
 // → { "status": "success", "redacted": true }
 ```
 
+The selectors must name the real login fields, because the password is typed only into a password input:
+
+- `password_selector` must match exactly one `<input type="password">` that is visible, enabled and not read-only;
+- `username_selector` must match exactly one `<input>` that takes text: not a `password`, `hidden`, `file`, `checkbox`, `radio`, `submit`, `button`, `image` or `reset` input. It is checked only when the entry has a username to type.
+
+A `textarea`, a `contenteditable` element, a search box as the password field, or a selector that matches several elements is refused with `blocked` / `password_target_invalid`, before the credential is fetched from the backend. The check runs again immediately before each value is typed, so a page that swaps the field after the first check is refused too. Wait for the form (`wait_for_selector`) before calling `vault_fill`: a field that is not on the page yet counts as no match.
+
 Failures are returned, not thrown:
 
 | `status` | `reason` examples |
 |---|---|
-| `blocked` | `vault_disabled`, `not_authorized`, `evaluate_required_off`, `dashboard_denied`, `confirm_timeout`, `form_action_mismatch` |
+| `blocked` | `vault_disabled`, `not_authorized`, `evaluate_required_off`, `password_target_invalid`, `dashboard_denied`, `confirm_timeout`, `form_action_mismatch` |
 | `origin_mismatch` | the page is not on an allowed origin |
 | `auth_failed` | `entry_not_found`, `backend_error`, `fill_failed`, `submit_failed` |
 
@@ -140,7 +147,7 @@ A confirmation that nobody answers within `--attentionTimeout` (default 6 h) is 
 
 ## 7. Audit
 
-Every fill and every rejected listing writes one row to the **Vault log**: time, entry, result, origin check, whether `evaluate` was enabled, session, page URL and the reason. A fill refused by a harness list says `harness_not_allowed`, with the session's harness, its declared name and whether the binding or the folder refused it. It never contains credentials.
+Every fill and every rejected listing writes one row to the **Vault log**: time, entry, result, origin check, whether `evaluate` was enabled, session, page URL and the reason. A fill refused by a harness list says `harness_not_allowed`, with the session's harness, its declared name and whether the binding or the folder refused it. A fill refused with `password_target_invalid` records which field (`username` or `password`), what was wrong (`not_password_input`, `not_text_input`, `multiple_matches`, `no_match`, `hidden`, `disabled`, `readonly`, or `unverifiable` when the page could not be inspected) and whether it was caught before the fetch (`pre_fetch`) or just before typing (`pre_fill`). It never contains credentials.
 
 ## Hardening checklist
 
@@ -148,5 +155,6 @@ Every fill and every rejected listing writes one row to the **Vault log**: time,
 - Use `require_no_evaluate` for sensitive entries, or run with `--allowEvaluate false`.
 - Use `clear_after_fill: true` in your agent's prompts.
 - Use `dashboard_confirm` for anything that moves money.
+- Know the remaining limit of the password-input rule: a site's own "show password" control turns the filled field into plain text, and an agent can click it and read the password back with `snapshot` or `screenshot`. For entries where that matters, set `redact_username` and `require_no_evaluate`, and use `dashboard_confirm`.
 - Give each agent its own token and authorize principals; use harness lists on top, to keep agents away from credentials that are not theirs.
 - Remember that the live view and screenshots show raw pixels.

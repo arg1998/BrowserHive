@@ -17,6 +17,11 @@ export interface VaultPage {
    * element (typed `unknown`: core has no DOM lib). Absent on fakes without a DOM.
    */
   $eval?<T>(selector: string, fn: (el: unknown) => T): Promise<T>;
+  /**
+   * Used for the fill-target gate (D-58): `fn` runs inside the page against every element the
+   * selector matches. Absent → the gate refuses the fill (it fails closed, unlike `$eval`'s use).
+   */
+  $$eval?<T>(selector: string, fn: (els: unknown[]) => T): Promise<T>;
 }
 
 /** The session facts the broker needs, without importing the concrete session. */

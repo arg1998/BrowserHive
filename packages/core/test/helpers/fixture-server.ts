@@ -82,6 +82,19 @@ export function startFixtureServer(): FixtureServer {
             </form>`,
           );
         }
+        case '/form-with-search':
+          // A login form under a site search box, plus the fields an agent could misdirect a
+          // vault fill into (spec 13 T0e).
+          return html(
+            `<form id="search-form" role="search" action="/search"><input id="search" type="search" name="q" placeholder="Search"></form>
+            <textarea id="notes"></textarea><div id="editor" contenteditable="true"></div>
+            <form id="login" method="post" action="/submitted">
+              <input id="username" name="username" autocomplete="username">
+              <input id="password" name="password" type="password" autocomplete="current-password">
+              <input id="hidden-password" name="hidden" type="password" style="display:none">
+              <button id="submit" type="submit">Sign in</button>
+            </form>`,
+          );
         case '/submitted': {
           const body = req.method === 'POST' ? await req.text() : '';
           return html(

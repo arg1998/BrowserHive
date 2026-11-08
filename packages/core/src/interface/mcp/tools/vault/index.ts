@@ -17,6 +17,7 @@ export function vaultPage(page: Page): VaultPage {
     click: (selector, options) => page.click(selector, options),
     waitForTimeout: (ms) => page.waitForTimeout(ms),
     $eval: (selector, fn) => page.$eval(selector, fn),
+    $$eval: (selector, fn) => page.$$eval(selector, fn),
   };
 }
 

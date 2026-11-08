@@ -21,7 +21,13 @@ import type { CallerSubject } from './bindings.ts';
 import { decideFill, evaluateEnabledFor } from './decide-fill.ts';
 import { publishVaultAccess } from './events.ts';
 import { listAvailable } from './list.ts';
-import { clearInputs, formActionAllowed, safeUrl } from './page-actions.ts';
+import {
+  clearInputs,
+  type FillTargetRefusal,
+  fillTargetRefusal,
+  formActionAllowed,
+  safeUrl,
+} from './page-actions.ts';
 import { PolicySet } from './policies.ts';
 import type { VaultRedaction } from './redaction.ts';
 import { resolveEntry } from './resolve.ts';
@@ -82,10 +88,11 @@ interface ConfirmDecision {
  * `vault_access` row and every fill-specific outcome is *returned*, never thrown:
  *
  * 1. `vault_enabled` gate → 2. handle + caller authorization (principal → slug → harness, D-48) → 3. `require_no_evaluate` →
- * 4. origin re-check → 5. dashboard confirm (D-15 broker) → 6. fetch credential →
- * 7. arm redaction BEFORE typing → 8. form-action defence, pause the trace chunk (D-13), type →
- * 9. optional submit (re-check action) → wait → optional clear → resume the chunk (finally) →
- * 10. `{ status: 'success', redacted: true }`.
+ * 4. origin re-check → 4b. fill-target gate (D-58: one password input, one text input) →
+ * 5. dashboard confirm (D-15 broker) → 6. fetch credential → 7. arm redaction BEFORE typing →
+ * 8. form-action defence, pause the trace chunk (D-13), re-run the fill-target gate immediately
+ * before each value is typed, type → 9. optional submit (re-check action) → wait → optional
+ * clear → resume the chunk (finally) → 10. `{ status: 'success', redacted: true }`.
  *
  * Throws only `VAULT_NOT_CONFIGURED` and `VAULT_LOCKED` (states unrelated to *this* fill; the
  * locked case still writes its audit row). The credential lives in a local for the duration of
@@ -222,6 +229,24 @@ export class VaultBroker {
     }
     const resolved = decision.entry;
 
+    /** Audits a refused fill target (D-58); the agent sees only `password_target_invalid`. */
+    const refuseTarget = async (
+      refusal: FillTargetRefusal,
+      phase: 'pre_fetch' | 'pre_fill',
+    ): Promise<VaultFillResult> => {
+      await audit('blocked', 'pass', {
+        reason: 'password_target_invalid',
+        phase,
+        field: refusal.field,
+        problem: refusal.problem,
+      });
+      return blocked('password_target_invalid');
+    };
+
+    // 4b. Fill-target gate (D-58), before anyone is asked to confirm and before the fetch.
+    const preFetch = await fillTargetRefusal(page, request, 'if_present');
+    if (preFetch !== null) return refuseTarget(preFetch, 'pre_fetch');
+
     // 5. Dashboard confirmation before the credential is fetched.
     if (decision.confirmRequired) {
       const verdict = await this.runConfirm(ctx, resolved, pageUrl);
@@ -263,9 +288,22 @@ export class VaultBroker {
     }
     await this.pauseTrace(ctx);
     try {
+      // D-58: the page may have swapped an element since 4b, so re-check right before each value.
+      const typeUsername = credential.username.length > 0;
+      const preUsername = await fillTargetRefusal(
+        page,
+        request,
+        typeUsername ? 'required' : 'skip',
+      );
+      if (preUsername !== null) return await refuseTarget(preUsername, 'pre_fill');
       try {
-        if (credential.username.length > 0) {
+        if (typeUsername) {
           await this.enterValue(ctx, request.usernameSelector, credential.username, rearm);
+          const prePassword = await fillTargetRefusal(page, request, 'skip');
+          if (prePassword !== null) {
+            await page.fill(request.usernameSelector, '', { timeout: 1000 }).catch(() => undefined);
+            return await refuseTarget(prePassword, 'pre_fill');
+          }
         }
         await this.enterValue(ctx, request.passwordSelector, credential.password, rearm);
       } catch (err) {
