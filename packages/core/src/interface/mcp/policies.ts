@@ -1,6 +1,8 @@
-/** @module interface/mcp/policies — the pre-execution tool policies: session ownership, URL blocklist, evaluate gate, path sandbox, http-only transport, vault configured (spec 02 §2.3). */
+/** @module interface/mcp/policies — the pre-execution tool policies: session ownership, URL scheme, URL blocklist, evaluate gate, path sandbox, http-only transport, vault configured (spec 02 §2.3). */
 
+import { ERROR_REGISTRY, renderMessage } from '@browserhive/contracts/errors';
 import { assertAttentionTransport } from '../../domain/operator-requests/heartbeat.ts';
+import { checkAgentUrl, type SchemeOptions } from '../../domain/policies/url-scheme.ts';
 import { AppError } from '../../kernel/errors/app-error.ts';
 import type { PolicyContext, ToolPolicy } from './definition.ts';
 import { resolveScreenshotSavePath, resolveUploadPath } from './sandbox.ts';
@@ -23,6 +25,56 @@ export const sessionOwnership: ToolPolicy = {
     ctx.attachSession(ctx.services.sessions.get(sessionId, ctx.principal));
   },
 };
+
+/** Every session is exclusive today, so `data:` is allowed; virtual sessions (spec 13 T1a) will refuse it. */
+const AGENT_SCHEME_OPTIONS: SchemeOptions = { allowData: true };
+
+/** Public text of `URL_SCHEME_NOT_ALLOWED` for input that does not parse as an absolute URL. */
+export const UNPARSEABLE_URL_MESSAGE =
+  'This URL is not an absolute URL, so it cannot be opened here. Use an http:// or https:// URL (or about:blank).';
+
+/**
+ * Refuses a URL whose scheme an agent may not open (only when `field` is present): anything but
+ * `http:`, `https:`, exactly `about:blank` and `data:` (spec 13 T0d, D-57). Runs after
+ * `sessionOwnership` and before `urlBlocklist`, so the blocklist only ever sees web schemes from
+ * agents. The handler then navigates to {@link agentUrlHref} of the same input.
+ *
+ * @throws `URL_SCHEME_NOT_ALLOWED` `{ scheme }`
+ */
+export function urlScheme(field: string): ToolPolicy {
+  return {
+    name: `urlScheme(${field})`,
+    apply(_ctx, args) {
+      const url = stringArg(args, field);
+      if (url === undefined) return;
+      const checked = checkAgentUrl(url, AGENT_SCHEME_OPTIONS);
+      if (checked.ok) return;
+      const { scheme } = checked.error;
+      const publicMessage =
+        scheme === ''
+          ? UNPARSEABLE_URL_MESSAGE
+          : renderMessage(ERROR_REGISTRY.URL_SCHEME_NOT_ALLOWED.message, { scheme });
+      throw new AppError('URL_SCHEME_NOT_ALLOWED', { scheme }, { publicMessage });
+    },
+  };
+}
+
+/**
+ * The normalized `href` a tool navigates to, so the browser never parses the raw string itself.
+ * Only for input `urlScheme` already allowed.
+ *
+ * @throws `URL_SCHEME_NOT_ALLOWED` if called on input the policy would refuse (a wiring bug)
+ */
+export function agentUrlHref(url: string): string {
+  const checked = checkAgentUrl(url, AGENT_SCHEME_OPTIONS);
+  if (checked.ok) return checked.value.href;
+  const { scheme } = checked.error;
+  throw new AppError(
+    'URL_SCHEME_NOT_ALLOWED',
+    { scheme },
+    { publicMessage: renderMessage(ERROR_REGISTRY.URL_SCHEME_NOT_ALLOWED.message, { scheme }) },
+  );
+}
 
 /**
  * Refuses a blocklisted URL before the browser is touched (only when `field` is present).

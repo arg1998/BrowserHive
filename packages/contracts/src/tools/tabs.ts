@@ -16,8 +16,10 @@ export const NEW_TAB = defineTool({
   name: 'new_tab',
   title: 'New tab',
   description:
-    'Open a new tab in the session and make it active. Optionally navigate it to a URL. ' +
-    'Returns the stable tab_id other tools accept via their optional tab_id argument.',
+    'Open a new tab in the session and make it active. Optionally navigate it to a URL; only ' +
+    'web URLs can be opened (http://, https://, about:blank and data:), and any other scheme ' +
+    'fails with URL_SCHEME_NOT_ALLOWED without opening a tab. Returns the stable tab_id other ' +
+    'tools accept via their optional tab_id argument.',
   input: z.object({
     session_id: z.string(),
     url: z.string().optional(),
@@ -28,7 +30,13 @@ export const NEW_TAB = defineTool({
   annotations: annotations(false, false, false, true),
   pack: 'tabs',
   capability: 'navigate',
-  errors: [...SESSION_ERRORS, 'URL_BLOCKED', 'NAVIGATION_TIMEOUT', 'NAVIGATION_FAILED'],
+  errors: [
+    ...SESSION_ERRORS,
+    'URL_SCHEME_NOT_ALLOWED',
+    'URL_BLOCKED',
+    'NAVIGATION_TIMEOUT',
+    'NAVIGATION_FAILED',
+  ],
   since: SINCE,
 });
 

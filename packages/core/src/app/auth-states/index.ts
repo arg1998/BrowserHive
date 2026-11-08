@@ -18,4 +18,14 @@ export {
   type SavedAuthResult,
   type StorageStateSource,
 } from './store.ts';
-export { type DirEntry, unzipToDirectory, ZIP_LEVEL, type ZipFs, zipDirectory } from './zip.ts';
+export {
+  createNodeZipFs,
+  type DirEntry,
+  PROFILE_CACHE_DIRS,
+  unzipFileToDirectory,
+  ZIP_LEVEL,
+  type ZipFs,
+  type ZipReadHandle,
+  type ZipWriteHandle,
+  zipDirectoryToFile,
+} from './zip.ts';

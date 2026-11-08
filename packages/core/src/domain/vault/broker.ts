@@ -21,7 +21,13 @@ import type { CallerSubject } from './bindings.ts';
 import { decideFill, evaluateEnabledFor } from './decide-fill.ts';
 import { publishVaultAccess } from './events.ts';
 import { listAvailable } from './list.ts';
-import { clearInputs, formActionAllowed, safeUrl } from './page-actions.ts';
+import {
+  clearInputs,
+  type FillTargetRefusal,
+  fillTargetRefusal,
+  formActionAllowed,
+  safeUrl,
+} from './page-actions.ts';
 import { PolicySet } from './policies.ts';
 import type { VaultRedaction } from './redaction.ts';
 import { resolveEntry } from './resolve.ts';
@@ -64,6 +70,8 @@ export interface VaultBrokerDeps {
   readonly typer?: VaultTyper;
   /** Confirm deadline in ms; `0`/absent waits indefinitely. */
   readonly confirmTimeoutMs?: number;
+  /** Per-field ceiling for waiting on and entering a field; default {@link FIELD_ENTRY_TIMEOUT_MS}. */
+  readonly fieldEntryTimeoutMs?: number;
 }
 
 interface Credential {
@@ -82,10 +90,12 @@ interface ConfirmDecision {
  * `vault_access` row and every fill-specific outcome is *returned*, never thrown:
  *
  * 1. `vault_enabled` gate → 2. handle + caller authorization (principal → slug → harness, D-48) → 3. `require_no_evaluate` →
- * 4. origin re-check → 5. dashboard confirm (D-15 broker) → 6. fetch credential →
- * 7. arm redaction BEFORE typing → 8. form-action defence, pause the trace chunk (D-13), type →
- * 9. optional submit (re-check action) → wait → optional clear → resume the chunk (finally) →
- * 10. `{ status: 'success', redacted: true }`.
+ * 4. origin re-check → 4a. wait (bounded) for the password field to be visible → 4b. fill-target
+ * gate (D-58: one password input, one text input) →
+ * 5. dashboard confirm (D-15 broker) → 6. fetch credential → 7. arm redaction BEFORE typing →
+ * 8. form-action defence, pause the trace chunk (D-13), re-run the fill-target gate immediately
+ * before each value is typed, type → 9. optional submit (re-check action) → wait → optional
+ * clear → resume the chunk (finally) → 10. `{ status: 'success', redacted: true }`.
  *
  * Throws only `VAULT_NOT_CONFIGURED` and `VAULT_LOCKED` (states unrelated to *this* fill; the
  * locked case still writes its audit row). The credential lives in a local for the duration of
@@ -222,6 +232,38 @@ export class VaultBroker {
     }
     const resolved = decision.entry;
 
+    /** Audits a refused fill target (D-58); the agent sees only `password_target_invalid`. */
+    const refuseTarget = async (
+      refusal: FillTargetRefusal,
+      phase: 'pre_fetch' | 'pre_fill',
+    ): Promise<VaultFillResult> => {
+      await audit('blocked', 'pass', {
+        reason: 'password_target_invalid',
+        phase,
+        field: refusal.field,
+        problem: refusal.problem,
+      });
+      return blocked('password_target_invalid');
+    };
+
+    // 4a. Wait for the password field: SPAs render login forms after `load`, and agents call
+    // vault_fill right after navigate. A field that never shows is what main answered after
+    // its 30 s fill timeout (`auth_failed` / `fill_failed`), only now nothing is fetched first.
+    const waited = await this.waitForPasswordField(ctx, request.passwordSelector);
+    if (waited !== null) {
+      await audit('auth_failed', 'pass', {
+        reason: 'fill_failed',
+        phase: 'pre_fetch',
+        field: 'password',
+        detail: waited,
+      });
+      return { status: 'auth_failed', redacted: true, reason: 'fill_failed' };
+    }
+
+    // 4b. Fill-target gate (D-58), before anyone is asked to confirm and before the fetch.
+    const preFetch = await fillTargetRefusal(page, request, 'if_present');
+    if (preFetch !== null) return refuseTarget(preFetch, 'pre_fetch');
+
     // 5. Dashboard confirmation before the credential is fetched.
     if (decision.confirmRequired) {
       const verdict = await this.runConfirm(ctx, resolved, pageUrl);
@@ -263,9 +305,22 @@ export class VaultBroker {
     }
     await this.pauseTrace(ctx);
     try {
+      // D-58: the page may have swapped an element since 4b, so re-check right before each value.
+      const typeUsername = credential.username.length > 0;
+      const preUsername = await fillTargetRefusal(
+        page,
+        request,
+        typeUsername ? 'required' : 'skip',
+      );
+      if (preUsername !== null) return await refuseTarget(preUsername, 'pre_fill');
       try {
-        if (credential.username.length > 0) {
+        if (typeUsername) {
           await this.enterValue(ctx, request.usernameSelector, credential.username, rearm);
+          const prePassword = await fillTargetRefusal(page, request, 'skip');
+          if (prePassword !== null) {
+            await page.fill(request.usernameSelector, '', { timeout: 1000 }).catch(() => undefined);
+            return await refuseTarget(prePassword, 'pre_fill');
+          }
         }
         await this.enterValue(ctx, request.passwordSelector, credential.password, rearm);
       } catch (err) {
@@ -314,6 +369,28 @@ export class VaultBroker {
 
   // --- internals ------------------------------------------------------------------------------
 
+  private get fieldTimeoutMs(): number {
+    return this.deps.fieldEntryTimeoutMs ?? FIELD_ENTRY_TIMEOUT_MS;
+  }
+
+  /**
+   * Waits up to the field timeout for the password selector to be visible. `null` when it is (or
+   * the page cannot wait: the target gate then decides on its own, failing closed); otherwise a
+   * scrubbed one-line reason for the audit row. No pre-fill re-check waits: by then it is there.
+   */
+  private async waitForPasswordField(
+    ctx: VaultFillContext,
+    selector: string,
+  ): Promise<string | null> {
+    if (typeof ctx.page.waitForSelector !== 'function') return null;
+    try {
+      await ctx.page.waitForSelector(selector, { timeout: this.fieldTimeoutMs });
+      return null;
+    } catch (err) {
+      return this.detail(ctx, err);
+    }
+  }
+
   private async enterValue(
     ctx: VaultFillContext,
     selector: string,
@@ -323,10 +400,10 @@ export class VaultBroker {
     const typer = this.deps.typer;
     if (ctx.session.humanize === true && typer !== undefined) {
       // Clear first: typing appends to whatever the field holds, where `fill` replaces it.
-      await ctx.page.fill(selector, '', { timeout: FIELD_ENTRY_TIMEOUT_MS });
-      await typer(ctx.page, selector, value, { timeoutMs: FIELD_ENTRY_TIMEOUT_MS });
+      await ctx.page.fill(selector, '', { timeout: this.fieldTimeoutMs });
+      await typer(ctx.page, selector, value, { timeoutMs: this.fieldTimeoutMs });
     } else {
-      await ctx.page.fill(selector, value, { timeout: FIELD_ENTRY_TIMEOUT_MS });
+      await ctx.page.fill(selector, value, { timeout: this.fieldTimeoutMs });
     }
     rearm();
   }

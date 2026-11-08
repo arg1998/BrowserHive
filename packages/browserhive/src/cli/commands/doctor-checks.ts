@@ -15,7 +15,13 @@ import {
   parseNotificationChannelFlags,
   type ResolvedConfigBundle,
 } from '@browserhive/core/config';
-import { classifyPublicUrlProbe, isInsecurePublicUrl } from '@browserhive/core/runtime';
+import {
+  classifyPublicUrlProbe,
+  describeReservedSubjects,
+  findReservedSubjects,
+  hasReservedSubjects,
+  isInsecurePublicUrl,
+} from '@browserhive/core/runtime';
 import type { CliDeps, ShorthandLookup } from '../deps.ts';
 import { databasePath, formatTimestamp, size } from './common.ts';
 
@@ -355,6 +361,45 @@ export async function checkDatabase(deps: CliDeps, dataDir: string): Promise<Che
     );
   }
   return result('database', 'ok', summary);
+}
+
+/**
+ * Agent tokens acting as a reserved subject (spec 13 T0f): tokens issued before token creation
+ * refused `local`, `browserhive`, `system` and `template:*`, and `authTokens` items named after
+ * one. A warning that names them and says how to revoke them; doctor never revokes. A database
+ * that cannot be read is the database row's problem, so this row then says it could not check.
+ */
+export async function checkReservedSubjects(
+  deps: CliDeps,
+  dataDir: string,
+  authTokens: readonly string[],
+): Promise<CheckResult> {
+  let tokens: Awaited<ReturnType<Awaited<ReturnType<CliDeps['openStorage']>>['listTokens']>> = [];
+  let unread = false;
+  if ((await deps.fs.stat(databasePath(dataDir))) !== null) {
+    try {
+      const storage = await deps.openStorage({
+        dataDir,
+        readOnly: true,
+        migrate: false,
+        owner: 'doctor',
+      });
+      try {
+        tokens = await storage.listTokens();
+      } finally {
+        await storage.close();
+      }
+    } catch {
+      unread = true;
+    }
+  }
+  const findings = findReservedSubjects(tokens, authTokens);
+  if (hasReservedSubjects(findings)) {
+    return result('reserved subjects', 'warn', describeReservedSubjects(findings));
+  }
+  return unread
+    ? result('reserved subjects', 'ok', 'could not read the tokens; see the database row')
+    : result('reserved subjects', 'ok', 'no agent token uses a reserved subject');
 }
 
 /** OTLP endpoint answers a HEAD within 2 s (warning only). */

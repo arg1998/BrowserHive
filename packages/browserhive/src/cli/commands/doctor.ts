@@ -24,6 +24,7 @@ import {
   checkPort,
   checkPublicUrl,
   checkReferenceDefaults,
+  checkReservedSubjects,
   checkSecretsFile,
   checkShorthand,
   checkUnrecognisedDataFiles,
@@ -95,6 +96,7 @@ export async function runChecks(
   }
   results.push(await checkUnrecognisedDataFiles(deps, dataDir));
   results.push(await checkDatabase(deps, dataDir));
+  results.push(await checkReservedSubjects(deps, dataDir, config?.authTokens ?? []));
   if (config !== null && resolution.ok) {
     results.push(await checkOtel(deps, config));
     results.push(checkCapacity(deps, config));

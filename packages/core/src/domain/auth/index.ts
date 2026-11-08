@@ -7,6 +7,7 @@ export {
   assertCan,
   authorizer,
   can,
+  hasFullOperatorAccess,
 } from './authorizer.ts';
 export {
   bearerTokenFromHeader,
@@ -38,6 +39,11 @@ export {
   principalFromRecord,
   type RequestPrincipal,
 } from './principal.ts';
+export {
+  isReservedSubject,
+  RESERVED_SUBJECT_PREFIX,
+  RESERVED_SUBJECTS,
+} from './reserved-subjects.ts';
 export {
   AGENT_SCOPES,
   ALL_SCOPES,

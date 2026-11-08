@@ -2,7 +2,12 @@
 
 import { describe, expect, it } from 'bun:test';
 import { isAppError } from '../../kernel/errors/app-error.ts';
-import { allowedDuringPasswordChange, assertCan, can } from './authorizer.ts';
+import {
+  allowedDuringPasswordChange,
+  assertCan,
+  can,
+  hasFullOperatorAccess,
+} from './authorizer.ts';
 import { agentPrincipal, LOCAL_PRINCIPAL, type RequestPrincipal } from './principal.ts';
 import { ALL_SCOPES, OPERATOR_SCOPES } from './scopes.ts';
 
@@ -15,21 +20,53 @@ const operator: RequestPrincipal = {
   tenantId: null,
   mustChangePassword: false,
 };
+/** An operator API token issued with a subset (`POST /auth/tokens {owner_kind:'operator', scopes}`). */
 const operatorToken: RequestPrincipal = {
   ...operator,
   auth: { method: 'bearer', credentialId: 'c1' },
-  scopes: ['sessions:read'],
+  scopes: ['system:read'],
+};
+/** An operator API token issued without `scopes`: it holds the full set. */
+const fullOperatorToken: RequestPrincipal = {
+  ...operator,
+  auth: { method: 'bearer', credentialId: 'c2' },
+  scopes: OPERATOR_SCOPES,
 };
 const agent = agentPrincipal('agent-1', {});
+const foreign = { kind: 'session', id: 'x', owner: 'agent-1' } as const;
 
 describe('Authorizer.can', () => {
-  it('operators can do everything, including other owners resources', () => {
+  it('a dashboard-session operator holds every scope, and ownership never restricts it', () => {
     for (const scope of ALL_SCOPES) expect(can(operator, scope)).toBe(true);
-    expect(can(operator, 'sessions:write', { kind: 'session', id: 'x', owner: 'agent-1' })).toBe(
-      true,
-    );
-    // operator kind wins even when a token narrowed the scope list
-    expect(can(operatorToken, 'vault:write')).toBe(true);
+    expect(can(operator, 'sessions:write', foreign)).toBe(true);
+    expect(can(operator, null, foreign)).toBe(true);
+    // The session decides, not the scope list the principal happens to carry.
+    expect(can({ ...operator, scopes: [] }, 'vault:write')).toBe(true);
+    const grant: RequestPrincipal = {
+      ...operator,
+      auth: { method: 'grant', sessionId: 's1' },
+      scopes: [],
+    };
+    expect(can(grant, 'sessions:read')).toBe(true);
+  });
+
+  it('an operator API token is limited to the scopes its credential carries', () => {
+    expect(can(operatorToken, 'system:read')).toBe(true);
+    expect(can(operatorToken, 'sessions:write')).toBe(false);
+    for (const scope of ALL_SCOPES.filter((s) => s !== 'system:read')) {
+      expect(can(operatorToken, scope)).toBe(false);
+    }
+  });
+
+  it('ownership never restricts an operator token, only its scopes do', () => {
+    expect(can(operatorToken, 'system:read', foreign)).toBe(true);
+    expect(can(operatorToken, null, foreign)).toBe(true);
+    expect(can(operatorToken, 'sessions:read', foreign)).toBe(false);
+  });
+
+  it('an operator token issued without scopes (the full set) is unchanged', () => {
+    for (const scope of ALL_SCOPES) expect(can(fullOperatorToken, scope)).toBe(true);
+    expect(can(fullOperatorToken, 'sessions:write', foreign)).toBe(true);
   });
 
   it('agents hold mcp:tools only', () => {
@@ -53,6 +90,20 @@ describe('Authorizer.can', () => {
   });
 });
 
+describe('hasFullOperatorAccess', () => {
+  it('is true for a session operator and a full-scope operator token only', () => {
+    expect(hasFullOperatorAccess(operator)).toBe(true);
+    expect(hasFullOperatorAccess(fullOperatorToken)).toBe(true);
+    expect(hasFullOperatorAccess(operatorToken)).toBe(false);
+    expect(hasFullOperatorAccess({ ...fullOperatorToken, scopes: OPERATOR_SCOPES.slice(1) })).toBe(
+      false,
+    );
+    expect(hasFullOperatorAccess(agent)).toBe(false);
+    expect(hasFullOperatorAccess({ ...agent, scopes: ALL_SCOPES })).toBe(false);
+    expect(hasFullOperatorAccess(LOCAL_PRINCIPAL)).toBe(false);
+  });
+});
+
 describe('Authorizer.assertCan', () => {
   it('throws UNAUTHORIZED without a principal and FORBIDDEN {scope} otherwise', () => {
     try {
@@ -69,6 +120,13 @@ describe('Authorizer.assertCan', () => {
       if (isAppError(error, 'FORBIDDEN')) expect(error.details.scope).toBe('sessions:read');
     }
     expect(() => assertCan(operator, 'sessions:read')).not.toThrow();
+    try {
+      assertCan(operatorToken, 'sessions:write');
+      throw new Error('unreachable');
+    } catch (error) {
+      expect(isAppError(error, 'FORBIDDEN')).toBe(true);
+      if (isAppError(error, 'FORBIDDEN')) expect(error.details.scope).toBe('sessions:write');
+    }
   });
 });
 

@@ -2,7 +2,7 @@
 
 # Error reference
 
-Every error code BrowserHive can produce (108 codes), generated from `ERROR_REGISTRY` in `@browserhive/contracts/errors`. Each code has a stable anchor: `errors.md#<CODE>`, which is also the `type` URL of HTTP problem responses (`https://browserhive.ai/docs/errors#<CODE>`).
+Every error code BrowserHive can produce (109 codes), generated from `ERROR_REGISTRY` in `@browserhive/contracts/errors`. Each code has a stable anchor: `errors.md#<CODE>`, which is also the `type` URL of HTTP problem responses (`https://browserhive.ai/docs/errors#<CODE>`).
 
 ## How errors reach you
 
@@ -55,6 +55,7 @@ Returned by tools and the REST API when a request cannot be served (unknown sess
 | [`PAGE_CLOSED`](#PAGE_CLOSED) | Page closed | 410 | different_args |
 | [`BROWSER_CRASHED`](#BROWSER_CRASHED) | Browser crashed | 500 | after_operator |
 | [`URL_BLOCKED`](#URL_BLOCKED) | URL blocked by policy | 403 | never |
+| [`URL_SCHEME_NOT_ALLOWED`](#URL_SCHEME_NOT_ALLOWED) | URL scheme not allowed | 400 | different_args |
 | [`BROWSER_NOT_INSTALLED`](#BROWSER_NOT_INSTALLED) | Browser not installed | 503 | after_operator |
 | [`VAULT_NOT_CONFIGURED`](#VAULT_NOT_CONFIGURED) | No vault configured | 404 | never |
 | [`VAULT_LOCKED`](#VAULT_LOCKED) | Vault locked | 409 | after_operator |
@@ -769,6 +770,30 @@ Details:
 |---|---|---|---|
 | `url` | `string` | yes | — |
 | `pattern` | `string` | yes | — |
+
+<a id="URL_SCHEME_NOT_ALLOWED"></a>
+### `URL_SCHEME_NOT_ALLOWED`
+
+| Property | Value |
+|---|---|
+| Title | URL scheme not allowed |
+| HTTP status | 400 |
+| Category | `domain` |
+| Retryable | `different_args` (retry only with different arguments) |
+
+Message: `URLs with the '{scheme}:' scheme cannot be opened here. Use an http:// or https:// URL (or about:blank).`
+
+Hint: Pass a full http:// or https:// URL; local files and browser pages cannot be opened.
+
+Cause: `navigate` and `new_tab` open only `http:`, `https:`, `about:blank` and `data:` URLs. Other schemes (`file:`, `chrome:`, `view-source:`, `javascript:`, `blob:`, `mailto:`, app schemes) and input without a scheme (`example.com`, `localhost:3000`) are refused before the browser is touched. `details.scheme` names the scheme (`localhost` for `localhost:3000`). It is empty when the input is not an absolute URL at all, and the message then reads "This URL is not an absolute URL, so it cannot be opened here. Use an http:// or https:// URL (or about:blank)."
+
+Resolution: Use a full web URL such as `https://example.com/`. This is a fixed product rule, not operator configuration.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `scheme` | `string` | yes | — |
 
 <a id="BROWSER_NOT_INSTALLED"></a>
 ### `BROWSER_NOT_INSTALLED`

@@ -20,6 +20,7 @@ import type {
 import type { Logger } from '../../ports/logger.ts';
 import type { PipelineDeps, PipelineHooks } from './pipeline-deps.ts';
 import { prepareSessionDirs, removeSessionDir, type SessionDirs } from './profile-dir.ts';
+import { guardPageScheme } from './scheme-guard.ts';
 
 /** Warning codes the driver emits that later phases adopt (so each phase reports its own findings). */
 const TRACING_CODES: ReadonlySet<string> = new Set(['TRACE_START_FAILED']);
@@ -249,10 +250,19 @@ export function buildPhases(
     register: async (ctx) => {
       const session = need(ctx.session, 'session');
       const handle = need(ctx.handle, 'handle');
+      // Every page of the session, the first one, tool-opened tabs and site-opened popups, is
+      // watched for main-frame commits of non-web schemes (spec 13 T0d).
+      const guard = {
+        sessionId: session.id,
+        tabs: session.tabs,
+        logger: deps.logger.child({ module: 'sessions.scheme-guard' }),
+      };
       session.tabs.add(handle.page);
+      guardPageScheme(handle.page, guard);
       // Site-opened pages (target=_blank, window.open) get an id too, so list_tabs stays accurate.
       handle.context.on('page', (page) => {
         session.tabs.add(page);
+        guardPageScheme(page, guard);
       });
       session.apply({ type: 'launched', at: deps.clock.now() });
       hooks.updated(session);

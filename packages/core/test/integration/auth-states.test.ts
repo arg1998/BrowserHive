@@ -1,7 +1,10 @@
 /** @module test/integration/auth-states — save_storage_state / save_full_profile + restore through launch_session against real Chromium, including two token principals sharing a name (spec 13 T0a). */
 
 import { describe, expect, it } from 'bun:test';
+import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { unzipSync } from 'fflate';
+import { PROFILE_CACHE_DIRS } from '../../src/app/auth-states/zip.ts';
 import { agentPrincipal, LOCAL_PRINCIPAL } from '../../src/domain/auth/principal.ts';
 import { textOf } from '../helpers/fake-transport.ts';
 import { useMcpStack } from './mcp-fixture.ts';
@@ -130,6 +133,69 @@ describe('auth-state save + restore (real Chromium)', () => {
     expect(listed.map((e) => e.name).sort()).toEqual(
       liveSaved ? ['live-profile', 'work-profile'] : ['work-profile'],
     );
+  });
+
+  it('full-profile: a logged-in cookie survives save_full_profile and restore_profile, caches stay out', async () => {
+    const h = state.harness;
+    // Chromium writes cookies to disk in batches or on close, so the login is first made durable:
+    // set a persistent cookie, close, and seed a profile with it.
+    const seed = await h.launch({ slug: 'ck-seed', persistence_mode: 'persistent' });
+    await h.callJson('navigate', {
+      session_id: seed,
+      url: state.fixture.url('/set-cookie?name=sid&v=logged-in&max_age=86400'),
+    });
+    await h.callJson('navigate', { session_id: seed, url: state.fixture.url('/') });
+    await h.callJson('close_session', { session_id: seed });
+    await h.services.authStates.saveFullProfile(
+      join(h.dataDir, 'sessions', seed, 'userdata'),
+      'ck-seed',
+      seed,
+      LOCAL_PRINCIPAL,
+    );
+    // A live, browsed session holding that login is what the agent snapshots through the tool.
+    const live = await h.launch({
+      slug: 'ck-live',
+      persistence_mode: 'persistent',
+      restore_profile: 'ck-seed',
+    });
+    await h.callJson('navigate', { session_id: live, url: state.fixture.url('/') });
+    const userdata = join(h.dataDir, 'sessions', live, 'userdata');
+    const result = await h.call('save_full_profile', { session_id: live, name: 'logged-in' });
+    let path: string;
+    if (result.isError === true) {
+      // Windows only: the running browser holds its cookie database exclusively (see above).
+      expect(process.platform).toBe('win32');
+      expect(textOf(result)).toContain('PROFILE_FILE_LOCKED');
+      await h.callJson('close_session', { session_id: live });
+      ({ path } = await h.services.authStates.saveFullProfile(
+        userdata,
+        'logged-in',
+        live,
+        LOCAL_PRINCIPAL,
+      ));
+    } else {
+      ({ path } = JSON.parse(textOf(result)) as { path: string });
+      await h.callJson('close_session', { session_id: live });
+    }
+    // The browsed profile has an HTTP cache; the snapshot does not, and keeps the cookie database.
+    expect(await readdir(join(userdata, 'Default'))).toContain('Cache');
+    const names = Object.keys(unzipSync(new Uint8Array(await readFile(path))));
+    expect(names.some((n) => /^Default\/(Network\/)?Cookies$/.test(n))).toBe(true);
+    for (const cache of PROFILE_CACHE_DIRS) {
+      expect(names.filter((n) => n.includes(`${cache}/`))).toEqual([]);
+    }
+    const dst = await h.launch({
+      slug: 'ck-dst',
+      persistence_mode: 'persistent',
+      restore_profile: 'logged-in',
+    });
+    await h.callJson('navigate', { session_id: dst, url: state.fixture.url('/echo-headers') });
+    const got = await h.callJson<{ cookies: { name: string; value: string }[] }>('get_cookies', {
+      session_id: dst,
+      urls: [state.fixture.origin],
+    });
+    expect(got.cookies.find((c) => c.name === 'sid')?.value).toBe('logged-in');
+    expect(state.fixture.requests.at(-1)?.headers['cookie']).toContain('sid=logged-in');
   });
 
   it('restoring a missing name fails with AUTH_STATE_NOT_FOUND', async () => {

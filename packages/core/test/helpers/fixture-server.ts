@@ -82,6 +82,31 @@ export function startFixtureServer(): FixtureServer {
             </form>`,
           );
         }
+        case '/form-with-search':
+          // A login form under a site search box, plus the fields an agent could misdirect a
+          // vault fill into (spec 13 T0e).
+          return html(
+            `<form id="search-form" role="search" action="/search"><input id="search" type="search" name="q" placeholder="Search"></form>
+            <textarea id="notes"></textarea><div id="editor" contenteditable="true"></div>
+            <form id="login" method="post" action="/submitted">
+              <input id="username" name="username" autocomplete="username">
+              <input id="password" name="password" type="password" autocomplete="current-password">
+              <input id="hidden-password" name="hidden" type="password" style="display:none">
+              <button id="submit" type="submit">Sign in</button>
+            </form>`,
+          );
+        case '/form-delayed':
+          // An SPA-style login form, rendered 1 s after load (spec 13 T0e: vault_fill waits for it).
+          return html(
+            `<div id="app"></div>
+            <script>setTimeout(() => {
+              document.getElementById('app').innerHTML =
+                '<form id="login" method="post" action="/submitted">' +
+                '<input id="username" name="username" autocomplete="username">' +
+                '<input id="password" name="password" type="password" autocomplete="current-password">' +
+                '<button id="submit" type="submit">Sign in</button></form>';
+            }, 1000);</script>`,
+          );
         case '/submitted': {
           const body = req.method === 'POST' ? await req.text() : '';
           return html(
@@ -113,6 +138,11 @@ export function startFixtureServer(): FixtureServer {
           return html('<a id="download" href="/download" download="fixture.txt">download</a>');
         case '/popup':
           return html(`<button id="open" onclick="window.open('/', '_blank')">open</button>`);
+        case '/to-file':
+          // A site-initiated navigation to a local file (the URL-scheme backstop suite).
+          return html(
+            `<p id="to-file">leaving</p><script>window.__tried = true; location = 'file:///etc/hosts';</script>`,
+          );
         case '/probe':
           return html(`<pre id="probe"></pre><script>${PROBE_SCRIPT}</script>`);
         case '/slow': {
@@ -136,10 +166,16 @@ export function startFixtureServer(): FixtureServer {
               window.__setStorage = (v) => { localStorage.setItem(key, v); sessionStorage.setItem(key, v); document.cookie = key + '=' + v + '; path=/'; };
             </script>`,
           );
-        case '/set-cookie':
+        case '/set-cookie': {
+          // `max_age` makes it a persistent cookie (written to the profile's cookie database).
+          const maxAge = url.searchParams.get('max_age');
+          const name = url.searchParams.get('name') ?? 'fixture';
           return new Response('ok', {
-            headers: { 'set-cookie': `fixture=${url.searchParams.get('v') ?? '1'}; Path=/` },
+            headers: {
+              'set-cookie': `${name}=${url.searchParams.get('v') ?? '1'}; Path=/${maxAge === null ? '' : `; Max-Age=${maxAge}`}`,
+            },
           });
+        }
         case '/status': {
           const code = Number(url.searchParams.get('code') ?? '200');
           return html(`<p id="status">${code}</p>`).status === 200

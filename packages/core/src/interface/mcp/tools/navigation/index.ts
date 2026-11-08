@@ -2,18 +2,18 @@
 
 import { requireSession } from '../../context.ts';
 import { defineTool, json, type ToolPack } from '../../definition.ts';
-import { sessionOwnership, urlBlocklist } from '../../policies.ts';
+import { agentUrlHref, sessionOwnership, urlBlocklist, urlScheme } from '../../policies.ts';
 import { drive, navigation, pageOf, recordNavigation, safeUrl } from '../shared.ts';
 
-/** `navigate`: blocklist before the browser is touched; HTTP 4xx/5xx is a soft failure (`HTTP_<n>`). */
+/** `navigate`: scheme and blocklist checks before the browser is touched; HTTP 4xx/5xx is a soft failure (`HTTP_<n>`). */
 export const navigate = defineTool('navigate', {
-  policies: [sessionOwnership, urlBlocklist('url')],
+  policies: [sessionOwnership, urlScheme('url'), urlBlocklist('url')],
   async handler(ctx, args) {
     const session = requireSession(ctx);
     const page = pageOf(ctx, session, args.tab_id);
     const target = { url: args.url, timeoutMs: args.timeout, tabId: args.tab_id };
     const response = await navigation(ctx, session, target, () =>
-      page.goto(args.url, { waitUntil: args.wait_until, timeout: args.timeout }),
+      page.goto(agentUrlHref(args.url), { waitUntil: args.wait_until, timeout: args.timeout }),
     );
     const visit = await recordNavigation(ctx, session, page);
     return json(

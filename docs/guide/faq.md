@@ -13,7 +13,7 @@ Each session is its own Chromium process with its own browser context: separate 
 With `--auth token`, a session belongs to the principal (token) that created it and other agents cannot see it. Without authentication every caller is `local` and sees every session.
 
 **Do sessions survive a restart?**
-With `persistence_mode: "persistent"` (or `--persistence persistent`) the profile is kept on disk under the data directory. Memory sessions are gone when they close. Agents can also save a login with `save_storage_state` or `save_full_profile` and restore it in a later session.
+With `persistence_mode: "persistent"` (or `--persistence persistent`) the profile is kept on disk under the data directory. Memory sessions are gone when they close. Agents can also save a login with `save_storage_state` or `save_full_profile` and restore it in a later session. A full-profile snapshot leaves out the browser's caches (HTTP, compiled code, GPU and shader caches, service-worker caches), which the browser rebuilds; cookies, local storage, IndexedDB and saved passwords are kept. Saving a large profile streams it to disk, so other sessions keep working meanwhile.
 
 **Where are my passwords?**
 In your password manager. BrowserHive stores only bindings (which entry may be filled on which origins, by which sessions) and an audit log without secrets.

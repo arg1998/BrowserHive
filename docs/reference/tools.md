@@ -231,7 +231,7 @@ Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](err
 
 **Navigate** · capability `navigate` · since 0.1.0
 
-> Navigate a tab to a URL (defaults to the active tab). The operator may maintain a URL blocklist; a blocked target fails with URL_BLOCKED and must not be retried.
+> Navigate a tab to a URL (defaults to the active tab). Only web URLs can be opened: http://, https://, about:blank and data:. Other schemes (file:, chrome:, view-source:, javascript:, app links) and URLs without a scheme fail with URL_SCHEME_NOT_ALLOWED; pass a full https:// URL instead. The operator may maintain a URL blocklist; a blocked target fails with URL_BLOCKED and must not be retried.
 
 Annotations: readOnly no · destructive no · idempotent no · openWorld yes
 
@@ -253,7 +253,7 @@ Result (JSON text block, mirrored in `structuredContent`):
 | `url` | `string` | yes |
 | `status` | `number` or `null` | yes |
 
-Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`URL_BLOCKED`](errors.md#URL_BLOCKED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`NAVIGATION_TIMEOUT`](errors.md#NAVIGATION_TIMEOUT), [`NAVIGATION_FAILED`](errors.md#NAVIGATION_FAILED). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
+Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`URL_SCHEME_NOT_ALLOWED`](errors.md#URL_SCHEME_NOT_ALLOWED), [`URL_BLOCKED`](errors.md#URL_BLOCKED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`NAVIGATION_TIMEOUT`](errors.md#NAVIGATION_TIMEOUT), [`NAVIGATION_FAILED`](errors.md#NAVIGATION_FAILED). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
 
 <a id="go_back"></a>
 ### `go_back`
@@ -370,7 +370,7 @@ Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](err
 
 **New tab** · capability `navigate` · since 0.1.0
 
-> Open a new tab in the session and make it active. Optionally navigate it to a URL. Returns the stable tab_id other tools accept via their optional tab_id argument.
+> Open a new tab in the session and make it active. Optionally navigate it to a URL; only web URLs can be opened (http://, https://, about:blank and data:), and any other scheme fails with URL_SCHEME_NOT_ALLOWED without opening a tab. Returns the stable tab_id other tools accept via their optional tab_id argument.
 
 Annotations: readOnly no · destructive no · idempotent no · openWorld yes
 
@@ -391,7 +391,7 @@ Result (JSON text block, mirrored in `structuredContent`):
 | `tab_id` | `string` | yes |
 | `url` | `string` | yes |
 
-Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`URL_BLOCKED`](errors.md#URL_BLOCKED), [`NAVIGATION_TIMEOUT`](errors.md#NAVIGATION_TIMEOUT), [`NAVIGATION_FAILED`](errors.md#NAVIGATION_FAILED). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
+Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`URL_SCHEME_NOT_ALLOWED`](errors.md#URL_SCHEME_NOT_ALLOWED), [`URL_BLOCKED`](errors.md#URL_BLOCKED), [`NAVIGATION_TIMEOUT`](errors.md#NAVIGATION_TIMEOUT), [`NAVIGATION_FAILED`](errors.md#NAVIGATION_FAILED). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
 
 <a id="close_tab"></a>
 ### `close_tab`
@@ -1271,7 +1271,7 @@ Errors: [`VAULT_NOT_CONFIGURED`](errors.md#VAULT_NOT_CONFIGURED), [`SESSION_NOT_
 
 **Vault: fill** · capability `credential` · since 0.1.0
 
-> Atomically inject a vault credential into a login form: origin re-check, fetch from the backend, fill username + password, optional submit, then redact. `entry_name` is the stable handle from vault_list_available. The filled values are LEFT in the form by default — pass `clear_after_fill: true` only if you want the inputs wiped after the fill (done after `after_submit_wait_ms`, so an async/AJAX submit still reads them). Returns { status: "success" | "origin_mismatch" | "auth_failed" | "blocked", redacted: true, reason? }. The credential never appears in the response, logs, events, or screenshots. The origin is checked against the entry allow-list by registrable domain.
+> Atomically inject a vault credential into a login form: origin re-check, fetch from the backend, fill username + password, optional submit, then redact. `entry_name` is the stable handle from vault_list_available. The filled values are LEFT in the form by default — pass `clear_after_fill: true` only if you want the inputs wiped after the fill (done after `after_submit_wait_ms`, so an async/AJAX submit still reads them). Returns { status: "success" | "origin_mismatch" | "auth_failed" | "blocked", redacted: true, reason? }. The credential never appears in the response, logs, events, or screenshots. The origin is checked against the entry allow-list by registrable domain. `password_selector` must match exactly one visible, enabled password input and `username_selector` exactly one text input of the login form; otherwise the fill is blocked with `password_target_invalid` and nothing is typed.
 
 Annotations: readOnly no · destructive no · idempotent no · openWorld yes
 

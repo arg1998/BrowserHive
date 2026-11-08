@@ -16,7 +16,7 @@ import { pathNotAllowed } from '../../kernel/paths.ts';
 import type { AuthStateLocator } from '../../ports/auth-state-locator.ts';
 import type { Clock } from '../../ports/clock.ts';
 import type { Logger } from '../../ports/logger.ts';
-import { unzipToDirectory, type ZipFs, zipDirectory } from './zip.ts';
+import { createNodeZipFs, unzipFileToDirectory, type ZipFs, zipDirectoryToFile } from './zip.ts';
 
 /** Directory name under the data dir (D-24). */
 export const AUTH_STATES_DIR_NAME = 'auth-states';
@@ -29,6 +29,7 @@ export const DEFAULT_OWNER = 'local';
 
 /** The filesystem the store needs (production: {@link createNodeAuthStateFs}). */
 export interface AuthStateFs extends ZipFs {
+  readFile(path: string): Promise<Uint8Array>;
   mkdir(dir: string, mode?: number): Promise<void>;
   /** `null` when the path does not exist. */
   stat(path: string): Promise<{ readonly size: number } | null>;
@@ -217,9 +218,7 @@ export class AuthStateStore implements AuthStateLocator {
     assertValidAuthName(name);
     const files = await this.prepareSave(name, principal);
     const path = files.profile;
-    const archive = await zipDirectory(userDataDir, this.fs);
-    await this.fs.writeFile(path, archive, AUTH_FILE_MODE);
-    const size = archive.byteLength;
+    const size = await zipDirectoryToFile(userDataDir, path, this.fs);
     await this.replaceStale(files, 'profile');
     await this.writeManifest(files, {
       name,
@@ -308,20 +307,8 @@ export class AuthStateStore implements AuthStateLocator {
     assertValidAuthName(name);
     const own = await this.ownSnapshot(name, principal);
     if (own === null || own.manifest.kind !== 'profile') throw notFound(name, 'profile');
-    let archive: Uint8Array;
-    try {
-      archive = await this.fs.readFile(own.files.profile);
-    } catch (err) {
-      throw new AppError(
-        'AUTH_STATE_NOT_FOUND',
-        { name, kind: 'profile' },
-        {
-          publicMessage: notFound(name, 'profile').publicMessage,
-          cause: err,
-        },
-      );
-    }
-    await unzipToDirectory(archive, userDataDir, this.fs);
+    if ((await this.fs.stat(own.files.profile)) === null) throw notFound(name, 'profile');
+    await unzipFileToDirectory(own.files.profile, userDataDir, this.fs);
   }
 
   /** The caller's snapshots, newest first. Malformed or orphan manifests are skipped. */
@@ -476,6 +463,7 @@ export class AuthStateStore implements AuthStateLocator {
 /** The `node:fs/promises` implementation of {@link AuthStateFs}. */
 export function createNodeAuthStateFs(): AuthStateFs {
   return {
+    ...createNodeZipFs(),
     async readdir(dir) {
       const entries = await readdir(dir, { withFileTypes: true });
       return entries.map((e) => ({

@@ -75,7 +75,10 @@ export const VAULT_FILL = defineTool({
     '`after_submit_wait_ms`, so an async/AJAX submit still reads them). Returns ' +
     '{ status: "success" | "origin_mismatch" | "auth_failed" | "blocked", redacted: true, reason? }. ' +
     'The credential never appears in the response, logs, events, or screenshots. The origin ' +
-    'is checked against the entry allow-list by registrable domain.',
+    'is checked against the entry allow-list by registrable domain. `password_selector` must ' +
+    'match exactly one visible, enabled password input and `username_selector` exactly one text ' +
+    'input of the login form; otherwise the fill is blocked with `password_target_invalid` and ' +
+    'nothing is typed.',
   input: z.object({
     session_id: z.string(),
     entry_name: z.string().min(1),

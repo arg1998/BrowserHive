@@ -5,6 +5,12 @@ export { type AuthService, createAuthService } from '../app/auth/auth-service.ts
 export { type Authenticator, createAuthenticator } from '../app/auth/authenticate.ts';
 export type { AuthEvents } from '../app/auth/events.ts';
 export { adminProviderChain, mcpProviderChain } from '../app/auth/providers/index.ts';
+export {
+  describeReservedSubjects,
+  findReservedSubjects,
+  hasReservedSubjects,
+  type ReservedSubjectFindings,
+} from '../app/auth/reserved-subject-check.ts';
 export { type AuthConfig, type AuthDeps, resolveAuthConfig } from '../app/auth/types.ts';
 export { secretConfigLiterals } from '../app/config/secret-literals.ts';
 export type { DomainEventName, DomainEvents } from '../app/events/catalog.ts';
