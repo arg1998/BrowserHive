@@ -155,6 +155,8 @@ Tokens at rest: `credentials.secret_hash` = SHA-256 of the token; `public_prefix
 
 Scopes (v1): `sessions:read`, `sessions:write`, `sessions:takeover`, `attention:read`, `attention:resolve`, `vault:read`, `vault:write`, `vault:confirm`, `blocklist:read`, `blocklist:write`, `system:read`, `system:write`, `logs:read`, `notifications:read`, `notifications:write`, `channels:read`, `channels:write`, `preferences:write`, `mcp:tools`. `channels:*` are separate from `notifications:*` because a channel is a delivery target that leaves the machine: a token that may dismiss notifications may not add a webhook. Operators hold all scopes; agents hold `mcp:tools` only; an operator `api_token` may be issued with a subset. `Authorizer.can()` is the only enforcement point; route descriptors declare the scope; WS commands map to the same scopes (`input` → `sessions:takeover`). A `tenant_id` filter is applied in one data-access chokepoint (`ScopedRepositories(principal)`), a no-op in v1.
 
+**Reserved subjects** (spec 13 T0f). The principal subjects `local`, `browserhive` and `system`, and every subject starting with `template:`, are BrowserHive's own: `local` owns every session created under `auth=off` and every saved auth state without an owner, `browserhive` owns maintenance sessions, and `template:<id>` is the principal of a template's vault auto-relogin. Agent token creation refuses them, whether the subject is given (the CLI's `admin tokens create <principal>`) or derived from `display` (`sanitizeSlug`): 400 `VALIDATION_FAILED`, `detail: 'subject is reserved'`, one issue `{path: 'subject'|'display', message: 'subject is reserved', code: 'reserved'}`. The comparison is case-insensitive after Unicode compatibility folding and trimming, and also applies to the `sanitizeSlug` form, so `Local`, `local `, `ＬＯＣＡＬ` and `-local-` are all refused; `local-runner` is not. The list is `RESERVED_SUBJECTS` / `isReservedSubject` in `domain/auth/reserved-subjects.ts`. Tokens issued before this rule keep working and are never revoked automatically: `browserhive doctor` (check `reserved subjects`) and one boot warning (`reserved subjects in use`) name each such token by subject, credential id and prefix, and each `authTokens` item with a reserved name, so the operator can revoke or rename them.
+
 ---
 
 ## 4. REST API reference (`/api/v1`)
@@ -174,7 +176,7 @@ Conventions (§5) apply to every list. `Auth` column: **S** operator session or 
 | DELETE | `/auth/sessions/{id_prefix}` | S | — | `{ok:true}` | 404 |
 | POST | `/auth/sessions/revoke-all` | S | — | `{ok:true, revoked:n}` (keeps current) | — |
 | GET | `/auth/tokens` | S | — | `{data:[{credential_id, public_prefix, owner_kind, subject, scopes, created_at, last_used_at, expires_at}]}` | — |
-| POST | `/auth/tokens` | S | `{owner_kind:'agent'|'operator', display, scopes?, expires_in_ms?}` | `{credential_id, token}` (token shown once) | 400 |
+| POST | `/auth/tokens` | S | `{owner_kind:'agent'|'operator', display, scopes?, expires_in_ms?}` | `{credential_id, token}` (token shown once) | 400 `VALIDATION_FAILED` (scopes not a subset of the owner kind's; `subject is reserved` for an agent whose subject would be reserved, §3.5) |
 | DELETE | `/auth/tokens/{credential_id}` | S | — | `{ok:true}` | 404 |
 | POST | `/auth/grants` | S | `{route:'trace'|'screenshot', resource_id}` | `{grant, expires_at}` | 400 |
 

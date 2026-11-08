@@ -13,6 +13,31 @@ export function useTokens() {
   return useQuery({ queryKey: keys.auth.tokens(), queryFn: () => api.listTokens() });
 }
 
+/** Inline text for a reserved agent name (spec 03 §3.5); the server's issue code is `reserved`. */
+export const RESERVED_NAME_TEXT = 'This name is reserved for BrowserHive. Choose another name.';
+
+/**
+ * The operator text for a `POST /auth/tokens` refusal of the name itself (a `VALIDATION_FAILED`
+ * issue on `display` or `subject`), shown under the field; `null` for any other error, which
+ * stays a toast.
+ */
+export function nameRejection(error: unknown): string | null {
+  if (!isAppError(error) || error.code !== 'VALIDATION_FAILED') return null;
+  const issues = error.details['issues'];
+  if (!Array.isArray(issues)) return null;
+  for (const issue of issues) {
+    if (typeof issue !== 'object' || issue === null) continue;
+    const path = 'path' in issue ? issue.path : undefined;
+    if (path !== 'display' && path !== 'subject') continue;
+    if ('code' in issue && issue.code === 'reserved') return RESERVED_NAME_TEXT;
+    const message = 'message' in issue && typeof issue.message === 'string' ? issue.message : '';
+    return message.length > 0
+      ? `${message.charAt(0).toUpperCase()}${message.slice(1)}.`
+      : error.message;
+  }
+  return null;
+}
+
 /** True when the error is an authorization refusal (the caller is not an operator). */
 export function isForbidden(error: unknown): boolean {
   return isAppError(error) && error.status === 403;
@@ -32,7 +57,11 @@ export function useCreateToken(onCreated: (created: CreateTokenResponse, display
     gcTime: 0,
     mutationFn: (display: string) => api.createToken({ body: { owner_kind: 'agent', display } }),
     onSuccess: (created, display) => onCreated(created, display),
-    onError: (error) => toast.fromError(toAppError(error), 'Could not create token'),
+    // A refused name is shown under the field by the form (`nameRejection`), not as a toast.
+    onError: (error) => {
+      if (nameRejection(error) === null)
+        toast.fromError(toAppError(error), 'Could not create token');
+    },
     onSettled: () => queryClient.invalidateQueries({ queryKey: keys.auth.tokens() }),
   });
   const { reset } = mutation;

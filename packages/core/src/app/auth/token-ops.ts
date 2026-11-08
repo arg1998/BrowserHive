@@ -4,6 +4,7 @@ import type { Scope } from '@browserhive/contracts/enums';
 import type { TokenOwnerKind } from '@browserhive/contracts/http';
 import { sha256Hex } from '../../domain/auth/digest.ts';
 import type { RequestPrincipal } from '../../domain/auth/principal.ts';
+import { isReservedSubject } from '../../domain/auth/reserved-subjects.ts';
 import { isSubsetOf, parseScopes, scopesForKind } from '../../domain/auth/scopes.ts';
 import { mintToken } from '../../domain/auth/token-format.ts';
 import { AppError } from '../../kernel/errors/app-error.ts';
@@ -70,6 +71,19 @@ export interface TokenOps {
 /** Internal dependencies of {@link createTokenOps}. */
 export interface TokenOpsDeps extends AuthDeps {
   readonly audit: AuthAudit;
+}
+
+/** `VALIDATION_FAILED` for a reserved agent subject, on the field it came from. */
+function reservedSubject(given: boolean): AppError {
+  return new AppError(
+    'VALIDATION_FAILED',
+    {
+      issues: [
+        { path: given ? 'subject' : 'display', message: 'subject is reserved', code: 'reserved' },
+      ],
+    },
+    { publicMessage: 'subject is reserved' },
+  );
 }
 
 /** Builds the {@link TokenOps}. */
@@ -176,10 +190,11 @@ export function createTokenOps(deps: TokenOpsDeps): TokenOps {
         }
         owner = record;
       } else {
-        owner = await ensureAgentPrincipal(
-          input.subject ?? sanitizeSlug(input.display),
-          input.display,
-        );
+        const subject = input.subject ?? sanitizeSlug(input.display);
+        // Spec 13 T0f: `local`, `browserhive`, `system` and `template:*` are BrowserHive's own
+        // principals; an agent named after one would own what they own (D-52 amendment).
+        if (isReservedSubject(subject)) throw reservedSubject(input.subject !== undefined);
+        owner = await ensureAgentPrincipal(subject, input.display);
       }
       return issue(owner, input.ownerKind, input.display, scopes, expiresAt, issuer.subject);
     },
