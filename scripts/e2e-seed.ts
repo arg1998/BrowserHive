@@ -2,8 +2,9 @@
  * @module scripts/e2e-seed — creates the data the dashboard e2e journey expects, over MCP.
  *
  * Usage: `bun scripts/e2e-seed.ts [baseUrl]` (default `http://127.0.0.1:9876`). The script launches
- * a `demo` session, visits example.com and a Wikipedia page, and closes the session. The daemon must
- * serve MCP without a bearer token (the default `--auth off`).
+ * a `demo` session, visits example.com and a Wikipedia page, saves three logins from it (one the
+ * Saved logins journey lists, one per Playwright project for it to delete), and closes the session.
+ * The daemon must serve MCP without a bearer token (the default `--auth off`).
  */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -24,6 +25,9 @@ const sessionId = String(launched['session_id']);
 for (const url of ['https://example.com/', 'https://en.wikipedia.org/wiki/Web_browser']) {
   await call('navigate', { session_id: sessionId, url });
 }
+for (const name of ['e2e-login', 'e2e-delete-desktop', 'e2e-delete-phone']) {
+  await call('save_storage_state', { session_id: sessionId, name });
+}
 await call('close_session', { session_id: sessionId });
 await client.close();
-console.log(`e2e-seed: ${sessionId} visited 2 pages`);
+console.log(`e2e-seed: ${sessionId} visited 2 pages and saved 3 logins`);

@@ -59,6 +59,12 @@ Every URL any agent visited, with the most visited domains, category tags for no
 
 The loaded rules and how often each one fired, lines in the file that do nothing (duplicates, refused patterns), attempts by source (tool boundary or network), sessions affected and top domains. **Reload blocklist** re-reads the file without a restart. When no blocklist is configured the page explains how to add one.
 
+## Saved logins
+
+The logins agents saved with `save_storage_state` (cookies, local storage and IndexedDB) or `save_full_profile` (the whole browser profile), for every principal: name, kind (**Cookies & storage** or **Full profile**), the principal that owns it, size, when it was saved, and the session it was saved from (a link while that session still exists). Search by name, owner or session, and sort by any column. The page updates live when an agent saves or deletes one.
+
+Saved logins hold live cookies and tokens, so delete the ones nobody needs: the trash button asks first, naming the login and its owner. Deleting removes the snapshot and the identity saved with it; sessions already restored from it keep running. An old date in **Saved** is a sign a login may have expired at the site. BrowserHive never deletes saved logins by itself. The same list and delete are available as `browserhive saved-logins` on the [command line](cli.md#saved-logins), and an agent can delete its own with `delete_saved_auth`. See [Saved logins are per principal](security.md#saved-logins-are-per-principal).
+
 ## Vault
 
 Available with `--vault bitwarden`.

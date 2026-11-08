@@ -218,7 +218,7 @@ Require PR; require status checks `lint, typecheck, depcruise, unit, goldens, bu
 `scripts/gen-docs.ts` writes, from `@browserhive/contracts`:
 - `docs/reference/configuration.md` — every key with env/CLI/JSON names, type, default, description, constraints (from the config schema registry).
 - `docs/reference/errors.md` — every error code with status, category, retryable, title, hint (from the error registry).
-- `docs/reference/tools.md` — the 43-tool catalog with input/output schemas and annotations.
+- `docs/reference/tools.md` — the 44-tool catalog with input/output schemas and annotations.
 - `docs/reference/api.md` — REST endpoints summary from the OpenAPI document (`packages/contracts/generated/openapi.json`).
 Each file begins with the generated-header comment; `gen:docs --check` fails CI on a diff. Hand-written docs (`docs/guide/*.md`, `README.md`) are not generated but are linted for dead links to reference anchors.
 

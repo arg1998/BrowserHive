@@ -10,6 +10,8 @@ import {
   AttentionQuery,
   AuthSessionIdPrefixParams,
   AuthSessionList,
+  AuthStateParams,
+  AuthStatesResponse,
   BlockedAttemptsPage,
   BlockedAttemptsQuery,
   BlocklistOverview,
@@ -39,6 +41,7 @@ import {
   CreateTokenRequest,
   CreateTokenResponse,
   CredentialIdParams,
+  DeleteAuthStateResponse,
   DeleteSessionResponse,
   DeleteVaultBindingResponse,
   DeliveriesPage,
@@ -300,6 +303,9 @@ export const OPERATIONS = {
   getBlocklist: { query: BlocklistOverviewQuery, response: BlocklistOverview },
   reloadBlocklist: { response: ReloadBlocklistResponse },
   listBlockedAttempts: { query: BlockedAttemptsQuery, response: BlockedAttemptsPage },
+  // §4.6.1 saved logins (auth states)
+  listAuthStates: { response: AuthStatesResponse },
+  deleteAuthState: { params: AuthStateParams, response: DeleteAuthStateResponse },
   // §4.7 system, config, logs
   getSystem: { response: SystemInfo },
   getSystemConfig: { response: SystemConfigResponse },

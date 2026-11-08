@@ -35,6 +35,7 @@ import {
   FakeFiles,
   FakeLiveControl,
   FakeLogs,
+  fakeAuthStates,
   fakeBlocklist,
   fakeDesktop,
   fakeHealth,
@@ -144,6 +145,7 @@ export async function createHttpKit(options: HttpKitOptions = {}) {
   const health = fakeHealth();
   const logs = new FakeLogs();
   const blocklist = fakeBlocklist();
+  const authStates = fakeAuthStates();
   const idempotency = fakeIdempotency();
   const config = resolveOk();
   const channelRegistry = new ChannelRegistry({
@@ -249,6 +251,7 @@ export async function createHttpKit(options: HttpKitOptions = {}) {
     traceViewerAvailable: true,
     channels,
     publicUrl,
+    authStates,
   };
   if (options.seed !== false) await seedDataset(repos, vaultRepos, files, sessionDirs);
   const http: HttpApp = createHttpApp({
@@ -316,6 +319,7 @@ export async function createHttpKit(options: HttpKitOptions = {}) {
     health,
     logs,
     blocklist,
+    authStates,
     files,
     idempotency,
     sessionDirs,

@@ -1,0 +1,42 @@
+{
+  "name": "delete_saved_auth",
+  "title": "Delete saved auth",
+  "description": "Delete one of your saved auth snapshots (storage-state or full-profile) by name, together with its identity seed. Sessions already restored from it keep running. A name you have not saved answers AUTH_STATE_NOT_FOUND.",
+  "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "name"
+    ]
+  },
+  "outputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string"
+      },
+      "deleted": {
+        "type": "boolean",
+        "const": true
+      }
+    },
+    "required": [
+      "name",
+      "deleted"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": true,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "since": "0.3.0"
+}

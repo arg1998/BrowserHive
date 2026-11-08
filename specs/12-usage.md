@@ -150,7 +150,7 @@ Full table with every key, type, validation and example: `docs/configuration.md`
 
 Data directory defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA%\BrowserHive` (Windows), `$XDG_DATA_HOME/browserhive` or `~/.local/share/browserhive` (Linux). Layout in D-24.
 
-## 8. Tool catalog (43 tools)
+## 8. Tool catalog (44 tools)
 
 | Group | Tools |
 |---|---|
@@ -164,7 +164,7 @@ Data directory defaults: `~/Library/Application Support/BrowserHive` (macOS), `%
 | Files | `upload_file` · `download_file` |
 | Dialogs | `accept_next_dialog` · `dismiss_next_dialog` |
 | Cookies & state | `get_cookies` · `set_cookies` · `set_viewport` · `set_extra_http_headers` |
-| Auth state | `save_storage_state` · `save_full_profile` · `list_saved_auths` |
+| Auth state | `save_storage_state` · `save_full_profile` · `list_saved_auths` · `delete_saved_auth` |
 | Vault | `vault_list_available` · `vault_fill` |
 | Attention (HTTP only) | `request_attention` · `get_attention_result` |
 

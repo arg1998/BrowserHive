@@ -313,6 +313,9 @@ function planInvocation(name: string, input: PlanInput): CliPlan {
     case 'channels test':
     case 'channels preview':
       return planChannels(name, input);
+    case 'saved-logins list':
+    case 'saved-logins rm':
+      return planSavedLogins(name, input);
     case 'version': {
       const json = reader.bool('json');
       if (reader.problems.length > 0) return usage(reader.problems);
@@ -323,21 +326,35 @@ function planInvocation(name: string, input: PlanInput): CliPlan {
   }
 }
 
+/** `--url`, or the configured host and port of a local server. */
+function remoteOrLocal(explicit: RemoteTarget | null, input: PlanInput): RemoteTarget {
+  if (explicit !== null) return explicit;
+  const resolved = resolveFull(input);
+  const host = resolved.ok ? resolved.value.config.host : '127.0.0.1';
+  const port = resolved.ok ? resolved.value.config.port : 9876;
+  const reachable = host === '0.0.0.0' || host === '::' ? '127.0.0.1' : host;
+  return { url: `http://${reachable.includes(':') ? `[${reachable}]` : reachable}:${port}` };
+}
+
+function planSavedLogins(name: string, input: PlanInput): CliPlan {
+  const { reader, color, args } = input;
+  const json = reader.bool('json');
+  const owner = reader.text('owner') ?? null;
+  const explicit = remoteTarget(reader);
+  if (reader.problems.length > 0) return usage(reader.problems);
+  const remote = remoteOrLocal(explicit, input);
+  if (name === 'saved-logins list')
+    return run({ command: 'saved-logins-list', json, remote }, color);
+  return run({ command: 'saved-logins-rm', name: args[0] ?? '', owner, json, remote }, color);
+}
+
 function planChannels(name: string, input: PlanInput): CliPlan {
   const { reader, color, args } = input;
   const json = reader.bool('json');
   const sampleText = reader.oneOf('sample', PREVIEW_SAMPLES) ?? 'attention';
   const explicit = remoteTarget(reader);
   if (reader.problems.length > 0) return usage(reader.problems);
-  let remote: RemoteTarget;
-  if (explicit !== null) remote = explicit;
-  else {
-    const resolved = resolveFull(input);
-    const host = resolved.ok ? resolved.value.config.host : '127.0.0.1';
-    const port = resolved.ok ? resolved.value.config.port : 9876;
-    const reachable = host === '0.0.0.0' || host === '::' ? '127.0.0.1' : host;
-    remote = { url: `http://${reachable.includes(':') ? `[${reachable}]` : reachable}:${port}` };
-  }
+  const remote = remoteOrLocal(explicit, input);
   const sample = PreviewSample.parse(sampleText);
   const channel = args[0] ?? '';
   switch (name) {

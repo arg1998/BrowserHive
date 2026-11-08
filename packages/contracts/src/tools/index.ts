@@ -1,7 +1,12 @@
-/** @module contracts/tools — the frozen 43-tool catalog: contracts, names, packs and JSON Schema helpers */
+/** @module contracts/tools — the 44-tool catalog (additive under D-12): contracts, names, packs and JSON Schema helpers */
 import { z } from 'zod';
 import { GET_ATTENTION_RESULT, REQUEST_ATTENTION } from './attention.ts';
-import { LIST_SAVED_AUTHS, SAVE_FULL_PROFILE, SAVE_STORAGE_STATE } from './auth-states.ts';
+import {
+  DELETE_SAVED_AUTH,
+  LIST_SAVED_AUTHS,
+  SAVE_FULL_PROFILE,
+  SAVE_STORAGE_STATE,
+} from './auth-states.ts';
 import { ACCEPT_NEXT_DIALOG, DISMISS_NEXT_DIALOG } from './dialogs.ts';
 import { DOWNLOAD_FILE, UPLOAD_FILE } from './files.ts';
 import { EVALUATE, GET_CONTENT, SCREENSHOT, SNAPSHOT } from './inspection.ts';
@@ -68,6 +73,7 @@ const ORDERED_CONTRACTS = [
   SAVE_STORAGE_STATE,
   SAVE_FULL_PROFILE,
   LIST_SAVED_AUTHS,
+  DELETE_SAVED_AUTH,
   REQUEST_ATTENTION,
   GET_ATTENTION_RESULT,
   VAULT_LIST_AVAILABLE,
@@ -76,7 +82,7 @@ const ORDERED_CONTRACTS = [
 
 type AnyContract = (typeof ORDERED_CONTRACTS)[number];
 
-/** Union of the 43 frozen tool names. */
+/** Union of the 44 tool names. */
 export type ToolName = AnyContract['name'];
 
 /** The contract for tool `N`, with its precise input/output schema types. */
@@ -107,13 +113,13 @@ function indexByName(list: readonly AnyContract[]): ContractRecord {
 /** Contracts keyed by name. */
 export const TOOL_CONTRACTS: ContractRecord = indexByName(ORDERED_CONTRACTS);
 
-/** The 43 names in registration order (pinned by the golden and the stdio handshake test). */
+/** The 44 names in registration order (pinned by the golden and the stdio handshake test). */
 export const ALL_TOOL_NAMES: readonly ToolName[] = ORDERED_CONTRACTS.map((c) => c.name);
 
 /** Zod schema of a tool name (for parsing wire input). */
 export const ToolNameSchema = z.enum(ALL_TOOL_NAMES as [ToolName, ...ToolName[]]);
 
-/** Whether `value` names one of the 43 tools. */
+/** Whether `value` names one of the 44 tools. */
 export function isToolName(value: string): value is ToolName {
   return Object.hasOwn(TOOL_CONTRACTS, value);
 }

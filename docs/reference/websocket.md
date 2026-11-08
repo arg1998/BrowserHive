@@ -139,6 +139,7 @@ Subscribe with `{ "type": "subscribe", "topic": "<topic>", "cursor"?: <last seq>
 | `logs` | `logs:read` | [`log.record`](#event-log-record) |
 | `notifications` | `notifications:read` | [`notification.created`](#event-notification-created), [`notification.updated`](#event-notification-updated) |
 | `channels` | `channels:read` | [`channel.changed`](#event-channel-changed), [`channel.removed`](#event-channel-removed), [`delivery.updated`](#event-delivery-updated), [`action.recorded`](#event-action-recorded) |
+| `auth-states` | `sessions:read` | [`auth_state.changed`](#event-auth_state-changed) |
 | `session:<id>` | `sessions:read` | [`session.opened`](#event-session-opened), [`session.updated`](#event-session-updated), [`session.closed`](#event-session-closed), [`session.removed`](#event-session-removed), [`session.warning`](#event-session-warning), [`tool.called`](#event-tool-called), [`page.visited`](#event-page-visited), [`screenshot.captured`](#event-screenshot-captured), [`vault.access`](#event-vault-access), [`blocklist.hit`](#event-blocklist-hit), [`attention.created`](#event-attention-created), [`attention.resolved`](#event-attention-resolved), [`vault.confirm.created`](#event-vault-confirm-created), [`vault.confirm.resolved`](#event-vault-confirm-resolved) |
 | `screencast:<id>` | `sessions:read` | stream messages `meta`, `started`, `stopped`, `failed` and binary frames |
 
@@ -282,6 +283,15 @@ Payloads of `kind: "event"` frames, discriminated on `type`. DTO fields (`sessio
 | `patterns` | `integer` | yes | ≥ 0 |
 | `skipped` | `integer` | yes | ≥ 0 |
 | `loaded_at` | `integer` | yes | ≥ 0 |
+
+<a id="event-auth_state-changed"></a>
+### `auth_state.changed`
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `owner` | `string` | yes | — |
+| `name` | `string` | yes | — |
+| `action` | one of `saved`, `deleted` | yes | — |
 
 <a id="event-system-degraded"></a>
 ### `system.degraded`

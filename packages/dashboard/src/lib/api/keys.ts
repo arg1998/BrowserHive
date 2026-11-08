@@ -67,6 +67,10 @@ export const keys = {
     logs: () => ['vault', 'log'] as const,
     log: (params?: KeyParams) => ['vault', 'log', stableParams(params)] as const,
   },
+  authStates: {
+    all: ['auth-states'] as const,
+    list: () => ['auth-states', 'list'] as const,
+  },
   blocklist: {
     all: ['blocklist'] as const,
     state: (params?: KeyParams) => ['blocklist', 'state', stableParams(params)] as const,

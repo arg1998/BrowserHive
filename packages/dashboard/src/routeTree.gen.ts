@@ -19,6 +19,7 @@ import { Route as AuthLogsRouteImport } from './routes/_auth/logs';
 import { Route as AuthNavigationRouteImport } from './routes/_auth/navigation';
 import { Route as AuthNotificationsRouteImport } from './routes/_auth/notifications';
 import { Route as AuthOverviewRouteImport } from './routes/_auth/overview';
+import { Route as AuthSavedLoginsRouteImport } from './routes/_auth/saved-logins';
 import { Route as AuthSessionsRouteImport } from './routes/_auth/sessions';
 import { Route as AuthSystemRouteImport } from './routes/_auth/system';
 import { Route as AuthVaultRouteImport } from './routes/_auth/vault';
@@ -82,6 +83,11 @@ const AuthNotificationsRoute = AuthNotificationsRouteImport.update({
 const AuthOverviewRoute = AuthOverviewRouteImport.update({
   id: '/overview',
   path: '/overview',
+  getParentRoute: () => AuthRoute,
+} as any);
+const AuthSavedLoginsRoute = AuthSavedLoginsRouteImport.update({
+  id: '/saved-logins',
+  path: '/saved-logins',
   getParentRoute: () => AuthRoute,
 } as any);
 const AuthSessionsRoute = AuthSessionsRouteImport.update({
@@ -180,6 +186,7 @@ export interface FileRoutesByFullPath {
   '/navigation': typeof AuthNavigationRoute;
   '/notifications': typeof AuthNotificationsRoute;
   '/overview': typeof AuthOverviewRoute;
+  '/saved-logins': typeof AuthSavedLoginsRoute;
   '/sessions': typeof AuthSessionsRoute;
   '/system': typeof AuthSystemRoute;
   '/vault': typeof AuthVaultRoute;
@@ -206,6 +213,7 @@ export interface FileRoutesByTo {
   '/navigation': typeof AuthNavigationRoute;
   '/notifications': typeof AuthNotificationsRoute;
   '/overview': typeof AuthOverviewRoute;
+  '/saved-logins': typeof AuthSavedLoginsRoute;
   '/sessions': typeof AuthSessionsRoute;
   '/system': typeof AuthSystemRoute;
   '/vault': typeof AuthVaultRoute;
@@ -235,6 +243,7 @@ export interface FileRoutesById {
   '/_auth/navigation': typeof AuthNavigationRoute;
   '/_auth/notifications': typeof AuthNotificationsRoute;
   '/_auth/overview': typeof AuthOverviewRoute;
+  '/_auth/saved-logins': typeof AuthSavedLoginsRoute;
   '/_auth/sessions': typeof AuthSessionsRoute;
   '/_auth/system': typeof AuthSystemRoute;
   '/_auth/vault': typeof AuthVaultRoute;
@@ -263,6 +272,7 @@ export interface FileRouteTypes {
     | '/navigation'
     | '/notifications'
     | '/overview'
+    | '/saved-logins'
     | '/sessions'
     | '/system'
     | '/vault'
@@ -289,6 +299,7 @@ export interface FileRouteTypes {
     | '/navigation'
     | '/notifications'
     | '/overview'
+    | '/saved-logins'
     | '/sessions'
     | '/system'
     | '/vault'
@@ -317,6 +328,7 @@ export interface FileRouteTypes {
     | '/_auth/navigation'
     | '/_auth/notifications'
     | '/_auth/overview'
+    | '/_auth/saved-logins'
     | '/_auth/sessions'
     | '/_auth/system'
     | '/_auth/vault'
@@ -412,6 +424,13 @@ declare module '@tanstack/react-router' {
       path: '/overview';
       fullPath: '/overview';
       preLoaderRoute: typeof AuthOverviewRouteImport;
+      parentRoute: typeof AuthRoute;
+    };
+    '/_auth/saved-logins': {
+      id: '/_auth/saved-logins';
+      path: '/saved-logins';
+      fullPath: '/saved-logins';
+      preLoaderRoute: typeof AuthSavedLoginsRouteImport;
       parentRoute: typeof AuthRoute;
     };
     '/_auth/sessions': {
@@ -536,6 +555,7 @@ interface AuthRouteChildren {
   AuthNavigationRoute: typeof AuthNavigationRoute;
   AuthNotificationsRoute: typeof AuthNotificationsRoute;
   AuthOverviewRoute: typeof AuthOverviewRoute;
+  AuthSavedLoginsRoute: typeof AuthSavedLoginsRoute;
   AuthSessionsRoute: typeof AuthSessionsRoute;
   AuthSystemRoute: typeof AuthSystemRoute;
   AuthVaultRoute: typeof AuthVaultRoute;
@@ -559,6 +579,7 @@ const AuthRouteChildren: AuthRouteChildren = {
   AuthNavigationRoute: AuthNavigationRoute,
   AuthNotificationsRoute: AuthNotificationsRoute,
   AuthOverviewRoute: AuthOverviewRoute,
+  AuthSavedLoginsRoute: AuthSavedLoginsRoute,
   AuthSessionsRoute: AuthSessionsRoute,
   AuthSystemRoute: AuthSystemRoute,
   AuthVaultRoute: AuthVaultRoute,

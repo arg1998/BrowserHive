@@ -14,11 +14,11 @@ import {
 import { ToolPackId } from '../../src/tools/types.ts';
 
 describe('tool catalog', () => {
-  it('has 43 unique names in registration order', () => {
-    expect(ALL_TOOL_NAMES).toHaveLength(43);
-    expect(new Set(ALL_TOOL_NAMES).size).toBe(43);
+  it('has 44 unique names in registration order', () => {
+    expect(ALL_TOOL_NAMES).toHaveLength(44);
+    expect(new Set(ALL_TOOL_NAMES).size).toBe(44);
     expect(ALL_TOOL_NAMES[0]).toBe('launch_session');
-    expect(ALL_TOOL_NAMES[42]).toBe('vault_fill');
+    expect(ALL_TOOL_NAMES[43]).toBe('vault_fill');
     expect(Object.keys(TOOL_CONTRACTS)).toEqual([...ALL_TOOL_NAMES]);
     for (const name of ALL_TOOL_NAMES) expect(TOOL_CONTRACTS[name].name).toBe(name);
   });

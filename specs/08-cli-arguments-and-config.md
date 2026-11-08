@@ -406,6 +406,7 @@ browserhive db status|backup|restore <file>|migrate
 browserhive admin reset-password
 browserhive admin tokens list|create <principal>|revoke <principal>
 browserhive channels list | test <name> | preview <name> [--sample <kind>]
+browserhive saved-logins list | rm <name> [--owner <subject>]
 browserhive version | --version | -v
 browserhive --help | -h                 (also per command)
 ```
@@ -434,6 +435,8 @@ Positional rules: the first argument is the command if it is a known command wor
 
 **`channels list | test <name> | preview <name> [--sample <kind>]`** — notification channels (03 §9.5). `list` prints name, platform (with the Discord mode: `discord (bot)`), status (with "from startup" for startup channels), where it sends (`target_hint`), whether its secret variables are set, the answer state when act buttons are on (`answers: connected`, `reconnecting`, `offline (<reason>)`), a line under the table per channel with reports (`daily digest 09:00 → next Wed 30 Sep 09:00 Europe/Berlin · anomaly alerts on`, or `something looks off: error rate` while checks are active), the last delivery and the 24 h counts. `test <name>` sends a real test message through the channel and exits 0 when the platform accepted it, 1 otherwise (printing the classified error). `preview <name>` renders a sample notification exactly as the channel would send it and sends nothing; `--sample` is one of `attention` (default), `attention-resolved`, `vault-confirm`, `tool-errors`, `crash`, `degraded`, `test`, `digest`, `anomaly` (the report samples follow the channel's schedule, zone and content level); text mode prints the platform request (method, path without secrets, body), `--json` the whole `ChannelPreview`. All three talk to a running server over the REST API: `--url` (default `http://127.0.0.1:<port>` from the resolved configuration) with `--token` (an operator bearer with `channels:read`/`channels:write`) or `--cookie`; without a reachable server they fail with exit 1 and say so. `--json` everywhere.
 
+**`saved-logins list | rm <name> [--owner <subject>]`** — saved logins of every principal (03 §4.6.1). `list` prints name, kind (`cookies & storage` / `full profile`), owner, size, when saved and the source session id (`(deleted)` once its record is gone). `rm <name>` deletes one with `DELETE /auth-states/{owner}/{name}`; without `--owner` it looks the name up and deletes the one principal's login of that name, and exits 1 naming the owners when several principals use it. Like `channels`, they talk to a running server (`--url`, `--token` with `sessions:read`/`sessions:write`, or `--cookie`). `--json` everywhere.
+
 **`admin reset-password`** — generates a new seed password, marks `must_change_password`, prints it once, refuses while the server is running (lock file), writes `admin/credentials.txt` (0600).
 
 **`version`** — `browserhive 0.1.0 (bun 1.4.2, sqlite 3.53.2, playwright 1.63.0, patchright 1.63.0|not installed)`; `--json` for machines.
@@ -459,6 +462,7 @@ COMMANDS
   db         Inspect, back up, restore, or migrate the database
   admin      Administrative actions (reset-password, tokens)
   channels   List, test and preview notification channels
+  saved-logins  List and delete agents' saved logins
   version    Print version information
 
 FLAGS — server

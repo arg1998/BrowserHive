@@ -674,6 +674,9 @@ export const BRIDGE: { readonly [T in EventType]?: Patch<T> } = {
   'blocklist.reloaded': ({ queryClient: qc }) => {
     invalidate(qc, keys.blocklist.all);
   },
+  'auth_state.changed': ({ queryClient: qc }) => {
+    invalidate(qc, keys.authStates.all);
+  },
   'system.degraded': ({ queryClient: qc }) => {
     invalidate(qc, keys.system.status());
     invalidate(qc, keys.system.events());

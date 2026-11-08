@@ -1,4 +1,4 @@
-/** @module interface/mcp/server — `createMcpServer`: the official-SDK `McpServer` with the 43 tools registered from the registry and `tools/call` routed through the dispatcher (spec 02 §1.1, D-02). */
+/** @module interface/mcp/server — `createMcpServer`: the official-SDK `McpServer` with the 44 tools registered from the registry and `tools/call` routed through the dispatcher (spec 02 §1.1, D-02). */
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import {

@@ -493,3 +493,83 @@ describe('AuthStateStore flat-layout migration (spec 13 T0a)', () => {
     expect(await exists(join(dir, 'auth-states', 'deep.meta.json'))).toBe(false);
   });
 });
+
+describe('AuthStateStore operator view (listAll, removeSnapshot)', () => {
+  it("lists every principal's snapshots newest first with owner and source session", async () => {
+    await saveAs('storage', 'work', local, 'LOCAL');
+    await clock.advance(10);
+    await saveAs('profile', 'work', alice, 'ALICE');
+    await clock.advance(10);
+    await saveAs('storage', 'other', bob, 'BOB');
+    expect(
+      (await store.listAll()).map((r) => [r.owner, r.name, r.kind, r.source_session_id]),
+    ).toEqual([
+      ['bob', 'other', 'storage', 's-bob'],
+      ['alice', 'work', 'profile', 's-alice'],
+      ['local', 'work', 'storage', 's-local'],
+    ]);
+  });
+
+  it('lists only what removeSnapshot can reach: no stray manifest from another directory', async () => {
+    await saveAs('storage', 'work', alice, 'ALICE');
+    // A manifest naming bob inside alice's directory (hand-copied) is not bob's and not alice's.
+    const stray = store.filesFor('alice', 'stray').manifest;
+    await writeFile(
+      stray,
+      JSON.stringify({
+        name: 'stray',
+        kind: 'storage',
+        saved_at: 1,
+        source_session_id: 's',
+        size: 2,
+        owner: 'bob',
+      }),
+    );
+    expect((await store.listAll()).map((r) => [r.owner, r.name])).toEqual([['alice', 'work']]);
+  });
+
+  it("removes another owner's snapshot for the operator and reports what it was", async () => {
+    await saveAs('profile', 'work', alice, 'ALICE');
+    await store.saveIdentitySeed('work', 'alice-seed', alice);
+    await saveAs('storage', 'work', bob, 'BOB');
+    const removed = await store.removeSnapshot('alice', 'work');
+    expect(removed).toMatchObject({ owner: 'alice', name: 'work', kind: 'profile' });
+    const files = store.filesFor('alice', 'work');
+    for (const path of Object.values(files)) expect(await exists(path)).toBe(false);
+    expect(await store.removeSnapshot('alice', 'work')).toBeNull();
+    // Bob's snapshot of the same name is untouched.
+    expect(await restoredSecret('storage', 'work', bob)).toBe('BOB');
+  });
+
+  it('remove deletes whatever is left of a partial file set, manifest last', async () => {
+    await saveAs('profile', 'work', alice, 'ALICE');
+    await store.saveIdentitySeed('work', 'alice-seed', alice);
+    const files = store.filesFor('alice', 'work');
+    // As after an interrupted delete: the payload is gone, the seed and the manifest are left.
+    await rm(files.profile);
+    expect((await store.list(alice)).map((e) => e.name)).toEqual(['work']);
+    expect(await store.remove('work', alice)).toBe(true);
+    for (const path of Object.values(files)) expect(await exists(path)).toBe(false);
+    expect(await store.list(alice)).toEqual([]);
+    // A manifest is what makes a snapshot exist: payloads without one are not removable by name.
+    await writeFile(files.storage, '{}');
+    expect(await store.remove('work', alice)).toBe(false);
+  });
+
+  it('publishes auth_state.changed after a save and a delete', async () => {
+    const published: unknown[] = [];
+    store = new AuthStateStore({
+      dataDir: dir,
+      clock,
+      logger: createCollectingLogger(),
+      events: { publish: (_name, payload) => void published.push(payload) },
+    });
+    await saveAs('storage', 'work', alice, 'ALICE');
+    await store.remove('work', alice);
+    await store.remove('work', alice);
+    expect(published).toEqual([
+      { type: 'auth_state.changed', owner: 'alice', name: 'work', action: 'saved' },
+      { type: 'auth_state.changed', owner: 'alice', name: 'work', action: 'deleted' },
+    ]);
+  });
+});

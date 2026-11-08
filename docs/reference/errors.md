@@ -440,7 +440,7 @@ Message: `No saved {kind_label} snapshot named '{name}'. Use list_saved_auths to
 
 Hint: Call list_saved_auths and use one of the returned names.
 
-Cause: No snapshot of the requested kind exists under that name in the auth-states directory.
+Cause: The caller has no snapshot of the requested kind under that name. Another principal's snapshot of the same name is answered the same way.
 
 Resolution: Save one with save_storage_state or save_full_profile first.
 
@@ -449,7 +449,7 @@ Details:
 | Field | Type | Required | Constraints |
 |---|---|---|---|
 | `name` | `string` | yes | — |
-| `kind` | one of `storage`, `profile` | yes | — |
+| `kind` | one of `storage`, `profile` | no | — |
 
 <a id="PROFILE_FILE_LOCKED"></a>
 ### `PROFILE_FILE_LOCKED`

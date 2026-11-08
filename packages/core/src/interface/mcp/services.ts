@@ -51,7 +51,7 @@ export interface VaultLike {
   ): Promise<ListAvailableResult>;
 }
 
-/** The auth-state surface the three auth-state tools use (`AuthStateStore` satisfies it). */
+/** The auth-state surface the four auth-state tools use (`AuthStateStore` satisfies it). */
 export interface AuthStatesLike {
   saveStorageState(
     source: StorageStateSource,
@@ -67,6 +67,8 @@ export interface AuthStatesLike {
   ): Promise<SavedAuthResult>;
   saveIdentitySeed(name: string, seed: string, principal: SessionPrincipal): Promise<boolean>;
   list(principal: SessionPrincipal): Promise<SavedAuthEntry[]>;
+  /** `false` when the caller has no snapshot of that name. */
+  remove(name: string, principal: SessionPrincipal): Promise<boolean>;
 }
 
 /** The blocklist surface (`BlocklistService` satisfies it). */

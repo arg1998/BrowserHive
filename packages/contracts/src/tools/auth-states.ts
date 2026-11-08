@@ -1,4 +1,4 @@
-/** @module contracts/tools/auth-states — save_storage_state, save_full_profile, list_saved_auths contracts */
+/** @module contracts/tools/auth-states — save_storage_state, save_full_profile, list_saved_auths, delete_saved_auth contracts */
 import { z } from 'zod';
 import { SavedAuthKind } from '../enums/saved-auth-kind.ts';
 import { annotations, SESSION_ERRORS, SINCE } from './shared.ts';
@@ -70,4 +70,21 @@ export const LIST_SAVED_AUTHS = defineTool({
   capability: 'read',
   errors: [],
   since: SINCE,
+});
+
+/** `delete_saved_auth`: removes one of the caller's snapshots, either kind, with its identity seed. */
+export const DELETE_SAVED_AUTH = defineTool({
+  name: 'delete_saved_auth',
+  title: 'Delete saved auth',
+  description:
+    'Delete one of your saved auth snapshots (storage-state or full-profile) by name, together ' +
+    'with its identity seed. Sessions already restored from it keep running. A name you have not ' +
+    'saved answers AUTH_STATE_NOT_FOUND.',
+  input: z.object({ name: z.string() }),
+  output: z.object({ name: z.string(), deleted: z.literal(true) }),
+  annotations: annotations(false, true, true, false),
+  pack: 'authStates',
+  capability: 'mutate',
+  errors: ['AUTH_STATE_NOT_FOUND', 'PATH_NOT_ALLOWED'],
+  since: '0.3.0',
 });

@@ -40,6 +40,8 @@ export function pageDocs(pathname: string): { readonly key: DocsPage; readonly l
       return { key: 'dashboardWebsites', label: 'Websites' };
     case 'blocklist':
       return { key: 'dashboardBlocklist', label: 'Blocklist' };
+    case 'saved-logins':
+      return { key: 'dashboardSavedLogins', label: 'Saved logins' };
     case 'vault':
       return second === 'log'
         ? { key: 'dashboardVaultLog', label: 'Vault log' }

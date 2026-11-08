@@ -129,6 +129,18 @@ export type Invocation =
       readonly json: boolean;
       readonly remote: RemoteTarget;
     }
+  | {
+      readonly command: 'saved-logins-list';
+      readonly json: boolean;
+      readonly remote: RemoteTarget;
+    }
+  | {
+      readonly command: 'saved-logins-rm';
+      readonly name: string;
+      readonly owner: string | null;
+      readonly json: boolean;
+      readonly remote: RemoteTarget;
+    }
   | { readonly command: 'version'; readonly json: boolean };
 
 /** Help topic: the whole CLI, one command, or one subcommand. */

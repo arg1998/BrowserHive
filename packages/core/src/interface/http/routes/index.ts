@@ -4,6 +4,7 @@ import type { Logger } from '../../../ports/logger.ts';
 import type { AnyRoute } from '../define-route.ts';
 import { ATTENTION_ROUTES } from './attention.ts';
 import { AUTH_ROUTES } from './auth.ts';
+import { AUTH_STATE_ROUTES } from './auth-states.ts';
 import { BLOCKLIST_ROUTES } from './blocklist.ts';
 import { CHANNEL_ROUTES } from './channels.ts';
 import { FLEET_ROUTES } from './fleet.ts';
@@ -33,6 +34,7 @@ export function apiRoutes(deps: MetaRouteDeps & { readonly logger: Logger }): re
     ...VAULT_ROUTES,
     ...VAULT_BINDING_ROUTES,
     ...BLOCKLIST_ROUTES,
+    ...AUTH_STATE_ROUTES,
     ...SYSTEM_ROUTES,
     ...LOG_ROUTES,
     ...NOTIFICATION_ROUTES,

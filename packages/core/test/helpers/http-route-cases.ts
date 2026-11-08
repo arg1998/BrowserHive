@@ -629,6 +629,16 @@ export const ROUTE_CASES: readonly RouteCase[] = [
     success: { path: api('/blocklist/attempts'), status: 200 },
     invalid: { path: api('/blocklist/attempts?source=bogus') },
   },
+  {
+    operationId: 'listAuthStates',
+    success: { path: api('/auth-states'), status: 200 },
+    invalid: null,
+  },
+  {
+    operationId: 'deleteAuthState',
+    success: { method: 'DELETE', path: api('/auth-states/alice/work'), status: 200 },
+    invalid: { method: 'DELETE', path: api('/auth-states/alice/..evil') },
+  },
   { operationId: 'getSystem', success: { path: api('/system'), status: 200 }, invalid: null },
   {
     operationId: 'getSystemConfig',

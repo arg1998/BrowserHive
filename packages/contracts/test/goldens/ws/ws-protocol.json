@@ -2701,6 +2701,35 @@
                 "properties": {
                   "type": {
                     "type": "string",
+                    "const": "auth_state.changed"
+                  },
+                  "owner": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "saved",
+                      "deleted"
+                    ]
+                  }
+                },
+                "required": [
+                  "type",
+                  "owner",
+                  "name",
+                  "action"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
                     "const": "system.degraded"
                   },
                   "event": {
@@ -7210,6 +7239,35 @@
           "patterns",
           "skipped",
           "loaded_at"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "auth_state.changed"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "saved",
+              "deleted"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "owner",
+          "name",
+          "action"
         ],
         "additionalProperties": false
       },

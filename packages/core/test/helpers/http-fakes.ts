@@ -3,7 +3,9 @@
 import type { BootPhase, HealthCheckState, HealthStatus } from '@browserhive/contracts/http';
 import type { LiveInput } from '@browserhive/contracts/ws';
 import type { z } from 'zod';
+import type { AuthStateRecord } from '../../src/app/auth-states/store.ts';
 import type {
+  AuthStatesPort,
   BlocklistPort,
   HealthProbe,
   IdempotencyStore,
@@ -207,6 +209,41 @@ export function fakeBlocklist(): BlocklistPort & { reloads: number } {
     },
     get reloads() {
       return state.reloads;
+    },
+  };
+}
+
+/**
+ * Saved logins in memory: `local`'s `work` (source `shop-0000000a`, recorded) and alice's `work`
+ * (source `gone-0000000c`, no longer recorded). Real file handling is the store's own suite.
+ */
+export function fakeAuthStates(): AuthStatesPort & { records: AuthStateRecord[] } {
+  const records: AuthStateRecord[] = [
+    {
+      name: 'work',
+      kind: 'profile',
+      owner: 'local',
+      size: 2_048,
+      saved_at: NOW - 3_600_000,
+      source_session_id: 'shop-0000000a',
+    },
+    {
+      name: 'work',
+      kind: 'storage',
+      owner: 'alice',
+      size: 512,
+      saved_at: NOW - 60_000,
+      source_session_id: 'gone-0000000c',
+    },
+  ];
+  return {
+    records,
+    listAll: async () => [...records].sort((a, b) => b.saved_at - a.saved_at),
+    removeSnapshot: async (owner, name) => {
+      const at = records.findIndex((r) => r.owner === owner && r.name === name);
+      if (at < 0) return null;
+      const [removed] = records.splice(at, 1);
+      return removed ?? null;
     },
   };
 }

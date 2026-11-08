@@ -212,13 +212,15 @@ export const SESSION_ERRORS = {
     category: 'domain',
     retryable: 'different_args',
     title: 'Saved auth state not found',
-    // `{kind_label}` is 'full-profile' for kind=profile and 'storage-state' for kind=storage.
+    // `{kind_label}` is 'full-profile' for kind=profile, 'storage-state' for kind=storage, and
+    // 'auth' when the request names no kind (delete_saved_auth and the operator's delete omit `kind`).
     message:
       "No saved {kind_label} snapshot named '{name}'. Use list_saved_auths to see what is available.",
     hint: 'Call list_saved_auths and use one of the returned names.',
-    details: z.object({ name: z.string(), kind: z.enum(['storage', 'profile']) }),
+    details: z.object({ name: z.string(), kind: z.enum(['storage', 'profile']).optional() }),
     docs: true,
-    cause: 'No snapshot of the requested kind exists under that name in the auth-states directory.',
+    cause:
+      "The caller has no snapshot of the requested kind under that name. Another principal's snapshot of the same name is answered the same way.",
     resolution: 'Save one with save_storage_state or save_full_profile first.',
   }),
   PROFILE_FILE_LOCKED: defineError({

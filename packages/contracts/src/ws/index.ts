@@ -34,6 +34,7 @@ export {
   ActionRecordedEvent,
   AttentionCreatedEvent,
   AttentionResolvedEvent,
+  AuthStateChangedEvent,
   BlocklistHitEvent,
   BlocklistReloadedEvent,
   ChannelChangedEvent,

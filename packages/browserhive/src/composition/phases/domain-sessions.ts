@@ -153,7 +153,7 @@ export async function buildSessions(input: SessionsInput): Promise<SessionsParts
       return warning === null ? [] : [warning];
     },
   };
-  const authStates = new AuthStateStore({ dataDir: config.dataDir, clock, logger });
+  const authStates = new AuthStateStore({ dataDir: config.dataDir, clock, logger, events: bus });
   const sessions = new SessionService({
     clock,
     ids,

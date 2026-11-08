@@ -54,6 +54,57 @@ describe('auth-state tools', () => {
       textOf(await h.call('save_storage_state', { session_id: id, name: '../evil' })),
     ).toStartWith('[PATH_NOT_ALLOWED]');
   });
+
+  it('delete_saved_auth removes the snapshot: the list drops it and a restore is AUTH_STATE_NOT_FOUND', async () => {
+    h = await createToolHarness();
+    const mem = await h.launch();
+    await executeTool(h, 'save_storage_state', { session_id: mem, name: 'my-login' });
+    const deleted = await executeTool(h, 'delete_saved_auth', { name: 'my-login' });
+    expect(deleted.value).toEqual({ name: 'my-login', deleted: true });
+    expect((await executeTool(h, 'list_saved_auths')).value).toEqual([]);
+    const restore = await h.call('launch_session', {
+      slug: 'again',
+      persistence_mode: 'storage-state',
+      context_options: { storageState: 'my-login' },
+    });
+    expect(textOf(restore)).toBe(
+      "[AUTH_STATE_NOT_FOUND] No saved storage-state snapshot named 'my-login'. Use list_saved_auths to see what is available.",
+    );
+    expect(textOf(await h.call('delete_saved_auth', { name: 'my-login' }))).toBe(
+      "[AUTH_STATE_NOT_FOUND] No saved auth snapshot named 'my-login'. Use list_saved_auths to see what is available.",
+    );
+    expect(textOf(await h.call('delete_saved_auth', { name: '../evil' }))).toStartWith(
+      '[PATH_NOT_ALLOWED]',
+    );
+  });
+
+  it("delete_saved_auth on another principal's name answers not-found and deletes nothing", async () => {
+    h = await createToolHarness();
+    const alice = await h.connect(agentPrincipal('alice', {}));
+    const id = await h.launch({ slug: 'alice' }, alice);
+    await executeTool(h, 'save_storage_state', { session_id: id, name: 'work' }, alice);
+    const foreign = textOf(await h.call('delete_saved_auth', { name: 'work' }));
+    const missing = textOf(await h.call('delete_saved_auth', { name: 'nothing-here' }));
+    expect(foreign).toBe(
+      "[AUTH_STATE_NOT_FOUND] No saved auth snapshot named 'work'. Use list_saved_auths to see what is available.",
+    );
+    // The same answer as for a name nobody saved: no oracle.
+    expect(missing.replace('nothing-here', 'work')).toBe(foreign);
+    expect(
+      ((await executeTool(h, 'list_saved_auths', {}, alice)).value as { name: string }[]).map(
+        (e) => e.name,
+      ),
+    ).toEqual(['work']);
+    const bob = await h.connect(agentPrincipal('bob', {}));
+    expect(textOf(await h.call('delete_saved_auth', { name: 'work' }, bob))).toBe(foreign);
+    expect(
+      (
+        (await executeTool(h, 'delete_saved_auth', { name: 'work' }, alice)).value as {
+          deleted: boolean;
+        }
+      ).deleted,
+    ).toBe(true);
+  });
 });
 
 describe('attention tools', () => {
