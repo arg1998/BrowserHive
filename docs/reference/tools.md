@@ -2,7 +2,7 @@
 
 # MCP tool reference
 
-The 43 tools BrowserHive registers, in registration order, generated from `TOOL_CONTRACTS` in `@browserhive/contracts/tools`. Names, parameters, defaults and result shapes are a frozen contract. Every page-targeting tool accepts an optional `tab_id` (defaults to the active tab). Errors are returned as `[CODE] message` text; see the [error reference](errors.md).
+The 44 tools BrowserHive registers, in registration order, generated from `TOOL_CONTRACTS` in `@browserhive/contracts/tools`. Names, parameters, defaults and result shapes are a frozen contract. Every page-targeting tool accepts an optional `tab_id` (defaults to the active tab). Errors are returned as `[CODE] message` text; see the [error reference](errors.md).
 
 Defaults shown for `launch_session` `channel` and `headless` are the contract defaults; a server started with `--defaultChannel` / `--defaultHeadless` advertises its configured values in `tools/list`.
 
@@ -35,24 +35,25 @@ Defaults shown for `launch_session` `channel` and `headless` are the contract de
 | 23 | [`screenshot`](#screenshot) | Inspection | Screenshot | yes | no | yes | no |
 | 24 | [`snapshot`](#snapshot) | Inspection | Snapshot | yes | no | yes | no |
 | 25 | [`get_content`](#get_content) | Inspection | Get content | yes | no | yes | no |
-| 26 | [`evaluate`](#evaluate) | Inspection | Evaluate | no | no | no | yes |
-| 27 | [`wait_for_selector`](#wait_for_selector) | Waits | Wait for selector | yes | no | yes | no |
-| 28 | [`wait_for_load_state`](#wait_for_load_state) | Waits | Wait for load state | yes | no | yes | no |
-| 29 | [`accept_next_dialog`](#accept_next_dialog) | Dialogs | Accept next dialog | no | no | yes | no |
-| 30 | [`dismiss_next_dialog`](#dismiss_next_dialog) | Dialogs | Dismiss next dialog | no | no | yes | no |
-| 31 | [`get_cookies`](#get_cookies) | Cookies and state | Get cookies | yes | no | yes | no |
-| 32 | [`set_cookies`](#set_cookies) | Cookies and state | Set cookies | no | no | yes | no |
-| 33 | [`set_viewport`](#set_viewport) | Cookies and state | Set viewport | no | no | yes | no |
-| 34 | [`set_extra_http_headers`](#set_extra_http_headers) | Cookies and state | Set extra HTTP headers | no | no | yes | no |
-| 35 | [`upload_file`](#upload_file) | Files | Upload file | no | no | yes | no |
-| 36 | [`download_file`](#download_file) | Files | Download file | no | no | no | yes |
-| 37 | [`save_storage_state`](#save_storage_state) | Auth states | Save storage state | no | no | yes | no |
-| 38 | [`save_full_profile`](#save_full_profile) | Auth states | Save full profile | no | no | yes | no |
-| 39 | [`list_saved_auths`](#list_saved_auths) | Auth states | List saved auths | yes | no | yes | no |
-| 40 | [`request_attention`](#request_attention) | Attention (HTTP transport only) | Request attention | no | no | no | no |
-| 41 | [`get_attention_result`](#get_attention_result) | Attention (HTTP transport only) | Get attention result | yes | no | yes | no |
-| 42 | [`vault_list_available`](#vault_list_available) | Vault | Vault: list available | yes | no | yes | no |
-| 43 | [`vault_fill`](#vault_fill) | Vault | Vault: fill | no | no | no | yes |
+| 26 | [`get_text`](#get_text) | Inspection | Get text | yes | no | yes | no |
+| 27 | [`evaluate`](#evaluate) | Inspection | Evaluate | no | no | no | yes |
+| 28 | [`wait_for_selector`](#wait_for_selector) | Waits | Wait for selector | yes | no | yes | no |
+| 29 | [`wait_for_load_state`](#wait_for_load_state) | Waits | Wait for load state | yes | no | yes | no |
+| 30 | [`accept_next_dialog`](#accept_next_dialog) | Dialogs | Accept next dialog | no | no | yes | no |
+| 31 | [`dismiss_next_dialog`](#dismiss_next_dialog) | Dialogs | Dismiss next dialog | no | no | yes | no |
+| 32 | [`get_cookies`](#get_cookies) | Cookies and state | Get cookies | yes | no | yes | no |
+| 33 | [`set_cookies`](#set_cookies) | Cookies and state | Set cookies | no | no | yes | no |
+| 34 | [`set_viewport`](#set_viewport) | Cookies and state | Set viewport | no | no | yes | no |
+| 35 | [`set_extra_http_headers`](#set_extra_http_headers) | Cookies and state | Set extra HTTP headers | no | no | yes | no |
+| 36 | [`upload_file`](#upload_file) | Files | Upload file | no | no | yes | no |
+| 37 | [`download_file`](#download_file) | Files | Download file | no | no | no | yes |
+| 38 | [`save_storage_state`](#save_storage_state) | Auth states | Save storage state | no | no | yes | no |
+| 39 | [`save_full_profile`](#save_full_profile) | Auth states | Save full profile | no | no | yes | no |
+| 40 | [`list_saved_auths`](#list_saved_auths) | Auth states | List saved auths | yes | no | yes | no |
+| 41 | [`request_attention`](#request_attention) | Attention (HTTP transport only) | Request attention | no | no | no | no |
+| 42 | [`get_attention_result`](#get_attention_result) | Attention (HTTP transport only) | Get attention result | yes | no | yes | no |
+| 43 | [`vault_list_available`](#vault_list_available) | Vault | Vault: list available | yes | no | yes | no |
+| 44 | [`vault_fill`](#vault_fill) | Vault | Vault: fill | no | no | no | yes |
 
 ## Lifecycle
 
@@ -750,7 +751,7 @@ Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](err
 
 **Snapshot** · capability `read` · since 0.1.0
 
-> Return the tab's ARIA accessibility tree (YAML) — purpose-built for LLM consumption.
+> Return the tab's ARIA accessibility tree (YAML) — purpose-built for LLM consumption. With selector, only the subtree of the first matching element. At most max_chars characters (default 60000) per call. Long results are paged: when truncated is true, call again with offset set to next_offset until next_offset is null. The tree holds what the accessibility tree exposes: collapsed <details>, hidden tab panels and the line breaks of <pre> blocks are not in it; use get_text to read those.
 
 Annotations: readOnly yes · destructive no · idempotent yes · openWorld no
 
@@ -760,6 +761,9 @@ Parameters:
 |---|---|---|---|---|
 | `session_id` | `string` | yes | — | — |
 | `tab_id` | `string` | no | — | — |
+| `selector` | `string` | no | — | Read only the first element matching this selector (ELEMENT_NOT_FOUND when nothing matches).; min length 1 |
+| `max_chars` | `integer` | no | `60000` | Most characters to return in this call (default 60000, at most 200000).; ≥ 1; ≤ 200000 |
+| `offset` | `integer` | no | `0` | Character offset to start from: pass the previous call's next_offset.; ≥ 0 |
 
 Result (JSON text block, mirrored in `structuredContent`):
 
@@ -768,15 +772,18 @@ Result (JSON text block, mirrored in `structuredContent`):
 | `session_id` | `string` | yes |
 | `url` | `string` | yes |
 | `tree` | `string` | yes |
+| `total_chars` | `integer` | yes |
+| `truncated` | `boolean` | yes |
+| `next_offset` | `integer` or `null` | yes |
 
-Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
+Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`ELEMENT_NOT_FOUND`](errors.md#ELEMENT_NOT_FOUND), [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS), [`WAIT_TIMEOUT`](errors.md#WAIT_TIMEOUT). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
 
 <a id="get_content"></a>
 ### `get_content`
 
 **Get content** · capability `read` · since 0.1.0
 
-> Return the current HTML content of a tab.
+> Return the current HTML content of a tab, or with selector the outerHTML of the first matching element. At most max_chars characters (default 60000) are returned per call, so a large page arrives in pages. Long results are paged: when truncated is true, call again with offset set to next_offset until next_offset is null. For readable text rather than markup, use get_text.
 
 Annotations: readOnly yes · destructive no · idempotent yes · openWorld no
 
@@ -786,6 +793,9 @@ Parameters:
 |---|---|---|---|---|
 | `session_id` | `string` | yes | — | — |
 | `tab_id` | `string` | no | — | — |
+| `selector` | `string` | no | — | Read only the first element matching this selector (ELEMENT_NOT_FOUND when nothing matches).; min length 1 |
+| `max_chars` | `integer` | no | `60000` | Most characters to return in this call (default 60000, at most 200000).; ≥ 1; ≤ 200000 |
+| `offset` | `integer` | no | `0` | Character offset to start from: pass the previous call's next_offset.; ≥ 0 |
 
 Result (JSON text block, mirrored in `structuredContent`):
 
@@ -794,8 +804,43 @@ Result (JSON text block, mirrored in `structuredContent`):
 | `session_id` | `string` | yes |
 | `url` | `string` | yes |
 | `html` | `string` | yes |
+| `total_chars` | `integer` | yes |
+| `truncated` | `boolean` | yes |
+| `next_offset` | `integer` or `null` | yes |
 
-Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
+Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`ELEMENT_NOT_FOUND`](errors.md#ELEMENT_NOT_FOUND), [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS), [`WAIT_TIMEOUT`](errors.md#WAIT_TIMEOUT). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
+
+<a id="get_text"></a>
+### `get_text`
+
+**Get text** · capability `read` · since 0.3.0
+
+> Return the readable text of a tab as plain text with line breaks. Without selector it reads the <main> element, else the page's only <article>, else <body> without nav, header, footer and aside; with selector, the first matching element. Code in <pre> keeps its line breaks, and collapsed <details> and inactive tab panels are included; script, style and hidden elements are skipped, and iframes are not read. It runs BrowserHive's own reader, not page script, so it also works when evaluate is disabled. At most max_chars characters (default 20000) per call. Long results are paged: when truncated is true, call again with offset set to next_offset until next_offset is null.
+
+Annotations: readOnly yes · destructive no · idempotent yes · openWorld no
+
+Parameters:
+
+| Name | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `session_id` | `string` | yes | — | — |
+| `tab_id` | `string` | no | — | — |
+| `selector` | `string` | no | — | Read only the first element matching this selector (ELEMENT_NOT_FOUND when nothing matches).; min length 1 |
+| `max_chars` | `integer` | no | `20000` | Most characters to return in this call (default 20000, at most 200000).; ≥ 1; ≤ 200000 |
+| `offset` | `integer` | no | `0` | Character offset to start from: pass the previous call's next_offset.; ≥ 0 |
+
+Result (JSON text block, mirrored in `structuredContent`):
+
+| Field | Type | Always present |
+|---|---|---|
+| `session_id` | `string` | yes |
+| `url` | `string` | yes |
+| `text` | `string` | yes |
+| `total_chars` | `integer` | yes |
+| `truncated` | `boolean` | yes |
+| `next_offset` | `integer` or `null` | yes |
+
+Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`ELEMENT_NOT_FOUND`](errors.md#ELEMENT_NOT_FOUND), [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS), [`WAIT_TIMEOUT`](errors.md#WAIT_TIMEOUT). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
 
 <a id="evaluate"></a>
 ### `evaluate`
@@ -941,7 +986,7 @@ Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](err
 
 **Get cookies** · capability `read` · since 0.1.0
 
-> Return the session context's cookies, optionally filtered to those that would be sent to the given URLs.
+> Return the session context's cookies, optionally filtered to those that would be sent to the given URLs. With include_values: false every value is the empty string, so you can check which cookies exist (for example whether a login cookie is set) without reading them.
 
 Annotations: readOnly yes · destructive no · idempotent yes · openWorld no
 
@@ -951,6 +996,7 @@ Parameters:
 |---|---|---|---|---|
 | `session_id` | `string` | yes | — | — |
 | `urls` | `string[]` | no | — | — |
+| `include_values` | `boolean` | no | `true` | false returns every cookie with value set to the empty string. |
 
 Result (JSON text block, mirrored in `structuredContent`):
 

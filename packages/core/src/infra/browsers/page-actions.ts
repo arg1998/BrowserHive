@@ -1,4 +1,4 @@
-/** @module infra/browsers/page-actions — the `PageActions` port over Playwright: main-world evaluate, per-session humanize state, driver error classification. */
+/** @module infra/browsers/page-actions — the `PageActions` port over Playwright: main-world evaluate, BrowserHive's own isolated page reads, per-session humanize state, driver error classification. */
 
 import type { Page } from 'playwright';
 import type { Clock } from '../../ports/clock.ts';
@@ -21,6 +21,7 @@ import {
 } from './humanize/actions.ts';
 import { CursorTracker } from './humanize/cursor.ts';
 import { type Rng, seededRng } from './humanize/rng.ts';
+import { readPage } from './page-read.ts';
 
 /** Dependencies of {@link createPlaywrightPageActions}. */
 export interface PlaywrightPageActionsDeps {
@@ -82,6 +83,9 @@ export function createPlaywrightPageActions(deps: PlaywrightPageActionsDeps = {}
       return isolatedEvaluate
         ? driver.evaluate(expression, undefined, undefined, false)
         : driver.evaluate(expression, undefined);
+    },
+    readPage(page, isolatedEvaluate, request) {
+      return readPage(page, isolatedEvaluate, request);
     },
     humanClick(sessionId, input: HumanClickInput) {
       return humanClick({

@@ -1,0 +1,90 @@
+{
+  "name": "get_text",
+  "title": "Get text",
+  "description": "Return the readable text of a tab as plain text with line breaks. Without selector it reads the <main> element, else the page's only <article>, else <body> without nav, header, footer and aside; with selector, the first matching element. Code in <pre> keeps its line breaks, and collapsed <details> and inactive tab panels are included; script, style and hidden elements are skipped, and iframes are not read. It runs BrowserHive's own reader, not page script, so it also works when evaluate is disabled. At most max_chars characters (default 20000) per call. Long results are paged: when truncated is true, call again with offset set to next_offset until next_offset is null.",
+  "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      },
+      "tab_id": {
+        "type": "string"
+      },
+      "selector": {
+        "description": "Read only the first element matching this selector (ELEMENT_NOT_FOUND when nothing matches).",
+        "type": "string",
+        "minLength": 1
+      },
+      "max_chars": {
+        "default": 20000,
+        "description": "Most characters to return in this call (default 20000, at most 200000).",
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 200000
+      },
+      "offset": {
+        "default": 0,
+        "description": "Character offset to start from: pass the previous call's next_offset.",
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 9007199254740991
+      }
+    },
+    "required": [
+      "session_id"
+    ]
+  },
+  "outputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "session_id": {
+        "type": "string"
+      },
+      "url": {
+        "type": "string"
+      },
+      "text": {
+        "type": "string"
+      },
+      "total_chars": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 9007199254740991
+      },
+      "truncated": {
+        "type": "boolean"
+      },
+      "next_offset": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "session_id",
+      "url",
+      "text",
+      "total_chars",
+      "truncated",
+      "next_offset"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "since": "0.3.0"
+}

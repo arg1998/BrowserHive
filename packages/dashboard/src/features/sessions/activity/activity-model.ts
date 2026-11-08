@@ -189,6 +189,7 @@ const TOOL_ICONS: Readonly<Record<string, IconName>> = {
   screenshot: 'toolScreenshot',
   snapshot: 'toolContent',
   get_content: 'toolContent',
+  get_text: 'toolContent',
   evaluate: 'toolEvaluate',
   get_cookies: 'toolCookies',
   set_cookies: 'toolCookies',

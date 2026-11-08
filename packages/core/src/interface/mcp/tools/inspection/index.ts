@@ -1,8 +1,12 @@
-/** @module interface/mcp/tools/inspection — screenshot, snapshot, get_content, evaluate. */
+/** @module interface/mcp/tools/inspection — screenshot, snapshot, get_content, get_text, evaluate. */
 
 import { dirname, join } from 'node:path';
+import type { Page } from 'playwright';
 import { sessionDirLayout } from '../../../../app/sessions/profile-dir.ts';
+import type { Session } from '../../../../domain/session/session.ts';
+import { AppError, isAppError } from '../../../../kernel/errors/app-error.ts';
 import { serializeError } from '../../../../kernel/errors/serialize-error.ts';
+import type { PageReadRequest } from '../../../../ports/page-actions.ts';
 import { requireSession, type ToolCallContext } from '../../context.ts';
 import {
   type ContentBlock,
@@ -14,8 +18,9 @@ import {
 import { evaluateAllowed, sandboxPath, sessionOwnership } from '../../policies.ts';
 import { resolveScreenshotSavePath } from '../../sandbox.ts';
 import { isolatedEvaluate } from '../interaction/act.ts';
-import { drive, pageOf, safeUrl } from '../shared.ts';
+import { drive, firstLine, pageOf, registryError, safeUrl } from '../shared.ts';
 import { wrapFunctionExpression } from './evaluate-wrap.ts';
+import { pageText, type TextPage } from './paging.ts';
 
 /** Content type of every tool screenshot. */
 export const SCREENSHOT_CONTENT_TYPE = 'image/png';
@@ -105,29 +110,131 @@ export const screenshot = defineTool('screenshot', {
   },
 });
 
-/** `snapshot`: ARIA accessibility tree (YAML). */
+/** Budget of one reading call's driver work, in ms (the tool `Timeout` default). */
+const READ_TIMEOUT_MS = 30_000;
+
+/** Playwright's selector parser errors (`Unexpected token … while parsing css selector …`, `Unknown engine …`). */
+const SELECTOR_SYNTAX_RE = /while parsing (?:css )?selector/;
+
+/** `ELEMENT_NOT_FOUND` for a reading tool's `selector` that matched nothing. */
+function notFound(selector: string): AppError<'ELEMENT_NOT_FOUND'> {
+  return registryError('ELEMENT_NOT_FOUND', { selector, count: 0 });
+}
+
+/**
+ * Runs a reading tool's driver work: a selector the driver cannot parse is `INVALID_ARGUMENTS` on
+ * `selector` (not `INTERNAL_ERROR`); everything else goes through the classifier.
+ */
+function reading<T>(
+  ctx: ToolCallContext,
+  session: Session,
+  selector: string | undefined,
+  what: string,
+  run: () => Promise<T>,
+): Promise<T> {
+  return drive(
+    ctx,
+    { sessionId: session.id, what, ...(selector !== undefined && { selector }) },
+    async () => {
+      try {
+        return await run();
+      } catch (err) {
+        if (isAppError(err) || selector === undefined) throw err;
+        if (!(err instanceof Error) || !SELECTOR_SYNTAX_RE.test(err.message)) throw err;
+        const message = firstLine(err).replace(/^[\w.]+:\s*/, '');
+        throw new AppError(
+          'INVALID_ARGUMENTS',
+          { issues: [{ path: 'selector', message }] },
+          { publicMessage: `selector: ${message}`, cause: err },
+        );
+      }
+    },
+  );
+}
+
+/**
+ * One of BrowserHive's own DOM reads (`get_text`, `get_content {selector}`), through the page-actions
+ * seam so it runs in an isolated world where the driver allows it. Not agent code: the evaluate
+ * gate does not apply.
+ */
+async function ownRead(
+  ctx: ToolCallContext,
+  session: Session,
+  page: Page,
+  kind: PageReadRequest['kind'],
+  selector: string | undefined,
+): Promise<string> {
+  const request: PageReadRequest = {
+    kind,
+    timeoutMs: READ_TIMEOUT_MS,
+    ...(selector !== undefined && { selector }),
+  };
+  const result = await reading(
+    ctx,
+    session,
+    selector,
+    kind === 'text' ? 'page text' : 'element html',
+    () => ctx.services.pageActions.readPage(page, isolatedEvaluate(session), request),
+  );
+  if (!result.found) throw notFound(selector ?? '');
+  return result.value;
+}
+
+/**
+ * Redacts the whole text first, then cuts the page: a credential that straddles a page boundary is
+ * still scrubbed, and the offsets index the text the agent actually receives.
+ */
+function paged(
+  ctx: ToolCallContext,
+  session: Session,
+  text: string,
+  args: { readonly offset: number; readonly max_chars: number },
+): TextPage {
+  return pageText(ctx.services.redaction.scrubText(session.id, text), args.offset, args.max_chars);
+}
+
+/** `snapshot`: ARIA accessibility tree (YAML) of the body or of the first `selector` match, paged. */
 export const snapshot = defineTool('snapshot', {
   policies: [sessionOwnership],
   async handler(ctx, args) {
     const session = requireSession(ctx);
     const page = pageOf(ctx, session, args.tab_id);
-    const tree = await drive(ctx, { sessionId: session.id, what: 'aria snapshot' }, () =>
-      page.locator('body').ariaSnapshot(),
-    );
-    return json({ session_id: session.id, url: safeUrl(page), tree });
+    const selector = args.selector;
+    const full = await reading(ctx, session, selector, 'aria snapshot', async () => {
+      if (selector === undefined) return page.locator('body').ariaSnapshot();
+      const matches = page.locator(selector);
+      if ((await matches.count()) === 0) throw notFound(selector);
+      return matches.first().ariaSnapshot({ timeout: READ_TIMEOUT_MS });
+    });
+    const { chunk, ...paging } = paged(ctx, session, full, args);
+    return json({ session_id: session.id, url: safeUrl(page), tree: chunk, ...paging });
   },
 });
 
-/** `get_content`: `page.content()`. */
+/** `get_content`: `page.content()`, or the `outerHTML` of the first `selector` match, paged. */
 export const getContent = defineTool('get_content', {
   policies: [sessionOwnership],
   async handler(ctx, args) {
     const session = requireSession(ctx);
     const page = pageOf(ctx, session, args.tab_id);
-    const html = await drive(ctx, { sessionId: session.id, what: 'page content' }, () =>
-      page.content(),
-    );
-    return json({ session_id: session.id, url: safeUrl(page), html });
+    const full =
+      args.selector === undefined
+        ? await drive(ctx, { sessionId: session.id, what: 'page content' }, () => page.content())
+        : await ownRead(ctx, session, page, 'outer_html', args.selector);
+    const { chunk, ...paging } = paged(ctx, session, full, args);
+    return json({ session_id: session.id, url: safeUrl(page), html: chunk, ...paging });
+  },
+});
+
+/** `get_text`: BrowserHive's readable-text walk of the default root or the first `selector` match, paged. */
+export const getText = defineTool('get_text', {
+  policies: [sessionOwnership],
+  async handler(ctx, args) {
+    const session = requireSession(ctx);
+    const page = pageOf(ctx, session, args.tab_id);
+    const full = await ownRead(ctx, session, page, 'text', args.selector);
+    const { chunk, ...paging } = paged(ctx, session, full, args);
+    return json({ session_id: session.id, url: safeUrl(page), text: chunk, ...paging });
   },
 });
 
@@ -158,5 +265,5 @@ export const evaluate = defineTool('evaluate', {
 /** The inspection pack. */
 export const inspectionPack: ToolPack = {
   id: 'inspection',
-  tools: [screenshot, snapshot, getContent, evaluate],
+  tools: [screenshot, snapshot, getContent, getText, evaluate],
 };

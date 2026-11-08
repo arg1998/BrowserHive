@@ -2,7 +2,7 @@
 title: "MCP server and tools"
 spec: "02"
 status: Normative
-scope: The MCP server (identity, transports, authentication, client metadata), the declarative tool layer and its dispatcher, the stable catalog of 43 tools, the attention, auth-state and humanize models as agents see them, contract goldens, and the programmatic API.
+scope: The MCP server (identity, transports, authentication, client metadata), the declarative tool layer and its dispatcher, the stable catalog of 44 tools, the attention, auth-state and humanize models as agents see them, contract goldens, and the programmatic API.
 audience: Contributors implementing or changing the MCP layer and tools; authors of MCP clients and agents; reviewers of tool-contract changes.
 related:
   - 00-decisions.md
@@ -18,7 +18,7 @@ related:
 > RFC 2119 when they appear in uppercase. `D-NN` identifiers refer to entries in the
 > [decision log](00-decisions.md). Terminology follows the [specification index](README.md#conventions).
 
-Scope: the MCP server (transports, auth, capabilities), the declarative tool layer and dispatcher, and the **frozen catalog of 43 tools**. Decisions: D-02 (single port, official SDK), D-05 (contracts, snake_case wire), D-07 (error registry), D-08 (telemetry), D-09 (principals), D-12 (stable tool contract), D-15 (operator requests).
+Scope: the MCP server (transports, auth, capabilities), the declarative tool layer and dispatcher, and the **stable catalog of 44 tools** (the 43 of 0.1.0 plus `get_text`, 0.3.0). Decisions: D-02 (single port, official SDK), D-05 (contracts, snake_case wire), D-07 (error registry), D-08 (telemetry), D-09 (principals), D-12 (stable tool contract), D-15 (operator requests).
 
 The stability contract of this spec: **an agent that works against a release of BrowserHive MUST keep working, unchanged, against every later release with the same major version.** Names, parameter names, defaults, enums, result shapes and error codes are contract; changes are additive (D-12).
 
@@ -123,7 +123,7 @@ interface ToolDefinition<I extends z.ZodObject | undefined, O extends z.ZodType>
   policies: ToolPolicy[];               // e.g. sessionOwnership, urlBlocklist('url'), evaluateAllowed, sandboxPath('save_path')
   telemetry: { captureArgs: 'full' | 'shape' | 'none'; captureResult: 'full' | 'size' | 'none' };
   errors: ErrorCode[];                  // documented codes; the dispatcher may add INTERNAL_ERROR
-  since: string;                        // semver of first appearance ('0.1.0' for all 43)
+  since: string;                        // semver of first appearance ('0.1.0' for the first 43, '0.3.0' for get_text)
   handler: (ctx: ToolCallContext, args: z.infer<I>) => Promise<ToolResult<z.infer<O>>>;
 }
 ```
@@ -242,9 +242,41 @@ Playwright actionability/timeout failures (`TimeoutError` or messages matching `
 | Tool | Input | Output | Errors | RO/D/I/OW |
 |---|---|---|---|---|
 | `screenshot` | `session_id` · `full_page: boolean=false` · `clip?: { x, y, width, height }` · `omit_background: boolean=false` · `save_path?: string` (relative ⇒ `<data-dir>/sessions/<id>/`; absolute must resolve under the session dir or `<data-dir>/uploads/` after realpath) · `tab_id?` | **content blocks**: `[{ type:'image', data: base64, mimeType:'image/png' }, …(save_path ? [{ type:'text', text: JSON.stringify({ saved_to }) }] : [])]`; `structuredContent: { saved_to?, width, height, bytes }` (additive). Same bytes archived at `<data-dir>/sessions/<id>/screenshots/<event_id>.png`; `screenshot.captured` is published after `tool.called` because the `screenshots` row references the `tool_calls` row | session, `TAB_NOT_FOUND`, `PATH_NOT_ALLOWED` | yes/no/yes/no |
-| `snapshot` | `session_id` · `tab_id?` | `{ session_id, url, tree: string }` (ARIA snapshot YAML) | session, `TAB_NOT_FOUND` | yes/no/yes/no |
-| `get_content` | `session_id` · `tab_id?` | `{ session_id, url, html }` | same | yes/no/yes/no |
+| `snapshot` | `session_id` · `tab_id?` · `selector?` · `max_chars: int 1..200000 = 60000` · `offset: int≥0 = 0` — without `selector`: `page.locator('body').ariaSnapshot()`; with it: `locator(selector).first().ariaSnapshot()` after a match count | `{ session_id, url, tree: string, total_chars, truncated, next_offset }` (ARIA snapshot YAML, paged) | session, `TAB_NOT_FOUND`, `ELEMENT_NOT_FOUND`, `INVALID_ARGUMENTS` (unparseable selector), `WAIT_TIMEOUT` | yes/no/yes/no |
+| `get_content` | `session_id` · `tab_id?` · `selector?` · `max_chars: int 1..200000 = 60000` · `offset: int≥0 = 0` — without `selector`: `page.content()`; with it: the first match's `outerHTML`, read like `get_text` | `{ session_id, url, html, total_chars, truncated, next_offset }` | as `snapshot` | yes/no/yes/no |
+| `get_text` | `session_id` · `tab_id?` · `selector?` · `max_chars: int 1..200000 = 20000` · `offset: int≥0 = 0` | `{ session_id, url, text, total_chars, truncated, next_offset }` — readable text (§3.6.2) | as `snapshot` | yes/no/yes/no |
 | `evaluate` | `session_id` · `expression: string (min 1)` · `tab_id?` — IIFE wrapping heuristic (an expression that looks like a function definition is invoked; an already-invoked IIFE is left alone); evaluation always runs in the page's main world via `evaluateMainWorld`, which passes Patchright's fourth positional `isolatedContext: false` only when the session's driver supports it (11 §2.1) | `{ session_id, result: unknown }` | `EVALUATE_DISABLED` (per-session `disable_evaluate` **or** server `allowEvaluate=false`), session, `TAB_NOT_FOUND`, `SCRIPT_ERROR` (page-side throw; message redacted) | no/no/no/yes |
+
+#### 3.6.1 Paging (`get_content`, `get_text`, `snapshot`)
+
+One convention for the three reading tools: `max_chars` and `offset` in; `total_chars`, `truncated` and `next_offset` out.
+
+- Lengths and offsets are UTF-16 code units (JavaScript string length). A page never splits a surrogate pair: an end that would fall inside one moves back by one (or forward when the page would otherwise be empty), and an `offset` inside one moves back to the pair's start.
+- `truncated` is true when text follows the page; `next_offset` is then where it starts, else `null`. An `offset` at or past the end answers an empty page with `next_offset: null`. Reading from 0 along `next_offset` reassembles the text exactly, as long as the page does not change between calls (every call reads the page afresh).
+- Defaults: `get_text` 20,000, `get_content` and `snapshot` 60,000; the bound is 200,000 for all three (about 50k tokens, more than any MCP client shows in one result). **`get_content`'s default cap is a deliberate change of default in 0.3.0** (a D-12 exception taken for #60): before it, a 600–700 KB page came back whole and overflowed MCP clients. Small pages are unchanged apart from the three added keys.
+- Redaction (§2.3) runs on the whole text **before** it is cut, so a credential that would straddle a page boundary is still scrubbed, and the offsets index the text the agent receives. The dispatcher's scrub of the result then finds nothing more.
+- `selector` (all three) reads the first match. No match is `ELEMENT_NOT_FOUND` (`{ selector, count: 0 }`); a selector Playwright cannot parse is `INVALID_ARGUMENTS` on `selector`, not `INTERNAL_ERROR`.
+
+#### 3.6.2 `get_text`
+
+BrowserHive's own reader, not agent code: it runs under `disable_evaluate` and `allowEvaluate=false` (the evaluate gate is for agent-written script). It runs where page scripts can neither observe nor alter it:
+
+- **Patchright** (`capabilities.isolatedEvaluate`): `locator.evaluate`, isolated by default, with the driver's own element.
+- **Stock Playwright (Chromium)**: a CDP isolated world on the main frame (`Page.createIsolatedWorld` by a fixed name, so Chromium reuses it per document; `Runtime.evaluate` with a timeout). The selector is first counted by Playwright (utility world); the reader then resolves it with `querySelectorAll`. When that differs from Playwright's match (Playwright-only syntax such as `text=` or `>>`, or matches inside shadow roots), the read falls back to `locator.evaluate` in the **main** world for that call. Default-root reads and plain CSS selectors never use the main world.
+- A navigation that destroys the context mid-read is retried once after `domcontentloaded` (≤ 5 s); a second loss is `WAIT_TIMEOUT` ("the page to finish navigating").
+
+The text is a walk over the flat tree (open shadow roots, slots), not `innerText`:
+
+- Root without `selector`: the first `<main>` / `[role=main]` that is not `display: none`; else the page's only `<article>`; else `<body>` without `nav`, `aside`, `[role=navigation|complementary|banner|contentinfo]` and the `header`/`footer` that are not inside `article`, `aside`, `main`, `nav` or `section`. With `selector`, the first match, read whole (no chrome stripping, and the root itself is read even when hidden).
+- Skipped: `script`, `style`, `noscript`, `template`, `svg`, `head` content, iframes and embedded objects, `canvas`, media, and form controls (`input`, `textarea`, `select`, `datalist`: field values are never read), and every `display: none` subtree (the `hidden` attribute included) **except** a `role=tabpanel`, so inactive tab panels are read. Collapsed `<details>` content is read (it has no box but is not `display: none`), as is `hidden="until-found"` content.
+- Kept as written: text whose computed `white-space` preserves it (`pre*`, `break-spaces`), so `<pre>`/`<code>` blocks keep line breaks and indentation. Elsewhere white space collapses to one space and inline elements (`code`, `a`, `b`, …) stay inline.
+- Line breaks: a block box ends and starts a line; `p`, `h1`–`h6`, `pre`, `blockquote`, `ul`, `ol`, `dl`, `table`, `figure` and `hr` get a blank line around them; `<br>` is a line break; table cells are separated by a tab. Leading and trailing blank lines are trimmed.
+
+**Spec 13 follow-up.** Sealed template sessions must apply their redaction to `get_text` as well as `get_content` and `snapshot` (recorded for the templates program; this spec is not where sealing is defined).
+
+#### 3.6.3 `snapshot` and inline code (Playwright 1.63)
+
+Investigated for #60, where a docs page seemed to lose inline `<code>`. On Chromium with Playwright 1.63, inline `<code>` is **kept**: it appears as a `code:` node inside its paragraph, list item, cell, heading or link (Sphinx `<code><span class="pre">…</span></code>` included). What the ARIA snapshot does not hold, by design of the accessibility tree: the content of collapsed `<details>` (only the `group` and its summary), hidden tab panels, `aria-hidden` and `display: none` content, and the line structure of `<pre>` blocks (a `pre` has no role, so its text collapses into one line, and syntax-highlighting spans flatten). Phrasing elements without a role (`kbd`, `samp`, `var`, `span`) merge into the surrounding text. No change was made to `snapshot`; its description points to `get_text` for these cases, and the integration suite pins the `code:` node and the missing `<pre>` line breaks so a Playwright upgrade that changes either is noticed.
 
 ### 3.7 Waits
 
@@ -266,7 +298,7 @@ One-shot `page.once('dialog')`, auto-disarmed after 60 000 ms (`unref` timer).
 
 | Tool | Input | Output | Errors | RO/D/I/OW |
 |---|---|---|---|---|
-| `get_cookies` | `session_id` · `urls?: string[]` | `{ cookies: Cookie[] }` (**no `session_id`**; full values returned to the agent, but never persisted — D-20) | session | yes/no/yes/no |
+| `get_cookies` | `session_id` · `urls?: string[]` · `include_values: boolean = true` | `{ cookies: Cookie[] }` (**no `session_id`**; full values returned to the agent, but never persisted — D-20). `include_values: false` sets every `value` to `''` and changes nothing else: the same shape sealed template sessions return (spec 13) | session | yes/no/yes/no |
 | `set_cookies` | `session_id` · `cookies: looseObject{ name: string, value: string, …}[]` (min 1, msg 'cookies must include at least one entry') | `{ added: number }` (**no `session_id`**) | session, `INVALID_ARGUMENTS` (Playwright cookie validation mapped to the field) | no/no/yes/no |
 | `set_viewport` | `session_id` · `width: int>0` · `height: int>0` · `tab_id?` — clamped to the asserted display when a fingerprint is active; invalidates the humanize cursor | `{ session_id, width, height, clamped?: true }` (`clamped` key only when true) | session, `TAB_NOT_FOUND` | no/no/yes/no |
 | `set_extra_http_headers` | `session_id` · `headers: Record<string,string>` — replaces previous extras; on stealth/fingerprint sessions identity-owned headers (`user-agent`, `accept-language`, `sec-ch-ua*`) are **refused, not thrown** | `{ session_id, applied: number, rejected: string[] }` | session | no/no/yes/no |
@@ -322,7 +354,7 @@ Both raise `VAULT_NOT_CONFIGURED` before session lookup when no backend is confi
 
 ### 3.14 Registration order (pinned)
 
-`launch_session, close_session, list_sessions, server_status, session_info, navigate, go_back, go_forward, reload, wait_for_url, new_tab, close_tab, switch_tab, list_tabs, click, type_text, fill, press_key, hover, select_option, scroll, drag_and_drop, screenshot, snapshot, get_content, evaluate, wait_for_selector, wait_for_load_state, accept_next_dialog, dismiss_next_dialog, get_cookies, set_cookies, set_viewport, set_extra_http_headers, upload_file, download_file, save_storage_state, save_full_profile, list_saved_auths, request_attention, get_attention_result, vault_list_available, vault_fill` — 43 names, checked by the stdio handshake test against `tools/list`.
+`launch_session, close_session, list_sessions, server_status, session_info, navigate, go_back, go_forward, reload, wait_for_url, new_tab, close_tab, switch_tab, list_tabs, click, type_text, fill, press_key, hover, select_option, scroll, drag_and_drop, screenshot, snapshot, get_content, get_text, evaluate, wait_for_selector, wait_for_load_state, accept_next_dialog, dismiss_next_dialog, get_cookies, set_cookies, set_viewport, set_extra_http_headers, upload_file, download_file, save_storage_state, save_full_profile, list_saved_auths, request_attention, get_attention_result, vault_list_available, vault_fill` — 44 names, checked by the stdio handshake test against `tools/list`. A new tool is registered with its pack (`get_text` follows `get_content`); existing tools keep their relative order.
 
 ## 4. Behavioral guarantees
 
@@ -360,7 +392,7 @@ Enabled per session (`humanize: true`, requires stealth). Affects `click`, `hove
 ## 8. Contract goldens
 
 - `packages/contracts/test/goldens/tools/<name>.json`: for each tool `{ name, title, description (static part), inputSchema (JSON Schema as sent on the wire), outputSchema, annotations, since }`. `bun run test:goldens` compares the live registry to the files; a diff fails CI. Bless with `UPDATE_GOLDENS=1 bun run test:goldens` and include the diff in the PR with a changeset (`minor` for additive, `major` for anything else).
-- `stdio-handshake.test.ts` spawns the built CLI with `--transport stdio`, runs `initialize → tools/list → tools/call list_sessions`, asserts the 43 names and that nothing but JSON-RPC reaches stdout.
+- `stdio-handshake.test.ts` spawns the built CLI with `--transport stdio`, runs `initialize → tools/list → tools/call list_sessions`, asserts the 44 names and that nothing but JSON-RPC reaches stdout.
 - The dynamic part of `request_attention`'s description is tested separately against floor values 0 and 1800.
 
 ## 9. Programmatic API (`browserhive` package)

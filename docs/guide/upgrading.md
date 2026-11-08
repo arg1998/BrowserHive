@@ -41,6 +41,12 @@ Two behaviour changes to know about:
 - **The browser sandbox is on by default.** Sessions now run inside Chromium's sandbox wherever the machine allows it (`--sandbox auto`). Where it cannot (Ubuntu 23.10+ with the bundled browser, root, Docker), sessions run as before and `browserhive doctor` explains why and how to fix it (still exit code 0). `--sandbox off` restores the previous behaviour exactly. See [Security: the browser sandbox](security.md#the-browser-sandbox).
 - **Environment variables in the config file.** A string in `browserhive.config.json` that contains `{env:NAME}` is now read as a [reference](configuration.md#references) to that variable, and `${env:NAME}`, `{ENV:NAME}` or `{file:…}` stop startup with a hint. Other braces, such as `{trace_id}` in `otelTraceUrlTemplate`, are left alone; write `{{…}}` to keep text that looks like a reference literal.
 
+### From 0.2.x to 0.3
+
+No migration. One tool behaviour changes:
+
+- **`get_content` returns at most 60,000 characters per call by default.** A larger document comes back with `truncated: true` and a `next_offset`; call again with `offset` to read the rest, raise `max_chars` (up to 200,000), or pass `selector` to read one element. Before, the whole document came back in one result, which overflowed MCP clients on large pages. `snapshot` pages the same way. The new `get_text` tool returns a page's readable text, and works with `evaluate` disabled.
+
 ## Downgrade
 
 Nothing is ever migrated downward in place. Instead, each database records two numbers: its schema version, and the **oldest schema version whose code can still read it**. Purely additive migrations (new tables or columns) do not raise the second number.

@@ -487,7 +487,7 @@ Details:
 
 Message: `The 'evaluate' tool is disabled for session '{session_id}'.`
 
-Hint: Use the structured tools (click, fill, get_content, snapshot) instead.
+Hint: Use the structured tools (click, fill, get_text, get_content, snapshot) instead.
 
 Cause: The session was launched with `disable_evaluate: true`, or the server runs with `allowEvaluate=false`.
 

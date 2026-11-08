@@ -58,6 +58,11 @@ describe('get_cookies output', () => {
     expect(GET_COOKIES.input.parse({ session_id: 's', urls: ['https://x.test'] })).toEqual({
       session_id: 's',
       urls: ['https://x.test'],
+      include_values: true,
+    });
+    expect(GET_COOKIES.input.parse({ session_id: 's', include_values: false })).toEqual({
+      session_id: 's',
+      include_values: false,
     });
   });
 });

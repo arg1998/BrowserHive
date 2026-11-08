@@ -33,6 +33,7 @@ const ARGS: Partial<Record<ToolName, Record<string, unknown>>> = {
   screenshot: {},
   snapshot: {},
   get_content: {},
+  get_text: {},
   evaluate: { expression: '1' },
   wait_for_selector: { selector: '#a' },
   wait_for_load_state: {},

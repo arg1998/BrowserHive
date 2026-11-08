@@ -71,7 +71,7 @@ BrowserHive/
     │       ├── config/           serverConfigSchema, key registry (env/cli/json names, descriptions)
     │       ├── errors/           error registry (code → status/category/retryable/details schema)
     │       ├── enums/            Channel, PersistenceMode, ClosedReason, UrlCategory, AttentionMode…
-    │       ├── tools/            input/output zod schemas for all 43 tools (+ annotations, titles)
+    │       ├── tools/            input/output zod schemas for all 44 tools (+ annotations, titles)
     │       ├── http/             REST DTOs, PageQuery/Page<T>, problem+json schema
     │       ├── ws/               envelope, client commands, server messages, feed event payloads
     │       └── index.ts

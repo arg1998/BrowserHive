@@ -43,6 +43,7 @@ A minimal session, as tool calls:
 launch_session({ "slug": "shop", "persistence_mode": "persistent" })   // → { "session_id": "shop-a1b2c3d4", ... }
 navigate({ "session_id": "shop-a1b2c3d4", "url": "https://example.com" })
 snapshot({ "session_id": "shop-a1b2c3d4" })
+get_text({ "session_id": "shop-a1b2c3d4" })                              // readable text, paged
 screenshot({ "session_id": "shop-a1b2c3d4" })
 close_session({ "session_id": "shop-a1b2c3d4" })
 ```

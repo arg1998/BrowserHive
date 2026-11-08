@@ -21,6 +21,12 @@ export interface ToolFakeScript {
   headers: Record<string, string> | null;
   /** Paths applied through `setInputFiles`. */
   inputFiles: string[];
+  /** What BrowserHive's own text read answers (the CDP isolated world or `locator.evaluate`). */
+  readText: string;
+  /** What BrowserHive's own `outerHTML` read answers. */
+  readHtml: string;
+  /** `locator(selector).count()` per selector (default 1). */
+  counts: Record<string, number>;
 }
 
 /** A fresh script with neutral defaults. */
@@ -33,6 +39,29 @@ export function toolFakeScript(): ToolFakeScript {
     downloadBody: 'fixture download body\n',
     headers: null,
     inputFiles: [],
+    readText: 'fixture text',
+    readHtml: '<p>fixture</p>',
+    counts: {},
+  };
+}
+
+/** The page-side reader's answer for the scripted read (`kind` from the serialised argument). */
+function readAnswer(script: ToolFakeScript, kind: string): { status: 'ok'; value: string } {
+  return { status: 'ok', value: kind === 'outer_html' ? script.readHtml : script.readText };
+}
+
+/** A CDP session answering the three calls of BrowserHive's isolated-world read. */
+function fakeCdp(page: FakePage, script: ToolFakeScript): Record<string, unknown> {
+  return {
+    send: async (method: string, params?: { expression?: string }) => {
+      record(page, `cdp:${method}`, [params]);
+      await maybeFail(page, `cdp:${method}`);
+      if (method === 'Page.getFrameTree') return { frameTree: { frame: { id: 'main' } } };
+      if (method === 'Page.createIsolatedWorld') return { executionContextId: 7 };
+      const kind = params?.expression?.includes('"kind":"outer_html"') ? 'outer_html' : 'text';
+      return { result: { value: readAnswer(script, kind) } };
+    },
+    detach: async () => undefined,
   };
 }
 
@@ -98,18 +127,31 @@ export function extendPage(page: FakePage, script: ToolFakeScript): FakePage {
     },
     locator: (selector: string) => {
       const base = baseLocator(selector);
+      const ariaSnapshot = async (options?: unknown) => {
+        record(page, 'ariaSnapshot', [selector, options]);
+        await maybeFail(page, 'ariaSnapshot');
+        return script.aria;
+      };
+      const evaluate = async (_fn: unknown, arg: { kind?: string } | undefined) => {
+        record(page, 'locator.evaluate', [selector, arg]);
+        await maybeFail(page, 'locator.evaluate');
+        return readAnswer(script, arg?.kind ?? 'text');
+      };
       return {
         ...base,
+        count: async () => {
+          record(page, 'count', [selector]);
+          await maybeFail(page, 'count');
+          return script.counts[selector] ?? 1;
+        },
+        first: () => ({ ariaSnapshot, evaluate }),
+        evaluate,
         scrollIntoViewIfNeeded: async (options?: unknown) => {
           record(page, 'scrollIntoViewIfNeeded', [selector, options]);
           await maybeFail(page, 'scrollIntoViewIfNeeded');
         },
         boundingBox: async () => ({ x: 10, y: 10, width: 100, height: 20 }),
-        ariaSnapshot: async () => {
-          record(page, 'ariaSnapshot', [selector]);
-          await maybeFail(page, 'ariaSnapshot');
-          return script.aria;
-        },
+        ariaSnapshot,
       };
     },
   });
@@ -122,6 +164,8 @@ export function extendContext(context: FakeBrowserContext, script: ToolFakeScrip
   const baseAddPage = context.addPage.bind(context);
   Object.assign(context, {
     addPage: (url?: string) => extendPage(baseAddPage(url), script),
+    // `asPage(fake)` is the fake itself, so the target page is the FakePage that records the calls.
+    newCDPSession: async (target: FakePage) => fakeCdp(target, script),
     cookies: async (urls?: string[]) => {
       void urls;
       return script.cookies.map((c) => ({ ...c }));

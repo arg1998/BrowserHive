@@ -103,6 +103,7 @@ describe('activity model', () => {
     expect(toolIcon('navigate')).toBe('toolNavigate');
     expect(toolIcon('click')).toBe('toolClick');
     expect(toolIcon('screenshot')).toBe('toolScreenshot');
+    expect(toolIcon('get_text')).toBe('toolContent');
     expect(toolIcon('something_new')).toBe('tool');
     expect(describeEntry({ id: 't', item: toolItem(1) }).status.label).toBe('');
     expect(describeEntry({ id: 'p', item: pageItem(1) }).status.label).toBe('');

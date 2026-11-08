@@ -150,7 +150,7 @@ Full table with every key, type, validation and example: `docs/configuration.md`
 
 Data directory defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA%\BrowserHive` (Windows), `$XDG_DATA_HOME/browserhive` or `~/.local/share/browserhive` (Linux). Layout in D-24.
 
-## 8. Tool catalog (43 tools)
+## 8. Tool catalog (44 tools)
 
 | Group | Tools |
 |---|---|
@@ -159,7 +159,7 @@ Data directory defaults: `~/Library/Application Support/BrowserHive` (macOS), `%
 | Navigation | `navigate` · `go_back` · `go_forward` · `reload` · `wait_for_url` |
 | Tabs | `new_tab` · `close_tab` · `switch_tab` · `list_tabs` |
 | Interaction | `click` · `type_text` · `fill` · `press_key` · `hover` · `select_option` · `scroll` · `drag_and_drop` |
-| Inspection | `screenshot` · `snapshot` · `get_content` · `evaluate` |
+| Inspection | `screenshot` · `snapshot` · `get_content` · `get_text` · `evaluate` |
 | Waits | `wait_for_selector` · `wait_for_load_state` |
 | Files | `upload_file` · `download_file` |
 | Dialogs | `accept_next_dialog` · `dismiss_next_dialog` |
