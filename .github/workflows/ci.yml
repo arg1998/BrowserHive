@@ -250,7 +250,7 @@ jobs:
         shell: bash
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then printf 'BROWSERHIVE_DATA_DIR=%s\\bh\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"; fi
-      # `dashboard-offline.test.ts` drives the built dashboard (its offline page and worker, D-49).
+      # `dashboard-offline.test.ts` drives the built dashboard (its offline page and worker, D-59).
       - if: env.RUN == 'true'
         run: bun run --filter @browserhive/dashboard build
       - if: env.RUN == 'true'

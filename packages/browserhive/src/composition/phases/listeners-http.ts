@@ -84,7 +84,7 @@ export function bindError(err: unknown, host: string, port: number): AppError {
 
 /**
  * The answer before the Hono app exists. It runs outside the middleware chain, so it sets the
- * version marker itself: the dashboard's offline page reads a marked 503 as "starting" (D-49).
+ * version marker itself: the dashboard's offline page reads a marked 503 as "starting" (D-59).
  */
 export function startingResponse(version: string): Response {
   return new Response('starting', { status: 503, headers: { [VERSION_HEADER]: version } });

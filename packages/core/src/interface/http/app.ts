@@ -151,7 +151,7 @@ export function createHttpApp(deps: HttpAppDeps): HttpApp {
     const path = new URL(c.req.url).pathname;
     if (!config.admin) {
       // `/` is the status page; a browser navigation elsewhere gets it with a 404, so an installed
-      // app launched against this daemon explains itself. Everything else keeps the JSON 404 (D-49).
+      // app launched against this daemon explains itself. Everything else keeps the JSON 404 (D-59).
       const navigation = path !== '/' && isSpaPath(path) && isBrowserNavigation(c.req.raw);
       if (path !== '/' && !navigation) return next();
       const html = statusPageHtml({

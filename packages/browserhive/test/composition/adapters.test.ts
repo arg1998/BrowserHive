@@ -96,7 +96,7 @@ describe('cancelAttentionOf', () => {
 });
 
 describe('startingResponse', () => {
-  it('is a 503 "starting" carrying the version marker (D-49)', async () => {
+  it('is a 503 "starting" carrying the version marker (D-59)', async () => {
     const response = startingResponse('9.8.7');
     expect(response.status).toBe(503);
     expect(response.headers.get('x-browserhive-version')).toBe('9.8.7');

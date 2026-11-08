@@ -1,4 +1,4 @@
-/** @module interface/static/status-page — the minimal server-rendered page shown when `admin=false`: at `/`, and with a 404 for a browser navigation to any other dashboard path (spec 03 §8, D-49). */
+/** @module interface/static/status-page — the minimal server-rendered page shown when `admin=false`: at `/`, and with a 404 for a browser navigation to any other dashboard path (spec 03 §8, D-59). */
 
 /** Facts shown on the status page. */
 export interface StatusPageFacts {

@@ -27,7 +27,7 @@ describe('directory assets', () => {
     });
   });
 
-  it('maps the installable-app files (D-49) to their MIME types, revalidated outside assets/', async () => {
+  it('maps the installable-app files (D-59) to their MIME types, revalidated outside assets/', async () => {
     await withTempDir(async (dir) => {
       mkdirSync(join(dir, 'icons'));
       writeFileSync(join(dir, 'index.html'), '<html></html>');

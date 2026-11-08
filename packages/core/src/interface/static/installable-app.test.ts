@@ -1,4 +1,4 @@
-/** @module interface/static/installable-app.test — the daemon side of the installable dashboard (D-49): the version marker on every response, the admin=false status page for browser navigations, and the app files served from the bundle. */
+/** @module interface/static/installable-app.test — the daemon side of the installable dashboard (D-59): the version marker on every response, the admin=false status page for browser navigations, and the app files served from the bundle. */
 
 import { describe, expect, it } from 'bun:test';
 import { createHttpKit } from '../../../test/helpers/http-kit.ts';

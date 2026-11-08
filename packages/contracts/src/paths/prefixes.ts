@@ -1,4 +1,4 @@
-/** @module contracts/paths/prefixes — the reserved path prefixes that never belong to the dashboard SPA (spec 03 §8, D-49). A zod-free leaf with no imports, so the dashboard's service worker can bundle it. */
+/** @module contracts/paths/prefixes — the reserved path prefixes that never belong to the dashboard SPA (spec 03 §8, D-59). A zod-free leaf with no imports, so the dashboard's service worker can bundle it. */
 
 /**
  * Path prefixes the daemon owns itself: they never fall back to `index.html`, the Vite dev server

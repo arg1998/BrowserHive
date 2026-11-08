@@ -1,5 +1,5 @@
 /** @module scripts/installable-app-check — the installable-app assertions of the package gate (spec
- * 09 §3.6, D-49) on a built dashboard directory: the manifest, worker, precache list, offline page
+ * 09 §3.6, D-59) on a built dashboard directory: the manifest, worker, precache list, offline page
  * and icons exist; the precache is complete and within budget; `sw.js` is a classic script without
  * zod; the icon stamp never ships. `package-check.ts` runs it on `packages/browserhive/dist/dashboard`;
  * `bun scripts/installable-app-check.ts [dir]` runs it alone (default `packages/dashboard/dist`).

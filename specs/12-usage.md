@@ -122,7 +122,7 @@ Log in, set a new password (minimum 12 characters), and the seed file is shredde
 
 Keyboard: `⌘K` command palette (pages, sessions, actions), `⌘B` sidebar, `/` filter, `?` shortcuts. Theme: system, light or dark.
 
-Install app (account menu or palette) installs the dashboard as its own app window; when BrowserHive isn't running, the app shows a help page with the cause and the commands to start it, and an open dashboard shows a *Can't reach BrowserHive* banner that clears itself when the daemon is back (D-49).
+Install app (account menu or palette) installs the dashboard as its own app window; when BrowserHive isn't running, the app shows a help page with the cause and the commands to start it, and an open dashboard shows a *Can't reach BrowserHive* banner that clears itself when the daemon is back (D-59).
 
 ## 7. Configuration in one page
 

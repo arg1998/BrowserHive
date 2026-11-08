@@ -126,7 +126,7 @@ State machine (`app/providers/auth-machine.ts`, pure): `loading → login | chan
 
 An injectable class (constructed in `SocketProvider`, replaceable in tests) exposing `useSocketState()`, `subscribe(topic, handler)` (refcounted; first subscriber sends `subscribe`, last sends `unsubscribe`), `command(name, params) → Promise<reply>` (correlated by `corr`), and binary screencast frames. Behavior:
 
-- Connects to `/api/v1/ws`; heartbeat `ping` every 20 s; dead if no frame for 45 s. An attempt that has not received the server's `hello` within 10 s of opening the connection (`CONNECT_TIMEOUT_MS`) is closed (client close code 4008, application range; the late `close` event of that socket is ignored) and counts as a failed attempt, so a daemon that accepts connections but never answers still drives the store to `offline` (D-49, §18.7). The timer starts when the socket is created, so it also covers an upgrade that never completes.
+- Connects to `/api/v1/ws`; heartbeat `ping` every 20 s; dead if no frame for 45 s. An attempt that has not received the server's `hello` within 10 s of opening the connection (`CONNECT_TIMEOUT_MS`) is closed (client close code 4008, application range; the late `close` event of that socket is ignored) and counts as a failed attempt, so a daemon that accepts connections but never answers still drives the store to `offline` (D-59, §18.7). The timer starts when the socket is created, so it also covers an upgrade that never completes.
 - Handshake: mismatch on `protocol` → banner "Dashboard is out of date, reload"; `epoch` change or `resync_required` → invalidate all topic-bound queries.
 - Reconnect: backoff 500 ms·2ⁿ capped 8 s + jitter; on reconnect re-send every active subscription with its last cursor and invalidate all active queries.
 - Bounded dedupe set (last 1 000 seq per topic). The `logs` topic is exempt: its frames carry the feed head as `seq` (many records share one), so they are neither deduped nor used as a resume cursor; the logs page resumes through REST (§12.9).
@@ -625,7 +625,7 @@ Wire format per `03-admin-backend.md` §6.5–6.7.
 - Harness: the root `test/preload.ts` registers happy-dom (only when the run includes `packages/dashboard`) before any CommonJS module links, adds global RTL cleanup, and sets `asyncUtilTimeout` to 3 s. Dashboard runs pass under randomized file order.
 - Contract: the dashboard compiles against the contracts schemas; fixtures in `test/fixtures` parse with them.
 - E2E (Playwright, `test/e2e`): `smoke.e2e.ts` (operator journey with forced password change) and `affordances.e2e.ts` (Tab walk with computed outlines, `elementFromPoint` over URL text in linked rows, real Ctrl+K), and `pwa.e2e.ts` (its own Playwright project: manifest and installability through CDP in a persistent `channel: 'chromium'` context, the native prompt path, worker control, the install dialog).
-- **Installable app and offline page:** the suites in 09 §3.5 (D-49), the stop-the-daemon integration test in 09 §3.4, and the manual browser gate in §18.12.
+- **Installable app and offline page:** the suites in 09 §3.5 (D-59), the stop-the-daemon integration test in 09 §3.4, and the manual browser gate in §18.12.
 
 ## 15. Extension recipes
 
@@ -647,7 +647,7 @@ Not built; each is a deliberate scope boundary of the current dashboard, not a d
 - **The operator cannot open a browser.** There is no `POST /sessions`; sessions come only from an agent's `launch_session`, so a dashboard with no agent connected has nothing to watch or drive.
 - **Takeover starts only when an agent asks.** Input is gated per message on an open `takeover` attention request, which only `request_attention` creates; there is no operator-initiated takeover.
 - **Live-view input gaps.** No clipboard: Ctrl/Cmd combinations are left to the local browser (`shouldPreventKey`), so paste never reaches the remote page. No IME composition. A popup or `window.open` tab never becomes the watched tab (only the agent switching tabs retargets the stream) and there is no operator tab switcher, so OAuth popups are invisible. Native dialogs, file choosers and browser UI are not part of a CDP screencast. WebAuthn/passkeys cannot work: the authenticator is on the operator's machine, not in the remote browser.
-- **Installing has browser limits (D-49).**
+- **Installing has browser limits (D-59).**
   - The offline page exists only in a browser profile that has loaded the dashboard at that exact address once. `localhost` and `127.0.0.1` are different apps.
   - A plain-`http` LAN address can neither install nor get the offline page.
   - Firefox installs websites as apps only on Windows (on Linux only when turned on).
@@ -664,7 +664,7 @@ Not built; each is a deliberate scope boundary of the current dashboard, not a d
 - **Transient failures never sign the operator out** (§4.1), and a page crash never replaces the shell (§5 error boundaries).
 - **Layout choices are per device, shareable view state is per URL, and only preferences that should follow the operator across devices are stored server-side** (§1 principle 1, §4.6).
 
-## 18. Installable app and offline page (D-49)
+## 18. Installable app and offline page (D-59)
 
 The dashboard is an installable web app. Its service worker exists only to show a diagnostic page when the daemon does not answer. A running dashboard still loads every screen from the daemon on every visit; the only change on that path is that each in-scope navigation passes through the worker, which hands it to the network untouched (§18.5.4).
 
@@ -716,7 +716,7 @@ The daemon serves all of these as ordinary bundle files: unauthenticated, `no-ca
 - **Colours.** `background_color` and `theme_color` equal `THEME_COLORS.light` (`src/theme/bootstrap.ts`). The window's title bar still follows the active theme, because `<meta name="theme-color">` is updated at runtime (§4.4) and Chromium prefers the meta tag.
 - **Start URL.** `/` redirects to `/overview` or `/login`, so the app opens where a typed address would.
 - **Shortcuts.** Each opens that page. Where the platform shows shortcuts it does so in a new window; on platforms without shortcut menus they are simply not shown. Every shortcut URL MUST be a route-table path (§6.2).
-- **Nothing else.** No `launch_handler`, `related_applications`, `prefer_related_applications`, `protocol_handlers`, `share_target`, `file_handlers`, `display_override` or `orientation` (D-49 deferrals).
+- **Nothing else.** No `launch_handler`, `related_applications`, `prefer_related_applications`, `protocol_handlers`, `share_target`, `file_handlers`, `display_override` or `orientation` (D-59 deferrals).
 
 `index.html` gains in `<head>`:
 - `<link rel="manifest" href="/manifest.webmanifest" />` with no `crossorigin`, since it is same-origin and needs no cookie;
@@ -1031,7 +1031,7 @@ Each entry records the source and the browser version it was checked against. Th
 
 ### 18.9 Reserved
 
-Launch handling (`launch_handler`, `launchQueue`) is deferred (D-49).
+Launch handling (`launch_handler`, `launchQueue`) is deferred (D-59).
 
 ### 18.10 Code boundaries
 
@@ -1069,14 +1069,14 @@ Launch handling (`launch_handler`, `launchQueue`) is deferred (D-49).
   - how to uninstall: the browser's app settings;
   - two daemons install as two apps.
 - **`docs/guide/troubleshooting.md` § "The app says BrowserHive isn't running":** every offline state and its fix, the loop-guard state, Forget this address, and manual removal (§18.5.7).
-- **`docs/guide/security.md`:** one paragraph on what the worker stores (public static files only) and on port grabbing (D-49 Consequences).
+- **`docs/guide/security.md`:** one paragraph on what the worker stores (public static files only) and on port grabbing (D-59 Consequences).
 - **`lib/links.ts` `DOCS_PAGES`** gains `dashboardInstall` (`guide/dashboard`, `install-as-an-app`) and `troubleshootingNotRunning` (`guide/troubleshooting`, `the-app-says-browserhive-isnt-running`). The existing links test checks the anchors.
 - **Spec 12:** one line in the dashboard tour.
 - **Changeset:** `browserhive` minor, "Install the dashboard as an app, with a help page when BrowserHive isn't running".
 
 ### 18.12 Tests and the verification gate
 
-The automated suites are in 09 §3.4–§3.6 (marked D-49). The manual gate below MUST pass on real browsers before the PR leaves draft, with screenshots and browser versions in the PR description:
+The automated suites are in 09 §3.4–§3.6 (marked D-59). The manual gate below MUST pass on real browsers before the PR leaves draft, with screenshots and browser versions in the PR description:
 
 1. **Chrome stable on Linux.**
    - Install from the account menu (native dialog).

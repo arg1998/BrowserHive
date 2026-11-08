@@ -22,7 +22,7 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   projects: [
-    // The offline service worker (D-49) must never touch the existing journeys.
+    // The offline service worker (D-59) must never touch the existing journeys.
     {
       name: 'desktop',
       testIgnore: PWA_SPEC,

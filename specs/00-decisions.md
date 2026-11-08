@@ -941,7 +941,11 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 
 **Alternatives considered.** *Treating an empty list as "all"*: an operator who unticks the last harness expects nothing to pass; silently allowing everything is the dangerous reading. *Matching custom names case-insensitively, or through `normalizeHarness`*: a custom name exists precisely for values the slug table does not know, and folding would make `Claude-Code` the built-in Claude Code behind the operator's back; exact matching plus a warning is predictable. *Using the per-call harness*: a client could switch its header between calls to pass a rule. *A distinct agent-facing reason (`harness_not_allowed`)*: tells a misbehaving agent which name to claim. *Applying the group list only to `allow_all` items*: a "Deploy folder for OpenCode and Claude Code" would then not cover the folder's manual bindings, which is what operators mean. *A new error code*: refusals are returned statuses (10 §1.4) and malformed lists are ordinary validation failures.
 
-## D-49 The dashboard is an installable web app with an offline "daemon not running" page; no CLI command
+## D-49 – D-58 Reserved for spec 13 (session templates)
+
+**Status:** Reserved. Spec 13 and its decisions D-49 to D-58 are on branch `docs/spec-session-templates` and land with it; D-57 and D-58 (and spec 13 T0a, T0d, T0e, T0f) are implemented ahead of it in browserhive 0.2.3. The numbers are kept because the spec and its security fixes already cite them.
+
+## D-59 The dashboard is an installable web app with an offline "daemon not running" page; no CLI command
 
 **Status:** Accepted
 

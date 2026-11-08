@@ -1,4 +1,4 @@
-/** @module dashboard/test/e2e/pwa.e2e — the installable dashboard (D-49, 04 §18, 09 §3.5): installability reported by Chromium itself in a persistent context, the native install prompt path, and in an ordinary context the offline worker taking control and Install app opening the instructions dialog; runs only in the `pwa` project; skips cleanly when `BROWSERHIVE_E2E_URL` is unset */
+/** @module dashboard/test/e2e/pwa.e2e — the installable dashboard (D-59, 04 §18, 09 §3.5): installability reported by Chromium itself in a persistent context, the native install prompt path, and in an ordinary context the offline worker taking control and Install app opening the instructions dialog; runs only in the `pwa` project; skips cleanly when `BROWSERHIVE_E2E_URL` is unset */
 import { mkdtempSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';

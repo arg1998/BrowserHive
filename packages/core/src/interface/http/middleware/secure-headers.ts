@@ -4,7 +4,7 @@ import type { MiddlewareHandler } from 'hono';
 import type { HttpEnv } from '../env.ts';
 
 /**
- * Marks every daemon response with the running version (spec 03 §2, D-49): the dashboard's service
+ * Marks every daemon response with the running version (spec 03 §2, D-59): the dashboard's service
  * worker and offline page tell this daemon from another program on the same address by it. The
  * version is already public through `/health`.
  */

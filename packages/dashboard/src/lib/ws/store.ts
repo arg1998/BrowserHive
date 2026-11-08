@@ -149,7 +149,7 @@ export const SOCKET_DEFAULTS = {
   connectTimeoutMs: 10_000,
 } as const;
 
-/** How long an attempt may go without the server's `hello` (spec 04 §4.2, D-49). */
+/** How long an attempt may go without the server's `hello` (spec 04 §4.2, D-59). */
 export const CONNECT_TIMEOUT_MS = SOCKET_DEFAULTS.connectTimeoutMs;
 
 /** Close code the client uses for an attempt that timed out before `hello` (4000–4999 is application space). */

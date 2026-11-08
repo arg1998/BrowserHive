@@ -33,7 +33,7 @@ for (const f of ['dist/bin.js', 'dist/index.js', 'dist/index.d.ts', 'dist/dashbo
 }
 const installable = installableAppProblems(join(pkgDir, 'dist/dashboard'));
 if (installable.length > 0) {
-  console.error(`package-check: installable app (D-49)\n  ${installable.join('\n  ')}`);
+  console.error(`package-check: installable app (D-59)\n  ${installable.join('\n  ')}`);
   process.exit(1);
 }
 console.log('package-check: installable app ok');

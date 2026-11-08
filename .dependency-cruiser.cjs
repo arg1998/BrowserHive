@@ -89,7 +89,7 @@ module.exports = {
       from: { path: '^packages/browserhive/' },
       to: { path: '^packages/(?!browserhive/)[^/]+/', dependencyTypes: ['local'] },
     },
-    // Installable app and offline page (D-49, spec 04 §18.10). npm packages are outside the graph
+    // Installable app and offline page (D-59, spec 04 §18.10). npm packages are outside the graph
     // (`exclude` drops node_modules), so these rules see local files and unresolved `@/` aliases;
     // `lib/daemon-help/boundaries.test.ts` checks the import specifiers themselves.
     {

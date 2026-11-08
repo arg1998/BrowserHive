@@ -1,4 +1,4 @@
-/** @module test/integration/dashboard-offline.test — the installed dashboard's service worker and offline page against a real daemon, a hung port, a failing proxy, a daemon without --admin, the daemon-unreachable banner and a foreign server on the same port (spec 09 §3.4, 04 §18, D-49). Needs the built dashboard. */
+/** @module test/integration/dashboard-offline.test — the installed dashboard's service worker and offline page against a real daemon, a hung port, a failing proxy, a daemon without --admin, the daemon-unreachable banner and a foreign server on the same port (spec 09 §3.4, 04 §18, D-59). Needs the built dashboard. */
 
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { existsSync, readFileSync } from 'node:fs';
@@ -178,7 +178,7 @@ afterAll(async () => {
   dir?.cleanup();
 });
 
-describe('installed dashboard: service worker and offline page (D-49)', () => {
+describe('installed dashboard: service worker and offline page (D-59)', () => {
   it(
     '1. the worker installs and precaches the offline page',
     async () => {

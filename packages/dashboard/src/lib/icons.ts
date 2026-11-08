@@ -265,7 +265,7 @@ export const ICONS = {
   notFound: FileQuestion,
   filter: ListFilter,
   monitor: Monitor,
-  // Installable app (D-49)
+  // Installable app (D-59)
   installApp: MonitorDown,
   densityComfortable: Rows3,
   densityCompact: Rows4,
