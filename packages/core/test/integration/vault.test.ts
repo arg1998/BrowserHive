@@ -48,8 +48,12 @@ function vaultPage(session: LaunchedSession): VaultPage {
     url: () => page.url(),
     fill: (selector, value, options) => page.fill(selector, value, options),
     click: (selector, options) => page.click(selector, options),
+    // A locator wait: no element handle is left behind for the page to hold.
+    waitForSelector: (selector, options) =>
+      page.locator(selector).first().waitFor({ state: 'visible', timeout: options.timeout }),
     waitForTimeout: (ms) => page.waitForTimeout(ms),
     $eval: (selector, fn) => page.$eval(selector, fn),
+    $$eval: (selector, fn) => page.$$eval(selector, fn),
   };
 }
 
@@ -64,7 +68,7 @@ async function traceText(path: string): Promise<string> {
 describe('vault_fill end to end (fake bw + real Chromium)', () => {
   const { state } = useDriverFixtures();
 
-  async function stack(dataDir: string, logPath: string) {
+  async function stack(dataDir: string, logPath: string, fieldEntryTimeoutMs?: number) {
     await writeFakeBwConfig(dataDir, { log: logPath });
     const clock = createSystemClock();
     const ids = createNanoidIdGenerator({ clock });
@@ -101,6 +105,7 @@ describe('vault_fill end to end (fake bw + real Chromium)', () => {
       logger,
       allowEvaluate: true,
       confirm,
+      ...(fieldEntryTimeoutMs !== undefined && { fieldEntryTimeoutMs }),
     });
     return { clock, logger, registry, repos, backend, broker, dataDir };
   }
@@ -212,6 +217,148 @@ describe('vault_fill end to end (fake bw + real Chromium)', () => {
     expect(text.length).toBeGreaterThan(0);
     expect(text).not.toContain(FAKE_BW_FIXTURE.password);
     expect(text).not.toContain(FAKE_BW_FIXTURE.username);
+  }, 60_000);
+
+  it('refuses a password selector that names a search box, a textarea or a contenteditable, answers fill_failed for a field that never shows, then fills the real login form (D-58)', async () => {
+    const session = await state.launch({ slug: 'vault' });
+    const logPath = join(state.dataDir, 'fake-bw-target.log');
+    // Short field wait: two cases below are fields that never become visible.
+    const s = await stack(state.dataDir, logPath, 1500);
+    await s.backend.unlock({ mode: 'token', token: secret(`${FAKE_BW_TOKEN}\n`) });
+    const origin = new URL(state.fixture.origin).hostname;
+    await s.repos.bindings.upsert({
+      handle: 'work.fixture-login',
+      tenantId: null,
+      title: 'Fixture',
+      itemName: FAKE_BW_FIXTURE.itemName,
+      itemId: FAKE_BW_FIXTURE.itemId,
+      groupId: FAKE_BW_FIXTURE.groupId,
+      allowedOrigins: [origin],
+      authorizedPrincipals: [],
+      authorizedSessionSlugs: ['vault'],
+      allowAllSessions: false,
+      redactUsername: false,
+      requireNoEvaluate: false,
+      dashboardConfirm: false,
+      harnesses: null,
+      version: 1,
+      createdAt: s.clock.now(),
+      updatedAt: s.clock.now(),
+    });
+    await session.page.goto(state.fixture.url('/form-with-search'));
+    const ctx = {
+      session: {
+        sessionId: session.handle.sessionId,
+        slug: 'vault',
+        disableEvaluate: false,
+        vaultEnabled: true,
+        harness: null,
+        harnessDeclared: null,
+      },
+      page: vaultPage(session),
+      tracing: null,
+      principal: 'local',
+    };
+    const fill = (usernameSelector: string, passwordSelector: string) =>
+      s.broker.fill({ entryName: 'work.fixture-login', usernameSelector, passwordSelector }, ctx);
+    const refused = {
+      status: 'blocked',
+      redacted: true,
+      reason: 'password_target_invalid',
+    } as const;
+
+    expect(await fill('#username', '#search')).toEqual(refused);
+    expect(await fill('#username', '#notes')).toEqual(refused);
+    expect(await fill('#username', '#editor')).toEqual(refused);
+    // A field that never becomes visible answers what main answered after its fill timeout,
+    // auth_failed / fill_failed, but now before anything is fetched.
+    const neverVisible = { status: 'auth_failed', redacted: true, reason: 'fill_failed' } as const;
+    expect(await fill('#username', '#hidden-password')).toEqual(neverVisible);
+    expect(await fill('#username', '#nope')).toEqual(neverVisible);
+    expect(await fill('#username', 'input')).toEqual(refused);
+    expect(await fill('#notes', '#password')).toEqual(refused);
+    expect(await fill('#password', '#password')).toEqual(refused);
+    expect(s.repos.audit.rows.map((r) => [r.reason, r.details?.['problem']])).toEqual([
+      ['password_target_invalid', 'not_password_input'],
+      ['password_target_invalid', 'not_password_input'],
+      ['password_target_invalid', 'not_password_input'],
+      ['fill_failed', undefined],
+      ['fill_failed', undefined],
+      ['password_target_invalid', 'multiple_matches'],
+      ['password_target_invalid', 'not_text_input'],
+      ['password_target_invalid', 'not_text_input'],
+    ]);
+    // Nothing was fetched from the backend and nothing reached the page.
+    const gets = async (): Promise<number> =>
+      (await readFile(logPath, 'utf8').catch(() => ''))
+        .trim()
+        .split('\n')
+        .filter((line) => line.length > 0)
+        .map((line) => JSON.parse(line) as { argv: string[] })
+        .filter((i) => i.argv.includes('get')).length;
+    expect(await gets()).toBe(0);
+    for (const field of ['#search', '#notes', '#username', '#password']) {
+      expect(await session.page.inputValue(field)).toBe('');
+    }
+    expect(await session.page.locator('#editor').textContent()).toBe('');
+
+    // The real login form still fills.
+    expect(await fill('#username', '#password')).toEqual({ status: 'success', redacted: true });
+    expect(await session.page.inputValue('#password')).toBe(FAKE_BW_FIXTURE.password);
+    expect(await session.page.inputValue('#username')).toBe(FAKE_BW_FIXTURE.username);
+    expect(await session.page.inputValue('#search')).toBe('');
+    expect(await gets()).toBe(1);
+  }, 60_000);
+
+  it('waits for a login form the page inserts 1 s after load, then fills it', async () => {
+    const session = await state.launch({ slug: 'vault' });
+    const s = await stack(state.dataDir, join(state.dataDir, 'fake-bw-delayed.log'));
+    await s.backend.unlock({ mode: 'token', token: secret(`${FAKE_BW_TOKEN}\n`) });
+    await s.repos.bindings.upsert({
+      handle: 'work.fixture-login',
+      tenantId: null,
+      title: 'Fixture',
+      itemName: FAKE_BW_FIXTURE.itemName,
+      itemId: FAKE_BW_FIXTURE.itemId,
+      groupId: FAKE_BW_FIXTURE.groupId,
+      allowedOrigins: [new URL(state.fixture.origin).hostname],
+      authorizedPrincipals: [],
+      authorizedSessionSlugs: ['vault'],
+      allowAllSessions: false,
+      redactUsername: false,
+      requireNoEvaluate: false,
+      dashboardConfirm: false,
+      harnesses: null,
+      version: 1,
+      createdAt: s.clock.now(),
+      updatedAt: s.clock.now(),
+    });
+    // Called right after navigate, the way agents do: the form is not in the DOM yet.
+    await session.page.goto(state.fixture.url('/form-delayed'));
+    expect(await session.page.locator('#password').count()).toBe(0);
+    const result = await s.broker.fill(
+      {
+        entryName: 'work.fixture-login',
+        usernameSelector: '#username',
+        passwordSelector: '#password',
+      },
+      {
+        session: {
+          sessionId: session.handle.sessionId,
+          slug: 'vault',
+          disableEvaluate: false,
+          vaultEnabled: true,
+          harness: null,
+          harnessDeclared: null,
+        },
+        page: vaultPage(session),
+        tracing: null,
+        principal: 'local',
+      },
+    );
+    expect(result).toEqual({ status: 'success', redacted: true });
+    expect(await session.page.inputValue('#password')).toBe(FAKE_BW_FIXTURE.password);
+    expect(await session.page.inputValue('#username')).toBe(FAKE_BW_FIXTURE.username);
   }, 60_000);
 
   it('a locked backend audits and throws VAULT_LOCKED; an off-origin page is origin_mismatch', async () => {
