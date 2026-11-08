@@ -224,7 +224,9 @@ describe('installed dashboard: service worker and offline page (D-49)', () => {
     '3. stopped: the offline page says it is not running, on the same URL',
     async () => {
       await stopEverything();
-      await page.reload();
+      // Navigate explicitly: a reload would reuse whatever URL the signed-out dashboard redirected
+      // to (`/login`), and on slower runners that redirect lands before this step starts.
+      await page.goto(`${base}/sessions`);
       await waitForHeading(/^BrowserHive isn't running$/, 10_000);
       expect(new URL(page.url()).pathname).toBe('/sessions');
       const commands = await page.locator('li code').allTextContents();

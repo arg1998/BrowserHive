@@ -1,4 +1,5 @@
 /** @module app/register-sw.test — worker registration conditions and the boot bookkeeping (04 §18.4) */
+import '../../test/setup.ts';
 import { afterEach, describe, expect, it } from 'bun:test';
 import { LAST_SEEN_KEY, OFFLINE_RELOADS_KEY } from '@/lib/daemon-help/keys.ts';
 import { recordBoot, registerServiceWorker } from './register-sw.ts';

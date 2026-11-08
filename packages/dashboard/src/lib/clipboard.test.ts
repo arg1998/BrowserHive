@@ -1,4 +1,5 @@
 /** @module lib/clipboard.test — `copyText`: the Clipboard API in a secure context, the `execCommand` fallback otherwise or when it rejects, and cleanup of the temporary textarea */
+import '../../test/setup.ts';
 import { describe, expect, it } from 'bun:test';
 import { copyText } from './clipboard.ts';
 
