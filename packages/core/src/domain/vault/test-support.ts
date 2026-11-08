@@ -28,11 +28,69 @@ export const SECRET = 'S3cr3t-P@ssw0rd-xyz';
 /** Its username. */
 export const USER = 'alice@example.com';
 
+/** The DOM shape the fill-target gate reads, as plain data (see {@link fakeElement}). */
+export interface FakeElementSpec {
+  readonly localName?: string;
+  readonly type?: string;
+  readonly disabled?: boolean;
+  readonly readOnly?: boolean;
+  /** `false` → a zero-size box (`display: none`). */
+  readonly visible?: boolean;
+  /** `false` → a box, but `visibility: hidden`. */
+  readonly styleVisible?: boolean;
+  readonly contentEditable?: boolean;
+}
+
+/** Whether each fake element is visible (what Playwright's `visible` wait checks). */
+const FAKE_VISIBLE = new WeakMap<object, boolean>();
+
+/**
+ * A DOM-like element for the gate's in-page function: the same properties and methods a real
+ * element answers with (`localName`, `namespaceURI`, `type`, `matches(':disabled')`, ...).
+ */
+export function fakeElement(spec: FakeElementSpec): object {
+  const localName = spec.localName ?? 'input';
+  const visible = spec.visible ?? true;
+  const element = {
+    localName,
+    namespaceURI: 'http://www.w3.org/1999/xhtml',
+    ...(localName === 'input' && { type: spec.type ?? 'text', readOnly: spec.readOnly ?? false }),
+    ...(localName === 'textarea' && { type: 'textarea', readOnly: spec.readOnly ?? false }),
+    disabled: spec.disabled ?? false,
+    isContentEditable: spec.contentEditable ?? false,
+    matches: (query: string) => query === ':disabled' && spec.disabled === true,
+    getBoundingClientRect: () => (visible ? { width: 120, height: 24 } : { width: 0, height: 0 }),
+    checkVisibility: () => visible && spec.styleVisible !== false,
+  };
+  FAKE_VISIBLE.set(element, visible && spec.styleVisible !== false);
+  return element;
+}
+
+/** A text input and a password input, the shape of an ordinary login form. */
+export const TEXT_INPUT = fakeElement({ type: 'text' });
+export const PASSWORD_INPUT = fakeElement({ type: 'password' });
+
 /** A page that records fill/click calls and reports a configurable url + form action. */
 export class FakePage implements VaultPage {
   readonly fills: [string, string][] = [];
   readonly clicks: string[] = [];
   formAction: string | null = null;
+  /**
+   * What each selector matches, for the fill-target gate. The defaults are an ordinary login
+   * form; a selector missing from the map matches nothing.
+   */
+  readonly elements = new Map<string, readonly object[]>([
+    ['#u', [TEXT_INPUT]],
+    ['#user', [TEXT_INPUT]],
+    ['#p', [PASSWORD_INPUT]],
+    ['#pass', [PASSWORD_INPUT]],
+  ]);
+  /** Every selector the gate inspected, in order. */
+  readonly inspected: string[] = [];
+  /** Every selector the broker waited for, in order. */
+  readonly waits: string[] = [];
+  /** Called before each inspection with the selector and its 1-based inspection count. */
+  beforeInspect: ((selector: string, count: number) => void) | null = null;
   /** When set, `fill` of this selector rejects with it. */
   failFill: { selector: string; error: Error } | null = null;
   /** When set, `click` rejects with it. */
@@ -68,6 +126,31 @@ export class FakePage implements VaultPage {
   $eval<T>(_selector: string, fn: (el: unknown) => T): Promise<T> {
     const el: unknown = { form: this.formAction === null ? null : { action: this.formAction } };
     return Promise.resolve(fn(el));
+  }
+
+  /** Polls `elements` like Playwright's `visible` wait: resolves once the first match is visible. */
+  async waitForSelector(selector: string, options: { timeout: number }): Promise<void> {
+    this.waits.push(selector);
+    for (let waited = 0; ; waited += 10) {
+      const first = this.elements.get(selector)?.[0];
+      if (first !== undefined && FAKE_VISIBLE.get(first) === true) return;
+      if (waited >= options.timeout) {
+        throw Object.assign(
+          new Error(`Timeout ${options.timeout}ms exceeded waiting for ${selector}`),
+          {
+            name: 'TimeoutError',
+          },
+        );
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+
+  $$eval<T>(selector: string, fn: (els: unknown[]) => T): Promise<T> {
+    this.inspected.push(selector);
+    const count = this.inspected.filter((s) => s === selector).length;
+    this.beforeInspect?.(selector, count);
+    return Promise.resolve(fn([...(this.elements.get(selector) ?? [])]));
   }
 }
 
@@ -160,6 +243,8 @@ export function createVaultHarness(): VaultHarness {
     ids,
     logger,
     allowEvaluate: true,
+    // Short, so a field that never shows fails fast; a test of a late form passes a longer one.
+    fieldEntryTimeoutMs: 200,
   };
   return {
     clock,

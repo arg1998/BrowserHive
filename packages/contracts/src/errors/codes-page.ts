@@ -171,6 +171,25 @@ export const PAGE_ERRORS = {
     cause: 'The URL matched a pattern in the operator blocklist (`blocklist` file).',
     resolution: 'Operators edit the blocklist file (reloaded live) if the block is unintended.',
   }),
+  URL_SCHEME_NOT_ALLOWED: defineError({
+    code: 'URL_SCHEME_NOT_ALLOWED',
+    httpStatus: 400,
+    category: 'domain',
+    retryable: 'different_args',
+    title: 'URL scheme not allowed',
+    // `scheme` is lowercased, without its colon. Input that does not parse as an absolute URL has
+    // `scheme: ''` and the message "This URL is not an absolute URL, so it cannot be opened here.
+    // Use an http:// or https:// URL (or about:blank)." (spec 13 T0d, D-57).
+    message:
+      "URLs with the '{scheme}:' scheme cannot be opened here. Use an http:// or https:// URL (or about:blank).",
+    hint: 'Pass a full http:// or https:// URL; local files and browser pages cannot be opened.',
+    details: z.object({ scheme: z.string() }),
+    docs: true,
+    cause:
+      '`navigate` and `new_tab` open only `http:`, `https:`, `about:blank` and `data:` URLs. Other schemes (`file:`, `chrome:`, `view-source:`, `javascript:`, `blob:`, `mailto:`, app schemes) and input without a scheme (`example.com`, `localhost:3000`) are refused before the browser is touched. `details.scheme` names the scheme (`localhost` for `localhost:3000`). It is empty when the input is not an absolute URL at all, and the message then reads "This URL is not an absolute URL, so it cannot be opened here. Use an http:// or https:// URL (or about:blank)."',
+    resolution:
+      'Use a full web URL such as `https://example.com/`. This is a fixed product rule, not operator configuration.',
+  }),
   BROWSER_NOT_INSTALLED: defineError({
     code: 'BROWSER_NOT_INSTALLED',
     httpStatus: 503,

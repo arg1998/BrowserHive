@@ -2,7 +2,7 @@
 
 import { requireSession } from '../../context.ts';
 import { defineTool, json, type PageVisit, type ToolPack } from '../../definition.ts';
-import { sessionOwnership, urlBlocklist } from '../../policies.ts';
+import { agentUrlHref, sessionOwnership, urlBlocklist, urlScheme } from '../../policies.ts';
 import { gotoCapturingDownload, type SavedDownload } from '../files/capture.ts';
 import { recordNavigation, safeUrl } from '../shared.ts';
 
@@ -11,14 +11,19 @@ import { recordNavigation, safeUrl } from '../shared.ts';
  * A `url` that answers with a download saves the file (as `navigate` does) and keeps the tab open.
  */
 export const newTab = defineTool('new_tab', {
-  policies: [sessionOwnership, urlBlocklist('url')],
+  policies: [sessionOwnership, urlScheme('url'), urlBlocklist('url')],
   async handler(ctx, args) {
     const session = requireSession(ctx);
     const { tabId, page } = await ctx.services.sessions.newTab(session);
     let visit: PageVisit | undefined;
     let download: SavedDownload | undefined;
     if (args.url !== undefined) {
-      const target = { url: args.url, timeoutMs: args.timeout, tabId, waitUntil: args.wait_until };
+      const target = {
+        url: agentUrlHref(args.url),
+        timeoutMs: args.timeout,
+        tabId,
+        waitUntil: args.wait_until,
+      };
       const outcome = await gotoCapturingDownload(ctx, session, page, target);
       if (outcome.kind === 'download') download = outcome.download;
       else visit = await recordNavigation(ctx, session, page);

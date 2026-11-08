@@ -2,22 +2,22 @@
 
 import { requireSession } from '../../context.ts';
 import { defineTool, json, type ToolPack } from '../../definition.ts';
-import { sessionOwnership, urlBlocklist } from '../../policies.ts';
+import { agentUrlHref, sessionOwnership, urlBlocklist, urlScheme } from '../../policies.ts';
 import { gotoCapturingDownload } from '../files/capture.ts';
 import { drive, navigation, pageOf, recordNavigation, safeUrl } from '../shared.ts';
 
 /**
- * `navigate`: blocklist before the browser is touched; HTTP 4xx/5xx is a soft failure (`HTTP_<n>`).
+ * `navigate`: scheme and blocklist checks before the browser is touched; HTTP 4xx/5xx is a soft failure (`HTTP_<n>`).
  * A URL that answers with a download saves the file into the managed downloads dir instead: the tab
  * keeps its page, so the result carries the unchanged URL, `status: null` and `download`.
  */
 export const navigate = defineTool('navigate', {
-  policies: [sessionOwnership, urlBlocklist('url')],
+  policies: [sessionOwnership, urlScheme('url'), urlBlocklist('url')],
   async handler(ctx, args) {
     const session = requireSession(ctx);
     const page = pageOf(ctx, session, args.tab_id);
     const target = {
-      url: args.url,
+      url: agentUrlHref(args.url),
       timeoutMs: args.timeout,
       tabId: args.tab_id,
       waitUntil: args.wait_until,

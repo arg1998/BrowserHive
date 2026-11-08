@@ -7,6 +7,7 @@ import { sessionBrowser } from './0004-session-browser.ts';
 import { notificationOutbox } from './0005-notification-outbox.ts';
 import { notificationActions } from './0006-notification-actions.ts';
 import { vaultHarnesses } from './0007-vault-harnesses.ts';
+import { operatorTokenScopes } from './0008-operator-token-scopes.ts';
 import type { Migration } from './migration.ts';
 
 export type { Migration } from './migration.ts';
@@ -20,6 +21,7 @@ export const MIGRATIONS: readonly Migration[] = [
   notificationOutbox,
   notificationActions,
   vaultHarnesses,
+  operatorTokenScopes,
 ];
 
 /** The schema version this binary writes. */

@@ -29,13 +29,16 @@ const HISTORY_ERRORS = [
   'NAVIGATION_FAILED',
 ] as const;
 
-/** `navigate`: `page.goto`; the blocklist is checked before the browser is touched. */
+/** `navigate`: `page.goto`; the URL scheme, then the blocklist, are checked before the browser is touched. */
 export const NAVIGATE = defineTool({
   name: 'navigate',
   title: 'Navigate',
   description:
-    'Navigate a tab to a URL (defaults to the active tab). The operator may maintain a URL ' +
-    'blocklist; a blocked target fails with URL_BLOCKED and must not be retried. A URL that ' +
+    'Navigate a tab to a URL (defaults to the active tab). Only web URLs can be opened: http://, ' +
+    'https://, about:blank and data:. Other schemes (file:, chrome:, view-source:, javascript:, ' +
+    'app links) and URLs without a scheme fail with URL_SCHEME_NOT_ALLOWED; pass a full https:// ' +
+    'URL instead. The operator may maintain a URL blocklist; a blocked target fails with ' +
+    'URL_BLOCKED and must not be retried. A URL that ' +
     'answers with a download (Content-Disposition: attachment) saves the file into the managed ' +
     'downloads dir (<data-dir>/sessions/<id>/downloads/) within the same timeout: the tab keeps ' +
     'its page, status is null, and download holds saved_to, suggested_name and size, as ' +
@@ -58,6 +61,7 @@ export const NAVIGATE = defineTool({
   capability: 'navigate',
   errors: [
     ...SESSION_ERRORS,
+    'URL_SCHEME_NOT_ALLOWED',
     'URL_BLOCKED',
     'TAB_NOT_FOUND',
     'NAVIGATION_TIMEOUT',

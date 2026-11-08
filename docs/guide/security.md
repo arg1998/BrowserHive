@@ -26,6 +26,7 @@ Tokens:
 
 - On the first start with `--auth token`, a token for the principal `agent-1` is generated and printed once.
 - `browserhive admin tokens create <name>` issues more; `list` shows name, public prefix, creation and last use; `revoke` is immediate. The dashboard's System page offers the same.
+- The names `local`, `browserhive`, `system` and `template:…` are reserved and refused, because an agent with such a name would own what BrowserHive's own principals own (for example everything created with `--auth off`). `browserhive doctor` warns about tokens an earlier version created under one; see [reserved names](mcp-clients.md#reserved-names).
 - Tokens are stored as SHA-256 hashes with an 8-character public prefix for lookup; the plaintext is only shown at creation.
 - `BROWSERHIVE_AUTH_TOKENS=name:token,…` adds tokens (at least 32 characters) that are never stored.
 
@@ -50,7 +51,19 @@ Operator API tokens let scripts call the REST API without a browser. Every login
 
 ### Authorization
 
-Operators hold every scope. Agent tokens only hold the tool scope: they cannot read the dashboard API, resolve their own attention requests, or change vault policy. Scopes per REST route are listed in the [API reference](../reference/api.md).
+Signed in to the dashboard, an operator holds every scope. Agent tokens only hold the tool scope: they cannot read the dashboard API, resolve their own attention requests, or change vault policy. Scopes per REST route are listed in the [API reference](../reference/api.md).
+
+**Scopes limit operator API tokens too.** A token is limited to the scopes it was issued with, whoever owns it, on the REST API, the WebSocket and `/mcp`. For example, `POST /api/v1/auth/tokens` with this body issues a read-only monitoring token:
+
+```json
+{ "owner_kind": "operator", "display": "monitoring", "scopes": ["system:read", "sessions:read"] }
+```
+
+That token can read `/system` and the session list, and gets 403 `FORBIDDEN` on anything else. `GET /api/v1/auth/me` shows the scopes it holds.
+
+- A token issued without `scopes` holds every operator scope, including scopes added by later releases. Tokens issued that way before 0.2.3 keep holding every scope after the upgrade.
+- Managing tokens, grants, dashboard sessions and the password needs the whole operator: the dashboard, or a token that holds every scope. A narrowed token cannot issue a wider one.
+- `/mcp` needs the `mcp:tools` scope.
 
 ## The vault: credentials the model never sees
 
@@ -106,9 +119,24 @@ Records are pruned after `--retentionDays` (default 7) or when the database and 
 
 The data directory is `0700` and secret files are `0600`. Saved logins (`auth-states/`) contain real cookies and storage; protect them like passwords. They are protected by your OS user account, not encrypted by BrowserHive.
 
+## Agents open web URLs only
+
+`navigate` and `new_tab` open `http://`, `https://`, `about:blank` and `data:` URLs, and nothing else. Every other scheme is refused with [`URL_SCHEME_NOT_ALLOWED`](../reference/errors.md#URL_SCHEME_NOT_ALLOWED) before the browser is touched:
+
+- `file:` and `view-source:` would read any file BrowserHive's user can read, including its own data directory.
+- `chrome:`, `chrome-untrusted:`, `chrome-extension:` and `devtools:` pages expose the browser's history, settings and saved passwords.
+- `javascript:` would run agent-written script in the page, even in a session launched with `disable_evaluate: true` or on a server with `allowEvaluate=false`.
+- `mailto:`, `tel:` and app schemes (`slack://`, `zoommtg://`) would launch programs on the host.
+- `blob:`, `filesystem:` and every `about:` page other than `about:blank` are refused too.
+- Input without a scheme is refused rather than guessed: `example.com` and `localhost:3000` must be written as `https://example.com/` and `http://localhost:3000/`.
+
+The scheme is read the way a browser reads it: case, surrounding whitespace, tabs and newlines do not get a URL past the check (`JAVA<tab>SCRIPT:` is `javascript:`). The browser is then given the normalized URL.
+
+This is a fixed rule, not configuration. As a backstop for navigations no tool asked for, BrowserHive closes any tab whose page ends up on a non-web URL (anything but `http:`, `https:`, `about:blank`, `about:srcdoc`, `blob:`, `data:` and Chromium's error page) and logs `non-web scheme page closed` with the session id and scheme. Pages a site opens as `blob:` or `data:` documents, and downloads, are unaffected.
+
 ## The blocklist is not an egress firewall
 
-`--blocklist` stops navigations at the tool boundary and aborts document requests in the browser. Subresources still load, and an agent with `evaluate` can `fetch()` a blocked URL. Use it to keep agents off pages, not to contain them.
+`--blocklist` stops navigations at the tool boundary and aborts document requests in the browser. Subresources still load, and an agent with `evaluate` can `fetch()` a blocked URL. Use it to keep agents off pages, not to contain them. The blocklist covers network schemes only (`http`, `https`, `ws`, `wss`, `ftp`, `ftps`); [the scheme rule above](#agents-open-web-urls-only) keeps agents off every other scheme.
 
 ## The browser sandbox
 

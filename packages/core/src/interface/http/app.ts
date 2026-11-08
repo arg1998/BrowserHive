@@ -5,6 +5,7 @@ import { WS_PATH } from '@browserhive/contracts/ws';
 import { Hono } from 'hono';
 import type { Authenticator } from '../../app/auth/authenticate.ts';
 import { publicUrlHost, publicUrlOrigin } from '../../app/notifications/public-url.ts';
+import { authorizer } from '../../domain/auth/authorizer.ts';
 import { AppError } from '../../kernel/errors/app-error.ts';
 import type { Clock } from '../../ports/clock.ts';
 import type { IdGenerator } from '../../ports/id-generator.ts';
@@ -120,6 +121,8 @@ export function createHttpApp(deps: HttpAppDeps): HttpApp {
         ? await deps.mcpAuthenticator.require(view)
         : await deps.mcpAuthenticator.authenticate(view);
     if (principal === null) throw new AppError('UNAUTHORIZED', {});
+    // A token is limited to its scopes: an operator token narrowed without `mcp:tools` is refused.
+    authorizer.assertCan(principal, 'mcp:tools');
     c.set('principal', principal);
     disableIdleTimeout(c);
     return deps.mcp(c.req.raw, principal, { clientIp: c.get('clientIp') });

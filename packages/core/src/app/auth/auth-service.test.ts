@@ -2,6 +2,7 @@
 
 import { describe, expect, it } from 'bun:test';
 import { createAuthTestKit, seedOperator } from '../../../test/helpers/fake-auth.ts';
+import { OPERATOR_SCOPES } from '../../domain/auth/scopes.ts';
 import { SEED_ALPHABET } from '../../domain/auth/token-format.ts';
 import { isAppError } from '../../kernel/errors/app-error.ts';
 import { secret } from '../../kernel/secret.ts';
@@ -280,6 +281,20 @@ describe('tokens', () => {
     expect(
       kit.repos.tables.authEvents.map((e) => e.type).filter((t) => t.startsWith('token')),
     ).toEqual(['token_issued', 'token_issued', 'token_revoked']);
+  });
+
+  it('an operator token issued without scopes stores [] and keeps the full operator set', async () => {
+    const kit = createAuthTestKit({ mode: 'token' });
+    await seedOperator(kit, { password: PW });
+    const service = createAuthService(kit.deps);
+    const { principal } = await service.login({ password: secret(PW), ip: '1.1.1.1' });
+    const full = await service.createToken(principal, { ownerKind: 'operator', display: 'cli' });
+    const agent = await service.createToken(principal, { ownerKind: 'agent', display: 'bot' });
+    expect(kit.repos.tables.credentials.get(full.credentialId)?.scopes).toEqual([]);
+    expect(kit.repos.tables.credentials.get(agent.credentialId)?.scopes).toEqual(['mcp:tools']);
+    const list = await service.listTokens();
+    expect(list.find((t) => t.credentialId === full.credentialId)?.scopes).toEqual(OPERATOR_SCOPES);
+    expect(list.find((t) => t.credentialId === agent.credentialId)?.scopes).toEqual(['mcp:tools']);
   });
 
   it('config tokens suppress the seed token', async () => {

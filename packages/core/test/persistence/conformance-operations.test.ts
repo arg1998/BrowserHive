@@ -429,6 +429,7 @@ describe('SchemaMigrationRepository', () => {
       [5, 'notification-outbox'],
       [6, 'notification-actions'],
       [7, 'vault-harnesses'],
+      [8, 'operator-token-scopes'],
     ]);
     expect(await t.repos.schemaMigrations.currentVersion()).toBe(SCHEMA_VERSION);
   });

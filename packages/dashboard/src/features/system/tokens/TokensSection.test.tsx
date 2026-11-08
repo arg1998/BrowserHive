@@ -34,6 +34,8 @@ interface ServerOptions {
   readonly list?: unknown;
   readonly failRevoke?: boolean;
   readonly gate?: Promise<void>;
+  /** When set, `POST /auth/tokens` answers this instead of issuing a token. */
+  readonly createFails?: { status: number; body: unknown };
 }
 
 function mount(options: ServerOptions = {}) {
@@ -44,6 +46,7 @@ function mount(options: ServerOptions = {}) {
     routes: {
       'GET /auth/tokens': options.list ?? (() => ({ data: [...rows] })),
       'POST /auth/tokens': (req: RecordedRequest) => {
+        if (options.createFails !== undefined) return options.createFails;
         const body = req.body as { display: string };
         rows.push(token(3, { credential_id: 'cred-new', subject: body.display }));
         return { credential_id: 'cred-new', token: PLAINTEXT };
@@ -174,6 +177,52 @@ describe('TokensSection', () => {
     expect(window.location.href).not.toContain(PLAINTEXT);
     await screen.findByText('ci-runner');
     expect((screen.getByLabelText('Agent name') as HTMLInputElement).value).toBe('');
+  });
+
+  it('shows a reserved name under the field, not as a toast, and creates no token', async () => {
+    const reserved = {
+      status: 400,
+      body: {
+        type: 'about:blank',
+        title: 'Validation failed',
+        status: 400,
+        detail: 'subject is reserved',
+        code: 'VALIDATION_FAILED',
+        retryable: 'different_args',
+        details: {
+          issues: [{ path: 'display', message: 'subject is reserved', code: 'reserved' }],
+        },
+      },
+    };
+    const view = mount({ createFails: reserved });
+    await screen.findByRole('region', { name: 'API tokens' });
+    await act(async () => {
+      fireEvent.input(screen.getByLabelText('Agent name'), { target: { value: 'Local' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Create token' }));
+    });
+    const alert = await screen.findByText(
+      'This name is reserved for BrowserHive. Choose another name.',
+    );
+    expect(alert.getAttribute('role')).toBe('alert');
+    const field = screen.getByLabelText('Agent name') as HTMLInputElement;
+    expect(field.getAttribute('aria-invalid')).toBe('true');
+    expect(field.value).toBe('Local');
+    expect(screen.queryByText('Could not create token')).toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(view.requests.filter((r) => r.method === 'POST')).toHaveLength(1);
+  });
+
+  it('still toasts a refusal that is not about the name', async () => {
+    mount({ createFails: problem(500, 'INTERNAL_ERROR', 'Internal error') });
+    await screen.findByRole('region', { name: 'API tokens' });
+    await act(async () => {
+      fireEvent.input(screen.getByLabelText('Agent name'), { target: { value: 'ci-runner' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Create token' }));
+    });
+    await poll(() => screen.queryAllByText('Could not create token').length > 0);
+    expect(
+      screen.queryByText('This name is reserved for BrowserHive. Choose another name.'),
+    ).toBeNull();
   });
 
   it('revokes after a confirm naming principal and prefix, removing the row at once', async () => {

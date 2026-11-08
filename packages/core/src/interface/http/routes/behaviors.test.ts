@@ -390,6 +390,40 @@ describe('operator requests and vault', () => {
   });
 });
 
+describe('POST /auth/tokens: reserved subjects (spec 13 T0f)', () => {
+  it('answers 400 VALIDATION_FAILED "subject is reserved" for Local, BrowserHive and System', async () => {
+    const { kit, cookie } = await authed();
+    for (const display of ['Local', 'BrowserHive', 'System', 'local ']) {
+      const response = await kit.request('POST', '/api/v1/auth/tokens', {
+        cookie,
+        body: { owner_kind: 'agent', display },
+      });
+      expect(response.status).toBe(400);
+      const problem = ProblemDetails.parse(await response.json());
+      expect(problem).toMatchObject({
+        code: 'VALIDATION_FAILED',
+        detail: 'subject is reserved',
+        retryable: 'different_args',
+        details: {
+          issues: [{ path: 'display', message: 'subject is reserved', code: 'reserved' }],
+        },
+      });
+    }
+    const list = await kit.request('GET', '/api/v1/auth/tokens', { cookie });
+    const { data } = (await list.json()) as { data: { subject: string }[] };
+    expect(data.map((t) => t.subject)).not.toContain('local');
+  });
+
+  it('still issues an ordinary agent token', async () => {
+    const { kit, cookie } = await authed();
+    const response = await kit.request('POST', '/api/v1/auth/tokens', {
+      cookie,
+      body: { owner_kind: 'agent', display: 'Local runner' },
+    });
+    expect(response.status).toBe(200);
+  });
+});
+
 describe('transport mounts', () => {
   it('/mcp requires a bearer under auth=token and forwards the principal', async () => {
     const { kit, cookie } = await authed();

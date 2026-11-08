@@ -4,6 +4,7 @@ import type { Scope } from '@browserhive/contracts/enums';
 import type { TokenOwnerKind } from '@browserhive/contracts/http';
 import { sha256Hex } from '../../domain/auth/digest.ts';
 import type { RequestPrincipal } from '../../domain/auth/principal.ts';
+import { isReservedSubject } from '../../domain/auth/reserved-subjects.ts';
 import { isSubsetOf, parseScopes, scopesForKind } from '../../domain/auth/scopes.ts';
 import { mintToken } from '../../domain/auth/token-format.ts';
 import { AppError } from '../../kernel/errors/app-error.ts';
@@ -23,7 +24,7 @@ export const SEED_AGENT_PRINCIPAL_ID = 'agent-1';
 export interface CreateTokenInput {
   readonly ownerKind: TokenOwnerKind;
   readonly display: string;
-  /** Subset of the owner kind's scopes; defaults to the full set. */
+  /** Subset of the owner kind's scopes; defaults to the full set (stored as `[]` for operators). */
   readonly scopes?: readonly Scope[];
   readonly expiresInMs?: number;
   /** Agent tokens: principal id to (re)use; defaults to a slug of `display`. */
@@ -70,6 +71,19 @@ export interface TokenOps {
 /** Internal dependencies of {@link createTokenOps}. */
 export interface TokenOpsDeps extends AuthDeps {
   readonly audit: AuthAudit;
+}
+
+/** `VALIDATION_FAILED` for a reserved agent subject, on the field it came from. */
+function reservedSubject(given: boolean): AppError {
+  return new AppError(
+    'VALIDATION_FAILED',
+    {
+      issues: [
+        { path: given ? 'subject' : 'display', message: 'subject is reserved', code: 'reserved' },
+      ],
+    },
+    { publicMessage: 'subject is reserved' },
+  );
 }
 
 /** Builds the {@link TokenOps}. */
@@ -176,12 +190,16 @@ export function createTokenOps(deps: TokenOpsDeps): TokenOps {
         }
         owner = record;
       } else {
-        owner = await ensureAgentPrincipal(
-          input.subject ?? sanitizeSlug(input.display),
-          input.display,
-        );
+        const subject = input.subject ?? sanitizeSlug(input.display);
+        // Spec 13 T0f: `local`, `browserhive`, `system` and `template:*` are BrowserHive's own
+        // principals; an agent named after one would own what they own (D-52 amendment).
+        if (isReservedSubject(subject)) throw reservedSubject(input.subject !== undefined);
+        owner = await ensureAgentPrincipal(subject, input.display);
       }
-      return issue(owner, input.ownerKind, input.display, scopes, expiresAt, issuer.subject);
+      // An operator token issued without `scopes` stores `[]`: "the operator's full set", which
+      // keeps holding every scope a later release adds (`principalFromRecord` expands it).
+      const stored = input.scopes === undefined && input.ownerKind === 'operator' ? [] : scopes;
+      return issue(owner, input.ownerKind, input.display, stored, expiresAt, issuer.subject);
     },
 
     async listTokens() {
@@ -189,13 +207,14 @@ export function createTokenOps(deps: TokenOpsDeps): TokenOps {
       const principals = new Map((await repos.principals.list()).map((p) => [p.principalId, p]));
       return credentials.map((c) => {
         const owner = principals.get(c.principalId);
+        const scopes = parseScopes(c.scopes);
         return {
           credentialId: c.credentialId,
           publicPrefix: c.publicPrefix ?? '',
           ownerKind: owner?.kind === 'operator' ? 'operator' : 'agent',
           subject: c.principalId,
           display: c.display,
-          scopes: parseScopes(c.scopes),
+          scopes: scopes.length > 0 ? scopes : scopesForKind(owner?.kind ?? 'agent'),
           createdAt: c.createdAt,
           lastUsedAt: c.lastUsedAt,
           expiresAt: c.expiresAt,
