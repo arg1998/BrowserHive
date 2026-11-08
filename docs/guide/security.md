@@ -106,9 +106,24 @@ Records are pruned after `--retentionDays` (default 7) or when the database and 
 
 The data directory is `0700` and secret files are `0600`. Saved logins (`auth-states/`) contain real cookies and storage; protect them like passwords. They are protected by your OS user account, not encrypted by BrowserHive.
 
+## Agents open web URLs only
+
+`navigate` and `new_tab` open `http://`, `https://`, `about:blank` and `data:` URLs, and nothing else. Every other scheme is refused with [`URL_SCHEME_NOT_ALLOWED`](../reference/errors.md#URL_SCHEME_NOT_ALLOWED) before the browser is touched:
+
+- `file:` and `view-source:` would read any file BrowserHive's user can read, including its own data directory.
+- `chrome:`, `chrome-untrusted:`, `chrome-extension:` and `devtools:` pages expose the browser's history, settings and saved passwords.
+- `javascript:` would run agent-written script in the page, even in a session launched with `disable_evaluate: true` or on a server with `allowEvaluate=false`.
+- `mailto:`, `tel:` and app schemes (`slack://`, `zoommtg://`) would launch programs on the host.
+- `blob:`, `filesystem:` and every `about:` page other than `about:blank` are refused too.
+- Input without a scheme is refused rather than guessed: `example.com` and `localhost:3000` must be written as `https://example.com/` and `http://localhost:3000/`.
+
+The scheme is read the way a browser reads it: case, surrounding whitespace, tabs and newlines do not get a URL past the check (`JAVA<tab>SCRIPT:` is `javascript:`). The browser is then given the normalized URL.
+
+This is a fixed rule, not configuration. As a backstop for navigations no tool asked for, BrowserHive closes any tab whose page ends up on a non-web URL (anything but `http:`, `https:`, `about:blank`, `about:srcdoc`, `blob:`, `data:` and Chromium's error page) and logs `non-web scheme page closed` with the session id and scheme. Pages a site opens as `blob:` or `data:` documents, and downloads, are unaffected.
+
 ## The blocklist is not an egress firewall
 
-`--blocklist` stops navigations at the tool boundary and aborts document requests in the browser. Subresources still load, and an agent with `evaluate` can `fetch()` a blocked URL. Use it to keep agents off pages, not to contain them.
+`--blocklist` stops navigations at the tool boundary and aborts document requests in the browser. Subresources still load, and an agent with `evaluate` can `fetch()` a blocked URL. Use it to keep agents off pages, not to contain them. The blocklist covers network schemes only (`http`, `https`, `ws`, `wss`, `ftp`, `ftps`); [the scheme rule above](#agents-open-web-urls-only) keeps agents off every other scheme.
 
 ## The browser sandbox
 

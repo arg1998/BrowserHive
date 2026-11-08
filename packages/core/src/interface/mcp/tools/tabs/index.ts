@@ -2,12 +2,12 @@
 
 import { requireSession } from '../../context.ts';
 import { defineTool, json, type PageVisit, type ToolPack } from '../../definition.ts';
-import { sessionOwnership, urlBlocklist } from '../../policies.ts';
+import { agentUrlHref, sessionOwnership, urlBlocklist, urlScheme } from '../../policies.ts';
 import { navigation, recordNavigation, safeUrl } from '../shared.ts';
 
 /** `new_tab`: opens a tab (identity override awaited first), makes it active, optionally navigates. */
 export const newTab = defineTool('new_tab', {
-  policies: [sessionOwnership, urlBlocklist('url')],
+  policies: [sessionOwnership, urlScheme('url'), urlBlocklist('url')],
   async handler(ctx, args) {
     const session = requireSession(ctx);
     const { tabId, page } = await ctx.services.sessions.newTab(session);
@@ -15,7 +15,7 @@ export const newTab = defineTool('new_tab', {
     if (args.url !== undefined) {
       const url = args.url;
       await navigation(ctx, session, { url, timeoutMs: args.timeout, tabId }, () =>
-        page.goto(url, { waitUntil: args.wait_until, timeout: args.timeout }),
+        page.goto(agentUrlHref(url), { waitUntil: args.wait_until, timeout: args.timeout }),
       );
       visit = await recordNavigation(ctx, session, page);
     }
