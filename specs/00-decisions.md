@@ -943,7 +943,7 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 
 ## D-49 The dashboard is an installable web app with an offline "daemon not running" page; no CLI command
 
-**Status:** Proposed
+**Status:** Accepted
 
 **Context.**
 - **The ask.** Operators reach the dashboard by typing or bookmarking `http://127.0.0.1:9876`. They want it in their app launcher and taskbar like a desktop app, installed from the dashboard itself through the browser's own install flow.
