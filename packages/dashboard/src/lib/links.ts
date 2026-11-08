@@ -33,6 +33,7 @@ export const DOCS_PAGES = {
   dashboardBlocklist: { page: 'guide/dashboard', anchor: 'blocklist' },
   dashboardVault: { page: 'guide/dashboard', anchor: 'vault' },
   dashboardVaultLog: { page: 'guide/dashboard', anchor: 'vault-log' },
+  dashboardSavedLogins: { page: 'guide/dashboard', anchor: 'saved-logins' },
   dashboardLogs: { page: 'guide/dashboard', anchor: 'logs' },
   dashboardSystem: { page: 'guide/dashboard', anchor: 'system' },
   dashboardNotifications: { page: 'guide/dashboard', anchor: 'notifications' },

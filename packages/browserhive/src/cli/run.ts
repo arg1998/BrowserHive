@@ -13,6 +13,7 @@ import { runDbBackup, runDbMigrate, runDbRestore, runDbStatus } from './commands
 import { runDoctor } from './commands/doctor.ts';
 import { runInit } from './commands/init.ts';
 import { runPurge } from './commands/purge.ts';
+import { runSavedLoginsList, runSavedLoginsRemove } from './commands/saved-logins.ts';
 import { runServe } from './commands/serve.ts';
 import { runVersion } from './commands/version.ts';
 import type { CliDeps, CommandContext } from './deps.ts';
@@ -86,6 +87,16 @@ export async function runInvocation(
         invocation.remote,
         invocation.name,
         invocation.sample,
+        invocation.json,
+      );
+    case 'saved-logins-list':
+      return runSavedLoginsList(context, invocation.remote, invocation.json);
+    case 'saved-logins-rm':
+      return runSavedLoginsRemove(
+        context,
+        invocation.remote,
+        invocation.name,
+        invocation.owner,
         invocation.json,
       );
     case 'version':

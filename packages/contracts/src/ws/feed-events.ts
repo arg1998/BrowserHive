@@ -111,6 +111,15 @@ export const BlocklistReloadedEvent = z.object({
   loaded_at: EpochMs,
 });
 
+// auth states ------------------------------------------------------------------------------------
+/** A saved login was saved (or replaced) or deleted; the dashboard refetches `GET /auth-states`. */
+export const AuthStateChangedEvent = z.object({
+  ...ev('auth_state.changed'),
+  owner: z.string(),
+  name: z.string(),
+  action: z.enum(['saved', 'deleted']),
+});
+
 // system -----------------------------------------------------------------------------------------
 /** A degradation was recorded or its count grew. */
 export const SystemDegradedEvent = z.object({ ...ev('system.degraded'), event: SystemEvent });
@@ -182,6 +191,7 @@ export const WsFeedEvent = z.discriminatedUnion('type', [
   VaultPolicyChangedEvent,
   VaultLockStateEvent,
   BlocklistReloadedEvent,
+  AuthStateChangedEvent,
   SystemDegradedEvent,
   SystemRecoveredEvent,
   SystemTickEvent,
@@ -219,6 +229,7 @@ export const WS_TOPIC_EVENTS: { readonly [T in WsStaticTopic]: readonly WsFeedEv
   logs: ['log.record'],
   notifications: ['notification.created', 'notification.updated'],
   channels: ['channel.changed', 'channel.removed', 'delivery.updated', 'action.recorded'],
+  'auth-states': ['auth_state.changed'],
 };
 
 /** Event types published on `session:<id>` topics. */

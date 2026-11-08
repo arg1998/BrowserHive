@@ -71,7 +71,7 @@ BrowserHive/
     │       ├── config/           serverConfigSchema, key registry (env/cli/json names, descriptions)
     │       ├── errors/           error registry (code → status/category/retryable/details schema)
     │       ├── enums/            Channel, PersistenceMode, ClosedReason, UrlCategory, AttentionMode…
-    │       ├── tools/            input/output zod schemas for all 43 tools (+ annotations, titles)
+    │       ├── tools/            input/output zod schemas for all 44 tools (+ annotations, titles)
     │       ├── http/             REST DTOs, PageQuery/Page<T>, problem+json schema
     │       ├── ws/               envelope, client commands, server messages, feed event payloads
     │       └── index.ts
@@ -185,7 +185,7 @@ Each step depends only on the steps before it; a new contributor reading bottom-
 2. `core/kernel`, `infra/persistence` (dialect, runner, schema, repositories, conformance tests).
 3. `infra/logging` + `telemetry` + request context; error model.
 4. `domain/session` + `infra/browsers` + `app/sessions`; isolation and stealth integration suites.
-5. `interface/mcp` dispatcher + all 43 tools; stdio transport; tool-surface tests.
+5. `interface/mcp` dispatcher + all 44 tools; stdio transport; tool-surface tests.
 6. `app/auth`, `interface/http` (routes), `interface/ws`, static; `composition`; `browserhive` CLI.
 7. Vault, operator requests, auth states, blocklist, notifications, retention, purge.
 8. Dashboard foundation (shell, tokens, component set), then pages.

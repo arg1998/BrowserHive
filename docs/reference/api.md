@@ -2,7 +2,7 @@
 
 # REST API reference
 
-The admin REST API served under `/api/v1` on the same port as MCP and the dashboard when `--admin` is on (112 operations), generated from `HTTP_ENDPOINTS` in `@browserhive/contracts/http`. Request and response schemas are in the OpenAPI 3.1 document the server serves at `/api/v1/openapi.json`, with an interactive reference UI at `/api/v1/docs`.
+The admin REST API served under `/api/v1` on the same port as MCP and the dashboard when `--admin` is on (114 operations), generated from `HTTP_ENDPOINTS` in `@browserhive/contracts/http`. Request and response schemas are in the OpenAPI 3.1 document the server serves at `/api/v1/openapi.json`, with an interactive reference UI at `/api/v1/docs`.
 
 Summaries come from `packages/contracts/generated/openapi.json`.
 
@@ -126,6 +126,13 @@ Summaries come from `packages/contracts/generated/openapi.json`.
 | GET | `/api/v1/blocklist` | `getBlocklist` | `blocklist:read` | cookie, bearer | Loaded patterns with hit counts, skipped lines and window stats. |
 | POST | `/api/v1/blocklist/reload` | `reloadBlocklist` | `blocklist:write` | cookie, bearer | Re-read the blocklist file; on failure the previous list stays active. |
 | GET | `/api/v1/blocklist/attempts` | `listBlockedAttempts` | `blocklist:read` | cookie, bearer | Blocked request audit (served even when no blocklist is configured). |
+
+## auth-states
+
+| Method | Path | operationId | Scope | Auth | Summary |
+|---|---|---|---|---|---|
+| GET | `/api/v1/auth-states` | `listAuthStates` | `sessions:read` | cookie, bearer | Every principal's saved logins (storage states and full profiles), newest first. |
+| DELETE | `/api/v1/auth-states/{owner}/{name}` | `deleteAuthState` | `sessions:write` | cookie, bearer | Delete one principal's saved login with its identity seed. Sessions already restored from it keep running. |
 
 ## System and configuration
 

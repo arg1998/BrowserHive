@@ -5,6 +5,7 @@ import type {
   ActionRecordedEvent,
   AttentionCreatedEvent,
   AttentionResolvedEvent,
+  AuthStateChangedEvent,
   BlocklistHitEvent,
   BlocklistReloadedEvent,
   ChannelChangedEvent,
@@ -129,6 +130,8 @@ export type DomainEvents = {
   readonly 'blocklist.hit': z.infer<typeof BlocklistHitEvent>;
   readonly 'blocklist.reloaded': z.infer<typeof BlocklistReloadedEvent>;
   readonly 'vault.access': z.infer<typeof VaultAccessEvent>;
+  // saved logins (the `auth-states` topic)
+  readonly 'auth_state.changed': z.infer<typeof AuthStateChangedEvent>;
   // operator requests
   readonly 'attention.created': z.infer<typeof AttentionCreatedEvent>;
   readonly 'attention.resolved': z.infer<typeof AttentionResolvedEvent>;

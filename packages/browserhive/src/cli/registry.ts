@@ -11,6 +11,7 @@ export const COMMAND_NAMES = [
   'db',
   'admin',
   'channels',
+  'saved-logins',
   'version',
   'help',
 ] as const;
@@ -362,6 +363,35 @@ export const COMMANDS: readonly CommandDescriptor[] = [
             describe:
               'Sample notification: attention, attention-resolved, vault-confirm, tool-errors, crash, degraded, test, digest or anomaly.',
             defaultText: 'attention',
+          },
+          ...remoteFlags,
+        ],
+      }),
+    ],
+    defaultSubcommand: ['list'],
+    args: [],
+  },
+  {
+    name: 'saved-logins',
+    summary: "List and delete agents' saved logins",
+    description:
+      'Saved logins are the snapshots agents keep with save_storage_state and save_full_profile. Talks to a running server over its REST API (--url, default the configured host and port) with an operator bearer (--token) or the dashboard cookie (--cookie). Sessions already restored from a deleted login keep running.',
+    flags: [],
+    configKeys: ['host', 'port', 'config', 'color'],
+    subcommands: [
+      sub(['list'], "List every principal's saved logins, newest first", {
+        flags: [json, ...remoteFlags],
+      }),
+      sub(['rm'], 'Delete a saved login and its identity seed', {
+        args: [{ name: 'name', required: true, describe: 'Saved-login name.' }],
+        flags: [
+          json,
+          {
+            name: 'owner',
+            kind: 'value',
+            placeholder: '<subject>',
+            describe:
+              'Principal that saved it (local without authentication). Needed only when several principals use the name.',
           },
           ...remoteFlags,
         ],

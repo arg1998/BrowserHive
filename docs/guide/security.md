@@ -114,6 +114,8 @@ Each principal has its own saved-login names. The no-auth `local` principal keep
 - A restore (`context_options.storageState` or `restore_profile`) finds only the caller's own snapshot, and only of the kind asked for. Anything else answers `AUTH_STATE_NOT_FOUND` with the same text as a name that does not exist, so a caller cannot probe for other principals' names.
 - Saving under a name replaces the caller's earlier snapshot of that name, whichever kind it was, including the identity seed saved beside a full profile.
 
+Saved logins are never deleted automatically. The operator sees every principal's on the dashboard's [Saved logins](dashboard.md#saved-logins) page (and with `browserhive saved-logins list`) with the date each was saved, and can delete any of them; an agent can delete its own with `delete_saved_auth`.
+
 Before 0.2.3 all principals shared one directory, and one could overwrite another's snapshot of the same name. See [Upgrading: saved logins move per principal](upgrading.md#saved-logins-move-per-principal).
 
 ## The blocklist is not an egress firewall

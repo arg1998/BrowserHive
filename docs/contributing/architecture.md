@@ -34,7 +34,7 @@ Bun workspaces, boundaries enforced by `dependency-cruiser` and TypeScript proje
 
 | Package | Published | Contents |
 |---|---|---|
-| `packages/contracts` (`@browserhive/contracts`) | no | Every wire shape as zod: config schema and key registry, error registry, enums, the 43 tool contracts, REST DTOs and the endpoint manifest, the WebSocket protocol. Platform-neutral; depends on zod only. |
+| `packages/contracts` (`@browserhive/contracts`) | no | Every wire shape as zod: config schema and key registry, error registry, enums, the 44 tool contracts, REST DTOs and the endpoint manifest, the WebSocket protocol. Platform-neutral; depends on zod only. |
 | `packages/core` (`@browserhive/core`) | no | Everything server-side, in layers (below). |
 | `packages/dashboard` (`@browserhive/dashboard`) | no | React 19 SPA (Vite, Tailwind v4, TanStack Router/Query/Table). Imports only `@browserhive/contracts`. |
 | `packages/browserhive` (`browserhive`) | **yes** | CLI, composition root, programmatic API (`createServer`). Bundles core and the dashboard. |

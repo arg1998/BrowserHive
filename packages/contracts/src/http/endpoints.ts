@@ -112,6 +112,9 @@ export const HTTP_ENDPOINTS: readonly HttpEndpoint[] = [
   ep('getBlocklist', 'get', '/blocklist', 'blocklist:read'),
   ep('reloadBlocklist', 'post', '/blocklist/reload', 'blocklist:write'),
   ep('listBlockedAttempts', 'get', '/blocklist/attempts', 'blocklist:read'),
+  // §4.6.1 saved logins (auth states)
+  ep('listAuthStates', 'get', '/auth-states', 'sessions:read'),
+  ep('deleteAuthState', 'delete', '/auth-states/{owner}/{name}', 'sessions:write'),
   // §4.7 system, config, logs
   ep('getSystem', 'get', '/system', 'system:read'),
   ep('getSystemConfig', 'get', '/system/config', 'system:read'),

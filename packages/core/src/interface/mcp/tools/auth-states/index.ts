@@ -1,5 +1,6 @@
-/** @module interface/mcp/tools/auth-states — save_storage_state, save_full_profile, list_saved_auths (restore is part of launch_session). */
+/** @module interface/mcp/tools/auth-states — save_storage_state, save_full_profile, list_saved_auths, delete_saved_auth (restore is part of launch_session). */
 
+import { authStateNotFound } from '../../../../app/auth-states/store.ts';
 import { sessionDirLayout } from '../../../../app/sessions/profile-dir.ts';
 import { AppError } from '../../../../kernel/errors/app-error.ts';
 import { requireSession } from '../../context.ts';
@@ -74,8 +75,22 @@ export const listSavedAuths = defineTool('list_saved_auths', {
   },
 });
 
+/**
+ * `delete_saved_auth`: removes the caller's snapshot of that name, either kind, with its seed. A
+ * missing name and another principal's answer the same `AUTH_STATE_NOT_FOUND`, and delete nothing.
+ */
+export const deleteSavedAuth = defineTool('delete_saved_auth', {
+  policies: [],
+  async handler(ctx, args) {
+    if (!(await ctx.services.authStates.remove(args.name, ctx.principal))) {
+      throw authStateNotFound(args.name);
+    }
+    return json({ name: args.name, deleted: true as const });
+  },
+});
+
 /** The auth-states pack. */
 export const authStatesPack: ToolPack = {
   id: 'authStates',
-  tools: [saveStorageState, saveFullProfile, listSavedAuths],
+  tools: [saveStorageState, saveFullProfile, listSavedAuths, deleteSavedAuth],
 };

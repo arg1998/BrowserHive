@@ -263,6 +263,17 @@ One broker (D-15) backs two resource views; paths stay recognizable.
 | POST | `/blocklist/reload` | S (`blocklist:write`) | — | `{ok:true, patterns, skipped, loaded_at}`; 400 `BLOCKLIST_LOAD_FAILED` (list left unchanged) |
 | GET | `/blocklist/attempts` | S | filters `session_id`, `pattern`, `domain`, `source[]`, `q`, `since`, `until`; sort `ts|domain|pattern|session|source` | `Page<BlockedRequestRow & {session_slug}>` |
 
+### 4.6.1 Saved logins (auth states)
+
+Snapshots agents saved with `save_storage_state` / `save_full_profile` (02 §6). Session artifacts, so they reuse the `sessions:*` scopes. Never expired automatically.
+
+| Method | Path | Auth | Request | Response |
+|---|---|---|---|---|
+| GET | `/auth-states` | S | — | `{data:[{name, kind:'storage'\|'profile', owner, size, saved_at, source_session_id, source_session_slug}], now}` every principal's, newest first; `source_session_slug` is `null` once the session's record is gone |
+| DELETE | `/auth-states/{owner}/{name}` | S (`sessions:write`) | — | `{ok:true, deleted: AuthStateRow}`: payloads, identity seed and manifest; sessions already restored keep running; one `operator_actions` row (`action:'delete'`, `resource_kind:'auth_state'`, `resource_id:'<owner>/<name>'`, details `{owner, name, kind, size, source_session_id}`); 404 `AUTH_STATE_NOT_FOUND`; 400 for a name outside the auth-state name rule |
+
+Every save and delete publishes `auth_state.changed` on the `auth-states` topic (§6.6).
+
 ### 4.7 System, config, logs
 
 | Method | Path | Auth | Request | Response |
@@ -415,6 +426,7 @@ Ordering: `screencast.start`, `screencast.stop` and `screencast.set_size` from o
 | `vault.access` | `vault.access` `{row}` fleet-wide (scope `vault:read`), so the unfiltered vault log updates live; also published on `session:<id>` |
 | `pages` | `page.visited` `{row}` fleet-wide (scope `sessions:read`), so overview and websites views update live; also published on `session:<id>` |
 | `blocklist` | `blocklist.hit` `{row}`, `blocklist.reloaded` `{patterns, skipped}` |
+| `auth-states` | `auth_state.changed` `{owner, name, action:'saved'\|'deleted'}` (scope `sessions:read`); the dashboard refetches `GET /auth-states` |
 | `system` | `system.degraded` `{event: SystemEvent}`, `system.recovered`, `tick`, `capacity` `{live, max}`, `retention.completed` |
 | `channels` | `channel.changed` `{channel: ChannelView}` (created, edited, paused, resumed, broken, or its stats moved), `channel.removed` `{channel_id}`, `delivery.updated` `{delivery: DeliveryRow}` (a job enqueued or its status changed; the live delivery log), `action.recorded` `{action: ActionRow}` (an act-button press was audited, §9.6) — scope `channels:read`; `channel.changed` also fires when a channel's press listener changes state |
 | `notifications` | `notification.created` `{notification}` (first occurrence), `notification.updated` `{notification}` (the full row: a group grew — `count`, `title`, `body`, `updated_at`, `source_event_id`, `revision` changed — a lifecycle revision changed `state` and `revision` (`updated_at` unchanged), or it was read/dismissed; clients upsert by `notification_id` and re-position by `updated_at`) |

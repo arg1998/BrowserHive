@@ -2,7 +2,7 @@
 
 # MCP tool reference
 
-The 43 tools BrowserHive registers, in registration order, generated from `TOOL_CONTRACTS` in `@browserhive/contracts/tools`. Names, parameters, defaults and result shapes are a frozen contract. Every page-targeting tool accepts an optional `tab_id` (defaults to the active tab). Errors are returned as `[CODE] message` text; see the [error reference](errors.md).
+The 44 tools BrowserHive registers, in registration order, generated from `TOOL_CONTRACTS` in `@browserhive/contracts/tools`. Names, parameters, defaults and result shapes are a frozen contract. Every page-targeting tool accepts an optional `tab_id` (defaults to the active tab). Errors are returned as `[CODE] message` text; see the [error reference](errors.md).
 
 Defaults shown for `launch_session` `channel` and `headless` are the contract defaults; a server started with `--defaultChannel` / `--defaultHeadless` advertises its configured values in `tools/list`.
 
@@ -49,10 +49,11 @@ Defaults shown for `launch_session` `channel` and `headless` are the contract de
 | 37 | [`save_storage_state`](#save_storage_state) | Auth states | Save storage state | no | no | yes | no |
 | 38 | [`save_full_profile`](#save_full_profile) | Auth states | Save full profile | no | no | yes | no |
 | 39 | [`list_saved_auths`](#list_saved_auths) | Auth states | List saved auths | yes | no | yes | no |
-| 40 | [`request_attention`](#request_attention) | Attention (HTTP transport only) | Request attention | no | no | no | no |
-| 41 | [`get_attention_result`](#get_attention_result) | Attention (HTTP transport only) | Get attention result | yes | no | yes | no |
-| 42 | [`vault_list_available`](#vault_list_available) | Vault | Vault: list available | yes | no | yes | no |
-| 43 | [`vault_fill`](#vault_fill) | Vault | Vault: fill | no | no | no | yes |
+| 40 | [`delete_saved_auth`](#delete_saved_auth) | Auth states | Delete saved auth | no | yes | yes | no |
+| 41 | [`request_attention`](#request_attention) | Attention (HTTP transport only) | Request attention | no | no | no | no |
+| 42 | [`get_attention_result`](#get_attention_result) | Attention (HTTP transport only) | Get attention result | yes | no | yes | no |
+| 43 | [`vault_list_available`](#vault_list_available) | Vault | Vault: list available | yes | no | yes | no |
+| 44 | [`vault_fill`](#vault_fill) | Vault | Vault: fill | no | no | no | yes |
 
 ## Lifecycle
 
@@ -1175,6 +1176,30 @@ Result: a JSON array; each item has:
 | `size` | `number` | yes |
 
 Errors: none documented. Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
+
+<a id="delete_saved_auth"></a>
+### `delete_saved_auth`
+
+**Delete saved auth** · capability `mutate` · since 0.3.0
+
+> Delete one of your saved auth snapshots (storage-state or full-profile) by name, together with its identity seed. Sessions already restored from it keep running. A name you have not saved answers AUTH_STATE_NOT_FOUND.
+
+Annotations: readOnly no · destructive yes · idempotent yes · openWorld no
+
+Parameters:
+
+| Name | Type | Required | Default | Notes |
+|---|---|---|---|---|
+| `name` | `string` | yes | — | — |
+
+Result (JSON text block, mirrored in `structuredContent`):
+
+| Field | Type | Always present |
+|---|---|---|
+| `name` | `string` | yes |
+| `deleted` | `true` | yes |
+
+Errors: [`AUTH_STATE_NOT_FOUND`](errors.md#AUTH_STATE_NOT_FOUND), [`PATH_NOT_ALLOWED`](errors.md#PATH_NOT_ALLOWED). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
 
 ## Attention (HTTP transport only)
 

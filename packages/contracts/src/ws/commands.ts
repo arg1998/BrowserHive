@@ -125,7 +125,8 @@ export const WS_TOPIC_SCOPES: {
     | 'system'
     | 'logs'
     | 'notifications'
-    | 'channels']: Scope;
+    | 'channels'
+    | 'auth-states']: Scope;
 } = {
   sessions: 'sessions:read',
   session: 'sessions:read',
@@ -140,4 +141,5 @@ export const WS_TOPIC_SCOPES: {
   logs: 'logs:read',
   notifications: 'notifications:read',
   channels: 'channels:read',
+  'auth-states': 'sessions:read',
 };

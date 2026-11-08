@@ -6,16 +6,17 @@ USAGE
   bh is installed as a shorthand: bh <command> is browserhive <command>.
 
 COMMANDS
-  serve     Start the MCP server (default)
-  init      Install browsers and prepare the data directory
-  doctor    Check the host, browsers, and configuration
-  purge     Delete local state after an inventory and confirmation
-  config    Show, validate, or export the configuration schema
-  db        Inspect, back up, restore, or migrate the database
-  admin     Administrative actions (reset-password, tokens)
-  channels  List, test and preview notification channels
-  version   Print version information
-  help      Show help for a command
+  serve         Start the MCP server (default)
+  init          Install browsers and prepare the data directory
+  doctor        Check the host, browsers, and configuration
+  purge         Delete local state after an inventory and confirmation
+  config        Show, validate, or export the configuration schema
+  db            Inspect, back up, restore, or migrate the database
+  admin         Administrative actions (reset-password, tokens)
+  channels      List, test and preview notification channels
+  saved-logins  List and delete agents' saved logins
+  version       Print version information
+  help          Show help for a command
 
 GLOBAL FLAGS
   -h, --help     Show help.

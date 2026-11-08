@@ -10,6 +10,7 @@ browserhive db status|backup|restore <file>|migrate
 browserhive admin reset-password
 browserhive admin tokens list|create <name>|revoke <name>
 browserhive channels list | test <name> | preview <name> [--sample <kind>]
+browserhive saved-logins list | rm <name> [--owner <subject>]
 browserhive version | --version | -v
 browserhive help [command] | --help | -h
 ```
@@ -148,6 +149,15 @@ Token commands work on the database directly when the server is stopped, or thro
 | `channels preview <name> [--sample <kind>] [--json]` | Prints the platform request a send would make (secrets shown as variable names); sends nothing. Samples: `attention` (default), `attention-resolved`, `vault-confirm`, `tool-errors`, `crash`, `degraded`, `test`, `digest`, `anomaly` (the report samples follow the channel's schedule, zone and content level). |
 
 They talk to the running server: `--url` defaults to the configured host and port, and `--token` (an operator API token) or `--cookie` authenticates. See [Notifications](notifications.md).
+
+## `saved-logins`
+
+| Command | Meaning |
+|---|---|
+| `saved-logins list [--json]` | Every principal's saved logins, newest first: name, kind (cookies & storage, or full profile), owner, size, when it was saved and the session it was saved from (`(deleted)` once that session is gone). |
+| `saved-logins rm <name> [--owner <subject>] [--json]` | Deletes a saved login and the identity saved with it. Without `--owner` it deletes the one principal's login of that name, and stops with the owners' names when several principals use it. Sessions already restored from it keep running. |
+
+Like `channels`, they talk to the running server: `--url` defaults to the configured host and port, and `--token` (an operator API token) or `--cookie` authenticates. The dashboard's [Saved logins](dashboard.md#saved-logins) page shows the same list.
 
 ## `version`
 

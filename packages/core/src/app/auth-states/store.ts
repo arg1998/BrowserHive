@@ -15,6 +15,7 @@ import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import { pathNotAllowed } from '../../kernel/paths.ts';
 import type { AuthStateLocator } from '../../ports/auth-state-locator.ts';
 import type { Clock } from '../../ports/clock.ts';
+import type { EventPublisher } from '../../ports/event-bus.ts';
 import type { Logger } from '../../ports/logger.ts';
 import { unzipToDirectory, type ZipFs, zipDirectory } from './zip.ts';
 
@@ -67,11 +68,35 @@ export type SavedAuthEntry = z.infer<typeof SavedAuthEntrySchema>;
 
 const IdentitySeedFile = z.object({ seed: z.string().min(1) });
 
+/** One snapshot of any principal, as the operator sees it (`GET /auth-states`). */
+export interface AuthStateRecord {
+  readonly name: string;
+  readonly kind: 'storage' | 'profile';
+  /** The principal subject that saved it. */
+  readonly owner: string;
+  readonly size: number;
+  readonly saved_at: number;
+  readonly source_session_id: string;
+}
+
+/** The change event the store publishes after a save or a delete (the `auth-states` topic). */
+export interface AuthStateChangedEvent {
+  readonly type: 'auth_state.changed';
+  readonly owner: string;
+  readonly name: string;
+  readonly action: 'saved' | 'deleted';
+}
+
+/** Events the store publishes. */
+export type AuthStateEvents = { readonly 'auth_state.changed': AuthStateChangedEvent };
+
 /** Constructor dependencies of {@link AuthStateStore}. */
 export interface AuthStateStoreDeps {
   readonly dataDir: string;
   readonly clock: Clock;
   readonly logger: Logger;
+  /** Where `auth_state.changed` goes (the dashboard's live refresh); omitted ⇒ nothing is published. */
+  readonly events?: EventPublisher<AuthStateEvents>;
   /** Defaults to `node:fs/promises`. */
   readonly fs?: AuthStateFs;
 }
@@ -94,6 +119,20 @@ function notFound(name: string, kind: 'storage' | 'profile'): AppError<'AUTH_STA
     { name, kind },
     {
       publicMessage: `No saved ${kindLabel} snapshot named '${name}'. Use list_saved_auths to see what is available.`,
+    },
+  );
+}
+
+/**
+ * `AUTH_STATE_NOT_FOUND` for a request that names no kind (`delete_saved_auth`, the operator's
+ * delete). The same text for a missing name and another principal's, so it reveals nothing.
+ */
+export function authStateNotFound(name: string): AppError<'AUTH_STATE_NOT_FOUND'> {
+  return new AppError(
+    'AUTH_STATE_NOT_FOUND',
+    { name },
+    {
+      publicMessage: `No saved auth snapshot named '${name}'. Use list_saved_auths to see what is available.`,
     },
   );
 }
@@ -200,6 +239,7 @@ export class AuthStateStore implements AuthStateLocator {
       size,
       owner: principal.subject,
     });
+    this.changed(principal.subject, name, 'saved');
     return { name, path, size };
   }
 
@@ -229,6 +269,7 @@ export class AuthStateStore implements AuthStateLocator {
       size,
       owner: principal.subject,
     });
+    this.changed(principal.subject, name, 'saved');
     return { name, path, size };
   }
 
@@ -344,13 +385,52 @@ export class AuthStateStore implements AuthStateLocator {
     return entries;
   }
 
-  /** Deletes every file of a snapshot the caller owns (manifest last). `false` when nothing was removed. */
+  /**
+   * Deletes every file of a snapshot the caller owns, whatever is left of it (manifest last, so an
+   * interrupted delete can be repeated). `false` when the caller has no snapshot of that name.
+   */
   async remove(name: string, principal: SessionPrincipal): Promise<boolean> {
+    return (await this.removeSnapshot(principal.subject, name)) !== null;
+  }
+
+  /**
+   * The operator's delete: removes `owner`'s snapshot `name` and returns what it was, or `null`
+   * when `owner` has no snapshot of that name.
+   */
+  async removeSnapshot(owner: string, name: string): Promise<AuthStateRecord | null> {
     assertValidAuthName(name);
-    const own = await this.ownSnapshot(name, principal);
-    if (own === null) return false;
+    const own = await this.ownSnapshot(name, { subject: owner });
+    if (own === null) return null;
     await this.removeFiles(own.files);
-    return true;
+    this.changed(owner, name, 'deleted');
+    return recordOf(own.manifest);
+  }
+
+  /**
+   * Every principal's snapshots, newest first: the operator's view (`GET /auth-states`). A
+   * per-principal directory only contributes manifests whose owner hashes to it, and the flat
+   * layout only `local`'s, so what is listed is exactly what {@link removeSnapshot} can reach.
+   */
+  async listAll(): Promise<AuthStateRecord[]> {
+    await this.ready();
+    const records: AuthStateRecord[] = [];
+    const collect = async (dir: string, accepts: (owner: string) => boolean) => {
+      for (const file of await this.fs.list(dir)) {
+        if (!file.endsWith(MANIFEST_SUFFIX)) continue;
+        const manifest = await this.readManifest(join(dir, file));
+        if (manifest !== null && accepts(manifest.owner)) records.push(recordOf(manifest));
+      }
+    };
+    await collect(this.dir, (owner) => owner === DEFAULT_OWNER);
+    const principalsDir = join(this.dir, PRINCIPAL_DIRS_NAME);
+    for (const entry of await this.fs.list(principalsDir)) {
+      await collect(
+        join(principalsDir, entry),
+        (owner) => owner !== DEFAULT_OWNER && principalDirName(owner) === entry,
+      );
+    }
+    records.sort((a, b) => b.saved_at - a.saved_at);
+    return records;
   }
 
   /**
@@ -381,6 +461,15 @@ export class AuthStateStore implements AuthStateLocator {
       }
     }
     return complete;
+  }
+
+  private changed(owner: string, name: string, action: 'saved' | 'deleted'): void {
+    this.deps.events?.publish('auth_state.changed', {
+      type: 'auth_state.changed',
+      owner,
+      name,
+      action,
+    });
   }
 
   private ready(): Promise<void> {
@@ -471,6 +560,17 @@ export class AuthStateStore implements AuthStateLocator {
   private async writeManifest(files: AuthStateFiles, manifest: AuthManifest): Promise<void> {
     await this.fs.writeFile(files.manifest, JSON.stringify(manifest, null, 2), AUTH_FILE_MODE);
   }
+}
+
+function recordOf(manifest: AuthManifest): AuthStateRecord {
+  return {
+    name: manifest.name,
+    kind: manifest.kind,
+    owner: manifest.owner,
+    size: manifest.size,
+    saved_at: manifest.saved_at,
+    source_session_id: manifest.source_session_id,
+  };
 }
 
 /** The `node:fs/promises` implementation of {@link AuthStateFs}. */

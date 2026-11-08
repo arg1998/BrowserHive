@@ -15,6 +15,7 @@ import type { ReportSettings } from '@browserhive/contracts/notifications';
 import type { LiveInput } from '@browserhive/contracts/ws';
 import type { AttentionService } from '../../app/attention/attention-service.ts';
 import type { AuthService } from '../../app/auth/auth-service.ts';
+import type { AuthStateStore } from '../../app/auth-states/store.ts';
 import type { ConfigView } from '../../app/config/provenance-view.ts';
 import type { DomainEvents } from '../../app/events/catalog.ts';
 import type { ChannelService } from '../../app/notifications/channel-service.ts';
@@ -302,7 +303,12 @@ export interface HttpServices {
   readonly channels: ChannelsPort;
   /** The `publicUrl` check (spec 08 §5.8). */
   readonly publicUrl: PublicUrlPort;
+  /** Saved logins of every principal (spec 03 §4.6.1). */
+  readonly authStates: AuthStatesPort;
 }
+
+/** The operator's view of saved logins (a structural slice of `AuthStateStore`). */
+export type AuthStatesPort = Pick<AuthStateStore, 'listAll' | 'removeSnapshot'>;
 
 /** The notification channels API (a structural slice of `ChannelService`). */
 export type ChannelsPort = Pick<

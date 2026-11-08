@@ -15,6 +15,7 @@ export const WS_STATIC_TOPICS = [
   'logs',
   'notifications',
   'channels',
+  'auth-states',
 ] as const;
 /** Static topic name. */
 export type WsStaticTopic = (typeof WS_STATIC_TOPICS)[number];

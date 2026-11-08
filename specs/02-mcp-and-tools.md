@@ -2,7 +2,7 @@
 title: "MCP server and tools"
 spec: "02"
 status: Normative
-scope: The MCP server (identity, transports, authentication, client metadata), the declarative tool layer and its dispatcher, the stable catalog of 43 tools, the attention, auth-state and humanize models as agents see them, contract goldens, and the programmatic API.
+scope: The MCP server (identity, transports, authentication, client metadata), the declarative tool layer and its dispatcher, the stable catalog of 44 tools, the attention, auth-state and humanize models as agents see them, contract goldens, and the programmatic API.
 audience: Contributors implementing or changing the MCP layer and tools; authors of MCP clients and agents; reviewers of tool-contract changes.
 related:
   - 00-decisions.md
@@ -18,7 +18,7 @@ related:
 > RFC 2119 when they appear in uppercase. `D-NN` identifiers refer to entries in the
 > [decision log](00-decisions.md). Terminology follows the [specification index](README.md#conventions).
 
-Scope: the MCP server (transports, auth, capabilities), the declarative tool layer and dispatcher, and the **frozen catalog of 43 tools**. Decisions: D-02 (single port, official SDK), D-05 (contracts, snake_case wire), D-07 (error registry), D-08 (telemetry), D-09 (principals), D-12 (stable tool contract), D-15 (operator requests).
+Scope: the MCP server (transports, auth, capabilities), the declarative tool layer and dispatcher, and the **catalog of 44 tools** (existing tools frozen; new tools additive under D-12). Decisions: D-02 (single port, official SDK), D-05 (contracts, snake_case wire), D-07 (error registry), D-08 (telemetry), D-09 (principals), D-12 (stable tool contract), D-15 (operator requests).
 
 The stability contract of this spec: **an agent that works against a release of BrowserHive MUST keep working, unchanged, against every later release with the same major version.** Names, parameter names, defaults, enums, result shapes and error codes are contract; changes are additive (D-12).
 
@@ -287,6 +287,7 @@ Names: `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`, no `..`; violation ⇒ `PATH_NOT_ALL
 | `save_storage_state` | `session_id` · `name` | `{ name, path, size }` (0600 file, manifest written) | session, `PATH_NOT_ALLOWED` | no/no/yes/no |
 | `save_full_profile` | `session_id` · `name` — persistent sessions only; zips `userdata` (regular files only); writes identity seed sidecar when a fingerprint exists | `{ name, path, size }` | session, `INVALID_PERSISTENCE_CONFIG` ('save_full_profile is only valid for a session in persistent mode'), `PATH_NOT_ALLOWED` | no/no/yes/no |
 | `list_saved_auths` | *(none)* | `[{ name, kind: 'storage'\|'profile', saved_at, size }]` newest first — scoped to the caller's principal under `auth=token` (manifests record `owner`) | none | yes/no/yes/no |
+| `delete_saved_auth` (0.3.0) | `name` | `{ name, deleted: true }`; deletes the caller's snapshot of that name, either kind, with its identity seed; sessions already restored from it keep running | `AUTH_STATE_NOT_FOUND` (missing or another principal's name, same text: `No saved auth snapshot named '<name>'. …`, `details.kind` omitted), `PATH_NOT_ALLOWED` | no/yes/yes/no |
 
 ### 3.12 Attention (HTTP only)
 
@@ -322,7 +323,7 @@ Both raise `VAULT_NOT_CONFIGURED` before session lookup when no backend is confi
 
 ### 3.14 Registration order (pinned)
 
-`launch_session, close_session, list_sessions, server_status, session_info, navigate, go_back, go_forward, reload, wait_for_url, new_tab, close_tab, switch_tab, list_tabs, click, type_text, fill, press_key, hover, select_option, scroll, drag_and_drop, screenshot, snapshot, get_content, evaluate, wait_for_selector, wait_for_load_state, accept_next_dialog, dismiss_next_dialog, get_cookies, set_cookies, set_viewport, set_extra_http_headers, upload_file, download_file, save_storage_state, save_full_profile, list_saved_auths, request_attention, get_attention_result, vault_list_available, vault_fill` — 43 names, checked by the stdio handshake test against `tools/list`.
+`launch_session, close_session, list_sessions, server_status, session_info, navigate, go_back, go_forward, reload, wait_for_url, new_tab, close_tab, switch_tab, list_tabs, click, type_text, fill, press_key, hover, select_option, scroll, drag_and_drop, screenshot, snapshot, get_content, evaluate, wait_for_selector, wait_for_load_state, accept_next_dialog, dismiss_next_dialog, get_cookies, set_cookies, set_viewport, set_extra_http_headers, upload_file, download_file, save_storage_state, save_full_profile, list_saved_auths, delete_saved_auth, request_attention, get_attention_result, vault_list_available, vault_fill` — 44 names, checked by the stdio handshake test against `tools/list`.
 
 ## 4. Behavioral guarantees
 
@@ -330,7 +331,7 @@ Rules the dispatcher and tools enforce on top of the shapes in §3. They are par
 
 | Guarantee | Behavior | How it surfaces |
 |---|---|---|
-| Ownership on every tool | the dispatcher applies ownership to every tool that names a session or request, including `close_session`, `list_sessions`, `list_saved_auths`, `get_attention_result` | foreign session ⇒ `closed:false` / not listed / "unknown request" — never an existence oracle |
+| Ownership on every tool | the dispatcher applies ownership to every tool that names a session or request, including `close_session`, `list_sessions`, `list_saved_auths`, `delete_saved_auth`, `get_attention_result` | foreign session ⇒ `closed:false` / not listed / "unknown request" — never an existence oracle |
 | `allowEvaluate=false` is enforced | `evaluate` throws `EVALUATE_DISABLED` when server `allowEvaluate=false` or session `disable_evaluate` | same code and message for both causes |
 | Server defaults are advertised | `launch_session` schema defaults are computed from `defaultHeadless` / `defaultChannel` at registration | visible in `tools/list` defaults |
 | Every call is observed | `INVALID_ARGUMENTS` and other pre-handler failures are observed like any failure | dashboard timeline row, `tool_calls.error_code` |
@@ -360,7 +361,7 @@ Enabled per session (`humanize: true`, requires stealth). Affects `click`, `hove
 ## 8. Contract goldens
 
 - `packages/contracts/test/goldens/tools/<name>.json`: for each tool `{ name, title, description (static part), inputSchema (JSON Schema as sent on the wire), outputSchema, annotations, since }`. `bun run test:goldens` compares the live registry to the files; a diff fails CI. Bless with `UPDATE_GOLDENS=1 bun run test:goldens` and include the diff in the PR with a changeset (`minor` for additive, `major` for anything else).
-- `stdio-handshake.test.ts` spawns the built CLI with `--transport stdio`, runs `initialize → tools/list → tools/call list_sessions`, asserts the 43 names and that nothing but JSON-RPC reaches stdout.
+- `stdio-handshake.test.ts` spawns the built CLI with `--transport stdio`, runs `initialize → tools/list → tools/call list_sessions`, asserts the 44 names and that nothing but JSON-RPC reaches stdout.
 - The dynamic part of `request_attention`'s description is tested separately against floor values 0 and 1800.
 
 ## 9. Programmatic API (`browserhive` package)
@@ -382,5 +383,6 @@ await server.stop({ deadlineMs?: 20_000 }); // idempotent; unwinds even after a 
 - `launch_session` gains keys and error codes only additively (`proxy_label`, `driver`, `BROWSER_NOT_INSTALLED`, `SANDBOX_UNAVAILABLE`; D-13, D-18, D-27). Its input schema and `SessionMetadata` output did not change for the sandbox: the verdict is on the HTTP `SessionSummary` (03 §4.2) and `/system`, not in the tool output; the per-session record of it (D-31) is likewise admin-only, and `list_sessions` is unchanged.
 - `launch_options.chromiumSandbox`: `false` is refused (`UNSAFE_LAUNCH_ARG`, spec 11 §4); `true` is accepted in every `sandbox` mode because it only strengthens the posture, and makes the sandbox a requirement for that session (a host that cannot give it answers `SANDBOX_UNAVAILABLE`, never `INTERNAL_ERROR`).
 - `list_saved_auths` lists the caller's directory and also checks the `owner` field in `.meta.json`; a flat-layout manifest without it (for example one written by hand) is treated as owned by `local`. A flat-layout manifest whose `owner` is not `local` (written before 0.2.3, when all principals shared one directory) is moved into its owner's directory on the first store access after start: payloads and seed first, the manifest last, so an interrupted move is finished on the next access without losing a file. If the owner already has that name (a downgraded release saved it flat), the newer copy by `saved_at` is kept. A name that one principal had already overwritten before the upgrade cannot be told apart afterwards: it moves to whoever saved it last.
+- Saved logins are never expired automatically: silently dropping a login is worse than keeping it. The operator sees every principal's (`GET /auth-states`, the dashboard's Saved logins page, `browserhive saved-logins`) with when each was saved, and deletes them there (`DELETE /auth-states/{owner}/{name}`, audited) or the agent deletes its own with `delete_saved_auth`.
 - `instructions` on the server and `title` on tools are additive; the golden generator normalizes key order so an SDK reordering does not produce a false diff.
 - `resolved_by` of an attention outcome names who answered: the operator principal from the dashboard or the API, or, when the operator answered with an act button in a chat (03 §9.6, D-41), the platform alone (`telegram`, `discord`, `ntfy`): the operator's views and the audit keep the full actor (`telegram:<user id>`), but the agent is untrusted (D-09) and never learns the operator's chat identity. There is no tool that sends a notification, and none will be added to the core catalog: notifications derive only from facts BrowserHive observed (D-32). Scheduled digests and anomaly alerts (D-43, D-44) are computed from the recorded facts on the operator's schedule; no tool can trigger or suppress one. `request_attention` is the agent's way to reach a human, and it already produces the `attention.requested` notification (03 §9) that external channels deliver.
