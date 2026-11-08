@@ -26,6 +26,7 @@ Tokens:
 
 - On the first start with `--auth token`, a token for the principal `agent-1` is generated and printed once.
 - `browserhive admin tokens create <name>` issues more; `list` shows name, public prefix, creation and last use; `revoke` is immediate. The dashboard's System page offers the same.
+- The names `local`, `browserhive`, `system` and `template:…` are reserved and refused, because an agent with such a name would own what BrowserHive's own principals own (for example everything created with `--auth off`). `browserhive doctor` warns about tokens an earlier version created under one; see [reserved names](mcp-clients.md#reserved-names).
 - Tokens are stored as SHA-256 hashes with an 8-character public prefix for lookup; the plaintext is only shown at creation.
 - `BROWSERHIVE_AUTH_TOKENS=name:token,…` adds tokens (at least 32 characters) that are never stored.
 

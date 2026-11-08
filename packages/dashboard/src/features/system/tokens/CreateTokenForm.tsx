@@ -1,4 +1,4 @@
-/** @module features/system/tokens/CreateTokenForm — name an agent and issue its token: label, then input and button on one line, hint under both; validated by the contracts `CreateTokenRequest.display` rule (1–80 chars, trimmed) */
+/** @module features/system/tokens/CreateTokenForm — name an agent and issue its token: label, then input and button on one line, hint under both; validated by the contracts `CreateTokenRequest.display` rule (1–80 chars, trimmed), and a name the server refuses (a reserved subject) is shown under the field */
 import { CreateTokenRequest } from '@browserhive/contracts/http';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useId } from 'react';
@@ -21,8 +21,11 @@ export const TOKEN_NAME_HINT = 'Enter a name of 1 to 80 characters, e.g. ci-runn
 export interface CreateTokenFormProps {
   readonly pending: boolean;
   readonly disabled?: boolean;
-  /** Resolves when the request settled; the field clears only after a success. */
-  readonly onCreate: (display: string, done: () => void) => void;
+  /**
+   * Starts the request. `done` clears the field after a success; `reject` shows the server's
+   * refusal of the name under the field.
+   */
+  readonly onCreate: (display: string, done: () => void, reject: (message: string) => void) => void;
 }
 
 /** Create token form. */
@@ -43,7 +46,11 @@ export function CreateTokenForm({ pending, disabled = false, onCreate }: CreateT
       aria-label="Create agent token"
       className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-2 gap-y-1.5 sm:max-w-xl"
       onSubmit={form.handleSubmit((values) =>
-        onCreate(values.display, () => form.reset({ display: '' })),
+        onCreate(
+          values.display,
+          () => form.reset({ display: '' }),
+          (message) => form.setError('display', { type: 'server', message }, { shouldFocus: true }),
+        ),
       )}
     >
       <Label htmlFor={inputId} className="col-span-2">
@@ -65,7 +72,7 @@ export function CreateTokenForm({ pending, disabled = false, onCreate }: CreateT
       </Button>
       {error !== undefined ? (
         <p id={errorId} role="alert" className="col-span-2 text-sm text-danger-text">
-          {TOKEN_NAME_HINT}
+          {error.type === 'server' && error.message !== undefined ? error.message : TOKEN_NAME_HINT}
         </p>
       ) : null}
       <p id={hintId} className="col-span-2 text-sm text-muted-foreground">

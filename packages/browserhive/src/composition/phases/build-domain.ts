@@ -12,10 +12,13 @@ import {
   DiscordGatewayHub,
   TelegramUpdatesHub,
 } from '@browserhive/core/notifications';
-import type { DomainEvents } from '@browserhive/core/runtime';
+import type { DomainEvents, Logger } from '@browserhive/core/runtime';
 import {
   createNanoidIdGenerator,
   DegradationService,
+  describeReservedSubjects,
+  findReservedSubjects,
+  hasReservedSubjects,
   isInsecurePublicUrl,
   serializeError,
 } from '@browserhive/core/runtime';
@@ -133,6 +136,7 @@ async function buildDomain(
     registerSecret: (literal) => secrets.add(literal),
   });
   const seeds = await seedCredentials(ctx, auth.service);
+  await warnReservedSubjects(logger, auth.service, config.authTokens);
   const timers = createTimers((err) =>
     logger.warn('timer callback failed', { err: serializeError(err) }),
   );
@@ -337,6 +341,33 @@ async function buildDomain(
       relay.detach();
     },
   };
+}
+
+/**
+ * Spec 13 T0f: tokens issued before token creation refused reserved subjects keep working, so say
+ * so once per boot, naming them, and let the operator revoke them. Nothing is revoked here. A
+ * failed listing never fails the boot.
+ */
+export async function warnReservedSubjects(
+  logger: Logger,
+  auth: { listTokens: () => Promise<Parameters<typeof findReservedSubjects>[0]> },
+  authTokens: readonly string[],
+): Promise<void> {
+  try {
+    const findings = findReservedSubjects(await auth.listTokens(), authTokens);
+    if (!hasReservedSubjects(findings)) return;
+    logger.warn('reserved subjects in use', {
+      detail: describeReservedSubjects(findings),
+      tokens: findings.tokens.map((t) => ({
+        subject: t.subject,
+        credential_id: t.credentialId,
+        public_prefix: t.publicPrefix,
+      })),
+      auth_token_names: [...findings.configNames],
+    });
+  } catch (err) {
+    logger.warn('reserved check failed', { err: serializeError(err) });
+  }
 }
 
 /**

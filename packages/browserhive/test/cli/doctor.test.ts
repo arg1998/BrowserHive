@@ -53,6 +53,7 @@ describe('doctor', () => {
       'vault',
       'unrecognised data files',
       'database',
+      'reserved subjects',
       'otel',
       'max sessions',
       'secrets',
@@ -72,7 +73,7 @@ describe('doctor', () => {
     expect(run.stdout).toMatch(/^\s+CHECK\s+DETAIL/m);
     expect(run.stdout).toContain('✓  bun');
     expect(run.stdout).toContain('config: maxSessions=4 (cli) shadows env=2');
-    expect(run.stdout).toContain('21 passed, 0 warnings, 0 failed');
+    expect(run.stdout).toContain('22 passed, 0 warnings, 0 failed');
   });
 
   it.each([
@@ -159,7 +160,7 @@ describe('doctor', () => {
       });
       expect(run.code).toBe(2);
       expect(run.stdout).toMatch(/!\s+bh\s+\/home\/me\/bin\/bh is not BrowserHive's/);
-      expect(run.stdout).toContain('20 passed, 1 warnings, 0 failed');
+      expect(run.stdout).toContain('21 passed, 1 warnings, 0 failed');
     });
 
     it.each([
@@ -317,6 +318,61 @@ describe('doctor', () => {
       }),
     });
     expect(ok.byName.get('notification channels')?.status).toBe('ok');
+  });
+
+  it('reserved subjects: an agent token acting as local, system or template:* is a warning naming it (spec 13 T0f)', async () => {
+    const row = (subject: string, n: number, ownerKind: 'agent' | 'operator' = 'agent') => ({
+      credentialId: `cred-${n}`,
+      publicPrefix: `pre${n}xxxx`,
+      ownerKind,
+      subject,
+      scopes: ['mcp:tools'],
+      createdAt: 0,
+      lastUsedAt: null,
+      expiresAt: null,
+    });
+    const storage = storageState({
+      tokens: [
+        row('ci-runner', 1),
+        row('local', 2),
+        row('template:x', 3),
+        row('system', 4, 'operator'),
+      ],
+    });
+    const { run, byName } = await doctorJson({ argv: [], fs: healthyFs(), storage });
+    expect(run.code).toBe(2);
+    const reserved = byName.get('reserved subjects');
+    expect(reserved?.status).toBe('warn');
+    expect(reserved?.detail).toContain('local (credential cred-2, prefix pre2xxxx)');
+    expect(reserved?.detail).toContain('template:x (credential cred-3, prefix pre3xxxx)');
+    expect(reserved?.detail).toContain(
+      "revoke each with 'browserhive admin tokens revoke <credential>'",
+    );
+    expect(reserved?.detail).not.toContain('ci-runner');
+    expect(reserved?.detail).not.toContain('cred-4');
+    // Doctor only reports: it opened the database read-only and revoked nothing.
+    expect(storage.tokens).toHaveLength(4);
+    expect(storage.opened.every((o) => o.readOnly)).toBe(true);
+
+    const fs = healthyFs();
+    fs.put(
+      '/work/browserhive.config.json',
+      JSON.stringify({ authTokens: [TOKEN, `Local:${'a'.repeat(32)}`] }),
+      0o600,
+    );
+    const config = (await doctorJson({ argv: [], fs })).byName.get('reserved subjects');
+    expect(config?.status).toBe('warn');
+    expect(config?.detail).toBe(
+      'authTokens items with a reserved name: Local; rename them in the config',
+    );
+    expect(config?.detail).not.toContain('a'.repeat(32));
+
+    const clean = await doctorJson({ argv: [], fs: healthyFs() });
+    expect(clean.byName.get('reserved subjects')).toEqual({
+      check: 'reserved subjects',
+      status: 'ok',
+      detail: 'no agent token uses a reserved subject',
+    });
   });
 
   it('maxSessions unbounded or above RAM is a warning', async () => {

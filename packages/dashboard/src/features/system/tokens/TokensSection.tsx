@@ -11,7 +11,7 @@ import { SkeletonKv } from '@/components/shared/Skeletons.tsx';
 import { formatNumber } from '@/lib/format/bytes.ts';
 import { ICONS } from '@/lib/icons.ts';
 import { docsUrl } from '@/lib/links.ts';
-import { isForbidden, useCreateToken, useRevokeToken, useTokens } from './api.ts';
+import { isForbidden, nameRejection, useCreateToken, useRevokeToken, useTokens } from './api.ts';
 import { CreateTokenForm } from './CreateTokenForm.tsx';
 import { type CreatedToken, TokenCreatedDialog } from './TokenCreatedDialog.tsx';
 import { TokenTable } from './TokenTable.tsx';
@@ -127,7 +127,15 @@ export function TokensSection({ origin, authMode, daemon }: TokensSectionProps) 
               <CreateTokenForm
                 pending={create.isPending}
                 disabled={tokens.isError}
-                onCreate={(display, done) => create.create(display, { onSuccess: done })}
+                onCreate={(display, done, reject) =>
+                  create.create(display, {
+                    onSuccess: done,
+                    onError: (error) => {
+                      const message = nameRejection(error);
+                      if (message !== null) reject(message);
+                    },
+                  })
+                }
               />
             </div>
             <DataPanel

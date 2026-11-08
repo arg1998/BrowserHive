@@ -39,6 +39,11 @@ export {
   type RequestPrincipal,
 } from './principal.ts';
 export {
+  isReservedSubject,
+  RESERVED_SUBJECT_PREFIX,
+  RESERVED_SUBJECTS,
+} from './reserved-subjects.ts';
+export {
   AGENT_SCOPES,
   ALL_SCOPES,
   isScope,

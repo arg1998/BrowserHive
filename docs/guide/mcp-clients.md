@@ -27,6 +27,12 @@ With `--auth token`, every request to `/mcp` needs `Authorization: Bearer <token
   While a server is running, the same commands work against it over the REST API, or you can manage tokens on the dashboard's System page.
 - **Ephemeral tokens:** `BROWSERHIVE_AUTH_TOKENS=ci-runner:<32+ characters>` adds tokens that are never stored.
 
+### Reserved names
+
+The names `local`, `browserhive` and `system`, and any name starting with `template:`, belong to BrowserHive: `local` owns everything created with `--auth off`, including saved logins without an owner. A token cannot be created under them, in any letter case or with extra spaces or punctuation (`Local`, `local `, `-system-`): the CLI and the dashboard answer `subject is reserved` (HTTP 400 [`VALIDATION_FAILED`](../reference/errors.md#VALIDATION_FAILED)). Names that only contain one of them, such as `local-runner`, are fine.
+
+A token created under one of these names by an earlier version keeps working until you revoke it. `browserhive doctor` warns about each one, and the server logs `reserved subjects in use` once at startup, naming the token's credential id and prefix. Revoke it with `browserhive admin tokens revoke <credential id>` or on the dashboard's System page, then create a new token under another name. BrowserHive never revokes it for you. An entry in `BROWSERHIVE_AUTH_TOKENS` with a reserved name gets the same warning; rename it.
+
 In the snippets below, replace `<token>` with a real token, or remove the `Authorization` header when auth is off.
 
 ## Claude Code
