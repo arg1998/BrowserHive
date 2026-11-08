@@ -1,6 +1,7 @@
 /** @module interface/http/auth-matrix.test — every route × {no credential → 401, must-change-password → 403 except the allowed three, valid → neither} (spec 09 §3.2). */
 
 import { describe, expect, it } from 'bun:test';
+import { Scope } from '@browserhive/contracts/enums';
 import { ProblemDetails } from '@browserhive/contracts/errors';
 import { HTTP_ENDPOINTS, PASSWORD_CHANGE_ALLOWED_OPERATIONS } from '@browserhive/contracts/http';
 import { createHttpKit } from '../../../test/helpers/http-kit.ts';
@@ -112,6 +113,82 @@ describe('auth matrix: bearer principals', () => {
       headers: { authorization: `Bearer ${token}` },
     });
     expect(tokens.status).toBe(403);
+  });
+
+  it('an operator token is limited to its scopes: 200 on a read it holds, 403 FORBIDDEN on writes', async () => {
+    const kit = await createHttpKit();
+    const cookie = await kit.login();
+    const created = await kit.request('POST', '/api/v1/auth/tokens', {
+      cookie,
+      body: { owner_kind: 'operator', display: 'monitor', scopes: ['system:read'] },
+    });
+    expect(created.status).toBe(200);
+    const { token } = (await created.json()) as { token: string };
+    const bearer = { authorization: `Bearer ${token}` };
+    const codeOf = async (response: Response) =>
+      ProblemDetails.parse(JSON.parse(await response.text())).code;
+
+    expect((await kit.request('GET', '/api/v1/system', { headers: bearer })).status).toBe(200);
+    const write = await kit.request('PATCH', '/api/v1/system/log-level', {
+      headers: bearer,
+      body: { spec: 'debug' },
+    });
+    expect(write.status).toBe(403);
+    expect(await codeOf(write)).toBe('FORBIDDEN');
+    const bulk = await kit.request('POST', '/api/v1/sessions/bulk', {
+      headers: { ...bearer, 'idempotency-key': 'k-1' },
+      body: { action: 'terminate', session_ids: ['shop-00000001'] },
+    });
+    expect(bulk.status).toBe(403);
+    expect(await codeOf(bulk)).toBe('FORBIDDEN');
+    expect((await kit.request('GET', '/api/v1/sessions', { headers: bearer })).status).toBe(403);
+
+    // /auth/me reports the token's real scopes.
+    const me = await kit.request('GET', '/api/v1/auth/me', { headers: bearer });
+    expect(me.status).toBe(200);
+    expect(((await me.json()) as { principal: { scopes: string[] } }).principal.scopes).toEqual([
+      'system:read',
+    ]);
+
+    // Account administration needs the full set: a narrowed token cannot mint a wider one.
+    const mint = await kit.request('POST', '/api/v1/auth/tokens', {
+      headers: bearer,
+      body: { owner_kind: 'operator', display: 'wider' },
+    });
+    expect(mint.status).toBe(403);
+    expect(await codeOf(mint)).toBe('FORBIDDEN');
+    expect((await kit.request('GET', '/api/v1/auth/tokens', { headers: bearer })).status).toBe(403);
+    // Nor reach MCP without `mcp:tools`.
+    expect((await kit.request('POST', '/mcp', { headers: bearer })).status).toBe(403);
+  });
+
+  it('an operator token issued without scopes holds the full set, as before', async () => {
+    const kit = await createHttpKit();
+    const cookie = await kit.login();
+    const created = await kit.request('POST', '/api/v1/auth/tokens', {
+      cookie,
+      body: { owner_kind: 'operator', display: 'cli' },
+    });
+    const { token } = (await created.json()) as { token: string };
+    const bearer = { authorization: `Bearer ${token}` };
+    const me = await kit.request('GET', '/api/v1/auth/me', { headers: bearer });
+    expect(((await me.json()) as { principal: { scopes: string[] } }).principal.scopes).toEqual([
+      ...Scope.options,
+    ]);
+    expect((await kit.request('GET', '/api/v1/sessions', { headers: bearer })).status).toBe(200);
+    expect((await kit.request('GET', '/api/v1/channels', { headers: bearer })).status).toBe(200);
+    const write = await kit.request('PATCH', '/api/v1/system/log-level', {
+      headers: bearer,
+      body: { spec: 'info' },
+    });
+    expect(write.status).toBe(200);
+    expect((await kit.request('GET', '/api/v1/auth/tokens', { headers: bearer })).status).toBe(200);
+    const mint = await kit.request('POST', '/api/v1/auth/tokens', {
+      headers: bearer,
+      body: { owner_kind: 'agent', display: 'bot' },
+    });
+    expect(mint.status).toBe(200);
+    expect((await kit.request('POST', '/mcp', { headers: bearer })).status).toBe(200);
   });
 
   it('a present-but-invalid bearer is 401, never anonymous', async () => {

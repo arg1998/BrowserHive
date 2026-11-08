@@ -28,6 +28,12 @@ const AGENT: RequestPrincipal = {
   auth: { method: 'bearer' },
   scopes: ['mcp:tools'],
 };
+/** An operator API token issued with `scopes: ['system:read']`. */
+const OPERATOR_TOKEN: RequestPrincipal = {
+  ...OPERATOR,
+  auth: { method: 'bearer', credentialId: 'cred-1' },
+  scopes: ['system:read'],
+};
 const SID = 'shop-00000001';
 
 class FakeLive implements LiveViewPort {
@@ -168,6 +174,39 @@ describe('feed', () => {
     expect(socket.last()).toMatchObject({
       kind: 'error',
       corr: 'x',
+      payload: { code: 'FORBIDDEN' },
+    });
+  });
+
+  it('checks topic and command scopes for an operator token: only what its credential carries', async () => {
+    const socket = new FakeSocket();
+    const conn = hub.open(socket, OPERATOR_TOKEN);
+    await send(conn, { type: 'subscribe', topic: 'system', corr: 'ok' });
+    expect(socket.messages().some((m) => m.kind === 'error' && m.corr === 'ok')).toBe(false);
+    expect(socket.messages().some((m) => m.kind === 'reply' && m.corr === 'ok')).toBe(true);
+    await send(conn, { type: 'subscribe', topic: 'sessions', corr: 'x' });
+    expect(socket.last()).toMatchObject({
+      kind: 'error',
+      corr: 'x',
+      payload: { code: 'FORBIDDEN' },
+    });
+    await send(conn, {
+      type: 'session.set_viewport',
+      session_id: SID,
+      width: 800,
+      height: 600,
+      corr: 'v',
+    });
+    expect(socket.last()).toMatchObject({
+      kind: 'error',
+      corr: 'v',
+      payload: { code: 'FORBIDDEN' },
+    });
+    expect(live.viewports).toEqual([]);
+    await send(conn, { type: 'logs.tail', corr: 'l' });
+    expect(socket.last()).toMatchObject({
+      kind: 'error',
+      corr: 'l',
       payload: { code: 'FORBIDDEN' },
     });
   });

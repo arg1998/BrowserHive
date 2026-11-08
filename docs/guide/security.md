@@ -51,7 +51,19 @@ Operator API tokens let scripts call the REST API without a browser. Every login
 
 ### Authorization
 
-Operators hold every scope. Agent tokens only hold the tool scope: they cannot read the dashboard API, resolve their own attention requests, or change vault policy. Scopes per REST route are listed in the [API reference](../reference/api.md).
+Signed in to the dashboard, an operator holds every scope. Agent tokens only hold the tool scope: they cannot read the dashboard API, resolve their own attention requests, or change vault policy. Scopes per REST route are listed in the [API reference](../reference/api.md).
+
+**Scopes limit operator API tokens too.** A token is limited to the scopes it was issued with, whoever owns it, on the REST API, the WebSocket and `/mcp`. For example, `POST /api/v1/auth/tokens` with this body issues a read-only monitoring token:
+
+```json
+{ "owner_kind": "operator", "display": "monitoring", "scopes": ["system:read", "sessions:read"] }
+```
+
+That token can read `/system` and the session list, and gets 403 `FORBIDDEN` on anything else. `GET /api/v1/auth/me` shows the scopes it holds.
+
+- A token issued without `scopes` holds every operator scope, including scopes added by later releases. Tokens issued that way before 0.2.3 keep holding every scope after the upgrade.
+- Managing tokens, grants, dashboard sessions and the password needs the whole operator: the dashboard, or a token that holds every scope. A narrowed token cannot issue a wider one.
+- `/mcp` needs the `mcp:tools` scope.
 
 ## The vault: credentials the model never sees
 
