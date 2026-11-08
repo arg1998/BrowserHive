@@ -3,6 +3,7 @@
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import type { StealthDriver } from '@browserhive/contracts/enums';
 import type { ToolPackId } from '@browserhive/contracts/tools';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -55,6 +56,8 @@ export interface ToolHarnessOptions {
   readonly trace?: boolean;
   /** Session cap (default 8). */
   readonly maxSessions?: number;
+  /** Driver a `stealth: true` session launches with (default `playwright`, the stock driver). */
+  readonly stealthDriver?: StealthDriver;
   /** Real driver for integration suites (default: `FakeBrowserDriver`). */
   readonly driver?: BrowserDriver;
   readonly pageActions?: PageActions;
@@ -135,7 +138,7 @@ export async function createToolHarness(options: ToolHarnessOptions = {}): Promi
       persistence: 'memory',
       maxSessions: options.maxSessions ?? 8,
       stealth: 'off',
-      stealthDriver: 'playwright',
+      stealthDriver: options.stealthDriver ?? 'playwright',
       fingerprint: false,
       humanize: false,
       trace: options.trace ?? false,

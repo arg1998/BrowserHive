@@ -231,7 +231,7 @@ Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](err
 
 **Navigate** · capability `navigate` · since 0.1.0
 
-> Navigate a tab to a URL (defaults to the active tab). The operator may maintain a URL blocklist; a blocked target fails with URL_BLOCKED and must not be retried.
+> Navigate a tab to a URL (defaults to the active tab). The operator may maintain a URL blocklist; a blocked target fails with URL_BLOCKED and must not be retried. A URL that answers with a download (Content-Disposition: attachment) saves the file into the managed downloads dir (<data-dir>/sessions/<id>/downloads/) within the same timeout: the tab keeps its page, status is null, and download holds saved_to, suggested_name and size, as download_file returns them. A download that fails or runs out of time is DOWNLOAD_FAILED.
 
 Annotations: readOnly no · destructive no · idempotent no · openWorld yes
 
@@ -252,8 +252,9 @@ Result (JSON text block, mirrored in `structuredContent`):
 | `session_id` | `string` | yes |
 | `url` | `string` | yes |
 | `status` | `number` or `null` | yes |
+| `download` | `object` | no |
 
-Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`URL_BLOCKED`](errors.md#URL_BLOCKED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`NAVIGATION_TIMEOUT`](errors.md#NAVIGATION_TIMEOUT), [`NAVIGATION_FAILED`](errors.md#NAVIGATION_FAILED). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
+Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`URL_BLOCKED`](errors.md#URL_BLOCKED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`NAVIGATION_TIMEOUT`](errors.md#NAVIGATION_TIMEOUT), [`NAVIGATION_FAILED`](errors.md#NAVIGATION_FAILED), [`DOWNLOAD_FAILED`](errors.md#DOWNLOAD_FAILED). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
 
 <a id="go_back"></a>
 ### `go_back`
@@ -370,7 +371,7 @@ Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](err
 
 **New tab** · capability `navigate` · since 0.1.0
 
-> Open a new tab in the session and make it active. Optionally navigate it to a URL. Returns the stable tab_id other tools accept via their optional tab_id argument.
+> Open a new tab in the session and make it active. Optionally navigate it to a URL. Returns the stable tab_id other tools accept via their optional tab_id argument. A url that answers with a download saves the file as navigate does and returns it under download (saved_to, suggested_name, size); the tab stays open on its blank page.
 
 Annotations: readOnly no · destructive no · idempotent no · openWorld yes
 
@@ -390,8 +391,9 @@ Result (JSON text block, mirrored in `structuredContent`):
 | `session_id` | `string` | yes |
 | `tab_id` | `string` | yes |
 | `url` | `string` | yes |
+| `download` | `object` | no |
 
-Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`URL_BLOCKED`](errors.md#URL_BLOCKED), [`NAVIGATION_TIMEOUT`](errors.md#NAVIGATION_TIMEOUT), [`NAVIGATION_FAILED`](errors.md#NAVIGATION_FAILED). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
+Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`URL_BLOCKED`](errors.md#URL_BLOCKED), [`NAVIGATION_TIMEOUT`](errors.md#NAVIGATION_TIMEOUT), [`NAVIGATION_FAILED`](errors.md#NAVIGATION_FAILED), [`DOWNLOAD_FAILED`](errors.md#DOWNLOAD_FAILED). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
 
 <a id="close_tab"></a>
 ### `close_tab`
@@ -776,7 +778,7 @@ Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](err
 
 **Get content** · capability `read` · since 0.1.0
 
-> Return the current HTML content of a tab.
+> Return the current HTML content of a tab. While the tab is still navigating, waits up to 5 s for the new page to reach domcontentloaded; if it is still navigating then, fails with WAIT_TIMEOUT, which is safe to retry.
 
 Annotations: readOnly yes · destructive no · idempotent yes · openWorld no
 
@@ -795,14 +797,14 @@ Result (JSON text block, mirrored in `structuredContent`):
 | `url` | `string` | yes |
 | `html` | `string` | yes |
 
-Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
+Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`WAIT_TIMEOUT`](errors.md#WAIT_TIMEOUT). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
 
 <a id="evaluate"></a>
 ### `evaluate`
 
 **Evaluate** · capability `mutate` · since 0.1.0
 
-> Evaluate a JavaScript expression in the tab context and return the result. Function-shaped strings are auto-wrapped as IIFEs. A session launched with disable_evaluate: true rejects this call with EVALUATE_DISABLED.
+> Evaluate a JavaScript expression in the tab context and return the result. An expression that is exactly one function (an arrow or function expression, async included) is called and its result returned; anything else, including an IIFE that is already invoked, runs as written. A page-side exception fails with SCRIPT_ERROR carrying its message. A session launched with disable_evaluate: true rejects this call with EVALUATE_DISABLED.
 
 Annotations: readOnly no · destructive no · idempotent no · openWorld yes
 

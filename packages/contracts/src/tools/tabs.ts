@@ -1,6 +1,6 @@
 /** @module contracts/tools/tabs — new_tab, close_tab, switch_tab, list_tabs contracts */
 import { z } from 'zod';
-import { annotations, SESSION_ERRORS, SINCE, WaitUntil } from './shared.ts';
+import { annotations, SavedDownload, SESSION_ERRORS, SINCE, WaitUntil } from './shared.ts';
 import { defineTool } from './types.ts';
 
 /** One `list_tabs` row. `title` is `''` when the page refused to report one. */
@@ -17,18 +17,31 @@ export const NEW_TAB = defineTool({
   title: 'New tab',
   description:
     'Open a new tab in the session and make it active. Optionally navigate it to a URL. ' +
-    'Returns the stable tab_id other tools accept via their optional tab_id argument.',
+    'Returns the stable tab_id other tools accept via their optional tab_id argument. A url ' +
+    'that answers with a download saves the file as navigate does and returns it under ' +
+    'download (saved_to, suggested_name, size); the tab stays open on its blank page.',
   input: z.object({
     session_id: z.string(),
     url: z.string().optional(),
     wait_until: WaitUntil.default('load'),
     timeout: z.number().int().nonnegative().default(30_000),
   }),
-  output: z.object({ session_id: z.string(), tab_id: z.string(), url: z.string() }),
+  output: z.object({
+    session_id: z.string(),
+    tab_id: z.string(),
+    url: z.string(),
+    download: SavedDownload.optional(),
+  }),
   annotations: annotations(false, false, false, true),
   pack: 'tabs',
   capability: 'navigate',
-  errors: [...SESSION_ERRORS, 'URL_BLOCKED', 'NAVIGATION_TIMEOUT', 'NAVIGATION_FAILED'],
+  errors: [
+    ...SESSION_ERRORS,
+    'URL_BLOCKED',
+    'NAVIGATION_TIMEOUT',
+    'NAVIGATION_FAILED',
+    'DOWNLOAD_FAILED',
+  ],
   since: SINCE,
 });
 

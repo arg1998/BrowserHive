@@ -189,7 +189,7 @@ Process level (installed by the CLI, not by core): `unhandledRejection`/`uncaugh
 
 ### 1.5 Playwright error classification
 
-`infra/browsers/classify-error.ts` maps driver errors to codes with an ordered regex table pinned by tests (each row has a fixture message):
+`infra/browsers/classify-error.ts` maps driver errors to codes with an ordered regex table pinned by tests (each row has a fixture message). A row that names a driver method accepts both the bare prefix Playwright and Patchright 1.63 write (`evaluate: …`, `goto: …`, `saveAs: …`, `async setInputFiles: …`) and the older object-qualified one (`page.evaluate: …`). The unit fixtures carry the 1.63 text plus the old text as extra cases, and the integration contract test (`test/integration/driver-messages.test.ts`) provokes each failure on real Chromium through both drivers, so a driver upgrade that rewords a message fails CI instead of surfacing as `INTERNAL_ERROR`:
 
 | Match | Code |
 |---|---|
@@ -197,11 +197,12 @@ Process level (installed by the CLI, not by core): `unhandledRejection`/`uncaugh
 | `/element is (not visible\|not stable\|not enabled\|not attached\|outside of the viewport)\|intercepts pointer events/i` | ELEMENT_NOT_ACTIONABLE |
 | `/strict mode violation/i` | ELEMENT_NOT_FOUND (`details.count`) |
 | `/net::ERR_[A-Z_]+/` (captured) | NAVIGATION_FAILED |
-| `TimeoutError` during `goto`/`waitForURL`/`waitForLoadState` | NAVIGATION_TIMEOUT |
+| `TimeoutError` during `goto`/`waitForURL`/`waitForLoadState`; the prose `goto: Timeout <n>ms exceeded` (also `goBack`/`goForward`/`reload`) on its own | NAVIGATION_TIMEOUT |
 | `/Target (page|context|browser) has been closed/i` | PAGE_CLOSED (page) / BROWSER_CRASHED (context, browser) |
 | `/Execution context was destroyed/i` | PAGE_CLOSED |
-| `evaluate` rejects with a page-thrown error | SCRIPT_ERROR (`details.message` = first line, ≤ 300 chars) |
-| `/Download.*(failed|canceled)/i` | DOWNLOAD_FAILED |
+| `evaluate` / `evaluateHandle` / `evaluateAll` / `$eval` / `$$eval` rejects with a page-thrown error (`evaluate: TypeError: …`, `page.evaluate: …`) | SCRIPT_ERROR (`details.message` = first line, ≤ 300 chars) |
+| `/Download.*(failed|canceled)/i`; a download method's own failure, `saveAs: canceled` / `path: …` / `createReadStream: …` (with or without `download.`) | DOWNLOAD_FAILED |
+| `content: Unable to retrieve content because the page is navigating…` | WAIT_TIMEOUT (`what: 'the page to finish navigating'`; `get_content` waits once before answering it, 02 §3) |
 | `setInputFiles` failures | UPLOAD_FAILED |
 | `/Executable doesn't exist/i` | BROWSER_NOT_INSTALLED (`details.install_command = 'browserhive init'`) |
 | a launch whose sandbox could not start: Chrome's or Playwright's markers (`Chromium sandboxing failed!`, `No usable sandbox`, `crbug.com/638180`, `crbug.com/357670`, `Failed to move to new namespace`, `zygote_host_impl_linux`, `The SUID sandbox helper binary was found, but is not configured correctly` (Edge on Ubuntu), …), or any other failure of a sandboxed launch after which the same browser starts without the sandbox | SANDBOX_UNAVAILABLE (`retryable: never`) when the sandbox was required; under `sandbox=auto` the session falls back instead. **Never `INTERNAL_ERROR`**: the failure is a property of the host, and `backoff` would make an agent retry forever |

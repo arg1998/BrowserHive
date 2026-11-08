@@ -71,7 +71,51 @@ describe('snapshot / get_content', () => {
     const content = await executeTool(h, 'get_content', { session_id: id });
     expect(content.value).toEqual({ session_id: id, url: 'about:blank', html: '<p>clicked</p>' });
   });
+
+  it('get_content waits for a navigation in flight and reads once more (#55)', async () => {
+    h = await createToolHarness();
+    const id = await h.launch();
+    const page = handle().firstPage;
+    page.script.html = '<p>arrived</p>';
+    page.failWith('content', new Error(NAVIGATING));
+    const content = await executeTool(h, 'get_content', { session_id: id });
+    expect(content.value).toEqual({ session_id: id, url: 'about:blank', html: '<p>arrived</p>' });
+    const methods = page.methods().filter((m) => m === 'content' || m === 'waitForLoadState');
+    expect(methods).toEqual(['content', 'waitForLoadState', 'content']);
+    expect(page.calls.find((c) => c.method === 'waitForLoadState')?.args).toEqual([
+      'domcontentloaded',
+      { timeout: 5000 },
+    ]);
+  });
+
+  it('get_content answers WAIT_TIMEOUT, never INTERNAL_ERROR, while the page keeps navigating', async () => {
+    h = await createToolHarness();
+    const id = await h.launch();
+    handle().firstPage.failWith('content', new Error(NAVIGATING), true);
+    const result = await h.call('get_content', { session_id: id });
+    expect(textOf(result)).toBe(
+      '[WAIT_TIMEOUT] Timed out after 5000 ms waiting for the page to finish navigating.',
+    );
+    expect(result._meta?.['browserhive.ai/error']).toMatchObject({
+      details: { what: 'the page to finish navigating', timeout_ms: 5000 },
+    });
+  });
+
+  it('get_content does not retry other failures', async () => {
+    h = await createToolHarness();
+    const id = await h.launch();
+    const page = handle().firstPage;
+    page.failWith('content', new Error('content: Target page, context or browser has been closed'));
+    expect(textOf(await h.call('get_content', { session_id: id }))).toStartWith(
+      '[BROWSER_CRASHED]',
+    );
+    expect(page.methods()).not.toContain('waitForLoadState');
+  });
 });
+
+/** Playwright 1.63's refusal to read `page.content()` mid-navigation. */
+const NAVIGATING =
+  'content: Unable to retrieve content because the page is navigating and changing the content.';
 
 describe('evaluate', () => {
   it('wraps function-shaped expressions and returns the result', async () => {
@@ -109,15 +153,21 @@ describe('evaluate', () => {
     expect(handle().firstPage.methods()).not.toContain('evaluate');
   });
 
-  it('a page-side throw is SCRIPT_ERROR', async () => {
+  it.each([
+    // Playwright 1.63 (bare method prefix), then the older object-qualified form.
+    ['evaluate: ReferenceError: nope is not defined', 'ReferenceError: nope is not defined'],
+    [
+      "evaluate: TypeError: Cannot read properties of null (reading 'x')",
+      "TypeError: Cannot read properties of null (reading 'x')",
+    ],
+    ['evaluate: TypeError: Failed to fetch', 'TypeError: Failed to fetch'],
+    ['page.evaluate: ReferenceError: nope is not defined', 'ReferenceError: nope is not defined'],
+  ])('a page-side throw is SCRIPT_ERROR with the message: %s', async (driverMessage, message) => {
     h = await createToolHarness();
     const id = await h.launch();
-    handle().firstPage.failWith(
-      'evaluate',
-      new Error('page.evaluate: ReferenceError: nope is not defined'),
-    );
-    expect(textOf(await h.call('evaluate', { session_id: id, expression: 'nope' }))).toStartWith(
-      '[SCRIPT_ERROR]',
+    handle().firstPage.failWith('evaluate', new Error(driverMessage));
+    expect(textOf(await h.call('evaluate', { session_id: id, expression: 'nope' }))).toBe(
+      `[SCRIPT_ERROR] The evaluated script threw: ${message}`,
     );
   });
 

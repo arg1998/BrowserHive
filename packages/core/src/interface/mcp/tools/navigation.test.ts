@@ -1,6 +1,10 @@
 /** @module interface/mcp/tools/navigation.test — navigation, tabs, waits and dialogs tools against FakePage through the real pipeline. */
 
 import { afterEach, describe, expect, it } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { FakeClock } from '../../../../test/helpers/fake-clock.ts';
+import type { FakeDownload } from '../../../../test/helpers/fake-page.ts';
 import type { FakeSessionHandle } from '../../../../test/helpers/fake-session-handle.ts';
 import {
   createToolHarness,
@@ -55,6 +59,81 @@ describe('navigation tools', () => {
     h = await createToolHarness();
     const id = await h.launch();
     handle().firstPage.failWith('goto', timeoutError('page.goto: Timeout 50ms exceeded.'));
+    const result = await h.call('navigate', {
+      session_id: id,
+      url: 'http://127.0.0.1/slow',
+      timeout: 50,
+    });
+    expect(textOf(result)).toStartWith('[NAVIGATION_TIMEOUT]');
+  });
+
+  it('navigate to an attachment saves the download and keeps the page (#55)', async () => {
+    h = await createToolHarness();
+    const id = await h.launch();
+    const page = handle().firstPage;
+    page.script.gotoDownload = { name: 'report.csv', body: 'a,b\n' };
+    const { value } = await executeTool(h, 'navigate', {
+      session_id: id,
+      url: 'http://127.0.0.1/report',
+    });
+    const savedTo = join(h.dataDir, 'sessions', id, 'downloads', 'report.csv');
+    expect(value).toEqual({
+      session_id: id,
+      url: 'about:blank',
+      status: null,
+      download: { saved_to: savedTo, suggested_name: 'report.csv', size: 4 },
+    });
+    expect(readFileSync(savedTo, 'utf8')).toBe('a,b\n');
+    // The tab did not navigate: no visit, no navigation count.
+    expect(h.bus.names()).not.toContain('page.visited');
+    const info = await h.callJson<{ navigation_count: number }>('session_info', { session_id: id });
+    expect(info.navigation_count).toBe(0);
+    expect(h.observations().find((o) => o.tool === 'navigate')?.ok).toBe(true);
+  });
+
+  it('navigate to an attachment whose save fails answers DOWNLOAD_FAILED', async () => {
+    h = await createToolHarness();
+    const id = await h.launch();
+    handle().firstPage.script.gotoDownload = { name: 'x.bin', failure: 'saveAs: canceled' };
+    const result = await h.call('navigate', { session_id: id, url: 'http://127.0.0.1/x' });
+    expect(textOf(result)).toBe('[DOWNLOAD_FAILED] Download failed: saveAs: canceled');
+  });
+
+  it("a download that outlives the call's timeout is cancelled and answers DOWNLOAD_FAILED", async () => {
+    const clock = new FakeClock();
+    h = await createToolHarness({ clock });
+    const id = await h.launch();
+    const page = handle().firstPage;
+    page.script.gotoDownload = { name: 'big.iso', hang: true };
+    let caught: FakeDownload | undefined;
+    page.on('download', (d) => {
+      caught = d as FakeDownload;
+    });
+    const pending = h.call('navigate', {
+      session_id: id,
+      url: 'http://127.0.0.1/big',
+      timeout: 2000,
+    });
+    while (clock.pendingSleeps === 0) await Bun.sleep(1);
+    await clock.advance(2000);
+    expect(textOf(await pending)).toBe(
+      '[DOWNLOAD_FAILED] Download failed: the download did not finish within 2000 ms',
+    );
+    expect(caught?.canceled).toBe(true);
+  });
+
+  it('navigate still answers NAVIGATION_FAILED for a net error with no download', async () => {
+    h = await createToolHarness();
+    const id = await h.launch();
+    handle().firstPage.failWith('goto', new Error('goto: net::ERR_NAME_NOT_RESOLVED at http://x/'));
+    const result = await h.call('navigate', { session_id: id, url: 'http://x/' });
+    expect(textOf(result)).toStartWith('[NAVIGATION_FAILED]');
+  });
+
+  it('navigate maps a Playwright 1.63 goto timeout (bare prefix) to NAVIGATION_TIMEOUT', async () => {
+    h = await createToolHarness();
+    const id = await h.launch();
+    handle().firstPage.failWith('goto', new Error('goto: Timeout 50ms exceeded.'));
     const result = await h.call('navigate', {
       session_id: id,
       url: 'http://127.0.0.1/slow',

@@ -43,7 +43,7 @@ export async function createRealHarness(options: ToolHarnessOptions = {}): Promi
       logger: createCollectingLogger(),
       clock,
       host: HOST,
-      stealthDriver: 'playwright',
+      stealthDriver: options.stealthDriver ?? 'playwright',
     }),
     pageActions: createPlaywrightPageActions({ clock }),
     clock,

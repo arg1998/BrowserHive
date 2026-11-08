@@ -45,3 +45,14 @@ export const SelectorAck = z.object({
   selector: z.string(),
   ok: z.literal(true),
 });
+
+/**
+ * A file saved into the managed downloads dir (`<data-dir>/sessions/<id>/downloads/`): the absolute
+ * path, the filename the server suggested, and the byte size. `download_file` returns these fields;
+ * `navigate` and `new_tab` return them under `download` when the URL answered with a download.
+ */
+export const SavedDownload = z.object({
+  saved_to: z.string(),
+  suggested_name: z.string(),
+  size: z.number(),
+});

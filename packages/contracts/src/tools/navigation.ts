@@ -1,6 +1,14 @@
 /** @module contracts/tools/navigation — navigate, go_back, go_forward, reload, wait_for_url contracts */
 import { z } from 'zod';
-import { annotations, SESSION_ERRORS, SINCE, TabId, Timeout, WaitUntil } from './shared.ts';
+import {
+  annotations,
+  SavedDownload,
+  SESSION_ERRORS,
+  SINCE,
+  TabId,
+  Timeout,
+  WaitUntil,
+} from './shared.ts';
 import { defineTool } from './types.ts';
 
 /** `go_back` / `go_forward` / `reload` share one argument shape. */
@@ -27,7 +35,11 @@ export const NAVIGATE = defineTool({
   title: 'Navigate',
   description:
     'Navigate a tab to a URL (defaults to the active tab). The operator may maintain a URL ' +
-    'blocklist; a blocked target fails with URL_BLOCKED and must not be retried.',
+    'blocklist; a blocked target fails with URL_BLOCKED and must not be retried. A URL that ' +
+    'answers with a download (Content-Disposition: attachment) saves the file into the managed ' +
+    'downloads dir (<data-dir>/sessions/<id>/downloads/) within the same timeout: the tab keeps ' +
+    'its page, status is null, and download holds saved_to, suggested_name and size, as ' +
+    'download_file returns them. A download that fails or runs out of time is DOWNLOAD_FAILED.',
   input: z.object({
     session_id: z.string(),
     url: z.string(),
@@ -35,7 +47,12 @@ export const NAVIGATE = defineTool({
     timeout: Timeout,
     tab_id: TabId,
   }),
-  output: z.object({ session_id: z.string(), url: z.string(), status: z.number().nullable() }),
+  output: z.object({
+    session_id: z.string(),
+    url: z.string(),
+    status: z.number().nullable(),
+    download: SavedDownload.optional(),
+  }),
   annotations: annotations(false, false, false, true),
   pack: 'navigation',
   capability: 'navigate',
@@ -45,6 +62,7 @@ export const NAVIGATE = defineTool({
     'TAB_NOT_FOUND',
     'NAVIGATION_TIMEOUT',
     'NAVIGATION_FAILED',
+    'DOWNLOAD_FAILED',
   ],
   since: SINCE,
 });
