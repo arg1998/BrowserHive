@@ -16,6 +16,12 @@ export interface PageScript {
   html: string;
   /** Result of `evaluate()`. */
   evaluateResult: unknown;
+  /**
+   * When set, the next `goto` behaves like a URL served as an attachment on Playwright 1.63: it
+   * emits a `download` (see {@link FakeDownloadBehaviour}) and rejects with
+   * `goto: Download is starting`.
+   */
+  gotoDownload: ({ readonly name: string } & FakeDownloadBehaviour) | null;
   /** Methods that throw on their next call (consumed once per entry unless `sticky`). */
   readonly failures: Map<string, { error: unknown; sticky: boolean }>;
 }
@@ -31,11 +37,23 @@ export interface FakeDialog {
   readonly outcome: { accepted: boolean | null; promptText: string | undefined };
 }
 
+/** How a scripted download's `saveAs` behaves. */
+export interface FakeDownloadBehaviour {
+  /** Bytes `saveAs` writes to the target path. */
+  readonly body?: string;
+  /** `saveAs` rejects with this message (Playwright 1.63 writes `saveAs: canceled`). */
+  readonly failure?: string;
+  /** `saveAs` never settles until the download is cancelled (a transfer that does not finish). */
+  readonly hang?: boolean;
+}
+
 /** A minimal download the `download` listeners receive. */
 export interface FakeDownload {
   suggestedFilename(): string;
   saveAs(path: string): Promise<void>;
+  cancel(): Promise<void>;
   readonly savedTo: string | null;
+  readonly canceled: boolean;
 }
 
 /**
@@ -55,6 +73,7 @@ export class FakePage {
     title: '',
     html: '<html></html>',
     evaluateResult: undefined,
+    gotoDownload: null,
     failures: new Map(),
   };
   readonly keyboard = {
@@ -114,6 +133,12 @@ export class FakePage {
 
   async goto(url: string, options?: unknown): Promise<{ status(): number; url(): string } | null> {
     await this.run('goto', [url, options]);
+    const attachment = this.script.gotoDownload;
+    if (attachment !== null) {
+      this.script.gotoDownload = null;
+      this.emitDownload(attachment.name, attachment);
+      throw new Error(`goto: Download is starting\nCall log:\n  - navigating to "${url}"`);
+    }
     this.currentUrl = url;
     return { status: () => 200, url: () => url };
   }
@@ -268,15 +293,31 @@ export class FakePage {
   }
 
   /** Emits a scripted download and returns it. */
-  emitDownload(suggestedName = 'file.bin'): FakeDownload {
+  emitDownload(suggestedName = 'file.bin', behaviour: FakeDownloadBehaviour = {}): FakeDownload {
     let savedTo: string | null = null;
+    let canceled = false;
+    let onCancel: () => void = () => undefined;
+    const cancelled = new Promise<void>((resolve) => {
+      onCancel = resolve;
+    });
     const download: FakeDownload = {
       suggestedFilename: () => suggestedName,
       saveAs: async (path) => {
+        if (behaviour.hang === true) await cancelled;
+        if (canceled) throw new Error('saveAs: canceled');
+        if (behaviour.failure !== undefined) throw new Error(behaviour.failure);
+        if (behaviour.body !== undefined) await Bun.write(path, behaviour.body);
         savedTo = path;
+      },
+      cancel: async () => {
+        canceled = true;
+        onCancel();
       },
       get savedTo() {
         return savedTo;
+      },
+      get canceled() {
+        return canceled;
       },
     };
     this.emit('download', download);

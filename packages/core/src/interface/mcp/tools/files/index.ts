@@ -1,14 +1,12 @@
 /** @module interface/mcp/tools/files — upload_file (uploads sandbox), download_file (managed downloads dir). */
 
-import { basename, join } from 'node:path';
-import type { Download } from 'playwright';
-import { sessionDirLayout } from '../../../../app/sessions/profile-dir.ts';
 import { isAppError } from '../../../../kernel/errors/app-error.ts';
 import { requireSession } from '../../context.ts';
 import { defineTool, json, type ToolPack } from '../../definition.ts';
 import { sandboxPath, sessionOwnership } from '../../policies.ts';
 import { resolveUploadPath } from '../../sandbox.ts';
 import { firstLine, pageOf, registryError } from '../shared.ts';
+import { saveDownload } from './capture.ts';
 
 /** `upload_file`: every path must resolve under `<data-dir>/uploads/` before the page is touched. */
 export const uploadFile = defineTool('upload_file', {
@@ -40,20 +38,13 @@ export const downloadFile = defineTool('download_file', {
   async handler(ctx, args) {
     const session = requireSession(ctx);
     const page = pageOf(ctx, session, args.tab_id);
-    const dir = sessionDirLayout(ctx.services.runtime.dataDir).forSession(session.id).downloads;
     try {
-      await ctx.services.fs.mkdir(dir);
       const [download] = await Promise.all([
         page.waitForEvent('download', { timeout: args.timeout }),
         page.click(args.trigger_selector, { timeout: args.timeout }),
       ]);
-      const saved: Download = download;
-      const suggested = saved.suggestedFilename();
-      const name = args.save_as !== undefined ? basename(args.save_as) : suggested;
-      const savedTo = join(dir, name);
-      await saved.saveAs(savedTo);
-      const size = await ctx.services.fs.fileSize(savedTo);
-      return json({ session_id: session.id, saved_to: savedTo, suggested_name: suggested, size });
+      const saved = await saveDownload(ctx, session.id, download, args.save_as);
+      return json({ session_id: session.id, ...saved });
     } catch (err) {
       if (isAppError(err)) throw err;
       throw registryError('DOWNLOAD_FAILED', { reason: firstLine(err) }, err);

@@ -15,6 +15,7 @@ import { evaluateAllowed, sandboxPath, sessionOwnership } from '../../policies.t
 import { resolveScreenshotSavePath } from '../../sandbox.ts';
 import { isolatedEvaluate } from '../interaction/act.ts';
 import { drive, pageOf, safeUrl } from '../shared.ts';
+import { contentWhenSettled } from './content.ts';
 import { wrapFunctionExpression } from './evaluate-wrap.ts';
 
 /** Content type of every tool screenshot. */
@@ -118,15 +119,13 @@ export const snapshot = defineTool('snapshot', {
   },
 });
 
-/** `get_content`: `page.content()`. */
+/** `get_content`: `page.content()`, waiting out a navigation in flight once (`contentWhenSettled`). */
 export const getContent = defineTool('get_content', {
   policies: [sessionOwnership],
   async handler(ctx, args) {
     const session = requireSession(ctx);
     const page = pageOf(ctx, session, args.tab_id);
-    const html = await drive(ctx, { sessionId: session.id, what: 'page content' }, () =>
-      page.content(),
-    );
+    const html = await contentWhenSettled(ctx, page, session.id);
     return json({ session_id: session.id, url: safeUrl(page), html });
   },
 });

@@ -36,6 +36,31 @@ const PROBE_SCRIPT = `
   document.getElementById('probe').textContent = JSON.stringify(out);
 `;
 
+/**
+ * An attachment whose first 2 KiB go out at once (enough for Chromium to start the download without
+ * waiting to sniff more) and whose remainder is up to `rest`. Bun sends nothing, not even the
+ * headers, until `start` settles, so the slow part lives in `pull`.
+ */
+function attachmentStream(
+  filename: string,
+  rest: (controller: ReadableStreamDefaultController<Uint8Array>) => Promise<void>,
+): Response {
+  return new Response(
+    new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('x'.repeat(2048)));
+      },
+      pull: rest,
+    }),
+    {
+      headers: {
+        'content-type': 'application/octet-stream',
+        'content-disposition': `attachment; filename="${filename}"`,
+      },
+    },
+  );
+}
+
 /** A running fixture server. */
 export interface FixtureServer {
   readonly origin: string;
@@ -135,7 +160,28 @@ export function startFixtureServer(): FixtureServer {
             },
           });
         case '/download-page':
-          return html('<a id="download" href="/download" download="fixture.txt">download</a>');
+          return html(
+            '<a id="download" href="/download" download="fixture.txt">download</a>' +
+              '<a id="download-broken" href="/download-broken" download>broken download</a>',
+          );
+        case '/download-broken':
+          // The transfer breaks after the first bytes; Chromium marks the download canceled.
+          return attachmentStream('broken.bin', async (controller) => {
+            await Bun.sleep(100);
+            controller.error();
+          });
+        case '/download-stall': {
+          // A transfer that sends its first bytes, then stalls for `ms` (default 10 s).
+          const ms = Number(url.searchParams.get('ms') ?? '10000');
+          return attachmentStream('stall.bin', async (controller) => {
+            await Bun.sleep(ms);
+            try {
+              controller.close();
+            } catch {
+              // The client went away (download cancelled, server stopped).
+            }
+          });
+        }
         case '/popup':
           return html(`<button id="open" onclick="window.open('/', '_blank')">open</button>`);
         case '/to-file':

@@ -57,7 +57,22 @@ const FIXTURES: readonly {
     details: { selector: 'button', count: 3 },
   },
   {
-    name: 'navigation timeout',
+    name: 'navigation timeout (Playwright 1.63)',
+    message:
+      'goto: Timeout 1000ms exceeded.\nCall log:\n  - navigating to "https://example.com/", waiting until "load"',
+    errorName: 'TimeoutError',
+    ctx: { url: 'https://example.com/' },
+    code: 'NAVIGATION_TIMEOUT',
+    details: { url: 'https://example.com/', timeout_ms: 1000 },
+  },
+  {
+    name: 'navigation timeout (prose only, no TimeoutError name)',
+    message: 'goto: Timeout 1000ms exceeded.',
+    code: 'NAVIGATION_TIMEOUT',
+    details: { url: '', timeout_ms: 1000 },
+  },
+  {
+    name: 'navigation timeout (prefixed form)',
     message:
       'page.goto: Timeout 30000ms exceeded.\n=========================== logs ===========================\nnavigating to "https://example.com/", waiting until "load"',
     errorName: 'TimeoutError',
@@ -73,7 +88,25 @@ const FIXTURES: readonly {
     details: { url: 'https://nope.invalid/', net_error: 'net::ERR_NAME_NOT_RESOLVED' },
   },
   {
-    name: 'download canceled',
+    name: 'download canceled (Playwright 1.63, saveAs)',
+    message: 'saveAs: canceled',
+    code: 'DOWNLOAD_FAILED',
+    details: { reason: 'canceled' },
+  },
+  {
+    name: 'download canceled (Playwright 1.63, path)',
+    message: 'path: canceled',
+    code: 'DOWNLOAD_FAILED',
+    details: { reason: 'canceled' },
+  },
+  {
+    name: 'download canceled (Playwright 1.63, createReadStream)',
+    message: 'createReadStream: canceled',
+    code: 'DOWNLOAD_FAILED',
+    details: { reason: 'canceled' },
+  },
+  {
+    name: 'download canceled (prefixed form)',
     message: 'download.path: canceled',
     code: 'DOWNLOAD_FAILED',
     details: { reason: 'canceled' },
@@ -85,16 +118,74 @@ const FIXTURES: readonly {
     details: { reason: 'deleted upon browser context closure.' },
   },
   {
-    name: 'upload failed',
+    name: 'upload to a non-file element (Playwright 1.63)',
+    message: 'async setInputFiles: Error: Node is not an HTMLInputElement',
+    code: 'UPLOAD_FAILED',
+    details: { reason: 'Error: Node is not an HTMLInputElement' },
+  },
+  {
+    name: 'upload through an element handle (Playwright 1.63)',
+    message:
+      'setInputFiles: Protocol error (DOM.setFileInputFiles): Node is not a file input element',
+    code: 'UPLOAD_FAILED',
+    details: { reason: 'Protocol error (DOM.setFileInputFiles): Node is not a file input element' },
+  },
+  {
+    name: 'upload failed (prefixed form)',
     message: "locator.setInputFiles: Error: ENOENT: no such file or directory, stat '/tmp/x.pdf'",
     code: 'UPLOAD_FAILED',
     details: { reason: "Error: ENOENT: no such file or directory, stat '/tmp/x.pdf'" },
   },
   {
-    name: 'script error',
+    name: 'script error (Playwright 1.63)',
+    message:
+      "evaluate: TypeError: Cannot read properties of null (reading 'x')\n    at eval (eval at evaluate (:311:30), <anonymous>:1:6)",
+    code: 'SCRIPT_ERROR',
+    details: { message: "TypeError: Cannot read properties of null (reading 'x')" },
+  },
+  {
+    name: 'rejected in-page fetch (Playwright 1.63)',
+    message: 'evaluate: TypeError: Failed to fetch',
+    code: 'SCRIPT_ERROR',
+    details: { message: 'TypeError: Failed to fetch' },
+  },
+  {
+    name: 'script reference error (Playwright 1.63)',
+    message: 'evaluate: ReferenceError: nope is not defined',
+    code: 'SCRIPT_ERROR',
+    details: { message: 'ReferenceError: nope is not defined' },
+  },
+  {
+    name: 'script syntax error (Playwright 1.63)',
+    message: 'evaluate: SyntaxError: Unexpected end of input\n    at eval (<anonymous>)',
+    code: 'SCRIPT_ERROR',
+    details: { message: 'SyntaxError: Unexpected end of input' },
+  },
+  {
+    name: 'script error from $eval (Playwright 1.63)',
+    message: "$eval: TypeError: Cannot read properties of null (reading 'y')",
+    code: 'SCRIPT_ERROR',
+    details: { message: "TypeError: Cannot read properties of null (reading 'y')" },
+  },
+  {
+    name: 'script error from evaluateHandle (Playwright 1.63)',
+    message: 'evaluateHandle: Error: boom',
+    code: 'SCRIPT_ERROR',
+    details: { message: 'Error: boom' },
+  },
+  {
+    name: 'script error (prefixed form)',
     message: 'page.evaluate: ReferenceError: foo is not defined\n    at eval (eval at evaluate)',
     code: 'SCRIPT_ERROR',
     details: { message: 'ReferenceError: foo is not defined' },
+  },
+  {
+    name: 'content read while the page is navigating (Playwright 1.63)',
+    message:
+      'content: Unable to retrieve content because the page is navigating and changing the content.',
+    ctx: { timeoutMs: 5000 },
+    code: 'WAIT_TIMEOUT',
+    details: { what: 'the page to finish navigating', timeout_ms: 5000 },
   },
   {
     name: 'element not visible',
@@ -163,6 +254,8 @@ describe('classifyDriverError fixture table', () => {
       timeout_ms: 7,
     });
     expect(classifyDriverError(new Error('totally unrelated'))).toBeNull();
+    // Not a download failure: a bare method name only counts at the start of the message.
+    expect(classifyDriverError(new Error('ENOENT: no such file, path: /x'))).toBeNull();
     expect(classifyDriverError('not an error')).toBeNull();
   });
 

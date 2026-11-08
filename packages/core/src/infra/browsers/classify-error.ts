@@ -37,6 +37,9 @@ function timeoutFrom(m: RegExpExecArray, ctx: ClassifyContext): number {
   return ctx.timeoutMs ?? (fromProse === undefined ? 0 : Number(fromProse));
 }
 
+/** The `what` of the `WAIT_TIMEOUT` a read answers while the tab is still navigating. */
+export const NAVIGATING_WHAT = 'the page to finish navigating';
+
 const CLOSED_RE =
   /Target page, context or browser has been closed|Target closed|Execution context was destroyed|Session closed\. Most likely the page has been closed|Browser has been closed|Navigation failed because page was closed|Page closed|Browser closed|Connection closed|has been closed/;
 
@@ -44,6 +47,11 @@ const CLOSED_RE =
  * The ordered table. Earlier rows win, so the specific (strict-mode violation, download, upload,
  * script) rows precede the generic timeout rows, and the "closed" row precedes everything that
  * would otherwise read a closed-target message as a timeout.
+ *
+ * A row that names a driver method accepts both the bare prefix Playwright 1.63 writes
+ * (`evaluate: …`, `goto: …`, `saveAs: …`, `async setInputFiles: …`) and the older object-qualified
+ * one (`page.evaluate: …`). The driver message contract test (integration) provokes each failure
+ * on both drivers, so a driver upgrade that rewords one fails CI rather than production.
  */
 const ROWS: readonly Row[] = [
   {
@@ -81,7 +89,8 @@ const ROWS: readonly Row[] = [
     },
   },
   {
-    test: /(?:page|frame)\.goto: Timeout (?<ms>\d+)ms exceeded/,
+    // `goto: Timeout …` (1.63) and `page.goto: Timeout …` alike.
+    test: /\b(?:goto|goBack|goForward|reload): Timeout (?<ms>\d+)ms exceeded/,
     build: (m, _message, ctx) => {
       const details = { url: ctx.url ?? '', timeout_ms: timeoutFrom(m, ctx) };
       return new AppError('NAVIGATION_TIMEOUT', details, {
@@ -99,7 +108,8 @@ const ROWS: readonly Row[] = [
     },
   },
   {
-    test: /download\.(?:path|saveAs|failure|createReadStream): (?<reason>.+)|Download (?<reason2>(?:deleted|canceled|failed).*)/,
+    // `saveAs: canceled` (1.63) and `download.saveAs: canceled`; anchored, as `path: ` alone is common prose.
+    test: /^(?:download\.)?(?:path|saveAs|failure|createReadStream|cancel|delete): (?<reason>.+)|Download (?<reason2>(?:deleted|canceled|failed).*)/,
     build: (m) => {
       const details = {
         reason: firstLine(m.groups?.['reason'] ?? m.groups?.['reason2'] ?? 'unknown'),
@@ -110,7 +120,8 @@ const ROWS: readonly Row[] = [
     },
   },
   {
-    test: /setInputFiles: (?<reason>.+)/,
+    // `async setInputFiles: …` (1.63, page and locator), `setInputFiles: …` (element handle).
+    test: /\bsetInputFiles: (?<reason>.+)/,
     build: (m) => {
       const details = { reason: firstLine(m.groups?.['reason'] ?? 'unknown') };
       return new AppError('UPLOAD_FAILED', details, {
@@ -119,7 +130,18 @@ const ROWS: readonly Row[] = [
     },
   },
   {
-    test: /^(?:page|frame|locator|elementHandle|jsHandle|worker)\.(?:evaluate|evaluateHandle|evaluateAll|\$eval|\$\$eval): (?!Timeout)(?<message>.+)/s,
+    // `page.content()` while a navigation is in flight; waiting for it to settle helps (#55).
+    test: /Unable to retrieve content because the page is navigating/,
+    build: (_m, _message, ctx) => {
+      const details = { what: NAVIGATING_WHAT, timeout_ms: ctx.timeoutMs ?? 0 };
+      return new AppError('WAIT_TIMEOUT', details, {
+        publicMessage: rendered('WAIT_TIMEOUT', details),
+      });
+    },
+  },
+  {
+    // `evaluate: TypeError: …` (1.63, page, frame, locator and handle alike) and `page.evaluate: …`.
+    test: /^(?:(?:page|frame|locator|elementHandle|jsHandle|worker)\.)?(?:evaluate|evaluateHandle|evaluateAll|\$eval|\$\$eval): (?!Timeout)(?<message>.+)/s,
     build: (m) => {
       const details = { message: firstLine(m.groups?.['message'] ?? 'unknown') };
       return new AppError('SCRIPT_ERROR', details, {

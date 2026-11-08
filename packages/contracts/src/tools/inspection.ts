@@ -59,28 +59,34 @@ export const SNAPSHOT = defineTool({
 export const GET_CONTENT = defineTool({
   name: 'get_content',
   title: 'Get content',
-  description: 'Return the current HTML content of a tab.',
+  description:
+    'Return the current HTML content of a tab. While the tab is still navigating, waits up to ' +
+    '5 s for the new page to reach domcontentloaded; if it is still navigating then, fails with ' +
+    'WAIT_TIMEOUT, which is safe to retry.',
   input: z.object({ session_id: z.string(), tab_id: TabId }),
   output: z.object({ session_id: z.string(), url: z.string(), html: z.string() }),
   annotations: annotations(true, false, true, false),
   pack: 'inspection',
   capability: 'read',
-  errors: [...SESSION_ERRORS, 'TAB_NOT_FOUND'],
+  errors: [...SESSION_ERRORS, 'TAB_NOT_FOUND', 'WAIT_TIMEOUT'],
   since: SINCE,
 });
 
 /**
- * `evaluate`: IIFE wrapping heuristic kept. `result` is whatever the page returned; a page-side
- * `undefined` is dropped by `JSON.stringify`, so the dispatcher should coerce it to `null` for
- * `structuredContent`.
+ * `evaluate`: a lone function is wrapped as an IIFE, decided by a parse (core `evaluate-wrap`).
+ * `result` is whatever the page returned; a page-side `undefined` is dropped by `JSON.stringify`,
+ * so the dispatcher should coerce it to `null` for `structuredContent`.
  */
 export const EVALUATE = defineTool({
   name: 'evaluate',
   title: 'Evaluate',
   description:
     'Evaluate a JavaScript expression in the tab context and return the result. ' +
-    'Function-shaped strings are auto-wrapped as IIFEs. A session launched with ' +
-    'disable_evaluate: true rejects this call with EVALUATE_DISABLED.',
+    'An expression that is exactly one function (an arrow or function expression, async ' +
+    'included) is called and its result returned; anything else, including an IIFE that is ' +
+    'already invoked, runs as written. A page-side exception fails with SCRIPT_ERROR carrying ' +
+    'its message. A session launched with disable_evaluate: true rejects this call with ' +
+    'EVALUATE_DISABLED.',
   input: z.object({ session_id: z.string(), expression: z.string().min(1), tab_id: TabId }),
   output: z.object({ session_id: z.string(), result: z.unknown() }),
   annotations: annotations(false, false, false, true),

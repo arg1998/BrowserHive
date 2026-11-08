@@ -1,7 +1,7 @@
 {
   "name": "evaluate",
   "title": "Evaluate",
-  "description": "Evaluate a JavaScript expression in the tab context and return the result. Function-shaped strings are auto-wrapped as IIFEs. A session launched with disable_evaluate: true rejects this call with EVALUATE_DISABLED.",
+  "description": "Evaluate a JavaScript expression in the tab context and return the result. An expression that is exactly one function (an arrow or function expression, async included) is called and its result returned; anything else, including an IIFE that is already invoked, runs as written. A page-side exception fails with SCRIPT_ERROR carrying its message. A session launched with disable_evaluate: true rejects this call with EVALUATE_DISABLED.",
   "inputSchema": {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "type": "object",
@@ -17,7 +17,10 @@
         "type": "string"
       }
     },
-    "required": ["session_id", "expression"]
+    "required": [
+      "session_id",
+      "expression"
+    ]
   },
   "outputSchema": {
     "$schema": "http://json-schema.org/draft-07/schema#",
@@ -28,7 +31,10 @@
       },
       "result": {}
     },
-    "required": ["session_id", "result"],
+    "required": [
+      "session_id",
+      "result"
+    ],
     "additionalProperties": false
   },
   "annotations": {

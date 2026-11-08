@@ -149,9 +149,15 @@ describe('ToolDispatcher invariants', () => {
     h.secrets.add(marker);
     handle().firstPage.script.html = `<p>${marker}</p>`;
     const ok = await h.call('get_content', { session_id: id });
-    handle().firstPage.failWith('evaluate', new Error(`page.evaluate: Error: ${marker}`));
+    // Playwright 1.63's bare prefix, then the older object-qualified one.
+    handle().firstPage.failWith('evaluate', new Error(`evaluate: Error: ${marker}`));
     const failed = await h.call('evaluate', { session_id: id, expression: '1' });
-    for (const payload of [ok, failed, ...h.observations()]) {
+    handle().firstPage.failWith('evaluate', new Error(`page.evaluate: Error: ${marker}`));
+    const failedPrefixed = await h.call('evaluate', { session_id: id, expression: '1' });
+    for (const payload of [failed, failedPrefixed]) {
+      expect(textOf(payload)).toStartWith('[SCRIPT_ERROR]');
+    }
+    for (const payload of [ok, failed, failedPrefixed, ...h.observations()]) {
       expect(JSON.stringify(payload)).not.toContain(marker);
     }
   });

@@ -1,6 +1,14 @@
 /** @module contracts/tools/files — upload_file and download_file contracts */
 import { z } from 'zod';
-import { annotations, SESSION_ERRORS, SelectorAck, SINCE, TabId, Timeout } from './shared.ts';
+import {
+  annotations,
+  SavedDownload,
+  SESSION_ERRORS,
+  SelectorAck,
+  SINCE,
+  TabId,
+  Timeout,
+} from './shared.ts';
 import { defineTool } from './types.ts';
 
 /** `upload_file`: every path must resolve under `<data-dir>/uploads/` before the page is touched. */
@@ -40,12 +48,7 @@ export const DOWNLOAD_FILE = defineTool({
     tab_id: TabId,
     save_as: z.string().optional(),
   }),
-  output: z.object({
-    session_id: z.string(),
-    saved_to: z.string(),
-    suggested_name: z.string(),
-    size: z.number(),
-  }),
+  output: z.object({ session_id: z.string(), ...SavedDownload.shape }),
   annotations: annotations(false, false, false, true),
   pack: 'files',
   capability: 'mutate',
