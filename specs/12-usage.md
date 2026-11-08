@@ -122,6 +122,8 @@ Log in, set a new password (minimum 12 characters), and the seed file is shredde
 
 Keyboard: `⌘K` command palette (pages, sessions, actions), `⌘B` sidebar, `/` filter, `?` shortcuts. Theme: system, light or dark.
 
+Install app (account menu or palette) installs the dashboard as its own app window; when BrowserHive isn't running, the app shows a help page with the cause and the commands to start it, and an open dashboard shows a *Can't reach BrowserHive* banner that clears itself when the daemon is back (D-59).
+
 ## 7. Configuration in one page
 
 Precedence (rightmost wins): **defaults < environment < `browserhive.config.json` < CLI flags** (D-06). When a key comes from more than one source, startup logs which value shadowed which. Names are mechanical: CLI `--maxSessions`, env `BROWSERHIVE_MAX_SESSIONS`, JSON `"maxSessions"`. Unknown or misspelled keys stop startup with a suggestion. A string in the config file may reference environment variables (`"authTokens": "ci:{env:CI_TOKEN}"`, `{env:NAME:-default}`), so a checked-in file can leave its secrets to the environment; `config show`, the startup log and the dashboard name the variable each value came from (D-29).

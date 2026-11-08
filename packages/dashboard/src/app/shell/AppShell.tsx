@@ -1,10 +1,14 @@
-/** @module app/shell/AppShell — frame: sticky sidebar + sticky topbar with the document as the only scroller, or a fixed-height workspace when a page opts in; palette, keyboard map, toasts and global shortcuts */
+/** @module app/shell/AppShell — frame: sticky sidebar + sticky topbar with the document as the only scroller, or a fixed-height workspace when a page opts in; palette, keyboard map, toasts, global shortcuts, the daemon reachability watcher and its banner, and Install app */
 import { type ReactNode, useState } from 'react';
 import { useClientErrorSink } from '@/app/providers/AuthProvider.tsx';
 import { useKeyboardScope, useShortcut } from '@/app/providers/KeyboardProvider.tsx';
+import { useSocketState } from '@/app/providers/SocketProvider.tsx';
+import { InstallAppProvider } from '@/features/install/install-app.tsx';
+import { DaemonReachabilityProvider } from '@/lib/daemon-help/reachability.tsx';
 import { cn } from '@/lib/utils.ts';
-import { AuthRetryBanner } from './AuthRetryNotice.tsx';
 import { CommandPalette } from './CommandPalette.tsx';
+import { DaemonUnreachableAnnouncer, ShellBanners } from './DaemonUnreachableBanner.tsx';
+import { InstallToastBridge } from './InstallToastBridge.tsx';
 import { KeyboardMap } from './KeyboardMap.tsx';
 import { PageActionsProvider } from './page-actions.tsx';
 import { WidgetBoundary } from './RouteError.tsx';
@@ -16,12 +20,17 @@ import { Topbar } from './Topbar.tsx';
 
 /** Shell. */
 export function AppShell({ children }: { readonly children: ReactNode }) {
+  const socket = useSocketState();
   return (
-    <ShellLayoutProvider>
-      <PageActionsProvider>
-        <Frame>{children}</Frame>
-      </PageActionsProvider>
-    </ShellLayoutProvider>
+    <DaemonReachabilityProvider socket={socket}>
+      <InstallAppProvider>
+        <ShellLayoutProvider>
+          <PageActionsProvider>
+            <Frame>{children}</Frame>
+          </PageActionsProvider>
+        </ShellLayoutProvider>
+      </InstallAppProvider>
+    </DaemonReachabilityProvider>
   );
 }
 
@@ -108,7 +117,7 @@ function Frame({ children }: { readonly children: ReactNode }) {
             onOpenKeyboardMap={() => setMapOpen(true)}
           />
         </WidgetBoundary>
-        <AuthRetryBanner />
+        <ShellBanners />
         <main
           id="main"
           tabIndex={-1}
@@ -129,6 +138,8 @@ function Frame({ children }: { readonly children: ReactNode }) {
         <KeyboardMap open={mapOpen} onOpenChange={setMapOpen} />
       </WidgetBoundary>
       <ToastStack />
+      <DaemonUnreachableAnnouncer />
+      <InstallToastBridge />
     </div>
   );
 }

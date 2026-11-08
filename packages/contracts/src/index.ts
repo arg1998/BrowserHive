@@ -661,6 +661,7 @@ export {
   type LegacyNotificationFacts,
   SESSION_CRASHED_TITLE,
 } from './notifications/taxonomy.ts';
+export { isNonSpaPath, NON_SPA_PREFIXES, type NonSpaPrefix } from './paths/index.ts';
 export {
   ALL_TOOL_NAMES,
   AppliedIdentity,

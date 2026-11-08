@@ -7,7 +7,7 @@ import {
   useState,
   useSyncExternalStore,
 } from 'react';
-import type { ThemePreference } from './bootstrap.ts';
+import type { ThemePreference } from './resolve.ts';
 import { browserThemeDom, type ThemeDom, ThemeStore } from './theme-store.ts';
 
 /** What `useTheme()` returns. */

@@ -129,6 +129,8 @@ export interface SocketStoreOptions {
   /** Consecutive failed attempts before the pill shows `offline` (retries continue at the cap). */
   readonly offlineAfterAttempts?: number;
   readonly commandTimeoutMs?: number;
+  /** An attempt without the server's `hello` within this long is closed and counts as failed. */
+  readonly connectTimeoutMs?: number;
 }
 
 /** Topic whose event `seq` is not unique (the feed head at publish time). */
@@ -144,7 +146,14 @@ export const SOCKET_DEFAULTS = {
   dedupeSize: 1_000,
   offlineAfterAttempts: 3,
   commandTimeoutMs: 10_000,
+  connectTimeoutMs: 10_000,
 } as const;
+
+/** How long an attempt may go without the server's `hello` (spec 04 §4.2, D-59). */
+export const CONNECT_TIMEOUT_MS = SOCKET_DEFAULTS.connectTimeoutMs;
+
+/** Close code the client uses for an attempt that timed out before `hello` (4000–4999 is application space). */
+const CONNECT_TIMEOUT_CLOSE = 4008;
 
 /** Build the socket URL for the current page origin. */
 export function socketUrl(location: { readonly protocol: string; readonly host: string }): string {
@@ -191,6 +200,7 @@ export class SocketStore {
   private corrSeq = 0;
   private heartbeat: ReturnType<typeof setInterval> | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private connectTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly createSocket: SocketFactory;
   private readonly clock: Clock;
   private readonly timers: Timers;
@@ -215,6 +225,7 @@ export class SocketStore {
       dedupeSize: options.dedupeSize ?? SOCKET_DEFAULTS.dedupeSize,
       offlineAfterAttempts: options.offlineAfterAttempts ?? SOCKET_DEFAULTS.offlineAfterAttempts,
       commandTimeoutMs: options.commandTimeoutMs ?? SOCKET_DEFAULTS.commandTimeoutMs,
+      connectTimeoutMs: options.connectTimeoutMs ?? SOCKET_DEFAULTS.connectTimeoutMs,
     };
   }
 
@@ -242,6 +253,7 @@ export class SocketStore {
   dispose(): void {
     this.started = false;
     this.clearReconnect();
+    this.clearConnectTimer();
     this.stopHeartbeat();
     this.rejectPending(
       new AppError({ code: 'ABORTED', status: 0, title: 'Socket disposed', retryable: 'never' }),
@@ -345,9 +357,10 @@ export class SocketStore {
       if (typeof event.data === 'string') this.onText(event.data);
       else if (event.data instanceof ArrayBuffer) this.onBinary(new Uint8Array(event.data));
     };
-    socket.onclose = (event) => {
+    const closed = (code: number): void => {
       if (this.socket !== socket) return;
       this.socket = null;
+      this.clearConnectTimer();
       this.stopHeartbeat();
       this.rejectPending(
         new AppError({
@@ -357,11 +370,24 @@ export class SocketStore {
           retryable: 'backoff',
         }),
       );
-      this.onClosed(event.code);
+      this.onClosed(code);
     };
+    socket.onclose = (event) => closed(event.code);
     socket.onerror = () => {
       // `onclose` always follows; reconnect logic lives there.
     };
+    // A daemon that accepts the connection but never says `hello` (hung, or a foreign server
+    // holding the upgrade open) would otherwise keep this attempt pending forever.
+    this.clearConnectTimer();
+    this.connectTimer = this.timers.setTimeout(() => {
+      this.connectTimer = null;
+      if (this.socket !== socket) return;
+      // A browser fires `close` for a CONNECTING socket only after its own handshake timeout, so
+      // the attempt is ended here and the late event ignored.
+      socket.onclose = null;
+      socket.close(CONNECT_TIMEOUT_CLOSE, 'connect timeout');
+      closed(CONNECT_TIMEOUT_CLOSE);
+    }, this.cfg.connectTimeoutMs);
   }
 
   private onClosed(code: number): void {
@@ -404,6 +430,13 @@ export class SocketStore {
       this.reconnectTimer = null;
       this.open();
     }, delay);
+  }
+
+  private clearConnectTimer(): void {
+    if (this.connectTimer !== null) {
+      this.timers.clearTimeout(this.connectTimer);
+      this.connectTimer = null;
+    }
   }
 
   private clearReconnect(): void {
@@ -478,6 +511,7 @@ export class SocketStore {
   }
 
   private onHello(hello: Extract<WsReplyPayload, { type: 'hello' }>): void {
+    this.clearConnectTimer();
     if (hello.protocol_version !== WS_PROTOCOL_VERSION) {
       this.started = false;
       this.setState({ status: 'offline', reason: 'protocol', protocolMismatch: true });

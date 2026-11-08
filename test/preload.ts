@@ -8,7 +8,8 @@ process.env['TZ'] = 'UTC';
  * file's portals, toasts and popups fail depending on which file happened to load first. Registering
  * here, before the first file links, makes the order irrelevant. Server suites never get a DOM.
  */
-if (process.argv.some((arg) => arg.includes('packages/dashboard'))) {
+// Windows may hand the path over with backslashes; compare with forward slashes.
+if (process.argv.some((arg) => arg.replaceAll('\\', '/').includes('packages/dashboard'))) {
   const dashboardSetup = '../packages/dashboard/test/setup.ts';
   await import(dashboardSetup);
   // Unmount after every test in every file (a hook in a shared helper module binds only to the first

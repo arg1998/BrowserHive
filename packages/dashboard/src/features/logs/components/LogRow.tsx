@@ -2,10 +2,11 @@
 import type { LogRecord } from '@browserhive/contracts/http';
 import { Link } from '@tanstack/react-router';
 import { memo, useState } from 'react';
-import { CopyButton, copyText } from '@/components/shared/CopyButton.tsx';
+import { CopyButton } from '@/components/shared/CopyButton.tsx';
 import { JsonView } from '@/components/shared/JsonView.tsx';
 import { TONE_CLASSES } from '@/components/shared/tones.ts';
 import { Button, buttonVariants } from '@/components/ui/button.tsx';
+import { copyText } from '@/lib/clipboard.ts';
 import { formatAbsolute } from '@/lib/format/time.ts';
 import { ICONS } from '@/lib/icons.ts';
 import { cn } from '@/lib/utils.ts';

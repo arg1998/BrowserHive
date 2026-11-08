@@ -48,4 +48,23 @@ describe('HealthPill', () => {
     expect(await screen.findByText('Healthy')).toBeTruthy();
     expect(screen.getByText('just now')).toBeTruthy();
   });
+
+  it('while Degraded, the reachability watcher rechecks /health every 15 s; its answer clears it', async () => {
+    const harness = await mount();
+    const { client, timers, requests } = harness;
+    await act(() =>
+      client
+        .fetchQuery({ queryKey: ['x'], queryFn: () => Promise.reject(networkError(null)) })
+        .catch(() => 0),
+    );
+    await screen.findByRole('button', { name: 'Connection: Degraded' });
+    const healthRequests = () => requests.filter((r) => r.path === '/health').length;
+    expect(healthRequests()).toBe(0);
+    act(() => timers.advance(15_000));
+    // The fake daemon answers /health with a marked 404: any daemon answer clears the failure.
+    expect(await screen.findByRole('button', { name: 'Connection: Live' })).toBeTruthy();
+    expect(healthRequests()).toBe(1);
+    act(() => timers.advance(60_000));
+    expect(healthRequests()).toBe(1);
+  });
 });

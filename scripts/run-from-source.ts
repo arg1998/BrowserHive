@@ -25,6 +25,8 @@ const INPUTS = [
   join(dashboard, 'src'),
   join(dashboard, 'public'),
   join(dashboard, 'index.html'),
+  join(dashboard, 'offline.html'),
+  join(dashboard, 'scripts'),
   join(dashboard, 'vite.config.ts'),
   join(dashboard, 'package.json'),
   join(root, 'packages', 'contracts', 'src'),

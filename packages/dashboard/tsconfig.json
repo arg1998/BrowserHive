@@ -18,5 +18,6 @@
     "vite.config.ts",
     "playwright.config.ts"
   ],
+  "exclude": ["src/sw/**"],
   "references": [{ "path": "../contracts" }]
 }

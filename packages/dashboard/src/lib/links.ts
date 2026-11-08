@@ -36,6 +36,7 @@ export const DOCS_PAGES = {
   dashboardLogs: { page: 'guide/dashboard', anchor: 'logs' },
   dashboardSystem: { page: 'guide/dashboard', anchor: 'system' },
   dashboardNotifications: { page: 'guide/dashboard', anchor: 'notifications' },
+  dashboardInstall: { page: 'guide/dashboard', anchor: 'install-as-an-app' },
   attention: { page: 'guide/attention' },
   notifications: { page: 'guide/notifications' },
   notificationChannels: { page: 'guide/notifications', anchor: 'channels' },
@@ -76,6 +77,10 @@ export const DOCS_PAGES = {
   upgrading: { page: 'guide/upgrading' },
   troubleshooting: { page: 'guide/troubleshooting' },
   troubleshootingDashboard: { page: 'guide/troubleshooting', anchor: 'dashboard' },
+  troubleshootingNotRunning: {
+    page: 'guide/troubleshooting',
+    anchor: 'the-app-says-browserhive-isnt-running',
+  },
   tools: { page: 'reference/tools' },
   errors: { page: 'reference/errors' },
 } as const satisfies Record<string, { readonly page: string; readonly anchor?: string }>;

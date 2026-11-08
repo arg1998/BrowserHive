@@ -141,18 +141,97 @@ One suite per user-visible guarantee, plus the single-port smoke. All use `Playw
 - `single-port.test.ts` (`packages/browserhive/test/integration/`) — spawn `bun src/bin.ts --admin --auth token` on an ephemeral port with a temp data dir: MCP `initialize` → `tools/list` equals the catalog golden → `tools/call list_sessions`; `GET /health` is `ready`; `GET /api/v1/openapi.json` parses; WS handshake without a cookie closes 4401, with a login cookie receives `ready`; SIGTERM exits 0 within `shutdownTimeout`.
 - `sandbox-stealth.test.ts` (`packages/browserhive/test/integration/`) — through BrowserHive (`createServer` → MCP → `launch_session` → `navigate` → `evaluate`) for every installed channel: `sandbox=auto` never fails a launch, `off` stays unsandboxed, every launched session passes the page-visible stealth checks (no `HeadlessChrome`, `Google Chrome` exactly once, `webdriver === false`, `window.chrome`, 5 plugins, `pdfViewerEnabled`, H.264/AAC, `fullVersionList` equal to the engine's real version), sandboxed and unsandboxed sessions report identical signals, and a required sandbox either works or fails as `SANDBOX_UNAVAILABLE`, `retryable: never`. Channels not installed skip with the reason printed; the bundled Chromium is never skipped. Sandbox state is read from the browser processes' command lines. The weekly `real-chrome` job runs the whole suite with `BHDEV_TEST_CHANNEL=chrome` (sessions on the installed Chrome, 06 §6.1).
 - `stdio-handshake.test.ts` — spawn with `--transport stdio`; stdout carries only JSON-RPC frames (a test injects a `console.log` in a hook and asserts it lands on stderr).
+- **`dashboard-offline.test.ts`** (`packages/browserhive/test/integration/`; D-59, 04 §18). It needs the built dashboard: a missing `packages/dashboard/dist/sw.js` fails the test with "run `bun run build` first", never a skip (§8). The daemon runs in-process with `bootServer` (as in `single-port.test.ts`) on a free port `P` ≠ 9876 with a temp data dir, so it can be stopped and restarted on the same port on every OS. A rebind retries `EADDRINUSE` for up to 5 s. Playwright Chromium runs in a normal context with service workers allowed. A test-local recorder stores the headers of every request the daemon receives. Steps:
+  1. **Worker installs.** Open `/login`, then wait until `navigator.serviceWorker.controller` is set and the `bh-offline-*` cache holds every path in `sw-precache.json`.
+  2. **Navigation headers.** Navigate to `/sessions` from the controlled page. The recorder saw the navigation with `Sec-Fetch-Mode: navigate`: the worker forwards it unchanged. (Chromium sends `Sec-Fetch-Dest: empty`, not `document`, for a worker's `fetch(event.request)`, measured with Playwright's Chromium 1243; the mode is what 03 §8's navigation check needs.)
+  3. **Not running.** Stop the server and wait until the port refuses. Reload `/sessions`: the offline page's `h1` reads "BrowserHive isn't running", the start command shows `--port P`, the URL is still `/sessions`, and no request to a reserved prefix was answered by the worker.
+  4. **Starting.** Boot again with `BootOverrides` holding the `ready` phase for 4 s. The page shows "BrowserHive is starting", then reloads itself into `/login` within 20 s of `ready`.
+  5. **Not responding.** Replace the daemon with a TCP server that accepts and never answers, then reload. The offline page is fully rendered right after the 10 s navigation timeout (its assets come from the cache) and first shows "Checking BrowserHive at …". Within a further 5 s + 3 s it reads "BrowserHive isn't responding".
+  6. **Proxy.** Replace it with an HTTP server answering every request `502 text/html` with no marker, then reload: "BrowserHive is unreachable behind …".
+  7. **Status page.** Boot the daemon **without** `--admin` and navigate to `/sessions` through the worker: the status page, HTTP 404, `text/html`.
+  8. **Banner.** Boot with `--admin`, sign in through REST with the first-run password from the data dir's `admin/credentials.txt`, complete the forced password change through REST (otherwise every page redirects to `/change-password`, which has no shell), sign in with the new password, and open `/overview`. Stop the server: `DaemonUnreachableBanner` appears within 30 s and its dialog lists `browserhive doctor`. Restart: the banner disappears within 15 s, and the page was not reloaded (a `window` marker survives).
+  9. **Retire.** Replace the daemon with an HTTP server answering `/` with `200 text/html` and no marker, then navigate: that page shows. Afterwards `navigator.serviceWorker.getRegistrations()` is empty and no `bh-offline-*` cache remains.
+
+  Single worker; 150 s timeout.
 
 ### 3.5 Dashboard
 
 - Unit: status registry (every state maps to a tone and label; no string tones); URL-state rules (reset to page 1 on filter change, omit defaults, comma lists, 3-way sort cycle) via the router's `validateSearch`; `JsonView` renders agent-controlled strings as text nodes (regression for the innerHTML surface); `RelativeTime` server-anchored; notification producers; WS bridge patches the Query cache from fat events and invalidates on thin ones; resync on `connecting → connected`.
 - Component (RTL + happy-dom + axe): `DataTable` (sort gating, `aria-sort`, selection with indeterminate, card-collapse under `sm`, pager clamps and never unmounts), `FilterBar`, `ConfirmDialog` (focus trap, return, Escape), `CommandPalette` (combobox/listbox roles, scrollIntoView), toast region (`role=status`, pause on hover), theme provider (system/light/dark, no FOUC bootstrap), auth machine (`error`/`offline`, 401 interceptor). Every component test runs `axe` with zero violations.
 - End-to-end (Playwright, against `bun run build` + `browserhive --admin --vault bitwarden` with the fake `bw`): login with the seed password → forced change → sessions list with URL filters (paste URL reproduces state) → session detail → start live view → agent calls `request_attention` (driven through the MCP endpoint from the test) → takeover input accepted, `input_rejected` shown when no attention is open → resolve → vault confirm approve with visible rollback on a forced failure → blocklist page shows a hit → notifications persist across reload → logout closes the socket. Responsive screenshot suite at 390, 768, 1280, 1920 for every route (visual goldens with a tolerance, updated through §7). Clipboard fallback on an insecure non-localhost origin (Playwright with `http://127.0.0.2`).
+- **Installable app and offline page (D-59, 04 §18).**
+  - **Unit, dashboard (`bun test`):**
+    - `routeRequest`: every row of 04 §18.5.4, including prefix boundaries (`/api` vs `/apix`, `/health` vs `/healthz`), non-`GET`, cross-origin, `navigate` vs other modes, `/sw.js` and the manifest routed `pass`, and a direct `/offline.html` visit routed `navigate`.
+    - `decideNavigation`: every row, marker present or absent × 200, 302 opaque redirect, 404, 500, 502, 503, 504, 530 × HTML and non-HTML; rejection; timeout.
+    - The worker's event handlers in a fake-global harness (in-memory `CacheStorage`, scripted `fetch`, fake timers):
+      - `install` stores only `ok`, non-redirected, `basic`, marked responses, and rejects on any failure;
+      - `activate` deletes only stale `bh-offline-*` caches;
+      - the navigation `fetch` is called with the original `Request` object and **no** init;
+      - the timer is cleared when the race settles;
+      - an `asset` is served cache-first with `ignoreVary`;
+      - `retire()` runs under `waitUntil`, deletes the caches and unregisters;
+      - `Response.error()` when `offline.html` is missing.
+    - The kill-switch worker: unregisters and deletes its caches, with no fetch listener.
+    - `classifyProbe`:
+      - every row of 04 §18.6.1, including `navigator.onLine === false`, a marked `421` (`refused`), a marked plain-text `503` (`starting`) and an unmarked `530` (`proxy-unreachable`);
+      - `isDaemonAnswer`: true only for marked responses;
+      - a BrowserHive body without `instance_id`;
+      - a 200 non-BrowserHive JSON, a 502 HTML and a 404 HTML;
+      - recognises every `HealthResponse` fixture of the contracts goldens.
+    - `daemonHelp`:
+      - port rules: default, other, empty by scheme;
+      - loopback (`localhost`, `127.0.0.5`, `[::1]`) vs remote: no `--port` and no port-holder lines for remote;
+      - `bunx browserhive@<v>` with and without `lastSeen`;
+      - the OS order.
+    - The poll schedule (1, 2, 3, 3 … s), the hidden pause, `location.replace('/')` on `/offline.html`, and the loop guard (3 reloads in 60 s, an unreadable `sessionStorage`).
+    - `installSupport`, with a UA fixture per row of 04 §18.8.2:
+      - Chrome, Edge, Brave, Opera and Vivaldi on Windows, macOS and Linux;
+      - Chrome Android;
+      - Firefox on Windows, Linux, macOS and Android;
+      - Safari on macOS;
+      - iPhone Safari and Chrome on iOS;
+      - iPad (Mac UA with `maxTouchPoints` 5);
+      - an unknown UA;
+      - plus `standalone` (each display mode), `insecure` and `prompt` precedence.
+    - The prompt store: adopts `window.__bhInstallPrompt`; `prompt()` used once; `appinstalled` clears the event and emits `installed`.
+    - The manifest: exactly the members of 04 §18.2; every icon file exists with its declared PNG size; the colours equal `THEME_COLORS.light`; the shortcut URLs are route-table paths.
+    - `index.html` carries the manifest link, the apple-touch-icon link and the `beforeinstallprompt` capture.
+    - `PROXIED_PATHS` equals `NON_SPA_PREFIXES`.
+    - `resolveTheme` (moved) behaves as before.
+    - The new `DOCS_PAGES` anchors exist (existing links test).
+  - **Unit, root** (`test/dashboard/daemon-help.test.ts`): every help command word is in `COMMAND_NAMES`, and `admin`/`port` are config keys.
+  - **Component (RTL + axe):**
+    - `PrincipalMenu` shows Install app for every kind but `standalone`, and the palette action follows the same rule.
+    - `InstallAppDialog`: one render per dialog kind.
+    - `prompt` calls the event's `prompt()` and opens no dialog.
+    - `InstallToastBridge` toasts on `installed`.
+    - `DaemonReachabilityProvider` is the only `/health` caller: `HealthPill` and the banner both read it, only outage-cadence probes count toward the banner, and the existing `HealthPill.test.tsx` cases still pass through the harness.
+    - The socket store's connect timeout: an attempt with no `hello` within 10 s closes and counts toward `offline`.
+    - The reachability watcher on its own (`lib/daemon-help/watcher.test.ts`, manual timers): the former `watchRestHealth` cases (idle stays healthy, failures, 4xx, mutations, realtime writes, rechecks until a daemon answer, the initial cache state), the cadence, the gap reset and every hide condition.
+    - `DaemonUnreachableBanner`:
+      - appears only after 3 consecutive failed probes;
+      - a gap over 15 s resets the count;
+      - it hides `AuthRetryBanner`;
+      - it clears on the first BrowserHive answer;
+      - its announcement goes to the persistent status region.
+    - The offline page in happy-dom, per state: copy buttons, Forget this address, focus order.
+  - **Core:**
+    - `X-BrowserHive-Version` on every response kind: SPA, asset, `/health`, API JSON, a thrown `AppError`, 404, the status page.
+    - With `admin=false`: the status page with 404 for a navigation detected by `Sec-Fetch-Mode: navigate`, by `Sec-Fetch-Dest: document`, and by `Accept: text/html` alone; JSON 404 for `Sec-Fetch-Mode: same-origin` with `Sec-Fetch-Dest: empty`, and for `/sw.js`; `/` unchanged.
+    - With `admin=true`: `/sw.js` and `/manifest.webmanifest` are served from the bundle with their MIME types and `no-cache`, not as `index.html`.
+  - **E2E** (`pwa.e2e.ts`, a dedicated `pwa` Playwright project with `serviceWorkers: 'allow'` and `testMatch: pwa.e2e.ts`; the `desktop` and `phone` projects set `serviceWorkers: 'block'` and `testIgnore` it, so the worker never touches existing journeys):
+    - In a **persistent context with `channel: 'chromium'`** (the only mode where installability is reported faithfully: the default headless shell returns `[]` for anything, and an ordinary context reports `in-incognito`):
+      - CDP `Page.getAppManifest` reports no `errors`, and `Page.getInstallabilityErrors` returns `[]`;
+      - a negative control page without a manifest reports `no-manifest` (an HTML page fulfilled by `page.route` under a reserved prefix, `/api/no-manifest-control`: once the worker controls the origin, an SPA path is fetched by the worker and gets `index.html`, manifest included);
+      - after a click, `beforeinstallprompt` arrives, and Install app calls `prompt()` (Playwright then dismisses it with Escape).
+    - In an ordinary context: the worker activates and controls the page; with no prompt available, Install app opens the instructions dialog, which passes axe.
 
 ### 3.6 Package gate (`scripts/`)
 
 - `publint` and `@arethetypeswrong/cli --pack` on the built `browserhive` package.
 - `smoke-installed.ts`: `npm pack` → clean directory → `bun install <tarball>` → `browserhive --version` → stdio handshake (`initialize`, `tools/list` equals the catalog golden, `list_sessions`) → `import { createServer } from 'browserhive'` and `listen()`/`stop()` on port 0.
 - Tarball content assertions: contains `dist/`, `README.md`, `LICENSE`, dashboard assets; excludes `src/`, `test/`, `.tsbuildinfo`, sourcemaps.
+- Installable-app assertions (D-59, `scripts/installable-app-check.ts`, also runnable alone on a directory) on `dist/dashboard`: `manifest.webmanifest`, `sw.js`, `sw-precache.json`, `offline.html` and the six icons exist; every `sw-precache.json` path exists, and its `version` appears in `sw.js`; every `url(…)` in the precached CSS other than a `data:` URI is itself precached; the precache totals ≤ 300 KB; `sw.js` contains no `import`, `importScripts` or `zod`; `icons.stamp.json` is **not** in the bundle.
 - `release-dry-run` = build + gate, run on tags and on demand.
 
 ## 4. Test doubles

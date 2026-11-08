@@ -1,8 +1,9 @@
-/** @module scripts/package-check — publint + attw + tarball contents + installed smoke (spec 06 §4, §6 "package"). */
+/** @module scripts/package-check — installable-app assertions + publint + attw + tarball contents + installed smoke (spec 06 §4, §6 "package", 09 §3.6). */
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { installableAppProblems } from './installable-app-check.ts';
 
 const root = join(import.meta.dir, '..');
 const pkgDir = join(root, 'packages/browserhive');
@@ -30,6 +31,12 @@ for (const f of ['dist/bin.js', 'dist/index.js', 'dist/index.d.ts', 'dist/dashbo
     process.exit(1);
   }
 }
+const installable = installableAppProblems(join(pkgDir, 'dist/dashboard'));
+if (installable.length > 0) {
+  console.error(`package-check: installable app (D-59)\n  ${installable.join('\n  ')}`);
+  process.exit(1);
+}
+console.log('package-check: installable app ok');
 step('publint', run('bunx', ['publint', pkgDir]));
 step('attw', run('bunx', ['@arethetypeswrong/cli', '--pack', pkgDir, '--profile', 'esm-only']));
 

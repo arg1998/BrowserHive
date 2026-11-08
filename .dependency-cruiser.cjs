@@ -89,6 +89,37 @@ module.exports = {
       from: { path: '^packages/browserhive/' },
       to: { path: '^packages/(?!browserhive/)[^/]+/', dependencyTypes: ['local'] },
     },
+    // Installable app and offline page (D-59, spec 04 §18.10). npm packages are outside the graph
+    // (`exclude` drops node_modules), so these rules see local files and unresolved `@/` aliases;
+    // `lib/daemon-help/boundaries.test.ts` checks the import specifiers themselves.
+    {
+      name: 'daemon-help-no-react',
+      severity: 'error',
+      from: {
+        path: '^packages/dashboard/src/lib/(daemon-help/(probe|commands|keys|copy)|install/(support|steps))\\.ts$',
+      },
+      to: { path: ['\\.tsx$', '^@/', '(^|/)node_modules/(react|react-dom)/'] },
+    },
+    {
+      name: 'offline-page-imports',
+      severity: 'error',
+      from: { path: '^packages/dashboard/src/offline/', pathNot: '\\.test\\.tsx?$' },
+      to: {
+        pathNot: [
+          '^packages/dashboard/src/offline/',
+          '^packages/dashboard/src/lib/daemon-help/(probe|commands|keys|copy)\\.ts$',
+          '^packages/dashboard/src/lib/(clock|links|storage|clipboard)\\.ts$',
+          '^packages/dashboard/src/theme/resolve\\.ts$',
+          '^packages/dashboard/src/styles/tokens\\.css$',
+        ],
+      },
+    },
+    {
+      name: 'service-worker-imports',
+      severity: 'error',
+      from: { path: '^packages/dashboard/src/sw/', pathNot: '\\.test\\.ts$' },
+      to: { pathNot: ['^packages/dashboard/src/sw/', '^packages/contracts/src/paths/'] },
+    },
     { name: 'no-circular', severity: 'error', from: {}, to: { circular: true } },
   ],
   options: {

@@ -99,6 +99,30 @@ Check the session's Identity tab. Make sure `browserhive init` installed Patchri
 
 **Takeover input is ignored** — input is only accepted while an attention request is open for that session ([`INPUT_NOT_PERMITTED`](../reference/errors.md#INPUT_NOT_PERMITTED)).
 
+## The app says BrowserHive isn't running
+
+Once you have opened the dashboard at an address, your browser keeps a small help page for it. When BrowserHive does not answer there, the installed app (or the browser tab) shows that page instead of an error. It checks again by itself (after 1 s, 2 s, then every 3 s while the window is visible) and opens the dashboard as soon as BrowserHive is ready. **Retry now** checks at once. Each command on the page has a **Copy** button. See [Install as an app](dashboard.md#install-as-an-app).
+
+What each message means, and what to do:
+
+| The page says | What happened | Fix |
+|---|---|---|
+| **BrowserHive isn't running** | Nothing listens on this port on this computer. | Start it with `browserhive --admin` (the page adds `--port` when you use another one). If it was started by an MCP client, a service manager or a container, start it the way you usually do. `browserhive doctor` checks the setup. |
+| **Can't reach BrowserHive** | Nothing answered at a remote address. | Check this device's network, any tunnel or proxy in between, and that BrowserHive runs on the other machine. Run the commands there. |
+| **This device is offline** | The browser reports no network. | Reconnect; the page checks again by itself. |
+| **BrowserHive isn't responding** | Something accepted the connection but sent nothing back within 5 seconds. | BrowserHive is stuck or overloaded: restart it. If it still hangs, read its log (see [Logs](#logs)) and run `browserhive doctor`. |
+| **BrowserHive is starting** | BrowserHive answers but is not ready yet. | Wait: the dashboard opens by itself. If it stays here, `browserhive doctor` says why. |
+| **BrowserHive is unreachable behind …** | A proxy or tunnel (nginx, Caddy, Cloudflare) answered with an error because BrowserHive behind it did not. | Check that BrowserHive runs and that the proxy points at its address and port (`browserhive config show`). |
+| **BrowserHive turned this request away** | BrowserHive runs, but refused the address you used (for example HTTP 421). | Allow the new name with `--allowedHosts`, set `--publicUrl`, or open the address the startup banner prints. |
+| **Another program is using this address** | A different program answers on this port. | If BrowserHive moved to another port, open that address and install the app from there. Use the port commands on the page to see what holds the port. |
+| **BrowserHive answers, but the dashboard didn't load** | BrowserHive is ready, but the page reloaded three times within a minute without reaching the dashboard (or the browser blocks this site's storage), so it stopped reloading by itself. | Click **Reload**. If it comes back, restart BrowserHive and check `browserhive doctor`. |
+
+**Forget this address** removes the help page from this address: from then on the browser shows its normal error page when nothing answers. The help page comes back the next time you open the dashboard there. The page also forgets an address by itself when a different program's web page answers on it.
+
+To remove it by hand, open the browser's developer tools, then **Application › Service workers › Unregister**, or clear the site data for the address in the browser's settings.
+
+The page stores only BrowserHive's public page files (the help page, its script, styles and fonts), never anything you see after signing in.
+
 ## Notifications
 
 **A notification did not reach my phone** — open **Notifications → Delivery log**: every row that was not delivered says why in a sentence (filtered by the channel's rules, quiet hours, the channel was paused, the platform refused the token, …). `browserhive channels test <name>` sends a real test message and prints the platform's answer. See [the delivery log](notifications.md#delivery-log).

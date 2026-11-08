@@ -940,3 +940,76 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 **Consequences.** Schema v7 (`0007-vault-harnesses`, `compatible: true`) adds the four nullable columns and backfills nothing: every existing rule keeps meaning "all harnesses" and every existing session has no declared name. A binary older than v7 can still read the database and ignores the lists; since they only narrow, such a downgrade can only widen access back to what the principal and slug rules allow, which is acceptable for a guard that is not a boundary. The harness vocabulary in `contracts/harness` now feeds a decision, so additions to it are reviewed like any other vault change; the alias tables still only identify, they never widen a rule.
 
 **Alternatives considered.** *Treating an empty list as "all"*: an operator who unticks the last harness expects nothing to pass; silently allowing everything is the dangerous reading. *Matching custom names case-insensitively, or through `normalizeHarness`*: a custom name exists precisely for values the slug table does not know, and folding would make `Claude-Code` the built-in Claude Code behind the operator's back; exact matching plus a warning is predictable. *Using the per-call harness*: a client could switch its header between calls to pass a rule. *A distinct agent-facing reason (`harness_not_allowed`)*: tells a misbehaving agent which name to claim. *Applying the group list only to `allow_all` items*: a "Deploy folder for OpenCode and Claude Code" would then not cover the folder's manual bindings, which is what operators mean. *A new error code*: refusals are returned statuses (10 §1.4) and malformed lists are ordinary validation failures.
+
+## D-49 – D-58 Reserved for spec 13 (session templates)
+
+**Status:** Reserved. Spec 13 and its decisions D-49 to D-58 are on branch `docs/spec-session-templates` and land with it; D-57 and D-58 (and spec 13 T0a, T0d, T0e, T0f) are implemented ahead of it in browserhive 0.2.3. The numbers are kept because the spec and its security fixes already cite them.
+
+## D-59 The dashboard is an installable web app with an offline "daemon not running" page; no CLI command
+
+**Status:** Accepted
+
+**Context.**
+- **The ask.** Operators reach the dashboard by typing or bookmarking `http://127.0.0.1:9876`. They want it in their app launcher and taskbar like a desktop app, installed from the dashboard itself through the browser's own install flow.
+- **The gap.** The daemon serves the dashboard on its single port (D-02). When the daemon is stopped nothing answers at that address, so an installed app or a bookmark opens on the browser's "can't connect" page, with no hint of what went wrong or what to run.
+- **What browsers allow (checked 2026-11):**
+  - Chromium-based browsers (Chrome, Edge, Brave, Opera, Vivaldi) install any secure-context site with a valid manifest: `http://127.0.0.1` and `http://localhost` qualify, and no service worker is required since Chrome 112. They let the page trigger the install (`beforeinstallprompt`).
+  - Firefox installs sites as web apps on Windows only (since 143, from an address-bar button). On Linux it exists but is off by default; on macOS it doesn't exist. Firefox has no page API to trigger an install.
+  - Safari 17+ on macOS installs any page through File › Add to Dock, from its own menu only. The web app runs service workers and has its own storage, seeded only with a copy of Safari's cookies.
+  - No browser lets an outside program install a web app, except through enterprise policy.
+
+**Decision.**
+- **Installable from the dashboard, never from the CLI.**
+  - The dashboard ships a web app manifest, app icons and a service worker (04 §18).
+  - The account menu and the command palette offer **Install app**. Where the browser has offered an install prompt, it opens the browser's native install dialog. Everywhere else it opens a dialog with that browser's steps, or says plainly that the browser can't install apps and what to use instead.
+  - There is **no CLI command or flag**: a command could only open a browser window, which installs nothing.
+- **A static manifest in the bundle.**
+  - `manifest.webmanifest` is a file in `packages/dashboard/public`, with relative URLs, `id: "/"` and the name "BrowserHive".
+  - The daemon gains no manifest route and no per-instance template.
+  - An installed app's identity is its origin (scheme, host, port) plus `id`, so the one file yields one app per address. It works unchanged behind `publicUrl`, through the Vite dev server and on any port.
+- **A service worker whose only job is the offline page.**
+  - `/sw.js` (scope `/`) precaches `offline.html` and the content-hashed files that page needs, and nothing else: not the manifest, the icons, the app shell or any API data.
+  - It sends page navigations to the network untouched. It falls back to `offline.html` only in two cases:
+    - nothing answers within 10 s, or the connection fails;
+    - a proxy answers a 5xx without BrowserHive's marker header.
+  - It never touches `/api`, `/mcp`, `/health`, `/trace-viewer`, non-`GET` requests or other origins.
+  - It holds no operator data, so it needs no sign-out cleanup and cannot serve a stale dashboard.
+- **The daemon marks its responses.** Every daemon response carries `X-BrowserHive-Version`. A successful HTML navigation without it means another program now owns the address. The worker then deletes its caches and unregisters itself, so it never haunts another app on a reused port. The offline page also has a **Forget this address** button that does the same on demand.
+- **The offline page diagnoses.**
+  - It probes `/health` and tells apart:
+    - nothing answering ("isn't running");
+    - no answer in time ("isn't responding");
+    - the daemon starting;
+    - a proxy whose upstream is down;
+    - BrowserHive refusing the address (host guard);
+    - the device being offline;
+    - another program on the address.
+  - It shows copyable commands for the visitor's OS, polls every few seconds while visible, and reloads itself when the daemon is ready.
+  - The running dashboard shows the same help in a banner and dialog when the daemon goes away while a page is open.
+- **Without `--admin`, browser navigations get the status page.** A navigation to any non-reserved path of a daemon running without the dashboard gets the status page (404 off `/`), not a JSON 404, so an installed app launched against such a daemon explains itself.
+- **Deferred:**
+  - the app-icon badge for pending attention requests (Badging API);
+  - `launch_handler` and the `launchQueue` consumer;
+  - window-controls overlay, link capturing and push;
+  - a per-instance app name.
+
+**Consequences.**
+- **First visit required.** The offline page works only in a browser context that has loaded the dashboard at that exact origin at least once since the worker shipped.
+  - For a Chromium-installed app that is always true: the app shares the profile that installed it.
+  - A Safari Dock app has its own storage, so it needs one launch while the daemon runs.
+  - A fresh profile, cleared site data, a private window or another spelling of the address (`localhost` vs `127.0.0.1`) still shows the browser's own error page.
+- **Two spellings, two apps.** `127.0.0.1` and `localhost` are separate origins and so separate apps. The docs say to install from the address the startup banner prints.
+- **Secure context needed.** Service workers and installs need a secure context. A LAN address over plain `http` gets neither; the dashboard works there as before, and Install app explains how to reach it securely (loopback, or an `https` `publicUrl`, D-37).
+- **Two daemons on two ports** install as two apps both named "BrowserHive". The window title tells them apart.
+- **Firefox on Linux (by default) and macOS** can't install the dashboard, and no page can change that. The dialog says so.
+- **Navigation cost.** Every in-scope navigation now passes through the worker: one worker start-up when it is idle (milliseconds), then the same network request.
+- **Port grabbing.** A program that takes the port while BrowserHive is down could register its own worker on that origin. That is already true today, with or without this feature; the security guide says so.
+
+**Alternatives considered.**
+- *A CLI command* (`browserhive open --install`, `--open`): it can only open a browser. Rejected per the owner: a command named "install" that doesn't install misleads.
+- *Writing OS launcher files* (`.desktop`, an `.app` shim, a `.lnk` running `chrome --app=…`): duplicates the browser's own install per platform, with no update path. Rejected.
+- *A daemon-generated manifest* (instance name, port in the name): the start URL must be relative to the installing origin anyway. The one gain, a port in the name, doesn't change identity, and it would add a route, a dev-proxy entry and a second source of truth. Rejected.
+- *Caching the whole app shell* for an offline-capable dashboard: `index.html` is templated per request (CSP nonce, version meta), so caching it reuses nonces. Every screen also needs the live daemon, and a cached shell risks an old bundle after an upgrade. Rejected.
+- *vite-plugin-pwa / Workbox*: a large generated worker for a job that fits in about 150 audited lines. Rejected; a small Vite plugin writes the precache list.
+- *A topbar install button or banner*: the browser already shows its own install icon in the address bar, and the owner chose the account area. Rejected as nagging.
+- *Navigation preload*: it saves the worker start-up on a navigation, but adds a header, an enable step and a second response path to reason about. Rejected for now; it can be added without changing anything else.

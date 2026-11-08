@@ -126,7 +126,7 @@ State machine (`app/providers/auth-machine.ts`, pure): `loading → login | chan
 
 An injectable class (constructed in `SocketProvider`, replaceable in tests) exposing `useSocketState()`, `subscribe(topic, handler)` (refcounted; first subscriber sends `subscribe`, last sends `unsubscribe`), `command(name, params) → Promise<reply>` (correlated by `corr`), and binary screencast frames. Behavior:
 
-- Connects to `/api/v1/ws`; heartbeat `ping` every 20 s; dead if no frame for 45 s.
+- Connects to `/api/v1/ws`; heartbeat `ping` every 20 s; dead if no frame for 45 s. An attempt that has not received the server's `hello` within 10 s of opening the connection (`CONNECT_TIMEOUT_MS`) is closed (client close code 4008, application range; the late `close` event of that socket is ignored) and counts as a failed attempt, so a daemon that accepts connections but never answers still drives the store to `offline` (D-59, §18.7). The timer starts when the socket is created, so it also covers an upgrade that never completes.
 - Handshake: mismatch on `protocol` → banner "Dashboard is out of date, reload"; `epoch` change or `resync_required` → invalidate all topic-bound queries.
 - Reconnect: backoff 500 ms·2ⁿ capped 8 s + jitter; on reconnect re-send every active subscription with its last cursor and invalidate all active queries.
 - Bounded dedupe set (last 1 000 seq per topic). The `logs` topic is exempt: its frames carry the feed head as `seq` (many records share one), so they are neither deduped nor used as a resume cursor; the logs page resumes through REST (§12.9).
@@ -186,7 +186,7 @@ Never: module-level mutable singletons holding server state.
 
 ### 6.1 Layout
 
-- `AppShell` = skip link (first focusable) · `Sidebar` · column of `Topbar` (`header`) · `AuthRetryBanner` · `main#main`.
+- `AppShell` = skip link (first focusable) · `Sidebar` · column of `Topbar` (`header`) · `DaemonUnreachableBanner` (§18.7) or else `AuthRetryBanner` · `main#main`.
 - **One page scroller.** In the default `document` layout the document scrolls: the sidebar is `sticky top-0 h-dvh`, the topbar is `sticky top-0`, and `main` is `relative` with `px-gutter pt-6 pb-12`. Pages render straight into `main` and add no page padding, no `mx-auto` and no fixed-height inner scrollers (`h-[70dvh]` is banned). Test: no double scrollbars at any width.
 - **Workspace layout.** A page that needs independently scrolling panes calls `useWorkspaceLayout(active)`. While any page claims it, the document stops scrolling (`h-dvh overflow-hidden` on the frame) and `main` becomes `min-h-0 flex-1 overflow-hidden pb-4` with `--table-sticky-top: 0px`; the page root is `flex min-h-0 flex-1 flex-col` and each pane is `min-h-0 overflow-y-auto`. Users: the session page while the live split is shown, and Logs. `main` keeps `pt-6` in both layouts so the page title never moves.
 - **Width.** Every page spans the content column; there is no page width cap (`--content-max` and `max-w-content` do not exist). Cap prose, not pages. All pages share the same left and right edge.
@@ -201,9 +201,9 @@ Never: module-level mutable singletons holding server state.
 - **Nav groups**: primary items ordered by `staticData.nav.order` (Overview 10, Sessions 20, Websites 30, Blocklist 40, Attention 50, Vault 60, Vault log 65, Logs 80, System 90). Items whose `staticData.requires` (e.g. `vault`) is off in `/system` render in a "Not enabled" group; vault items render in no group until `/system` has loaded. Badges: Attention shows the open count; Vault shows the confirm count, and the confirm-count query never runs while the vault is disabled. Items carry `aria-current="page"` from the router's active match.
 - **Topbar** (`--topbar-height` 3.5rem = 56 px, sticky, translucent with backdrop blur):
   - Left: breadcrumbs on object pages only (`Sessions › slug`); list pages show nothing there because `PageHeader` carries the title. No "BrowserHive" root crumb. Under 768 px: menu button + brand mark instead.
-  - Right: a search field-button ("Search sessions, pages…" + `Ctrl K`/`⌘K` by platform) that opens the palette (an icon button under 768 px), `HealthPill`, `NotificationBell`, `ThemeMenu`, `PrincipalMenu` (display name, Change password, Keyboard shortcuts, Log out).
+  - Right: a search field-button ("Search sessions, pages…" + `Ctrl K`/`⌘K` by platform) that opens the palette (an icon button under 768 px), `HealthPill`, `NotificationBell`, `ThemeMenu`, `PrincipalMenu` (display name, Change password, Keyboard shortcuts, Install app (§18.8, hidden inside the installed app), Log out).
   - `document.title` = `${title} · BrowserHive`.
-- `HealthPill` is a ghost `Button` opening a popover with Realtime (WS `connected | connecting | offline` + reason), REST, the last answer ("2m ago", browser clock against browser clock) and daemon version. REST health follows how requests **ended**, never how long ago one ran (an idle page is not degraded, and the socket store already reconnects a socket that went silent): a query or mutation that fails with `NETWORK_ERROR`, `TIMEOUT` or an `INTERNAL_ERROR` 5xx that is not the daemon's own JSON answer marks REST failing (label Degraded); 4xx, aborts, malformed bodies, the daemon's typed operation failures (`NAVIGATION_FAILED`, `CHANNEL_PLATFORM_ERROR`, …) and realtime cache writes change nothing; the next successful request clears it, and while failing a `GET /health` probe runs every 15 s (any answer, a degraded 503 included, clears it) so a blip on a quiet page does not stick.
+- `HealthPill` is a ghost `Button` opening a popover with Realtime (WS `connected | connecting | offline` + reason), REST, the last answer ("2m ago", browser clock against browser clock) and daemon version. REST health follows how requests **ended**, never how long ago one ran (an idle page is not degraded, and the socket store already reconnects a socket that went silent): a query or mutation that fails with `NETWORK_ERROR`, `TIMEOUT` or an `INTERNAL_ERROR` 5xx that is not the daemon's own JSON answer marks REST failing (label Degraded); 4xx, aborts, malformed bodies, the daemon's typed operation failures (`NAVIGATION_FAILED`, `CHANNEL_PLATFORM_ERROR`, …) and realtime cache writes change nothing; the next successful request clears it, and while failing a `GET /health` probe runs every 15 s, owned by `DaemonReachabilityProvider` (§18.7), (any answer, a degraded 503 included, clears it) so a blip on a quiet page does not stick.
 - `NotificationBell`: badge anchored top-right, capped at "9+" (the server's `unread_count`: digests arrive read and never count, anomaly alerts do, D-45); rows show the session slug (unless the title has it), `updated_at`, "first …" for grouped rows and the same outcome pill as the inbox (§12.11); "View all" → `/notifications`.
 - 404 (`NotFoundPage`) renders inside `AuthGate` and the shell and sets its title ("Page not found · BrowserHive").
 
@@ -220,7 +220,7 @@ A 640 px (40rem) dialog (Base UI dialog: portal, focus trap, restore) with a `ro
 3. **Sessions**: with a query of ≥ 2 characters, `GET /sessions?q=` sorted by last activity; each row shows slug, state dot and label, the id suffix (mono) and relative time in fixed columns, so same-slug sessions are distinguishable. `/search` is the fallback.
 4. **Attention**: pending requests filtered by the query.
 5. **Pages**: "Go to …" from the route table, plus Notifications.
-6. **Actions**: theme (light/dark/system), expand/collapse sidebar, change password, log out.
+6. **Actions**: theme (light/dark/system), expand/collapse sidebar, change password, install BrowserHive as an app (§18.8), log out.
 
 ### 6.4 Toasts
 
@@ -624,7 +624,8 @@ Wire format per `03-admin-backend.md` §6.5–6.7.
 - CSS contract: `styles/affordances.test.tsx` compiles the real `globals.css` (focus-ring utilities, safety net, row-link z-index contract).
 - Harness: the root `test/preload.ts` registers happy-dom (only when the run includes `packages/dashboard`) before any CommonJS module links, adds global RTL cleanup, and sets `asyncUtilTimeout` to 3 s. Dashboard runs pass under randomized file order.
 - Contract: the dashboard compiles against the contracts schemas; fixtures in `test/fixtures` parse with them.
-- E2E (Playwright, `test/e2e`): `smoke.e2e.ts` (operator journey with forced password change) and `affordances.e2e.ts` (Tab walk with computed outlines, `elementFromPoint` over URL text in linked rows, real Ctrl+K).
+- E2E (Playwright, `test/e2e`): `smoke.e2e.ts` (operator journey with forced password change) and `affordances.e2e.ts` (Tab walk with computed outlines, `elementFromPoint` over URL text in linked rows, real Ctrl+K), and `pwa.e2e.ts` (its own Playwright project: manifest and installability through CDP in a persistent `channel: 'chromium'` context, the native prompt path, worker control, the install dialog).
+- **Installable app and offline page:** the suites in 09 §3.5 (D-59), the stop-the-daemon integration test in 09 §3.4, and the manual browser gate in §18.12.
 
 ## 15. Extension recipes
 
@@ -646,6 +647,13 @@ Not built; each is a deliberate scope boundary of the current dashboard, not a d
 - **The operator cannot open a browser.** There is no `POST /sessions`; sessions come only from an agent's `launch_session`, so a dashboard with no agent connected has nothing to watch or drive.
 - **Takeover starts only when an agent asks.** Input is gated per message on an open `takeover` attention request, which only `request_attention` creates; there is no operator-initiated takeover.
 - **Live-view input gaps.** No clipboard: Ctrl/Cmd combinations are left to the local browser (`shouldPreventKey`), so paste never reaches the remote page. No IME composition. A popup or `window.open` tab never becomes the watched tab (only the agent switching tabs retargets the stream) and there is no operator tab switcher, so OAuth popups are invisible. Native dialogs, file choosers and browser UI are not part of a CDP screencast. WebAuthn/passkeys cannot work: the authenticator is on the operator's machine, not in the remote browser.
+- **Installing has browser limits (D-59).**
+  - The offline page exists only in a browser profile that has loaded the dashboard at that exact address once. `localhost` and `127.0.0.1` are different apps.
+  - A plain-`http` LAN address can neither install nor get the offline page.
+  - Firefox installs websites as apps only on Windows (on Linux only when turned on).
+  - Safari and Firefox install only from their own menus.
+  - A Safari Dock app needs one launch while BrowserHive runs before it can show the offline page.
+  - The app cannot start the daemon: a web page cannot run programs.
 - **No `noindex` signal.** Neither `index.html` nor the daemon's responses carry `robots` meta or `X-Robots-Tag`; a dashboard exposed beyond loopback relies on authentication to keep its pages out of search indexes.
 
 ## 17. Design constraints
@@ -655,3 +663,439 @@ Not built; each is a deliberate scope boundary of the current dashboard, not a d
 - **The client relies on server ordering guarantees instead of compensating for them**: screencast start/stop/set_size serialisation and message order (§13), the logs gap fill by `after_seq` (§12.9), and full DTOs in feed events for cache patches (§5).
 - **Transient failures never sign the operator out** (§4.1), and a page crash never replaces the shell (§5 error boundaries).
 - **Layout choices are per device, shareable view state is per URL, and only preferences that should follow the operator across devices are stored server-side** (§1 principle 1, §4.6).
+
+## 18. Installable app and offline page (D-59)
+
+The dashboard is an installable web app. Its service worker exists only to show a diagnostic page when the daemon does not answer. A running dashboard still loads every screen from the daemon on every visit; the only change on that path is that each in-scope navigation passes through the worker, which hands it to the network untouched (§18.5.4).
+
+### 18.1 Files in the bundle
+
+| Published path | Source | Precached | Purpose |
+|---|---|---|---|
+| `/manifest.webmanifest` | `public/manifest.webmanifest` | no | Web app manifest (§18.2) |
+| `/icons/app.svg`, `/icons/app-192.png`, `/icons/app-512.png` | `src/assets/app-icon/app.svg` → `gen:icons` (§18.3) | no | `purpose: any` icons |
+| `/icons/maskable-192.png`, `/icons/maskable-512.png` | `src/assets/app-icon/maskable.svg` → `gen:icons` | no | `purpose: maskable` icons |
+| `/icons/apple-touch-icon.png` (180×180, opaque) | `maskable.svg` → `gen:icons` | no | Safari Add to Dock / Home Screen |
+| `/offline.html` | `offline.html` → `src/offline/main.ts` + `src/offline/offline.css`, built by the plugin's own isolated build (§18.5.6) | yes (fallback only) | The offline page (§18.6) |
+| `/assets/offline-<hash>.{js,css}` and the fonts its CSS references | the same isolated build | yes | The offline page's code, styles and fonts |
+| `/sw.js` | `src/sw/sw.ts`, built by `scripts/offline-sw-plugin.ts` (§18.5.6) | no | Service worker |
+| `/sw-precache.json` | written by the same plugin | no | The precache list, for tests and `package:check` (public file names only) |
+
+The daemon serves all of these as ordinary bundle files: unauthenticated, `no-cache` outside `assets/`, immutable inside it (03 §8). `sw.js` and `sw-precache.json` exist only in a production build; the Vite dev server never serves a worker.
+
+### 18.2 Manifest
+
+`public/manifest.webmanifest`, exactly these members. URLs are relative to the manifest, so they resolve against whatever origin serves it.
+
+```json
+{
+  "id": "/",
+  "name": "BrowserHive",
+  "short_name": "BrowserHive",
+  "description": "Operator dashboard for your BrowserHive daemon.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f9fafb",
+  "theme_color": "#f9fafb",
+  "icons": [
+    { "src": "/icons/app.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icons/app-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/app-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Sessions", "url": "/sessions" },
+    { "name": "Attention", "url": "/attention" },
+    { "name": "Logs", "url": "/logs" }
+  ]
+}
+```
+
+- **Colours.** `background_color` and `theme_color` equal `THEME_COLORS.light` (`src/theme/bootstrap.ts`). The window's title bar still follows the active theme, because `<meta name="theme-color">` is updated at runtime (§4.4) and Chromium prefers the meta tag.
+- **Start URL.** `/` redirects to `/overview` or `/login`, so the app opens where a typed address would.
+- **Shortcuts.** Each opens that page. Where the platform shows shortcuts it does so in a new window; on platforms without shortcut menus they are simply not shown. Every shortcut URL MUST be a route-table path (§6.2).
+- **Nothing else.** No `launch_handler`, `related_applications`, `prefer_related_applications`, `protocol_handlers`, `share_target`, `file_handlers`, `display_override` or `orientation` (D-59 deferrals).
+
+`index.html` gains in `<head>`:
+- `<link rel="manifest" href="/manifest.webmanifest" />` with no `crossorigin`, since it is same-origin and needs no cookie;
+- `<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />`;
+- one statement in the existing nonce'd inline bootstrap, so the event is never missed before the module graph runs:
+
+  ```js
+  addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); window.__bhInstallPrompt = e; });
+  ```
+
+The CSP (03 §2) is unchanged: `manifest-src` falls back to `default-src 'self'`, and `worker-src 'self'` already admits `/sw.js`.
+
+### 18.3 Icons
+
+- **Sources.** Two SVGs in `src/assets/app-icon/`, from the brand mark (`public/favicon.svg`):
+  - `app.svg` (`any`): the hive hexagon on a transparent background, with 4% padding.
+  - `maskable.svg`: a full-bleed square in the brand gradient (`#4b8af0` → `#2459c9`), with the white three-cell hive glyph inside the central 80% circle (the maskable safe zone).
+- **Generation.** `bun run gen:icons` (root script → `packages/dashboard/scripts/gen-app-icons.ts`) rasterises them with the Playwright Chromium already in the dev dependencies, so no new dependency. It writes the five PNGs of §18.1 and copies `app.svg` into `public/icons/`.
+- **Stamp.** It writes `src/assets/app-icon/icons.stamp.json` (kept out of `public/`, so it never ships): the SHA-256 of each source and each output's expected size.
+- **`gen:icons --check`.**
+  - Needs no browser: it reads hashes and PNG headers, never PNG bytes, which differ between rasterisers.
+  - Fails when a source hash differs from the stamp, an output is missing, or an output's IHDR has the wrong width, height or colour type (alpha for `app-*`, none for `apple-touch-icon`).
+  - Joins `bun run check` and the CI `goldens` job (06 §3, §6).
+
+### 18.4 Registration
+
+`src/app/register-sw.ts` is called once from `main.tsx` after the first render, on `window` `load`.
+
+- **Conditions.** It registers only when `import.meta.env.PROD`, `'serviceWorker' in navigator` and `window.isSecureContext` all hold.
+- **Call.** `navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' })`. Update checks then bypass the HTTP cache for the script.
+- **Failures.** A rejected registration is ignored silently: no toast, no state, no `console` (Biome `noConsole`). The dashboard behaves the same without a worker.
+- **Signed out too.** It runs whether or not the operator is signed in. The login page registers the worker, so one visit is enough.
+- **Bookkeeping on each boot,** through `lib/storage.ts`, which gains `sessionStorage` helpers beside its `localStorage` ones. Both keys and their validators live in `src/lib/daemon-help/keys.ts` (React-free, no imports), which the offline page shares:
+  - writes `bh.daemon.lastSeen` = `{ version, seen_at }`, from `<meta name="browserhive-version">` and `browserClock`;
+  - removes `bh.offline.reloads` from `sessionStorage` (§18.6.4).
+
+### 18.5 Service worker (`/sw.js`)
+
+- **Shape.** A classic script (IIFE): no runtime imports, no `importScripts`.
+- **Code layout.** `src/sw/sw-core.ts` holds the pure logic (routing, the fallback decision, cache-name rules); `src/sw/sw.ts` wires it to the worker events (`startWorker(scope, constants)`); `src/sw/scope.ts` holds the part of `ServiceWorkerGlobalScope` both workers use and `retire()`. Each worker entry starts itself only when the plugin's `define`s exist (`typeof SW_VERSION === 'string'`), so tests import it and drive it through a fake scope.
+- **Typing.** `src/sw/**` is excluded from the dashboard's `tsconfig.json` and typed by `tsconfig.sw.json` (`lib: ["ES2023", "WebWorker"]`, `types: ["bun-types"]` for its tests). That config references the contracts project and is listed in the root `tsconfig.json` references.
+
+#### 18.5.1 Constants (injected at build)
+
+- **`SW_VERSION`.** The first 12 hex characters of the SHA-256 over the sorted precache paths and their bytes. Any change to the offline page or its assets changes `sw.js`, and that change is what installs a new worker.
+- **`SW_PRECACHE`.** `/offline.html` plus the hashed files of the isolated offline build (§18.5.6).
+- **`CACHE_NAME`.** `bh-offline-${SW_VERSION}`. The worker creates, reads and deletes only caches whose names start with `bh-offline-`.
+- **`NAVIGATION_TIMEOUT_MS`.** 10 000.
+- **`MARKER_HEADER`.** `x-browserhive-version` (03 §2).
+- **`RESERVED_PREFIXES`.** `NON_SPA_PREFIXES` from the zod-free subpath `@browserhive/contracts/paths` (§18.10).
+
+#### 18.5.2 `install`
+
+- **Fetch.** For each `SW_PRECACHE` path: `fetch(url, { cache: 'reload', credentials: 'same-origin' })` (the same request as `new Request(path, …)`, with `path` made absolute against the worker's origin). Every response is fetched and checked before any is stored, so a failure leaves the cache as it was.
+- **Store.** A response is stored with `cache.put` only if it is `ok`, not `redirected`, of type `basic`, and carries `MARKER_HEADER`.
+- **Any failure rejects `install`.** The browser then discards the new worker and keeps any previous one, as the Service Worker spec requires for a failed install or update. This is what happens against a daemon running without `--admin`.
+- **Takeover.** On success it calls `self.skipWaiting()`. The worker has no state shared with pages.
+
+#### 18.5.3 `activate`
+
+- Deletes every `bh-offline-*` cache other than `CACHE_NAME`. Other caches are never touched; the trace viewer's worker under `/trace-viewer/` keeps its own.
+- Then calls `self.clients.claim()`.
+
+#### 18.5.4 `fetch`
+
+**Routing** (`routeRequest`, pure; the first match wins):
+
+| # | Condition | Route |
+|---|---|---|
+| 1 | method ≠ `GET` | `pass`: no `respondWith` |
+| 2 | URL origin ≠ the worker's origin | `pass` |
+| 3 | pathname equals a reserved prefix or starts with `prefix + '/'` | `pass` |
+| 4 | pathname is one of the hashed `SW_PRECACHE` files (not `/offline.html`, which a direct visit reaches as a navigation, row 5) | `asset` |
+| 5 | `request.mode === 'navigate'` | `navigate` |
+| 6 | anything else (app assets, `/sw.js`, `/manifest.webmanifest`, icons) | `pass` |
+
+- **`asset`: cache first.** `caches.match(request, { cacheName: CACHE_NAME, ignoreVary: true })`; on a miss, `fetch(request)`. The cache is keyed by `SW_VERSION`, so it is never stale. The offline page therefore renders instantly, even when the address hangs. `ignoreVary` is needed because assets are served with `Vary: accept-encoding`.
+- **`navigate`.** `fetch(event.request)` with **no** init argument. An init would turn mode `navigate` into `same-origin` (Fetch spec, Request constructor), and the daemon would no longer see `Sec-Fetch-Mode: navigate`. The fetch is raced against a 10 s timer, which is cleared as soon as the race settles. The outcome, decided by `decideNavigation` (pure):
+
+| Outcome | The worker returns |
+|---|---|
+| Response with `MARKER_HEADER` (any status) | that response, untouched |
+| Response without the marker, any 5xx (502–504 from nginx or Caddy, 530/52x from Cloudflare) | the cached offline page (a proxy whose upstream is down, §18.6.1) |
+| Response without the marker, 2xx, `content-type` `text/html` | that response untouched, **and** `retire()` (below) |
+| Any other response without the marker (redirects, 4xx, non-HTML 2xx) | that response, untouched |
+| Fetch rejected, or the timer fired first | the cached offline page |
+
+  - **The cached offline page** is `caches.match('/offline.html', { cacheName: CACHE_NAME, ignoreVary: true })`, falling back to `Response.error()` if it is absent. It is returned with its stored headers, so the address bar keeps the requested URL and a reload after recovery lands on the same page.
+  - **A late answer after the timer** is discarded. The navigation has already been answered, and the page's own probe takes over.
+- **`retire()`.** Runs under `event.waitUntil(retire())`, so the worker is not stopped before it finishes. It deletes every `bh-offline-*` cache, then calls `self.registration.unregister()`. The current response is still returned untouched. From then on the address behaves as if BrowserHive had never been installed there. It is called only from the 2xx-HTML-without-marker row, which a BrowserHive daemon (any version carrying the marker) never produces. A false positive (a proxy's own HTML login or interstitial page) costs nothing lasting: the next dashboard load registers the worker again (§18.4).
+- **Never empty.** The fetch handler MUST NOT be empty: rows 4 and 5 always call `respondWith`.
+
+#### 18.5.5 What the worker never does
+
+- It has no `message`, `push`, `sync`, `periodicsync` or `notificationclick` listener, and no navigation preload.
+- It never caches anything outside `SW_PRECACHE`, never reads cookies or `Authorization`, and never redirects or rewrites a response.
+- It never answers a request routed `pass`.
+
+#### 18.5.6 Build plugin (`scripts/offline-sw-plugin.ts`)
+
+A Vite plugin active only in `vite build`. The main build's `rolldownOptions.input` stays `index.html` alone. When two entries of one build share a module, it always becomes a shared chunk, so the offline page MUST be built separately. In `generateBundle` the plugin:
+
+1. **Builds the offline page in isolation.**
+   - It uses Vite's own `build()` with `configFile: false` (otherwise it would load `vite.config.ts`, this plugin and the router plugin, and recurse).
+   - `root` is the dashboard package, `write: false`, input `offline.html`, plus the Tailwind plugin and `@` alias it needs.
+   - Output file names are prefixed `assets/offline-`.
+   - Every module the offline page shares with the dashboard is duplicated into this build, never shared.
+2. **Emits** every output file of that build into the main bundle (`this.emitFile`). The precache list is `/offline.html` plus all of them: JS, CSS, and the fonts its CSS references.
+3. **Fails the build** when:
+   - the offline output lacks `offline.html`;
+   - a precache path collides with a main-bundle file;
+   - the precache totals more than 300 KB uncompressed.
+4. **Builds the worker.** `src/sw/sw.ts` goes through another `build()` (`configFile: false`, `write: false`, library mode, format `iife`, minified), with `define` for `SW_VERSION`, `SW_PRECACHE`, `NAVIGATION_TIMEOUT_MS` and `MARKER_HEADER`. The result is emitted as `sw.js` at the bundle root.
+5. **Emits `sw-precache.json`** (`{ version, paths }`).
+
+It never imports a bare `rolldown`: the hoisted copy differs from Vite's own.
+
+In `vite.config.ts`:
+- `optimizeDeps.entries` adds `offline.html`, and the dev server serves it as a plain page for design work;
+- the deprecated `rollupOptions` key becomes `rolldownOptions`;
+- `PROXIED_PATHS` moves to an exported `src/dev-proxy.ts` that both the config and its test import.
+
+#### 18.5.7 Updates, upgrades and removal
+
+- **Daemon upgrade.** The next navigation's update check fetches `/sw.js`. New bytes install a worker that takes over at once and drops the old cache. Navigations always go to the network, so the operator sees the new dashboard immediately.
+- **Downgrade to a daemon without the worker or the marker.** Its `index.html` lacks `MARKER_HEADER`, so the first navigation retires the worker. That is acceptable: the old daemon has no offline page to offer.
+- **Port reuse.** Another program's HTML on the address retires the worker on the first navigation (§18.5.4). The offline page's **Forget this address** button (§18.6.2) does the same by hand. A retired worker comes back the next time the dashboard itself loads at that address.
+- **Kill switch.** If a released worker misbehaves, the fix is a release whose `sw.js`:
+  - calls `skipWaiting()` on `install`;
+  - on `activate`, deletes every `bh-offline-*` cache, then `self.registration.unregister()`, then `clients.claim()`;
+  - has no `fetch` handler.
+
+  `src/sw/kill-switch.ts` holds it, built in place of `sw.ts` by the plugin's `worker: 'kill-switch'` option (`BHDEV_SW_KILL_SWITCH=1 bun run --filter @browserhive/dashboard build`) and unit-tested now, so it is ready before it is needed.
+- **Manual removal** (troubleshooting guide): DevTools › Application › Service workers › Unregister, or clear the site data for the address.
+
+### 18.6 Offline page (`/offline.html`)
+
+- **No framework.** `src/offline/main.ts` builds the DOM with `createElement` and `textContent` only, never `innerHTML`.
+- **Styles and fonts.** The design tokens and Geist, latin subsets only (the precache stays near 110 KB). The CSS comes from `src/offline/offline.css`, which imports `styles/tokens.css` and uses Tailwind with `source(none)` and `@source "./"`, plus the few base rules and utilities of `styles/globals.css` it needs (`focus-ring`, `section-label`, `eyebrow`, `px-gutter`). The tab icon is a `data:` URI of the favicon in `offline.html`, so it needs no request either. The layout follows the signed-out pages (`AuthLayout`): the brand mark above one card.
+- **Theme.** The tokens define dark only under `:root[data-theme="dark"]`, so `main.ts` always sets `data-theme` (and `color-scheme`) first thing. The value is `resolveTheme(stored preference, matchMedia('(prefers-color-scheme: dark)').matches)`, and it follows `change` events. `resolveTheme` and `THEME_COLORS` move to a React-free `src/theme/resolve.ts`, imported by both the dashboard and the offline page, which also sets `<meta name="theme-color">`. The very first paint may show the light tokens for one frame when the result is dark; `offline.html` sets `<meta name="color-scheme" content="light dark">` and a dark `background` under `prefers-color-scheme: dark` in a small `<style>` block, which the CSP allows, so even that frame is dark.
+- **No inline script.** The page is served without a nonce, so it contains none.
+- **Brand mark.** Built in `main.ts` with `createElementNS`, so no icon request is needed.
+
+#### 18.6.1 Probe (`src/lib/daemon-help/probe.ts`)
+
+- **`probeHealth({ fetch, timers })`.** Both are injectable (defaults: global `fetch`, `browserTimers`). It calls `fetch('/health', { cache: 'no-store' })` with a 5 s timeout. It returns the raw outcome: rejected, timed out, or `{ status, marked, body }`, where `marked` means the response carries `X-BrowserHive-Version`. Both the offline page and the dashboard (§18.7) use it.
+- **`isDaemonAnswer(outcome)`** = `outcome.marked`. Any response carrying the marker, healthy or not, proves the daemon is reachable. Rejections, timeouts and unmarked responses (`foreign`, `proxy-unreachable`) are not daemon answers.
+- **`classifyProbe(outcome, { online })`** (pure; the caller passes `navigator.onLine`, so the module reads no DOM global).
+  - **What counts as BrowserHive.** A JSON object with `status` ∈ `starting|ready|degraded|stopping` and a string `version`. The check is hand-written, not zod, so the offline build stays small.
+  - **Consistency.** A test asserts it recognises every `HealthResponse` fixture, including one without `instance_id` (older daemons).
+
+| Probe outcome | State |
+|---|---|
+| (before the first probe returns) | `checking` |
+| rejected | `not-running` (or `device-offline` when `navigator.onLine === false`) |
+| timed out | `not-responding` |
+| BrowserHive body, `ready` or `degraded` | `ready` → reload (§18.6.4) |
+| BrowserHive body, `starting` | `starting` |
+| BrowserHive body, `stopping` | `not-running` (it will be in a moment) |
+| marked, not a health body, status 503 (the listener's pre-app fallback) | `starting` |
+| marked, not a health body, any other status (e.g. `421 HOST_NOT_ALLOWED`) | `refused`. The worker returns such a response untouched on a navigation, so this state is reached mainly by a direct visit to `/offline.html` or when the host guard changes while the page is open. |
+| not marked, any 5xx | `proxy-unreachable` |
+| anything else | `foreign` |
+
+#### 18.6.2 What the page says
+
+`host` is `location.host`, rendered as text. "Loopback" means a hostname of `localhost`, `127.0.0.0/8` or `[::1]`.
+
+| State | Heading | Body |
+|---|---|---|
+| `checking` | Checking BrowserHive at `host`… | No body; the status line shows the check in progress. |
+| `not-running`, loopback | BrowserHive isn't running | Nothing is answering at `host`. If you just started it, it may still be getting ready. This page reconnects by itself. |
+| `not-running`, other host | Can't reach BrowserHive | Nothing answered at `host`. Check this device's connection and any tunnel or proxy in between, and that BrowserHive is running. This page reconnects by itself. |
+| `device-offline` | This device is offline | Reconnect to the network. This page reconnects by itself. |
+| `not-responding` | BrowserHive isn't responding | Something at `host` accepted the connection but didn't answer within 5 seconds. BrowserHive may be stuck or overloaded. Restarting it usually helps. |
+| `starting` | BrowserHive is starting | It is getting ready. This page opens the dashboard as soon as it is. |
+| `proxy-unreachable` | BrowserHive is unreachable behind `host` | The proxy or tunnel at `host` answered, but BrowserHive behind it didn't. Check that BrowserHive is running and that the proxy points at it. |
+| `refused` | BrowserHive turned this request away | BrowserHive is running at `host` but didn't accept this address (HTTP `<status>`). If you reach it through a new name, allow it with `--allowedHosts` or set `--publicUrl`, or open the address the startup banner prints. |
+| `foreign` | Another program is using this address | Something other than BrowserHive answered at `host`. If BrowserHive moved to another port, open that address (and install the app from there). |
+| loop guard (§18.6.4) | BrowserHive answers, but the dashboard didn't load | Reload, or restart BrowserHive. |
+
+Below the body:
+
+- **Commands** (§18.6.3).
+- **Last used.** "You last used BrowserHive `0.x.y` here 3 hours ago." Read from `bh.daemon.lastSeen`, and omitted when that is absent or unreadable.
+- **Status line.** "Checking again in 3 s", plus the time of the last check. Its region is mounted empty at load with `role="status"`. Only state changes are written into it; countdown ticks are not.
+- **Buttons.** **Retry now**, and, for `foreign` and as a quiet link otherwise, **Forget this address**.
+  - Forget this address unregisters the worker and deletes the `bh-offline-*` caches.
+  - It then says: "Done. From now on this address shows your browser's normal page when nothing answers."
+- **Learn more.** A link to `docsUrl('troubleshootingNotRunning')`.
+
+#### 18.6.3 Help commands (`daemonHelp`, pure, `src/lib/daemon-help/commands.ts`)
+
+Shown for `not-running`, `not-responding`, `starting` (start command omitted), `refused` (only `config show`), `proxy-unreachable` and the loop guard. Each command is a monospace block with a Copy button (`copyText` from `src/lib/clipboard.ts`, §18.10).
+
+| Purpose | Command |
+|---|---|
+| Start with the dashboard | `browserhive --admin`, plus ` --port <p>` only when the host is loopback and `<p>` ≠ `9876` |
+| Not on `PATH` | `bunx browserhive@<v> --admin …` (`<v>` = `lastSeen.version`; plain `bunx browserhive` when unknown) |
+| Check the setup | `browserhive doctor` |
+| See the settings in effect (port, host, data dir) | `browserhive config show` |
+| See what holds the port (loopback only; three labelled lines, the detected OS first) | Linux `ss -ltnp 'sport = :<p>'` · macOS `lsof -nP -iTCP:<p> -sTCP:LISTEN` · Windows (PowerShell) `Get-NetTCPConnection -LocalPort <p> -State Listen` |
+
+- `<p>` is `location.port`, or 80 or 443 by scheme when that is empty.
+- The OS is detected from `navigator.userAgentData?.platform`, then the UA string. When neither says, the order is Linux, macOS, Windows.
+- For a non-loopback host, one line above the commands: "Run these on the machine where BrowserHive runs."
+- Below the commands: "Started by an MCP client, a service manager or a container? Start it the way you usually do."
+- A root test (`test/dashboard/daemon-help.test.ts`, outside `packages/`, so the dependency rules allow it; `test:server` gains `test/dashboard`, 06 §3) asserts the points below. `daemon-help/{probe,commands}.ts` therefore use relative imports only and touch no DOM global at module top level, so the root test project can load them:
+  - every command word is in `COMMAND_NAMES` (`packages/browserhive/src/cli/registry.ts`);
+  - `--admin` and `--port` are config keys in `@browserhive/contracts/config`;
+  - `doctor` and `config show` exist as written.
+
+#### 18.6.4 Polling and reload
+
+- **When it probes.** At load. Then after 1 s, 2 s, then every 3 s while the page is visible. Also at once on `online`, on becoming visible, and on Retry now (which resets the schedule).
+- **Hidden pages.** No probe runs while hidden. Timers come from `lib/clock.ts` (`Timers`, `browserTimers`).
+- **On `ready`:**
+  - if the page's path is `/offline.html` (opened directly), `location.replace('/')`;
+  - otherwise, `location.reload()`.
+- **Loop guard.**
+  - Each automatic reload appends a timestamp to `sessionStorage['bh.offline.reloads']`, keeping only the last 60 s.
+  - The dashboard clears the key when it boots (§18.4), so only reloads that never reach the dashboard count.
+  - On the third, the page stops reloading by itself and shows the loop-guard state with a **Reload** button.
+  - When `sessionStorage` is unreadable, the page never reloads automatically and always shows the Reload button.
+
+#### 18.6.5 Accessibility and layout
+
+- **Structure.** One `h1`, a `main` landmark, real `<button>`s and visible focus rings.
+- **Motion.** No animation under `prefers-reduced-motion`.
+- **Widths.** Readable from 320 px.
+- **Testing.** Passes axe with no disabled rules at 390 px and 1280 px, in both themes.
+
+### 18.7 Daemon-unreachable banner (in the running dashboard)
+
+`HealthPill` turns Offline when the socket gives up (§6.1). The banner adds an explanation and the same help as the offline page.
+
+- **One watcher.** `DaemonReachabilityProvider` (`src/lib/daemon-help/reachability.tsx`, mounted in `AppShell` inside `SocketProvider`) owns every `/health` probe the shell makes. The logic is the framework-free `DaemonReachability` class in `src/lib/daemon-help/watcher.ts`, which follows the query cache (`followRestOutcomes`, `lib/api/rest-health.ts`) and replaces the REST-failure probing that lived in `HealthPill`'s effect (`watchRestHealth`), with the same rules (§6.1), now calling `probeHealth()`. The provider takes the socket state as a `socket` prop (`AppShell` passes `useSocketState()`), so `lib/` never imports `app/`. `HealthPill` and the banner both read it through `useDaemonReachability()`, so there is never a second poller, and at most one probe is in flight.
+- **When it probes.**
+  - The **outage cadence** starts the moment the socket store first reports `offline` with reason `network` (offline for `unauthorized`, `password_change` or `protocol` means the daemon answered). The store's reconnect backoff (500 ms, 1 s, 2 s, plus the 10 s connect timeout of §4.2 against a hung daemon) gets there about 3.5 s after the daemon stops, or about 33 s when it hangs. Each probe starts 5 s after the previous one started, or when it settles, whichever is later.
+  - Otherwise, as §6.1 says: every 15 s while REST is failing. These probes update `HealthPill` but never count toward the banner.
+  - Probing stops on the first daemon answer (`isDaemonAnswer`), which also clears the REST failure in `HealthPill`. An unmarked 502 from a proxy keeps it failing; a malformed but marked 200 clears it.
+- **When it shows.** After **3 consecutive outage-cadence** probes classified `not-running`, `not-responding` or `proxy-unreachable`. Gaps are measured from probe start to probe start, and any gap over 15 s resets the count, so sleep, resume and a throttled background tab never show it on wake. The banner appears about 15–20 s after the daemon stops (later for a hung daemon: connect timeout plus three 5 s probe timeouts).
+- **When it hides.** On any daemon answer: a marked probe response, the socket reaching `connected`, or a successful REST request. The socket store's reconnect resyncs (§4.2), with no reload.
+- **Testing seam.** `test/helpers/page-harness.tsx` mounts `DaemonReachabilityProvider` inside `SocketProvider` with the harness's `fetchImpl` and fake timers, so `HealthPill.test.tsx` and page tests keep working. The harness's fake daemon marks every response with `X-BrowserHive-Version`, like the real one.
+- **Banner state.** It first shows for a counted state; while shown it follows the latest outage probe (e.g. `device-offline`), so the dialog describes the current state. If the daemon answers while the dialog is open, the dialog stays and says "BrowserHive is back".
+- **`DaemonUnreachableBanner`** (`src/app/shell/DaemonUnreachableBanner.tsx`).
+  - **Placement.** Rendered under the topbar; while shown it takes precedence over `AuthRetryBanner`.
+  - **Text.** "Can't reach BrowserHive at `host`. It may have stopped."
+  - **What to do.** A button that opens a dialog with the §18.6.2 body for the current state and the §18.6.3 commands. They are rendered with `CodeBlock`, promoted from `features/notifications/channels/wizard/fields.tsx` to `components/shared` (§7.2), and with `CopyButton`. `CodeBlock` gains `overflow: 'scroll' | 'wrap'`: `wrap` keeps one command's copy button beside its first line and wraps only between words. The body text is `stateCopy` from `src/lib/daemon-help/copy.ts` (moved from `src/offline/`, shared with the offline page). One Close button, no corner ✕; Learn more → `docsUrl('troubleshootingNotRunning')`.
+  - **Announcement.** The text is written into a `role="status"` region the shell mounts permanently, so it is announced once.
+  - **Never modal.** The operator can still read the page.
+
+### 18.8 Install app
+
+#### 18.8.1 Capturing the browser's offer
+
+- **The store.** `src/lib/install/prompt-store.ts` adopts `window.__bhInstallPrompt` (from the inline bootstrap, §18.2) and listens for later `beforeinstallprompt` events, calling `preventDefault()`.
+  - `preventDefault()` only stops mobile Chromium's mini-infobar; desktop keeps its address-bar icon.
+  - Components read the store with `useSyncExternalStore`.
+  - The store takes the event off `window` when it adopts it (and clears the global when its own listener receives one), so a later mount never adopts a used event; `stop()` puts an unused one back. `src/lib/install/install-prompt.d.ts` declares `BeforeInstallPromptEvent`, the `beforeinstallprompt`/`appinstalled` window events and `window.__bhInstallPrompt`.
+- **Prompting.** After `prompt()` the event is dropped whatever the outcome; Chromium may offer a new one later.
+- **`appinstalled`.** The store clears the event and emits an `installed` signal. `InstallToastBridge` (`src/app/shell/InstallToastBridge.tsx`), mounted once in `AppShell`, turns that signal into the toast "BrowserHive is installed. Open it from your app launcher or taskbar." (Toasts need the React context.)
+
+#### 18.8.2 What the browser supports (`installSupport`, pure, `src/lib/install/support.ts`)
+
+**Input.** `{ hasPrompt, standalone, secure, userAgent, uaBrands, uaPlatform, maxTouchPoints }`, where `standalone` is true when either holds:
+- `matchMedia('(display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui), (display-mode: window-controls-overlay)').matches`;
+- `navigator.standalone === true`.
+
+The first matching row wins:
+
+| # | Condition | Kind | Install app does |
+|---|---|---|---|
+| 1 | `standalone` | `standalone` | Item hidden: this is the installed app |
+| 2 | `!secure` | `insecure` | Dialog: "Browsers install apps only from a secure address. On the computer running BrowserHive, open `http://127.0.0.1:<p>` (if it listens on another address, `browserhive config show` names it). From other devices, give BrowserHive an `https` address." The address is a copy button, followed by a link to the public-address guide (D-37) |
+| 3 | `hasPrompt` | `prompt` | `prompt()`: the browser's own install dialog; no dialog of ours |
+| 4 | UA says iPhone or iPad, or `Macintosh` with `maxTouchPoints > 1` (iPadOS reports a Mac UA) | `ios` | Dialog: "Tap Share, then Add to Home Screen." |
+| 5 | Chromium (brand `Chromium` in `uaBrands`, or `Chrome/`/`Edg/` in the UA), Android | `chromium-android` | Dialog: "Open the browser menu ⋮ and choose *Add to Home screen* or *Install app*." |
+| 6 | Chromium, desktop | `chromium` | Dialog: the brand's steps (§18.8.3), then "Already installed? Your browser shows an *Open in app* button in the address bar instead." |
+| 7 | `Firefox/` in the UA, Windows | `firefox-windows` | Dialog: the Firefox steps (§18.8.3) |
+| 8 | `Firefox/`, Linux | `firefox-linux` | Dialog: "Firefox on Linux doesn't install websites as apps unless that is turned on. Open this address in Chrome, Edge or another Chromium browser to install BrowserHive, or bookmark it here." The address is a copy button |
+| 9 | `Firefox/`, macOS or other desktop (Firefox for Android installs from its menu and falls to row 11) | `firefox-unsupported` | Dialog: "Firefox can't install websites as apps on this system. Open this address in Chrome, Edge or another Chromium browser to install BrowserHive, or bookmark it here." The address is a copy button |
+| 10 | Safari (`Safari/` and `Version/`, none of `Chrome/`, `Chromium/`, `Edg/`, `OPR/`, `Firefox/`), macOS | `safari-macos` | Dialog: "In the menu bar choose File › Add to Dock. Then open the new app once while BrowserHive is running: from then on it can show you help when BrowserHive is stopped." |
+| 11 | anything else | `unknown` | Dialog: "Look for *Install* or *Add to Home screen* in your browser's menu. If there isn't one, this browser can't install websites as apps." |
+
+The UA only picks which instructions to show. Installing never depends on it: row 3 wins over every browser row.
+
+#### 18.8.3 Browser-specific steps (`src/lib/install/steps.ts`)
+
+Each entry records the source and the browser version it was checked against. The manual gate (§18.12) re-checks Chrome and Edge. As built, the recorded versions (Chrome 154, Edge 154, Chromium 153, Firefox 143+ on Windows, 2026-11) are where the source articles' wording was taken from; none was walked through in a real browser UI yet, which is exactly what the gate does.
+
+| Brand | Steps | Source |
+|---|---|---|
+| Chrome | Click the install icon at the right of the address bar, or open the ⋮ menu › *Cast, save, and share* › *Install page as app…* | support.google.com/chrome/answer/9658361 |
+| Edge | Click *App available* in the address bar, or open the … menu › *More tools* › *Apps* › *Install this site as an app* | Microsoft Support, "Install, manage, or uninstall apps in Microsoft Edge" |
+| Other Chromium brands | Click the install icon in the address bar, or look for *Install* in the browser menu | generic |
+| Firefox (Windows) | Click the web-apps icon in the address bar, then *Add to taskbar* | Mozilla Support / firefox-source-docs `taskbartabs` |
+
+#### 18.8.4 Where it appears
+
+- **Account menu** (`PrincipalMenu`): **Install app**, with `ICONS.installApp` (lucide `MonitorDown`, added to `lib/icons.ts`), placed between Keyboard shortcuts and Log out. It is hidden only for `standalone`.
+- **Command palette**, Actions section: "Install BrowserHive as an app" (keywords `install app pwa desktop dock taskbar home screen`). It has the same visibility and the same handler.
+- **One handler.** `InstallAppProvider` (`src/features/install/install-app.tsx`, mounted once in `AppShell`) owns the prompt store and the dialog; `useInstallApp()` gives both entry points `{ visible, run }`. `run` re-reads `installSupport` on every call (the offer may have arrived since) and calls `prompt()` synchronously inside the click.
+- **Nowhere else:** no banner, card or reminder. The browser's address-bar icon is the ambient affordance.
+- **`InstallAppDialog`** (`src/features/install/InstallAppDialog.tsx`, shared `Dialog`):
+  - title "Install BrowserHive";
+  - the row's text;
+  - the address as a copyable field (`CopyButton`, always visible) where the row says so;
+  - "Learn more" → `docsUrl('dashboardInstall')`;
+  - one Close button (no corner ✕);
+  - besides the row's text, a one-line description under the title (e.g. "It opens in its own window, from your app launcher or taskbar."), and for Chromium and Firefox on Windows the steps in a card under the browser's name.
+
+### 18.9 Reserved
+
+Launch handling (`launch_handler`, `launchQueue`) is deferred (D-59).
+
+### 18.10 Code boundaries
+
+- **`@browserhive/contracts/paths`** is a new subpath entry: a zod-free leaf exporting `NON_SPA_PREFIXES`. It is added to the tsdown entries and to the package `exports`. `core/interface/static/spa.ts` imports it in place of its local list, and so does the worker.
+  - A unit test asserts `src/dev-proxy.ts`'s `PROXIED_PATHS` equals it.
+  - The plugin asserts `sw.js` contains no `zod`.
+  - The contracts export-snapshot golden is updated for the new subpath.
+- **`src/lib/clipboard.ts`.** `copyText` and its insecure-context fallback move here from `components/shared/CopyButton.tsx`, which imports it. The offline page uses it without React.
+- **dependency-cruiser rules** (added to `.dependency-cruiser.cjs`):
+  - `src/offline/**` may import only:
+    - `src/offline/**`;
+    - `src/lib/daemon-help/{probe,commands,keys,copy}.ts`;
+    - `src/lib/{clock,links,storage,clipboard}.ts`;
+    - `src/theme/resolve.ts`;
+    - `src/styles/tokens.css`.
+  - `src/sw/**` may import only `src/sw/**` and `@browserhive/contracts/paths`.
+  - `src/lib/daemon-help/{probe,commands,keys,copy}.ts` and `src/lib/install/{support,steps}.ts` import no React.
+  - These rules see local files and unresolved `@/` aliases only: npm packages are outside the graph (`exclude: node_modules`). `src/lib/daemon-help/boundaries.test.ts` therefore asserts that `probe.ts`, `commands.ts`, `keys.ts` and `copy.ts` import only relative `.ts` files, and `src/lib/install/boundaries.test.ts` the same for `support.ts` and `steps.ts`.
+- **Folder structure (§3)** gains:
+  - `src/sw/`, `src/offline/`, `src/lib/install/`, `src/lib/daemon-help/`, `src/assets/app-icon/`;
+  - `src/dev-proxy.ts`, `src/lib/clipboard.ts`, `src/theme/resolve.ts`, `src/features/install/`;
+  - `tsconfig.sw.json`;
+  - `offline.html`;
+  - `scripts/offline-sw-plugin.ts`, `scripts/gen-app-icons.ts`;
+  - `public/manifest.webmanifest`, `public/icons/`.
+- **`scripts/run-from-source.ts`** adds `packages/dashboard/scripts` and `offline.html` to its rebuild inputs.
+
+### 18.11 Docs and links
+
+- **`docs/guide/dashboard.md` § "Install as an app":**
+  - what it gives, and how to install per browser (§18.8 in prose);
+  - install from the address the banner prints (`127.0.0.1` and `localhost` are different apps);
+  - the app is only a window: BrowserHive must be running;
+  - the secure-address rule, and that Safari needs one launch while BrowserHive runs;
+  - how to uninstall: the browser's app settings;
+  - two daemons install as two apps.
+- **`docs/guide/troubleshooting.md` § "The app says BrowserHive isn't running":** every offline state and its fix, the loop-guard state, Forget this address, and manual removal (§18.5.7).
+- **`docs/guide/security.md`:** one paragraph on what the worker stores (public static files only) and on port grabbing (D-59 Consequences).
+- **`lib/links.ts` `DOCS_PAGES`** gains `dashboardInstall` (`guide/dashboard`, `install-as-an-app`) and `troubleshootingNotRunning` (`guide/troubleshooting`, `the-app-says-browserhive-isnt-running`). The existing links test checks the anchors.
+- **Spec 12:** one line in the dashboard tour.
+- **Changeset:** `browserhive` minor, "Install the dashboard as an app, with a help page when BrowserHive isn't running".
+
+### 18.12 Tests and the verification gate
+
+The automated suites are in 09 §3.4–§3.6 (marked D-59). The manual gate below MUST pass on real browsers before the PR leaves draft, with screenshots and browser versions in the PR description:
+
+1. **Chrome stable on Linux.**
+   - Install from the account menu (native dialog).
+   - The launcher icon is right.
+   - The app opens standalone.
+   - The title bar follows light and dark.
+   - The shortcuts open Sessions, Attention and Logs.
+2. **Chrome, daemon stopped.**
+   - Launch the app: `not-running`, the right port, Copy works.
+   - Start the daemon: the dashboard returns within about 5 s.
+   - Run a foreign server on the port (`python3 -m http.server <p>`): its own listing shows, and afterwards the address no longer has a BrowserHive worker (DevTools › Application).
+3. **The daemon dies while the dashboard is open.**
+   - The banner appears after about 15–20 s; What to do shows the help.
+   - On restart the banner clears without a reload.
+   - Close the laptop lid for a minute with the daemon running: no banner on wake.
+4. **Edge** (Windows or Linux): install from the address bar and from the menu path in §18.8.3.
+5. **Firefox on Linux:** Install app shows `firefox-linux`, and the offline page works after one visit. **Firefox on Windows**, if available: the steps match.
+6. **Safari on macOS**, if available:
+   - Add to Dock.
+   - Launch once with the daemon up, stop the daemon, launch again: the offline page.
+7. **Without `--admin`:** the installed app opens on the status page, and `/sessions` shows the status page, not JSON.
+8. **Layout and theme:** the offline page, the dialog and the banner at 390 px and 1280 px, in both themes, reviewed visually against the dashboard quality bar.

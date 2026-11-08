@@ -4,6 +4,7 @@
     { "path": "packages/contracts" },
     { "path": "packages/core" },
     { "path": "packages/dashboard" },
+    { "path": "packages/dashboard/tsconfig.sw.json" },
     { "path": "packages/browserhive" },
     { "path": "scripts" },
     { "path": "test" }

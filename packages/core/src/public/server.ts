@@ -96,6 +96,7 @@ export { createTraceViewerAssets } from '../infra/static/playwright-trace-viewer
 export { BitwardenBackend } from '../infra/vault-backends/bitwarden/bitwarden-backend.ts';
 export { OffVaultBackend } from '../infra/vault-backends/off.ts';
 export { createHttpApp, type HttpApp } from '../interface/http/app.ts';
+export { VERSION_HEADER } from '../interface/http/middleware/secure-headers.ts';
 export type {
   BlocklistPort,
   HealthProbe,

@@ -1,15 +1,13 @@
 /** @module interface/static/spa — the dashboard SPA: hashed assets, templated `index.html` with a CSP nonce, History-API fallback (spec 03 §8). */
 
+import { isNonSpaPath } from '@browserhive/contracts/paths';
 import type { StaticAssets } from '../../ports/static-assets.ts';
 import { dashboardCsp } from '../http/middleware/secure-headers.ts';
 import { assetResponse } from './assets-response.ts';
 
-/** Path prefixes that never fall back to `index.html`. */
-export const NON_SPA_PREFIXES: readonly string[] = ['/api', '/mcp', '/health', '/trace-viewer'];
-
-/** True when `path` belongs to the SPA (not an API/transport prefix). */
+/** True when `path` belongs to the SPA: not under a reserved prefix (`NON_SPA_PREFIXES` of `@browserhive/contracts/paths`). */
 export function isSpaPath(path: string): boolean {
-  return !NON_SPA_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+  return !isNonSpaPath(path);
 }
 
 /** Adds `nonce` to every `<script>` without one and the version meta tag. */

@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "WebWorker"],
+    "types": ["bun-types"],
+    "rootDir": ".",
+    "outDir": "dist/types-sw",
+    "tsBuildInfoFile": "dist/.sw.tsbuildinfo"
+  },
+  "include": ["src/sw/**/*.ts"],
+  "references": [{ "path": "../contracts" }]
+}

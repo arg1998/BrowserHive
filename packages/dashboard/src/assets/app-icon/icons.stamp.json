@@ -1,0 +1,38 @@
+{
+  "sources": {
+    "app.svg": "c1b169c052dd69b21f3d89aa3684016887139a96545285bb6bb0df5989e354a0",
+    "maskable.svg": "8cf93ddaa430f95e01b04e13ad9c30224bde22e3164d9770d3ee032361da263d"
+  },
+  "outputs": [
+    {
+      "file": "app-192.png",
+      "source": "app.svg",
+      "size": 192,
+      "colorType": 6
+    },
+    {
+      "file": "app-512.png",
+      "source": "app.svg",
+      "size": 512,
+      "colorType": 6
+    },
+    {
+      "file": "maskable-192.png",
+      "source": "maskable.svg",
+      "size": 192,
+      "colorType": 2
+    },
+    {
+      "file": "maskable-512.png",
+      "source": "maskable.svg",
+      "size": 512,
+      "colorType": 2
+    },
+    {
+      "file": "apple-touch-icon.png",
+      "source": "maskable.svg",
+      "size": 180,
+      "colorType": 2
+    }
+  ]
+}

@@ -3,7 +3,6 @@ import type { SessionSummary } from '@browserhive/contracts/http';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useConfirm } from '@/app/providers/ConfirmProvider.tsx';
 import { useToast } from '@/app/providers/ToastProvider.tsx';
-import { copyText } from '@/components/shared/CopyButton.tsx';
 import { useRowControlTabIndex } from '@/components/shared/row-context.ts';
 import { Button, buttonVariants } from '@/components/ui/button.tsx';
 import {
@@ -14,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu.tsx';
 import { Hint } from '@/components/ui/tooltip.tsx';
+import { copyText } from '@/lib/clipboard.ts';
 import { ICONS } from '@/lib/icons.ts';
 import { useSessionMutations } from '../api.ts';
 import { deleteConfirm, terminateConfirm } from '../confirm-copy.ts';
