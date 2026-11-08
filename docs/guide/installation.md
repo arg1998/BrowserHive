@@ -148,7 +148,7 @@ Override it with `--dataDir` or `BROWSERHIVE_DATA_DIR`. The layout:
   backups/                       database backups written before migrations
   admin/credentials.txt          first-run dashboard password (removed after you change it)
   sessions/<id>/                 userdata, trace.zip, screenshots/, downloads/
-  auth-states/                   saved logins (storage states, profile zips)
+  auth-states/                   saved logins (storage states, profile zips); p/<id>/ per token principal
   uploads/
   browserhive.config.json        optional configuration file
 ```

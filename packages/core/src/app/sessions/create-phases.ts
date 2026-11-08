@@ -131,7 +131,9 @@ export function buildPhases(
       if (request.restoreProfile !== null) {
         const locator = authStates(deps, request.restoreProfile, 'profile');
         await locator.restoreProfile(request.restoreProfile, dirs.userdata, deps.principal);
-        ctx.restoredSeed = await locator.loadIdentitySeed(request.restoreProfile).catch(() => null);
+        ctx.restoredSeed = await locator
+          .loadIdentitySeed(request.restoreProfile, deps.principal)
+          .catch(() => null);
         session.setIdentitySeed(ctx.restoredSeed);
       }
       if (request.storageStateName !== null) {

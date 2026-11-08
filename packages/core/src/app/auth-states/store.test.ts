@@ -1,4 +1,4 @@
-/** @module app/auth-states/store.test — save/list/remove/restore, owner scoping, identity seed round trip, name sandbox. */
+/** @module app/auth-states/store.test — save/list/remove/restore, per-principal names (spec 13 T0a), identity seed round trip, flat-layout migration, name sandbox. */
 
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
@@ -7,10 +7,17 @@ import { join } from 'node:path';
 import { FakeClock } from '../../../test/helpers/fake-clock.ts';
 import { createCollectingLogger } from '../../../test/helpers/test-logger.ts';
 import { isAppError } from '../../kernel/errors/app-error.ts';
-import { AuthStateStore, assertValidAuthName } from './store.ts';
+import {
+  type AuthStateFs,
+  AuthStateStore,
+  assertValidAuthName,
+  createNodeAuthStateFs,
+  principalDirName,
+} from './store.ts';
 
 const local = { subject: 'local' };
 const alice = { subject: 'alice' };
+const bob = { subject: 'bob' };
 let dir: string;
 let clock: FakeClock;
 let store: AuthStateStore;
@@ -95,13 +102,13 @@ describe('AuthStateStore', () => {
       await symlink('/etc/passwd', join(userdata, 'SingletonLock'));
     }
     await store.saveFullProfile(userdata, 'work', 'prof-00000001', local);
-    expect(await store.saveIdentitySeed('work', 'prof-00000001')).toBe(true);
+    expect(await store.saveIdentitySeed('work', 'prof-00000001', local)).toBe(true);
     const dest = join(dir, 'dest');
     await store.restoreProfile('work', dest, local);
     expect(await readFile(join(dest, 'Default', 'Local State'), 'utf8')).toBe('state');
     expect(await stat(join(dest, 'SingletonLock')).catch(() => null)).toBeNull();
-    expect(await store.loadIdentitySeed('work')).toBe('prof-00000001');
-    expect(await store.loadIdentitySeed('none')).toBeNull();
+    expect(await store.loadIdentitySeed('work', local)).toBe('prof-00000001');
+    expect(await store.loadIdentitySeed('none', local)).toBeNull();
   });
 
   it('removes every file of a snapshot the caller owns', async () => {
@@ -132,5 +139,357 @@ describe('AuthStateStore', () => {
       expect(() => assertValidAuthName(name)).toThrow();
     }
     expect(() => assertValidAuthName('my-login.v2_ok')).not.toThrow();
+  });
+});
+
+/** A source whose snapshot carries `value` as its `sid` cookie. */
+function sourceWith(value: string) {
+  return {
+    storageState: async (options: { path: string; indexedDB: boolean }) => {
+      await writeFile(
+        options.path,
+        JSON.stringify({ cookies: [{ name: 'sid', value }], origins: [] }),
+      );
+    },
+  };
+}
+
+/** A managed userdata dir whose `Default/Cookies` holds `cookies`. */
+async function userdataWith(label: string, cookies: string): Promise<string> {
+  const userdata = join(dir, `ud-${label}`);
+  await mkdir(join(userdata, 'Default'), { recursive: true });
+  await writeFile(join(userdata, 'Default', 'Cookies'), cookies);
+  return userdata;
+}
+
+async function exists(path: string): Promise<boolean> {
+  return (await stat(path).catch(() => null)) !== null;
+}
+
+type Kind = 'storage' | 'profile';
+
+async function saveAs(
+  kind: Kind,
+  name: string,
+  principal: { subject: string },
+  secret: string,
+): Promise<void> {
+  if (kind === 'storage') {
+    await store.saveStorageState(sourceWith(secret), name, `s-${principal.subject}`, principal);
+  } else {
+    const userdata = await userdataWith(`${principal.subject}-${kind}`, secret);
+    await store.saveFullProfile(userdata, name, `s-${principal.subject}`, principal);
+  }
+}
+
+/** What a restore of `name` as `principal` yields: the secret, or the error code. */
+async function restoredSecret(kind: Kind, name: string, principal: { subject: string }) {
+  try {
+    if (kind === 'storage') {
+      const path = await store.storageStatePath(name, principal);
+      const state = JSON.parse(await readFile(path, 'utf8')) as {
+        cookies: { value: string }[];
+      };
+      return state.cookies[0]?.value;
+    }
+    const dest = join(dir, `restore-${principal.subject}-${Math.random()}`);
+    await store.restoreProfile(name, dest, principal);
+    return await readFile(join(dest, 'Default', 'Cookies'), 'utf8');
+  } catch (err) {
+    return isAppError(err) ? err.code : String(err);
+  }
+}
+
+describe('AuthStateStore names per principal (spec 13 T0a)', () => {
+  const kinds: Kind[] = ['storage', 'profile'];
+  for (const first of kinds) {
+    for (const second of kinds) {
+      it(`bob saving alice's ${first} name as a ${second} leaves alice's snapshot alone`, async () => {
+        await saveAs(first, 'work', alice, 'ALICE');
+        await saveAs(second, 'work', bob, 'BOB');
+        expect((await store.list(alice)).map((e) => [e.name, e.kind])).toEqual([['work', first]]);
+        expect((await store.list(bob)).map((e) => [e.name, e.kind])).toEqual([['work', second]]);
+        // Each restores only its own; the other kind under the same name is simply not found.
+        expect(await restoredSecret(first, 'work', alice)).toBe('ALICE');
+        expect(await restoredSecret(second, 'work', bob)).toBe('BOB');
+        if (first !== second) {
+          expect(await restoredSecret(first, 'work', bob)).toBe('AUTH_STATE_NOT_FOUND');
+          expect(await restoredSecret(second, 'work', alice)).toBe('AUTH_STATE_NOT_FOUND');
+        }
+        expect(await restoredSecret(first, 'work', local)).toBe('AUTH_STATE_NOT_FOUND');
+        expect(await store.list(local)).toEqual([]);
+      });
+    }
+  }
+
+  it('lays out local flat and everyone else under p/<sha256(subject)[:16]>/', async () => {
+    const mine = await store.saveStorageState(source, 'x', 's', local);
+    const theirs = await store.saveStorageState(source, 'x', 's', alice);
+    expect(mine.path).toBe(join(dir, 'auth-states', 'x.storage.json'));
+    expect(principalDirName('alice')).toMatch(/^[0-9a-f]{16}$/);
+    expect(theirs.path).toBe(
+      join(dir, 'auth-states', 'p', principalDirName('alice'), 'x.storage.json'),
+    );
+    if (process.platform !== 'win32') {
+      expect((await stat(join(dir, 'auth-states', 'p'))).mode & 0o777).toBe(0o700);
+      expect(
+        (await stat(join(dir, 'auth-states', 'p', principalDirName('alice')))).mode & 0o777,
+      ).toBe(0o700);
+    }
+  });
+
+  it('keeps identity seeds per principal', async () => {
+    await saveAs('profile', 'work', alice, 'ALICE');
+    expect(await store.saveIdentitySeed('work', 'alice-seed', alice)).toBe(true);
+    // Bob has no profile of that name: no seed is written for him and alice's stays.
+    expect(await store.saveIdentitySeed('work', 'bob-seed', bob)).toBe(false);
+    expect(await store.loadIdentitySeed('work', bob)).toBeNull();
+    await saveAs('profile', 'work', bob, 'BOB');
+    expect(await store.loadIdentitySeed('work', bob)).toBeNull();
+    expect(await store.saveIdentitySeed('work', 'bob-seed', bob)).toBe(true);
+    expect(await store.loadIdentitySeed('work', alice)).toBe('alice-seed');
+    expect(await store.loadIdentitySeed('work', bob)).toBe('bob-seed');
+    expect(await store.loadIdentitySeed('work', local)).toBeNull();
+  });
+
+  it('one name is one snapshot: saving the other kind drops the stale payload and the seed', async () => {
+    await saveAs('profile', 'work', alice, 'ALICE-PROFILE');
+    await store.saveIdentitySeed('work', 'alice-seed', alice);
+    const files = store.filesFor('alice', 'work');
+    await saveAs('storage', 'work', alice, 'ALICE-STORAGE');
+    expect(await exists(files.profile)).toBe(false);
+    expect(await exists(files.identity)).toBe(false);
+    expect(await store.loadIdentitySeed('work', alice)).toBeNull();
+    expect(await restoredSecret('storage', 'work', alice)).toBe('ALICE-STORAGE');
+    await saveAs('profile', 'work', alice, 'ALICE-PROFILE-2');
+    expect(await exists(files.storage)).toBe(false);
+    expect(await restoredSecret('profile', 'work', alice)).toBe('ALICE-PROFILE-2');
+    expect((await store.list(alice)).map((e) => e.kind)).toEqual(['profile']);
+  });
+
+  it('restore requires the manifest kind to match the requested kind', async () => {
+    await saveAs('storage', 'work', local, 'LOCAL');
+    // A stale profile payload beside a storage manifest (left by an older release) is never restored.
+    await writeFile(join(dir, 'auth-states', 'work.profile.zip'), 'not-restored');
+    await writeFile(
+      join(dir, 'auth-states', 'work.identity.json'),
+      JSON.stringify({ seed: 'stale' }),
+    );
+    expect(await restoredSecret('profile', 'work', local)).toBe('AUTH_STATE_NOT_FOUND');
+    expect(await store.loadIdentitySeed('work', local)).toBeNull();
+    expect(await restoredSecret('storage', 'work', local)).toBe('LOCAL');
+  });
+
+  it('answers the same not-found for a foreign name as for a missing one', async () => {
+    await saveAs('storage', 'work', alice, 'ALICE');
+    await saveAs('profile', 'deep', alice, 'ALICE');
+    const errorOf = async (p: Promise<unknown>) =>
+      p.then(
+        () => null,
+        (err: unknown) => (isAppError(err) ? [err.code, err.publicMessage] : String(err)),
+      );
+    expect(await errorOf(store.storageStatePath('work', bob))).toEqual(
+      await errorOf(store.storageStatePath('work', { subject: 'nobody' })),
+    );
+    expect(await errorOf(store.restoreProfile('deep', join(dir, 'd1'), bob))).toEqual(
+      await errorOf(store.restoreProfile('deep', join(dir, 'd2'), { subject: 'nobody' })),
+    );
+    expect(await store.list(bob)).toEqual([]);
+    expect(await store.remove('work', bob)).toBe(false);
+    expect(await restoredSecret('storage', 'work', alice)).toBe('ALICE');
+  });
+});
+
+/** Writes a pre-T0a flat snapshot: payload, optional seed and a manifest with `owner` (omitted when `undefined`). */
+async function writeFlat(
+  name: string,
+  kind: Kind,
+  owner: string | undefined,
+  options: { secret?: string; seed?: string; savedAt?: number } = {},
+): Promise<void> {
+  const flat = join(dir, 'auth-states');
+  await mkdir(flat, { recursive: true });
+  const secret = options.secret ?? `${owner ?? 'none'}-secret`;
+  if (kind === 'storage') {
+    await writeFile(
+      join(flat, `${name}.storage.json`),
+      JSON.stringify({ cookies: [{ name: 'sid', value: secret }], origins: [] }),
+    );
+  } else {
+    // A real archive, built by a throwaway store under another data dir.
+    const other = new AuthStateStore({
+      dataDir: join(dir, `build-${name}-${Math.random()}`),
+      clock,
+      logger: createCollectingLogger(),
+    });
+    const saved = await other.saveFullProfile(
+      await userdataWith(`flat-${name}`, secret),
+      name,
+      's',
+      local,
+    );
+    await writeFile(join(flat, `${name}.profile.zip`), await readFile(saved.path));
+  }
+  if (options.seed !== undefined) {
+    await writeFile(join(flat, `${name}.identity.json`), JSON.stringify({ seed: options.seed }));
+  }
+  await writeFile(
+    join(flat, `${name}.meta.json`),
+    JSON.stringify({
+      name,
+      kind,
+      saved_at: options.savedAt ?? 1,
+      source_session_id: 's',
+      size: 2,
+      ...(owner !== undefined && { owner }),
+    }),
+  );
+}
+
+describe('AuthStateStore flat-layout migration (spec 13 T0a)', () => {
+  it('moves a flat snapshot with a non-local owner, seed included, into its owner directory on first access', async () => {
+    await writeFlat('work', 'profile', 'alice', { secret: 'ALICE', seed: 'alice-seed' });
+    const fresh = new AuthStateStore({ dataDir: dir, clock, logger: createCollectingLogger() });
+    // The first access of any principal runs the move.
+    expect(await fresh.list(local)).toEqual([]);
+    const files = fresh.filesFor('alice', 'work');
+    for (const path of [files.profile, files.identity, files.manifest]) {
+      expect(await exists(path)).toBe(true);
+    }
+    for (const ext of ['profile.zip', 'identity.json', 'meta.json']) {
+      expect(await exists(join(dir, 'auth-states', `work.${ext}`))).toBe(false);
+    }
+    store = fresh;
+    expect(await restoredSecret('profile', 'work', alice)).toBe('ALICE');
+    expect(await fresh.loadIdentitySeed('work', alice)).toBe('alice-seed');
+    expect((await fresh.list(alice)).map((e) => e.name)).toEqual(['work']);
+    expect(await restoredSecret('profile', 'work', local)).toBe('AUTH_STATE_NOT_FOUND');
+  });
+
+  it('keeps a legacy owner-less manifest local and in place', async () => {
+    await writeFlat('old', 'storage', undefined, { secret: 'LOCAL' });
+    await writeFlat('mine', 'storage', 'local', { secret: 'LOCAL2' });
+    expect((await store.list(local)).map((e) => e.name).sort()).toEqual(['mine', 'old']);
+    expect(await exists(join(dir, 'auth-states', 'old.meta.json'))).toBe(true);
+    expect(await exists(join(dir, 'auth-states', 'p'))).toBe(false);
+    expect(await restoredSecret('storage', 'old', local)).toBe('LOCAL');
+    expect(await restoredSecret('storage', 'old', alice)).toBe('AUTH_STATE_NOT_FOUND');
+    expect(await store.list(alice)).toEqual([]);
+  });
+
+  it('is idempotent', async () => {
+    await writeFlat('work', 'storage', 'alice', { secret: 'ALICE' });
+    expect(await store.migrateFlatLayout()).toBe(true);
+    expect(await store.migrateFlatLayout()).toBe(true);
+    expect(await restoredSecret('storage', 'work', alice)).toBe('ALICE');
+  });
+
+  it('loses nothing when a crash interrupts the move, and finishes it on the next start', async () => {
+    await writeFlat('work', 'profile', 'alice', { secret: 'ALICE', seed: 'alice-seed' });
+    const real = createNodeAuthStateFs();
+    let renames = 0;
+    // The second rename (the seed) fails as if the process died there.
+    const crashing: AuthStateFs = {
+      ...real,
+      rename: async (from, to) => {
+        renames += 1;
+        if (renames === 2) throw new Error('simulated crash');
+        await real.rename(from, to);
+      },
+    };
+    const before = new AuthStateStore({
+      dataDir: dir,
+      clock,
+      logger: createCollectingLogger(),
+      fs: crashing,
+    });
+    expect(await before.migrateFlatLayout()).toBe(false);
+    // Half moved: the payload is in alice's directory, the seed and the manifest still flat.
+    const files = before.filesFor('alice', 'work');
+    expect(await exists(files.profile)).toBe(true);
+    expect(await exists(join(dir, 'auth-states', 'work.identity.json'))).toBe(true);
+    expect(await exists(join(dir, 'auth-states', 'work.meta.json'))).toBe(true);
+    // Nobody can read the half-moved snapshot meanwhile, and local never sees it.
+    expect(await before.list(local)).toEqual([]);
+    // The next start finishes the move.
+    store = new AuthStateStore({ dataDir: dir, clock, logger: createCollectingLogger() });
+    expect((await store.list(alice)).map((e) => e.name)).toEqual(['work']);
+    expect(await restoredSecret('profile', 'work', alice)).toBe('ALICE');
+    expect(await store.loadIdentitySeed('work', alice)).toBe('alice-seed');
+    expect(await exists(join(dir, 'auth-states', 'work.meta.json'))).toBe(false);
+  });
+
+  it('retries a failed move on the next access of the same process', async () => {
+    await writeFlat('work', 'storage', 'alice', { secret: 'ALICE' });
+    const real = createNodeAuthStateFs();
+    let failNext = true;
+    const flaky: AuthStateFs = {
+      ...real,
+      rename: async (from, to) => {
+        if (failNext) {
+          failNext = false;
+          throw new Error('simulated EBUSY');
+        }
+        await real.rename(from, to);
+      },
+    };
+    store = new AuthStateStore({
+      dataDir: dir,
+      clock,
+      logger: createCollectingLogger(),
+      fs: flaky,
+    });
+    expect(await store.list(alice)).toEqual([]);
+    expect((await store.list(alice)).map((e) => e.name)).toEqual(['work']);
+  });
+
+  it('a local save of a name whose flat manifest is still foreign moves it first', async () => {
+    await writeFlat('work', 'storage', 'alice', { secret: 'ALICE' });
+    const real = createNodeAuthStateFs();
+    let failFirst = true;
+    store = new AuthStateStore({
+      dataDir: dir,
+      clock,
+      logger: createCollectingLogger(),
+      fs: {
+        ...real,
+        rename: async (from, to) => {
+          if (failFirst) {
+            failFirst = false;
+            throw new Error('simulated EBUSY');
+          }
+          await real.rename(from, to);
+        },
+      },
+    });
+    expect(await store.migrateFlatLayout()).toBe(false);
+    await saveAs('storage', 'work', local, 'LOCAL');
+    expect(await restoredSecret('storage', 'work', local)).toBe('LOCAL');
+    expect(await restoredSecret('storage', 'work', alice)).toBe('ALICE');
+  });
+
+  it('keeps the newer copy when the owner already has the name (a downgrade saved one flat)', async () => {
+    await saveAs('storage', 'work', alice, 'ALICE-NEW');
+    const newest = (await store.list(alice))[0]?.saved_at ?? 0;
+    await writeFlat('work', 'storage', 'alice', { secret: 'ALICE-OLD', savedAt: newest - 1 });
+    await writeFlat('deep', 'storage', 'alice', { secret: 'ALICE-FLAT', savedAt: newest + 5 });
+    await saveAs('storage', 'deep', alice, 'ALICE-DIR');
+    // `deep` was saved in alice's directory before the flat copy appeared, but the flat one is newer.
+    await writeFile(
+      store.filesFor('alice', 'deep').manifest,
+      JSON.stringify({
+        name: 'deep',
+        kind: 'storage',
+        saved_at: newest,
+        source_session_id: 's',
+        size: 2,
+        owner: 'alice',
+      }),
+    );
+    store = new AuthStateStore({ dataDir: dir, clock, logger: createCollectingLogger() });
+    expect(await restoredSecret('storage', 'work', alice)).toBe('ALICE-NEW');
+    expect(await restoredSecret('storage', 'deep', alice)).toBe('ALICE-FLAT');
+    expect(await exists(join(dir, 'auth-states', 'work.meta.json'))).toBe(false);
+    expect(await exists(join(dir, 'auth-states', 'deep.meta.json'))).toBe(false);
   });
 });

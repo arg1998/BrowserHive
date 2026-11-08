@@ -119,6 +119,16 @@ Records are pruned after `--retentionDays` (default 7) or when the database and 
 
 The data directory is `0700` and secret files are `0600`. Saved logins (`auth-states/`) contain real cookies and storage; protect them like passwords. They are protected by your OS user account, not encrypted by BrowserHive.
 
+### Saved logins are per principal
+
+Each principal has its own saved-login names. The no-auth `local` principal keeps its files directly in `auth-states/`; every token principal has `auth-states/p/<id>/`, where `<id>` is the first 16 hex characters of the SHA-256 of its subject. So two agents with different tokens can both save a login called `work` and never see, restore or overwrite each other's:
+
+- `list_saved_auths` lists only the caller's own.
+- A restore (`context_options.storageState` or `restore_profile`) finds only the caller's own snapshot, and only of the kind asked for. Anything else answers `AUTH_STATE_NOT_FOUND` with the same text as a name that does not exist, so a caller cannot probe for other principals' names.
+- Saving under a name replaces the caller's earlier snapshot of that name, whichever kind it was, including the identity seed saved beside a full profile.
+
+Before 0.2.3 all principals shared one directory, and one could overwrite another's snapshot of the same name. See [Upgrading: saved logins move per principal](upgrading.md#saved-logins-move-per-principal).
+
 ## Agents open web URLs only
 
 `navigate` and `new_tab` open `http://`, `https://`, `about:blank` and `data:` URLs, and nothing else. Every other scheme is refused with [`URL_SCHEME_NOT_ALLOWED`](../reference/errors.md#URL_SCHEME_NOT_ALLOWED) before the browser is touched:

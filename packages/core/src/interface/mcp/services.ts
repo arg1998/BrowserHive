@@ -65,7 +65,7 @@ export interface AuthStatesLike {
     sourceSessionId: string,
     principal: SessionPrincipal,
   ): Promise<SavedAuthResult>;
-  saveIdentitySeed(name: string, seed: string): Promise<boolean>;
+  saveIdentitySeed(name: string, seed: string, principal: SessionPrincipal): Promise<boolean>;
   list(principal: SessionPrincipal): Promise<SavedAuthEntry[]>;
 }
 
