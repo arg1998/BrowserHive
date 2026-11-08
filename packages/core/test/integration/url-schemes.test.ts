@@ -1,7 +1,9 @@
 /** @module test/integration/url-schemes — agent-requested URLs are limited to web schemes (spec 13 T0d, D-57) and the main-frame backstop, against real Chromium. */
 
 import { describe, expect, it } from 'bun:test';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { Page } from 'playwright';
 import type { ToolHarness } from '../helpers/fake-transport.ts';
@@ -48,6 +50,17 @@ function livePage(h: ToolHarness, sessionId: string, tabId?: string): Page {
 
 async function tabs(h: ToolHarness, sessionId: string): Promise<{ tab_id: string; url: string }[]> {
   return h.callJson('list_tabs', { session_id: sessionId });
+}
+
+/**
+ * A `file:` URL of a file that exists on every OS. A missing file commits Chromium's error page
+ * (`chrome-error:`), which the backstop rightly leaves open, so `/etc/hostname` would not do on
+ * macOS or Windows.
+ */
+function localFileUrl(h: ToolHarness): string {
+  const path = join(h.dataDir, 'local-file.txt');
+  writeFileSync(path, 'local file\n');
+  return pathToFileURL(path).href;
 }
 
 async function waitFor(predicate: () => boolean | Promise<boolean>, ms = 10_000): Promise<boolean> {
@@ -221,7 +234,7 @@ describe('non-web scheme backstop (real Chromium)', () => {
     const h = state.harness;
     const id = await h.launch({ slug: 'backstop' });
     const page = livePage(h, id);
-    await page.goto('file:///etc/hostname').catch(() => undefined);
+    await page.goto(localFileUrl(h)).catch(() => undefined);
     expect(await waitFor(() => page.isClosed())).toBe(true);
     expect(await tabs(h, id)).toEqual([]);
     const logged = h.logger.find('non-web scheme page closed');
@@ -235,7 +248,7 @@ describe('non-web scheme backstop (real Chromium)', () => {
     const first = (await tabs(h, id))[0]?.tab_id ?? '';
     const second = await h.callJson<{ tab_id: string }>('new_tab', { session_id: id });
     const page = livePage(h, id, second.tab_id);
-    await page.goto('file:///etc/hostname').catch(() => undefined);
+    await page.goto(localFileUrl(h)).catch(() => undefined);
     expect(await waitFor(() => page.isClosed())).toBe(true);
     const open = await tabs(h, id);
     expect(open.map((t) => t.tab_id)).toEqual([first]);
@@ -252,7 +265,7 @@ describe('non-web scheme backstop (real Chromium)', () => {
     const popup = await popupPromise;
     await popup.waitForLoadState();
     expect((await tabs(h, id)).length).toBe(2);
-    await popup.goto('file:///etc/hostname').catch(() => undefined);
+    await popup.goto(localFileUrl(h)).catch(() => undefined);
     expect(await waitFor(() => popup.isClosed())).toBe(true);
     expect((await tabs(h, id)).map((t) => t.url)).toEqual([state.fixture.url('/popup')]);
   });
