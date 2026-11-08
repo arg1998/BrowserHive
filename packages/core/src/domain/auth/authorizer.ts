@@ -4,6 +4,7 @@ import type { Scope } from '@browserhive/contracts/enums';
 import { PASSWORD_CHANGE_ALLOWED_OPERATIONS } from '@browserhive/contracts/http';
 import { AppError } from '../../kernel/errors/app-error.ts';
 import type { RequestPrincipal } from './principal.ts';
+import { isSubsetOf, OPERATOR_SCOPES } from './scopes.ts';
 
 /**
  * A resource the caller wants to touch. Ownership is decided here only when the caller passes
@@ -30,15 +31,43 @@ export interface Authorizer {
     scope: Scope | null,
     resource?: AuthorizedResource,
   ): asserts principal is RequestPrincipal;
+  /** True for a dashboard-session operator or an operator token holding every operator scope. */
+  hasFullOperatorAccess(principal: RequestPrincipal): boolean;
   /** True when the principal may reach `operationId` while still on the seed password. */
   allowedDuringPasswordChange(principal: RequestPrincipal, operationId: string): boolean;
 }
 
 /**
+ * True when the principal is an operator established by the dashboard (a password-session cookie,
+ * or a grant minted from one). Such an operator holds every scope whatever list it carries. The
+ * credential type decides, never the subject: an operator API token is a `bearer` principal and is
+ * limited to its credential's scopes (spec 03 §3.5).
+ */
+function isOperatorSession(principal: RequestPrincipal): boolean {
+  if (principal.kind !== 'operator') return false;
+  const method = principal.auth.method;
+  return method === 'password-session' || method === 'grant';
+}
+
+/**
+ * True when the principal may act as the whole operator: a dashboard-session operator, or an
+ * operator API token whose credential carries every operator scope (one issued without `scopes`).
+ * Scope-less account administration (tokens, grants, auth sessions, the password) requires it, so
+ * a narrowed token can never mint a wider one.
+ */
+export function hasFullOperatorAccess(principal: RequestPrincipal): boolean {
+  if (principal.kind !== 'operator') return false;
+  if (isOperatorSession(principal)) return true;
+  return isSubsetOf(OPERATOR_SCOPES, principal.scopes);
+}
+
+/**
  * v1 policy table:
- * - operators can do everything (they hold every scope; ownership never restricts them);
- * - agents and operator API tokens are limited to the scopes their credential carries;
- * - when a resource names an `owner`, non-operators must be that owner.
+ * - a dashboard-session operator holds every scope;
+ * - every principal authenticated by an API token, operator or agent, is limited to the scopes
+ *   its credential carries;
+ * - ownership never restricts an operator (session or token); when a resource names an `owner`,
+ *   every other principal must be that owner.
  */
 export function can(
   principal: RequestPrincipal | null,
@@ -46,8 +75,10 @@ export function can(
   resource?: AuthorizedResource,
 ): boolean {
   if (principal === null) return false;
+  if (scope !== null && !isOperatorSession(principal) && !principal.scopes.includes(scope)) {
+    return false;
+  }
   if (principal.kind === 'operator') return true;
-  if (scope !== null && !principal.scopes.includes(scope)) return false;
   if (resource?.owner !== undefined && resource.owner !== principal.subject) return false;
   return true;
 }
@@ -87,5 +118,6 @@ export function allowedDuringPasswordChange(
 export const authorizer: Authorizer = Object.freeze({
   can,
   assertCan,
+  hasFullOperatorAccess,
   allowedDuringPasswordChange,
 });

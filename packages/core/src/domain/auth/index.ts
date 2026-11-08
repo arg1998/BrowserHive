@@ -7,6 +7,7 @@ export {
   assertCan,
   authorizer,
   can,
+  hasFullOperatorAccess,
 } from './authorizer.ts';
 export {
   bearerTokenFromHeader,
