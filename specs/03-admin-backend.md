@@ -325,7 +325,7 @@ One broker (D-15) backs two resource views; paths stay recognizable.
 
 ### 4.8.2 Session templates and site packs (spec 13)
 
-The `/templates` routes (templates, sites, recording, re-login, probes, hosts, parked pages, checkpoints, versions, access tester) and the `/site-packs` routes (catalog, diff, approve, reject, pin, enable, check, reload, import, change history, strategies) plus `GET /site-packs/guard-hits` are specified in spec 13 §11.1 with their scopes (`templates:*`, `sitepacks:*`), bodies and errors. `/attention` (§4.4) also lists and resolves `security_intercept` requests (`kind: 'security_intercept'`, D-54); `GET /sessions/{id}/timeline` gains the kind `guard`. `GET /sessions` gains the facet `templates` and the sort key `template`, and `SessionSummary` gains `template?` and `sealed?` (above).
+The `/templates` routes (templates, sites, recording, re-login, probes, hosts, parked pages, checkpoints, versions, access tester) and the `/site-packs` routes (catalog with provenance and follow settings, diff, download, apply, reject, revert, pin, follow, approve-local, enable, check, reload, import, change history, strategies) plus `GET /site-packs/guard-hits` are specified in spec 13 §11.1 with their scopes (`templates:*`, `sitepacks:*`), bodies and errors. `/attention` (§4.4) also lists and resolves `security_intercept` requests (`kind: 'security_intercept'`, D-54); `GET /sessions/{id}/timeline` gains the kind `guard`. `GET /sessions` gains the facet `templates` and the sort key `template`, and `SessionSummary` gains `template?` and `sealed?` (above).
 
 ### 4.9 Client errors
 

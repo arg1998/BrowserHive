@@ -199,7 +199,7 @@ BrowserHive treats **the agent as untrusted and the operator as trusted**.
 - **WebAuthn/passkeys cannot be replayed** from saved state.
 - **A session template is a signed-in identity.** Sealed by default, agents can use its sign-ins but cannot read cookie values, run `evaluate`, export it or fill vault credentials into it; they can still act as the account, so give template access only to agents you would trust with the account, and run BrowserHive as a separate OS user when agents have a shell. Sessions of one template share cookies, so one agent signing out signs all of them out. Template versions are encrypted with a key in `admin/template.key` or from `BROWSERHIVE_TEMPLATE_KEY`; the live browser profile is protected by file permissions only (spec 13 §2.4, §13).
 - **Only web pages can be opened.** `navigate` and `new_tab` refuse `file://`, `chrome://`, `javascript:` and every other non-web scheme (D-57).
-- **Site-pack updates.** While a template exists, BrowserHive checks `browserhive.ai/registry/v1/` for signed site-pack updates once a day, sending nothing about your install; updates apply only after you approve them. `--sitePacksUpdateCheck false` turns the check off (D-55).
+- **Site-pack updates.** BrowserHive downloads the small signed index of `browserhive.ai/registry/v1/` once a day, sending nothing about your install; a pack update is downloaded and applied only when you choose (Download & review, Apply, Revert), for the packs you follow. Bundled packs and your own local pack files also apply only after you approve them. `--sitePacksUpdateCheck false` turns the check off (D-55).
 
 Every error code, its cause and resolution: `docs/errors.md` (generated).
 

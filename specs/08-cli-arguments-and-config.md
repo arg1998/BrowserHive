@@ -376,10 +376,10 @@ All boot keys; they arrive with the PRs of spec 13 §17 (T1a for `templates`, `t
 | `templateRecycleRss` | bytes ≥ `512MiB` | `3GiB` | host resident memory that first trims the largest session, then drains and restarts the host (spec 13 §3.2); sampled without OTel | host supervisor | boot |
 | `templateDrainTimeout` | duration `1m`–`2h` | `15m` | | host supervisor | boot |
 | `sitePacks` | boolean | `true` | `false`: no site-pack data is used and no update check runs | site-pack registry | boot |
-| `sitePacksUpdateCheck` | boolean | `true` | the anonymous update check of D-55, made only while a template exists; `false` for air-gapped or opted-out hosts | registry client | boot |
-| `sitePacksAutoUpdate` | boolean | `false` | `true`: tightening and neutral pack updates apply without approval; loosening and restrictive changes and domain changes still wait | site-pack registry | boot |
+| `sitePacksUpdateCheck` | boolean | `true` | the automatic, anonymous check of D-55, which downloads only the signed index every 24 h (pack files only when an operator downloads them); `false` for air-gapped or opted-out hosts | registry client | boot |
+| `sitePacksAutoUpdate` | boolean | `false` | `true`: tightening and neutral registry updates of followed packs are downloaded and applied without approval; loosening and restrictive changes, domain changes, bundled versions and local files still wait | site-pack registry | boot |
 | `sitePacksUrl` | url | `https://browserhive.ai/registry/v1/` | `https:` only; a mirror must serve the same signed files | registry client | boot |
-| `sitePacksDir` | path | `<data-dir>/site-packs/local` | signed layouts (verified and queued like an import) and unsigned single-pack files (visible local overrides that win over every other source) (spec 13 §10.5) | site-pack registry | boot |
+| `sitePacksDir` | path | `<data-dir>/site-packs/local` | signed layouts (verified and queued like an import) and unsigned single-pack files, which need no signature but apply only after an operator approves their content once per SHA-256, then win over every other source (spec 13 §10.5) | site-pack registry | boot |
 
 ## 6. How the schema drives everything
 
@@ -430,7 +430,7 @@ browserhive admin reset-password
 browserhive admin tokens list|create <principal>|revoke <principal>
 browserhive channels list | test <name> | preview <name> [--sample <kind>]
 browserhive templates list|show|create|finish|seed|login|probe|versions|save|restore|host|disable|enable|rm|rekey   (spec 13 §11.5)
-browserhive sitepacks list|show|check|diff|approve|reject|pin|unpin|enable|disable|import|export|reload|unoverride|verify   (spec 13 §11.5)
+browserhive sitepacks list|show|check|download|diff|apply|reject|revert|pin|unpin|follow|approve-local|enable|disable|import|export|reload|verify   (spec 13 §11.5)
 browserhive version | --version | -v
 browserhive --help | -h                 (also per command)
 ```
