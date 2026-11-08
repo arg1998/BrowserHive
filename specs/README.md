@@ -17,7 +17,7 @@ These documents specify BrowserHive: a local-first, MCP-native daemon that runs 
 |---|---|---|
 | 00 | [Decisions](00-decisions.md) | Architecture decision log: runtime, packages, persistence, contracts, config ladder, errors, telemetry, auth, realtime, dashboard stack, tool contract, stealth, vault, operator requests, notifications, testing, publishing, privacy, lifecycle, naming, data layout |
 | 01 | [Overall architecture](01-overall-architecture.md) | Topology, repository layout, layering rules, subsystems, composition root, workflows, extension points, dependency order |
-| 02 | [MCP and tools](02-mcp-and-tools.md) | MCP server surface, tool definition model and dispatcher, the stable 43-tool contract, attention and auth-state models, goldens |
+| 02 | [MCP and tools](02-mcp-and-tools.md) | MCP server surface, tool definition model and dispatcher, the stable 44-tool contract, attention and auth-state models, goldens |
 | 03 | [Admin backend](03-admin-backend.md) | HTTP layering and middleware, auth design, complete `/api/v1` reference, WebSocket protocol, live view, SQLite schema, repositories, retention, notifications |
 | 04 | [Admin frontend](04-admin-frontend.md) | Dashboard architecture, providers and data layer, design tokens, app shell, responsive rules, shared components, every page, UX rules, extension recipes |
 | 05 | [Coding standards](05-coding-standards.md) | TypeScript config and type rules, naming, module rules, error/async/logging rules, dependency policy, in-source docs, anti-pattern catalogue, definition of done |

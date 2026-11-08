@@ -67,7 +67,10 @@ Idle sessions are closed after `--sessionLease` (default `2h`). The dashboard's 
 The operator's blocklist matched. The Blocklist page shows which pattern.
 
 **[`EVALUATE_DISABLED`](../reference/errors.md#EVALUATE_DISABLED)**
-`--allowEvaluate false` on the server, or `disable_evaluate: true` on the session.
+`--allowEvaluate false` on the server, or `disable_evaluate: true` on the session. To read the page without `evaluate`, use `get_text` (readable text), `get_content` (HTML) or `snapshot` (accessibility tree).
+
+**Page reads come back cut off (`truncated: true`)**
+`get_text` (20,000 characters by default), `get_content` and `snapshot` (60,000) return the text in pages. Call again with `offset` set to the returned `next_offset` until `next_offset` is `null`, raise `max_chars` (up to 200,000), or narrow the read with `selector`. Since 0.3.0 `get_content` pages large documents by default; before, it returned the whole document in one result, which could overflow the MCP client.
 
 **Elements not found or not actionable**
 Use `snapshot` to see the page as the agent does, `wait_for_selector` before interacting, and check the tool call's screenshot on the session's Timeline tab.

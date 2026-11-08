@@ -23,14 +23,26 @@ export const Cookie = z.looseObject({
   partitionKey: z.string().optional(),
 });
 
-/** `get_cookies`: full values go to the agent, never to persistence (D-20). No `session_id` key. */
+/**
+ * `get_cookies`: full values go to the agent, never to persistence (D-20). No `session_id` key.
+ * `include_values: false` keeps the shape and empties every `value` (the shape sealed template
+ * sessions return, spec 13).
+ */
 export const GET_COOKIES = defineTool({
   name: 'get_cookies',
   title: 'Get cookies',
   description:
     "Return the session context's cookies, optionally filtered to those that would be sent " +
-    'to the given URLs.',
-  input: z.object({ session_id: z.string(), urls: z.array(z.string()).optional() }),
+    'to the given URLs. With include_values: false every value is the empty string, so you can ' +
+    'check which cookies exist (for example whether a login cookie is set) without reading them.',
+  input: z.object({
+    session_id: z.string(),
+    urls: z.array(z.string()).optional(),
+    include_values: z
+      .boolean()
+      .default(true)
+      .describe('false returns every cookie with value set to the empty string.'),
+  }),
   output: z.object({ cookies: z.array(Cookie) }),
   annotations: annotations(true, false, true, false),
   pack: 'state',

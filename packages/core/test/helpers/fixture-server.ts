@@ -36,6 +36,50 @@ const PROBE_SCRIPT = `
   document.getElementById('probe').textContent = JSON.stringify(out);
 `;
 
+/** The body of the `/reading` pages: every case `get_text` has a rule for (spec 02 §3.6). */
+const READING_BODY = `<header><nav><a href="/">Home</a> Docs</nav></header>
+<main id="main">
+  <h1>Reading fixture</h1>
+  <p>Call <code>fetchData()</code> then   read
+  the result.</p>
+  <pre id="code"><code>const a = 1;
+  return a;</code></pre>
+  <details id="det"><summary>Expand</summary><p>Collapsed details body</p></details>
+  <div role="tablist"><button role="tab" aria-selected="true">npm</button><button role="tab">bun</button></div>
+  <div role="tabpanel" id="panel-npm">npm install pkg</div>
+  <div role="tabpanel" id="panel-bun" hidden>bun add pkg</div>
+  <div style="display:none">HIDDEN_DIV_MARKER</div>
+  <script>window.__inline = 'SCRIPT_TEXT_MARKER';</script>
+  <style>.marker::after { content: 'STYLE_TEXT_MARKER'; }</style>
+  <noscript>NOSCRIPT_MARKER</noscript>
+  <template>TEMPLATE_MARKER</template>
+  <svg width="1" height="1"><text>SVG_MARKER</text></svg>
+  <section id="scoped"><h2>Scoped</h2><p>Only this section</p></section>
+  <p id="emoji">Party 🎉 time</p>
+</main>
+<footer>FOOTER_MARKER</footer>`;
+
+/** A page script that rewrites the DOM prototypes a main-world reader would rely on. */
+const TAMPER_SCRIPT = `
+  Object.defineProperty(Node.prototype, 'textContent', { get() { return 'TAMPERED'; } });
+  Object.defineProperty(Node.prototype, 'nodeValue', { get() { return 'TAMPERED'; } });
+  Object.defineProperty(Node.prototype, 'childNodes', { get() { return []; } });
+  Element.prototype.querySelectorAll = function () { throw new Error('tampered'); };
+  Document.prototype.querySelectorAll = function () { throw new Error('tampered'); };
+  window.getComputedStyle = function () { return { display: 'none', whiteSpace: 'normal' }; };
+`;
+
+/** About 700 KB of HTML with astral characters, so pages must not split surrogate pairs. */
+function bigBody(): string {
+  const rows: string[] = [];
+  for (let i = 0; i < 7_400; i += 1) {
+    rows.push(
+      `<p class="row" data-i="${i}">Row ${i} of the large fixture 😀 with some filler text to pad it out.</p>`,
+    );
+  }
+  return `<main>${rows.join('\n')}</main>`;
+}
+
 /** A running fixture server. */
 export interface FixtureServer {
   readonly origin: string;
@@ -153,6 +197,12 @@ export function startFixtureServer(): FixtureServer {
           return new Response(JSON.stringify(headers), {
             headers: { 'content-type': 'application/json' },
           });
+        case '/reading':
+          return html(READING_BODY);
+        case '/reading-tamper':
+          return html(`${READING_BODY}<script>${TAMPER_SCRIPT}</script>`);
+        case '/reading-big':
+          return html(bigBody());
         case '/elements':
           return html(
             `<h1 id="h">Elements</h1>

@@ -48,6 +48,21 @@ export interface DriverErrorContext {
   readonly what?: string;
 }
 
+/** A BrowserHive-owned DOM read (never agent code, so the evaluate gate does not apply). */
+export interface PageReadRequest {
+  /** `text`: the readable-text walk (`get_text`); `outer_html`: the element's `outerHTML`. */
+  readonly kind: 'text' | 'outer_html';
+  /** Driver selector; the first match is read. Omitted: the default root (text) or the document. */
+  readonly selector?: string;
+  /** Budget of the read in ms (`0` = no timeout). */
+  readonly timeoutMs: number;
+}
+
+/** Outcome of a {@link PageReadRequest}. `world` says where it ran (`main` only as a fallback). */
+export type PageReadResult =
+  | { readonly found: false }
+  | { readonly found: true; readonly value: string; readonly world: 'isolated' | 'main' };
+
 /**
  * The page-interaction seam between `interface/mcp/tools` and `infra/browsers`. Composition
  * implements it with `evaluateMainWorld`, the humanize layer (one seeded rng and cursor tracker per
@@ -59,6 +74,16 @@ export interface PageActions {
    * (Patchright isolates `evaluate` by default; `isolatedEvaluate` comes from the session handle).
    */
   evaluate(page: Page, isolatedEvaluate: boolean, expression: string): Promise<unknown>;
+  /**
+   * Runs one of BrowserHive's own DOM reads in an isolated world where the driver allows it, so page
+   * scripts can neither observe nor alter it (spec 02 §3.6). `found: false` when `selector` matches
+   * nothing.
+   */
+  readPage(
+    page: Page,
+    isolatedEvaluate: boolean,
+    request: PageReadRequest,
+  ): Promise<PageReadResult>;
   /** Humanized click (curved path, dwell); falls back to `native` when it cannot proceed. */
   humanClick(sessionId: string, input: HumanClickInput): Promise<void>;
   /** Humanized hover. */

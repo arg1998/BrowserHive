@@ -24,7 +24,10 @@ function contextOf(session: Session): BrowserContext {
   return handle.context;
 }
 
-/** `get_cookies`: full values go to the agent; the observation records shape only (D-20). */
+/**
+ * `get_cookies`: full values go to the agent; the observation records shape only (D-20).
+ * `include_values: false` empties every `value` and changes nothing else.
+ */
 export const getCookies = defineTool('get_cookies', {
   policies: [sessionOwnership],
   telemetry: { captureResult: 'size' },
@@ -35,7 +38,8 @@ export const getCookies = defineTool('get_cookies', {
     const cookies = await drive(ctx, { sessionId: session.id }, () =>
       urls !== undefined ? context.cookies(urls) : context.cookies(),
     );
-    return json({ cookies: cookies.map((c) => ({ ...c })) });
+    const keep = args.include_values;
+    return json({ cookies: cookies.map((c) => (keep ? { ...c } : { ...c, value: '' })) });
   },
 });
 

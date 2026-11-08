@@ -13,7 +13,7 @@ export const PAGE_ERRORS = {
     retryable: 'never',
     title: 'evaluate is disabled',
     message: "The 'evaluate' tool is disabled for session '{session_id}'.",
-    hint: 'Use the structured tools (click, fill, get_content, snapshot) instead.',
+    hint: 'Use the structured tools (click, fill, get_text, get_content, snapshot) instead.',
     details: z.object({ session_id: z.string(), scope: z.enum(['session', 'server']) }),
     docs: true,
     cause:

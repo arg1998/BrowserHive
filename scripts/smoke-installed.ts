@@ -86,7 +86,7 @@ try {
   send({ jsonrpc: '2.0', id: 2, method: 'tools/list' });
   const list = (await waitFor(2)) as { result?: { tools?: { name: string }[] } };
   const names = (list.result?.tools ?? []).map((t) => t.name);
-  if (names.length !== 43) fail(`expected 43 tools, got ${names.length}`);
+  if (names.length !== 44) fail(`expected 44 tools, got ${names.length}`);
   send({
     jsonrpc: '2.0',
     id: 3,

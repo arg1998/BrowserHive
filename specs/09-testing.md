@@ -64,7 +64,7 @@ Each item is a suite that must exist; the name in parentheses is the file. "Inva
 
 Committed under `packages/contracts/test/goldens/` and regenerated only through the golden protocol (§7):
 
-- `tools.json` — for each of the 43 tools: name, title, description, annotations, input JSON Schema, output JSON Schema (from `z.toJSONSchema`). **Invariant:** the 43 names and their registration order are fixed (D-12), because MCP clients list tools in that order and agent prompts refer to tools by name; every input schema has top-level `type: "object"`; `scroll` stays a flat object with no `oneOf`/`anyOf` at the top level.
+- `tools.json` — for each of the 44 tools: name, title, description, annotations, input JSON Schema, output JSON Schema (from `z.toJSONSchema`). **Invariant:** the names and their registration order are fixed (D-12; a new tool is added with its pack and never moves an existing tool relative to the others), because MCP clients list tools in that order and agent prompts refer to tools by name; every input schema has top-level `type: "object"`; `scroll` stays a flat object with no `oneOf`/`anyOf` at the top level.
 - `openapi.json` — the generated OpenAPI 3.1 document for `/api/v1`. **Invariant:** every route has a problem+json error response; every collection route uses the shared `Page<T>` envelope.
 - `ws-protocol.json` — JSON Schema of the envelope, every client command, every server message, every feed payload.
 - `config-schema.json` — the config JSON Schema. **Invariant:** every key has `description` and `x-browserhive-env`; reserved keys are listed with `x-browserhive-reserved: true`; every property accepts a string holding an `{env:NAME}` reference, and every enum still rejects a string that is neither a member nor a reference.

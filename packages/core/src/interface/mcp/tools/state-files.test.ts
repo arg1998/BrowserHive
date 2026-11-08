@@ -49,6 +49,32 @@ describe('state tools', () => {
     }
   });
 
+  it('get_cookies include_values: false empties every value and keeps everything else', async () => {
+    h = await createToolHarness();
+    const id = await h.launch();
+    const cookie = {
+      name: 'sid',
+      value: 'abc123secret',
+      domain: '127.0.0.1',
+      path: '/',
+      expires: -1,
+      httpOnly: true,
+      secure: false,
+      sameSite: 'Lax',
+    };
+    h.script.cookies = [cookie, { ...cookie, name: 'theme', value: 'dark' }];
+    const names = await executeTool(h, 'get_cookies', { session_id: id, include_values: false });
+    expect(names.value).toEqual({
+      cookies: [
+        { ...cookie, value: '' },
+        { ...cookie, name: 'theme', value: '' },
+      ],
+    });
+    expect(textOf(names.result)).not.toContain('abc123secret');
+    const full = await executeTool(h, 'get_cookies', { session_id: id });
+    expect(full.value).toEqual({ cookies: [cookie, { ...cookie, name: 'theme', value: 'dark' }] });
+  });
+
   it('set_cookies maps Playwright validation to INVALID_ARGUMENTS', async () => {
     h = await createToolHarness();
     const id = await h.launch();
