@@ -113,6 +113,11 @@ export function startFixtureServer(): FixtureServer {
           return html('<a id="download" href="/download" download="fixture.txt">download</a>');
         case '/popup':
           return html(`<button id="open" onclick="window.open('/', '_blank')">open</button>`);
+        case '/to-file':
+          // A site-initiated navigation to a local file (the URL-scheme backstop suite).
+          return html(
+            `<p id="to-file">leaving</p><script>window.__tried = true; location = 'file:///etc/hosts';</script>`,
+          );
         case '/probe':
           return html(`<pre id="probe"></pre><script>${PROBE_SCRIPT}</script>`);
         case '/slow': {

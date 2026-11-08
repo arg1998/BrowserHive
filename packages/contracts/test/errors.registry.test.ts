@@ -47,6 +47,7 @@ const CORE_CODES = [
   'PROFILE_FILE_LOCKED',
   'ELEMENT_NOT_ACTIONABLE',
   'URL_BLOCKED',
+  'URL_SCHEME_NOT_ALLOWED',
 ] as const;
 
 /** The remaining codes named by spec 10 §1.1. */
@@ -273,6 +274,17 @@ describe('error message texts are stable', () => {
     expect(text).toBe(
       "The URL 'https://x' is blocked by the administrator (matched the blocklist pattern 'x/*'). This is an operator policy, not a transient failure — do not retry this URL, and do not try to reach it by another route. Report it to the user if the task cannot continue.",
     );
+  });
+
+  it('URL_SCHEME_NOT_ALLOWED names the scheme and the way out', () => {
+    const text = renderMessage(ERROR_REGISTRY.URL_SCHEME_NOT_ALLOWED.message, {
+      scheme: 'javascript',
+    });
+    expect(text).toBe(
+      "URLs with the 'javascript:' scheme cannot be opened here. Use an http:// or https:// URL (or about:blank).",
+    );
+    expect(ERROR_REGISTRY.URL_SCHEME_NOT_ALLOWED.httpStatus).toBe(400);
+    expect(ERROR_REGISTRY.URL_SCHEME_NOT_ALLOWED.retryable).toBe('different_args');
   });
 
   it('AUTH_STATE_NOT_FOUND renders the kind label from extra vars', () => {

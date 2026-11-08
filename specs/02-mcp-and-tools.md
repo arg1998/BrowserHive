@@ -160,7 +160,7 @@ mint eventId, open span "mcp.tool <name>" (parent from _meta traceparent)
 bound(args)               → INVALID_ARGUMENTS  when the arguments hold more than 100,000 array elements and object members (any depth), counted before validation (D-46)
 parse(args)               → INVALID_ARGUMENTS  (zod issues in details; text = "[INVALID_ARGUMENTS] <first issue path>: <message>")
 authorize(principal)      → ownership via sessions.get(session_id, principal) for every tool that names a session
-policies                  → URL_BLOCKED, EVALUATE_DISABLED, PATH_NOT_ALLOWED, UNSAFE_LAUNCH_ARG … (thrown before touching the browser)
+policies                  → URL_SCHEME_NOT_ALLOWED, URL_BLOCKED, EVALUATE_DISABLED, PATH_NOT_ALLOWED, UNSAFE_LAUNCH_ARG … (thrown before touching the browser)
 execute(handler)          → ToolResult
 map error                 → AppError (registry code) — unknown errors become INTERNAL_ERROR with a private cause
 classify outcome          → soft failures for tools that *return* failure (vault_fill status≠success, attention rejected/timeout/cancelled, navigate HTTP 4xx/5xx) get a synthetic audit code (fixed set: ORIGIN_MISMATCH, VAULT_FILL_AUTH_FAILED, VAULT_FILL_BLOCKED, VAULT_LIST_DENIED, ATTENTION_REJECTED, ATTENTION_TIMEOUT, ATTENTION_CANCELLED, HTTP_<n>)
@@ -203,7 +203,7 @@ Conventions: `Timeout` = `int ≥ 0, default 30000` ms (`0` = no timeout); `TabI
 
 | Tool | Input | Output | Errors | RO/D/I/OW |
 |---|---|---|---|---|
-| `navigate` | `session_id` · `url: string` · `wait_until: WaitUntil='load'` · `timeout: Timeout` · `tab_id?` | `{ session_id, url: page.url(), status: number\|null }`; `navigation_count++`; HTTP 400–599 status is a **soft failure** (`HTTP_<n>` audit code, not an error) | session, `URL_BLOCKED` (before the browser is touched), `TAB_NOT_FOUND`, `NAVIGATION_TIMEOUT`, `NAVIGATION_FAILED` | no/no/no/yes |
+| `navigate` | `session_id` · `url: string` (web schemes only, see below) · `wait_until: WaitUntil='load'` · `timeout: Timeout` · `tab_id?` | `{ session_id, url: page.url(), status: number\|null }`; `navigation_count++`; HTTP 400–599 status is a **soft failure** (`HTTP_<n>` audit code, not an error) | session, `URL_SCHEME_NOT_ALLOWED` and then `URL_BLOCKED` (both before the browser is touched), `TAB_NOT_FOUND`, `NAVIGATION_TIMEOUT`, `NAVIGATION_FAILED` | no/no/no/yes |
 | `go_back` | `session_id` · `wait_until='load'` · `timeout` · `tab_id?` | `{ session_id, url }`; count++ | session, `TAB_NOT_FOUND`, `NAVIGATION_TIMEOUT`, `NAVIGATION_FAILED` | no/no/no/yes |
 | `go_forward` | same | same | same | no/no/no/yes |
 | `reload` | same | same | same | no/no/yes/yes |
@@ -211,13 +211,15 @@ Conventions: `Timeout` = `int ≥ 0, default 30000` ms (`0` = no timeout); `TabI
 
 `url` as `string | object` is a property-level union (allowed); the root stays an object.
 
+**URL schemes** (`navigate`, `new_tab`; spec 13 T0d, D-57). The `urlScheme(url)` policy runs after `sessionOwnership` and before `urlBlocklist`. It parses the URL with WHATWG `URL` (which strips tabs, newlines and surrounding whitespace, so `java\tscript:` is `javascript:`) and compares the scheme lowercased. Allowed: `http:`, `https:`, exactly `about:blank`, and `data:` (every session is exclusive; virtual sessions of spec 13 will refuse it). Anything else answers `URL_SCHEME_NOT_ALLOWED` (`400`, `different_args`, details `{ scheme }`) before the browser is touched: `file:`, `chrome:`, `chrome-untrusted:`, `chrome-extension:`, `devtools:`, `view-source:`, `javascript:`, `blob:`, `filesystem:`, `mailto:`, `about:version`, app schemes, scheme-less input such as `localhost:3000` (scheme `localhost`) and input that does not parse at all (`example.com`; `scheme: ''` and the message "This URL is not an absolute URL, so it cannot be opened here. …"). The handler then navigates to the normalized `href`, never the raw string. `go_back`, `go_forward` and `reload` need no check: history only holds what was allowed or what a site opened. A backstop covers navigations no tool requested: a `framenavigated` listener on every page of every session (the first page, `new_tab` pages and site-opened popups) closes a page whose **main frame** commits a URL outside `http:`, `https:`, `about:blank`/`about:srcdoc`, `blob:`, `chrome-error:` and `data:`, removes its tab and logs `non-web scheme page closed` with the session id and scheme. Site-initiated `blob:` and `data:` documents and downloads are unaffected.
+
 ### 3.4 Tabs
 
-Tab ids `t-<nanoid6 [0-9a-z]>`, stable, never reused; site-opened pages auto-register; first page is active; closing the active tab promotes the most recently added survivor.
+Tab ids `t-<nanoid6 [0-9a-z]>`, stable, never reused; site-opened pages auto-register; first page is active; closing the active tab promotes the most recently added survivor. A page the non-web scheme backstop closes (§3.3) loses its tab the same way.
 
 | Tool | Input | Output | Errors | RO/D/I/OW |
 |---|---|---|---|---|
-| `new_tab` | `session_id` · `url?: string` · `wait_until='load'` · `timeout: int≥0=30000` | `{ session_id, tab_id, url }`; count++ only when `url` given; awaits per-page stealth override before navigating | session, `URL_BLOCKED`, `NAVIGATION_*` | no/no/no/yes |
+| `new_tab` | `session_id` · `url?: string` (web schemes only, §3.3) · `wait_until='load'` · `timeout: int≥0=30000` | `{ session_id, tab_id, url }`; count++ only when `url` given; awaits per-page stealth override before navigating; a refused `url` opens no tab | session, `URL_SCHEME_NOT_ALLOWED`, `URL_BLOCKED`, `NAVIGATION_*` | no/no/no/yes |
 | `close_tab` | `session_id` · `tab_id: string` (required) | `{ session_id, tab_id, closed: true }` | session, `TAB_NOT_FOUND` | no/yes/yes/no |
 | `switch_tab` | `session_id` · `tab_id` | `{ session_id, tab_id, url }` | session, `TAB_NOT_FOUND` | no/no/yes/no |
 | `list_tabs` | `session_id` | **bare array** `[{ tab_id, url, title (''\ on failure), active }]` insertion order | session | yes/no/yes/no |

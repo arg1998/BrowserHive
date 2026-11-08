@@ -157,6 +157,7 @@
               "PAGE_CLOSED",
               "BROWSER_CRASHED",
               "URL_BLOCKED",
+              "URL_SCHEME_NOT_ALLOWED",
               "BROWSER_NOT_INSTALLED",
               "VAULT_NOT_CONFIGURED",
               "VAULT_LOCKED",

@@ -8,6 +8,9 @@ import {
   textOf,
 } from '../../../../test/helpers/fake-transport.ts';
 import { executeTool } from '../../../../test/helpers/tool-run.ts';
+import { UNPARSEABLE_URL_MESSAGE } from '../policies.ts';
+import { navigate } from './navigation/index.ts';
+import { newTab } from './tabs/index.ts';
 
 let h: ToolHarness;
 afterEach(async () => h.close());
@@ -49,6 +52,48 @@ describe('navigation tools', () => {
     const result = await h.call('navigate', { session_id: id, url: 'https://blocked.example/' });
     expect(textOf(result)).toStartWith('[URL_BLOCKED]');
     expect(handle().firstPage.methods()).not.toContain('goto');
+  });
+
+  it('navigate refuses a non-web scheme before the blocklist and the browser (spec 13 T0d)', async () => {
+    h = await createToolHarness({ blocklist: 'blocked.example\n' });
+    const id = await h.launch();
+    const result = await h.call('navigate', {
+      session_id: id,
+      url: "JAVA\tSCRIPT:document.body.innerHTML='x'",
+    });
+    expect(textOf(result)).toBe(
+      "[URL_SCHEME_NOT_ALLOWED] URLs with the 'javascript:' scheme cannot be opened here. Use an http:// or https:// URL (or about:blank).",
+    );
+    expect(result._meta?.['browserhive.ai/error']).toMatchObject({
+      code: 'URL_SCHEME_NOT_ALLOWED',
+      retryable: 'different_args',
+      details: { scheme: 'javascript' },
+    });
+    const unparsed = await h.call('navigate', { session_id: id, url: 'example.com' });
+    expect(textOf(unparsed)).toBe(`[URL_SCHEME_NOT_ALLOWED] ${UNPARSEABLE_URL_MESSAGE}`);
+    expect(handle().firstPage.methods()).not.toContain('goto');
+    expect(h.observations().at(-1)?.errorCode).toBe('URL_SCHEME_NOT_ALLOWED');
+  });
+
+  it('navigate and new_tab hand the browser the normalized href', async () => {
+    h = await createToolHarness();
+    const id = await h.launch();
+    await executeTool(h, 'navigate', { session_id: id, url: ' HTTPS://Example.COM/a b ' });
+    const goto = handle().firstPage.calls.find((c) => c.method === 'goto');
+    expect(goto?.args[0]).toBe('https://example.com/a%20b');
+    await executeTool(h, 'new_tab', { session_id: id, url: 'ABOUT:blank' });
+    const second = handle().fakeContext.fakePages[1];
+    expect(second?.calls.find((c) => c.method === 'goto')?.args[0]).toBe('about:blank');
+  });
+
+  it('the scheme policy sits between ownership and the blocklist on both tools', () => {
+    for (const tool of [navigate, newTab]) {
+      expect(tool.policies.map((p) => p.name)).toEqual([
+        'sessionOwnership',
+        'urlScheme(url)',
+        'urlBlocklist(url)',
+      ]);
+    }
   });
 
   it('navigate maps a goto timeout to NAVIGATION_TIMEOUT', async () => {
@@ -100,6 +145,14 @@ describe('navigation tools', () => {
 });
 
 describe('tab tools', () => {
+  it('new_tab refuses a non-web scheme without opening a tab', async () => {
+    h = await createToolHarness();
+    const id = await h.launch();
+    const result = await h.call('new_tab', { session_id: id, url: 'file:///etc/hostname' });
+    expect(textOf(result)).toStartWith('[URL_SCHEME_NOT_ALLOWED]');
+    expect(handle().fakeContext.fakePages).toHaveLength(1);
+  });
+
   it('new_tab / list_tabs / switch_tab / close_tab', async () => {
     h = await createToolHarness();
     const id = await h.launch();
