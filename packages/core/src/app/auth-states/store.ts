@@ -1,6 +1,7 @@
-/** @module app/auth-states/store — AuthStateStore: save/list/remove/restore of saved auth snapshots under `<data-dir>/auth-states/` (spec 02 §6, D-24); implements the `AuthStateLocator` port. */
+/** @module app/auth-states/store — AuthStateStore: save/list/remove/restore of saved auth snapshots under `<data-dir>/auth-states/`, scoped per principal (spec 02 §6, D-24, spec 13 T0a); implements the `AuthStateLocator` port. */
 
-import { chmod, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { chmod, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   AUTH_NAME_RE,
@@ -35,6 +36,8 @@ export interface AuthStateFs extends ZipFs {
   /** Writes with `mode` (existing files are truncated; mode applied afterwards). */
   writeFile(path: string, data: Uint8Array | string, mode?: number): Promise<void>;
   remove(path: string): Promise<void>;
+  /** Moves a file, replacing `to` when it exists. */
+  rename(from: string, to: string): Promise<void>;
   /** Names of a directory's entries, or `[]` when it does not exist. */
   list(dir: string): Promise<readonly string[]>;
 }
@@ -95,11 +98,49 @@ function notFound(name: string, kind: 'storage' | 'profile'): AppError<'AUTH_STA
   );
 }
 
+/** Directory under `auth-states/` that holds one directory per non-`local` principal (spec 13 T0a). */
+export const PRINCIPAL_DIRS_NAME = 'p';
+
+/**
+ * The directory name of a principal's snapshots under `auth-states/p/`: the first 16 hex chars of
+ * SHA-256 of its subject. Hashed so any subject maps to a safe, fixed-length file name.
+ */
+export function principalDirName(subject: string): string {
+  return createHash('sha256').update(subject, 'utf8').digest('hex').slice(0, 16);
+}
+
+/** The four files of one snapshot. */
+export interface AuthStateFiles {
+  /** `<name>.storage.json`. */
+  readonly storage: string;
+  /** `<name>.profile.zip`. */
+  readonly profile: string;
+  /** `<name>.identity.json`. */
+  readonly identity: string;
+  /** `<name>.meta.json`: its presence is what makes a snapshot exist. */
+  readonly manifest: string;
+}
+
+/** Move and delete order: payloads and seed first, the manifest last, so an interrupted step can be resumed. */
+const FILE_ORDER = ['storage', 'profile', 'identity', 'manifest'] as const;
+const MANIFEST_SUFFIX = '.meta.json';
+
+function isValidAuthName(name: string): boolean {
+  return AUTH_NAME_RE.test(name) && !name.includes('..');
+}
+
 /**
  * Two snapshot kinds: `storage` (`<name>.storage.json`, cookies, localStorage and IndexedDB; restored into a
  * fresh non-persistent context) and `profile` (`<name>.profile.zip` of a managed `userdata`;
  * restored into a new persistent session). Each has a `<name>.meta.json` manifest so listings never
  * open the payload, and a profile may carry `<name>.identity.json` (`{ seed }` only).
+ *
+ * Names are scoped per principal (spec 13 T0a): `local` keeps the flat `auth-states/<name>.*`
+ * layout, every other principal has `auth-states/p/<principalDirName(subject)>/<name>.*`. A name is
+ * one snapshot per principal: saving either kind replaces the caller's other kind and seed, and two
+ * principals using the same name never touch each other's files. Manifests left in the flat layout
+ * by an older release with a non-`local` owner are moved into their owner's directory on the first
+ * access after start ({@link AuthStateStore.migrateFlatLayout}).
  */
 export class AuthStateStore implements AuthStateLocator {
   /** `<data-dir>/auth-states`. */
@@ -107,6 +148,8 @@ export class AuthStateStore implements AuthStateLocator {
   private readonly deps: AuthStateStoreDeps;
   private readonly fs: AuthStateFs;
   private readonly log: Logger;
+  /** The once-per-process flat-layout migration; reset when a step failed so the next access retries. */
+  private migration: Promise<void> | null = null;
 
   constructor(deps: AuthStateStoreDeps) {
     this.deps = deps;
@@ -115,24 +158,22 @@ export class AuthStateStore implements AuthStateLocator {
     this.log = deps.logger.child({ module: 'auth-states' });
   }
 
-  /** `<name>.storage.json`. */
-  storageStateFile(name: string): string {
-    return join(this.dir, `${name}.storage.json`);
+  /** The directory of `subject`'s snapshots: `auth-states/` for `local`, `auth-states/p/<hash>/` otherwise. */
+  dirFor(subject: string): string {
+    return subject === DEFAULT_OWNER
+      ? this.dir
+      : join(this.dir, PRINCIPAL_DIRS_NAME, principalDirName(subject));
   }
 
-  /** `<name>.profile.zip`. */
-  profileZipFile(name: string): string {
-    return join(this.dir, `${name}.profile.zip`);
-  }
-
-  /** `<name>.meta.json`. */
-  manifestFile(name: string): string {
-    return join(this.dir, `${name}.meta.json`);
-  }
-
-  /** `<name>.identity.json`. */
-  identitySeedFile(name: string): string {
-    return join(this.dir, `${name}.identity.json`);
+  /** The paths of `subject`'s snapshot `name` (they need not exist). */
+  filesFor(subject: string, name: string): AuthStateFiles {
+    const dir = this.dirFor(subject);
+    return {
+      storage: join(dir, `${name}.storage.json`),
+      profile: join(dir, `${name}.profile.zip`),
+      identity: join(dir, `${name}.identity.json`),
+      manifest: join(dir, `${name}${MANIFEST_SUFFIX}`),
+    };
   }
 
   /** Saves a light storage-state snapshot from a live context (any persistence mode). */
@@ -143,14 +184,15 @@ export class AuthStateStore implements AuthStateLocator {
     principal: SessionPrincipal,
   ): Promise<SavedAuthResult> {
     assertValidAuthName(name);
-    await this.fs.mkdir(this.dir, AUTH_DIR_MODE);
-    const path = this.storageStateFile(name);
+    const files = await this.prepareSave(name, principal);
+    const path = files.storage;
     // IndexedDB is part of a login for many sites (Firebase Auth keeps its tokens there).
     await source.storageState({ path, indexedDB: true });
     // Playwright writes 0644; the snapshot holds cookies/tokens, so pin it owner-only.
     await this.fs.chmod(path, AUTH_FILE_MODE);
     const size = (await this.fs.stat(path))?.size ?? 0;
-    await this.writeManifest({
+    await this.replaceStale(files, 'storage');
+    await this.writeManifest(files, {
       name,
       kind: 'storage',
       saved_at: this.deps.clock.now(),
@@ -173,12 +215,13 @@ export class AuthStateStore implements AuthStateLocator {
     principal: SessionPrincipal,
   ): Promise<SavedAuthResult> {
     assertValidAuthName(name);
-    await this.fs.mkdir(this.dir, AUTH_DIR_MODE);
-    const path = this.profileZipFile(name);
+    const files = await this.prepareSave(name, principal);
+    const path = files.profile;
     const archive = await zipDirectory(userDataDir, this.fs);
     await this.fs.writeFile(path, archive, AUTH_FILE_MODE);
     const size = archive.byteLength;
-    await this.writeManifest({
+    await this.replaceStale(files, 'profile');
+    await this.writeManifest(files, {
       name,
       kind: 'profile',
       saved_at: this.deps.clock.now(),
@@ -190,17 +233,25 @@ export class AuthStateStore implements AuthStateLocator {
   }
 
   /**
-   * Saves the presented-identity seed beside a profile. Only the seed (the display metrics are a
-   * pure function of it); the geo half is re-resolved on restore. Best-effort: a failure is logged
-   * and reported as `false`, never thrown — a snapshot that restores with a fresh identity is
-   * still a usable snapshot.
+   * Saves the presented-identity seed beside the caller's own profile snapshot `name`. Only the seed
+   * (the display metrics are a pure function of it); the geo half is re-resolved on restore.
+   * Best-effort: a failure (including no such profile of the caller's) is logged and reported as
+   * `false`, never thrown — a snapshot that restores with a fresh identity is still a usable snapshot.
    */
-  async saveIdentitySeed(name: string, seed: string): Promise<boolean> {
+  async saveIdentitySeed(
+    name: string,
+    seed: string,
+    principal: SessionPrincipal,
+  ): Promise<boolean> {
     assertValidAuthName(name);
     try {
-      await this.fs.mkdir(this.dir, AUTH_DIR_MODE);
+      const own = await this.ownSnapshot(name, principal);
+      if (own === null || own.manifest.kind !== 'profile') {
+        this.log.warn('identity seed: no profile', { name });
+        return false;
+      }
       await this.fs.writeFile(
-        this.identitySeedFile(name),
+        own.files.identity,
         JSON.stringify({ seed }, null, 2),
         AUTH_FILE_MODE,
       );
@@ -211,11 +262,13 @@ export class AuthStateStore implements AuthStateLocator {
     }
   }
 
-  /** The seed saved beside a profile, or `null` (absent, malformed, or pre-identity snapshot). */
-  async loadIdentitySeed(name: string): Promise<string | null> {
+  /** The seed saved beside the caller's profile `name`, or `null` (absent, malformed, not a profile, or pre-identity snapshot). */
+  async loadIdentitySeed(name: string, principal: SessionPrincipal): Promise<string | null> {
     assertValidAuthName(name);
     try {
-      const raw = await this.fs.readFile(this.identitySeedFile(name));
+      const own = await this.ownSnapshot(name, principal);
+      if (own === null || own.manifest.kind !== 'profile') return null;
+      const raw = await this.fs.readFile(own.files.identity);
       const parsed = IdentitySeedFile.safeParse(JSON.parse(new TextDecoder().decode(raw)));
       return parsed.success ? parsed.data.seed : null;
     } catch {
@@ -224,27 +277,40 @@ export class AuthStateStore implements AuthStateLocator {
     }
   }
 
-  /** @throws `AUTH_STATE_NOT_FOUND` `{ name, kind: 'storage' }` (also for another principal's snapshot). */
+  /**
+   * The caller's storage-state snapshot file.
+   *
+   * @throws `AUTH_STATE_NOT_FOUND` `{ name, kind: 'storage' }` (also for another principal's snapshot or a profile of that name).
+   */
   async storageStatePath(name: string, principal: SessionPrincipal): Promise<string> {
     assertValidAuthName(name);
-    const path = this.storageStateFile(name);
-    if ((await this.fs.stat(path)) === null || !(await this.ownedBy(name, principal))) {
+    const own = await this.ownSnapshot(name, principal);
+    if (
+      own === null ||
+      own.manifest.kind !== 'storage' ||
+      (await this.fs.stat(own.files.storage)) === null
+    ) {
       throw notFound(name, 'storage');
     }
-    return path;
+    return own.files.storage;
   }
 
-  /** @throws `AUTH_STATE_NOT_FOUND` `{ name, kind: 'profile' }`; `PATH_NOT_ALLOWED` on a zip-slip entry. */
+  /**
+   * Extracts the caller's profile snapshot into `userDataDir`.
+   *
+   * @throws `AUTH_STATE_NOT_FOUND` `{ name, kind: 'profile' }` (also for another principal's snapshot or a storage state of that name); `PATH_NOT_ALLOWED` on a zip-slip entry.
+   */
   async restoreProfile(
     name: string,
     userDataDir: string,
     principal: SessionPrincipal,
   ): Promise<void> {
     assertValidAuthName(name);
-    if (!(await this.ownedBy(name, principal))) throw notFound(name, 'profile');
+    const own = await this.ownSnapshot(name, principal);
+    if (own === null || own.manifest.kind !== 'profile') throw notFound(name, 'profile');
     let archive: Uint8Array;
     try {
-      archive = await this.fs.readFile(this.profileZipFile(name));
+      archive = await this.fs.readFile(own.files.profile);
     } catch (err) {
       throw new AppError(
         'AUTH_STATE_NOT_FOUND',
@@ -260,10 +326,12 @@ export class AuthStateStore implements AuthStateLocator {
 
   /** The caller's snapshots, newest first. Malformed or orphan manifests are skipped. */
   async list(principal: SessionPrincipal): Promise<SavedAuthEntry[]> {
+    await this.ready();
     const entries: SavedAuthEntry[] = [];
-    for (const file of await this.fs.list(this.dir)) {
-      if (!file.endsWith('.meta.json')) continue;
-      const manifest = await this.readManifest(file.slice(0, -'.meta.json'.length));
+    const dir = this.dirFor(principal.subject);
+    for (const file of await this.fs.list(dir)) {
+      if (!file.endsWith(MANIFEST_SUFFIX)) continue;
+      const manifest = await this.readManifest(join(dir, file));
       if (manifest === null || manifest.owner !== principal.subject) continue;
       entries.push({
         name: manifest.name,
@@ -276,46 +344,132 @@ export class AuthStateStore implements AuthStateLocator {
     return entries;
   }
 
-  /** Deletes every file of a snapshot the caller owns. `false` when nothing was removed. */
+  /** Deletes every file of a snapshot the caller owns (manifest last). `false` when nothing was removed. */
   async remove(name: string, principal: SessionPrincipal): Promise<boolean> {
     assertValidAuthName(name);
-    const manifest = await this.readManifest(name);
-    if (manifest === null || manifest.owner !== principal.subject) return false;
-    for (const path of [
-      this.storageStateFile(name),
-      this.profileZipFile(name),
-      this.identitySeedFile(name),
-      this.manifestFile(name),
-    ]) {
-      await this.fs.remove(path);
-    }
+    const own = await this.ownSnapshot(name, principal);
+    if (own === null) return false;
+    await this.removeFiles(own.files);
     return true;
   }
 
-  private async ownedBy(name: string, principal: SessionPrincipal): Promise<boolean> {
-    const manifest = await this.readManifest(name);
-    // A snapshot without a manifest, or a manifest without `owner`, belongs to `local`.
-    const owner = manifest?.owner ?? DEFAULT_OWNER;
-    return owner === principal.subject;
+  /**
+   * Moves every flat-layout snapshot whose manifest names a non-`local` owner into that owner's
+   * directory (spec 13 T0a). Runs once per process before the first access; safe to repeat. Each
+   * name moves payloads and seed first and its manifest last, so a crash mid-move leaves the flat
+   * manifest in place and the next start finishes the move without losing a file. When the owner
+   * already has a snapshot of that name (a downgraded release saved one flat), the newer one wins.
+   *
+   * @returns `true` when every flat snapshot was handled.
+   */
+  async migrateFlatLayout(): Promise<boolean> {
+    let complete = true;
+    for (const file of await this.fs.list(this.dir)) {
+      if (!file.endsWith(MANIFEST_SUFFIX)) continue;
+      const name = file.slice(0, -MANIFEST_SUFFIX.length);
+      if (!isValidAuthName(name)) continue;
+      const manifest = await this.readManifest(join(this.dir, file));
+      if (manifest === null || manifest.owner === DEFAULT_OWNER) continue;
+      try {
+        await this.moveToOwner(name, manifest);
+      } catch (err) {
+        complete = false;
+        this.log.warn('auth state move failed', {
+          name,
+          err: serializeError(err),
+        });
+      }
+    }
+    return complete;
   }
 
-  private async readManifest(name: string): Promise<AuthManifest | null> {
+  private ready(): Promise<void> {
+    this.migration ??= this.migrateFlatLayout().then(
+      (complete) => {
+        if (!complete) this.migration = null;
+      },
+      (err: unknown) => {
+        this.migration = null;
+        this.log.warn('auth state migrate failed', { err: serializeError(err) });
+      },
+    );
+    return this.migration;
+  }
+
+  private async moveToOwner(name: string, flat: AuthManifest): Promise<void> {
+    const from = this.filesFor(DEFAULT_OWNER, name);
+    const to = this.filesFor(flat.owner, name);
+    await this.fs.mkdir(this.dirFor(flat.owner), AUTH_DIR_MODE);
+    const existing = await this.readManifest(to.manifest);
+    if (existing !== null) {
+      if (existing.saved_at >= flat.saved_at) {
+        await this.removeFiles(from);
+        this.log.info('stale flat copy dropped', { name });
+        return;
+      }
+      await this.removeFiles(to);
+    }
+    for (const key of FILE_ORDER) {
+      if ((await this.fs.stat(from[key])) === null) continue;
+      await this.fs.rename(from[key], to[key]);
+    }
+    this.log.info('auth state moved to owner', { name });
+  }
+
+  /**
+   * Creates the caller's directory and returns the snapshot's paths. A flat manifest of that name
+   * still owned by someone else (its move failed earlier) is moved first, so a `local` save never
+   * overwrites another principal's snapshot.
+   */
+  private async prepareSave(name: string, principal: SessionPrincipal): Promise<AuthStateFiles> {
+    await this.ready();
+    const files = this.filesFor(principal.subject, name);
+    await this.fs.mkdir(this.dirFor(principal.subject), AUTH_DIR_MODE);
+    if (principal.subject === DEFAULT_OWNER) {
+      const existing = await this.readManifest(files.manifest);
+      if (existing !== null && existing.owner !== DEFAULT_OWNER) {
+        await this.moveToOwner(name, existing);
+      }
+    }
+    return files;
+  }
+
+  /** One name is one snapshot: drops the other kind's payload and the seed before the new manifest lands. */
+  private async replaceStale(files: AuthStateFiles, kind: 'storage' | 'profile'): Promise<void> {
+    await this.fs.remove(kind === 'storage' ? files.profile : files.storage);
+    await this.fs.remove(files.identity);
+  }
+
+  /** The caller's snapshot `name` when its manifest exists and names the caller as owner. */
+  private async ownSnapshot(
+    name: string,
+    principal: SessionPrincipal,
+  ): Promise<{ readonly files: AuthStateFiles; readonly manifest: AuthManifest } | null> {
+    await this.ready();
+    const files = this.filesFor(principal.subject, name);
+    const manifest = await this.readManifest(files.manifest);
+    // A manifest without `owner` belongs to `local`, and only `local` reads the flat layout.
+    if (manifest === null || manifest.owner !== principal.subject) return null;
+    return { files, manifest };
+  }
+
+  private async removeFiles(files: AuthStateFiles): Promise<void> {
+    for (const key of FILE_ORDER) await this.fs.remove(files[key]);
+  }
+
+  private async readManifest(path: string): Promise<AuthManifest | null> {
     try {
-      const raw = await this.fs.readFile(this.manifestFile(name));
+      const raw = await this.fs.readFile(path);
       const parsed = AuthManifest.safeParse(JSON.parse(new TextDecoder().decode(raw)));
       return parsed.success ? parsed.data : null;
     } catch {
-      // Unreadable / malformed: skipped rather than failing the whole listing.
+      // Absent / unreadable / malformed: no snapshot, rather than failing the whole listing.
       return null;
     }
   }
 
-  private async writeManifest(manifest: AuthManifest): Promise<void> {
-    await this.fs.writeFile(
-      this.manifestFile(manifest.name),
-      JSON.stringify(manifest, null, 2),
-      AUTH_FILE_MODE,
-    );
+  private async writeManifest(files: AuthStateFiles, manifest: AuthManifest): Promise<void> {
+    await this.fs.writeFile(files.manifest, JSON.stringify(manifest, null, 2), AUTH_FILE_MODE);
   }
 }
 
@@ -348,6 +502,7 @@ export function createNodeAuthStateFs(): AuthStateFs {
     },
     chmod: (path, mode) => chmod(path, mode),
     remove: (path) => rm(path, { force: true }),
+    rename: (from, to) => rename(from, to),
     async list(dir) {
       try {
         return await readdir(dir);

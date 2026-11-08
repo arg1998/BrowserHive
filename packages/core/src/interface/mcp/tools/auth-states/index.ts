@@ -52,7 +52,7 @@ export const saveFullProfile = defineTool('save_full_profile', {
     const saved = await store.saveFullProfile(userdata, args.name, session.id, ctx.principal);
     // The display seed: restored with the profile, else the session id (the resolver's default).
     if (session.request.fingerprint && session.identity?.display != null) {
-      const ok = await store.saveIdentitySeed(args.name, session.identitySeed);
+      const ok = await store.saveIdentitySeed(args.name, session.identitySeed, ctx.principal);
       if (!ok) {
         ctx.services.sessions.warn(session, {
           code: 'IDENTITY_SEED_SAVE_FAILED',

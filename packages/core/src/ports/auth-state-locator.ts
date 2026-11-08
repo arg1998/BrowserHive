@@ -7,15 +7,15 @@ export interface AuthStateLocator {
   /**
    * Managed file path for a saved storage-state name.
    *
-   * @throws `AUTH_STATE_NOT_FOUND` `{ name, kind: 'storage' }` when no snapshot exists.
+   * @throws `AUTH_STATE_NOT_FOUND` `{ name, kind: 'storage' }` when the principal has no storage-state snapshot of that name.
    */
   storageStatePath(name: string, principal: SessionPrincipal): Promise<string>;
   /**
    * Extracts a saved full profile into the managed `userDataDir`.
    *
-   * @throws `AUTH_STATE_NOT_FOUND` `{ name, kind: 'profile' }` when no snapshot exists.
+   * @throws `AUTH_STATE_NOT_FOUND` `{ name, kind: 'profile' }` when the principal has no full-profile snapshot of that name.
    */
   restoreProfile(name: string, userDataDir: string, principal: SessionPrincipal): Promise<void>;
-  /** The display seed saved beside a profile, or `null` (missing/unreadable degrades to a fresh identity). */
-  loadIdentitySeed(name: string): Promise<string | null>;
+  /** The display seed saved beside the principal's profile, or `null` (missing/unreadable degrades to a fresh identity). */
+  loadIdentitySeed(name: string, principal: SessionPrincipal): Promise<string | null>;
 }

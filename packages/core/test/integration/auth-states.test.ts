@@ -1,8 +1,8 @@
-/** @module test/integration/auth-states — save_storage_state / save_full_profile + restore through launch_session against real Chromium. */
+/** @module test/integration/auth-states — save_storage_state / save_full_profile + restore through launch_session against real Chromium, including two token principals sharing a name (spec 13 T0a). */
 
 import { describe, expect, it } from 'bun:test';
 import { join } from 'node:path';
-import { LOCAL_PRINCIPAL } from '../../src/domain/auth/principal.ts';
+import { agentPrincipal, LOCAL_PRINCIPAL } from '../../src/domain/auth/principal.ts';
 import { textOf } from '../helpers/fake-transport.ts';
 import { useMcpStack } from './mcp-fixture.ts';
 
@@ -142,5 +142,87 @@ describe('auth-state save + restore (real Chromium)', () => {
     expect(textOf(result)).toBe(
       "[AUTH_STATE_NOT_FOUND] No saved storage-state snapshot named 'does-not-exist'. Use list_saved_auths to see what is available.",
     );
+  });
+
+  it("two token principals: bob saving alice's name never restores alice's cookies", async () => {
+    const h = state.harness;
+    const aliceP = agentPrincipal('alice', {});
+    const alice = await h.connect(aliceP);
+    const bob = await h.connect(agentPrincipal('bob', {}));
+    const origin = state.fixture.origin;
+    const expires = Math.floor(Date.now() / 1000) + 3600;
+    const cookiesOf = async (sessionId: string, via: typeof alice) => {
+      await h.callJson('navigate', { session_id: sessionId, url: state.fixture.url('/') }, via);
+      const got = await h.callJson<{ cookies: { name: string; value: string }[] }>(
+        'get_cookies',
+        { session_id: sessionId, urls: [origin] },
+        via,
+      );
+      return got.cookies.filter((c) => c.name === 'sid').map((c) => c.value);
+    };
+
+    // Alice: a full profile carrying her cookie, saved from the flushed profile (as above).
+    const aliceSrc = await h.launch({ slug: 'alice-src', persistence_mode: 'persistent' }, alice);
+    await h.callJson('navigate', { session_id: aliceSrc, url: state.fixture.url('/') }, alice);
+    await h.callJson(
+      'set_cookies',
+      {
+        session_id: aliceSrc,
+        cookies: [{ name: 'sid', value: 'ALICE-COOKIE', url: origin, expires }],
+      },
+      alice,
+    );
+    await h.callJson('close_session', { session_id: aliceSrc }, alice);
+    await h.services.authStates.saveFullProfile(
+      join(h.dataDir, 'sessions', aliceSrc, 'userdata'),
+      'work',
+      aliceSrc,
+      aliceP,
+    );
+
+    // Bob saves a storage state under the same name.
+    const bobSrc = await h.launch({ slug: 'bob-src' }, bob);
+    await h.callJson('navigate', { session_id: bobSrc, url: state.fixture.url('/') }, bob);
+    await h.callJson(
+      'set_cookies',
+      { session_id: bobSrc, cookies: [{ name: 'sid', value: 'BOB-COOKIE', url: origin }] },
+      bob,
+    );
+    await h.callJson('save_storage_state', { session_id: bobSrc, name: 'work' }, bob);
+
+    // Bob's profile restore of that name finds nothing: he has no full profile called `work`.
+    const stolen = await h.call(
+      'launch_session',
+      { slug: 'bob-steal', persistence_mode: 'persistent', restore_profile: 'work' },
+      bob,
+    );
+    expect(textOf(stolen)).toBe(
+      "[AUTH_STATE_NOT_FOUND] No saved full-profile snapshot named 'work'. Use list_saved_auths to see what is available.",
+    );
+    // His storage-state restore gets his own cookie only.
+    const bobDst = await h.launch(
+      {
+        slug: 'bob-dst',
+        persistence_mode: 'storage-state',
+        context_options: { storageState: 'work' },
+      },
+      bob,
+    );
+    expect(await cookiesOf(bobDst, bob)).toEqual(['BOB-COOKIE']);
+    // Alice still restores her own profile, cookie included.
+    const aliceDst = await h.launch(
+      { slug: 'alice-dst', persistence_mode: 'persistent', restore_profile: 'work' },
+      alice,
+    );
+    expect(await cookiesOf(aliceDst, alice)).toEqual(['ALICE-COOKIE']);
+    // Each lists only its own snapshot; the shared `local` caller sees neither.
+    const kinds = async (via?: typeof alice) =>
+      (await h.callJson<{ name: string; kind: string }[]>('list_saved_auths', {}, via)).map((e) => [
+        e.name,
+        e.kind,
+      ]);
+    expect(await kinds(alice)).toEqual([['work', 'profile']]);
+    expect(await kinds(bob)).toEqual([['work', 'storage']]);
+    expect(await kinds()).toEqual([]);
   });
 });

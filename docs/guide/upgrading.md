@@ -41,6 +41,14 @@ Two behaviour changes to know about:
 - **The browser sandbox is on by default.** Sessions now run inside Chromium's sandbox wherever the machine allows it (`--sandbox auto`). Where it cannot (Ubuntu 23.10+ with the bundled browser, root, Docker), sessions run as before and `browserhive doctor` explains why and how to fix it (still exit code 0). `--sandbox off` restores the previous behaviour exactly. See [Security: the browser sandbox](security.md#the-browser-sandbox).
 - **Environment variables in the config file.** A string in `browserhive.config.json` that contains `{env:NAME}` is now read as a [reference](configuration.md#references) to that variable, and `${env:NAME}`, `{ENV:NAME}` or `{file:…}` stop startup with a hint. Other braces, such as `{trace_id}` in `otelTraceUrlTemplate`, are left alone; write `{{…}}` to keep text that looks like a reference literal.
 
+### Saved logins move per principal
+
+From 0.2.3, saved logins are kept per principal ([Security: saved logins are per principal](security.md#saved-logins-are-per-principal)). The no-auth `local` principal keeps the flat `auth-states/<name>.*` layout, so single-user installs see no change. Snapshots of token principals live in `auth-states/p/<id>/<name>.*`.
+
+On the first start of 0.2.3, every snapshot in the flat layout whose manifest names another owner is moved into that owner's directory, with its identity seed. The move is safe to interrupt: whatever was not moved yet is finished on the next start.
+
+If you use more than one token: before 0.2.3, an agent that saved a login under a name another principal already used took that name over (the snapshot and its owner were replaced). Such a takeover cannot be detected after the upgrade, because the files then belong to whoever saved last. Ask each agent to call `list_saved_auths`, check that each saved login is the one it expects, and save again any that is missing or wrong.
+
 ## Downgrade
 
 Nothing is ever migrated downward in place. Instead, each database records two numbers: its schema version, and the **oldest schema version whose code can still read it**. Purely additive migrations (new tables or columns) do not raise the second number.
@@ -55,6 +63,8 @@ browserhive db status                                       # with the newer ver
 bun add -g browserhive@<older-version>
 browserhive db restore ~/.local/share/browserhive/backups/browserhive-v3-20260914T101500Z.db
 ```
+
+A release older than 0.2.3 does not know the per-principal saved-login directories: after a downgrade, token principals' saved logins under `auth-states/p/` are invisible to it (they are not deleted, and reappear after upgrading again). Logins saved by the `local` principal keep working. A login a token principal saves while downgraded goes to the shared flat layout again and is moved on the next upgrade; if that principal also has a copy of the same name from before the downgrade, the newer one is kept.
 
 `db restore` refuses while a server is running, checks that the file is a BrowserHive database, and copies the current database aside before replacing it. Anything recorded since the backup (sessions, audit rows, vault bindings changed in the meantime) is not in the restored file.
 
