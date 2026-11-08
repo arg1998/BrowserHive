@@ -41,6 +41,9 @@ export interface FakeElementSpec {
   readonly contentEditable?: boolean;
 }
 
+/** Whether each fake element is visible (what Playwright's `visible` wait checks). */
+const FAKE_VISIBLE = new WeakMap<object, boolean>();
+
 /**
  * A DOM-like element for the gate's in-page function: the same properties and methods a real
  * element answers with (`localName`, `namespaceURI`, `type`, `matches(':disabled')`, ...).
@@ -48,7 +51,7 @@ export interface FakeElementSpec {
 export function fakeElement(spec: FakeElementSpec): object {
   const localName = spec.localName ?? 'input';
   const visible = spec.visible ?? true;
-  return {
+  const element = {
     localName,
     namespaceURI: 'http://www.w3.org/1999/xhtml',
     ...(localName === 'input' && { type: spec.type ?? 'text', readOnly: spec.readOnly ?? false }),
@@ -59,6 +62,8 @@ export function fakeElement(spec: FakeElementSpec): object {
     getBoundingClientRect: () => (visible ? { width: 120, height: 24 } : { width: 0, height: 0 }),
     checkVisibility: () => visible && spec.styleVisible !== false,
   };
+  FAKE_VISIBLE.set(element, visible && spec.styleVisible !== false);
+  return element;
 }
 
 /** A text input and a password input, the shape of an ordinary login form. */
@@ -82,6 +87,8 @@ export class FakePage implements VaultPage {
   ]);
   /** Every selector the gate inspected, in order. */
   readonly inspected: string[] = [];
+  /** Every selector the broker waited for, in order. */
+  readonly waits: string[] = [];
   /** Called before each inspection with the selector and its 1-based inspection count. */
   beforeInspect: ((selector: string, count: number) => void) | null = null;
   /** When set, `fill` of this selector rejects with it. */
@@ -119,6 +126,24 @@ export class FakePage implements VaultPage {
   $eval<T>(_selector: string, fn: (el: unknown) => T): Promise<T> {
     const el: unknown = { form: this.formAction === null ? null : { action: this.formAction } };
     return Promise.resolve(fn(el));
+  }
+
+  /** Polls `elements` like Playwright's `visible` wait: resolves once the first match is visible. */
+  async waitForSelector(selector: string, options: { timeout: number }): Promise<void> {
+    this.waits.push(selector);
+    for (let waited = 0; ; waited += 10) {
+      const first = this.elements.get(selector)?.[0];
+      if (first !== undefined && FAKE_VISIBLE.get(first) === true) return;
+      if (waited >= options.timeout) {
+        throw Object.assign(
+          new Error(`Timeout ${options.timeout}ms exceeded waiting for ${selector}`),
+          {
+            name: 'TimeoutError',
+          },
+        );
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
   }
 
   $$eval<T>(selector: string, fn: (els: unknown[]) => T): Promise<T> {
@@ -218,6 +243,8 @@ export function createVaultHarness(): VaultHarness {
     ids,
     logger,
     allowEvaluate: true,
+    // Short, so a field that never shows fails fast; a test of a late form passes a longer one.
+    fieldEntryTimeoutMs: 200,
   };
   return {
     clock,

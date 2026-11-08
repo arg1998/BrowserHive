@@ -127,7 +127,9 @@ The selectors must name the real login fields, because the password is typed onl
 - `password_selector` must match exactly one `<input type="password">` that is visible, enabled and not read-only;
 - `username_selector` must match exactly one `<input>` that takes text: not a `password`, `hidden`, `file`, `checkbox`, `radio`, `submit`, `button`, `image` or `reset` input. It is checked only when the entry has a username to type.
 
-A `textarea`, a `contenteditable` element, a search box as the password field, or a selector that matches several elements is refused with `blocked` / `password_target_invalid`, before the credential is fetched from the backend. The check runs again immediately before each value is typed, so a page that swaps the field after the first check is refused too. Wait for the form (`wait_for_selector`) before calling `vault_fill`: a field that is not on the page yet counts as no match.
+A `textarea`, a `contenteditable` element, a search box as the password field, or a selector that matches several elements is refused with `blocked` / `password_target_invalid`, before the credential is fetched from the backend. The check runs again immediately before each value is typed, so a page that swaps the field after the first check is refused too.
+
+Before the check, `vault_fill` waits up to 30 seconds for the password field to become visible, so a login form that a single-page app renders after the page loads still fills. A password field that never becomes visible (missing, or hidden) returns `auth_failed` / `fill_failed`, as earlier versions did after their 30-second fill timeout; nothing is fetched from the vault.
 
 Failures are returned, not thrown:
 

@@ -95,6 +95,18 @@ export function startFixtureServer(): FixtureServer {
               <button id="submit" type="submit">Sign in</button>
             </form>`,
           );
+        case '/form-delayed':
+          // An SPA-style login form, rendered 1 s after load (spec 13 T0e: vault_fill waits for it).
+          return html(
+            `<div id="app"></div>
+            <script>setTimeout(() => {
+              document.getElementById('app').innerHTML =
+                '<form id="login" method="post" action="/submitted">' +
+                '<input id="username" name="username" autocomplete="username">' +
+                '<input id="password" name="password" type="password" autocomplete="current-password">' +
+                '<button id="submit" type="submit">Sign in</button></form>';
+            }, 1000);</script>`,
+          );
         case '/submitted': {
           const body = req.method === 'POST' ? await req.text() : '';
           return html(

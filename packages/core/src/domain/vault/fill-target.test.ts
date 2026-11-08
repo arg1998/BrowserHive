@@ -56,13 +56,6 @@ describe('vault fill-target gate — password selector (refused before the fetch
       'not_password_input',
     ],
     ['two password inputs', [PASSWORD_INPUT, PASSWORD_INPUT], 'multiple_matches'],
-    ['nothing', [], 'no_match'],
-    ['a hidden password input', [fakeElement({ type: 'password', visible: false })], 'hidden'],
-    [
-      'a visibility:hidden password input',
-      [fakeElement({ type: 'password', styleVisible: false })],
-      'hidden',
-    ],
     ['a disabled password input', [fakeElement({ type: 'password', disabled: true })], 'disabled'],
     ['a readonly password input', [fakeElement({ type: 'password', readOnly: true })], 'readonly'],
   ];
@@ -124,6 +117,74 @@ describe('vault fill-target gate — password selector (refused before the fetch
     const off = new FakePage('https://evil.com/login');
     expect((await h.broker().fill(FILL, h.ctx(off))).reason).toBe('origin_mismatch');
     expect(off.inspected).toEqual([]);
+  });
+});
+
+/** Field states that never pass Playwright's `visible` wait. */
+const NEVER_VISIBLE: readonly [string, readonly object[], string][] = [
+  ['nothing', [], 'no_match'],
+  ['a hidden password input', [fakeElement({ type: 'password', visible: false })], 'hidden'],
+  [
+    'a visibility:hidden password input',
+    [fakeElement({ type: 'password', styleVisible: false })],
+    'hidden',
+  ],
+];
+
+describe('vault fill — waiting for the password field', () => {
+  it('fills a login form the page inserts 1 s after load', async () => {
+    const page = loginPage();
+    page.elements.delete('#u');
+    page.elements.delete('#p');
+    setTimeout(() => {
+      page.elements.set('#u', [TEXT_INPUT]);
+      page.elements.set('#p', [PASSWORD_INPUT]);
+    }, 1000);
+    const started = performance.now();
+    const r = await h.broker({ fieldEntryTimeoutMs: 5000 }).fill(FILL, h.ctx(page));
+    expect(r).toEqual({ status: 'success', redacted: true });
+    expect(performance.now() - started).toBeGreaterThanOrEqual(900);
+    expect(page.waits).toEqual(['#p']);
+    expect(page.fills).toEqual([
+      ['#u', USER],
+      ['#p', SECRET],
+    ]);
+  });
+
+  for (const [name, elements] of NEVER_VISIBLE) {
+    it(`answers auth_failed / fill_failed, as main did, for ${name}, with zero backend calls`, async () => {
+      const page = loginPage();
+      page.elements.set('#p', elements);
+      const r = await h.broker().fill(FILL, h.ctx(page));
+      expect(r).toEqual({ status: 'auth_failed', redacted: true, reason: 'fill_failed' });
+      expect(h.backend.calls).toEqual([]);
+      expect(page.fills).toEqual([]);
+      expect(page.inspected).toEqual([]);
+      expect(h.repos.audit.rows).toHaveLength(1);
+      expect(h.repos.audit.rows[0]).toMatchObject({
+        result: 'auth_failed',
+        reason: 'fill_failed',
+        originCheck: 'pass',
+        details: { phase: 'pre_fetch', field: 'password' },
+      });
+      expect(String(h.repos.audit.rows[0]?.details?.['detail'])).toContain('Timeout');
+    });
+  }
+
+  for (const [name, elements, problem] of NEVER_VISIBLE) {
+    it(`a page that cannot wait leaves ${name} to the gate (blocked, ${problem})`, async () => {
+      const page = loginPage();
+      Object.defineProperty(page, 'waitForSelector', { value: undefined });
+      page.elements.set('#p', elements);
+      expect(await h.broker().fill(FILL, h.ctx(page))).toEqual(BLOCKED);
+      expectRefusedBeforeFetch(page, 'password', problem);
+    });
+  }
+
+  it('the pre-fill re-checks never wait', async () => {
+    const page = loginPage();
+    expect((await h.broker().fill(FILL, h.ctx(page))).status).toBe('success');
+    expect(page.waits).toEqual(['#p']);
   });
 });
 

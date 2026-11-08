@@ -11,6 +11,11 @@ export interface VaultPage {
   url(): string;
   fill(selector: string, value: string, options?: { timeout?: number }): Promise<void>;
   click(selector: string, options?: { timeout?: number }): Promise<void>;
+  /**
+   * Resolves once `selector` is visible, rejects after `timeout` ms. Lets a fill wait for a login
+   * form a page renders after `load`. Absent → the fill does not wait (the target gate still runs).
+   */
+  waitForSelector?(selector: string, options: { timeout: number }): Promise<void>;
   waitForTimeout?(ms: number): Promise<void>;
   /**
    * Used for the form-action mutation defence; `fn` runs inside the page against the matched

@@ -15,6 +15,9 @@ export function vaultPage(page: Page): VaultPage {
     url: () => page.url(),
     fill: (selector, value, options) => page.fill(selector, value, options),
     click: (selector, options) => page.click(selector, options),
+    // A locator wait: no element handle is left behind for the page to hold.
+    waitForSelector: (selector, options) =>
+      page.locator(selector).first().waitFor({ state: 'visible', timeout: options.timeout }),
     waitForTimeout: (ms) => page.waitForTimeout(ms),
     $eval: (selector, fn) => page.$eval(selector, fn),
     $$eval: (selector, fn) => page.$$eval(selector, fn),
