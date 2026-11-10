@@ -118,8 +118,16 @@ export async function templateMcp(
     supervisor,
     template,
     async stop() {
-      await ready.close({ beforeRemove: () => supervisor.stopAll(10_000) });
-      sites.stop();
+      try {
+        await ready.close({ beforeRemove: () => supervisor.stopAll() });
+      } catch (err) {
+        // Windows: a just-closed Chromium can hold a file of the temp data dir for a while (EBUSY);
+        // a leftover temp dir is not this suite's failure.
+        const code = (err as { code?: unknown } | null)?.code;
+        if (process.platform !== 'win32' || code !== 'EBUSY') throw err;
+      } finally {
+        sites.stop();
+      }
     },
   };
 }
