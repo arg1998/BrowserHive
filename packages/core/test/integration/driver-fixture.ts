@@ -14,7 +14,7 @@ import { PlaywrightBrowserDriver } from '../../src/infra/browsers/playwright-bro
 import { createSystemClock } from '../../src/infra/clock/system-clock.ts';
 import { createCollectingLogger } from '../../src/infra/logging/collecting-logger.ts';
 import { removeTree } from '../../src/kernel/remove.ts';
-import type { LaunchSpec, SessionHandle } from '../../src/ports/browser-driver.ts';
+import type { BrowserHost, LaunchSpec, SessionView } from '../../src/ports/browser-driver.ts';
 import { type FixtureServer, startFixtureServer } from '../helpers/fixture-server.ts';
 import { integrationChannel } from '../helpers/integration-channel.ts';
 
@@ -35,7 +35,13 @@ export interface SessionRequest {
 
 /** A launched session plus the geo the identity phase resolved (for timezone assertions). */
 export interface LaunchedSession {
-  readonly handle: SessionHandle;
+  /**
+   * The launched exclusive host (what `SessionHandle` was before spec 13 T0c): browser, context,
+   * identity, tracing, crash and close. Driver-level suites assert on it directly.
+   */
+  readonly handle: BrowserHost;
+  /** The session's one view over `handle`. */
+  readonly view: SessionView;
   readonly page: Page;
   readonly geo: { readonly timezoneId: string } | null;
 }
@@ -45,7 +51,7 @@ export interface IntegrationState {
   driver: PlaywrightBrowserDriver;
   fixture: FixtureServer;
   dataDir: string;
-  sessions: SessionHandle[];
+  sessions: SessionView[];
   launch(request: SessionRequest): Promise<LaunchedSession>;
 }
 
@@ -133,9 +139,9 @@ export function useDriverFixtures(): { state: IntegrationState } {
           },
         }),
       };
-      const handle = await state.driver.launch(spec);
-      state.sessions.push(handle);
-      return { handle, page: handle.page, geo: resolved?.identity.geo ?? null };
+      const view = await state.driver.launch(spec);
+      state.sessions.push(view);
+      return { handle: view.host, view, page: view.page, geo: resolved?.identity.geo ?? null };
     };
   });
 

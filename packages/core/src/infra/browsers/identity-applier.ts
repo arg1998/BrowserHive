@@ -88,19 +88,30 @@ export class IdentityApplier {
   private readonly context: BrowserContext;
   private readonly host: HostFacts;
   private readonly logger: Logger;
+  private readonly openProbePage: () => Promise<Page>;
   private readonly pages = new WeakMap<Page, PageState>();
   /** Pages with a live CDP session, so `dispose()` can detach them (a WeakMap is not iterable). */
   private readonly live = new Set<Page>();
   private override: CoherentIdentity['override'] | undefined;
   private disposed = false;
 
+  /**
+   * @param context The host's context; its `page` subscription stays host-level (spec 13 §3.1).
+   * @param deps `openProbePage` opens the Edge UA-CH probe page; it defaults to `context.newPage()`
+   *   (an exclusive host), and a template host passes one that creates a parked host claim.
+   */
   constructor(
     context: BrowserContext,
-    deps: { readonly host: HostFacts; readonly logger: Logger },
+    deps: {
+      readonly host: HostFacts;
+      readonly logger: Logger;
+      readonly openProbePage?: () => Promise<Page>;
+    },
   ) {
     this.context = context;
     this.host = deps.host;
     this.logger = deps.logger.child({ module: 'browsers.identity' });
+    this.openProbePage = deps.openProbePage ?? (() => this.context.newPage());
   }
 
   /**
@@ -180,7 +191,7 @@ export class IdentityApplier {
   private async readNativeUaCh(): Promise<NativeUaCh | null> {
     let probe: Page | undefined;
     try {
-      probe = await this.context.newPage();
+      probe = await this.openProbePage();
       await probe.route(NATIVE_UA_CH_URL, (route) =>
         route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html>' }),
       );

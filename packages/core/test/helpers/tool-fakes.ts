@@ -3,7 +3,7 @@
 import { createPlaywrightPageActions } from '../../src/infra/browsers/page-actions.ts';
 import type { PageActions } from '../../src/ports/page-actions.ts';
 import type { FakePage } from './fake-page.ts';
-import type { FakeBrowserContext, FakeSessionHandle } from './fake-session-handle.ts';
+import type { FakeBrowserContext, FakeSessionView } from './fake-session-view.ts';
 
 /** Scripted outcomes for the extended surface (mutable per test). */
 export interface ToolFakeScript {
@@ -146,9 +146,9 @@ export function extendContext(context: FakeBrowserContext, script: ToolFakeScrip
   });
 }
 
-/** Installs the extensions on a launched fake handle. */
-export function extendHandle(handle: FakeSessionHandle, script: ToolFakeScript): void {
-  extendContext(handle.fakeContext, script);
+/** Installs the extensions on a launched fake view's context. */
+export function extendHandle(view: FakeSessionView, script: ToolFakeScript): void {
+  extendContext(view.fakeContext, script);
 }
 
 /** Real page actions with humanize calls recorded and short-circuited to the native call. */

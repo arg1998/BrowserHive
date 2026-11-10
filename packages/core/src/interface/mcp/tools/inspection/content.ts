@@ -1,7 +1,7 @@
 /** @module interface/mcp/tools/inspection/content — reads the tab's HTML, waiting out a navigation in flight once (#55). */
 
-import type { Page } from 'playwright';
 import { isAppError } from '../../../../kernel/errors/app-error.ts';
+import type { Page } from '../../../../ports/page-types.ts';
 import type { ToolCallContext } from '../../context.ts';
 import { drive, registryError } from '../shared.ts';
 

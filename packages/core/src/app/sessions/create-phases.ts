@@ -15,7 +15,7 @@ import type {
   LaunchIdentity,
   LaunchSpec,
   ProxySpec,
-  SessionHandle,
+  SessionView,
 } from '../../ports/browser-driver.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type { PipelineDeps, PipelineHooks } from './pipeline-deps.ts';
@@ -35,7 +35,7 @@ export interface PipelineContext {
   restoredSeed: string | null;
   proxy: ProxySpec | null;
   identity?: LaunchIdentity;
-  handle?: SessionHandle;
+  view?: SessionView;
 }
 
 /** Registers a compensator that never throws (failures are logged, the unwind continues). */
@@ -198,38 +198,38 @@ export function buildPhases(
           partsDir: dirs.traceParts,
         },
       };
-      const handle = await launchRaced(deps, spec, signal, deadlineMs);
-      ctx.handle = handle;
+      const view = await launchRaced(deps, spec, signal, deadlineMs);
+      ctx.view = view;
       compensate(stack, log, 'launch', async () => {
-        await handle.close(deps.closeTimeoutMs);
+        await view.close(deps.closeTimeoutMs);
       });
       const now = deps.clock.now();
       session.attach({
-        handle,
-        driver: handle.driver,
+        view,
+        driver: view.host.driver,
         launchedAt: now,
         launchMs: now - session.createdAt,
       });
-      handle.onCrash((reason) => hooks.crashed(session, reason));
-      for (const warning of handle.warnings) {
+      view.onCrash((reason) => hooks.crashed(session, reason));
+      for (const warning of view.host.warnings) {
         if (TRACING_CODES.has(warning.code) || IDENTITY_CODES.has(warning.code)) continue;
         hooks.warn(session, warningFromLaunch(session.id, warning));
       }
     },
     installPolicies: async (ctx) => {
       const session = need(ctx.session, 'session');
-      const handle = need(ctx.handle, 'handle');
+      const view = need(ctx.view, 'view');
       if (deps.policies === undefined) return;
-      const warnings = await deps.policies.install(handle, { sessionId: session.id });
+      const warnings = await deps.policies.install(view.host, { sessionId: session.id });
       for (const warning of warnings) hooks.warn(session, warningFromLaunch(session.id, warning));
     },
     startTracing: async (ctx) => {
       // The driver starts tracing during `launch` (port contract: `LaunchSpec.tracing`); this phase
       // confirms the outcome and surfaces a failed start as the session's own warning.
       const session = need(ctx.session, 'session');
-      const handle = need(ctx.handle, 'handle');
+      const view = need(ctx.view, 'view');
       if (!deps.trace) return;
-      for (const warning of handle.warnings) {
+      for (const warning of view.host.warnings) {
         if (TRACING_CODES.has(warning.code))
           hooks.warn(session, warningFromLaunch(session.id, warning));
       }
@@ -237,19 +237,19 @@ export function buildPhases(
     applyIdentity: async (ctx) => {
       const request = need(ctx.request, 'request');
       const session = need(ctx.session, 'session');
-      const handle = need(ctx.handle, 'handle');
+      const view = need(ctx.view, 'view');
       if (!request.stealth) return;
       // The override is page-scoped and awaitable: wait before the agent can drive the first page.
-      await handle.ensureIdentityForPage(handle.page);
-      session.setIdentity(handle.identity);
-      for (const warning of handle.warnings) {
+      await view.host.ensureIdentityForPage(view.page);
+      session.setIdentity(view.host.identity);
+      for (const warning of view.host.warnings) {
         if (IDENTITY_CODES.has(warning.code))
           hooks.warn(session, warningFromLaunch(session.id, warning));
       }
     },
     register: async (ctx) => {
       const session = need(ctx.session, 'session');
-      const handle = need(ctx.handle, 'handle');
+      const view = need(ctx.view, 'view');
       // Every page of the session, the first one, tool-opened tabs and site-opened popups, is
       // watched for main-frame commits of non-web schemes (spec 13 T0d).
       const guard = {
@@ -257,10 +257,11 @@ export function buildPhases(
         tabs: session.tabs,
         logger: deps.logger.child({ module: 'sessions.scheme-guard' }),
       };
-      session.tabs.add(handle.page);
-      guardPageScheme(handle.page, guard);
+      session.tabs.add(view.page);
+      guardPageScheme(view.page, guard);
       // Site-opened pages (target=_blank, window.open) get an id too, so list_tabs stays accurate.
-      handle.context.on('page', (page) => {
+      // Only pages the host attributed to this session arrive here (spec 13 §3.4).
+      view.onPage((page) => {
         session.tabs.add(page);
         guardPageScheme(page, guard);
       });
@@ -285,20 +286,20 @@ function authStates(deps: PipelineDeps, name: string, kind: 'storage' | 'profile
 
 /**
  * Launches under the deadline. A driver that ignores the signal may still resolve later; the
- * orphaned handle is then closed so no browser process outlives its failed launch.
+ * orphaned view is then closed so no browser process outlives its failed launch.
  */
 async function launchRaced(
   deps: PipelineDeps,
   spec: LaunchSpec,
   signal: AbortSignal,
   deadlineMs: number,
-): Promise<SessionHandle> {
+): Promise<SessionView> {
   let settled = false;
   const launching = deps.driver.launch(spec, signal);
   launching
-    .then((handle) => {
+    .then((view) => {
       if (!settled) return;
-      void handle.close(deps.closeTimeoutMs).catch(() => undefined);
+      void view.close(deps.closeTimeoutMs).catch(() => undefined);
     })
     .catch(() => undefined);
   try {

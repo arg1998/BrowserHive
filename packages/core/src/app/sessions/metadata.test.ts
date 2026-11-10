@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'bun:test';
 import { SessionSummary } from '@browserhive/contracts/http';
 import { SessionMetadata } from '@browserhive/contracts/tools';
-import { FakeSessionHandle } from '../../../test/helpers/fake-session-handle.ts';
+import { FakeSessionView } from '../../../test/helpers/fake-session-view.ts';
 import type { AppliedIdentity, SessionBrowserInfo } from '../../ports/browser-driver.ts';
 import {
   configJson,
@@ -133,10 +133,10 @@ describe('session metadata projections', () => {
     function launched(info?: SessionBrowserInfo) {
       const session = testSession();
       session.apply({ type: 'launch', phase: 'launch', at: T0 + 1 });
-      const handle = new FakeSessionHandle(session.id, {
+      const handle = new FakeSessionView(session.id, {
         ...(info !== undefined && { browserInfo: info }),
       });
-      session.attach({ handle, driver: 'playwright', launchedAt: T0 + 2, launchMs: 2 });
+      session.attach({ view: handle, driver: 'playwright', launchedAt: T0 + 2, launchMs: 2 });
       session.apply({ type: 'launched', at: T0 + 2 });
       return { session, handle };
     }
@@ -167,7 +167,7 @@ describe('session metadata projections', () => {
       session.apply({ type: 'drain', reason: 'user', at: T0 + 5 });
       session.apply({ type: 'closed', at: T0 + 6 });
       session.detach();
-      expect(session.handle).toBeNull();
+      expect(session.view).toBeNull();
       expect(toSessionSummary(session, T0 + 7).browser).toEqual({
         version: '153.0.8010.12',
         sandboxed: false,
@@ -181,7 +181,7 @@ describe('session metadata projections', () => {
     it('the latest launch wins', () => {
       const { session } = launched({ version: '153.0.8010.12', sandboxed: false });
       session.attach({
-        handle: new FakeSessionHandle(session.id, {
+        view: new FakeSessionView(session.id, {
           browserInfo: { version: '154.0.8037.57', sandboxed: true },
         }),
         driver: 'playwright',

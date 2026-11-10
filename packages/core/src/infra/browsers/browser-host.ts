@@ -1,25 +1,28 @@
-/** @module infra/browsers/session-handle — the launched session: crash listeners, identity replay, deadline-capped close that never throws. */
+/** @module infra/browsers/browser-host — the exclusive `BrowserHost`: one browser and context, its page-attribution dispatcher, crash listeners, identity replay and a deadline-capped close that never throws. */
 
 import type { Browser, BrowserContext, Page } from 'playwright';
 import { withDeadline } from '../../kernel/deadline.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type {
   AppliedIdentity,
+  BrowserHost,
   EngineCapabilities,
   LaunchWarning,
   SessionBrowserInfo,
-  SessionHandle,
 } from '../../ports/browser-driver.ts';
+import type { Clock } from '../../ports/clock.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type { IdentityApplier } from './identity-applier.ts';
+import { sessionOwner } from './page-attribution.ts';
+import { HostPageDispatcher } from './page-dispatcher.ts';
 import type { PlaywrightTracingHandle } from './tracing.ts';
 
-/** Everything the driver resolved for one session; the handle is a thin, final view over it. */
-export interface SessionHandleInput {
+/** Everything the driver resolved for one exclusive session; the host is a thin, final wrapper over it. */
+export interface BrowserHostInput {
+  /** The session id: an exclusive host is named after its one session. */
   readonly sessionId: string;
   readonly browser: Browser | null;
   readonly context: BrowserContext;
-  readonly page: Page;
   readonly capabilities: EngineCapabilities;
   readonly driver: 'patchright' | 'playwright';
   readonly identity: AppliedIdentity | null;
@@ -27,25 +30,30 @@ export interface SessionHandleInput {
   readonly warnings: readonly LaunchWarning[];
   readonly tracing: PlaywrightTracingHandle | null;
   readonly applier: IdentityApplier | null;
+  readonly clock: Clock;
   readonly logger: Logger;
 }
 
 /**
- * One browser process + one context, owned and torn down together. Crash detection subscribes to
- * `browser.on('disconnected')` and `context.on('close')`; both are silenced once `close()` starts
- * so an orderly teardown is never reported as a crash.
+ * One browser process + one context of one exclusive session, owned and torn down together. Crash
+ * detection subscribes to `browser.on('disconnected')` and `context.on('close')`; both are silenced
+ * once `close()` starts so an orderly teardown is never reported as a crash. Every page of the
+ * context, the ones present at launch and every later `page` event, goes through the host's
+ * {@link HostPageDispatcher}, whose fallback owner is the session: an exclusive host parks nothing.
  */
-export class PlaywrightSessionHandle implements SessionHandle {
-  readonly sessionId: string;
+export class PlaywrightBrowserHost implements BrowserHost {
+  readonly hostId: string;
+  readonly kind = 'exclusive' as const;
   readonly browser: Browser | null;
   readonly context: BrowserContext;
-  readonly page: Page;
   readonly capabilities: EngineCapabilities;
   readonly driver: 'patchright' | 'playwright';
   readonly identity: AppliedIdentity | null;
   readonly browserInfo: SessionBrowserInfo;
   readonly warnings: readonly LaunchWarning[];
   readonly tracing: PlaywrightTracingHandle | null;
+  /** Attributes the context's pages; read by the host's view. */
+  readonly dispatcher: HostPageDispatcher;
 
   private readonly applier: IdentityApplier | null;
   private readonly logger: Logger;
@@ -54,11 +62,10 @@ export class PlaywrightSessionHandle implements SessionHandle {
   private closed: Promise<readonly LaunchWarning[]> | undefined;
   private pid: Promise<number | null> | undefined;
 
-  constructor(input: SessionHandleInput) {
-    this.sessionId = input.sessionId;
+  constructor(input: BrowserHostInput) {
+    this.hostId = input.sessionId;
     this.browser = input.browser;
     this.context = input.context;
-    this.page = input.page;
     this.capabilities = input.capabilities;
     this.driver = input.driver;
     this.identity = input.identity;
@@ -67,9 +74,18 @@ export class PlaywrightSessionHandle implements SessionHandle {
     this.tracing = input.tracing;
     this.applier = input.applier;
     this.logger = input.logger.child({ module: 'browsers.session', sessionId: input.sessionId });
+    this.dispatcher = new HostPageDispatcher({
+      fallback: sessionOwner(input.sessionId),
+      clock: input.clock,
+      logger: this.logger,
+    });
 
     this.browser?.on('disconnected', () => this.emitCrash('browser disconnected'));
     this.context.on('close', () => this.emitCrash('context closed'));
+    // Registered after the identity applier's own `page` listener (it subscribed during launch),
+    // so the override starts before the session's tab registry sees the page, as before the split.
+    for (const page of this.context.pages()) this.dispatcher.adopt(page);
+    this.context.on('page', (page) => this.dispatcher.adopt(page));
   }
 
   ensureIdentityForPage(page: Page): Promise<void> {
@@ -84,7 +100,7 @@ export class PlaywrightSessionHandle implements SessionHandle {
   }
 
   /**
-   * Tear down all resources owned by this session within `deadlineMs`. Idempotent and best-effort:
+   * Tear down the browser and context within `deadlineMs`. Idempotent and best-effort:
    * each step is wrapped so a failure in `context.close()` does not skip `browser.close()`, and on
    * overrun the browser process is killed rather than awaited. Findings become warnings.
    */
@@ -127,6 +143,7 @@ export class PlaywrightSessionHandle implements SessionHandle {
         return true;
       }
     };
+    this.dispatcher.dispose();
     try {
       // Detach the stealth CDP sessions first (harmless if the context is already tearing down).
       if (this.applier !== null)

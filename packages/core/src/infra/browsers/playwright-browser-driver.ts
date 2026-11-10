@@ -11,12 +11,13 @@ import type {
   EngineCapabilities,
   LaunchSpec,
   LaunchWarning,
-  SessionHandle,
+  SessionView,
 } from '../../ports/browser-driver.ts';
 import type { Clock } from '../../ports/clock.ts';
 import type { Logger } from '../../ports/logger.ts';
 import { ATTR, SPAN, withSpan } from '../telemetry/spans.ts';
 import { channelExecutable, playwrightChannelExecutable } from './browser-detection.ts';
+import { PlaywrightBrowserHost } from './browser-host.ts';
 import { launchKwargsForChannel } from './channel.ts';
 import {
   assertChromiumInstalled,
@@ -31,7 +32,7 @@ import { buildLaunchOptions, executablePathWarning } from './launch-args.ts';
 import { installNativeGetters, mergeNativeGetterPayloads } from './native-getter.ts';
 import { sandboxUnavailable } from './sandbox-error.ts';
 import { SandboxPolicy } from './sandbox-policy.ts';
-import { PlaywrightSessionHandle } from './session-handle.ts';
+import { ExclusiveSessionView } from './session-view.ts';
 import { deviceMemoryPayload } from './stealth-identity.ts';
 import { PlaywrightTracingHandle, traceStartWarning } from './tracing.ts';
 
@@ -123,7 +124,7 @@ export class PlaywrightBrowserDriver implements BrowserDriver {
     return this.resolver.stealthDriverName(this.mode);
   }
 
-  launch(spec: LaunchSpec, signal?: AbortSignal): Promise<SessionHandle> {
+  launch(spec: LaunchSpec, signal?: AbortSignal): Promise<SessionView> {
     const resolved = spec.stealth
       ? this.resolver.resolveStealth(spec.stealthDriver)
       : { browserType: this.resolver.stock(), driver: 'playwright' as const };
@@ -146,7 +147,7 @@ export class PlaywrightBrowserDriver implements BrowserDriver {
     driver: 'patchright' | 'playwright',
     spec: LaunchSpec,
     signal: AbortSignal | undefined,
-  ): Promise<SessionHandle> {
+  ): Promise<SessionView> {
     const log = this.logger.child({ sessionId: spec.sessionId });
     const warnings: LaunchWarning[] = [];
     const kwargs = launchKwargsForChannel(spec.channel, {
@@ -359,20 +360,23 @@ export class PlaywrightBrowserDriver implements BrowserDriver {
       launched_at: this.clock.now(),
     });
 
-    return new PlaywrightSessionHandle({
+    const host = new PlaywrightBrowserHost({
       sessionId: spec.sessionId,
       browser,
       context,
-      page,
       capabilities: capabilitiesFor(driver, spec),
       driver,
       identity,
       warnings,
       tracing,
       applier,
+      clock: this.clock,
       logger: this.logger,
       browserInfo: { version: browser?.version() ?? null, sandboxed },
     });
+    // An exclusive host has exactly one view (spec 13 §3.13).
+    const userData = spec.persistenceMode === 'persistent' ? (userDataDir ?? null) : null;
+    return new ExclusiveSessionView(host, page, userData);
   }
 }
 

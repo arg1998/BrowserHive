@@ -285,7 +285,7 @@ export class LiveView {
         { publicMessage: `No browser session with id '${sessionId}'` },
       );
     }
-    if (!LIVE_STATES.has(session.state.kind) || session.handle === null) {
+    if (!LIVE_STATES.has(session.state.kind) || session.view === null) {
       throw new AppError('SESSION_NOT_AVAILABLE', {
         session_id: sessionId,
         state: session.state.kind,
@@ -341,7 +341,7 @@ export class LiveView {
     void this.queue
       .run(sessionId, async () => {
         const session = this.deps.sessions.peek(sessionId);
-        if (bridge.closed || session === undefined || session.handle === null) return;
+        if (bridge.closed || session === undefined || session.view === null) return;
         if (!LIVE_STATES.has(session.state.kind)) return;
         const active = session.tabs.activeTabId();
         if (active === undefined || active === bridge.tabId) return;

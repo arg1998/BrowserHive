@@ -1,10 +1,10 @@
 /** @module interface/mcp/tools/files/capture — the managed-downloads code path `download_file`, `navigate` and `new_tab` share: save a Playwright download, and a `goto` that may turn into one. */
 
 import { basename, join } from 'node:path';
-import type { Download, Page, Response } from 'playwright';
 import { sessionDirLayout } from '../../../../app/sessions/profile-dir.ts';
 import type { Session } from '../../../../domain/session/session.ts';
 import { isAppError } from '../../../../kernel/errors/app-error.ts';
+import type { Download, Page, Response } from '../../../../ports/page-types.ts';
 import type { ToolCallContext } from '../../context.ts';
 import { firstLine, navigation, registryError } from '../shared.ts';
 
