@@ -273,14 +273,15 @@ export class TemplateHostSupervisor implements TemplateRuntime {
    * start finishes, and a close that overruns kills its browser.
    */
   async stopAll(deadlineMs?: number): Promise<void> {
-    const ids = [...this.hosts.keys()];
+    // Only what exists now: a stop that overruns the deadline must never close a later session.
+    const stops = [...this.hosts].map(([id, lifecycle]) => ({
+      lifecycle,
+      sessions: this.sessionsOf(id, null).map((s) => s.id),
+    }));
     const stopping = Promise.allSettled(
-      ids.map(async (id) => {
-        await this.hosts.get(id)?.stop('shutdown');
-        await this.closeSessions(
-          this.sessionsOf(id, null).map((s) => s.id),
-          'shutdown',
-        );
+      stops.map(async ({ lifecycle, sessions }) => {
+        await lifecycle.stop('shutdown');
+        await this.closeSessions(sessions, 'shutdown');
       }),
     );
     const sleep = (ms: number, signal?: AbortSignal) => this.deps.clock.sleep(ms, signal);

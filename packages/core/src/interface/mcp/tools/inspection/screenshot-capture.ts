@@ -31,8 +31,8 @@ function isTimeout(err: unknown): boolean {
 
 /**
  * A PNG of `page`. Exclusive sessions: Playwright as before. Template sessions: Playwright with a
- * 10 s timeout, then once more with `Page.captureScreenshot {fromSurface: true}` on the page's own
- * DevTools session.
+ * 10 s timeout; when it stalls or fails, once more with `Page.captureScreenshot {fromSurface: true}`
+ * on the page's own DevTools session (a closed page answers with Playwright's own failure).
  */
 export async function captureScreenshot(
   ctx: ToolCallContext,
@@ -51,15 +51,17 @@ export async function captureScreenshot(
   if (session.template === null || view === null) {
     return new Uint8Array(await drive(ctx, context, () => page.screenshot(options)));
   }
+  let failure: unknown;
   try {
     const shot = await page.screenshot({ ...options, timeout: TEMPLATE_SCREENSHOT_TIMEOUT_MS });
     return new Uint8Array(shot);
   } catch (err) {
-    if (!isTimeout(err))
-      return new Uint8Array(await drive(ctx, context, () => Promise.reject(err)));
-    ctx.log.info('screenshot fallback', { sessionId: session.id });
+    // A stall (timeout) or a capture the window's state refused: try the window surface once.
+    failure = err;
+    ctx.log.info('screenshot fallback', { sessionId: session.id, timeout: isTimeout(err) });
   }
   const bytes = await drive(ctx, context, async () => {
+    if (page.isClosed()) throw failure;
     const cdp = await view.newCDPSession(page);
     try {
       const clip = request.clip ?? (request.fullPage ? await fullPageClip(cdp) : undefined);

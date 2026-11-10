@@ -165,7 +165,7 @@ for (const driver of DRIVERS) {
       };
       expect(prefs.credentials_enable_service).toBe(false);
       expect(prefs.profile?.password_manager_enabled).toBe(false);
-      await w.supervisor.stopAll(10_000);
+      await w.supervisor.stopAll();
       expect(profileHasSecrets(userdata)).toBe(false);
     });
 
@@ -193,7 +193,7 @@ for (const driver of DRIVERS) {
         // The first start recorded the observed identity (Chrome major at least).
         await until(() => w.updates.length > 0, 5_000, 'observed identity');
         expect(w.updates[0]?.identityObserved?.chromeMajor).toMatch(/^\d+$/);
-        await w.supervisor.stopAll(10_000);
+        await w.supervisor.stopAll();
         process.env['TZ'] = 'Asia/Tokyo';
         const second = await read();
         expect(second).toEqual(first);
