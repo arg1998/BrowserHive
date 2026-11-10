@@ -19,13 +19,17 @@ function cookieOf(req: Request, name: string): string | null {
   return null;
 }
 
+/** The site whose home page is its sign-in form (the end-to-end journey types into it by hand). */
+export const FORM_HOME_SITE = 'shop.test';
+
 /** The sign-in pages, or `null` for any other path. */
 export async function signInRoute(
   req: Request,
   site: string,
   path: string,
 ): Promise<Response | null> {
-  if (path === '/login' && req.method === 'GET') {
+  const formHome = site === FORM_HOME_SITE && path === '/' && req.method === 'GET';
+  if ((path === '/login' && req.method === 'GET') || formHome) {
     return html(
       `Sign in to ${site}`,
       `<form method="post" action="/login">
