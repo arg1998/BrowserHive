@@ -53,7 +53,7 @@ describe('stdio transport', () => {
     send({ jsonrpc: '2.0', method: 'notifications/initialized' });
     send({ jsonrpc: '2.0', id: 2, method: 'tools/list' });
     const list = (await next()) as { result: { tools: { name: string }[] } };
-    expect(list.result.tools).toHaveLength(43);
+    expect(list.result.tools).toHaveLength(44);
     send({
       jsonrpc: '2.0',
       id: 3,

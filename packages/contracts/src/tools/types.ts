@@ -18,6 +18,7 @@ export const ToolPackId = z.enum([
   'authStates',
   'attention',
   'vault',
+  'templates',
 ]);
 /** Union of {@link ToolPackId} values. */
 export type ToolPackId = z.infer<typeof ToolPackId>;

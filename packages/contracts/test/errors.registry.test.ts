@@ -6,6 +6,7 @@ import {
   ERROR_CODES,
   ERROR_REGISTRY,
   ErrorCategory,
+  type ErrorCode,
   ErrorCodeSchema,
   errorDocsUrl,
   errorSpec,
@@ -134,6 +135,15 @@ const SPEC_CODES = [
   'STALE_BROWSER_PROCESSES',
   'DATA_DIR_LOCKED',
   'SANDBOX_UNAVAILABLE',
+  // Session templates (spec 13 §12, T1a).
+  'TEMPLATE_NOT_FOUND',
+  'TEMPLATE_BUSY',
+  'TEMPLATE_UNAVAILABLE',
+  'TEMPLATE_DISABLED',
+  'SESSION_SEALED',
+  'TEMPLATE_NAME_TAKEN',
+  'TEMPLATE_IN_USE',
+  'TEMPLATE_HOST_FAILED',
 ] as const;
 
 describe('ERROR_REGISTRY completeness', () => {
@@ -285,6 +295,60 @@ describe('error message texts are stable', () => {
     );
     expect(ERROR_REGISTRY.URL_SCHEME_NOT_ALLOWED.httpStatus).toBe(400);
     expect(ERROR_REGISTRY.URL_SCHEME_NOT_ALLOWED.retryable).toBe('different_args');
+  });
+
+  it('the session-template codes carry the exact public texts of spec 13 §12', () => {
+    const cases: readonly [ErrorCode, Record<string, unknown>, string, number, string][] = [
+      [
+        'TEMPLATE_NOT_FOUND',
+        { template: 'job-hunt' },
+        "No session template named 'job-hunt'. Use list_templates to see the templates you can use.",
+        404,
+        'different_args',
+      ],
+      [
+        'TEMPLATE_BUSY',
+        {
+          template: 'job-hunt',
+          limit_kind: 'capacity',
+          limit_text: "Template 'job-hunt' is at capacity.",
+          retry_after_ms: 5000,
+          retry_after_s: 5,
+        },
+        "Template 'job-hunt' is at capacity. Retry in 5 s.",
+        429,
+        'backoff',
+      ],
+      [
+        'TEMPLATE_UNAVAILABLE',
+        { template: 'job-hunt', reason: 'starting', retry_after_ms: 5000 },
+        "Template 'job-hunt' is temporarily unavailable. Retry in a few seconds.",
+        503,
+        'backoff',
+      ],
+      [
+        'TEMPLATE_DISABLED',
+        { template: 'job-hunt', reason: 'disabled' },
+        "Template 'job-hunt' cannot be used until the operator fixes it.",
+        409,
+        'after_operator',
+      ],
+      [
+        'SESSION_SEALED',
+        { session_id: 's-1', tool: 'set_cookies' },
+        "set_cookies is not available in this session: its sign-ins belong to the operator's session template.",
+        403,
+        'never',
+      ],
+    ];
+    for (const [code, details, text, status, retryable] of cases) {
+      const spec = ERROR_REGISTRY[code];
+      expect(spec.details.safeParse(details).success).toBe(true);
+      expect(renderMessage(spec.message, details)).toBe(text);
+      expect(spec.httpStatus).toBe(status);
+      expect<string>(spec.retryable).toBe(retryable);
+      expect(spec.category).toBe('domain');
+    }
   });
 
   it('AUTH_STATE_NOT_FOUND renders the kind label from extra vars', () => {

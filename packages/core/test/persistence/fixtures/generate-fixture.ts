@@ -12,6 +12,9 @@ import {
   pageRecord,
   screenshotRecord,
   sessionRecord,
+  TEMPLATE_ID,
+  templateRecord,
+  templateSiteRecord,
   toolCallRecord,
   vaultAccessRecord,
 } from '../helpers.ts';
@@ -106,6 +109,32 @@ export async function seedFixture(uow: SqliteUnitOfWork): Promise<void> {
         harnessDeclared: 'Claude Code',
         sandboxed: true,
         browserVersion: '154.0.8037.57',
+      }),
+    );
+    // Schema v9: a session template with two sites, and a virtual session launched from it.
+    await r.templates.insert(templateRecord({ createdAt: at, updatedAt: at, lastUsedAt: at }));
+    await r.templateSites.upsert(templateSiteRecord({ siteId: 'site-a.test', addedAt: at }));
+    await r.templateSites.upsert(
+      templateSiteRecord({
+        siteId: 'site-b.test',
+        writePolicy: 'confirm',
+        learnedCookieNames: ['sid'],
+        health: {
+          state: 'signed_in',
+          reason: 'cookies_present',
+          checkedAt: at,
+          changedAt: at,
+          consecutiveInconclusive: 0,
+        },
+        addedAt: at + 1,
+      }),
+    );
+    await r.sessions.insert(
+      sessionRecord({
+        sessionId: 'jobs-t1t2t3t4',
+        slug: 'jobs',
+        template: { templateId: TEMPLATE_ID, name: 'job-hunt', version: null, mode: 'live' },
+        sealed: true,
       }),
     );
     await r.sessions.insert(

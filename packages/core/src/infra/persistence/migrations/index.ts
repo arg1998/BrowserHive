@@ -8,6 +8,7 @@ import { notificationOutbox } from './0005-notification-outbox.ts';
 import { notificationActions } from './0006-notification-actions.ts';
 import { vaultHarnesses } from './0007-vault-harnesses.ts';
 import { operatorTokenScopes } from './0008-operator-token-scopes.ts';
+import { templates } from './0009-templates.ts';
 import type { Migration } from './migration.ts';
 
 export type { Migration } from './migration.ts';
@@ -22,6 +23,7 @@ export const MIGRATIONS: readonly Migration[] = [
   notificationActions,
   vaultHarnesses,
   operatorTokenScopes,
+  templates,
 ];
 
 /** The schema version this binary writes. */
@@ -47,7 +49,12 @@ export const TABLES: readonly string[] = [
   'notifications',
   'notification_channels',
   'notification_cursors',
+  'template_probes',
+  'template_versions',
+  'template_sites',
   'sessions',
+  // After `sessions`: `sessions.template_id` references `templates` (spec 13 §2.5).
+  'templates',
   'grants',
   'auth_sessions',
   'credentials',

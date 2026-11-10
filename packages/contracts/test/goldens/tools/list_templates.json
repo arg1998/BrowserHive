@@ -1,0 +1,103 @@
+{
+  "name": "list_templates",
+  "title": "List templates",
+  "description": "List the session templates you may use. A session launched with a template's name as `template` starts signed in to the template's sites. The sign-ins belong to the operator: do not sign out, and do not change account, security or privacy settings; such actions may be blocked or need the operator's approval. Sign-ins and site data the session changes are kept in the template and carried into later sessions from it. Cookie values are hidden, and evaluate and saving the login are unavailable unless the operator allows them.",
+  "inputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "outputSchema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+      "templates": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "display_name": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "sites": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "site": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "unknown",
+                      "signed_in",
+                      "signed_out",
+                      "challenged",
+                      "inconclusive"
+                    ]
+                  },
+                  "checked_at": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "site",
+                  "title",
+                  "status",
+                  "checked_at"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "availability": {
+              "type": "string",
+              "enum": [
+                "available",
+                "busy",
+                "needs_login",
+                "unavailable"
+              ]
+            },
+            "sealed": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "name",
+            "display_name",
+            "description",
+            "sites",
+            "availability",
+            "sealed"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "templates"
+    ],
+    "additionalProperties": false
+  },
+  "annotations": {
+    "readOnlyHint": true,
+    "destructiveHint": false,
+    "idempotentHint": true,
+    "openWorldHint": false
+  },
+  "since": "0.4.0"
+}

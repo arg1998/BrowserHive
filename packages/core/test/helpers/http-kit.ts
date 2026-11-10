@@ -20,6 +20,7 @@ import { sampleAnomalyFacts, sampleDigestFacts } from '../../src/app/notificatio
 import { sessionDirLayout } from '../../src/app/sessions/profile-dir.ts';
 import { SessionService } from '../../src/app/sessions/session-service.ts';
 import { FakeSessionDirFs, testConfig } from '../../src/app/sessions/test-support.ts';
+import { TemplateService } from '../../src/app/templates/template-service.ts';
 import { VaultService } from '../../src/app/vault/vault-service.ts';
 import { OperatorRequestBroker } from '../../src/domain/operator-requests/broker.ts';
 import { CHANNEL_RENDERERS, channelFactories } from '../../src/infra/notifications/index.ts';
@@ -48,6 +49,7 @@ import { SYSTEM_INFO, seedDataset } from './http-fixtures.ts';
 import { InMemoryRepositories, InMemoryUnitOfWork } from './in-memory-repos.ts';
 import { createVaultRepos } from './in-memory-vault-repos.ts';
 import { RecordingEventBus } from './recording-event-bus.ts';
+import { FAKE_TEMPLATE_GEO, FakeTemplateFiles, FakeTemplateRuntime } from './template-kit.ts';
 
 /** Environment the channel service sees in the HTTP suites (names only matter). */
 export const CHANNEL_ENV: Readonly<Record<string, string>> = {
@@ -214,6 +216,25 @@ export async function createHttpKit(options: HttpKitOptions = {}) {
     probe: async () => ({ kind: 'error', detail: 'no network in tests' }),
     clock,
   });
+  const templateRepos = { ...repos, operatorActions: vaultRepos.actions };
+  const templateRuntime = new FakeTemplateRuntime();
+  const templateFiles = new FakeTemplateFiles();
+  const templates = new TemplateService({
+    repos: templateRepos,
+    uow: new InMemoryUnitOfWork(templateRepos),
+    runtime: templateRuntime,
+    geo: FAKE_TEMPLATE_GEO,
+    files: templateFiles,
+    ids: auth.ids,
+    clock,
+    logger,
+    config: {
+      enabled: true,
+      authMode: 'token',
+      maxPagesPerHost: 40,
+      defaults: { channel: 'chromium', stealth: 'standard', fingerprint: false, humanize: false },
+    },
+  });
   const services: HttpServices = {
     sessions,
     repos: { ...repos, operatorActions: vaultRepos.actions },
@@ -249,6 +270,7 @@ export async function createHttpKit(options: HttpKitOptions = {}) {
     traceViewerAvailable: true,
     channels,
     publicUrl,
+    templates,
   };
   if (options.seed !== false) await seedDataset(repos, vaultRepos, files, sessionDirs);
   const http: HttpApp = createHttpApp({
@@ -320,6 +342,9 @@ export async function createHttpKit(options: HttpKitOptions = {}) {
     idempotency,
     sessionDirs,
     services,
+    templates,
+    templateRuntime,
+    templateFiles,
   };
 }
 

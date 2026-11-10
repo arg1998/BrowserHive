@@ -35,6 +35,12 @@ export const CONSUMED_KEYS: Readonly<Record<ConfigKey, string>> = {
   blocklist: 'app/blocklist/blocklist-service',
   blocklistWatch: 'app/blocklist/blocklist-service',
   vault: 'app/vault/vault-subsystem',
+  templates: 'app/templates/template-service',
+  templateMaxPagesPerHost: 'app/templates/template-service',
+  // Read by the template host supervisor (spec 13 §3.2), which lands with templates T1a-2.
+  templateHostIdleTimeout: 'app/templates/host-supervisor',
+  templateRecycleAfter: 'app/templates/host-supervisor',
+  templateDrainTimeout: 'app/templates/host-supervisor',
   stealth: 'infra/browsers/launcher',
   stealthDriver: 'infra/browsers/chromium-resolver',
   fingerprint: 'infra/browsers/launcher',

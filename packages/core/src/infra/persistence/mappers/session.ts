@@ -7,8 +7,10 @@ import {
   SESSION_CHANNELS,
   SESSION_ENGINES,
   SESSION_STATES,
+  TEMPLATE_MODES,
 } from '../../../ports/persistence/enums.ts';
 import type { SessionPatch, SessionRecord } from '../../../ports/persistence/records.ts';
+import type { SessionTemplateRecord } from '../../../ports/persistence/records-templates.ts';
 import type { Sessions } from '../generated/db.d.ts';
 import {
   boolToInt,
@@ -20,6 +22,21 @@ import {
   toJson,
   toJsonOrNull,
 } from './codec.ts';
+
+/**
+ * The session's template, or `null` for an exclusive session. `template_mode` is an open set in SQL
+ * (spec 13 §16): a value this binary does not know reads as `maintenance`, which refuses agents.
+ */
+function templateFromRow(row: Selectable<Sessions>): SessionTemplateRecord | null {
+  if (row.template_name === null) return null;
+  const mode = TEMPLATE_MODES.find((m) => m === row.template_mode) ?? 'maintenance';
+  return {
+    templateId: row.template_id,
+    name: row.template_name,
+    version: row.template_version,
+    mode,
+  };
+}
 
 /** Row → record (total: throws `INTERNAL_ERROR` on a corrupt row). */
 export function sessionFromRow(row: Selectable<Sessions>): SessionRecord {
@@ -58,6 +75,8 @@ export function sessionFromRow(row: Selectable<Sessions>): SessionRecord {
     harnessDeclared: row.harness_declared,
     sandboxed: row.sandboxed === null ? null : intToBool(row.sandboxed),
     browserVersion: row.browser_version,
+    template: templateFromRow(row),
+    sealed: row.sealed === null ? null : intToBool(row.sealed),
   };
 }
 
@@ -97,6 +116,11 @@ export function sessionToRow(record: SessionRecord): Selectable<Sessions> {
     harness_declared: record.harnessDeclared,
     sandboxed: record.sandboxed === null ? null : boolToInt(record.sandboxed),
     browser_version: record.browserVersion,
+    template_id: record.template?.templateId ?? null,
+    template_name: record.template?.name ?? null,
+    template_version: record.template?.version ?? null,
+    template_mode: record.template?.mode ?? null,
+    sealed: record.sealed === null ? null : boolToInt(record.sealed),
   };
 }
 

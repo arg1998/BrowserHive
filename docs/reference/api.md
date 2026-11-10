@@ -2,7 +2,7 @@
 
 # REST API reference
 
-The admin REST API served under `/api/v1` on the same port as MCP and the dashboard when `--admin` is on (112 operations), generated from `HTTP_ENDPOINTS` in `@browserhive/contracts/http`. Request and response schemas are in the OpenAPI 3.1 document the server serves at `/api/v1/openapi.json`, with an interactive reference UI at `/api/v1/docs`.
+The admin REST API served under `/api/v1` on the same port as MCP and the dashboard when `--admin` is on (116 operations), generated from `HTTP_ENDPOINTS` in `@browserhive/contracts/http`. Request and response schemas are in the OpenAPI 3.1 document the server serves at `/api/v1/openapi.json`, with an interactive reference UI at `/api/v1/docs`.
 
 Summaries come from `packages/contracts/generated/openapi.json`.
 
@@ -18,7 +18,7 @@ Summaries come from `packages/contracts/generated/openapi.json`.
 
 ## Scopes
 
-`sessions:read` · `sessions:write` · `sessions:takeover` · `attention:read` · `attention:resolve` · `vault:read` · `vault:write` · `vault:confirm` · `blocklist:read` · `blocklist:write` · `system:read` · `system:write` · `logs:read` · `notifications:read` · `notifications:write` · `channels:read` · `channels:write` · `preferences:write` · `mcp:tools`
+`sessions:read` · `sessions:write` · `sessions:takeover` · `attention:read` · `attention:resolve` · `vault:read` · `vault:write` · `vault:confirm` · `blocklist:read` · `blocklist:write` · `system:read` · `system:write` · `logs:read` · `notifications:read` · `notifications:write` · `channels:read` · `channels:write` · `preferences:write` · `mcp:tools` · `templates:read` · `templates:write` · `templates:login` · `sitepacks:read` · `sitepacks:write`
 
 ## Health
 
@@ -199,6 +199,15 @@ Summaries come from `packages/contracts/generated/openapi.json`.
 | Method | Path | operationId | Scope | Auth | Summary |
 |---|---|---|---|---|---|
 | GET | `/api/v1/search` | `search` | `sessions:read` | cookie, bearer | Entity search for the command palette. |
+
+## templates
+
+| Method | Path | operationId | Scope | Auth | Summary |
+|---|---|---|---|---|---|
+| GET | `/api/v1/templates` | `listTemplates` | `templates:read` | cookie, bearer | Every session template with its sites, browser state, live sessions and cap; facets by status, browser state and site health. |
+| POST | `/api/v1/templates` | `createTemplate` | `templates:write` | cookie, bearer | Create a template in `recording` with its sites, pinned identity and access rule. Under auth=token `policy.authorized_principals` is required (`[]` = every agent). |
+| GET | `/api/v1/templates/{template_id}` | `getTemplate` | `templates:read` | cookie, bearer | One template with its browser, sites, live session count, other windows and the windows shared by several sessions. |
+| DELETE | `/api/v1/templates/{template_id}` | `deleteTemplate` | `templates:write` | cookie, bearer | Delete a template: stops its browser and deletes its directory. With live sessions it needs force=true, which closes them. Deleting does not sign out at the sites. |
 
 ## Client errors
 

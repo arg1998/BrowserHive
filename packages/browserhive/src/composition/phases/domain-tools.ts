@@ -16,6 +16,7 @@ import type {
   PageActions,
   RuntimeFacts,
   SessionService,
+  TemplateService,
   VaultRedaction,
   VaultService,
 } from '@browserhive/core/server';
@@ -34,6 +35,7 @@ export interface ToolsInput {
   readonly vaultRedaction: VaultRedaction;
   readonly authStates: AuthStateStore;
   readonly blocklist: BlocklistService;
+  readonly templates: TemplateService;
   readonly pageActions: PageActions;
   readonly redactor: Redactor;
   readonly bus: EventBus<DomainEvents>;
@@ -57,6 +59,7 @@ export function runtimeFactsFor(input: ToolsInput): RuntimeFacts {
     },
     dataDir: config.dataDir,
     persistenceMode: config.persistence,
+    templates: config.templates,
     launchDefaults: { channel: config.defaultChannel, headless: config.defaultHeadless },
   };
 }
@@ -75,6 +78,7 @@ export function buildTools(input: ToolsInput): {
       vault: input.vault,
       authStates: input.authStates,
       blocklist: input.blocklist,
+      templates: input.templates,
       pageActions: input.pageActions,
       fs: createNodeToolFs(),
       redaction: {
@@ -87,7 +91,10 @@ export function buildTools(input: ToolsInput): {
       ids: input.ids,
       runtime,
     },
-    registry: createToolRegistry(runtime),
+    // `templates=false`: list_templates answers TOOL_NOT_AVAILABLE (spec 08 §5.9).
+    registry: createToolRegistry(runtime, {
+      disabledPacks: input.config.templates ? [] : ['templates'],
+    }),
     logger: input.logger,
   });
   return { runtime, dispatcher };

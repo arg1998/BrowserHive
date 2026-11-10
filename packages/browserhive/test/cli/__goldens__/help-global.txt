@@ -6,16 +6,17 @@ USAGE
   bh is installed as a shorthand: bh <command> is browserhive <command>.
 
 COMMANDS
-  serve     Start the MCP server (default)
-  init      Install browsers and prepare the data directory
-  doctor    Check the host, browsers, and configuration
-  purge     Delete local state after an inventory and confirmation
-  config    Show, validate, or export the configuration schema
-  db        Inspect, back up, restore, or migrate the database
-  admin     Administrative actions (reset-password, tokens)
-  channels  List, test and preview notification channels
-  version   Print version information
-  help      Show help for a command
+  serve      Start the MCP server (default)
+  init       Install browsers and prepare the data directory
+  doctor     Check the host, browsers, and configuration
+  purge      Delete local state after an inventory and confirmation
+  config     Show, validate, or export the configuration schema
+  db         Inspect, back up, restore, or migrate the database
+  admin      Administrative actions (reset-password, tokens)
+  channels   List, test and preview notification channels
+  templates  List and delete session templates
+  version    Print version information
+  help       Show help for a command
 
 GLOBAL FLAGS
   -h, --help     Show help.
@@ -83,6 +84,22 @@ FLAGS — sessions
   --blocklistWatch                  Reload the blocklist when the file changes (debounced). Requires
                                     blocklist. default: false
   --vault <off|bitwarden>           Credential vault backend. default: off
+  --templates                       Session templates. false: list_templates answers
+                                    TOOL_NOT_AVAILABLE, launch_session template answers
+                                    TEMPLATE_NOT_FOUND, and no template browser starts.
+                                    default: true
+  --templateHostIdleTimeout <duration>
+                                    How long a template's browser stays open with no session before
+                                    it is stopped; 0 = never. default: 1h
+  --templateMaxPagesPerHost <n>     Agent pages per template browser (parked and maintenance pages
+                                    excluded); each session may hold max(2, floor(value / cap)).
+                                    default: 40
+  --templateRecycleAfter <duration>
+                                    Age after which a template's browser is drained and restarted.
+                                    default: 24h
+  --templateDrainTimeout <duration>
+                                    How long a draining template browser waits for its sessions
+                                    before closing them. default: 15m
 
 FLAGS — stealth
   --stealth <off|standard|max>      Stealth level. max also defaults fingerprint to true.

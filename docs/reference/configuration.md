@@ -2,7 +2,7 @@
 
 # Configuration reference
 
-Every configuration key of BrowserHive (53 keys), generated from the zod schema in `@browserhive/contracts/config`. For a guided introduction see [the configuration guide](../guide/configuration.md).
+Every configuration key of BrowserHive (58 keys), generated from the zod schema in `@browserhive/contracts/config`. For a guided introduction see [the configuration guide](../guide/configuration.md).
 
 ## Precedence
 
@@ -323,6 +323,11 @@ Per-session close and trace-finalize cap.
 | [`blocklist`](#blocklist) | `--blocklist` | `BROWSERHIVE_BLOCKLIST` | unset |
 | [`blocklistWatch`](#blocklistWatch) | `--blocklistWatch` | `BROWSERHIVE_BLOCKLIST_WATCH` | `false` |
 | [`vault`](#vault) | `--vault` | `BROWSERHIVE_VAULT` | `off` |
+| [`templates`](#templates) | `--templates` | `BROWSERHIVE_TEMPLATES` | `true` |
+| [`templateHostIdleTimeout`](#templateHostIdleTimeout) | `--templateHostIdleTimeout` | `BROWSERHIVE_TEMPLATE_HOST_IDLE_TIMEOUT` | `1h` |
+| [`templateMaxPagesPerHost`](#templateMaxPagesPerHost) | `--templateMaxPagesPerHost` | `BROWSERHIVE_TEMPLATE_MAX_PAGES_PER_HOST` | `40` |
+| [`templateRecycleAfter`](#templateRecycleAfter) | `--templateRecycleAfter` | `BROWSERHIVE_TEMPLATE_RECYCLE_AFTER` | `24h` |
+| [`templateDrainTimeout`](#templateDrainTimeout) | `--templateDrainTimeout` | `BROWSERHIVE_TEMPLATE_DRAIN_TIMEOUT` | `15m` |
 
 <a id="persistence"></a>
 ### `persistence`
@@ -491,6 +496,76 @@ Credential vault backend.
 | Type | one of: off, bitwarden |
 | Default | `off` |
 | Notes | restart required · reserved values `local`, `onepassword`, `http` fail fast |
+
+<a id="templates"></a>
+### `templates`
+
+Session templates. false: list_templates answers TOOL_NOT_AVAILABLE, launch_session template answers TEMPLATE_NOT_FOUND, and no template browser starts.
+
+| Property | Value |
+|---|---|
+| CLI flag | `--templates` |
+| Environment | `BROWSERHIVE_TEMPLATES` |
+| Config file | `"templates"` |
+| Type | a boolean: 'true', 'false', '1', '0', 'yes' or 'no' |
+| Default | `true` |
+| Notes | restart required |
+
+<a id="templateHostIdleTimeout"></a>
+### `templateHostIdleTimeout`
+
+How long a template's browser stays open with no session before it is stopped; 0 = never.
+
+| Property | Value |
+|---|---|
+| CLI flag | `--templateHostIdleTimeout` |
+| Environment | `BROWSERHIVE_TEMPLATE_HOST_IDLE_TIMEOUT` |
+| Config file | `"templateHostIdleTimeout"` |
+| Type | a duration like '2h', '30m', '90s', '500ms', or an integer of milliseconds |
+| Default | `1h` |
+| Notes | restart required |
+
+<a id="templateMaxPagesPerHost"></a>
+### `templateMaxPagesPerHost`
+
+Agent pages per template browser (parked and maintenance pages excluded); each session may hold max(2, floor(value / cap)).
+
+| Property | Value |
+|---|---|
+| CLI flag | `--templateMaxPagesPerHost` |
+| Environment | `BROWSERHIVE_TEMPLATE_MAX_PAGES_PER_HOST` |
+| Config file | `"templateMaxPagesPerHost"` |
+| Type | an integer between 2 and 200 |
+| Default | `40` |
+| Notes | restart required |
+
+<a id="templateRecycleAfter"></a>
+### `templateRecycleAfter`
+
+Age after which a template's browser is drained and restarted.
+
+| Property | Value |
+|---|---|
+| CLI flag | `--templateRecycleAfter` |
+| Environment | `BROWSERHIVE_TEMPLATE_RECYCLE_AFTER` |
+| Config file | `"templateRecycleAfter"` |
+| Type | a duration of at least '1h' |
+| Default | `24h` |
+| Notes | restart required |
+
+<a id="templateDrainTimeout"></a>
+### `templateDrainTimeout`
+
+How long a draining template browser waits for its sessions before closing them.
+
+| Property | Value |
+|---|---|
+| CLI flag | `--templateDrainTimeout` |
+| Environment | `BROWSERHIVE_TEMPLATE_DRAIN_TIMEOUT` |
+| Config file | `"templateDrainTimeout"` |
+| Type | a duration between '1m' and '2h' |
+| Default | `15m` |
+| Notes | restart required |
 
 ## Stealth
 

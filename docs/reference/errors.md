@@ -2,7 +2,7 @@
 
 # Error reference
 
-Every error code BrowserHive can produce (109 codes), generated from `ERROR_REGISTRY` in `@browserhive/contracts/errors`. Each code has a stable anchor: `errors.md#<CODE>`, which is also the `type` URL of HTTP problem responses (`https://browserhive.ai/docs/errors#<CODE>`).
+Every error code BrowserHive can produce (117 codes), generated from `ERROR_REGISTRY` in `@browserhive/contracts/errors`. Each code has a stable anchor: `errors.md#<CODE>`, which is also the `type` URL of HTTP problem responses (`https://browserhive.ai/docs/errors#<CODE>`).
 
 ## How errors reach you
 
@@ -43,6 +43,11 @@ Returned by tools and the REST API when a request cannot be served (unknown sess
 | [`PATH_NOT_ALLOWED`](#PATH_NOT_ALLOWED) | Path outside the sandbox | 400 | different_args |
 | [`AUTH_STATE_NOT_FOUND`](#AUTH_STATE_NOT_FOUND) | Saved auth state not found | 404 | different_args |
 | [`PROFILE_FILE_LOCKED`](#PROFILE_FILE_LOCKED) | Profile file locked by the running browser | 409 | never |
+| [`TEMPLATE_NOT_FOUND`](#TEMPLATE_NOT_FOUND) | Template not found | 404 | different_args |
+| [`TEMPLATE_BUSY`](#TEMPLATE_BUSY) | Template busy | 429 | backoff |
+| [`TEMPLATE_UNAVAILABLE`](#TEMPLATE_UNAVAILABLE) | Template temporarily unavailable | 503 | backoff |
+| [`TEMPLATE_DISABLED`](#TEMPLATE_DISABLED) | Template disabled | 409 | after_operator |
+| [`SESSION_SEALED`](#SESSION_SEALED) | Not available in this session | 403 | never |
 | [`EVALUATE_DISABLED`](#EVALUATE_DISABLED) | evaluate is disabled | 403 | never |
 | [`ELEMENT_NOT_ACTIONABLE`](#ELEMENT_NOT_ACTIONABLE) | Element not actionable | 422 | backoff |
 | [`ELEMENT_NOT_FOUND`](#ELEMENT_NOT_FOUND) | Element not found | 404 | different_args |
@@ -84,6 +89,8 @@ Returned by tools and the REST API when a request cannot be served (unknown sess
 | [`DELIVERY_NOT_FOUND`](#DELIVERY_NOT_FOUND) | Delivery not found | 404 | never |
 | [`REPORT_NOT_FOUND`](#REPORT_NOT_FOUND) | Report not found | 404 | never |
 | [`INTERNAL_ERROR`](#INTERNAL_ERROR) | Internal error | 500 | backoff |
+| [`TEMPLATE_NAME_TAKEN`](#TEMPLATE_NAME_TAKEN) | Template name in use | 409 | different_args |
+| [`TEMPLATE_IN_USE`](#TEMPLATE_IN_USE) | Template has live sessions | 409 | different_args |
 
 <a id="SESSION_NOT_FOUND"></a>
 ### `SESSION_NOT_FOUND`
@@ -475,6 +482,134 @@ Details:
 | Field | Type | Required | Constraints |
 |---|---|---|---|
 | `file` | `string` | yes | — |
+
+<a id="TEMPLATE_NOT_FOUND"></a>
+### `TEMPLATE_NOT_FOUND`
+
+| Property | Value |
+|---|---|
+| Title | Template not found |
+| HTTP status | 404 |
+| Category | `domain` |
+| Retryable | `different_args` (retry only with different arguments) |
+
+Message: `No session template named '{template}'. Use list_templates to see the templates you can use.`
+
+Hint: Call list_templates and use one of the returned names.
+
+Cause: No template has that name, the caller is not allowed to use it (its principal or harness is not in the template’s access rule), the template is still being set up (`recording`), or templates are turned off (`templates=false`). All four answer identically, so an agent cannot tell a template it may not use from one that does not exist (D-52).
+
+Resolution: The operator sees the real reason in the template’s access tester and in the `template launch refused` log line; grant the caller access, finish the recording, or enable templates.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `template` | `string` | yes | — |
+
+<a id="TEMPLATE_BUSY"></a>
+### `TEMPLATE_BUSY`
+
+| Property | Value |
+|---|---|
+| Title | Template busy |
+| HTTP status | 429 |
+| Category | `domain` |
+| Retryable | `backoff` (retry later with backoff) |
+
+Message: `{limit_text} Retry in {retry_after_s} s.`
+
+Hint: Wait for the time given, then retry.
+
+Cause: The template is at its session cap (`max_concurrent`, further bounded by its sites’ packs), its browser holds `templateMaxPagesPerHost` agent pages, the session holds its share of them (`tabs`), or a site strategy paces actions (`pace`, spec 13 §6.3, §9.4).
+
+Resolution: Close sessions or tabs that are no longer needed, or raise the template’s cap or `templateMaxPagesPerHost`.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `template` | `string` | yes | — |
+| `limit_kind` | one of `capacity`, `tabs`, `pace` | yes | — |
+| `limit_text` | `string` | yes | — |
+| `retry_after_ms` | `integer` | yes | ≥ 0 |
+| `retry_after_s` | `integer` | yes | ≥ 0 |
+
+<a id="TEMPLATE_UNAVAILABLE"></a>
+### `TEMPLATE_UNAVAILABLE`
+
+| Property | Value |
+|---|---|
+| Title | Template temporarily unavailable |
+| HTTP status | 503 |
+| Category | `domain` |
+| Retryable | `backoff` (retry later with backoff) |
+
+Message: `Template '{template}' is temporarily unavailable. Retry in a few seconds.`
+
+Hint: Wait a few seconds, then retry.
+
+Cause: The template’s browser is starting and did not finish within the launch budget (`starting`), is being drained for a recycle, restore or operator restart (`restarting`), or is restarting after a crash (`recovering`, spec 13 §3.2).
+
+Resolution: Retry after `retry_after_ms`. A template that stays unavailable shows its browser state and last error on the template page.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `template` | `string` | yes | — |
+| `reason` | one of `starting`, `restarting`, `recovering` | yes | — |
+| `retry_after_ms` | `integer` | yes | ≥ 0 |
+
+<a id="TEMPLATE_DISABLED"></a>
+### `TEMPLATE_DISABLED`
+
+| Property | Value |
+|---|---|
+| Title | Template disabled |
+| HTTP status | 409 |
+| Category | `domain` |
+| Retryable | `after_operator` (retry after an operator acts (unlock the vault, resolve a request, change policy)) |
+
+Message: `Template '{template}' cannot be used until the operator fixes it.`
+
+Hint: Use another template, or retry after the operator has fixed this one.
+
+Cause: The operator disabled the template (`disabled`), or its browser cannot start until the operator acts (`needs_operator`: five failed starts, no display, an unreachable proxy or no sandbox under `sandbox=on`; the cause is shown on operator surfaces only).
+
+Resolution: Enable the template, or fix the cause shown on the template page and restart its browser.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `template` | `string` | yes | — |
+| `reason` | one of `disabled`, `needs_operator` | yes | — |
+
+<a id="SESSION_SEALED"></a>
+### `SESSION_SEALED`
+
+| Property | Value |
+|---|---|
+| Title | Not available in this session |
+| HTTP status | 403 |
+| Category | `domain` |
+| Retryable | `never` (do not retry; the request cannot succeed as sent) |
+
+Message: `{tool} is not available in this session: its sign-ins belong to the operator's session template.`
+
+Hint: Continue without it, or ask the operator to allow it for this template.
+
+Cause: The session was launched from a sealed template: `set_cookies` (cookie writes) and `save_storage_state` (state export) are refused unless the operator unseals that flag for the template and the caller (spec 13 §5.4, D-51).
+
+Resolution: Unseal the flag on the template’s Access tab, for every principal or only for the ones that need it.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `session_id` | `string` | yes | — |
+| `tool` | `string` | yes | — |
 
 <a id="EVALUATE_DISABLED"></a>
 ### `EVALUATE_DISABLED`
@@ -1477,6 +1612,55 @@ Details:
 |---|---|---|---|
 | `ref` | `string` | yes | — |
 
+<a id="TEMPLATE_NAME_TAKEN"></a>
+### `TEMPLATE_NAME_TAKEN`
+
+| Property | Value |
+|---|---|
+| Title | Template name in use |
+| HTTP status | 409 |
+| Category | `domain` |
+| Retryable | `different_args` (retry only with different arguments) |
+
+Message: `A session template named '{name}' already exists.`
+
+Hint: Pick another name.
+
+Cause: Template names are unique: agents address a template by its name (spec 13 §2.1).
+
+Resolution: Choose a different name, or delete the existing template first.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `name` | `string` | yes | — |
+
+<a id="TEMPLATE_IN_USE"></a>
+### `TEMPLATE_IN_USE`
+
+| Property | Value |
+|---|---|
+| Title | Template has live sessions |
+| HTTP status | 409 |
+| Category | `domain` |
+| Retryable | `different_args` (retry only with different arguments) |
+
+Message: `Template '{template_id}' has {live_sessions} live session(s). Close them, or delete with force=true.`
+
+Hint: Retry with ?force=true to close the sessions and delete the template.
+
+Cause: Deleting a template stops its browser, which would end the sessions launched from it.
+
+Resolution: Close the sessions first, or pass `force=true` (they close with `closed_reason: operator`).
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `template_id` | `string` | yes | — |
+| `live_sessions` | `integer` | yes | ≥ 0 |
+
 ## Boot errors
 
 Stop the process before it serves anything. The CLI prints `[CODE] message` and exits with the listed exit code.
@@ -1500,6 +1684,7 @@ Stop the process before it serves anything. The CLI prints `[CODE] message` and 
 | [`UNHANDLED`](#UNHANDLED) | Unhandled error | 500 | never |
 | [`RETENTION_FAILED`](#RETENTION_FAILED) | Retention sweep failed | 500 | backoff |
 | [`STALE_BROWSER_PROCESSES`](#STALE_BROWSER_PROCESSES) | Stale browser processes found | 500 | never |
+| [`TEMPLATE_HOST_FAILED`](#TEMPLATE_HOST_FAILED) | Template browser failed | 500 | never |
 
 <a id="ADMIN_REQUIRES_HTTP"></a>
 ### `ADMIN_REQUIRES_HTTP`
@@ -1947,6 +2132,33 @@ Details:
 | Field | Type | Required | Constraints |
 |---|---|---|---|
 | `count` | `integer` | yes | — |
+
+<a id="TEMPLATE_HOST_FAILED"></a>
+### `TEMPLATE_HOST_FAILED`
+
+| Property | Value |
+|---|---|
+| Title | Template browser failed |
+| HTTP status | 500 |
+| Category | `boot` |
+| Retryable | `never` (do not retry; the request cannot succeed as sent) |
+| Exit code | 1 |
+
+Message: `The browser of template '{template_id}' cannot start ({reason}).`
+
+Hint: Fix the cause on the template page, then restart its browser.
+
+Cause: A template host failed five consecutive starts within 30 minutes, found no display for a headed browser, could not reach its pinned proxy, or could not sandbox under `sandbox=on` (spec 13 §3.2). Recorded as a degradation; launches answer `TEMPLATE_DISABLED` until an operator restart clears it.
+
+Resolution: Read the reason on the template page or in `doctor`; for `no_display` run under `xvfb-run -a` or set the template headless.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `template_id` | `string` | yes | — |
+| `reason` | one of `host_failed`, `no_display`, `proxy_unreachable`, `sandbox_unavailable` | yes | — |
+| `attempts` | `integer` | yes | ≥ 0 |
 
 ## Authentication errors
 

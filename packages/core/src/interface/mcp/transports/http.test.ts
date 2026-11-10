@@ -140,7 +140,7 @@ describe('MCP Streamable HTTP transport', () => {
       post({ jsonrpc: '2.0', id: 2, method: 'tools/list' }, session),
       LOCAL_PRINCIPAL,
     );
-    expect((await sseJson(list)).result?.tools).toHaveLength(43);
+    expect((await sseJson(list)).result?.tools).toHaveLength(44);
 
     const foreign = await handler.handleMcpRequest(
       post({ jsonrpc: '2.0', id: 3, method: 'tools/list' }, session),

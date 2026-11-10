@@ -3,7 +3,8 @@
 import { UNGROUPED_GROUP_KEY } from '@browserhive/contracts/http';
 import type { VaultAccessMode } from '../../ports/persistence/enums.ts';
 import type { VaultGroupPolicyRecord } from '../../ports/persistence/records.ts';
-import { type AuthorizationRule, dedupe } from './bindings.ts';
+import type { AuthorizationRule } from '../policies/access-rule.ts';
+import { dedupe } from './bindings.ts';
 import { normalizeHarnessList } from './harness-rule.ts';
 
 /** `vault_group_policies.group_key` for a group id (`null` → `__ungrouped__`). */

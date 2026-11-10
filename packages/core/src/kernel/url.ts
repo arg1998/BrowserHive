@@ -59,6 +59,19 @@ function registrable(host: string): string {
   return getDomain(host, { allowPrivateDomains: false }) ?? '';
 }
 
+/**
+ * The registrable domain (eTLD+1) of a host name, the vault's origin semantics: what a session
+ * template calls a site (spec 13 §1.1). `''` for an IP literal, a loopback host, an empty host or a
+ * host that is only a public suffix (`co.uk`). Hosts under a private suffix collapse into one site
+ * (`a.github.io` and `b.github.io` are both `github.io`); a name under an unlisted TLD follows the
+ * public-suffix default rule (`www.site-a.test` → `site-a.test`).
+ */
+export function registrableDomain(host: string): string {
+  const h = normalizeHost(host);
+  if (isLoopbackHost(h)) return '';
+  return registrable(h);
+}
+
 /** Lowercases the host and strips IPv6 brackets so `[::1]` and `::1` compare equal. */
 export function normalizeHost(host: string): string {
   const lower = host.trim().toLowerCase();

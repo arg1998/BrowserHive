@@ -313,6 +313,9 @@ function planInvocation(name: string, input: PlanInput): CliPlan {
     case 'channels test':
     case 'channels preview':
       return planChannels(name, input);
+    case 'templates list':
+    case 'templates rm':
+      return planTemplates(name, input);
     case 'version': {
       const json = reader.bool('json');
       if (reader.problems.length > 0) return usage(reader.problems);
@@ -323,21 +326,35 @@ function planInvocation(name: string, input: PlanInput): CliPlan {
   }
 }
 
+/** `--url` when given, else the configured host and port (a wildcard bind is reached on loopback). */
+function remoteOrConfigured(input: PlanInput, explicit: RemoteTarget | null): RemoteTarget {
+  if (explicit !== null) return explicit;
+  const resolved = resolveFull(input);
+  const host = resolved.ok ? resolved.value.config.host : '127.0.0.1';
+  const port = resolved.ok ? resolved.value.config.port : 9876;
+  const reachable = host === '0.0.0.0' || host === '::' ? '127.0.0.1' : host;
+  return { url: `http://${reachable.includes(':') ? `[${reachable}]` : reachable}:${port}` };
+}
+
+function planTemplates(name: string, input: PlanInput): CliPlan {
+  const { reader, color, args } = input;
+  const json = reader.bool('json');
+  const force = name === 'templates rm' && reader.bool('force');
+  const yes = name === 'templates rm' && reader.bool('yes');
+  const explicit = remoteTarget(reader);
+  if (reader.problems.length > 0) return usage(reader.problems);
+  const remote = remoteOrConfigured(input, explicit);
+  if (name === 'templates list') return run({ command: 'templates-list', json, remote }, color);
+  return run({ command: 'templates-rm', name: args[0] ?? '', force, yes, json, remote }, color);
+}
+
 function planChannels(name: string, input: PlanInput): CliPlan {
   const { reader, color, args } = input;
   const json = reader.bool('json');
   const sampleText = reader.oneOf('sample', PREVIEW_SAMPLES) ?? 'attention';
   const explicit = remoteTarget(reader);
   if (reader.problems.length > 0) return usage(reader.problems);
-  let remote: RemoteTarget;
-  if (explicit !== null) remote = explicit;
-  else {
-    const resolved = resolveFull(input);
-    const host = resolved.ok ? resolved.value.config.host : '127.0.0.1';
-    const port = resolved.ok ? resolved.value.config.port : 9876;
-    const reachable = host === '0.0.0.0' || host === '::' ? '127.0.0.1' : host;
-    remote = { url: `http://${reachable.includes(':') ? `[${reachable}]` : reachable}:${port}` };
-  }
+  const remote = remoteOrConfigured(input, explicit);
   const sample = PreviewSample.parse(sampleText);
   const channel = args[0] ?? '';
   switch (name) {

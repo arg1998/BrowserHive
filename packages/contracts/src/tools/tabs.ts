@@ -44,6 +44,7 @@ export const NEW_TAB = defineTool({
     'NAVIGATION_TIMEOUT',
     'NAVIGATION_FAILED',
     'DOWNLOAD_FAILED',
+    'TEMPLATE_BUSY',
   ],
   since: SINCE,
 });

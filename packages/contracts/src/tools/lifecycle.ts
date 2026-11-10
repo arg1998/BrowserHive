@@ -4,6 +4,7 @@ import { Channel } from '../enums/channel.ts';
 import { PersistenceMode } from '../enums/persistence-mode.ts';
 import { SessionMetadata } from './session-metadata.ts';
 import { annotations, SINCE } from './shared.ts';
+import { TEMPLATE_NAME_RE } from './templates.ts';
 import { defineTool } from './types.ts';
 
 /** Slug rule: starts lowercase, 2–32 chars, lowercase alphanumerics + dash. */
@@ -36,6 +37,21 @@ export const BASE_LAUNCH_DEFAULTS: LaunchSessionDefaults = {
   headless: true,
 };
 
+/** Description of `launch_session.template` (spec 13 §5.2; wording rule of §5). */
+export const TEMPLATE_PARAM_DESCRIPTION =
+  "Name of a session template from list_templates. The session starts signed in to the template's " +
+  'sites; sign-ins and site data it changes are kept in the template.';
+
+/**
+ * The `context_options` keys a template session applies per session (spec 13 §4, §5.3); any other key
+ * is refused on a template launch, whatever its value.
+ */
+export const PER_SESSION_TEMPLATE_CONTEXT_OPTIONS = [
+  'viewport',
+  'extraHTTPHeaders',
+  'colorScheme',
+] as const;
+
 /**
  * Build the `launch_session` input schema with the server's effective defaults baked in, so
  * `tools/list` shows the real `channel`/`headless` defaults rather than hardcoded ones.
@@ -55,17 +71,26 @@ export function launchSessionInput(defaults: LaunchSessionDefaults = BASE_LAUNCH
     stealth: z.boolean().optional(),
     fingerprint: z.boolean().optional(),
     humanize: z.boolean().optional(),
+    template: z
+      .string()
+      .regex(TEMPLATE_NAME_RE, 'template must match /^[a-z][a-z0-9-]{1,31}$/')
+      .optional()
+      .describe(TEMPLATE_PARAM_DESCRIPTION),
   });
 }
+
+/** Agent-facing description of `launch_session` (spec 13 §5.2). */
+export const LAUNCH_SESSION_DESCRIPTION =
+  'Launch a new browser session. Without `template`, the session is fully isolated: it owns its own ' +
+  'Playwright driver, browser, context and page, and its cookies and storage are its own. With ' +
+  "`template`, the session starts signed in to the template's sites (see list_templates). The " +
+  "resolved session_id is '<slug>-<nanoid8>' and is returned as the 'session_id' field.";
 
 /** `launch_session`: one isolated browser session per call. */
 export const LAUNCH_SESSION = defineTool({
   name: 'launch_session',
   title: 'Launch session',
-  description:
-    'Launch a new isolated browser session. Each session owns its own Playwright driver, ' +
-    'browser, context, and page so cookies and storage never leak between sessions. The ' +
-    "resolved session_id is '<slug>-<nanoid8>' and is returned as the 'session_id' field.",
+  description: LAUNCH_SESSION_DESCRIPTION,
   input: launchSessionInput(),
   output: SessionMetadata,
   annotations: annotations(false, false, false, true),
@@ -81,6 +106,10 @@ export const LAUNCH_SESSION = defineTool({
     'AUTH_STATE_NOT_FOUND',
     'BROWSER_NOT_INSTALLED',
     'SANDBOX_UNAVAILABLE',
+    'TEMPLATE_NOT_FOUND',
+    'TEMPLATE_BUSY',
+    'TEMPLATE_UNAVAILABLE',
+    'TEMPLATE_DISABLED',
   ],
   since: SINCE,
 });

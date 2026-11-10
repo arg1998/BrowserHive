@@ -16,7 +16,9 @@
         }
       }
     },
-    "required": ["session_id"]
+    "required": [
+      "session_id"
+    ]
   },
   "outputSchema": {
     "$schema": "http://json-schema.org/draft-07/schema#",
@@ -50,7 +52,11 @@
             },
             "sameSite": {
               "type": "string",
-              "enum": ["Strict", "Lax", "None"]
+              "enum": [
+                "Strict",
+                "Lax",
+                "None"
+              ]
             },
             "partitionKey": {
               "type": "string"
@@ -68,9 +74,15 @@
           ],
           "additionalProperties": {}
         }
+      },
+      "sealed": {
+        "type": "boolean",
+        "const": true
       }
     },
-    "required": ["cookies"],
+    "required": [
+      "cookies"
+    ],
     "additionalProperties": false
   },
   "annotations": {

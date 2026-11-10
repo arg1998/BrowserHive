@@ -13,6 +13,7 @@ import type {
 import type { ToolCheckContext } from '../../app/blocklist/blocklist-service.ts';
 import type { DomainEvents } from '../../app/events/catalog.ts';
 import type { SessionService } from '../../app/sessions/session-service.ts';
+import type { TemplateService } from '../../app/templates/template-service.ts';
 import type { SessionPrincipal } from '../../domain/session/principal.ts';
 import type { CallerSubject } from '../../domain/vault/bindings.ts';
 import type {
@@ -95,6 +96,9 @@ export interface ToolRedaction {
   onNavigation(sessionId: string, url: string): void;
 }
 
+/** The template surface `list_templates` and `launch_session.template` use (`TemplateService` satisfies it). */
+export type TemplatesLike = Pick<TemplateService, 'enabled' | 'listForAgent' | 'launch'>;
+
 /** Everything a tool handler may reach. Built once by the composition root; runtime objects never change. */
 export interface ToolServices {
   readonly sessions: SessionService;
@@ -103,6 +107,8 @@ export interface ToolServices {
   readonly vault: VaultLike;
   readonly authStates: AuthStatesLike;
   readonly blocklist: BlocklistLike;
+  /** Session templates (spec 13 §5). */
+  readonly templates: TemplatesLike;
   readonly pageActions: PageActions;
   readonly fs: ToolFs;
   readonly redaction: ToolRedaction;

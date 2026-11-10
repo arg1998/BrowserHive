@@ -1,4 +1,4 @@
-/** @module interface/mcp/registry — the single ordered tool list (13 packs, spec 02 §3.14): resolved schemas and descriptions per runtime, pack availability. */
+/** @module interface/mcp/registry — the single ordered tool list (14 packs, spec 02 §3.14, spec 13 §5.1): resolved schemas and descriptions per runtime, pack availability. */
 
 import { ALL_TOOL_NAMES, type ToolName, type ToolPackId } from '@browserhive/contracts/tools';
 import type { z } from 'zod';
@@ -15,6 +15,7 @@ import { lifecyclePack } from './tools/lifecycle/index.ts';
 import { navigationPack } from './tools/navigation/index.ts';
 import { statePack } from './tools/state/index.ts';
 import { tabsPack } from './tools/tabs/index.ts';
+import { templatesPack } from './tools/templates/index.ts';
 import { vaultPack } from './tools/vault/index.ts';
 import { waitsPack } from './tools/waits/index.ts';
 
@@ -33,6 +34,7 @@ export const TOOL_PACK_LIST: readonly ToolPack[] = [
   authStatesPack,
   attentionPack,
   vaultPack,
+  templatesPack,
 ];
 
 /** Every definition in registration order (the only hand-maintained list; pinned against `ALL_TOOL_NAMES`). */

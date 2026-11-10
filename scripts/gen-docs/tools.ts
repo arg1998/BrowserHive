@@ -43,6 +43,7 @@ const PACK_TITLES: Readonly<Record<ToolPackId, string>> = {
   authStates: 'Auth states',
   attention: 'Attention (HTTP transport only)',
   vault: 'Vault',
+  templates: 'Session templates',
 };
 
 function yesNo(value: boolean): string {

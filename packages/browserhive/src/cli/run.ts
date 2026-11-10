@@ -14,6 +14,7 @@ import { runDoctor } from './commands/doctor.ts';
 import { runInit } from './commands/init.ts';
 import { runPurge } from './commands/purge.ts';
 import { runServe } from './commands/serve.ts';
+import { runTemplatesList, runTemplatesRm } from './commands/templates.ts';
 import { runVersion } from './commands/version.ts';
 import type { CliDeps, CommandContext } from './deps.ts';
 import { renderCommandHelp } from './help.ts';
@@ -88,6 +89,10 @@ export async function runInvocation(
         invocation.sample,
         invocation.json,
       );
+    case 'templates-list':
+      return runTemplatesList(context, invocation.remote, invocation.json);
+    case 'templates-rm':
+      return runTemplatesRm(context, invocation);
     case 'version':
       return runVersion(context, invocation.json);
   }

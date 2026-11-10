@@ -3,7 +3,7 @@
 import type { VaultAccessEvent } from '@browserhive/contracts/ws';
 import type { z } from 'zod';
 import type { TracingHandle } from '../../ports/browser-driver.ts';
-import type { AuthorizationRule } from './bindings.ts';
+import type { AuthorizationRule } from '../policies/access-rule.ts';
 import type { EntryHarnessRules } from './harness-rule.ts';
 
 /** The minimal page surface the broker drives (a subset of Playwright's `Page`, for testability). */

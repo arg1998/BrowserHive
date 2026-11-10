@@ -63,6 +63,7 @@ export type {
 
 import type { SessionClientInfo } from '../../domain/session/client-info.ts';
 import type { JsonObject } from './json.ts';
+import type { SessionTemplateRecord } from './records-templates.ts';
 
 export type { JsonObject, JsonValue } from './json.ts';
 
@@ -124,6 +125,13 @@ export interface SessionRecord {
   readonly sandboxed: boolean | null;
   /** The launched browser's real version (D-31); `null` when not recorded or not readable. */
   readonly browserVersion: string | null;
+  /**
+   * The template the session was launched from, written once at launch (spec 13 §2.5); `null` for
+   * exclusive sessions and for every session created before schema v9.
+   */
+  readonly template: SessionTemplateRecord | null;
+  /** Whether a template session is sealed (spec 13 §5.4); `null` for exclusive sessions. */
+  readonly sealed: boolean | null;
 }
 
 /** Mutable subset of {@link SessionRecord} accepted by `SessionRepository.update`. */

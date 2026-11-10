@@ -2,6 +2,7 @@
 import { z } from 'zod';
 import { Channel } from '../enums/channel.ts';
 import { PersistenceMode } from '../enums/persistence-mode.ts';
+import { SessionTemplateInfo } from './templates.ts';
 
 /** UA-CH brand entry (`{ brand, version }`). Keys are camelCase on the wire (frozen by D-12). */
 export const Brand = z.object({ brand: z.string(), version: z.string() });
@@ -39,8 +40,9 @@ export const AppliedIdentity = z.object({
 export type AppliedIdentity = z.infer<typeof AppliedIdentity>;
 
 /**
- * Session metadata as returned by `launch_session` and `list_sessions`. `proxy_label` is the one
- * additive key (D-13); everything else is the frozen base shape (D-12).
+ * Session metadata as returned by `launch_session` and `list_sessions`. `proxy_label` (D-13) and
+ * `template` (template sessions only, spec 13 §5.2) are additive keys; everything else is the frozen
+ * base shape (D-12).
  */
 export const SessionMetadata = z.object({
   session_id: z.string(),
@@ -61,6 +63,7 @@ export const SessionMetadata = z.object({
   humanize: z.boolean(),
   identity: AppliedIdentity.nullable(),
   proxy_label: z.string().nullable(),
+  template: SessionTemplateInfo.optional(),
 });
 /** Parsed {@link SessionMetadata}. */
 export type SessionMetadata = z.infer<typeof SessionMetadata>;

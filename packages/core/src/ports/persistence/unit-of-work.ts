@@ -33,6 +33,7 @@ import type { OperatorRequestRepository } from './operator-requests.ts';
 import type { PageRepository } from './pages.ts';
 import type { ScreenshotRepository } from './screenshots.ts';
 import type { SessionRepository } from './sessions.ts';
+import type { TemplateRepository, TemplateSiteRepository } from './templates.ts';
 import type { ToolCallRepository } from './tool-calls.ts';
 import type { VaultAuditRepository } from './vault-audit.ts';
 import type { VaultBindingRepository, VaultGroupPolicyRepository } from './vault-policy.ts';
@@ -69,6 +70,8 @@ export interface Repositories {
   readonly artifactOutbox: ArtifactOutboxRepository;
   readonly mcpConnections: McpConnectionRepository;
   readonly schemaMigrations: SchemaMigrationRepository;
+  readonly templates: TemplateRepository;
+  readonly templateSites: TemplateSiteRepository;
 }
 
 /**

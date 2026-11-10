@@ -8,6 +8,7 @@ import {
   isIpLiteral,
   isLoopbackHost,
   isPrivateNetworkHost,
+  registrableDomain,
   sanitizeUrl,
   URL_CATEGORIES,
 } from './url.ts';
@@ -132,5 +133,34 @@ describe('sanitizeUrl', () => {
   it('returns a placeholder for unparseable input and empty for empty', () => {
     expect(sanitizeUrl('not a url')).toBe(INVALID_URL);
     expect(sanitizeUrl('   ')).toBe('');
+  });
+});
+
+describe('registrableDomain', () => {
+  it('reduces a host to its site, as the vault does', () => {
+    expect(registrableDomain('www.linkedin.com')).toBe('linkedin.com');
+    expect(registrableDomain('LinkedIn.COM')).toBe('linkedin.com');
+    expect(registrableDomain('jobs.example.co.uk')).toBe('example.co.uk');
+    expect(registrableDomain('www.site-a.test')).toBe('site-a.test');
+  });
+
+  it('collapses hosts under a private suffix into one site', () => {
+    expect(registrableDomain('a.github.io')).toBe('github.io');
+    expect(registrableDomain('b.github.io')).toBe('github.io');
+  });
+
+  it('has no site for IPs, loopback hosts and bare public suffixes', () => {
+    for (const host of [
+      '127.0.0.1',
+      '[::1]',
+      'localhost',
+      'app.localhost',
+      '10.0.0.1',
+      'co.uk',
+      'com',
+      '',
+    ]) {
+      expect(registrableDomain(host)).toBe('');
+    }
   });
 });

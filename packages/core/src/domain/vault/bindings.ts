@@ -3,6 +3,7 @@
 import { VAULT_HANDLE_RE } from '@browserhive/contracts/http';
 import { matchesGlob } from '../../kernel/glob.ts';
 import type { VaultBindingRecord } from '../../ports/persistence/records.ts';
+import { type AuthorizationRule, isPrincipalAuthorized } from '../policies/access-rule.ts';
 import { normalizeHarnessList } from './harness-rule.ts';
 
 /** Maximum handle length admitted by {@link VAULT_HANDLE_RE}. */
@@ -21,15 +22,6 @@ export interface CallerSubject {
   readonly harness: string | null;
   /** The session's launch declared harness name (`sessions.harness_declared`), or `null`. */
   readonly harnessDeclared: string | null;
-}
-
-/** The authorization rule a binding or group policy expresses. */
-export interface AuthorizationRule {
-  readonly allowAllSessions: boolean;
-  /** Exact slugs or globs (`agent-*`). */
-  readonly slugGlobs: readonly string[];
-  /** Exact principal ids; empty = any principal. */
-  readonly principals: readonly string[];
 }
 
 /** Lowercases and folds one label into the handle alphabet (`[a-z0-9._-]`). */
@@ -87,11 +79,6 @@ export function dedupe(values: readonly string[]): readonly string[] {
 /** Whether `slug` satisfies the rule's session part (`allow_all_sessions` or a glob match). */
 export function isSlugAuthorized(rule: AuthorizationRule, slug: string): boolean {
   return rule.allowAllSessions || rule.slugGlobs.some((pattern) => matchesGlob(slug, pattern));
-}
-
-/** Whether `principal` satisfies the rule's principal part (empty list = any principal). */
-export function isPrincipalAuthorized(rule: AuthorizationRule, principal: string): boolean {
-  return rule.principals.length === 0 || rule.principals.includes(principal);
 }
 
 /** D-14: the principal AND the slug must both be authorized. */

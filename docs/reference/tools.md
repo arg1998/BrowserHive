@@ -2,7 +2,7 @@
 
 # MCP tool reference
 
-The 43 tools BrowserHive registers, in registration order, generated from `TOOL_CONTRACTS` in `@browserhive/contracts/tools`. Names, parameters, defaults and result shapes are a frozen contract. Every page-targeting tool accepts an optional `tab_id` (defaults to the active tab). Errors are returned as `[CODE] message` text; see the [error reference](errors.md).
+The 44 tools BrowserHive registers, in registration order, generated from `TOOL_CONTRACTS` in `@browserhive/contracts/tools`. Names, parameters, defaults and result shapes are a frozen contract. Every page-targeting tool accepts an optional `tab_id` (defaults to the active tab). Errors are returned as `[CODE] message` text; see the [error reference](errors.md).
 
 Defaults shown for `launch_session` `channel` and `headless` are the contract defaults; a server started with `--defaultChannel` / `--defaultHeadless` advertises its configured values in `tools/list`.
 
@@ -53,6 +53,7 @@ Defaults shown for `launch_session` `channel` and `headless` are the contract de
 | 41 | [`get_attention_result`](#get_attention_result) | Attention (HTTP transport only) | Get attention result | yes | no | yes | no |
 | 42 | [`vault_list_available`](#vault_list_available) | Vault | Vault: list available | yes | no | yes | no |
 | 43 | [`vault_fill`](#vault_fill) | Vault | Vault: fill | no | no | no | yes |
+| 44 | [`list_templates`](#list_templates) | Session templates | List templates | yes | no | yes | no |
 
 ## Lifecycle
 
@@ -61,7 +62,7 @@ Defaults shown for `launch_session` `channel` and `headless` are the contract de
 
 **Launch session** · capability `lifecycle` · since 0.1.0
 
-> Launch a new isolated browser session. Each session owns its own Playwright driver, browser, context, and page so cookies and storage never leak between sessions. The resolved session_id is '<slug>-<nanoid8>' and is returned as the 'session_id' field.
+> Launch a new browser session. Without `template`, the session is fully isolated: it owns its own Playwright driver, browser, context and page, and its cookies and storage are its own. With `template`, the session starts signed in to the template's sites (see list_templates). The resolved session_id is '<slug>-<nanoid8>' and is returned as the 'session_id' field.
 
 Annotations: readOnly no · destructive no · idempotent no · openWorld yes
 
@@ -82,6 +83,7 @@ Parameters:
 | `stealth` | `boolean` | no | — | — |
 | `fingerprint` | `boolean` | no | — | — |
 | `humanize` | `boolean` | no | — | — |
+| `template` | `string` | no | — | Name of a session template from list_templates. The session starts signed in to the template's sites; sign-ins and site data it changes are kept in the template.; pattern `^[a-z][a-z0-9-]{1,31}$` |
 
 Result (JSON text block, mirrored in `structuredContent`):
 
@@ -105,8 +107,9 @@ Result (JSON text block, mirrored in `structuredContent`):
 | `humanize` | `boolean` | yes |
 | `identity` | `object` or `null` | yes |
 | `proxy_label` | `string` or `null` | yes |
+| `template` | `object` | no |
 
-Errors: [`INVALID_SLUG`](errors.md#INVALID_SLUG), [`UNKNOWN_CHANNEL`](errors.md#UNKNOWN_CHANNEL), [`SESSION_LIMIT_REACHED`](errors.md#SESSION_LIMIT_REACHED), [`SESSION_ALREADY_EXISTS`](errors.md#SESSION_ALREADY_EXISTS), [`UNSAFE_LAUNCH_ARG`](errors.md#UNSAFE_LAUNCH_ARG), [`INVALID_PERSISTENCE_CONFIG`](errors.md#INVALID_PERSISTENCE_CONFIG), [`AUTH_STATE_NOT_FOUND`](errors.md#AUTH_STATE_NOT_FOUND), [`BROWSER_NOT_INSTALLED`](errors.md#BROWSER_NOT_INSTALLED), [`SANDBOX_UNAVAILABLE`](errors.md#SANDBOX_UNAVAILABLE). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
+Errors: [`INVALID_SLUG`](errors.md#INVALID_SLUG), [`UNKNOWN_CHANNEL`](errors.md#UNKNOWN_CHANNEL), [`SESSION_LIMIT_REACHED`](errors.md#SESSION_LIMIT_REACHED), [`SESSION_ALREADY_EXISTS`](errors.md#SESSION_ALREADY_EXISTS), [`UNSAFE_LAUNCH_ARG`](errors.md#UNSAFE_LAUNCH_ARG), [`INVALID_PERSISTENCE_CONFIG`](errors.md#INVALID_PERSISTENCE_CONFIG), [`AUTH_STATE_NOT_FOUND`](errors.md#AUTH_STATE_NOT_FOUND), [`BROWSER_NOT_INSTALLED`](errors.md#BROWSER_NOT_INSTALLED), [`SANDBOX_UNAVAILABLE`](errors.md#SANDBOX_UNAVAILABLE), [`TEMPLATE_NOT_FOUND`](errors.md#TEMPLATE_NOT_FOUND), [`TEMPLATE_BUSY`](errors.md#TEMPLATE_BUSY), [`TEMPLATE_UNAVAILABLE`](errors.md#TEMPLATE_UNAVAILABLE), [`TEMPLATE_DISABLED`](errors.md#TEMPLATE_DISABLED). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
 
 <a id="close_session"></a>
 ### `close_session`
@@ -165,6 +168,7 @@ Result: a JSON array; each item has:
 | `humanize` | `boolean` | yes |
 | `identity` | `object` or `null` | yes |
 | `proxy_label` | `string` or `null` | yes |
+| `template` | `object` | no |
 
 Errors: none documented. Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
 
@@ -221,6 +225,7 @@ Result (JSON text block, mirrored in `structuredContent`):
 | `last_tool_at` | `number` | yes |
 | `lease_expires_at` | `number` | yes |
 | `navigation_count` | `number` | yes |
+| `template` | `object` | no |
 
 Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
 
@@ -393,7 +398,7 @@ Result (JSON text block, mirrored in `structuredContent`):
 | `url` | `string` | yes |
 | `download` | `object` | no |
 
-Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`URL_SCHEME_NOT_ALLOWED`](errors.md#URL_SCHEME_NOT_ALLOWED), [`URL_BLOCKED`](errors.md#URL_BLOCKED), [`NAVIGATION_TIMEOUT`](errors.md#NAVIGATION_TIMEOUT), [`NAVIGATION_FAILED`](errors.md#NAVIGATION_FAILED), [`DOWNLOAD_FAILED`](errors.md#DOWNLOAD_FAILED). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
+Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`URL_SCHEME_NOT_ALLOWED`](errors.md#URL_SCHEME_NOT_ALLOWED), [`URL_BLOCKED`](errors.md#URL_BLOCKED), [`NAVIGATION_TIMEOUT`](errors.md#NAVIGATION_TIMEOUT), [`NAVIGATION_FAILED`](errors.md#NAVIGATION_FAILED), [`DOWNLOAD_FAILED`](errors.md#DOWNLOAD_FAILED), [`TEMPLATE_BUSY`](errors.md#TEMPLATE_BUSY). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
 
 <a id="close_tab"></a>
 ### `close_tab`
@@ -959,6 +964,7 @@ Result (JSON text block, mirrored in `structuredContent`):
 | Field | Type | Always present |
 |---|---|---|
 | `cookies` | `object[]` | yes |
+| `sealed` | `true` | no |
 
 Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
 
@@ -984,7 +990,7 @@ Result (JSON text block, mirrored in `structuredContent`):
 |---|---|---|
 | `added` | `number` | yes |
 
-Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
+Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS), [`SESSION_SEALED`](errors.md#SESSION_SEALED). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
 
 <a id="set_viewport"></a>
 ### `set_viewport`
@@ -1128,7 +1134,7 @@ Result (JSON text block, mirrored in `structuredContent`):
 | `path` | `string` | yes |
 | `size` | `number` | yes |
 
-Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`PATH_NOT_ALLOWED`](errors.md#PATH_NOT_ALLOWED). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
+Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`PATH_NOT_ALLOWED`](errors.md#PATH_NOT_ALLOWED), [`SESSION_SEALED`](errors.md#SESSION_SEALED). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
 
 <a id="save_full_profile"></a>
 ### `save_full_profile`
@@ -1299,3 +1305,24 @@ Result (JSON text block, mirrored in `structuredContent`):
 | `reason` | `string` | no |
 
 Errors: [`VAULT_NOT_CONFIGURED`](errors.md#VAULT_NOT_CONFIGURED), [`VAULT_LOCKED`](errors.md#VAULT_LOCKED), [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
+
+## Session templates
+
+<a id="list_templates"></a>
+### `list_templates`
+
+**List templates** · capability `read` · since 0.4.0
+
+> List the session templates you may use. A session launched with a template's name as `template` starts signed in to the template's sites. The sign-ins belong to the operator: do not sign out, and do not change account, security or privacy settings; such actions may be blocked or need the operator's approval. Sign-ins and site data the session changes are kept in the template and carried into later sessions from it. Cookie values are hidden, and evaluate and saving the login are unavailable unless the operator allows them.
+
+Annotations: readOnly yes · destructive no · idempotent yes · openWorld no
+
+Parameters: none.
+
+Result (JSON text block, mirrored in `structuredContent`):
+
+| Field | Type | Always present |
+|---|---|---|
+| `templates` | `object[]` | yes |
+
+Errors: [`TOOL_NOT_AVAILABLE`](errors.md#TOOL_NOT_AVAILABLE). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).

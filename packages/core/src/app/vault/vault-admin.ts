@@ -5,8 +5,8 @@ import {
   normalizeHarness,
   UNKNOWN_HARNESS,
 } from '@browserhive/contracts/harness';
+import { isPrincipalAuthorized } from '../../domain/policies/access-rule.ts';
 import {
-  isPrincipalAuthorized,
   isSlugAuthorized,
   isValidHandle,
   mergeBinding,

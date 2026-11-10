@@ -206,3 +206,42 @@ export type SystemEventSeverity = (typeof SYSTEM_EVENT_SEVERITIES)[number];
 export const ARTIFACT_KINDS = ['trace', 'screenshot', 'session_dir', 'backup'] as const;
 /** Element of {@link ARTIFACT_KINDS}. */
 export type ArtifactKind = (typeof ARTIFACT_KINDS)[number];
+
+/** Lifecycle of a session template (spec 13 §2.1). */
+export const TEMPLATE_STATUSES = ['recording', 'ready', 'disabled'] as const;
+/** Element of {@link TEMPLATE_STATUSES}. */
+export type TemplateStatus = (typeof TEMPLATE_STATUSES)[number];
+
+/** Stealth level pinned on a template (spec 13 §2.1). */
+export const TEMPLATE_STEALTH_LEVELS = ['off', 'standard', 'max'] as const;
+/** Element of {@link TEMPLATE_STEALTH_LEVELS}. */
+export type TemplateStealthLevel = (typeof TEMPLATE_STEALTH_LEVELS)[number];
+
+/** Initial window state of a template's virtual sessions (spec 13 §3.3). */
+export const AGENT_WINDOW_STATES = ['normal', 'minimized'] as const;
+/** Element of {@link AGENT_WINDOW_STATES}. */
+export type AgentWindowState = (typeof AGENT_WINDOW_STATES)[number];
+
+/** A template site's sign-in state (spec 13 §2.3). */
+export const TEMPLATE_HEALTH_STATES = [
+  'unknown',
+  'signed_in',
+  'signed_out',
+  'challenged',
+  'inconclusive',
+] as const;
+/** Element of {@link TEMPLATE_HEALTH_STATES}. */
+export type TemplateHealthState = (typeof TEMPLATE_HEALTH_STATES)[number];
+
+/** Per-site write policy; `null` in the column = the pack's default (spec 13 §9.3). */
+export const SITE_WRITE_POLICIES = ['allow', 'warn', 'confirm'] as const;
+/** Element of {@link SITE_WRITE_POLICIES}. */
+export type SiteWritePolicy = (typeof SITE_WRITE_POLICIES)[number];
+
+/**
+ * How a session uses its template. `sessions.template_mode` is an open set in SQL (`serial` is
+ * reserved, spec 13 §16); a value this binary does not know reads as `maintenance`, the refusing one.
+ */
+export const TEMPLATE_MODES = ['live', 'maintenance'] as const;
+/** Element of {@link TEMPLATE_MODES}. */
+export type TemplateMode = (typeof TEMPLATE_MODES)[number];

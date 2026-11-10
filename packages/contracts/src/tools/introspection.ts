@@ -4,6 +4,7 @@ import { Channel } from '../enums/channel.ts';
 import { PersistenceMode } from '../enums/persistence-mode.ts';
 import { Transport } from '../enums/transport.ts';
 import { annotations, SESSION_ERRORS, SINCE } from './shared.ts';
+import { SessionTemplateInfo } from './templates.ts';
 import { defineTool } from './types.ts';
 
 /** `server_status` result. `sessions.limit` is `null` only when `maxSessions=unbounded`. */
@@ -20,7 +21,7 @@ export const ServerStatus = z.object({
   persistence_mode: PersistenceMode,
 });
 
-/** `session_info` result: launch configuration plus live counters. */
+/** `session_info` result: launch configuration plus live counters; `template` for template sessions only (spec 13 §5.2). */
 export const SessionInfo = z.object({
   session_id: z.string(),
   config: z.object({
@@ -42,6 +43,7 @@ export const SessionInfo = z.object({
   last_tool_at: z.number(),
   lease_expires_at: z.number(),
   navigation_count: z.number(),
+  template: SessionTemplateInfo.optional(),
 });
 
 /** `server_status`: takes no arguments, so no `inputSchema`. */

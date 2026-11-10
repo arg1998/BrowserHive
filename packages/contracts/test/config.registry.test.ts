@@ -11,6 +11,7 @@ import {
   RESERVED_CONFIG_KEYS,
   RESERVED_ENUM_MEMBERS,
   secretKeys,
+  serverConfigObject,
 } from '../src/config/index.ts';
 
 /** Every key of spec 08 §5 (plus the spec 10 §4/§8 knobs). */
@@ -68,12 +69,33 @@ const SPEC_KEYS = [
   'otelSignals',
   'otelVerbose',
   'urlQueryAllowlist',
+  // spec 08 §5.9, the rows delivered by templates T1a
+  'templates',
+  'templateHostIdleTimeout',
+  'templateMaxPagesPerHost',
+  'templateRecycleAfter',
+  'templateDrainTimeout',
 ] as const;
 
 describe('CONFIG_KEYS', () => {
   it('covers every key of the spec 08 key table', () => {
     for (const key of SPEC_KEYS) expect(CONFIG_KEYS).toContain(key);
     expect(CONFIG_KEYS.length).toBe(SPEC_KEYS.length);
+  });
+
+  it('parses the template keys with the bounds of spec 08 §5.9', () => {
+    const shape = serverConfigObject.shape;
+    expect(shape.templates.parse(undefined)).toBe(true);
+    expect(shape.templateHostIdleTimeout.parse('0')).toBe(0);
+    expect(shape.templateHostIdleTimeout.parse(undefined)).toBe(3_600_000);
+    expect(shape.templateMaxPagesPerHost.parse(undefined)).toBe(40);
+    expect(shape.templateMaxPagesPerHost.safeParse(1).success).toBe(false);
+    expect(shape.templateMaxPagesPerHost.safeParse(201).success).toBe(false);
+    expect(shape.templateRecycleAfter.parse(undefined)).toBe(86_400_000);
+    expect(shape.templateRecycleAfter.safeParse('59m').success).toBe(false);
+    expect(shape.templateDrainTimeout.parse(undefined)).toBe(900_000);
+    expect(shape.templateDrainTimeout.safeParse('30s').success).toBe(false);
+    expect(shape.templateDrainTimeout.safeParse('3h').success).toBe(false);
   });
 
   it('derives names mechanically and keeps them unique across keys and reserved keys', () => {

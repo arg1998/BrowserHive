@@ -17,6 +17,6 @@ describe('tool execution checklist (spec 09 §3.2)', () => {
     );
     const missing = ALL_TOOL_NAMES.filter((name) => !executed.has(name));
     expect(missing).toEqual([]);
-    expect(ALL_TOOL_NAMES).toHaveLength(43);
+    expect(ALL_TOOL_NAMES).toHaveLength(44);
   });
 });

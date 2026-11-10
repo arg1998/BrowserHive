@@ -577,6 +577,8 @@ describe('documented == recorded', () => {
       harnessDeclared: null,
       sandboxed: null,
       browserVersion: null,
+      template: null,
+      sealed: null,
     });
     const retention = new RetentionScheduler({
       maintenance: {

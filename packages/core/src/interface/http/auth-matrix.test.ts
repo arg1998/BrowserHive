@@ -5,7 +5,11 @@ import { Scope } from '@browserhive/contracts/enums';
 import { ProblemDetails } from '@browserhive/contracts/errors';
 import { HTTP_ENDPOINTS, PASSWORD_CHANGE_ALLOWED_OPERATIONS } from '@browserhive/contracts/http';
 import { createHttpKit } from '../../../test/helpers/http-kit.ts';
-import { type CaseContext, ROUTE_CASES } from '../../../test/helpers/http-route-cases.ts';
+import {
+  type CaseContext,
+  ROUTE_CASES,
+  TEMPLATE_BODY,
+} from '../../../test/helpers/http-route-cases.ts';
 
 const PUBLIC = new Set(HTTP_ENDPOINTS.filter((e) => e.auth.length === 0).map((e) => e.operationId));
 const ALLOWED = new Set(PASSWORD_CHANGE_ALLOWED_OPERATIONS);
@@ -189,6 +193,52 @@ describe('auth matrix: bearer principals', () => {
     });
     expect(mint.status).toBe(200);
     expect((await kit.request('POST', '/mcp', { headers: bearer })).status).toBe(200);
+  });
+
+  it('the template routes need their own scopes (spec 13 §6.2); agents reach none of them', async () => {
+    const kit = await createHttpKit();
+    const cookie = await kit.login();
+    const issue = async (body: Record<string, unknown>) => {
+      const response = await kit.request('POST', '/api/v1/auth/tokens', { cookie, body });
+      const { token } = (await response.json()) as { token: string };
+      return { authorization: `Bearer ${token}` };
+    };
+    const reader = await issue({
+      owner_kind: 'operator',
+      display: 'templates-reader',
+      scopes: ['templates:read'],
+    });
+    const writer = await issue({
+      owner_kind: 'operator',
+      display: 'templates-writer',
+      scopes: ['templates:read', 'templates:write'],
+    });
+    const agent = await issue({ owner_kind: 'agent', display: 'bot' });
+    const body = TEMPLATE_BODY;
+
+    expect((await kit.request('GET', '/api/v1/templates', { headers: reader })).status).toBe(200);
+    const refused = await kit.request('POST', '/api/v1/templates', { headers: reader, body });
+    expect(refused.status).toBe(403);
+    expect(ProblemDetails.parse(await refused.json()).code).toBe('FORBIDDEN');
+    const created = await kit.request('POST', '/api/v1/templates', { headers: writer, body });
+    expect(created.status).toBe(201);
+    const { template } = (await created.json()) as { template: { template_id: string } };
+    const path = `/api/v1/templates/${template.template_id}`;
+    expect((await kit.request('GET', path, { headers: reader })).status).toBe(200);
+    expect((await kit.request('DELETE', path, { headers: reader })).status).toBe(403);
+    for (const [method, url] of [
+      ['GET', '/api/v1/templates'],
+      ['POST', '/api/v1/templates'],
+      ['GET', path],
+      ['DELETE', path],
+    ] as const) {
+      const response = await kit.request(method, url, {
+        headers: agent,
+        ...(method === 'POST' && { body }),
+      });
+      expect(response.status).toBe(403);
+    }
+    expect((await kit.request('DELETE', path, { headers: writer })).status).toBe(200);
   });
 
   it('a present-but-invalid bearer is 401, never anonymous', async () => {
