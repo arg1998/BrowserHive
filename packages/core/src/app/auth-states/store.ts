@@ -14,6 +14,7 @@ import { AppError } from '../../kernel/errors/app-error.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import { pathNotAllowed } from '../../kernel/paths.ts';
 import type { AuthStateLocator } from '../../ports/auth-state-locator.ts';
+import type { StorageStateSource } from '../../ports/browser-driver.ts';
 import type { Clock } from '../../ports/clock.ts';
 import type { Logger } from '../../ports/logger.ts';
 import { createNodeZipFs, unzipFileToDirectory, type ZipFs, zipDirectoryToFile } from './zip.ts';
@@ -43,11 +44,8 @@ export interface AuthStateFs extends ZipFs {
   list(dir: string): Promise<readonly string[]>;
 }
 
-/** Anything that can write a Playwright storage state to a path (a `BrowserContext`). */
-export interface StorageStateSource {
-  /** `indexedDB` is required so a caller can never silently drop it again (Playwright's default is off). */
-  storageState(options: { path: string; indexedDB: boolean }): Promise<unknown>;
-}
+/** Anything that can write a Playwright storage state to a path; defined by the driver port (`SessionView.storageStateSource()`). */
+export type { StorageStateSource };
 
 /** Manifest written next to every snapshot (`<name>.meta.json`); `owner` is optional on read (spec 02 §6). */
 export const AuthManifest = z.object({

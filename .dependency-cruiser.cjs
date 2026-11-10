@@ -38,7 +38,23 @@ module.exports = {
         path: '^packages/',
         pathNot: ['^packages/core/src/infra/browsers', '^packages/[^/]+/test', '\\.test\\.tsx?$'],
       },
-      to: { path: '^(playwright|patchright|playwright-core)', dependencyTypesNot: ['type-only'] },
+      // Resolved npm paths start with `node_modules/`; reading a driver's `package.json` (its
+      // version, for `server_status`) is not a use of the driver.
+      to: {
+        path: '^node_modules/(playwright|playwright-core|patchright|patchright-core)/',
+        pathNot: '/package\\.json$',
+        dependencyTypesNot: ['type-only'],
+      },
+    },
+    {
+      // Spec 13 §3.13 (PR T0c): no `interface/` module imports `BrowserContext`. dependency-cruiser
+      // cannot match imported names, so `interface/` names Playwright types only through
+      // `ports/page-types.ts`, which re-exports page-level types and never `BrowserContext` or
+      // `Browser`; tools, the live view and the vault reach a session through its `SessionView`.
+      name: 'interface-no-playwright',
+      severity: 'error',
+      from: { path: '^packages/core/src/interface', pathNot: '\\.test\\.tsx?$' },
+      to: { path: '^node_modules/(playwright|playwright-core|patchright|patchright-core)/' },
     },
     {
       name: 'sqlite-only-in-persistence',
@@ -51,13 +67,21 @@ module.exports = {
           '\\.test\\.tsx?$',
         ],
       },
-      to: { path: '^(kysely|bun:sqlite)' },
+      to: { path: '^(node_modules/kysely/|bun:sqlite)' },
     },
     {
       name: 'contracts-platform-neutral',
       severity: 'error',
       from: { path: '^packages/contracts/src', pathNot: '\\.test\\.tsx?$' },
-      to: { path: '^(node:|bun:|bun-types|bun$)' },
+      // `node:fs` resolves to the core module `fs` (the prefix is gone), so match the dependency
+      // type; Bun's own modules are matched by name.
+      to: { dependencyTypes: ['core'] },
+    },
+    {
+      name: 'contracts-platform-neutral-bun',
+      severity: 'error',
+      from: { path: '^packages/contracts/src', pathNot: '\\.test\\.tsx?$' },
+      to: { path: '^(bun:|bun-types|bun$|node_modules/(bun-types|@types/bun)/)' },
     },
     {
       name: 'dashboard-only-contracts',
@@ -92,8 +116,14 @@ module.exports = {
     { name: 'no-circular', severity: 'error', from: {}, to: { circular: true } },
   ],
   options: {
+    // `node_modules` is not followed, but it is not excluded either: an excluded module vanishes
+    // from the dependency list, so no rule could ever match an npm package.
     doNotFollow: { path: 'node_modules' },
-    exclude: { path: ['node_modules', 'dist', '\\.gen\\.ts$', 'generated/'] },
+    // Anchored to the repository's own build output: an unanchored `dist` also hid every npm
+    // package that resolves into its `dist/` (`node_modules/kysely/dist/index.js`).
+    exclude: {
+      path: ['^dist/', '^packages/[^/]+/dist/', '\\.gen\\.ts$', '^packages/.*/generated/'],
+    },
     tsPreCompilationDeps: 'specify',
     tsConfig: { fileName: 'tsconfig.json' },
     enhancedResolveOptions: {

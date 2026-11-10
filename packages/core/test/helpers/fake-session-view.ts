@@ -1,19 +1,24 @@
-/** @module test/helpers/fake-session-handle — FakeBrowserContext, FakeTracingHandle and FakeSessionHandle: an in-memory `SessionHandle` with crash injection (spec 09 §4). */
+/** @module test/helpers/fake-session-view — FakeBrowserContext, FakeTracingHandle, FakeBrowserHost and FakeSessionView: an in-memory exclusive host and its one view, with crash injection (spec 09 §4, 13 §3.13). */
 
 import type { Browser, BrowserContext, Page } from 'playwright';
+import { sessionOwner } from '../../src/infra/browsers/page-attribution.ts';
+import { HostPageDispatcher } from '../../src/infra/browsers/page-dispatcher.ts';
+import { ExclusiveSessionView } from '../../src/infra/browsers/session-view.ts';
+import { createCollectingLogger } from '../../src/infra/logging/collecting-logger.ts';
 import type {
   AppliedIdentity,
+  BrowserHost,
   EngineCapabilities,
   LaunchWarning,
   SessionBrowserInfo,
-  SessionHandle,
   TracingHandle,
 } from '../../src/ports/browser-driver.ts';
+import { FakeClock } from './fake-clock.ts';
 import { asPage, FakePage } from './fake-page.ts';
 
 type Listener = (payload: unknown) => void;
 
-/** Structural cast companion of `asPage` for the context; documented once here, used only by the handle. */
+/** Structural cast companion of `asPage` for the context; documented once here, used only by the host. */
 function asContext(fake: FakeBrowserContext): BrowserContext {
   const widened: unknown = fake;
   return widened as BrowserContext;
@@ -130,8 +135,8 @@ export class FakeTracingHandle implements TracingHandle {
   }
 }
 
-/** Constructor options of {@link FakeSessionHandle}. */
-export interface FakeSessionHandleOptions {
+/** Constructor options of {@link FakeSessionView} (and its {@link FakeBrowserHost}). */
+export interface FakeSessionViewOptions {
   readonly driver?: 'patchright' | 'playwright';
   readonly identity?: AppliedIdentity | null;
   readonly warnings?: readonly LaunchWarning[];
@@ -144,6 +149,8 @@ export interface FakeSessionHandleOptions {
   readonly browser?: Browser | null;
   /** The launch facts a real driver reports (D-31); absent by default, like other fakes. */
   readonly browserInfo?: SessionBrowserInfo;
+  /** What `userDataDir()` answers (a persistent session's profile dir); `null` by default. */
+  readonly userDataDir?: string | null;
 }
 
 /** Recorded `close()` invocation. */
@@ -161,20 +168,25 @@ const DEFAULT_CAPABILITIES: EngineCapabilities = {
   isolatedEvaluate: false,
 };
 
-/** In-memory `SessionHandle` over a {@link FakeBrowserContext}. */
-export class FakeSessionHandle implements SessionHandle {
-  readonly sessionId: string;
+/**
+ * In-memory exclusive `BrowserHost` over a {@link FakeBrowserContext}. Its pages go through the real
+ * {@link HostPageDispatcher} with the session as fallback owner, exactly as the Playwright host does.
+ */
+export class FakeBrowserHost implements BrowserHost {
+  readonly hostId: string;
+  readonly kind = 'exclusive' as const;
   readonly browser: Browser | null;
   readonly fakeContext: FakeBrowserContext;
   readonly context: BrowserContext;
-  readonly firstPage: FakePage;
-  readonly page: Page;
   readonly capabilities: EngineCapabilities;
   readonly driver: 'patchright' | 'playwright';
   readonly identity: AppliedIdentity | null;
   readonly browserInfo?: SessionBrowserInfo;
   readonly warnings: readonly LaunchWarning[];
   readonly tracing: FakeTracingHandle | null;
+  readonly dispatcher: HostPageDispatcher;
+  /** The context's first page. */
+  readonly firstPage: FakePage;
   /** Pages `ensureIdentityForPage` was called with. */
   readonly identityPages: Page[] = [];
   readonly closes: RecordedClose[] = [];
@@ -182,13 +194,11 @@ export class FakeSessionHandle implements SessionHandle {
   closed = false;
   private readonly crashListeners = new Set<(reason: string) => void>();
 
-  constructor(sessionId: string, options: FakeSessionHandleOptions = {}) {
-    this.sessionId = sessionId;
+  constructor(sessionId: string, options: FakeSessionViewOptions = {}) {
+    this.hostId = sessionId;
     this.browser = options.browser ?? null;
     this.fakeContext = new FakeBrowserContext(this.browser);
     this.context = this.fakeContext.context;
-    this.firstPage = this.fakeContext.addPage();
-    this.page = asPage(this.firstPage);
     this.capabilities = { ...DEFAULT_CAPABILITIES, ...options.capabilities };
     this.driver = options.driver ?? 'playwright';
     this.identity = options.identity ?? null;
@@ -201,6 +211,16 @@ export class FakeSessionHandle implements SessionHandle {
           ? new FakeTracingHandle()
           : options.tracing;
     this.closeWarnings = options.closeWarnings ?? [];
+    this.dispatcher = new HostPageDispatcher({
+      fallback: sessionOwner(sessionId),
+      clock: new FakeClock(),
+      logger: createCollectingLogger(),
+    });
+    // The first page, adopted before any listener exists (as `PlaywrightBrowserHost` adopts
+    // `context.pages()` at construction).
+    this.firstPage = this.fakeContext.addPage();
+    this.dispatcher.adopt(asPage(this.firstPage));
+    this.fakeContext.on('page', (page) => this.dispatcher.adopt(asPageEvent(page)));
   }
 
   async ensureIdentityForPage(page: Page): Promise<void> {
@@ -224,5 +244,58 @@ export class FakeSessionHandle implements SessionHandle {
     this.closed = true;
     await this.fakeContext.close();
     return this.closeWarnings;
+  }
+}
+
+/** The payload of a fake `page` event is a page made by {@link FakeBrowserContext}. */
+function asPageEvent(payload: unknown): Page {
+  return payload as Page;
+}
+
+/**
+ * The real {@link ExclusiveSessionView} over its own {@link FakeBrowserHost}, so ownership checks
+ * (`owns`, `newCDPSession`) and delegation are the production code. The test conveniences the
+ * former `FakeSessionHandle` had (`fakeContext`, `firstPage`, `tracing`, `closes`, `closed`,
+ * `identityPages`, `crash()`) forward to the host so suites read the same.
+ */
+export class FakeSessionView extends ExclusiveSessionView<FakeBrowserHost> {
+  constructor(sessionId: string, options: FakeSessionViewOptions = {}) {
+    const host = new FakeBrowserHost(sessionId, options);
+    super(host, asPage(host.firstPage), options.userDataDir ?? null);
+  }
+
+  /** The host's fake context. */
+  get fakeContext(): FakeBrowserContext {
+    return this.host.fakeContext;
+  }
+
+  /** The context's first page as a fake. */
+  get firstPage(): FakePage {
+    return this.host.firstPage;
+  }
+
+  /** The host's tracing handle. */
+  get tracing(): FakeTracingHandle | null {
+    return this.host.tracing;
+  }
+
+  /** The host's recorded closes. */
+  get closes(): readonly RecordedClose[] {
+    return this.host.closes;
+  }
+
+  /** True once the host closed. */
+  get closed(): boolean {
+    return this.host.closed;
+  }
+
+  /** Pages the host applied the identity to. */
+  get identityPages(): readonly Page[] {
+    return this.host.identityPages;
+  }
+
+  /** Fires the host's crash listeners. */
+  crash(reason?: string): void {
+    this.host.crash(reason);
   }
 }

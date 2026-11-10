@@ -143,7 +143,7 @@ export function launchDeclaredHarnessOf(client: SessionClientInfo | null): strin
  * else what its launch recorded (kept after teardown); absent when nothing was recorded.
  */
 function browserOf(session: Session): Pick<SessionSummary, 'browser'> {
-  const info = session.handle?.browserInfo ?? session.browserInfo;
+  const info = session.view?.host.browserInfo ?? session.browserInfo;
   return info === undefined || info === null
     ? {}
     : { browser: { version: info.version, sandboxed: info.sandboxed } };

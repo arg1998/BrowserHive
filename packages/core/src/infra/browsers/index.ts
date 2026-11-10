@@ -23,6 +23,7 @@ export {
   playwrightChannelExecutable,
   playwrightExecutable,
 } from './browser-detection.ts';
+export { type BrowserHostInput, PlaywrightBrowserHost } from './browser-host.ts';
 export {
   isChannel,
   type LaunchKwargs,
@@ -110,6 +111,24 @@ export {
   type WindowMetrics,
 } from './native-getter.ts';
 export {
+  type AttributionDecision,
+  type AttributionRule,
+  PARKED,
+  PageAttribution,
+  type PageAttributionOptions,
+  type PageOwner,
+  sameOwner,
+  sessionOwner,
+  type TargetFacts,
+  TOMBSTONE_LIMIT,
+} from './page-attribution.ts';
+export {
+  ATTRIBUTION_HOLD_MS,
+  HostPageDispatcher,
+  type HostPageDispatcherOptions,
+  type TargetFactsReader,
+} from './page-dispatcher.ts';
+export {
   assertLaunchOptionsAllowed,
   BrowserContextOptionsSchema,
   byoProxyPresent,
@@ -169,7 +188,7 @@ export {
   type SandboxUnavailableFactory,
   type SandboxVerdict,
 } from './sandbox-policy.ts';
-export { PlaywrightSessionHandle, type SessionHandleInput } from './session-handle.ts';
+export { ExclusiveSessionView, type ExclusiveViewHost } from './session-view.ts';
 export {
   archFor,
   type CoherentIdentity,

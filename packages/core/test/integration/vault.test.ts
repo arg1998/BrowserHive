@@ -154,7 +154,7 @@ describe('vault_fill end to end (fake bw + real Chromium)', () => {
       },
       {
         session: {
-          sessionId: session.handle.sessionId,
+          sessionId: session.view.sessionId,
           slug: 'vault',
           disableEvaluate: false,
           vaultEnabled: true,
@@ -248,7 +248,7 @@ describe('vault_fill end to end (fake bw + real Chromium)', () => {
     await session.page.goto(state.fixture.url('/form-with-search'));
     const ctx = {
       session: {
-        sessionId: session.handle.sessionId,
+        sessionId: session.view.sessionId,
         slug: 'vault',
         disableEvaluate: false,
         vaultEnabled: true,
@@ -344,7 +344,7 @@ describe('vault_fill end to end (fake bw + real Chromium)', () => {
       },
       {
         session: {
-          sessionId: session.handle.sessionId,
+          sessionId: session.view.sessionId,
           slug: 'vault',
           disableEvaluate: false,
           vaultEnabled: true,
@@ -386,7 +386,7 @@ describe('vault_fill end to end (fake bw + real Chromium)', () => {
     await session.page.goto(state.fixture.url('/form'));
     const ctx = {
       session: {
-        sessionId: session.handle.sessionId,
+        sessionId: session.view.sessionId,
         slug: 'vault',
         disableEvaluate: false,
         vaultEnabled: true,

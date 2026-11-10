@@ -1,9 +1,9 @@
 /** @module interface/mcp/tools/vault — vault_list_available, vault_fill (delegating to VaultService; failures are returned statuses). */
 
-import type { Page } from 'playwright';
 import { safeCurrentUrl } from '../../../../app/sessions/metadata.ts';
 import type { Session } from '../../../../domain/session/session.ts';
 import type { VaultPage } from '../../../../domain/vault/types.ts';
+import type { Page } from '../../../../ports/page-types.ts';
 import { requireSession } from '../../context.ts';
 import { defineTool, json, type ToolPack } from '../../definition.ts';
 import { sessionOwnership, vaultEnabled } from '../../policies.ts';
@@ -98,7 +98,7 @@ export const vaultFill = defineTool('vault_fill', {
           ...launchHarness(session),
         },
         page: vaultPage(page),
-        tracing: session.handle?.tracing ?? null,
+        tracing: session.view?.host.tracing ?? null,
         principal: ctx.principal.subject,
         toolEventId: ctx.eventId,
         signal: ctx.signal,

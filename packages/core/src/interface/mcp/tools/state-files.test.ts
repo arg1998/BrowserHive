@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { FakeSessionHandle } from '../../../../test/helpers/fake-session-handle.ts';
+import type { FakeSessionView } from '../../../../test/helpers/fake-session-view.ts';
 import {
   createToolHarness,
   type ToolHarness,
@@ -15,7 +15,7 @@ import { clampToAssertedDisplay, splitIdentityHeaders } from './state/headers.ts
 let h: ToolHarness;
 afterEach(async () => h.close());
 
-function handle(): FakeSessionHandle {
+function handle(): FakeSessionView {
   const found = h.fakeDriver?.handles[0];
   if (found === undefined) throw new Error('no handle');
   return found;

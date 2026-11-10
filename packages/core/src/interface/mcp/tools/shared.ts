@@ -1,10 +1,10 @@
 /** @module interface/mcp/tools/shared — helpers every tool pack uses: page resolution, driver-error mapping, navigation facts. */
 
 import { ERROR_REGISTRY, renderMessage } from '@browserhive/contracts/errors';
-import type { Page } from 'playwright';
 import type { Session } from '../../../domain/session/session.ts';
 import { AppError, isAppError } from '../../../kernel/errors/app-error.ts';
 import type { DriverErrorContext } from '../../../ports/page-actions.ts';
+import type { Page } from '../../../ports/page-types.ts';
 import type { ToolCallContext } from '../context.ts';
 import type { PageVisit } from '../definition.ts';
 

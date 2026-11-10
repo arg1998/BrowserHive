@@ -1,10 +1,11 @@
-/** @module ports/browser-driver — engine-neutral session lifecycle port; Playwright types appear only as `type` imports (spec 01 §5, 11 §2.1). */
+/** @module ports/browser-driver — engine-neutral session lifecycle port: a `BrowserHost` and the `SessionView`s over it; Playwright types appear only as `type` imports (spec 01 §5, 11 §2.1, 13 §3.13). */
 
 import type { Channel, PersistenceMode, StealthDriver } from '@browserhive/contracts/enums';
 import type {
   Browser,
   BrowserContext,
   BrowserContextOptions,
+  CDPSession,
   LaunchOptions,
   Page,
 } from 'playwright';
@@ -182,17 +183,28 @@ export interface TracingHandle {
   stop(path: string): Promise<void>;
 }
 
+/** A cookie as the browser reports it (Playwright's `Cookie`). */
+export type Cookie = Awaited<ReturnType<BrowserContext['cookies']>>[number];
+
+/** A cookie to add: `url`, or `domain` plus `path`, alongside name and value (Playwright validates it). */
+export type CookieInput = Parameters<BrowserContext['addCookies']>[0][number];
+
+/** Anything that can write a Playwright storage state to a path (a `BrowserContext`). */
+export interface StorageStateSource {
+  /** `indexedDB` is required so a caller can never silently drop it again (Playwright's default is off). */
+  storageState(options: { path: string; indexedDB: boolean }): Promise<unknown>;
+}
+
 /**
- * A launched, isolated browser session: one browser process, one context. Implementations MUST
- * NOT share `Browser` or `BrowserContext` instances across sessions.
+ * What a session may know about the browser that serves it: facts and page-scoped helpers, never
+ * the browser, its context or its lifecycle (spec 13 §3.13). This is the type of
+ * `SessionView.host`, so tools, the live view and the vault cannot reach the shared context, the
+ * other sessions' pages or `close()` of a template host through a value.
  */
-export interface SessionHandle {
-  readonly sessionId: string;
-  /** `null` for a persistent context; closing the context tears the browser down. */
-  readonly browser: Browser | null;
-  readonly context: BrowserContext;
-  /** The initial page. */
-  readonly page: Page;
+export interface SessionHost {
+  /** The session id for an exclusive host, the template id for a template host. */
+  readonly hostId: string;
+  readonly kind: 'exclusive' | 'template';
   readonly capabilities: EngineCapabilities;
   /** `patchright` or `playwright` — what actually launched. */
   readonly driver: 'patchright' | 'playwright';
@@ -201,23 +213,95 @@ export interface SessionHandle {
   /** The engine's real version (null when no `Browser` can be read; Chromium persistent contexts expose one) and whether it runs sandboxed. Absent in fakes. */
   readonly browserInfo?: SessionBrowserInfo;
   readonly warnings: readonly LaunchWarning[];
+  /** Per-context tracing; always `null` for a template host (spec 13 §5.4). */
   readonly tracing: TracingHandle | null;
   /** Applies the UA/UA-CH override to a page and resolves when it is in effect (new tabs await this). */
   ensureIdentityForPage(page: Page): Promise<void>;
-  /** Subscribes to unexpected browser exit / context close. Returns an unsubscribe. */
-  onCrash(listener: (reason: string) => void): () => void;
-  /** Closes everything within `deadlineMs`; never throws (findings become warnings). */
-  close(deadlineMs: number, signal?: AbortSignal): Promise<readonly LaunchWarning[]>;
   /**
    * The OS pid of the browser's main process (the root of its process tree), read once and cached;
-   * `null` when it cannot be read. Only the browser-memory metric asks (spec 10 §7). Absent in fakes.
+   * `null` when it cannot be read. Only the browser-memory metric asks (spec 10 §7), keyed by
+   * `hostId`. Absent in fakes.
    */
   browserPid?(): Promise<number | null>;
+}
+
+/**
+ * One running browser and its context (spec 13 §3.13). An exclusive session gets a host of its own
+ * (`kind: 'exclusive'`, `hostId` = the session id); a template host (`kind: 'template'`, PR T1a) is
+ * shared by the virtual sessions of one template. Only the driver, the creation pipeline (policy
+ * install) and infra hold a `BrowserHost`; a session sees it as a {@link SessionHost}.
+ *
+ * @remarks An exclusive host MUST NOT be shared between sessions; a template host is shared only by
+ * the virtual sessions of its template, and its views MUST satisfy the attribution invariant of
+ * spec 13 §3.4. `interface/` modules cannot name `BrowserContext` (dependency-cruiser rule
+ * `interface-no-playwright`) nor reach it through a session (`SessionView.host` is a
+ * `SessionHost`; the grep rules forbid `.context(` there).
+ */
+export interface BrowserHost extends SessionHost {
+  /** `null` for a persistent context; closing the context tears the browser down. */
+  readonly browser: Browser | null;
+  readonly context: BrowserContext;
+  /** Subscribes to unexpected browser exit / context close. Returns an unsubscribe. */
+  onCrash(listener: (reason: string) => void): () => void;
+  /** Closes the browser and its context within `deadlineMs`; never throws (findings become warnings). */
+  close(deadlineMs: number, signal?: AbortSignal): Promise<readonly LaunchWarning[]>;
+}
+
+/**
+ * What one session may touch: its own pages only (spec 13 §3.13). Tools, the live view and the
+ * vault ask the view, never the host's context.
+ *
+ * @remarks A page is in `pages()` and reaches `onPage` listeners only once the host's attribution
+ * dispatcher has attributed it to this session (spec 13 §3.4); an attribution never changes.
+ */
+export interface SessionView {
+  readonly sessionId: string;
+  /** Facts about the browser serving this session; never its context or lifecycle. */
+  readonly host: SessionHost;
+  /** The first page. */
+  readonly page: Page;
+  /** The open pages attributed to this session, in attribution order. */
+  pages(): readonly Page[];
+  /** True while `page` is open and attributed to this session. */
+  owns(page: Page): boolean;
+  /** Pages attributed to this session after it opened (site-opened popups, new tabs). Returns an unsubscribe. */
+  onPage(listener: (page: Page) => void): () => void;
+  /** Opens a page attributed to this session (exclusive: `context.newPage()`; virtual: spec 13 §3.3). */
+  newPage(): Promise<Page>;
+  /** Cookies visible to this session, optionally limited to `urls`. */
+  cookies(urls?: readonly string[]): Promise<Cookie[]>;
+  /** Adds cookies; the driver validates them and rejects with its own message. */
+  addCookies(cookies: readonly CookieInput[]): Promise<void>;
+  /** Replaces the extra request headers (exclusive: context-wide; virtual: per page, replayed on new pages). */
+  setExtraHTTPHeaders(headers: Record<string, string>): Promise<void>;
+  /** What `save_storage_state` reads; `null` for a virtual session. */
+  storageStateSource(): StorageStateSource | null;
+  /** The managed profile directory of a persistent session; `null` otherwise and for virtual sessions. */
+  userDataDir(): string | null;
+  /**
+   * A DevTools session on one of this session's pages (the live view's screencast and input).
+   *
+   * @throws `INTERNAL_ERROR` (`ref: 'page-not-owned'`) when `page` was never attributed to this session.
+   */
+  newCDPSession(page: Page): Promise<CDPSession>;
+  /** Subscribes to the host's crash fan-out plus this session's own crash. Returns an unsubscribe. */
+  onCrash(listener: (reason: string) => void): () => void;
+  /** Closes the session within `deadlineMs`; never throws (exclusive: closes the host; virtual: spec 13 §3.5). */
+  close(deadlineMs: number, signal?: AbortSignal): Promise<readonly LaunchWarning[]>;
+}
+
+/** An exclusive host and its one view, as `BrowserDriver.launch` returns them. */
+export interface LaunchedSession {
+  /** What the session keeps (`Session.view`). */
+  readonly view: SessionView;
+  /** The full host, for the creation pipeline's policy install; `view.host` is the same object. */
+  readonly host: BrowserHost;
 }
 
 /** Strategy for spawning a new isolated browser session (spec 01 §9 engine seam). */
 export interface BrowserDriver {
   /** Reports which driver stealth sessions will use, for `server_status`/System page. */
   stealthDriverName(): 'patchright' | 'playwright';
-  launch(spec: LaunchSpec, signal?: AbortSignal): Promise<SessionHandle>;
+  /** Launches an exclusive host; the session keeps only the view, the pipeline uses the host once. */
+  launch(spec: LaunchSpec, signal?: AbortSignal): Promise<LaunchedSession>;
 }

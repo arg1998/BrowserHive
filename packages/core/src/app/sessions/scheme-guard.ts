@@ -1,6 +1,6 @@
 /** @module app/sessions/scheme-guard — the non-web scheme backstop: closes a session page whose main frame commits a URL outside the web schemes (spec 13 T0d, D-57). */
 
-import type { Frame, Page } from 'playwright';
+import type { CDPSession, Frame, Page } from 'playwright';
 import { refusedCommittedScheme, type SchemeOptions } from '../../domain/policies/url-scheme.ts';
 import type { TabRegistry } from '../../domain/session/tabs.ts';
 import type { Logger } from '../../ports/logger.ts';
@@ -32,14 +32,14 @@ function closedWithin(page: Page, ms: number): Promise<void> {
  * `file:` commit: about one in ten), and Playwright never re-sends one, so a page still open after
  * {@link CLOSE_WAIT_MS} is closed again with CDP `Page.close`. Resolves `true` once it is closed.
  */
-async function closePage(page: Page): Promise<boolean> {
+async function closePage(page: Page, target: SchemeGuardTarget): Promise<boolean> {
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
   page.close().catch(() => undefined);
   for (let retry = 0; retry < CLOSE_RETRIES; retry++) {
     await closedWithin(page, CLOSE_WAIT_MS);
     if (page.isClosed()) return true;
     try {
-      const cdp = await page.context().newCDPSession(page);
+      const cdp = await target.newCDPSession(page);
       await cdp.send('Page.close');
     } catch {
       // The page closed (or the context went away) in the meantime; the loop re-checks.
@@ -54,6 +54,8 @@ export interface SchemeGuardTarget {
   readonly sessionId: string;
   readonly tabs: TabRegistry;
   readonly logger: Logger;
+  /** A DevTools session on one of the session's own pages (`SessionView.newCDPSession`). */
+  newCDPSession(page: Page): Promise<CDPSession>;
 }
 
 /**
@@ -82,7 +84,7 @@ export function guardPageScheme(page: Page, target: SchemeGuardTarget): void {
       ...(tabId !== undefined && { tabId }),
       scheme,
     });
-    void closePage(page).then((closed) => {
+    void closePage(page, target).then((closed) => {
       if (!closed) {
         target.logger.error('scheme page close failed', {
           sessionId: target.sessionId,

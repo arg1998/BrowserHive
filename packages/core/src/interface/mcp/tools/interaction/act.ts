@@ -18,7 +18,7 @@ export function humanized(session: Session): boolean {
 
 /** Whether `evaluate` must opt out of Patchright's isolated world for this session. */
 export function isolatedEvaluate(session: Session): boolean {
-  return session.handle?.capabilities.isolatedEvaluate ?? false;
+  return session.view?.host.capabilities.isolatedEvaluate ?? false;
 }
 
 /**

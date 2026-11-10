@@ -1000,7 +1000,7 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 
 **Status:** Accepted
 
-**Implementation:** planned: PR T0c (the `BrowserHost`/`SessionView` split, no behaviour change) and PR T1a of spec 13 §17.
+**Implementation:** PR T0c (the `BrowserHost`/`SessionView` split and the attribution dispatcher, no behaviour change) on the templates feature branch; planned: PR T1a of spec 13 §17.
 
 **Context.** Two ways exist to run ten sessions from one sign-in. *Fork mode* gives each session its own browser seeded from a copy of the cookie jar: Google supersedes a copied snapshot within about 10 minutes, refresh-token rotation with reuse detection revokes the whole token family (RFC 9700 §4.14.2), device-bound session credentials (DBSC) cannot be copied at all, and antidetect vendors therefore run one profile on one device at a time. *Shared mode* runs one browser per identity with a window per task, which is what a person does. Measured on Playwright and Patchright 1.63 with headed Chromium: `Target.createTarget({newWindow: true, browserContextId})` opens a window Playwright adopts; focus emulation keeps pages visible and focused in background tabs and unfocused windows; ten sessions in one browser take about 1.3 GB against 2.3 GB as ten browsers. The cost is the session model itself: D-21, spec 11 §2.2 and the driver port say one session is one browser and one context.
 

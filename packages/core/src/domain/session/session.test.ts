@@ -1,7 +1,7 @@
 /** @module domain/session/session.test — the Session aggregate: seeding, lease, transitions, attachment, counters, terminal facts. */
 
 import { describe, expect, it } from 'bun:test';
-import { FakeSessionHandle } from '../../../test/helpers/fake-session-handle.ts';
+import { FakeSessionView } from '../../../test/helpers/fake-session-view.ts';
 import { isAppError } from '../../kernel/errors/app-error.ts';
 import { validateCreateRequest } from './create-request.ts';
 import { LOCAL_PRINCIPAL } from './principal.ts';
@@ -39,7 +39,7 @@ describe('Session', () => {
     expect(s.lease).toEqual({ expiresAt: 1_000 + WINDOW, pausedAt: null });
     expect(s.owner).toBe('local');
     expect(s.slug).toBe('shop');
-    expect(s.handle).toBeNull();
+    expect(s.view).toBeNull();
     expect(s.driver).toBeNull();
     expect(s.identity).toBeNull();
     expect(s.lastToolAt).toBe(1_000);
@@ -91,7 +91,7 @@ describe('Session', () => {
 
   it('attach records handle facts and identity; detach drops the handle', () => {
     const s = session();
-    const handle = new FakeSessionHandle(s.id, {
+    const handle = new FakeSessionView(s.id, {
       driver: 'patchright',
       identity: {
         userAgent: 'ua',
@@ -103,8 +103,8 @@ describe('Session', () => {
         display: null,
       },
     });
-    s.attach({ handle, driver: handle.driver, launchedAt: 5_000, launchMs: 4_000 });
-    expect(s.handle).toBe(handle);
+    s.attach({ view: handle, driver: handle.host.driver, launchedAt: 5_000, launchMs: 4_000 });
+    expect(s.view).toBe(handle);
     expect(s.driver).toBe('patchright');
     expect(s.launchedAt).toBe(5_000);
     expect(s.launchMs).toBe(4_000);
@@ -117,7 +117,7 @@ describe('Session', () => {
     s.setProxyLabel('proxy.example:8080');
     expect(s.proxyLabel).toBe('proxy.example:8080');
     s.detach();
-    expect(s.handle).toBeNull();
+    expect(s.view).toBeNull();
     expect(s.driver).toBeNull();
   });
 

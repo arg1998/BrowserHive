@@ -142,8 +142,8 @@ export async function buildSessions(input: SessionsInput): Promise<SessionsParts
     blocklist.configured && config.blocklistWatch ? blocklist.watch(nodeBlocklistWatcher) : null;
 
   const policies: SessionPolicyInstaller = {
-    async install(handle, context) {
-      const warning = await installBlocklistRoute(handle.context, {
+    async install(host, context) {
+      const warning = await installBlocklistRoute(host.context, {
         blocklist: blocklist.holder,
         observer: blocklist.requestObserver,
         sessionId: context.sessionId,

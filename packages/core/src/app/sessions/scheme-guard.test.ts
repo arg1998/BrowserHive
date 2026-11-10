@@ -16,7 +16,12 @@ function setup(url = 'about:blank') {
   const logger = createCollectingLogger();
   const fake = new FakePage(url);
   const tabId = tabs.add(fake.page);
-  guardPageScheme(fake.page, { sessionId: 's-1', tabs, logger });
+  guardPageScheme(fake.page, {
+    sessionId: 's-1',
+    tabs,
+    logger,
+    newCDPSession: () => Promise.reject(new Error('no CDP in unit tests')),
+  });
   return { tabs, logger, fake, tabId };
 }
 

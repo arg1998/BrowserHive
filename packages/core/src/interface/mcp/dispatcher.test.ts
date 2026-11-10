@@ -6,7 +6,7 @@ import {
   InMemorySpanExporter,
   SimpleSpanProcessor,
 } from '@opentelemetry/sdk-trace-base';
-import type { FakeSessionHandle } from '../../../test/helpers/fake-session-handle.ts';
+import type { FakeSessionView } from '../../../test/helpers/fake-session-view.ts';
 import {
   createToolHarness,
   type ToolHarness,
@@ -19,7 +19,7 @@ import { ERROR_META_KEY } from './shape.ts';
 let h: ToolHarness;
 afterEach(async () => h.close());
 
-function handle(): FakeSessionHandle {
+function handle(): FakeSessionView {
   const found = h.fakeDriver?.handles[0];
   if (found === undefined) throw new Error('no handle');
   return found;

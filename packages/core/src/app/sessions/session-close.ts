@@ -1,4 +1,4 @@
-/** @module app/sessions/session-close — the close path: drain under the lock, teardown outside it (trace finalize, handle close, dir cleanup), settle through events. */
+/** @module app/sessions/session-close — the close path: drain under the lock, teardown outside it (trace finalize, view close, dir cleanup), settle through events. */
 
 import type { ClosedReason } from '@browserhive/contracts/enums';
 import { SpanStatusCode, type Tracer } from '@opentelemetry/api';
@@ -85,14 +85,16 @@ async function teardown(
   signal: AbortSignal | undefined,
   deps: CloseDeps,
 ): Promise<void> {
-  const handle = session.handle;
+  const view = session.view;
   const dirs = deps.layout.forSession(session.id);
-  if (handle !== null) {
-    // Finalize the trace before tearing the context down; capped so a hung flush never blocks shutdown.
-    if (handle.tracing !== null) {
+  if (view !== null) {
+    // Finalize the trace before tearing the context down; capped so a hung flush never blocks
+    // shutdown. Only an exclusive host traces (a template host's `tracing` is always null).
+    const tracing = view.host.tracing;
+    if (tracing !== null) {
       const deadline = withDeadline(signal, deadlineMs);
       try {
-        await Promise.race([handle.tracing.stop(dirs.traceZip), rejectOnAbort(deadline.signal)]);
+        await Promise.race([tracing.stop(dirs.traceZip), rejectOnAbort(deadline.signal)]);
       } catch (err) {
         deps.warn(session, {
           code: 'TRACE_FINALIZE_FAILED',
@@ -104,7 +106,7 @@ async function teardown(
         deadline.clear();
       }
     }
-    const warnings = await handle.close(deadlineMs, signal);
+    const warnings = await view.close(deadlineMs, signal);
     for (const warning of warnings) {
       deps.warn(session, {
         code: warning.code,

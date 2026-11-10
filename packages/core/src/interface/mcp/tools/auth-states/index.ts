@@ -11,16 +11,25 @@ export const saveStorageState = defineTool('save_storage_state', {
   policies: [sessionOwnership],
   async handler(ctx, args) {
     const session = requireSession(ctx);
-    const handle = session.handle;
-    if (handle === null) {
+    const view = session.view;
+    if (view === null) {
       throw new AppError(
         'SESSION_NOT_LIVE',
         { session_id: session.id },
         { publicMessage: `Session '${session.id}' is not live.` },
       );
     }
+    const source = view.storageStateSource();
+    if (source === null) {
+      // Only a virtual session has no source of its own (PR T1a refuses it before this point).
+      throw new AppError(
+        'INTERNAL_ERROR',
+        { ref: 'storage-state-source' },
+        { message: 'the session view has no storage state source' },
+      );
+    }
     const saved = await ctx.services.authStates.saveStorageState(
-      handle.context,
+      source,
       args.name,
       session.id,
       ctx.principal,

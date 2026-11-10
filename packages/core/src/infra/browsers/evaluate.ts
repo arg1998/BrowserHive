@@ -23,7 +23,7 @@ export type Evaluable = Page | Frame;
  * fourth positional `isolatedContext: false` is passed; under stock Playwright (which already runs
  * in the main world) the plain two-argument form is used.
  *
- * @param isolatedEvaluate `SessionHandle.capabilities.isolatedEvaluate` for the session that owns `target`.
+ * @param isolatedEvaluate `BrowserHost.capabilities.isolatedEvaluate` of the host serving the session that owns `target`.
  */
 export function evaluateMainWorld<R, Arg = undefined>(
   target: Evaluable,
