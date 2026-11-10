@@ -65,24 +65,64 @@ function waitForOutput(child: ChildProcessWithoutNullStreams, pattern: RegExp, m
   });
 }
 
-/** Types into the recording window as the operator would: its site tab, user name, password, Enter. */
-function signInByKeyboard(): void {
-  const found = execFileSync(
-    'xdotool',
-    ['search', '--sync', '--onlyvisible', '--name', `Sign in to ${SITE}`],
-    { encoding: 'utf8', timeout: 30_000 },
-  );
-  const window = found.trim().split('\n')[0] ?? '';
-  const xdo = (...args: string[]) => execFileSync('xdotool', args, { timeout: 15_000 });
-  xdo('windowfocus', '--sync', window);
-  // The first tab carries the instructions; the site's sign-in form is the second.
+/** Visible X windows and their names (the display's view of the template's browser). */
+function windows(): { id: string; name: string }[] {
+  let ids: string[] = [];
+  try {
+    ids = execFileSync('xdotool', ['search', '--onlyvisible', '--name', '.'], { encoding: 'utf8' })
+      .trim()
+      .split('\n')
+      .filter((id) => id !== '');
+  } catch {
+    return [];
+  }
+  return ids.map((id) => {
+    try {
+      const name = execFileSync('xdotool', ['getwindowname', id], { encoding: 'utf8' }).trim();
+      return { id, name };
+    } catch {
+      return { id, name: '' };
+    }
+  });
+}
+
+/** Saves a picture of the whole display next to the test's results (CI uploads them on failure). */
+function snap(path: string): void {
+  try {
+    execFileSync('import', ['-window', 'root', path], { timeout: 15_000 });
+  } catch {
+    // No ImageMagick: the window names in the log still say what was on screen.
+  }
+}
+
+/**
+ * Types into the template's sign-in window as the operator would: the site's tab (the second tab of
+ * the window whose first tab carries the `[BrowserHive] Sign in to …` marker), user name, Tab,
+ * password, Enter. Returns what the display showed, for the failure message.
+ */
+function signInByKeyboard(shots: (name: string) => string): string {
+  const log: string[] = [];
+  execFileSync('xdotool', ['search', '--sync', '--onlyvisible', '--name', 'BrowserHive'], {
+    timeout: 30_000,
+  });
+  const xdo = (...args: string[]) =>
+    execFileSync('xdotool', args, { encoding: 'utf8', timeout: 15_000 }).trim();
+  log.push(`windows: ${JSON.stringify(windows())}`);
+  const marked = windows().find((w) => w.name.includes(`[BrowserHive] Sign in to ${SITE}`));
+  if (marked === undefined) return `${log.join('\n')}\nno marked window`;
+  xdo('windowfocus', '--sync', marked.id);
   xdo('key', '--clearmodifiers', 'ctrl+2');
   xdo('sleep', '1');
-  xdo('type', '--delay', '40', 'operator');
+  log.push(`after ctrl+2 focus: ${xdo('getwindowfocus', 'getwindowname')}`);
+  snap(shots('before-typing.png'));
+  xdo('type', '--delay', '60', 'operator');
   xdo('key', 'Tab');
-  xdo('type', '--delay', '40', 'correct horse battery staple');
+  xdo('type', '--delay', '60', 'correct horse battery staple');
   xdo('key', 'Return');
-  xdo('sleep', '2');
+  xdo('sleep', '3');
+  log.push(`after submit: ${JSON.stringify(windows())}`);
+  snap(shots('after-submit.png'));
+  return log.join('\n');
 }
 
 test.describe('session templates', () => {
@@ -97,9 +137,11 @@ test.describe('session templates', () => {
     test.skip(info.project.name !== 'desktop', 'one browser journey is enough');
     test.setTimeout(180_000);
     const cookie = await operatorCookie(page);
+    // A retry gets its own template (the first attempt's still exists).
+    const name = `shop-r${info.retry}`;
     const create = cli([
       'create',
-      'shop',
+      name,
       '--sites',
       SITE,
       '--allPrincipals',
@@ -112,11 +154,11 @@ test.describe('session templates', () => {
     ]);
     const exited = new Promise<number | null>((done) => create.on('close', done));
     await waitForOutput(create, /press Enter/i, 60_000);
-    signInByKeyboard();
+    const display = signInByKeyboard((file) => info.outputPath(file));
     const finished = waitForOutput(create, /is ready/i, 60_000);
     create.stdin.write('\n');
     const output = await finished;
-    expect(await exited).toBe(0);
+    expect(await exited, `${output}\n${display}`).toBe(0);
     expect(output).toContain(SITE);
 
     // The agent's side: list, launch, and the site knows who is signed in.
@@ -128,8 +170,8 @@ test.describe('session templates', () => {
       return (result.structuredContent ?? {}) as Record<string, unknown>;
     };
     const listed = (await call('list_templates', {}))['templates'] as { name: string }[];
-    expect(listed.map((t) => t.name)).toContain('shop');
-    const launched = await call('launch_session', { slug: 'e2e', template: 'shop' });
+    expect(listed.map((t) => t.name)).toContain(name);
+    const launched = await call('launch_session', { slug: 'e2e', template: name });
     const sessionId = String(launched['session_id']);
     await call('navigate', { session_id: sessionId, url: `https://${SITE}/account` });
     const content = await call('get_content', { session_id: sessionId });

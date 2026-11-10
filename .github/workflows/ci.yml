@@ -394,7 +394,7 @@ jobs:
       - name: Start the template daemon
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends xvfb xdotool
+          sudo apt-get install -y --no-install-recommends xvfb xdotool imagemagick
           tpl="$RUNNER_TEMP/bh-e2e-templates"
           # A throwaway CI display (never a bare Xvfb on a shared machine, spec 13 §3.11).
           Xvfb :99 -screen 0 1600x1000x24 -nolisten tcp > "$RUNNER_TEMP/xvfb.log" 2>&1 &

@@ -97,6 +97,14 @@ for (const driver of DRIVERS) {
       world = await templateWorld(driver);
       const w = world;
       const agent = await w.launch('alpha');
+      // Which windows BrowserHive asks to minimize (a bare Xvfb has no window manager to obey).
+      const minimized: string[] = [];
+      const targets = w.host().targets;
+      const minimize = targets.minimize.bind(targets);
+      targets.minimize = async (targetId: string) => {
+        minimized.push(targetId);
+        await minimize(targetId);
+      };
       const { service, ops, repos } = await recorder(w);
       const started = await service.start(w.template.templateId, {}, { subject: 'operator' });
       const recording = w.sessions.peek(started.session_id);
@@ -110,9 +118,12 @@ for (const driver of DRIVERS) {
         10_000,
       );
       expect(recording.tabs.activePage()?.url()).toStartWith('https://site-a.test/');
-      // Agents' windows step aside while the operator signs in (headed only: a headless host has none).
-      if (HEADED && agent.view !== null)
-        expect(await windowState(w, agent.view.page)).toBe('minimized');
+      // Agents' windows step aside while the operator signs in (headed only: a headless host has
+      // none). Without a window manager the request is all Chromium can do (spec 13 §3.10).
+      if (HEADED && agent.view !== null) {
+        expect(minimized).toContain(w.host().dispatcher.targetIdOf(agent.view.page) ?? '');
+        expect(['minimized', 'normal']).toContain((await windowState(w, agent.view.page)) ?? '');
+      }
       expect(ops.recordingOf(w.template.templateId)?.id).toBe(recording.id);
       // The operator signs in to the site, and to an identity provider that is not a site.
       await signIn(tabOn(recording, 'site-a.test'), 'operator@example.test');
