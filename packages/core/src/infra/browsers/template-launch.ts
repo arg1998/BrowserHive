@@ -17,7 +17,7 @@ import {
 } from './chromium-resolver.ts';
 import { contextOptionsFor, deriveFingerprint, scriptPayloadFor } from './fingerprint.ts';
 import type { HostFacts } from './host-facts.ts';
-import { hostOwnerResolver, selfOriginHandler } from './host-interception.ts';
+import { hostOwnerResolver, selfOriginHandler, templateHostCookies } from './host-interception.ts';
 import { IdentityApplier } from './identity-applier.ts';
 import { InterceptionChain, type InterceptionHandler } from './interception-chain.ts';
 import { buildLaunchOptions } from './launch-args.ts';
@@ -131,6 +131,9 @@ export async function launchTemplateHostWith(
       );
       await context.addInitScript(installNativeGetters, payload);
     }
+    // Before anything navigates: every request to BrowserHive carries the marker the daemon
+    // refuses, redirect hops included (spec 13 §3.8).
+    await context.addCookies(templateHostCookies(spec.selfOrigins));
     const anchor = context.pages()[0] ?? (await context.newPage());
     const targets = await HostTargets.open(context, anchor, log);
     const host = buildHost(ctx, spec, context, targets, sandboxed);

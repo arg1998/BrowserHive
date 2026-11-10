@@ -23,21 +23,32 @@ export interface StaleSweepDeps {
 }
 
 /**
- * Pids whose command line names a `--user-data-dir` inside `templatesDir` (pure). The directory
- * is compared as a path prefix with a separator, so `templates-old/` never matches `templates/`.
+ * Pids whose command line names a `--user-data-dir` inside `templatesDir` (pure). `ps` prints
+ * command lines unquoted, so a data dir with a space (the macOS default, `Application Support`)
+ * cannot be split on whitespace: the text after the switch is compared with the directory as a
+ * prefix ending in a separator, so `templates-old/` never matches `templates/`. A quoted switch
+ * (`"--user-data-dir=…"`) or value (`--user-data-dir="…"`) matches too.
  */
 export function staleTemplatePids(
   processes: readonly ProcessCommand[],
   templatesDir: string,
   self: number,
 ): number[] {
-  const root = resolve(templatesDir) + sep;
+  const roots = new Set(
+    [templatesDir, resolve(templatesDir)].flatMap((root) => {
+      const bare = root.replace(/[\\/]+$/, '');
+      return [`${bare}/`, `${bare}\\`, `${bare}${sep}`];
+    }),
+  );
   const pids: number[] = [];
   for (const { pid, command } of processes) {
     if (pid === self) continue;
-    const match = /--user-data-dir=("[^"]+"|\S+)/.exec(command);
-    const dir = match?.[1]?.replace(/^"|"$/g, '');
-    if (dir !== undefined && (resolve(dir) + sep).startsWith(root)) pids.push(pid);
+    const named = command.split('--user-data-dir=').slice(1);
+    const inside = named.some((rest) => {
+      const value = rest.replace(/^"/, '');
+      return [...roots].some((root) => value.startsWith(root));
+    });
+    if (inside) pids.push(pid);
   }
   return pids;
 }

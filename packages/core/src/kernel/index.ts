@@ -74,6 +74,12 @@ export {
 export { type Err, err, type Ok, ok, type Result } from './result.ts';
 export { isSecret, SECRET_PLACEHOLDER, Secret, secret, unwrapSecret } from './secret.ts';
 export {
+  canonicalHost,
+  isCanonicalLoopback,
+  isLoopbackByMeaning,
+  TEMPLATE_HOST_COOKIE,
+} from './self-address.ts';
+export {
   assertValidSlug,
   FALLBACK_SLUG,
   ID_ALPHABET,

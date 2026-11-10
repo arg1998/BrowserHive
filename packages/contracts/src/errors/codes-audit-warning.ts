@@ -191,6 +191,12 @@ export const WARNING_ERRORS = {
     'A CDP session was still attached when its page closed and had to be pruned late.',
     'No action; report if it repeats.',
   ),
+  SESSION_PAGE_LIMIT: warning(
+    'SESSION_PAGE_LIMIT',
+    'Page limit: a site-opened page was closed',
+    "A site in a template session opened more pages than the session's page cap (spec 13 §6.3); the page over the cap was closed so the shared browser's other sessions keep theirs.",
+    'Close pages the session no longer needs; raise templateMaxPagesPerHost or lower the template cap if sessions need more pages.',
+  ),
   SCREENSHOT_ARCHIVE_FAILED: warning(
     'SCREENSHOT_ARCHIVE_FAILED',
     'Screenshot archive failed',

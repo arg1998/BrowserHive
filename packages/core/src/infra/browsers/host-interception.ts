@@ -2,6 +2,12 @@
 
 import type { Page, Request } from 'playwright';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
+import {
+  canonicalHost,
+  isLoopbackByMeaning,
+  TEMPLATE_HOST_COOKIE,
+} from '../../kernel/self-address.ts';
+import type { CookieInput } from '../../ports/browser-driver.ts';
 import type { Clock } from '../../ports/clock.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type { RequestOwner } from '../../ports/request-guard.ts';
@@ -22,39 +28,81 @@ const ABORT_BLOCKED: InterceptionVerdict = Object.freeze({
 /** How often a frameless navigation is re-read while its page is being adopted. */
 const OWNER_POLL_MS = 25;
 
-/** The canonical origin of `raw` (`scheme://host:port`, default ports dropped), or `null`. */
-export function originOf(raw: string): string | null {
-  try {
-    const url = new URL(raw);
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
-    return url.origin.toLowerCase();
-  } catch {
-    return null;
+/** The port a URL addresses (the scheme's default when absent). */
+function portOf(url: URL): number {
+  if (url.port !== '') return Number(url.port);
+  return url.protocol === 'https:' ? 443 : 80;
+}
+
+/** What the self-origin guard matches, compiled from BrowserHive's own origins. */
+export interface SelfAddresses {
+  /** Exact origins (`publicUrl`, every own origin). */
+  readonly origins: ReadonlySet<string>;
+  /** The ports BrowserHive answers on. */
+  readonly ports: ReadonlySet<number>;
+  /** Host names of its own origins (bound host, interface addresses, `publicUrl` host), canonical. */
+  readonly hosts: ReadonlySet<string>;
+}
+
+/** Compiles {@link SelfAddresses} from origins such as `http://127.0.0.1:9876`. */
+export function selfAddressesOf(origins: readonly string[]): SelfAddresses {
+  const exact = new Set<string>();
+  const ports = new Set<number>();
+  const hosts = new Set<string>();
+  for (const raw of origins) {
+    try {
+      const url = new URL(raw);
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') continue;
+      exact.add(url.origin.toLowerCase());
+      ports.add(portOf(url));
+      hosts.add(canonicalHost(url.hostname));
+    } catch {
+      // Not a URL: nothing to guard.
+    }
   }
+  return { origins: exact, ports, hosts };
+}
+
+/**
+ * True when `raw` addresses BrowserHive itself, by meaning rather than spelling (spec 13 §3.8): one
+ * of its own origins, or any `http(s)` URL on one of its ports whose host is loopback in any form
+ * (`*.localhost`, 127/8, `::1`, IPv4-mapped, `0.0.0.0`, case and a trailing dot ignored) or one of
+ * its own host names.
+ */
+export function isSelfAddress(raw: string, self: SelfAddresses): boolean {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+  if (self.origins.has(url.origin.toLowerCase())) return true;
+  if (!self.ports.has(portOf(url))) return false;
+  const host = canonicalHost(url.hostname);
+  return isLoopbackByMeaning(host) || self.hosts.has(host);
 }
 
 /**
  * Handler 1 of a template host's chain: aborts every request, of every method and resource type,
- * to BrowserHive's own origins, so the dashboard never loads in a host window and its session cookie
- * never enters a template's jar (spec 13 §3.8). Fail-closed for every type: a request it cannot
- * read is aborted.
+ * to BrowserHive itself ({@link isSelfAddress}), so the dashboard never loads in a host window and
+ * its session cookie never enters a template's jar (spec 13 §3.8). Fail-closed for every type: a
+ * request it cannot read is aborted. A redirect hop is not routed (Playwright routes the first URL
+ * only); the daemon refuses those itself (the template-host marker cookie, `templateHostCookies`).
  */
 export function selfOriginHandler(deps: {
   readonly origins: readonly string[];
   readonly logger: Logger;
 }): InterceptionHandler {
-  const origins = new Set(
-    deps.origins.map(originOf).filter((origin): origin is string => origin !== null),
-  );
+  const self = selfAddressesOf(deps.origins);
   const log = deps.logger.child({ module: 'self-origin' });
   return {
     id: 'self-origin',
     onError: 'closed',
     handle: async (request: Request) => {
       try {
-        const origin = originOf(request.url());
-        if (origin === null || !origins.has(origin)) return PASS;
-        log.info('own origin blocked', { origin });
+        if (!isSelfAddress(request.url(), self)) return PASS;
+        log.info('own origin blocked');
         return ABORT_BLOCKED;
       } catch (err) {
         log.error('self-origin check threw', { err: serializeError(err) });
@@ -62,6 +110,37 @@ export function selfOriginHandler(deps: {
       }
     },
   };
+}
+
+export { TEMPLATE_HOST_COOKIE } from '../../kernel/self-address.ts';
+
+/**
+ * The marker cookies a template host carries for each of BrowserHive's own origins: sent on every
+ * request to them, redirect hops included, so the daemon can refuse what the route never sees.
+ * HttpOnly (no page script can remove it); `Lax` so a cross-site top-level navigation carries it.
+ */
+export function templateHostCookies(origins: readonly string[]): CookieInput[] {
+  const cookies: CookieInput[] = [];
+  const seen = new Set<string>();
+  for (const raw of origins) {
+    try {
+      const url = new URL(raw);
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') continue;
+      if (seen.has(url.origin)) continue;
+      seen.add(url.origin);
+      cookies.push({
+        name: TEMPLATE_HOST_COOKIE,
+        value: '1',
+        url: url.origin,
+        httpOnly: true,
+        sameSite: 'Lax',
+        expires: -1,
+      });
+    } catch {
+      // Not a URL.
+    }
+  }
+  return cookies;
 }
 
 /** What the resolver reads from the host's attribution. */

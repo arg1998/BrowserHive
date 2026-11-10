@@ -262,6 +262,8 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
 
   /** The dispatcher committed an open page: resolve waiters, bound the parked pages. */
   private committed(page: Page, owner: PageOwner, facts: TargetFacts): void {
+    // A session's page may open tabs Chromium gives no opener (modifier clicks): watch for them.
+    if (owner.kind === 'session') void this.targets.watchNewTabs(page, facts.targetId);
     if (this.waiters.committed(page, owner, facts)) return;
     if (owner.kind !== 'parked' || page === this.sentinel) return;
     this.parked.set(page, { targetId: facts.targetId, url: '', openedAt: this.clock.now() });

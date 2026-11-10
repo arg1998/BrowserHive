@@ -30,9 +30,14 @@ const page = (title: string, body: string, head = ''): Response =>
   );
 
 /** The pages every site serves; `host` names the site. */
-function route(host: string, path: string, method = 'GET'): Response {
+function route(host: string, path: string, method = 'GET', search = ''): Response {
   const site = host.split(':')[0] ?? host;
   switch (path) {
+    case '/redir': {
+      // An open redirect to wherever `to` says (spec 13 §3.8: the route never sees the hop).
+      const to = new URLSearchParams(search).get('to') ?? '/';
+      return new Response(null, { status: 302, headers: { location: to } });
+    }
     case '/':
       return page(
         site,
@@ -41,7 +46,10 @@ function route(host: string, path: string, method = 'GET'): Response {
         <button id="open" onclick="window.open('https://site-b.test/landing')">open</button>
         <button id="noopener" onclick="window.open('https://site-b.test/landing', '_blank', 'noopener')">noopener</button>
         <button id="popup-window" onclick="window.open('https://site-a.test/popup', 'pw', 'popup,width=420,height=320')">popup window</button>
-        <button id="opener-closes" onclick="window.open('https://site-a.test/closer')">closer</button>`,
+        <button id="opener-closes" onclick="window.open('https://site-a.test/closer')">closer</button>
+        <a id="plain" href="https://site-b.test/landing?plain">plain</a>
+        <form id="post-form" method="post" action="https://site-b.test/landing?posted"><button id="post">post</button></form>
+        <button id="many" onclick="for (let i = 0; i < 12; i++) window.open('https://site-b.test/landing?many=' + i)">many</button>`,
       );
     case '/landing':
       return page(`landing ${site}`, `<p id="landing">${site}</p>`);
@@ -81,6 +89,14 @@ function route(host: string, path: string, method = 'GET'): Response {
       // The preflight is refused (no Access-Control-Allow-*): a browser that honours it never sends the write.
       if (method === 'OPTIONS') return new Response(null, { status: 403 });
       return new Response('written', { headers: { 'content-type': 'text/plain' } });
+    case '/unload-beacon':
+      // A beacon from `pagehide` while the page closes: never routed (spec 13 §3.8).
+      return page(
+        'unload',
+        `<p id="unload">unload</p><script>addEventListener('pagehide', () => navigator.sendBeacon('/api/pagehide', 'bye'));</script>`,
+      );
+    case '/api/pagehide':
+      return new Response('ok');
     case '/sw-page':
       return page(
         'sw',
@@ -118,7 +134,7 @@ export function startHttpsSites(): HttpsSites {
       const url = new URL(req.url);
       const host = req.headers.get('host') ?? url.host;
       requests.push({ host, method: req.method, path: url.pathname + url.search });
-      return route(host, url.pathname, req.method);
+      return route(host, url.pathname, req.method, url.search);
     },
   });
   const port = server.port ?? 0;

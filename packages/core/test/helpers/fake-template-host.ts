@@ -44,7 +44,8 @@ export class FakeTemplateHost implements TemplateHost {
   /** Extra pages per session (beyond each view's first page), for the cap checks. */
   readonly extraPages = new Map<string, number>();
   failOpen: Error | null = null;
-  private readonly exits = new Set<(exit: TemplateHostExit) => void>();
+  /** Exit listeners (the supervisor's, and one per open view, like the real host). */
+  readonly exits = new Set<(exit: TemplateHostExit) => void>();
 
   constructor(templateId: string, identity: AppliedIdentity | null = null) {
     this.hostId = templateId;
@@ -56,8 +57,19 @@ export class FakeTemplateHost implements TemplateHost {
     const view = new FakeSessionView(sessionId);
     this.views.set(sessionId, view);
     this.viewOptions.set(sessionId, options);
+    // Like `TemplateSessionView`: a view's crash listeners are host exit listeners that skip an
+    // operator stop, and they go when the view closes.
+    const subscriptions = new Set<() => void>();
+    view.onCrash = (listener) => {
+      const off = this.onExit((exit) => {
+        if (!exit.operatorStop) listener(exit.reason);
+      });
+      subscriptions.add(off);
+      return off;
+    };
     const close = view.close.bind(view);
     view.close = async (deadline, signal) => {
+      for (const off of subscriptions) off();
       this.views.delete(sessionId);
       return close(deadline, signal);
     };
@@ -105,10 +117,9 @@ export class FakeTemplateHost implements TemplateHost {
     return this.onExit((exit) => listener(exit.reason));
   }
 
-  /** The browser went away: listeners first (the supervisor), then each view's crash fan-out. */
+  /** The browser went away: every exit listener runs, as on the real host. */
   exit(exit: TemplateHostExit = { reason: 'browser disconnected', operatorStop: false }): void {
     for (const listener of [...this.exits]) listener(exit);
-    if (!exit.operatorStop) for (const view of this.views.values()) view.crash(exit.reason);
   }
 
   async close(): Promise<readonly LaunchWarning[]> {

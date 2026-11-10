@@ -64,6 +64,8 @@ export function virtualLauncher(input: {
   readonly template: TemplateRecord;
   readonly session: SessionTemplate;
   readonly caps: PageCaps | null;
+  /** A site-opened page over the session's cap was closed. */
+  readonly onPageLimit?: (sessionId: string) => void;
 }): VirtualSessionLauncher {
   const { lifecycle, template, caps } = input;
   const name = template.name;
@@ -87,6 +89,8 @@ export function virtualLauncher(input: {
           ...(caps !== null && {
             beforeNewPage: () =>
               admitNewPage(name, caps, host.agentPageCount(), host.sessionPageCount(sessionId)),
+            pageLimit: caps.perSession,
+            onPageLimit: () => input.onPageLimit?.(sessionId),
           }),
         });
       } catch (err) {

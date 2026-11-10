@@ -17,6 +17,7 @@ BrowserHive is a local MCP server that gives AI agents isolated, stealthy Chromi
 - [Human takeover](guide/attention.md): `request_attention` and the live view
 - [Notifications](guide/notifications.md): notifications on your phone through Telegram, Discord, ntfy or a webhook, answering from the chat, daily digests and anomaly alerts, reports in the dashboard, screenshots, self-destruct and a public address for links
 - [Stealth](guide/stealth.md): what it does, what it does not, ceilings, proxies
+- [Session templates](guide/templates.md): the shared browser behind a template and its known limits (initial version)
 - [Telemetry](guide/telemetry.md): OpenTelemetry export and a local Grafana stack
 - [Command line](guide/cli.md): every command and exit code
 - [Programmatic API](guide/programmatic-api.md): `createServer`

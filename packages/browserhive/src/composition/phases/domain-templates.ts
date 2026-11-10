@@ -1,5 +1,6 @@
 /** @module composition/phases/domain-templates — the template service (spec 13 §2, §5, §6, §11.1): repositories, the pinned-identity geo, the template directories and the host supervisor (the runtime that starts template browsers); under `templates=false` the runtime has no hosts. */
 
+import { hostname, networkInterfaces } from 'node:os';
 import { join } from 'node:path';
 import type { ServerConfig } from '@browserhive/contracts/config';
 import type { SqliteUnitOfWork } from '@browserhive/core/persistence';
@@ -52,17 +53,44 @@ export interface TemplatesParts {
   readonly stopTicks: () => void;
 }
 
+/** The machine's names and addresses, for a wildcard bind (test seam). */
+export interface MachineNames {
+  readonly hostname: string;
+  readonly addresses: readonly string[];
+}
+
+/** This machine's host name and interface addresses. */
+export function machineNames(): MachineNames {
+  const addresses = Object.values(networkInterfaces())
+    .flat()
+    .flatMap((info) => (info === undefined ? [] : [info.address]));
+  return { hostname: hostname(), addresses };
+}
+
 /**
- * BrowserHive's own origins for a host's self-origin guard (spec 13 §3.8): the bound host and
- * port, the loopback names on that port, and the `publicUrl` origin.
+ * BrowserHive's own origins (spec 13 §3.8): the self-origin guard of a template host blocks them,
+ * and every loopback spelling on their ports; the host's marker cookie is set for each. The bound
+ * host, the canonical loopback names, the extra `allowedHosts` and the `publicUrl` origin; under a
+ * wildcard bind also the machine's host name (and `<name>.local`) and every interface address.
  */
-export function selfOriginsOf(config: Readonly<ServerConfig>): string[] {
+export function selfOriginsOf(
+  config: Readonly<ServerConfig>,
+  machine: MachineNames = machineNames(),
+): string[] {
   const port = config.port;
-  const hosts = new Set([config.host, 'localhost', '127.0.0.1', '[::1]']);
-  const origins = [...hosts].flatMap((host) => {
-    const name = host.includes(':') && !host.startsWith('[') ? `[${host}]` : host;
-    return port > 0 ? [`http://${name}:${port}`, `https://${name}:${port}`] : [];
-  });
+  const hosts = new Set([config.host, 'localhost', '127.0.0.1', '::1', ...config.allowedHosts]);
+  if (['0.0.0.0', '::', ''].includes(config.host)) {
+    hosts.add(machine.hostname);
+    hosts.add(`${machine.hostname}.local`);
+    for (const address of machine.addresses) hosts.add(address);
+  }
+  const origins = [...hosts]
+    .filter((host) => host !== '' && host !== '::')
+    .flatMap((host) => {
+      const bare = host.replace(/^\[|\]$/g, '');
+      const name = bare.includes(':') ? `[${bare}]` : bare;
+      return port > 0 ? [`http://${name}:${port}`, `https://${name}:${port}`] : [];
+    });
   if (config.publicUrl !== undefined) origins.push(config.publicUrl);
   return origins;
 }

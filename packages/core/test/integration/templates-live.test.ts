@@ -24,6 +24,26 @@ function focusedWindow(): string | null {
   return out.status === 0 ? out.stdout.trim() : null;
 }
 
+/**
+ * The operator's window: a tiny X client (`xmessage`) given the input focus before the host starts,
+ * so a start that took the focus would be seen (headed Linux CI only; `null` elsewhere).
+ */
+function operatorWindow(): { readonly id: string; close(): void } | null {
+  if (!HEADED || process.platform !== 'linux') return null;
+  const child = Bun.spawn(['xmessage', '-name', 'bh-operator', 'operator window']);
+  const found = spawnSync('xdotool', ['search', '--sync', '--classname', 'bh-operator'], {
+    encoding: 'utf8',
+    timeout: 10_000,
+  });
+  const id = found.stdout.trim().split('\n')[0] ?? '';
+  if (found.status !== 0 || id === '') {
+    child.kill();
+    throw new Error('xmessage/xdotool unavailable on the headed leg');
+  }
+  spawnSync('xdotool', ['windowfocus', '--sync', id], { timeout: 10_000 });
+  return { id, close: () => child.kill() };
+}
+
 function pageOf(session: Session) {
   const view = session.view;
   if (view === null) throw new Error(`${session.id} has no view`);
@@ -40,14 +60,23 @@ for (const driver of DRIVERS) {
   describe(`template host (${driver}${HEADED ? ', headed' : ''})`, () => {
     it('three sessions get their own background windows and see only their own pages', async () => {
       world = await templateWorld(driver);
-      // The first launch starts the host (its sentinel is the browser's first window); every
-      // session window after that opens in the background and never moves the focus (no-op headless).
-      const a = await world.launch('alpha');
-      const before = focusedWindow();
-      const b = await world.launch('bravo');
-      expect(focusedWindow()).toBe(before);
-      const c = await world.launch('charlie');
-      expect(focusedWindow()).toBe(before);
+      // The operator works in another window: neither the host's start (the first launch) nor any
+      // session window may take the focus from it (no-op headless).
+      const operator = operatorWindow();
+      try {
+        const before = focusedWindow();
+        if (operator !== null) expect(before).toBe(operator.id);
+        await world.launch('alpha');
+        expect(focusedWindow()).toBe(before);
+        await world.launch('bravo');
+        expect(focusedWindow()).toBe(before);
+        await world.launch('charlie');
+        expect(focusedWindow()).toBe(before);
+      } finally {
+        operator?.close();
+      }
+      const [a, b, c] = world.sessions.listAll();
+      if (a === undefined || b === undefined || c === undefined) throw new Error('three sessions');
       const host = world.host();
       expect(world.hosts).toHaveLength(1);
       const browser = host.context.browser();

@@ -11,7 +11,11 @@ import type {
   SessionView,
 } from '../../ports/browser-driver.ts';
 import type { Logger } from '../../ports/logger.ts';
-import type { TemplatePageOptions, TemplateViewOptions } from '../../ports/template-host.ts';
+import type {
+  TemplateHostExit,
+  TemplatePageOptions,
+  TemplateViewOptions,
+} from '../../ports/template-host.ts';
 import type { TargetFacts } from './page-attribution.ts';
 import type { HostPageDispatcher } from './page-dispatcher.ts';
 
@@ -35,7 +39,8 @@ export interface TemplateViewHost extends SessionHost {
   ): Promise<Page | null>;
   /** Resizes the window of `page` on a headed host (never moves it). */
   resizeWindow(page: Page, width: number, height: number): Promise<void>;
-  onCrash(listener: (reason: string) => void): () => void;
+  /** The end of the browser (crash or operator stop); not called for a supervisor close. */
+  onExit(listener: (exit: TemplateHostExit) => void): () => void;
   /** The view closed: the host forgets it. */
   viewClosed(sessionId: string): void;
 }
@@ -57,6 +62,8 @@ export class TemplateSessionView implements SessionView {
   private readonly log: Logger;
   private headers: Readonly<Record<string, string>> | undefined;
   private readonly unsubscribe: () => void;
+  /** Host exit subscriptions, removed when the view closes (a long-lived host keeps none per closed session). */
+  private readonly exitSubscriptions = new Set<() => void>();
   private closing: Promise<readonly LaunchWarning[]> | undefined;
 
   constructor(
@@ -76,6 +83,13 @@ export class TemplateSessionView implements SessionView {
     this.headers = options.pageOptions?.extraHTTPHeaders;
     // Every page of the session gets its per-session options, whoever opened it.
     this.unsubscribe = host.dispatcher.onAttributed(sessionId, (opened) => {
+      if (this.overLimit()) {
+        // A site opened one page too many: close it here, never someone else's (spec 13 §6.3).
+        void opened.close({ runBeforeUnload: false }).catch(() => undefined);
+        this.log.info('page over the cap closed');
+        options.onPageLimit?.();
+        return;
+      }
       void this.prepare(opened);
     });
   }
@@ -148,8 +162,20 @@ export class TemplateSessionView implements SessionView {
     return this.owner.context.newCDPSession(page);
   }
 
+  /**
+   * A crash of the host only: an operator stop is the supervisor's to report (it closes the
+   * session with `operator`, spec 13 §3.2), so the session is not marked crashed first.
+   */
   onCrash(listener: (reason: string) => void): () => void {
-    return this.owner.onCrash(listener);
+    const off = this.owner.onExit((exit) => {
+      if (!exit.operatorStop) listener(exit.reason);
+    });
+    const dispose = () => {
+      off();
+      this.exitSubscriptions.delete(dispose);
+    };
+    this.exitSubscriptions.add(dispose);
+    return dispose;
   }
 
   /**
@@ -167,6 +193,7 @@ export class TemplateSessionView implements SessionView {
     signal?: AbortSignal,
   ): Promise<readonly LaunchWarning[]> {
     this.unsubscribe();
+    for (const dispose of [...this.exitSubscriptions]) dispose();
     const dispatcher = this.owner.dispatcher;
     dispatcher.releaseSession(this.sessionId);
     const pages = dispatcher.pagesOf(this.sessionId);
@@ -187,6 +214,12 @@ export class TemplateSessionView implements SessionView {
     // Still attributed to this (released) session: no other session can ever reach them.
     if (stillOpen.length > 0) this.log.warn('pages left open', { count: stillOpen.length });
     return [];
+  }
+
+  /** More open pages than the session's cap (pages the session opens itself are checked before). */
+  private overLimit(): boolean {
+    const limit = this.options.pageLimit;
+    return limit !== undefined && this.pages().length > limit;
   }
 
   private minimized(): boolean {

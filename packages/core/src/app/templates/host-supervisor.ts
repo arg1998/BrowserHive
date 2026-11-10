@@ -146,7 +146,13 @@ export class TemplateHostSupervisor implements TemplateRuntime {
         const created = await this.deps.sessions.createVirtual(
           virtualSessionInput(request),
           request.principal,
-          virtualLauncher({ lifecycle, template, session, caps }),
+          virtualLauncher({
+            lifecycle,
+            template,
+            session,
+            caps,
+            onPageLimit: (id) => this.pageLimitWarning(id),
+          }),
           { signal: budget, deadlineMs: TEMPLATE_LAUNCH_BUDGET_MS },
         );
         await this.deps.templates
@@ -209,15 +215,13 @@ export class TemplateHostSupervisor implements TemplateRuntime {
   /** Before a delete: closes every session of the template and stops its host (spec 13 §2.6). */
   async shutdown(templateId: string): Promise<readonly string[]> {
     const live = this.liveSessions(templateId);
+    // The host goes `draining` before anything is awaited, so no launch attaches meanwhile.
+    await this.hosts.get(templateId)?.stop('template deleted', 'operator');
+    this.hosts.delete(templateId);
     await this.closeSessions(
       this.sessionsOf(templateId, null).map((s) => s.id),
       'operator',
     );
-    const lifecycle = this.hosts.get(templateId);
-    if (lifecycle !== undefined) {
-      await lifecycle.stop('template deleted');
-      this.hosts.delete(templateId);
-    }
     this.rss.delete(templateId);
     return live;
   }
@@ -238,10 +242,6 @@ export class TemplateHostSupervisor implements TemplateRuntime {
           now,
         );
         if (idleExpired(lifecycle.idleSince, this.deps.config.idleTimeoutMs, now)) {
-          await this.closeSessions(
-            this.sessionsOf(lifecycle.templateId, null).map((s) => s.id),
-            'shutdown',
-          );
           await lifecycle.stop('idle');
           continue;
         }
@@ -279,11 +279,11 @@ export class TemplateHostSupervisor implements TemplateRuntime {
     const ids = [...this.hosts.keys()];
     await Promise.allSettled(
       ids.map(async (id) => {
+        await this.hosts.get(id)?.stop('shutdown');
         await this.closeSessions(
           this.sessionsOf(id, null).map((s) => s.id),
           'shutdown',
         );
-        await this.hosts.get(id)?.stop('shutdown');
       }),
     );
     this.hosts.clear();
@@ -375,6 +375,18 @@ export class TemplateHostSupervisor implements TemplateRuntime {
       (updated) => this.hosts.get(template.templateId)?.refresh(updated),
       (err: unknown) => this.log.warn('observed identity unsaved', { err: serializeError(err) }),
     );
+  }
+
+  /** The session's warning after a site-opened page over its cap was closed (spec 13 §6.3). */
+  private pageLimitWarning(sessionId: string): void {
+    const session = this.deps.sessions.peek(sessionId);
+    if (session === undefined) return;
+    this.deps.sessions.warn(session, {
+      code: 'SESSION_PAGE_LIMIT',
+      sessionId,
+      message:
+        'This session has reached its tab limit; a page a site opened was closed. Close a tab you no longer need.',
+    });
   }
 
   private async sample(templateId: string, host: TemplateHost): Promise<void> {

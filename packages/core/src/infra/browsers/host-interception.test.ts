@@ -7,7 +7,14 @@ import { join } from 'node:path';
 import type { Page, Request } from 'playwright';
 import { FakeClock } from '../../../test/helpers/fake-clock.ts';
 import { createCollectingLogger } from '../logging/collecting-logger.ts';
-import { hostOwnerResolver, originOf, selfOriginHandler } from './host-interception.ts';
+import {
+  hostOwnerResolver,
+  isSelfAddress,
+  selfAddressesOf,
+  selfOriginHandler,
+  TEMPLATE_HOST_COOKIE,
+  templateHostCookies,
+} from './host-interception.ts';
 import { PARKED, sessionOwner } from './page-attribution.ts';
 import { applyTemplatePreferences, mergePreferences } from './profile-preferences.ts';
 
@@ -66,9 +73,38 @@ describe('self-origin guard', () => {
     expect(guard.id).toBe('self-origin');
   });
 
-  it('normalizes origins', () => {
-    expect(originOf('HTTPS://Hive.Example.com:443/x')).toBe('https://hive.example.com');
-    expect(originOf('about:blank')).toBeNull();
+  it('matches by meaning: every loopback spelling on the daemon port (PR #76 F1)', () => {
+    const self = selfAddressesOf(['http://127.0.0.1:9876', 'https://hive.example.com']);
+    for (const url of [
+      'http://foo.localhost:9876/',
+      'http://LOCALHOST.:9876/',
+      'http://127.0.0.2:9876/',
+      'http://[::ffff:127.0.0.1]:9876/',
+      'http://[::ffff:7f00:1]:9876/',
+      'http://[::1]:9876/',
+      'http://0.0.0.0:9876/',
+      'https://localhost:9876/',
+      'https://HIVE.example.com./x',
+    ]) {
+      expect([url, isSelfAddress(url, self)]).toEqual([url, true]);
+    }
+    for (const url of [
+      'http://localhost:9877/',
+      'http://example.com:9876/',
+      'http://10.0.0.5:9876/',
+      'ws://localhost:9876/',
+      'not a url',
+    ]) {
+      expect([url, isSelfAddress(url, self)]).toEqual([url, false]);
+    }
+  });
+
+  it('marks requests to every own origin with an HttpOnly Lax cookie', () => {
+    const cookies = templateHostCookies(['http://127.0.0.1:9876', 'http://localhost:9876', 'x']);
+    expect(cookies.map((c) => [c.name, c.url, c.httpOnly, c.sameSite])).toEqual([
+      [TEMPLATE_HOST_COOKIE, 'http://127.0.0.1:9876', true, 'Lax'],
+      [TEMPLATE_HOST_COOKIE, 'http://localhost:9876', true, 'Lax'],
+    ]);
   });
 });
 

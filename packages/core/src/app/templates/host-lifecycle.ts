@@ -127,21 +127,32 @@ export class HostLifecycle {
     return templateUnavailable(name, 'starting');
   }
 
-  /** Stops the host cleanly (idle stop, after a drain, delete); sessions must be gone already. */
-  async stop(reason: string): Promise<void> {
+  /**
+   * Stops the host cleanly (idle stop, after a drain, delete, daemon shutdown). The host is
+   * `draining` until its browser is closed, so a launch meanwhile is refused typed
+   * (`TEMPLATE_UNAVAILABLE` `restarting`) and never attaches to a closing browser, and no new start
+   * can race the old one for the profile lock. Every session still on the host is closed with
+   * `closeReason` first, and again after the close for a view that opened in between.
+   */
+  async stop(reason: string, closeReason: ClosedReason = 'shutdown'): Promise<void> {
     this.cancelRestart();
     const host = this.instance;
     const starting = this.starting;
-    this.detach();
-    this.enter('stopped');
-    this.startedAt = null;
+    this.enter(host !== null || starting !== null ? 'draining' : 'stopped');
     if (host !== null) {
+      await this.deps.closeSessions(host.viewIds(), closeReason);
       this.log.info('template host stopped', { reason });
+      this.detach();
       await host.close(this.deps.closeTimeoutMs);
+      const late = host.viewIds();
+      if (late.length > 0) await this.deps.closeSessions(late, closeReason);
     } else if (starting !== null) {
+      this.detach();
       // A start in flight: close what it brings up.
-      await starting.then((late) => late.close(this.deps.closeTimeoutMs)).catch(() => undefined);
+      await starting.then((up) => up.close(this.deps.closeTimeoutMs)).catch(() => undefined);
     }
+    this.startedAt = null;
+    this.enter('stopped');
   }
 
   /**

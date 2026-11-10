@@ -362,3 +362,76 @@ describe('maintenance sessions', () => {
     expect(sessions.peek(own.id)).toBe(own);
   });
 });
+
+describe('review fixes (PR #76)', () => {
+  it('F3: an operator stop through the real view semantics closes sessions with reason operator', async () => {
+    const { supervisor, launcher, clock } = setup();
+    const a = await supervisor.launch(request(templateRecord(), 'one'));
+    launcher.last.exit({ reason: 'browser disconnected', operatorStop: true });
+    await clock.advance(1);
+    await flush();
+    expect(a.dead).toBe(false);
+    expect(a.closedReason).toBe('operator');
+  });
+
+  it('F4: a launch during an idle stop is refused typed and nothing stays live on the closed host', async () => {
+    const { supervisor, launcher, sessions, clock } = setup();
+    const template = templateRecord();
+    await supervisor.launchMaintenance({
+      template,
+      sites: [],
+      slug: 'maintenance',
+      principal: { subject: 'browserhive' },
+    });
+    const host = launcher.last;
+    const [maintenance] = [...host.views.values()];
+    if (maintenance === undefined) throw new Error('no maintenance view');
+    const close = maintenance.close.bind(maintenance);
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    maintenance.close = async (deadline, signal) => {
+      await gate;
+      return close(deadline, signal);
+    };
+    await supervisor.tick();
+    await clock.advance(3_600_000);
+    const ticking = supervisor.tick();
+    await flush();
+    expect(supervisor.host(template.templateId).state).toBe('draining');
+    expect(await codeOf(supervisor.launch(request(template, 'late')))).toBe('TEMPLATE_UNAVAILABLE');
+    release();
+    await ticking;
+    await flush();
+    expect(supervisor.host(template.templateId).state).toBe('stopped');
+    expect(host.closed).toBe(1);
+    expect(sessions.listAll().filter((s) => !s.dead && s.state.kind === 'live')).toEqual([]);
+    // The next launch starts a fresh host.
+    await supervisor.launch(request(template, 'next'));
+    expect(launcher.hosts).toHaveLength(2);
+  });
+
+  it('F7: closed virtual sessions leave no exit listener on a long-lived host', async () => {
+    const { supervisor, launcher, sessions } = setup();
+    const template = templateRecord();
+    await supervisor.launch(request(template, 'first'));
+    const host = launcher.last;
+    const baseline = host.exits.size;
+    for (let i = 0; i < 20; i++) {
+      const s = await supervisor.launch(request(template, `cycle${i}`));
+      await sessions.close(s.id);
+    }
+    expect(host.exits.size).toBe(baseline);
+  });
+
+  it('M23: a launch admitted but not yet reserved counts toward the template cap', async () => {
+    const { supervisor } = setup();
+    const template = templateRecord({ maxConcurrent: 1 });
+    // Both are admitted in the same turn, before the first reaches the registry.
+    const first = supervisor.launch(request(template, 'one'));
+    const second = codeOf(supervisor.launch(request(template, 'two')));
+    expect(await second).toBe('TEMPLATE_BUSY:capacity');
+    await first;
+  });
+});

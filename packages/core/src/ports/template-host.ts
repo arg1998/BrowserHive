@@ -58,6 +58,13 @@ export interface TemplateViewOptions {
    * throws the typed refusal (`TEMPLATE_BUSY`) at a page cap (spec 13 §6.3).
    */
   readonly beforeNewPage?: () => void;
+  /**
+   * The session's page cap (spec 13 §6.3) for pages a site opens in it: a page attributed to the
+   * session beyond it is closed, so one session cannot take the shared browser's pages.
+   */
+  readonly pageLimit?: number;
+  /** Called after a site-opened page over `pageLimit` was closed (the session's warning). */
+  readonly onPageLimit?: () => void;
   /** Aborts the wait for the first window; the window is then closed. */
   readonly signal?: AbortSignal;
   /** A maintenance session (spec 13 §1.1): its pages are not agent pages and count toward no cap. */

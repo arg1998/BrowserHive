@@ -4,6 +4,7 @@ import type { BrowserContext, CDPSession, Page } from 'playwright';
 import { AppError } from '../../kernel/errors/app-error.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { Logger } from '../../ports/logger.ts';
+import { NewTabRequests } from './new-tab-requests.ts';
 import type { TargetFacts } from './page-attribution.ts';
 
 /** What discovery knows about one page target of the host's context. */
@@ -11,6 +12,9 @@ interface DiscoveredTarget {
   readonly openerId: string | null;
   destroyed: boolean;
 }
+
+/** How long a page without an opener waits for its URL, to be matched to a new-tab request. */
+const INFER_WAIT_MS = 1_000;
 
 /** Discovered targets kept per host (closed ones are dropped first). */
 const DISCOVERED_LIMIT = 10_000;
@@ -37,6 +41,8 @@ export class HostTargets {
   private readonly discovered = new Map<string, DiscoveredTarget>();
   /** Target ids a page's facts read returned (so a destroyed one is not a lost target). */
   private readonly matched = new Set<string>();
+  /** Openers of tabs Chromium opens without one (modifier clicks), by URL (spec 13 §3.4). */
+  readonly newTabs = new NewTabRequests(() => Date.now());
   private lost: ((facts: TargetFacts) => void) | null = null;
   private destroyedListener: ((targetId: string) => void) | null = null;
   private disposed = false;
@@ -78,10 +84,26 @@ export class HostTargets {
       throw new AppError('INTERNAL_ERROR', { ref: 'template-host-context-id' });
     }
     const cdp = await browser.newBrowserCDPSession();
+    return HostTargets.attach(cdp, context, browserContextId, logger);
+  }
+
+  /** Starts discovery on an open browser-level session (also the unit tests' entry). */
+  static async attach(
+    cdp: CDPSession,
+    context: BrowserContext,
+    browserContextId: string,
+    logger: Logger,
+  ): Promise<HostTargets> {
     const targets = new HostTargets(cdp, context, browserContextId, logger);
+    const ours = (info: { type: string; browserContextId?: string }) =>
+      info.type === 'page' && info.browserContextId === browserContextId;
     cdp.on('Target.targetCreated', ({ targetInfo }) => {
-      if (targetInfo.type !== 'page' || targetInfo.browserContextId !== browserContextId) return;
+      if (!ours(targetInfo)) return;
       targets.remember(targetInfo.targetId, targetInfo.openerId ?? null);
+      targets.newTabs.urlOf(targetInfo.targetId, targetInfo.url);
+    });
+    cdp.on('Target.targetInfoChanged', ({ targetInfo }) => {
+      if (ours(targetInfo)) targets.newTabs.urlOf(targetInfo.targetId, targetInfo.url);
     });
     cdp.on('Target.targetDestroyed', ({ targetId }) => targets.destroyed(targetId));
     await cdp.send('Target.setDiscoverTargets', { discover: true });
@@ -111,9 +133,10 @@ export class HostTargets {
       const { targetInfo } = await cdp.send('Target.getTargetInfo');
       this.matched.add(targetInfo.targetId);
       const known = this.discovered.get(targetInfo.targetId);
+      const openerId = known?.openerId ?? targetInfo.openerId ?? null;
       return {
         targetId: targetInfo.targetId,
-        openerId: known?.openerId ?? targetInfo.openerId ?? null,
+        openerId: openerId ?? (await this.newTabs.openerOf(targetInfo.targetId, INFER_WAIT_MS)),
       };
     } finally {
       await cdp.detach().catch(() => undefined);
@@ -223,7 +246,35 @@ export class HostTargets {
     if (target === undefined || target.destroyed) return;
     target.destroyed = true;
     if (!this.disposed) this.destroyedListener?.(targetId);
-    if (this.matched.has(targetId) || this.disposed) return;
-    this.lost?.({ targetId, openerId: target.openerId });
+    if (this.matched.has(targetId) || this.disposed) {
+      this.newTabs.forget(targetId);
+      return;
+    }
+    const facts = (openerId: string | null) => {
+      this.newTabs.forget(targetId);
+      this.lost?.({ targetId, openerId });
+    };
+    if (target.openerId !== null) facts(target.openerId);
+    else void this.newTabs.openerOf(targetId, 0).then(facts, () => facts(null));
+  }
+
+  /**
+   * Watches a session's page for the new tabs and windows it asks Chromium to open
+   * (`Page.frameRequestedNavigation` with disposition `newTab`/`newWindow`), whose targets get no
+   * `openerId` (spec 13 §3.4). Best effort: a page that closes first has nothing left to open.
+   */
+  async watchNewTabs(page: Page, targetId: string): Promise<void> {
+    try {
+      const cdp = await this.context.newCDPSession(page);
+      cdp.on('Page.frameRequestedNavigation', ({ disposition, url }) => {
+        if (disposition === 'newTab' || disposition === 'newWindow') {
+          this.newTabs.requested(targetId, url);
+        }
+      });
+      await cdp.send('Page.enable');
+      page.once('close', () => void cdp.detach().catch(() => undefined));
+    } catch (err) {
+      this.log.debug('new tabs not watched', { err: serializeError(err) });
+    }
   }
 }
