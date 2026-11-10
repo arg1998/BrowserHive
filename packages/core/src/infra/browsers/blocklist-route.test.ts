@@ -122,3 +122,37 @@ describe('installBlocklistRoute', () => {
     expect(warning?.message).toContain('navigation tools are still checked');
   });
 });
+
+describe('installBlocklistRoute on the interception chain (spec 13 T0b)', () => {
+  const deps = (blocklist: Blocklist, hits: BlockedUrlHit[]) => ({
+    blocklist,
+    observer: { blocked: (hit: BlockedUrlHit) => void hits.push(hit) },
+    sessionId: 'sess-1',
+    clock: new FakeClock(1_000),
+    logger: createCollectingLogger(),
+  });
+
+  it('installs exactly one route', async () => {
+    let routes = 0;
+    const context: unknown = {
+      route: async () => {
+        routes += 1;
+      },
+    };
+    await installBlocklistRoute(context as BrowserContext, deps(new Blocklist(), []));
+    expect(routes).toBe(1);
+  });
+
+  it('never reads the method: a POST document load is blocked, a POST fetch passes', async () => {
+    const hits: BlockedUrlHit[] = [];
+    const { context, handler } = fakeContext();
+    await installBlocklistRoute(context, deps(new Blocklist(rules('site.test/logout')), hits));
+    const form = fakeRoute('https://site.test/logout', 'document');
+    const xhr = fakeRoute('https://site.test/logout', 'fetch');
+    await handler()?.(form.route);
+    await handler()?.(xhr.route);
+    expect(form.outcome).toEqual(['abort:blockedbyclient']);
+    expect(xhr.outcome).toEqual(['fallback']);
+    expect(hits.map((h) => h.url)).toEqual(['https://site.test/logout']);
+  });
+});

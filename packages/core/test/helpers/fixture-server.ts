@@ -247,7 +247,27 @@ export function startFixtureServer(): FixtureServer {
              <input id="file" type="file">
              <div id="tall" style="height:3000px"></div><p id="bottom">bottom</p>`,
           );
+        case '/logout':
+          // GitHub's shape (issue #59): a GET shows a confirm form, the sign-out is its POST.
+          return req.method === 'POST'
+            ? html('<p id="signed-out">signed out</p>')
+            : html(
+                `<form id="logout" method="post" action="/logout"><button id="sign-out" type="submit">Sign out</button></form>
+                <form id="search" method="get" action="/logout"><button id="search-go" type="submit">Search</button></form>`,
+              );
+        case '/cached':
+          // Fresh for an hour: a second `force-cache` fetch is served from the HTTP cache when
+          // the context has one (routing disables it).
+          return new Response('cached', {
+            headers: { 'content-type': 'text/plain', 'cache-control': 'public, max-age=3600' },
+          });
         default:
+          if (url.pathname.startsWith('/api/')) {
+            // Any method: what a page's fetch, XHR or beacon reached.
+            return new Response(JSON.stringify({ method: req.method, path: url.pathname }), {
+              headers: { 'content-type': 'application/json' },
+            });
+          }
           return new Response('not found', { status: 404 });
       }
     },

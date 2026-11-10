@@ -4,6 +4,8 @@ export {
   type BlockedUrlHit,
   type BlockedUrlObserver,
   type BlocklistRouteDeps,
+  blocklistHandler,
+  blocklistRouteFailed,
   installBlocklistRoute,
 } from './blocklist-route.ts';
 export {
@@ -81,6 +83,16 @@ export {
   resolveIdentity,
 } from './identity-resolver.ts';
 export {
+  fixedOwner,
+  InterceptionChain,
+  type InterceptionChainDeps,
+  type InterceptionContext,
+  type InterceptionHandler,
+  type InterceptionVerdict,
+  type OwnerResolver,
+  PASS,
+} from './interception-chain.ts';
+export {
   AUTOMATION_ARG,
   type BuildLaunchOptionsInput,
   type BuiltLaunchOptions,
@@ -119,6 +131,7 @@ export {
   type PlaywrightBrowserDriverDeps,
 } from './playwright-browser-driver.ts';
 export { FORCED_PROXY_BYPASS, mergeBypass, PassThroughProxyResolver } from './proxy.ts';
+export { type RequestGuardHandlerDeps, requestGuardHandler } from './request-guard-route.ts';
 export {
   APPARMOR_DIR,
   APPARMOR_PROFILE_NAME,
