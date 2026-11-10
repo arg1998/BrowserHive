@@ -168,6 +168,19 @@ describe('grep rules (spec 05 §10)', () => {
     expect(out).toEqual([]);
   });
 
+  it('interface/ and app/ never reach a browser context, browser or host lifecycle through a value', () => {
+    // Spec 13 §3.13: sessions go through their SessionView. `SessionView.host` is typed as a
+    // SessionHost (no context, browser or close); Playwright's `Page.context()` cannot be hidden by
+    // a type, so the call is banned here, with the host's own members for good measure.
+    const scoped = (f: SourceFile): boolean =>
+      !isTest(f.rel) &&
+      (f.rel.startsWith('packages/core/src/interface/') ||
+        f.rel.startsWith('packages/core/src/app/'));
+    expect(
+      violations(/\.context\(\s*\)|\.host\??\.(context|browser|close|onCrash)\b/, scoped),
+    ).toEqual([]);
+  });
+
   it('no dangerouslySetInnerHTML in the dashboard', () => {
     expect(
       violations(/dangerouslySetInnerHTML/, (f) => f.rel.startsWith('packages/dashboard/')),

@@ -1,6 +1,6 @@
 /** @module interface/mcp/tools/dialogs — accept_next_dialog, dismiss_next_dialog (one-shot, auto-disarmed). */
 
-import type { Dialog, Page } from 'playwright';
+import type { Dialog, Page } from '../../../../ports/page-types.ts';
 import { requireSession } from '../../context.ts';
 import { defineTool, json, type ToolPack } from '../../definition.ts';
 import { sessionOwnership } from '../../policies.ts';

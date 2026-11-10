@@ -37,11 +37,12 @@ function wireMetricsFor(ctx: BootContext, logger: Logger): () => void {
   const sampler = startBrowserMemorySampler({
     sessions: () =>
       domain.sessions.listAll().map((session) => {
-        const handle = session.handle;
+        // Keyed by host (spec 13 §3.13): an exclusive host's id is its session's id.
+        const host = session.view?.host;
         return {
-          id: session.id,
-          ...(handle?.browserPid !== undefined && {
-            browserPid: () => handle.browserPid?.() ?? Promise.resolve(null),
+          id: host?.hostId ?? session.id,
+          ...(host?.browserPid !== undefined && {
+            browserPid: () => host.browserPid?.() ?? Promise.resolve(null),
           }),
         };
       }),

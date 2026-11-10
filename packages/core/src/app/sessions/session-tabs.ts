@@ -30,16 +30,16 @@ export class SessionTabs {
    * carries it), registers it and makes it active (the `new_tab` tool).
    */
   async newTab(session: Session): Promise<{ tabId: string; page: Page }> {
-    const handle = session.handle;
-    if (handle === null) {
+    const view = session.view;
+    if (view === null) {
       throw new AppError(
         'SESSION_NOT_LIVE',
         { session_id: session.id },
         { publicMessage: `Session '${session.id}' is not live.` },
       );
     }
-    const page = await handle.context.newPage();
-    await handle.ensureIdentityForPage(page);
+    const page = await view.newPage();
+    await view.host.ensureIdentityForPage(page);
     const tabId = session.tabs.add(page);
     session.tabs.setActive(tabId);
     session.setCurrentUrl(safeUrl(page), this.deps.clock.now());

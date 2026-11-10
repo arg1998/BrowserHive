@@ -6,7 +6,7 @@ import type { Result } from '../../kernel/result.ts';
 import type {
   AppliedIdentity,
   SessionBrowserInfo,
-  SessionHandle,
+  SessionView,
 } from '../../ports/browser-driver.ts';
 import type { CreateSessionRequest } from './create-request.ts';
 import {
@@ -44,7 +44,8 @@ export type SessionCounter = keyof SessionCounters;
 
 /** What the pipeline knows once the driver has launched. */
 export interface LaunchAttachment {
-  readonly handle: SessionHandle;
+  /** The session's view of its host (spec 13 §3.13). */
+  readonly view: SessionView;
   readonly driver: StealthDriverName;
   readonly launchedAt: number;
   readonly launchMs: number;
@@ -63,8 +64,8 @@ export interface SessionSeed {
 /**
  * One browser session. Mutation happens only through the explicit methods below; the state machine
  * (`domain/session/state.ts`) and the lease (`domain/session/lease.ts`) stay pure and are applied
- * here. The aggregate never touches I/O: the driver handle is attached by the pipeline and closed by
- * the service.
+ * here. The aggregate never touches I/O: the driver's session view is attached by the pipeline and
+ * closed by the service.
  */
 export class Session {
   readonly id: string;
@@ -123,9 +124,9 @@ export class Session {
     return this.currentLease;
   }
 
-  /** The driver handle once launched; `null` while reserved/launching or after teardown. */
-  get handle(): SessionHandle | null {
-    return this.attachment?.handle ?? null;
+  /** The session's view of its browser once launched; `null` while reserved/launching or after teardown. */
+  get view(): SessionView | null {
+    return this.attachment?.view ?? null;
   }
 
   /** Which driver launched the browser, once known. */
@@ -271,17 +272,17 @@ export class Session {
 
   // --- launch outcome ----------------------------------------------------------------------------
 
-  /** Records the launched driver handle and its facts. */
+  /** Records the launched session view and its host's facts. */
   attach(attachment: LaunchAttachment): void {
     this.attachment = attachment;
-    this.appliedIdentity = attachment.handle.identity;
+    this.appliedIdentity = attachment.view.host.identity;
     // The latest launch wins (D-31); `detach` keeps it.
-    const info = attachment.handle.browserInfo;
+    const info = attachment.view.host.browserInfo;
     this.launchBrowser =
       info === undefined ? null : { version: info.version, sandboxed: info.sandboxed };
   }
 
-  /** Drops the driver handle after teardown so nothing can drive a closed browser. */
+  /** Drops the session view after teardown so nothing can drive a closed browser. */
   detach(): void {
     this.attachment = null;
   }

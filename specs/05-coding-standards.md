@@ -171,7 +171,7 @@ A row never reaches the wire; a wire DTO never reaches the domain. Mappers are t
 | Thing | Convention | Example |
 |---|---|---|
 | Files, directories | kebab-case; test files `*.test.ts` colocated; React components `kebab-case.tsx` exporting a PascalCase component | `lease-sweeper.ts`, `session-detail.tsx` |
-| Types, interfaces, classes, enums | PascalCase; no `I` prefix, no `Type` suffix | `SessionHandle`, `AppError` |
+| Types, interfaces, classes, enums | PascalCase; no `I` prefix, no `Type` suffix | `SessionView`, `AppError` |
 | Functions, variables, properties | camelCase | `resolveIdentity`, `leaseExpiresAt` |
 | True constants (compile-time literal, module scope) | SCREAMING_SNAKE | `MAX_BLOCKLIST_ENTRIES` |
 | Config keys, JSON config | camelCase (D-06) | `maxSessions` |

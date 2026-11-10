@@ -1,27 +1,25 @@
 /** @module interface/mcp/tools/state — get_cookies, set_cookies, set_viewport, set_extra_http_headers. */
 
-import type { BrowserContext } from 'playwright';
 import type { Session } from '../../../../domain/session/session.ts';
 import { AppError, isAppError } from '../../../../kernel/errors/app-error.ts';
+import type { CookieInput, SessionView } from '../../../../ports/browser-driver.ts';
 import { requireSession } from '../../context.ts';
 import { defineTool, json, type ToolPack } from '../../definition.ts';
 import { sessionOwnership } from '../../policies.ts';
 import { drive, firstLine, pageOf } from '../shared.ts';
 import { clampToAssertedDisplay, splitIdentityHeaders } from './headers.ts';
 
-/** Playwright's `addCookies` parameter, the landing type of the loose cookie schema. */
-type PlaywrightCookies = Parameters<BrowserContext['addCookies']>[0];
-
-function contextOf(session: Session): BrowserContext {
-  const handle = session.handle;
-  if (handle === null) {
+/** The session's view; cookies and headers go through it, never the host's context (spec 13 §3.13). */
+function viewOf(session: Session): SessionView {
+  const view = session.view;
+  if (view === null) {
     throw new AppError(
       'SESSION_NOT_LIVE',
       { session_id: session.id },
       { publicMessage: `Session '${session.id}' is not live.` },
     );
   }
-  return handle.context;
+  return view;
 }
 
 /** `get_cookies`: full values go to the agent; the observation records shape only (D-20). */
@@ -30,11 +28,9 @@ export const getCookies = defineTool('get_cookies', {
   telemetry: { captureResult: 'size' },
   async handler(ctx, args) {
     const session = requireSession(ctx);
-    const context = contextOf(session);
+    const view = viewOf(session);
     const urls = args.urls;
-    const cookies = await drive(ctx, { sessionId: session.id }, () =>
-      urls !== undefined ? context.cookies(urls) : context.cookies(),
-    );
+    const cookies = await drive(ctx, { sessionId: session.id }, () => view.cookies(urls));
     return json({ cookies: cookies.map((c) => ({ ...c })) });
   },
 });
@@ -45,10 +41,10 @@ export const setCookies = defineTool('set_cookies', {
   telemetry: { captureArgs: 'shape' },
   async handler(ctx, args) {
     const session = requireSession(ctx);
-    const context = contextOf(session);
+    const view = viewOf(session);
     try {
       // The loose cookie schema forwards Playwright's full cookie surface; Playwright validates it.
-      await context.addCookies(args.cookies as unknown as PlaywrightCookies);
+      await view.addCookies(args.cookies as unknown as readonly CookieInput[]);
     } catch (err) {
       if (isAppError(err)) throw err;
       const classified = ctx.services.pageActions.classifyError(err, { sessionId: session.id });
@@ -94,10 +90,10 @@ export const setExtraHttpHeaders = defineTool('set_extra_http_headers', {
   policies: [sessionOwnership],
   async handler(ctx, args) {
     const session = requireSession(ctx);
-    const context = contextOf(session);
+    const view = viewOf(session);
     const identityOn = session.request.stealth || session.request.fingerprint;
     const { accepted, rejected } = splitIdentityHeaders(args.headers, identityOn);
-    await drive(ctx, { sessionId: session.id }, () => context.setExtraHTTPHeaders(accepted));
+    await drive(ctx, { sessionId: session.id }, () => view.setExtraHTTPHeaders(accepted));
     return json({ session_id: session.id, applied: Object.keys(accepted).length, rejected });
   },
 });

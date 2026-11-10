@@ -1,8 +1,8 @@
 /** @module interface/ws/cdp-bridge — the CDP surface live view uses, and its Playwright `CDPSession` adapter (type-only Playwright). */
 
-import type { CDPSession, Page } from 'playwright';
 import type { Session } from '../../domain/session/session.ts';
 import { AppError } from '../../kernel/errors/app-error.ts';
+import type { CDPSession, Page } from '../../ports/page-types.ts';
 import type { KeyEventParams, MouseEventParams, TouchEventParams } from './live-input.ts';
 
 /** Page geometry attached to a frame (`Page.ScreencastFrameMetadata`, the fields live view uses). */
@@ -117,14 +117,14 @@ export function cdpSessionBridge(cdp: CDPSession): CdpBridge {
  */
 export function playwrightBridgeFactory(pageOf: (session: Session) => Page): CdpBridgeFactory {
   return async (session) => {
-    const handle = session.handle;
-    if (handle === null) {
+    const view = session.view;
+    if (view === null) {
       throw new AppError('SESSION_NOT_AVAILABLE', {
         session_id: session.id,
         state: session.state.kind,
       });
     }
-    const cdp = await handle.context.newCDPSession(pageOf(session));
+    const cdp = await view.newCDPSession(pageOf(session));
     return cdpSessionBridge(cdp);
   };
 }

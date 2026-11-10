@@ -4,16 +4,17 @@ import type { ProcessTreeReader } from '@browserhive/core/runtime';
 import { BROWSER_RSS_SAMPLE_INTERVAL_MS } from '@browserhive/core/runtime';
 import type { EveryFn } from './timers.ts';
 
-/** A live session as the sampler sees it. */
+/** A live browser host as the sampler sees it (spec 13 §3.13: keyed by host). */
 export interface SampledSession {
+  /** The host id: an exclusive host's id is its session's id, so `session_id` stays exact today. */
   readonly id: string;
-  /** The browser's main pid (cached by the handle); absent before launch and in fakes. */
+  /** The browser's main pid (cached by the host); absent before launch and in fakes. */
   readonly browserPid?: () => Promise<number | null>;
 }
 
 /** Dependencies of {@link startBrowserMemorySampler}. */
 export interface BrowserMemorySamplerDeps {
-  /** The sessions to sample now. */
+  /** The hosts to sample now (today: one per live exclusive session). */
   readonly sessions: () => Iterable<SampledSession>;
   /** `null` where the platform has no reader (Windows): the sampler then never runs. */
   readonly reader: ProcessTreeReader | null;
@@ -25,7 +26,7 @@ export interface BrowserMemorySamplerDeps {
 
 /** A running sampler. */
 export interface BrowserMemorySampler {
-  /** RSS bytes per session id from the latest sample. */
+  /** RSS bytes per host id from the latest sample (a session id for an exclusive host). */
   latest(): ReadonlyMap<string, number>;
   /** Takes one sample now (the timer calls this). */
   sample(): Promise<void>;

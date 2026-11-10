@@ -172,7 +172,7 @@ describe('SessionService lifecycle', () => {
     expect(handle?.closes).toEqual([{ deadlineMs: 250, aborted: false }]);
     expect(session.state.kind).toBe('closed');
     expect(session.closedReason).toBe('operator');
-    expect(session.handle).toBeNull();
+    expect(session.view).toBeNull();
     expect(closed).toHaveLength(1);
     expect(updated.at(-1)?.session.state).toBe('draining');
     expect(fs.ops).toContain('rm /data/sessions/shop-00000001/trace-parts');
