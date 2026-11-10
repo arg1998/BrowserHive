@@ -1,5 +1,12 @@
 # @browserhive/core
 
+## 0.2.3
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @browserhive/contracts@0.2.3
+
 ## 0.2.2
 
 ### Patch Changes

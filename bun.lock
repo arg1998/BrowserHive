@@ -21,7 +21,7 @@
     },
     "packages/browserhive": {
       "name": "browserhive",
-      "version": "0.2.2",
+      "version": "0.2.3",
       "bin": {
         "browserhive": "./dist/bin.js",
         "bh": "./dist/bin.js",
@@ -66,14 +66,14 @@
     },
     "packages/contracts": {
       "name": "@browserhive/contracts",
-      "version": "0.2.2",
+      "version": "0.2.3",
       "dependencies": {
         "zod": "4.6.7",
       },
     },
     "packages/core": {
       "name": "@browserhive/core",
-      "version": "0.2.2",
+      "version": "0.2.3",
       "dependencies": {
         "@browserhive/contracts": "workspace:*",
         "@hono/zod-openapi": "1.6.3",
@@ -112,7 +112,7 @@
     },
     "packages/dashboard": {
       "name": "@browserhive/dashboard",
-      "version": "0.2.2",
+      "version": "0.2.3",
       "dependencies": {
         "@base-ui/react": "^1.8.0",
         "@browserhive/contracts": "workspace:*",

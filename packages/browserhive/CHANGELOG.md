@@ -1,5 +1,60 @@
 # browserhive
 
+## 0.2.3
+
+### Patch Changes
+
+- [#64](https://github.com/arg1998/BrowserHive/pull/64) [`a07890e`](https://github.com/arg1998/BrowserHive/commit/a07890e228c6192bf2b434244f4c18e4b21b758f) Thanks [@arg1998](https://github.com/arg1998)! - Saved logins are now kept per principal. Before, all token principals shared one set of names, so an agent that saved a login under a name another agent already used replaced that agent's snapshot and its identity seed, and could then restore it. Now:
+
+  - Every token principal has its own directory, `auth-states/p/<id>/`. The no-auth `local` principal keeps the flat `auth-states/` layout, so single-user installs see no change.
+  - `list_saved_auths` and restores (`context_options.storageState`, `restore_profile`) see only the caller's own snapshots, and a restore must name the kind that was saved. Anything else answers `AUTH_STATE_NOT_FOUND` with the same text as a missing name.
+  - Saving under a name you already use replaces your earlier snapshot of that name whichever kind it was, including the identity seed saved beside a full profile.
+  - On first start, snapshots in the flat layout that belong to a token principal move into that principal's directory with their identity seed. An interrupted move finishes on the next start.
+
+  A name that was already taken over before the upgrade cannot be detected afterwards. If you use more than one token, ask each agent to check its `list_saved_auths` and save again any login that is missing or wrong. After a downgrade, an older release does not see the per-principal directories. See the upgrading guide.
+
+- [#69](https://github.com/arg1998/BrowserHive/pull/69) [`31ede03`](https://github.com/arg1998/BrowserHive/commit/31ede036e5150658195c6879f2b193f1bddb8b84) Thanks [@arg1998](https://github.com/arg1998)! - Page-side errors, downloads and reads during a navigation no longer come back as `INTERNAL_ERROR` ([#55](https://github.com/arg1998/BrowserHive/issues/55), [#56](https://github.com/arg1998/BrowserHive/issues/56)).
+
+  - **`evaluate`** answers `SCRIPT_ERROR` with the page's message again (for example `TypeError: Cannot read properties of null (reading 'x')` or `TypeError: Failed to fetch`). Playwright 1.63 changed the wording of driver errors (`evaluate: …` instead of `page.evaluate: …`), and the error mapping only knew the old form. Download, upload and navigation-timeout errors were checked the same way.
+  - **`evaluate` auto-wrap** now parses the expression instead of counting brackets. An expression that is exactly one function (`() => …`, `x => …`, `async () => …`, `function () {}`) is still called for you; anything else runs as written. An IIFE that is already invoked is never wrapped again, even when it contains `(` or `)` inside a string, template, regex or comment, so `(() => { const s = 'start('; return s.length; })()` returns `6`. Invalid code is passed through, so you get the page's own `SyntaxError`.
+  - **`get_content`** while the tab is still navigating (for example right after a `navigate` that timed out) waits up to 5 s for the new page and reads again. If the page is still navigating, it answers `WAIT_TIMEOUT` ("waiting for the page to finish navigating"), which is safe to retry.
+  - **`navigate` and `new_tab` to a URL that is a download** (`Content-Disposition: attachment`) now save the file into the session's downloads folder, like `download_file`, and succeed. The result keeps the tab's URL, has `status: null`, and adds a `download` field with `saved_to`, `suggested_name` and `size`. The download counts against the call's `timeout`; a download that fails or does not finish in time answers `DOWNLOAD_FAILED`.
+
+- [#71](https://github.com/arg1998/BrowserHive/pull/71) [`cf50ac1`](https://github.com/arg1998/BrowserHive/commit/cf50ac1f29f1542fc167e5c8e7563b98d5422207) Thanks [@arg1998](https://github.com/arg1998)! - Operator API tokens issued with `scopes` are now limited to those scopes. Before, any token owned by an operator could call every route whatever scopes it was issued with, so a read-only monitoring token could also terminate sessions, change vault policy or issue new tokens.
+
+  - A token issued with `POST /auth/tokens {owner_kind: "operator", scopes: [...]}` gets 403 `FORBIDDEN` on routes, WebSocket commands and topics outside its scopes, and on `/mcp` unless it holds `mcp:tools`. `GET /auth/me` shows the scopes it holds.
+  - Managing tokens, grants, dashboard sessions and the password needs the whole operator: the dashboard, or an operator token that holds every scope. A narrowed token cannot issue a wider one.
+  - Nothing changes for the dashboard, agent tokens, or operator tokens issued without `scopes`: those hold every operator scope, now including scopes added by later releases. The database moves to schema v8 (compatible, data only): it marks operator tokens issued before this release with the full scope list of their release as "every scope", so a token from 0.1.x also keeps the channel scopes added in 0.2.0.
+
+- [#66](https://github.com/arg1998/BrowserHive/pull/66) [`50e12e7`](https://github.com/arg1998/BrowserHive/commit/50e12e7e4b8a3a28af43bbbfbfd476e6dcdf9774) Thanks [@arg1998](https://github.com/arg1998)! - `save_full_profile` no longer freezes the server while it zips a large profile, and restoring with `restore_profile` no longer loads the whole archive into memory ([#58](https://github.com/arg1998/BrowserHive/issues/58)). Both now stream the profile in small slices, so other sessions, MCP clients and the dashboard keep responding. On a 160 MB profile, the longest pause dropped from about 6 seconds to under 20 ms, and memory growth dropped from about 600 MB to under 30 MB.
+
+  Behaviour changes:
+
+  - Full-profile snapshots now leave out the browser's regenerable caches (`Cache`, `Code Cache`, `GPUCache`, shader and Dawn caches, `component_crx_cache`, and the service worker's `CacheStorage` and `ScriptCache`). Logins are not affected: cookies, local storage, IndexedDB, session storage, saved passwords and preferences are kept. Snapshots are much smaller as a result, and a restored session starts with a cold cache.
+  - A snapshot is written to a temporary file and renamed into place when it is complete. A save that fails no longer leaves a partial archive and no longer replaces the previous snapshot of that name.
+  - Restored profile files are created owner-only (0600), and each file is checked against its CRC, so a damaged archive fails the launch instead of restoring corrupt data.
+
+  Snapshots saved by earlier versions restore unchanged.
+
+- [#67](https://github.com/arg1998/BrowserHive/pull/67) [`4bd229b`](https://github.com/arg1998/BrowserHive/commit/4bd229b468bc1845ba63d4269d824f39c21ea650) Thanks [@arg1998](https://github.com/arg1998)! - Agent tokens can no longer be created under the names BrowserHive uses for its own principals: `local`, `browserhive`, `system`, and any name starting with `template:`. Letter case and extra spaces or punctuation do not matter (`Local`, `local `, `-system-` are refused); names that only contain one of them, such as `local-runner`, still work. Previously an agent token named "Local" acted as the `local` principal and owned every session created under `--auth off` and every saved login without an owner. `POST /auth/tokens`, `browserhive admin tokens create` and the dashboard now answer HTTP 400 `VALIDATION_FAILED` with `subject is reserved`, and the dashboard shows it under the name field.
+
+  Tokens that an earlier version created under a reserved name keep working: BrowserHive never revokes them for you. `browserhive doctor` has a new `reserved subjects` check, and the server logs `reserved subjects in use` once at startup. Both name each such token by credential id and prefix, and each `BROWSERHIVE_AUTH_TOKENS` entry with a reserved name. Revoke those tokens with `browserhive admin tokens revoke <credential id>` or on the dashboard, and create new ones under other names.
+
+- [#65](https://github.com/arg1998/BrowserHive/pull/65) [`a08b404`](https://github.com/arg1998/BrowserHive/commit/a08b4043f25d302387d1b55c8851387f373353cd) Thanks [@arg1998](https://github.com/arg1998)! - `navigate` and `new_tab` now open only web URLs: `http://`, `https://`, `about:blank` and `data:`. Any other scheme is refused with the new error `URL_SCHEME_NOT_ALLOWED` (400, retry with different arguments) before the browser is touched. That covers `file:`, `view-source:`, `chrome:`, `chrome-untrusted:`, `chrome-extension:`, `devtools:`, `javascript:`, `blob:`, `filesystem:`, `mailto:`, `about:` pages other than `about:blank`, and app schemes. Before this change these URLs reached the browser: `file:` read local files, `chrome:` pages exposed browser settings and history, and a `javascript:` URL ran script in the page even in a session launched with `disable_evaluate: true`, while the tool reported a navigation failure.
+
+  Behaviour changes:
+
+  - Input without a scheme is refused instead of passed to the browser. Write `example.com` as `https://example.com/` and `localhost:3000` as `http://localhost:3000/`.
+  - The browser is given the normalized URL (`HTTPS://Example.COM` opens `https://example.com/`), so case, whitespace, tabs and newlines cannot hide a scheme.
+  - A `new_tab` call with a refused URL opens no tab.
+  - As a backstop, a tab whose page ends up on a non-web URL without a tool asking for it is closed, and the server logs `non-web scheme page closed` with the session id and scheme. Pages a site opens as `blob:` or `data:` documents, `about:srcdoc` frames, Chromium's error page and downloads are unaffected.
+
+  The `navigate` and `new_tab` tool descriptions say which URLs can be opened, and the security guide has a new section on it. The blocklist still covers network schemes only.
+
+- [#63](https://github.com/arg1998/BrowserHive/pull/63) [`dcc5ed1`](https://github.com/arg1998/BrowserHive/commit/dcc5ed146d618f28ed6e7ecb7c5707533763aa1e) Thanks [@arg1998](https://github.com/arg1998)! - `vault_fill` now types the password only into a password input. Before the credential is fetched, and again immediately before each value is typed, `password_selector` must match exactly one visible, enabled, writable `<input type="password">`, and `username_selector` exactly one text input (not a password, hidden, file, checkbox, radio or button input). Otherwise the fill returns `blocked` with the new reason `password_target_invalid`, nothing is fetched from the vault, and the Vault log records which field was wrong and why. Previously an agent could point `password_selector` at a search box or another visible field and read the password back with `snapshot` or `screenshot`.
+
+  Behaviour change: a fill whose selectors match a `textarea`, a `contenteditable` element or several elements is now refused instead of attempted. As before, `vault_fill` waits up to 30 seconds for the password field to appear, so login forms rendered after the page loads still fill. A password field that never appears still returns `auth_failed` / `fill_failed`, but now nothing is fetched from the vault first. A site's own "show password" control can still reveal a filled password; `require_no_evaluate`, `redact_username` and `dashboard_confirm` remain the per-entry hardening.
+
 ## 0.2.2
 
 ### Patch Changes
