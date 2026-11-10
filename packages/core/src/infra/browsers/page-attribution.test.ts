@@ -15,7 +15,7 @@ describe('PageAttribution.decide', () => {
     const state = host();
     state.commit('opener', B);
     state.claim('t1', A);
-    expect(state.decide({ targetId: 't1', openerId: 'opener' }, { final: false })).toEqual({
+    expect(state.decide({ targetId: 't1', openerId: 'opener' }, { expired: false })).toEqual({
       kind: 'attributed',
       owner: A,
       rule: 'claim',
@@ -26,12 +26,12 @@ describe('PageAttribution.decide', () => {
     const state = host();
     state.commit('a-page', A);
     state.commit('parked-page', PARKED);
-    expect(state.decide({ targetId: 'p1', openerId: 'a-page' }, { final: false })).toEqual({
+    expect(state.decide({ targetId: 'p1', openerId: 'a-page' }, { expired: false })).toEqual({
       kind: 'attributed',
       owner: A,
       rule: 'opener',
     });
-    expect(state.decide({ targetId: 'p2', openerId: 'parked-page' }, { final: false })).toEqual({
+    expect(state.decide({ targetId: 'p2', openerId: 'parked-page' }, { expired: false })).toEqual({
       kind: 'attributed',
       owner: PARKED,
       rule: 'opener',
@@ -43,7 +43,7 @@ describe('PageAttribution.decide', () => {
     state.commit('oauth', A);
     state.close('oauth');
     expect(state.ownerOf('oauth')).toEqual(A);
-    const decision = state.decide({ targetId: 'p', openerId: 'oauth' }, { final: false });
+    const decision = state.decide({ targetId: 'p', openerId: 'oauth' }, { expired: false });
     expect(decision).toEqual({ kind: 'attributed', owner: A, rule: 'opener' });
   });
 
@@ -52,30 +52,61 @@ describe('PageAttribution.decide', () => {
     state.beginCreate();
     expect(state.creating).toBe(true);
     const facts = { targetId: 'x', openerId: null };
-    expect(state.decide(facts, { final: false })).toEqual({ kind: 'held' });
-    expect(state.decide(facts, { final: true })).toEqual({
+    expect(state.decide(facts, { expired: false })).toEqual({ kind: 'held' });
+    expect(state.decide(facts, { expired: true })).toEqual({
       kind: 'attributed',
       owner: PARKED,
       rule: 'fallback',
     });
     state.endCreate();
-    expect(state.decide(facts, { final: false }).kind).toBe('attributed');
+    expect(state.decide(facts, { expired: false }).kind).toBe('attributed');
   });
 
-  it('holds a page whose opener is held or may still be read, never when final', () => {
+  it('follows a held opener past its own expiry, stops only when final', () => {
     const state = host();
     state.hold('opener');
     const child = { targetId: 'child', openerId: 'opener' };
-    expect(state.decide(child, { final: false })).toEqual({ kind: 'held' });
-    expect(state.decide(child, { final: true }).kind).toBe('attributed');
+    expect(state.decide(child, { expired: false })).toEqual({ kind: 'held' });
+    expect(state.decide(child, { expired: true })).toEqual({ kind: 'held' });
+    expect(state.decide(child, { expired: true, final: true })).toEqual({
+      kind: 'attributed',
+      owner: PARKED,
+      rule: 'fallback',
+    });
+  });
+
+  it('waits for facts in flight only until its own hold expires', () => {
+    const state = host();
     const orphan = { targetId: 'orphan', openerId: 'unknown' };
-    expect(state.decide(orphan, { final: false }).kind).toBe('attributed');
-    expect(state.decide(orphan, { final: false, openerPending: true })).toEqual({ kind: 'held' });
+    expect(state.decide(orphan, { expired: false }).kind).toBe('attributed');
+    expect(state.decide(orphan, { expired: false, openerPending: true })).toEqual({ kind: 'held' });
+    expect(state.decide(orphan, { expired: true, openerPending: true }).kind).toBe('attributed');
+  });
+
+  it('a claim wins even over an opener that is another session (claim before opener)', () => {
+    const state = host();
+    state.commit('b-page', B);
+    state.claim('t', A);
+    expect(state.decide({ targetId: 't', openerId: 'b-page' }, { expired: false })).toEqual({
+      kind: 'attributed',
+      owner: A,
+      rule: 'claim',
+    });
+  });
+
+  it('a target naming itself as opener is treated as having none', () => {
+    const state = host();
+    state.hold('self');
+    expect(state.decide({ targetId: 'self', openerId: 'self' }, { expired: true })).toEqual({
+      kind: 'attributed',
+      owner: PARKED,
+      rule: 'fallback',
+    });
   });
 
   it('an exclusive host falls back to its one session', () => {
     const state = new PageAttribution({ fallback: A });
-    expect(state.decide({ targetId: 'ctrl-t', openerId: null }, { final: false })).toEqual({
+    expect(state.decide({ targetId: 'ctrl-t', openerId: null }, { expired: false })).toEqual({
       kind: 'attributed',
       owner: A,
       rule: 'fallback',
@@ -101,7 +132,7 @@ describe('PageAttribution state', () => {
     state.commit('t', A);
     state.claim('u', B);
     state.close('u');
-    expect(state.decide({ targetId: 'u', openerId: null }, { final: false })).toEqual({
+    expect(state.decide({ targetId: 'u', openerId: null }, { expired: false })).toEqual({
       kind: 'attributed',
       owner: PARKED,
       rule: 'fallback',
@@ -116,12 +147,12 @@ describe('PageAttribution state', () => {
     state.commit('done', A);
     state.close('done');
     state.releaseSession('a');
-    expect(state.decide({ targetId: 'pending', openerId: null }, { final: false })).toEqual({
+    expect(state.decide({ targetId: 'pending', openerId: null }, { expired: false })).toEqual({
       kind: 'attributed',
       owner: PARKED,
       rule: 'fallback',
     });
-    expect(state.decide({ targetId: 'other', openerId: null }, { final: false }).kind).toBe(
+    expect(state.decide({ targetId: 'other', openerId: null }, { expired: false }).kind).toBe(
       'attributed',
     );
     expect(state.ownerOf('done')).toEqual(A);

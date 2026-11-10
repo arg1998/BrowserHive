@@ -101,27 +101,35 @@ export class PageAttribution {
   }
 
   /**
-   * Decides a page without recording anything. An opener that is named but not known yet holds the
-   * page when the opener is itself held, or when `openerPending` says some page's facts are still
-   * being read (the opener may be among them). With `final`, a page is never held (its hold
-   * expired): an unknown opener then counts as none and the fallback applies, so a doubt never
-   * hands a page to a session.
+   * Decides a page without recording anything. A named opener that is not known yet holds the page
+   * while the opener is itself held, or while `openerPending` says some page's facts are still being
+   * read (the opener may be among them). With `expired` (the page's own hold ran out), the page no
+   * longer waits for a `createTarget` response or for facts in flight, but it still follows an
+   * opener that is held: that opener's own hold bounds the wait, and a page opened by a session's
+   * page must not be parked merely because its opener was decided later. A doubt that remains goes
+   * to the fallback, so it never hands a page to a session. `final` (a second hold has passed)
+   * stops every wait, so even malformed facts (two targets naming each other) cannot hold forever.
    */
   decide(
     facts: TargetFacts,
-    options: { readonly final: boolean; readonly openerPending?: boolean },
+    options: {
+      readonly expired: boolean;
+      readonly final?: boolean;
+      readonly openerPending?: boolean;
+    },
   ): AttributionDecision {
     const committed = this.ownerOf(facts.targetId);
     if (committed !== undefined) return { kind: 'attributed', owner: committed, rule: 'committed' };
     const claimed = this.claims.get(facts.targetId);
     if (claimed !== undefined) return { kind: 'attributed', owner: claimed, rule: 'claim' };
-    if (facts.openerId !== null) {
+    // A target is never its own opener; such facts are treated as having none.
+    if (facts.openerId !== null && facts.openerId !== facts.targetId) {
       const opener = this.ownerOf(facts.openerId);
       if (opener !== undefined) return { kind: 'attributed', owner: opener, rule: 'opener' };
-      const mayAppear = this.undecided.has(facts.openerId) || options.openerPending === true;
-      if (!options.final && mayAppear) return { kind: 'held' };
+      if (options.final !== true && this.undecided.has(facts.openerId)) return { kind: 'held' };
+      if (!options.expired && options.openerPending === true) return { kind: 'held' };
     }
-    if (!options.final && this.pendingCreates > 0) return { kind: 'held' };
+    if (!options.expired && this.pendingCreates > 0) return { kind: 'held' };
     return { kind: 'attributed', owner: this.fallback, rule: 'fallback' };
   }
 

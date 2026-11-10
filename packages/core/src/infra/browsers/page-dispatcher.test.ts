@@ -215,4 +215,128 @@ describe('HostPageDispatcher', () => {
     expect(r.delivered.get('a')).toEqual([]);
     expect(r.dispatcher.ownerOf(window)).toEqual(PARKED);
   });
+
+  // Review of PR #74, F1: a listener that calls back into the dispatcher while a pass is running.
+  it('a listener that claims another held page neither drops a third one nor double-delivers', async () => {
+    const r = rig();
+    const settle = r.dispatcher.beginCreate();
+    const x = r.page('X');
+    const y = r.page('Y');
+    const z = r.page('Z');
+    for (const page of [x, y, z]) r.dispatcher.adopt(page);
+    const seen: Page[] = [];
+    r.dispatcher.onAttributed('S', (page) => {
+      seen.push(page);
+      if (seen.length === 1) r.dispatcher.claim('Y', sessionOwner('S'));
+    });
+    r.dispatcher.claim('X', sessionOwner('S'));
+    expect(seen).toEqual([x, y]);
+    expect(r.dispatcher.ownerOf(z)).toBeUndefined();
+    settle();
+    expect(r.dispatcher.ownerOf(z)).toEqual(PARKED);
+    await r.clock.advance(5 * ATTRIBUTION_HOLD_MS);
+    await flush();
+    expect(seen).toEqual([x, y]);
+    expect(r.dispatcher.parkedPages()).toEqual([z]);
+  });
+
+  // Review of PR #74, F4: `window.open(url); window.close()` before the popup's facts were read.
+  it("a popup that closes before its facts are read is tombstoned, so its own popup is the session's", async () => {
+    const r = rig({ slow: new Set(['P']) });
+    r.listen('S');
+    r.dispatcher.claim('A', sessionOwner('S'));
+    const a = r.page('A');
+    r.dispatcher.adopt(a);
+    const p = r.page('P', 'A');
+    r.dispatcher.adopt(p);
+    await p.close();
+    r.release('P');
+    await flush();
+    expect(r.dispatcher.everOwnedBy(p, 'S')).toBe(true);
+    expect(r.dispatcher.ownerOf(p)).toBeUndefined();
+    const q = r.page('Q', 'P');
+    r.dispatcher.adopt(q);
+    expect(r.dispatcher.ownerOf(q)).toEqual(sessionOwner('S'));
+    // The closed popup itself was never delivered.
+    expect(r.delivered.get('S')).toEqual([a, q]);
+  });
+
+  it('a held page that closes keeps waiting for its claim and is tombstoned with it', () => {
+    const r = rig();
+    r.listen('S');
+    const settle = r.dispatcher.beginCreate();
+    const w = r.page('W');
+    r.dispatcher.adopt(w);
+    void w.close();
+    return flush().then(() => {
+      r.dispatcher.claim('W', sessionOwner('S'));
+      settle();
+      expect(r.dispatcher.everOwnedBy(w, 'S')).toBe(true);
+      expect(r.delivered.get('S')).toEqual([]);
+    });
+  });
+
+  // Review of PR #74, F5: the child's hold runs out while its opener is still held.
+  it("a popup follows an opener that is decided after the popup's own hold ran out", async () => {
+    const r = rig({ slow: new Set(['H']) });
+    r.listen('S');
+    const settle = r.dispatcher.beginCreate();
+    const h = r.page('H');
+    r.dispatcher.adopt(h);
+    const c = r.page('C', 'H');
+    r.dispatcher.adopt(c);
+    await r.clock.advance(ATTRIBUTION_HOLD_MS / 2);
+    r.release('H');
+    await flush();
+    // C's hold ends at 2 000 ms, H's (placed at 1 000 ms) at 3 000 ms: at 2 000 ms H is undecided.
+    await r.clock.advance(ATTRIBUTION_HOLD_MS / 2);
+    await flush();
+    expect(r.dispatcher.ownerOf(c)).toBeUndefined();
+    r.dispatcher.claim('H', sessionOwner('S'));
+    settle();
+    expect(r.dispatcher.ownerOf(h)).toEqual(sessionOwner('S'));
+    expect(r.dispatcher.ownerOf(c)).toEqual(sessionOwner('S'));
+  });
+
+  it('two pages naming each other as opener are parked after two holds, never held forever', async () => {
+    const r = rig();
+    const settle = r.dispatcher.beginCreate();
+    const a = r.page('a', 'b');
+    const b = r.page('b', 'a');
+    r.dispatcher.adopt(a);
+    r.dispatcher.adopt(b);
+    settle();
+    expect(r.dispatcher.ownerOf(a)).toBeUndefined();
+    await r.clock.advance(ATTRIBUTION_HOLD_MS);
+    await flush();
+    await r.clock.advance(ATTRIBUTION_HOLD_MS);
+    await flush();
+    expect(r.dispatcher.ownerOf(a)).toEqual(PARKED);
+    expect(r.dispatcher.ownerOf(b)).toEqual(PARKED);
+  });
+
+  // Review of PR #74, F6: a facts read that never answers.
+  it('a facts read that never settles parks the page at its deadline and ignores the late answer', async () => {
+    const r = rig({ slow: new Set(['late']) });
+    r.listen('S');
+    r.dispatcher.claim('late', sessionOwner('S'));
+    const page = r.page('late');
+    r.dispatcher.adopt(page);
+    await r.clock.advance(ATTRIBUTION_HOLD_MS);
+    await flush();
+    expect(r.dispatcher.ownerOf(page)).toEqual(PARKED);
+    r.release('late');
+    await flush();
+    expect(r.dispatcher.ownerOf(page)).toEqual(PARKED);
+    expect(r.delivered.get('S')).toEqual([]);
+  });
+
+  it('an unsubscribed listener set is dropped', () => {
+    const r = rig({ fallback: sessionOwner('S') });
+    const seen: Page[] = [];
+    const off = r.dispatcher.onAttributed('S', (page) => seen.push(page));
+    off();
+    r.dispatcher.adopt(r.page('p'));
+    expect(seen).toEqual([]);
+  });
 });
