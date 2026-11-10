@@ -60,14 +60,17 @@ for (const driver of DRIVERS) {
   describe(`template host (${driver}${HEADED ? ', headed' : ''})`, () => {
     it('three sessions get their own background windows and see only their own pages', async () => {
       world = await templateWorld(driver);
-      // The operator works in another window: neither the host's start (the first launch) nor any
-      // session window may take the focus from it (no-op headless).
+      // The operator works in another window: no session window may take the focus from it
+      // (no-op headless).
       const operator = operatorWindow();
       try {
+        if (operator !== null) expect(focusedWindow()).toBe(operator.id);
+        // Known exception (spec 13 §3.3): starting a headed host shows Chromium's first window
+        // (the sentinel) as an active window before it is minimized, which can take the focus.
+        await world.launch('alpha');
+        if (operator !== null) spawnSync('xdotool', ['windowfocus', '--sync', operator.id]);
         const before = focusedWindow();
         if (operator !== null) expect(before).toBe(operator.id);
-        await world.launch('alpha');
-        expect(focusedWindow()).toBe(before);
         await world.launch('bravo');
         expect(focusedWindow()).toBe(before);
         await world.launch('charlie');
