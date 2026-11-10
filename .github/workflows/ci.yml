@@ -267,6 +267,9 @@ jobs:
           packages/core/test/integration/template-known-limits.test.ts
           packages/core/test/integration/template-pages.test.ts
           packages/core/test/integration/template-self-origin.test.ts
+          packages/core/test/integration/template-sealing.test.ts
+          packages/core/test/integration/template-recording.test.ts
+          packages/core/test/integration/template-tools.test.ts
 
   ntfy:
     # The ntfy adapter against a real ntfy server (binwiederhier/ntfy): publish, read back, upload
@@ -385,10 +388,35 @@ jobs:
           echo "E2E_PASSWORD=$(tr -d '\n' < "$data/admin/credentials.txt")" >> "$GITHUB_ENV"
       - name: Seed the journey's data
         run: bun scripts/e2e-seed.ts http://127.0.0.1:9876
+      # The templates journey (spec 13 §17 T1a): a second daemon from source with the testing seam
+      # pointing Chromium at the HTTPS fixture sites, on a virtual display so the template's sign-in
+      # window is a real window that the test types into with xdotool.
+      - name: Start the template daemon
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb xdotool
+          tpl="$RUNNER_TEMP/bh-e2e-templates"
+          # A throwaway CI display (never a bare Xvfb on a shared machine, spec 13 §3.11).
+          Xvfb :99 -screen 0 1600x1000x24 -nolisten tcp > "$RUNNER_TEMP/xvfb.log" 2>&1 &
+          echo "DISPLAY=:99" >> "$GITHUB_ENV"
+          sleep 1
+          DISPLAY=:99 nohup bun packages/browserhive/test/e2e/template-server.ts 9877 "$tpl" > "$RUNNER_TEMP/template-daemon.log" 2>&1 &
+          for _ in $(seq 1 60); do
+            if curl -sf http://127.0.0.1:9877/health > /dev/null; then break; fi
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:9877/health > /dev/null || { cat "$RUNNER_TEMP/template-daemon.log"; exit 1; }
+          echo "E2E_TEMPLATES_PASSWORD=$(tr -d '\n' < "$tpl/admin/credentials.txt")" >> "$GITHUB_ENV"
       - name: Playwright
-        run: BROWSERHIVE_E2E_URL=http://127.0.0.1:9876 BROWSERHIVE_E2E_PASSWORD="$E2E_PASSWORD" bun run test:e2e
+        run: >-
+          BROWSERHIVE_E2E_URL=http://127.0.0.1:9876 BROWSERHIVE_E2E_PASSWORD="$E2E_PASSWORD"
+          BROWSERHIVE_E2E_TEMPLATES_URL=http://127.0.0.1:9877
+          BROWSERHIVE_E2E_TEMPLATES_PASSWORD="$E2E_TEMPLATES_PASSWORD"
+          bun run test:e2e
       - if: failure()
-        run: cat "$RUNNER_TEMP/daemon.log" || true
+        run: |
+          cat "$RUNNER_TEMP/daemon.log" || true
+          cat "$RUNNER_TEMP/template-daemon.log" || true
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
         with:
