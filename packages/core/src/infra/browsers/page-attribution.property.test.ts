@@ -77,6 +77,11 @@ interface ModelTarget {
   adoptedAt: number | null;
   /** Its slow facts missed the deadline: the dispatcher parks it with no known opener. */
   timedOut: boolean;
+  /**
+   * It closed before its own facts were read and browser-level discovery reported it with its
+   * real facts (`adoptClosedTarget`): its children follow its rule-given owner.
+   */
+  lost: boolean;
 }
 
 interface ModelSession {
@@ -108,6 +113,7 @@ const OPS = [
   'rendererCrash',
   'advanceTime',
   'factsArrive',
+  'lostTarget',
 ] as const;
 type Op = (typeof OPS)[number];
 
@@ -133,6 +139,8 @@ class HostModel {
   readonly toClose: ModelTarget[] = [];
   readonly violations: string[] = [];
   readonly trace: string[] = [];
+  /** Pages the dispatcher handed back because their session was released (the host closes them). */
+  readonly releasedPages: Page[] = [];
   private nextTarget = 0;
   private nextWindow = 0;
 
@@ -147,6 +155,7 @@ class HostModel {
       }),
       clock: this.clock,
       logger: createCollectingLogger(),
+      onReleased: (page) => this.releasedPages.push(page),
     });
   }
 
@@ -164,7 +173,8 @@ class HostModel {
         target,
         deliver: () => {
           target.factsIn = true;
-          target.placedAt = this.clock.now();
+          // A lost target was placed when discovery reported it; its hold started then.
+          target.placedAt ??= this.clock.now();
           resolve(facts);
         },
       });
@@ -197,6 +207,7 @@ class HostModel {
       placedAt: null,
       adoptedAt: null,
       timedOut: false,
+      lost: false,
     };
     this.facts.set(target.page, { targetId: id, openerId });
     this.targets.push(target);
@@ -458,6 +469,34 @@ class HostModel {
         await this.deliverFacts(false);
         break;
       }
+      case 'lostTarget': {
+        // A page closes while its own facts are still being read; discovery (a template host's
+        // browser session) reports the target with its real facts at once (spec 13 §3.4).
+        const entry = this.pick(this.slowFacts.filter((f) => !f.target.lost));
+        if (entry === undefined) break;
+        const target = entry.target;
+        this.trace.push(`lostTarget ${target.id}`);
+        if (!target.fake.isClosed()) await this.close(target);
+        const facts = this.facts.get(target.page);
+        if (facts === undefined) break;
+        target.lost = true;
+        // Its facts reached the dispatcher (through discovery): its hold, if any, starts now.
+        target.factsIn = true;
+        target.placedAt = this.clock.now();
+        this.dispatcher.adoptClosedTarget(facts);
+        this.observe();
+        break;
+      }
+    }
+    // The host closes a page that arrived for a released session (spec 13 §3.5).
+    for (const page of this.releasedPages.splice(0)) {
+      const target = this.byPage.get(page);
+      const owner = this.dispatcher.attributionOf(page);
+      const session =
+        owner?.kind === 'session' ? this.sessions.find((s) => s.id === owner.sessionId) : undefined;
+      if (session?.open !== false)
+        this.violations.push(`${target?.id} handed back for a live session`);
+      if (target !== undefined && !target.fake.isClosed()) await this.close(target);
     }
     // A refused claim closes the target (the launch fails, spec 13 §3.3).
     for (const target of this.toClose.splice(0)) {
@@ -517,7 +556,17 @@ class HostModel {
     const openerId =
       origin.kind === 'opener' ? origin.openerId : (this.facts.get(target.page)?.openerId ?? null);
     const opener = openerId === null ? undefined : this.byId.get(openerId);
-    return opener === undefined ? PARKED : this.expectedOwner(opener);
+    return opener === undefined ? PARKED : this.ownerForChildren(opener);
+  }
+
+  /**
+   * What a target passes to the pages it opened: its expected owner, except that a lost target
+   * (its page's facts were never read, discovery reported the target) passes the owner its real
+   * facts give, even when its page object itself ended up parked under a synthetic id.
+   */
+  ownerForChildren(target: ModelTarget): PageOwner {
+    if (!target.lost || !target.timedOut) return this.expectedOwner(target);
+    return this.expectedOwner({ ...target, timedOut: false });
   }
 }
 

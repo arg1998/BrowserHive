@@ -130,6 +130,7 @@ const SPEC_CODES = [
   'REAP_DEAD_FAILED',
   'CDP_SESSION_LEAKED',
   'SCREENSHOT_ARCHIVE_FAILED',
+  'SESSION_PAGE_LIMIT',
   'UNHANDLED',
   'RETENTION_FAILED',
   'STALE_BROWSER_PROCESSES',
@@ -210,7 +211,7 @@ describe('ERROR_REGISTRY completeness', () => {
   it('categories partition the codes; audit and warning codes are never thrown', () => {
     const total = ErrorCategory.options.reduce((n: number, c) => n + codesInCategory(c).length, 0);
     expect(total).toBe(ERROR_CODES.length);
-    expect(codesInCategory('warning')).toHaveLength(11);
+    expect(codesInCategory('warning')).toHaveLength(12);
     expect(codesInCategory('audit')).toContain('ORIGIN_MISMATCH');
     expect(codesInCategory('boot')).toContain('PORT_IN_USE');
   });

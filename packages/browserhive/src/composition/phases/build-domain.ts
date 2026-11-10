@@ -37,7 +37,7 @@ import type { PhaseHandle } from '../unwind.ts';
 import { buildOperators } from './domain-operators.ts';
 import { buildOps, reconcile } from './domain-ops.ts';
 import { buildSessions } from './domain-sessions.ts';
-import { buildTemplates } from './domain-templates.ts';
+import { buildTemplates, templatesDirOf } from './domain-templates.ts';
 import { buildTools } from './domain-tools.ts';
 
 /** How often expired auth sessions, grants and rate buckets are swept. */
@@ -246,14 +246,15 @@ async function buildDomain(
     IMAGE_PRUNE_INTERVAL_MS,
   );
   undo.push(stopImagePrune);
-  await reconcile({ repos, clock, logger, degradations, broker: operators.broker });
+  const templatesDir = templatesDirOf(config.dataDir);
+  await reconcile({ repos, clock, logger, degradations, broker: operators.broker, templatesDir });
   // Requests settled while nothing listened (the last shutdown, the orphan recovery above) revise
   // their notifications now; the producers subscribe later, in wire-observers.
   await ops.notifications
     .reconcileRequests(repos.operatorRequests)
     .catch((err: unknown) => logger.warn('catch-up failed', { err: serializeError(err) }));
 
-  const templates = buildTemplates({
+  const tpl = buildTemplates({
     config,
     host: hostFactsOf(ctx.input.host),
     uow: storage.uow,
@@ -261,7 +262,11 @@ async function buildDomain(
     ids,
     logger,
     degradations,
+    sessions,
+    driver: sessionParts.driver,
+    repeat: timers.every,
   });
+  const templates = tpl.service;
 
   const tools = buildTools({
     config,
@@ -343,7 +348,9 @@ async function buildDomain(
       discordGateway.stop();
       sessionParts.sweeper.stop();
       sessionParts.stopWatcher?.();
+      tpl.stopTicks();
       await sessions.closeAll('shutdown', Math.max(1_000, deadlineMs - 500));
+      await tpl.supervisor?.stopAll(); // template hosts close after their sessions (spec 13 §3.2)
       await operators.broker.shutdown();
       operators.vaultRedaction.closeAll();
       offClosed();

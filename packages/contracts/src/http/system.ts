@@ -50,9 +50,14 @@ export const MigrationRow = z.object({
 /** One applied schema migration. */
 export type MigrationRow = z.infer<typeof MigrationRow>;
 
-/** Session capacity; `max` is `null` when unbounded. */
+/**
+ * Session capacity; `max` is `null` when unbounded. `live` counts sessions (a template's virtual
+ * sessions included); `browsers` counts what `max` bounds: exclusive sessions plus template
+ * browsers (spec 13 §6.3, D-56).
+ */
 export const SystemCapacity = z.object({
   live: Count,
+  browsers: Count,
   max: Count.nullable(),
   max_source: z.enum(['config', 'derived']),
 });

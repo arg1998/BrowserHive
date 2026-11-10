@@ -36,7 +36,7 @@ export function systemInfo(patch: Partial<SystemInfo> = {}): SystemInfo {
     host: '127.0.0.1',
     port: 9876,
     admin: true,
-    capacity: { live: 2, max: 8, max_source: 'config' },
+    capacity: { live: 2, browsers: 2, max: 8, max_source: 'config' },
     open_attention: 1,
     active_screencasts: 0,
     realtime: { connections: 1 },

@@ -30,7 +30,6 @@ import {
   reconcileOnStartup,
   retentionPolicyFromConfig,
 } from '@browserhive/core/runtime';
-import type { OperatorRequestBroker } from '@browserhive/core/server';
 import {
   type ActionCounter,
   type ActionExecutor,
@@ -46,6 +45,7 @@ import {
   NotificationActionService,
   NotificationOutbox,
   NotificationService,
+  type OperatorRequestBroker,
   PreferenceService,
   PublicUrlChecker,
   Recorder,
@@ -54,6 +54,7 @@ import {
   ReportService,
   ReportSettingsStore,
   runtimeZone,
+  sweepStaleTemplateBrowsers,
 } from '@browserhive/core/server';
 
 /** Inputs of {@link buildOps}. */
@@ -308,9 +309,15 @@ export function buildOps(input: OpsInput): OpsParts {
 export async function reconcile(
   input: Pick<OpsInput, 'repos' | 'clock' | 'logger' | 'degradations'> & {
     readonly broker: OperatorRequestBroker;
+    /** `<data-dir>/templates`: Chromium a killed daemon left on a template profile holds its lock (spec 13 §3.1). */
+    readonly templatesDir?: string;
   },
 ): Promise<void> {
+  const templatesDir = input.templatesDir;
   const result = await reconcileOnStartup({
+    ...(templatesDir !== undefined && {
+      findStaleBrowserProcesses: () => sweepStaleTemplateBrowsers(templatesDir),
+    }),
     sessions: input.repos.sessions,
     operatorRequests: input.broker,
     mcpConnections: input.repos.mcpConnections,

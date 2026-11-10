@@ -122,6 +122,7 @@ describe('SessionService ownership and lookup', () => {
     }
     expect(service.serverStatus()).toEqual({
       count: 1,
+      liveSessions: 1,
       limit: 1,
       driver: 'playwright',
       persistenceMode: 'memory',

@@ -22,7 +22,7 @@ import { healthOf } from './health.ts';
 import { accessLog } from './middleware/access-log.ts';
 import { authenticateRoute, authViewOf } from './middleware/auth.ts';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.ts';
-import { hostGuard } from './middleware/host-guard.ts';
+import { hostGuard, templateHostGuard } from './middleware/host-guard.ts';
 import { originGuard } from './middleware/origin-guard.ts';
 import { LOGIN_CONCURRENCY, Semaphore, TokenBuckets } from './middleware/rate-limit.ts';
 import { requestId } from './middleware/request-id.ts';
@@ -101,6 +101,7 @@ export function createHttpApp(deps: HttpAppDeps): HttpApp {
       allowedHosts: [...(config.allowedHosts ?? []), ...(publicHost === null ? [] : [publicHost])],
     }),
   );
+  app.use('*', templateHostGuard());
   app.use(
     `${API_PREFIX}/*`,
     originGuard({ trustedOrigins: publicOrigin === null ? [] : [publicOrigin] }),

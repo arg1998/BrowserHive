@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'bun:test';
 import type { ProcessTreeReader } from '@browserhive/core/runtime';
-import { startBrowserMemorySampler } from './browser-memory.ts';
+import { hostKey, rssAttributes, startBrowserMemorySampler } from './browser-memory.ts';
 
 function manualTimer() {
   const timers: { fn: () => void; ms: number; cancelled: boolean }[] = [];
@@ -114,5 +114,17 @@ describe('startBrowserMemorySampler', () => {
     expect(errors).toHaveLength(1);
     expect([...sampler.latest()]).toEqual([['s-a', 5]]);
     sampler.stop();
+  });
+});
+
+describe('host keys (spec 13 §11.7)', () => {
+  it('an exclusive host is keyed by its session id, a template host by its template id', () => {
+    expect(hostKey({ kind: 'exclusive', hostId: 'shop-a1b2c3d4' })).toBe('shop-a1b2c3d4');
+    expect(rssAttributes(hostKey({ kind: 'exclusive', hostId: 'shop-a1b2c3d4' }))).toEqual({
+      session_id: 'shop-a1b2c3d4',
+    });
+    expect(rssAttributes(hostKey({ kind: 'template', hostId: 'tp-abcdefghij' }))).toEqual({
+      template_id: 'tp-abcdefghij',
+    });
   });
 });

@@ -246,6 +246,7 @@
               "IDENTITY_SEED_SAVE_FAILED",
               "REAP_DEAD_FAILED",
               "CDP_SESSION_LEAKED",
+              "SESSION_PAGE_LIMIT",
               "SCREENSHOT_ARCHIVE_FAILED"
             ]
           },
@@ -7647,6 +7648,10 @@
                 "type": "integer",
                 "minimum": 0
               },
+              "browsers": {
+                "type": "integer",
+                "minimum": 0
+              },
               "max": {
                 "type": [
                   "integer",
@@ -7664,6 +7669,7 @@
             },
             "required": [
               "live",
+              "browsers",
               "max",
               "max_source"
             ]

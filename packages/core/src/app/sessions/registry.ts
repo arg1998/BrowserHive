@@ -70,6 +70,31 @@ export class SessionRegistry {
     return this.sessions.size;
   }
 
+  /** Exclusive sessions occupying capacity: each holds a browser of its own (spec 13 §6.3). */
+  exclusiveSize(): number {
+    let n = 0;
+    for (const session of this.sessions.values()) if (session.template === null) n++;
+    return n;
+  }
+
+  /** Exclusive sessions tools may drive (`server_status.sessions.count` adds the running hosts). */
+  exclusiveLiveCount(): number {
+    let n = 0;
+    for (const session of this.sessions.values()) {
+      if (session.template === null && canServeTools(session.state)) n++;
+    }
+    return n;
+  }
+
+  /** Live sessions, virtual ones included, maintenance ones excluded (operator capacity). */
+  agentLiveCount(): number {
+    let n = 0;
+    for (const s of this.sessions.values()) {
+      if (s.template?.mode !== 'maintenance' && canServeTools(s.state)) n++;
+    }
+    return n;
+  }
+
   /** Sessions tools may drive (`live` or `paused`). */
   liveCount(): number {
     let n = 0;
@@ -82,8 +107,8 @@ export class SessionRegistry {
     return [...this.sessions.values()];
   }
 
-  /** Snapshot filtered to one owner. */
+  /** Snapshot filtered to one owner; maintenance sessions are never anyone's to list (spec 13 §6.1). */
   ownedBy(owner: string): readonly Session[] {
-    return this.values().filter((s) => s.owner === owner);
+    return this.values().filter((s) => s.owner === owner && s.template?.mode !== 'maintenance');
   }
 }

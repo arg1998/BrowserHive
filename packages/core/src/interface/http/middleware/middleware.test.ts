@@ -5,7 +5,7 @@ import { createHttpKit } from '../../../../test/helpers/http-kit.ts';
 import { parseByteRange } from '../byte-range.ts';
 import { accessLogLevel } from './access-log.ts';
 import { createClientResolver, ipInCidr, parseCidr } from './client-ip.ts';
-import { hostnameOf, isHostAllowed } from './host-guard.ts';
+import { fromTemplateHost, hostnameOf, isHostAllowed } from './host-guard.ts';
 import { isSameOrigin } from './origin-guard.ts';
 import { DEFAULT_RATE, OPERATOR_READ_RATE, Semaphore, TokenBuckets } from './rate-limit.ts';
 import { parseTraceparent } from './trace-ids.ts';
@@ -212,5 +212,33 @@ describe('byte ranges', () => {
     expect(parseByteRange('bytes=100-', 100)).toBe('unsatisfiable');
     expect(parseByteRange('bytes=0-1,5-6', 100)).toBeNull();
     expect(parseByteRange(undefined, 100)).toBeNull();
+  });
+});
+
+describe('template browsers never reach BrowserHive (spec 13 §3.8, PR #76 F1)', () => {
+  it('a request carrying the template-host marker is refused on every path, before any route', async () => {
+    const kit = await createHttpKit({ seed: false });
+    const session = await kit.login();
+    for (const path of ['/', '/health', '/api/v1/system', '/api/v1/auth/login', '/mcp']) {
+      const response = await kit.http.app.request(`http://localhost${path}`, {
+        headers: { host: 'localhost', cookie: `${session}; browserhive_template_host=1` },
+      });
+      expect([path, response.status]).toEqual([path, 403]);
+    }
+    expect(fromTemplateHost('a=1; browserhive_template_host=1')).toBe(true);
+    expect(fromTemplateHost('xbrowserhive_template_host=1')).toBe(false);
+    expect(fromTemplateHost(undefined)).toBe(false);
+  });
+
+  it('the Host guard answers only canonical loopback names, never an alias a cookie cannot cover', () => {
+    for (const name of ['localhost', '127.0.0.1', '::1', '[::1]']) {
+      expect([name, isHostAllowed(name, { host: '127.0.0.1' })]).toEqual([name, true]);
+    }
+    for (const name of ['foo.localhost', '127.0.0.2', '::ffff:127.0.0.1', '::ffff:7f00:1']) {
+      expect([name, isHostAllowed(name, { host: '127.0.0.1' })]).toEqual([name, false]);
+      expect([name, isHostAllowed(name, { host: '0.0.0.0' })]).toEqual([name, false]);
+    }
+    expect(isHostAllowed('0.0.0.0', { host: '0.0.0.0' })).toBe(true);
+    expect(isHostAllowed('192.168.1.20', { host: '0.0.0.0' })).toBe(true);
   });
 });

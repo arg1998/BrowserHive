@@ -46,6 +46,8 @@ export interface SessionsInput {
 /** Built session-side services. */
 export interface SessionsParts {
   readonly driverName: () => 'patchright' | 'playwright';
+  /** The browser driver; it also starts template hosts (spec 13 §3.1). */
+  readonly driver: PlaywrightBrowserDriver;
   readonly browserInstalled: boolean;
   /** Version of the Chromium build `chromium` sessions launch; `null` when it is not installed. */
   readonly chromiumVersion: string | null;
@@ -110,19 +112,6 @@ export async function buildSessions(input: SessionsInput): Promise<SessionsParts
     clock,
     ...(input.sandboxHost !== undefined && { host: input.sandboxHost }),
   });
-  const driver = new PlaywrightBrowserDriver({
-    logger,
-    clock,
-    host,
-    stealthDriver: config.stealthDriver,
-    driverResolver: resolver,
-    sandbox: sandbox.policy,
-  });
-  // The System page's runtime row: the build the driver actually launches (Patchright's or
-  // Playwright's bundled Chromium), not a system-wide browser.
-  const chromiumVersion = browserInstalled
-    ? bundledChromiumVersion(config.stealth === 'off' ? 'playwright' : driver.stealthDriverName())
-    : null;
   const geoSeed = new HostGeoSeedResolver(host);
 
   let sessionsRef: SessionService | undefined;
@@ -140,6 +129,24 @@ export async function buildSessions(input: SessionsInput): Promise<SessionsParts
   await blocklist.load();
   const stopWatcher =
     blocklist.configured && config.blocklistWatch ? blocklist.watch(nodeBlocklistWatcher) : null;
+
+  const driver = new PlaywrightBrowserDriver({
+    logger,
+    clock,
+    host,
+    stealthDriver: config.stealthDriver,
+    driverResolver: resolver,
+    sandbox: sandbox.policy,
+    // Every template host's chain carries the configured blocklist (spec 13 §3.8).
+    templateBlocklist: blocklist.configured
+      ? { blocklist: blocklist.holder, observer: blocklist.requestObserver }
+      : null,
+  });
+  // The System page's runtime row: the build the driver actually launches (Patchright's or
+  // Playwright's bundled Chromium), not a system-wide browser.
+  const chromiumVersion = browserInstalled
+    ? bundledChromiumVersion(config.stealth === 'off' ? 'playwright' : driver.stealthDriverName())
+    : null;
 
   const policies: SessionPolicyInstaller = {
     async install(host, context) {
@@ -195,6 +202,7 @@ export async function buildSessions(input: SessionsInput): Promise<SessionsParts
   });
   return {
     driverName: () => driver.stealthDriverName(),
+    driver,
     browserInstalled,
     chromiumVersion,
     blocklist,

@@ -49,7 +49,13 @@ function setup() {
     dataDir: '/data',
     mcp: { connections: () => 2 },
     sessions: {
-      serverStatus: () => ({ count: 2, limit: 8, driver: 'playwright', persistenceMode: 'memory' }),
+      serverStatus: () => ({
+        count: 2,
+        liveSessions: 3,
+        limit: 8,
+        driver: 'playwright',
+        persistenceMode: 'memory',
+      }),
     },
     capacitySource: 'derived',
     attention: { openCount: () => 1 },
@@ -120,7 +126,7 @@ describe('SystemStatusService', () => {
     expect(SystemInfo.safeParse(info).success).toBe(true);
     expect(info).toMatchObject({
       uptime_ms: 6_000,
-      capacity: { live: 2, max: 8, max_source: 'derived' },
+      capacity: { live: 3, browsers: 2, max: 8, max_source: 'derived' },
       open_attention: 1,
       storage: { db_bytes: 4096 },
       stealth: { driver: 'playwright' },

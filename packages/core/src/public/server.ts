@@ -36,6 +36,11 @@ export { LeaseSweeper } from '../app/sessions/lease-sweeper.ts';
 export { sessionDirLayout } from '../app/sessions/profile-dir.ts';
 export { SessionService } from '../app/sessions/session-service.ts';
 export {
+  type HostSupervisorConfig,
+  type HostSupervisorDeps,
+  TemplateHostSupervisor,
+} from '../app/templates/host-supervisor.ts';
+export {
   TemplateService,
   type TemplateServiceConfig,
 } from '../app/templates/template-service.ts';
@@ -97,6 +102,7 @@ export {
 export { createTemplateGeoResolver } from '../infra/browsers/template-geo.ts';
 export { createBunDesktop } from '../infra/desktop/bun-desktop.ts';
 export { createTemplateFiles } from '../infra/fs/template-files.ts';
+export { sweepStaleTemplateBrowsers } from '../infra/host/stale-template-browsers.ts';
 export { createArtifactFiles } from '../infra/static/artifact-files.ts';
 export { createBunStaticAssets } from '../infra/static/bun-static-assets.ts';
 export { createTraceViewerAssets } from '../infra/static/playwright-trace-viewer.ts';

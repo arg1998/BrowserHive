@@ -266,8 +266,14 @@ export interface SessionView {
   owns(page: Page): boolean;
   /** Pages attributed to this session after it opened (site-opened popups, new tabs). Returns an unsubscribe. */
   onPage(listener: (page: Page) => void): () => void;
-  /** Opens a page attributed to this session (exclusive: `context.newPage()`; virtual: spec 13 §3.3). */
-  newPage(): Promise<Page>;
+  /**
+   * Opens a page attributed to this session (exclusive: `context.newPage()`; virtual: spec 13 §3.3,
+   * a tab next to `beside` when that page is the session's and sits in a normal tabbed window, else
+   * a new background window).
+   *
+   * @throws AppError `TEMPLATE_BUSY` at a page cap of a template host (spec 13 §6.3).
+   */
+  newPage(beside?: Page | null): Promise<Page>;
   /** Cookies visible to this session, optionally limited to `urls`. */
   cookies(urls?: readonly string[]): Promise<Cookie[]>;
   /** Adds cookies; the driver validates them and rejects with its own message. */

@@ -33,7 +33,8 @@ export type Schedule = (fn: () => void, ms: number) => () => void;
 
 /** One blocked navigation as the driver's route handler reports it (structurally `BlockedUrlObserver` in infra). */
 export interface BlockedUrlHit {
-  readonly sessionId: string;
+  /** `null` for a template host's own request (spec 13 §3.8); `''` is read as `null` too. */
+  readonly sessionId: string | null;
   readonly url: string;
   readonly pattern: string;
   readonly source: 'tool' | 'request';
@@ -260,7 +261,7 @@ export class BlocklistService {
 
   private record(hit: BlockedUrlHit, tool: string | null, toolEventId: string | null): void {
     this.hits[hit.source]++;
-    const sessionId = hit.sessionId.length > 0 ? hit.sessionId : null;
+    const sessionId = hit.sessionId !== null && hit.sessionId.length > 0 ? hit.sessionId : null;
     const url = sanitizeUrl(hit.url, { allowQueryKeys: this.deps.urlQueryAllowlist ?? [] });
     const domain = classifyUrl(hit.url).domain;
     const row: BlockedRequestRow = {

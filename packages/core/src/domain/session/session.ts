@@ -18,6 +18,7 @@ import {
   resumeLease,
   touchLease,
 } from './lease.ts';
+import type { SessionTemplate } from './session-template.ts';
 import {
   reserved,
   type SessionEvent,
@@ -184,6 +185,11 @@ export class Session {
   /** Epoch ms of the last activity of any kind (`sessions.last_activity_at`). */
   get lastActivityAt(): number {
     return this.activityAt;
+  }
+
+  /** The template of a virtual session, or `null` for an exclusive session (spec 13 §3.7). */
+  get template(): SessionTemplate | null {
+    return this.request.template ?? null;
   }
 
   /** True once the browser crashed (tools answer `SESSION_DEAD`). */

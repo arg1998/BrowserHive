@@ -125,6 +125,8 @@ export class LeaseSweeper {
 
 function reasonFor(session: Session, now: number): Reaped['reason'] | undefined {
   if (session.dead) return 'crash';
+  // A maintenance session has no lease (spec 13 §1.1): its own work closes it.
+  if (session.template?.mode === 'maintenance') return undefined;
   if (session.state.kind === 'live' && session.isLeaseExpired(now)) return 'lease_expired';
   return undefined;
 }

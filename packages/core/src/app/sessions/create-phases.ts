@@ -2,77 +2,29 @@
 
 import { requestedProxy } from '../../domain/policies/proxy-request.ts';
 import { assertAdmitted } from '../../domain/session/admission.ts';
-import {
-  type CreateSessionRequest,
-  validateCreateRequest,
-} from '../../domain/session/create-request.ts';
+import { validateCreateRequest } from '../../domain/session/create-request.ts';
 import { Session } from '../../domain/session/session.ts';
 import { warningFromLaunch } from '../../domain/session/warnings.ts';
 import { raceSignal } from '../../kernel/deadline.ts';
 import { AppError } from '../../kernel/errors/app-error.ts';
-import { serializeError } from '../../kernel/errors/serialize-error.ts';
-import type {
-  BrowserHost,
-  LaunchedSession,
-  LaunchIdentity,
-  LaunchSpec,
-  ProxySpec,
-  SessionView,
-} from '../../ports/browser-driver.ts';
+import type { LaunchedSession, LaunchSpec } from '../../ports/browser-driver.ts';
 import type { Logger } from '../../ports/logger.ts';
+import { compensate, type PhaseName, type PhaseRunner } from './pipeline-context.ts';
 import type { PipelineDeps, PipelineHooks } from './pipeline-deps.ts';
-import { prepareSessionDirs, removeSessionDir, type SessionDirs } from './profile-dir.ts';
+import { prepareSessionDirs, removeSessionDir } from './profile-dir.ts';
 import { guardPageScheme, type SchemeGuardTarget } from './scheme-guard.ts';
+import { virtualPhases } from './virtual-phases.ts';
+
+export {
+  compensate,
+  type PhaseName,
+  type PhaseRunner,
+  type PipelineContext,
+} from './pipeline-context.ts';
 
 /** Warning codes the driver emits that later phases adopt (so each phase reports its own findings). */
 const TRACING_CODES: ReadonlySet<string> = new Set(['TRACE_START_FAILED']);
 const IDENTITY_CODES: ReadonlySet<string> = new Set(['STEALTH_INIT_FAILED']);
-
-/** Mutable state threaded through the phases of one run. */
-export interface PipelineContext {
-  request?: CreateSessionRequest;
-  session?: Session;
-  dirs?: SessionDirs;
-  storageStatePath?: string;
-  restoredSeed: string | null;
-  proxy: ProxySpec | null;
-  identity?: LaunchIdentity;
-  view?: SessionView;
-  /** The full host, for `installPolicies` only; the session keeps the view. */
-  host?: BrowserHost;
-}
-
-/** Registers a compensator that never throws (failures are logged, the unwind continues). */
-export function compensate(
-  stack: AsyncDisposableStack,
-  log: Logger,
-  name: string,
-  fn: () => Promise<void>,
-): void {
-  stack.defer(async () => {
-    try {
-      await fn();
-    } catch (err) {
-      log.warn('compensator failed', { step: name, err: serializeError(err) });
-    }
-  });
-}
-
-/** One phase: mutates the context, registers its compensator on `stack` before returning. */
-export type PhaseRunner = (ctx: PipelineContext) => Promise<void>;
-
-/** Every phase name the runners cover. */
-export type PhaseName =
-  | 'validate'
-  | 'admit'
-  | 'reserve'
-  | 'prepareProfile'
-  | 'resolveIdentity'
-  | 'launch'
-  | 'installPolicies'
-  | 'startTracing'
-  | 'applyIdentity'
-  | 'register';
 
 /** Builds the runners for one pipeline run. */
 export function buildPhases(
@@ -87,14 +39,14 @@ export function buildPhases(
     if (value === undefined) throw new AppError('INTERNAL_ERROR', { ref: `pipeline-${what}` });
     return value;
   };
-  return {
+  const exclusive: Record<PhaseName, PhaseRunner> = {
     validate: async (ctx) => {
       ctx.request = validateCreateRequest(deps.input, deps.defaults, deps.principal);
     },
     admit: async (ctx) => {
       const request = need(ctx.request, 'request');
       assertAdmitted(deps.admission, {
-        occupied: deps.registry.size,
+        occupied: deps.occupiedSlots(),
         slug: request.slug,
         principal: request.owner,
       });
@@ -104,7 +56,7 @@ export function buildPhases(
       // Capacity is re-checked under the lock: two creates may both pass `admit` on the same snapshot.
       const session = await deps.registry.withLock(() => {
         assertAdmitted(deps.admission, {
-          occupied: deps.registry.size,
+          occupied: deps.occupiedSlots(),
           slug: request.slug,
           principal: request.owner,
         });
@@ -275,6 +227,8 @@ export function buildPhases(
       hooks.updated(session);
     },
   };
+  if (deps.virtual === undefined) return exclusive;
+  return { ...exclusive, ...virtualPhases(deps, deps.virtual, hooks, log, stack, signal) };
 }
 
 function authStates(deps: PipelineDeps, name: string, kind: 'storage' | 'profile') {

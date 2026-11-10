@@ -39,7 +39,10 @@ import {
   type Telemetry,
 } from '@browserhive/core/runtime';
 import { createRealtimeHub, InProcessEventBus, type Realtime } from '@browserhive/core/server';
-import { startBrowserMemorySampler } from '../../src/composition/adapters/browser-memory.ts';
+import {
+  hostKey,
+  startBrowserMemorySampler,
+} from '../../src/composition/adapters/browser-memory.ts';
 import {
   notificationCounters,
   realtimeMetrics,
@@ -619,9 +622,16 @@ describe('documented == recorded', () => {
     });
     // "Browsers" whose process trees are this test process and its parent: the real reader, the
     // real sampler. The second one closes before the last export.
+    // A template host (spec 13 §11.7) is a third process tree: a child that idles until stopped.
+    const host = Bun.spawn([process.execPath, '-e', 'setTimeout(() => {}, 120000)']);
+    stops.push(() => host.kill());
     const browsers = [
       { id: SESSION, browserPid: async () => process.pid },
       { id: 'gone-00000001', browserPid: async () => process.ppid },
+      {
+        id: hostKey({ kind: 'template', hostId: 'tp-guard00001' }),
+        browserPid: async () => host.pid,
+      },
     ];
     const sampler = startBrowserMemorySampler({
       sessions: () => browsers,
@@ -644,7 +654,8 @@ describe('documented == recorded', () => {
     first = receivedMetrics(bodies);
     // A session closes; the next export no longer reports its browser. (The size gauge also
     // reports the value read at the previous collection.)
-    browsers.pop();
+    // The closed session goes; the template host stays.
+    browsers.splice(1, 1);
     await sampler.sample();
     await telemetry.forceFlush();
     received = receivedMetrics(bodies);
@@ -686,8 +697,8 @@ describe('documented == recorded', () => {
   it('stops reporting a gauge series that is no longer observed (a closed session)', () => {
     const sessions = (m: Map<string, Received>) =>
       (m.get('browserhive.browser.rss_bytes')?.points ?? []).map((p) => p.attrs['session_id']);
-    expect(sessions(first).sort()).toEqual(['gone-00000001', SESSION]);
-    expect(sessions(received)).toEqual([SESSION]);
+    expect(sessions(first).filter(Boolean).sort()).toEqual(['gone-00000001', SESSION]);
+    expect(sessions(received).filter(Boolean)).toEqual([SESSION]);
   });
 
   it('carries the values of the driven sources', () => {

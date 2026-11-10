@@ -2,7 +2,7 @@
 
 # Error reference
 
-Every error code BrowserHive can produce (118 codes), generated from `ERROR_REGISTRY` in `@browserhive/contracts/errors`. Each code has a stable anchor: `errors.md#<CODE>`, which is also the `type` URL of HTTP problem responses (`https://browserhive.ai/docs/errors#<CODE>`).
+Every error code BrowserHive can produce (119 codes), generated from `ERROR_REGISTRY` in `@browserhive/contracts/errors`. Each code has a stable anchor: `errors.md#<CODE>`, which is also the `type` URL of HTTP problem responses (`https://browserhive.ai/docs/errors#<CODE>`).
 
 ## How errors reach you
 
@@ -2796,6 +2796,7 @@ Non-fatal degradations recorded on a session or in the system events list; the o
 | [`IDENTITY_SEED_SAVE_FAILED`](#IDENTITY_SEED_SAVE_FAILED) | Identity seed not saved | 500 | never |
 | [`REAP_DEAD_FAILED`](#REAP_DEAD_FAILED) | Dead session reap failed | 500 | never |
 | [`CDP_SESSION_LEAKED`](#CDP_SESSION_LEAKED) | CDP session leaked | 500 | never |
+| [`SESSION_PAGE_LIMIT`](#SESSION_PAGE_LIMIT) | Page limit: a site-opened page was closed | 500 | never |
 | [`SCREENSHOT_ARCHIVE_FAILED`](#SCREENSHOT_ARCHIVE_FAILED) | Screenshot archive failed | 500 | never |
 
 <a id="EXECUTABLE_PATH_OVERRIDE"></a>
@@ -3049,6 +3050,32 @@ Hint: Session warning: logged and broadcast on session:<id>, never thrown.
 Cause: A CDP session was still attached when its page closed and had to be pruned late.
 
 Resolution: No action; report if it repeats.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `session_id` | `string` | yes | — |
+| `message` | `string` | yes | — |
+| `details` | `object` | no | additional keys allowed |
+
+<a id="SESSION_PAGE_LIMIT"></a>
+### `SESSION_PAGE_LIMIT`
+
+| Property | Value |
+|---|---|
+| Title | Page limit: a site-opened page was closed |
+| HTTP status | 500 |
+| Category | `warning` |
+| Retryable | `never` (do not retry; the request cannot succeed as sent) |
+
+Message: `{message}`
+
+Hint: Session warning: logged and broadcast on session:<id>, never thrown.
+
+Cause: A site in a template session opened more pages than the session's page cap (spec 13 §6.3); the page over the cap was closed so the shared browser's other sessions keep theirs.
+
+Resolution: Close pages the session no longer needs; raise templateMaxPagesPerHost or lower the template cap if sessions need more pages.
 
 Details:
 
