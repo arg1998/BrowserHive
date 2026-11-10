@@ -29,7 +29,7 @@ BrowserHive is a local MCP server that gives AI agents isolated, stealthy Chromi
 Generated from the source by `scripts/gen-docs.ts`; always in sync with the code.
 
 - [Configuration keys](reference/configuration.md): every key with CLI, environment and file names, type, default
-- [MCP tools](reference/tools.md): the 43 tools with parameters, results and errors
+- [MCP tools](reference/tools.md): the 44 tools with parameters, results and errors
 - [Errors](reference/errors.md): every error code with cause and resolution
 - [REST API](reference/api.md): every admin API endpoint with scope and authentication
 - [WebSocket protocol](reference/websocket.md): envelope, topics, commands, screencast frames

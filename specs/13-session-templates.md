@@ -298,6 +298,8 @@ interface TemplateStateStore {   // the files under templates/<id>/versions, enc
 }
 ```
 
+*As built in T1a-1.* `TemplateRepository.list(query)` is `listAll()` (every row, by name): `GET /templates` sorts and filters by `in_use` and `host_state`, which only the host supervisor knows, so the template service pages over the (small, operator-made) set with its own keyset cursor. `TemplateRepository.insert` throws `TEMPLATE_NAME_TAKEN` on the unique name; `update` throws `CONFLICT` on a stale version and `TEMPLATE_NAME_TAKEN` on a colliding rename. `TemplateSiteRepository` adds `listAll()`. The host side is behind one more port, `TemplateRuntime` (`ports/template-runtime.ts`: `host(id)`, `liveSessions(id)`, `launch(request)`, `shutdown(id)`), which the host supervisor implements in T1a-2; until then `UnavailableTemplateRuntime` reports every host `stopped` and answers launches with `TEMPLATE_UNAVAILABLE` (`reason: 'starting'`). The template directory is behind `TemplateFiles` (`ports/template-files.ts`).
+
 ---
 
 ## 3. Live mode
@@ -613,7 +615,7 @@ A context-level setting is the template's, never a session's. The table fixes, f
 
 - **Only templates the caller may launch are listed** (§6.1); a template the caller may not use is absent, never marked. `site` is the registrable domain; `title` the pack's title or the domain; disabled sites are omitted.
 - `availability`: `available` (a launch would be admitted now; a stopped host counts as available, it starts on launch); `busy` (the template is at capacity, or a strategy defers launches, §9.4); `needs_login` (every enabled site is `signed_out` or `challenged`); `unavailable` (the template is not `ready`, or cannot run until the operator acts). No count of sessions, no `mode` and nothing about other sessions is returned (D-09, §5).
-- Pack `templates`, capability `read`, `since` = the release that ships T1a. Registration order: appended after `vault_fill` (02 §3.14), so the existing 43 keep their positions. A new tool gets a strict empty input schema; the argument-less legacy tools keep theirs (D-12). The MCP server `instructions` (02 §1) gain one sentence: "Use list_templates to find session templates the operator has signed in to sites; launch_session with template starts a session that is signed in to them."
+- Pack `templates`, capability `read`, `since` = the release that ships T1a (`TEMPLATES_SINCE`, `0.4.0` as built in T1a-1 because 0.3.0 is planned for other work; the final feature PR moves it if templates ship later). Registration order: appended after `vault_fill` (02 §3.14), so the existing 43 keep their positions. A new tool gets a strict empty input schema; the argument-less legacy tools keep theirs (D-12). The MCP server `instructions` (02 §1) gain one sentence: "Use list_templates to find session templates the operator has signed in to sites; launch_session with template starts a session that is signed in to them."
 - Description (§5): "List the session templates you may use. A session launched with a template's name as `template` starts signed in to the template's sites. The sign-ins belong to the operator: do not sign out, and do not change account, security or privacy settings; such actions may be blocked or need the operator's approval. Sign-ins and site data the session changes are kept in the template and carried into later sessions from it. Cookie values are hidden, and evaluate and saving the login are unavailable unless the operator allows them."
 
 ### 5.2 `launch_session.template` (new optional parameter, PR T1a)
