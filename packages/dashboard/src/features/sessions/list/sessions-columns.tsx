@@ -53,6 +53,9 @@ export function SessionTitleCell({
         </Hint>
         <ActivityInline session={session} />
         {browser !== null ? <span className="truncate">· {browser}</span> : null}
+        {session.template !== undefined ? (
+          <span className="truncate">· {session.template.name}</span>
+        ) : null}
         {showOwner ? <span className="truncate">· {session.owner}</span> : null}
         <CopyButton
           value={session.session_id}

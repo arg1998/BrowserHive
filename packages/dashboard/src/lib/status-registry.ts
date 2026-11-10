@@ -11,6 +11,9 @@ import type {
   NotificationType,
   OperatorRequestStatus,
   SessionStatus,
+  TemplateHealthState,
+  TemplateHostState,
+  TemplateStatus,
   UrlCategory,
 } from '@browserhive/contracts/enums';
 import type {
@@ -256,6 +259,36 @@ export const LOG_LEVEL: { readonly [K in LogLevel]: StatusEntry } = {
   trace: { label: 'trace', tone: 'muted' },
 };
 
+/** Session template status (spec 13 §11.4, spec 04 §8). */
+export const TEMPLATE_STATUS: { readonly [K in TemplateStatus]: StatusEntry } = {
+  recording: {
+    label: 'Setting up',
+    tone: 'warn',
+    hint: 'Not signed in yet: finish the sign-in so agents can use it',
+  },
+  ready: { label: 'Ready', tone: 'success' },
+  disabled: { label: 'Disabled', tone: 'neutral', hint: 'Agents cannot launch it' },
+};
+
+/** A template's browser (the host, spec 13 §3.2); the UI says "Browser". */
+export const TEMPLATE_HOST: { readonly [K in TemplateHostState]: StatusEntry } = {
+  stopped: { label: 'Stopped', tone: 'neutral', hint: 'Starts on the next launch or sign-in' },
+  starting: { label: 'Starting', tone: 'info', pulse: true },
+  running: { label: 'Running', tone: 'success' },
+  draining: { label: 'Restarting', tone: 'warn', pulse: true, hint: 'New launches wait' },
+  crashed: { label: 'Crashed', tone: 'danger', hint: 'Restarting with backoff' },
+  failed: { label: 'Failed', tone: 'danger', hint: 'Needs you: restart it from the template' },
+};
+
+/** A site's sign-in health (spec 13 §8.1). */
+export const SITE_HEALTH: { readonly [K in TemplateHealthState]: StatusEntry } = {
+  signed_in: { label: 'Signed in', tone: 'success' },
+  signed_out: { label: 'Signed out', tone: 'danger' },
+  challenged: { label: 'Check needed', tone: 'warn' },
+  inconclusive: { label: "Couldn't tell", tone: 'neutral' },
+  unknown: { label: 'Not checked', tone: 'muted' },
+};
+
 /** Socket state registry (health pill). */
 export const SOCKET_STATE = {
   connected: { label: 'daemon · /mcp', tone: 'success', icon: 'online', pulse: true },
@@ -304,6 +337,9 @@ export const REGISTRIES = {
   actionOutcome: ACTION_OUTCOME,
   listener: LISTENER_STATE,
   publicUrl: PUBLIC_URL_OUTCOME,
+  templateStatus: TEMPLATE_STATUS,
+  templateHost: TEMPLATE_HOST,
+  siteHealth: SITE_HEALTH,
 } as const;
 
 /** Registry domain name. */

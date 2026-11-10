@@ -31,6 +31,10 @@ A template's status is `recording` ("setting up") until you finish signing in, t
 
 Creating and signing in needs a running server with the dashboard API (`--admin`). The sign-in window opens **on the machine running BrowserHive**, wherever you run the command or call the API from.
 
+### From the dashboard
+
+**Templates → New template** walks through the same choices in five steps (name, sites, identity and network, access, sign in), then opens the sign-in window and shows a mark per site as you confirm it. A template still setting up offers **Continue sign-in** on the Templates page. See [Templates in the dashboard](dashboard.md#templates).
+
 ### From the command line
 
 ```bash
@@ -69,7 +73,7 @@ BrowserHive lists such domains as "Also signed in to: … — agents can use thi
 
 - **Finish** (Enter, `templates finish <name>`, or `POST …/recording/finish`) closes the window and sets the template `ready`. A site you never confirmed is kept and marked signed out; agents can still launch the template.
 - **Cancel** (`DELETE …/recording`) closes the window. The template stays "setting up", and sign-ins you completed stay in its browser.
-- **Finish later.** When `--timeout` runs out, or after a cancel, the template stays "setting up". Run `browserhive templates finish job-hunt` to complete it. To open the sign-in window again first, call `POST /api/v1/templates/{id}/recording`; a "Continue sign-in" action arrives with the dashboard pages in a later release.
+- **Finish later.** When `--timeout` runs out, or after a cancel, the template stays "setting up". Run `browserhive templates finish job-hunt` to complete it. To open the sign-in window again first, use **Continue sign-in** on the dashboard's Templates page, or call `POST /api/v1/templates/{id}/recording`.
 
 Closing the sign-in window by hand cancels nothing: the template's browser keeps running, and the recording stays open until you finish or cancel.
 

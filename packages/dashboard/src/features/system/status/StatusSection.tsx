@@ -48,6 +48,7 @@ import {
   systemNotices,
 } from '../model.ts';
 import { PublicAddressPanel } from './PublicAddressPanel.tsx';
+import { TemplateBrowsersPanel } from './TemplateBrowsersPanel.tsx';
 
 const SEVERITY_TONE: { readonly [K in SystemEvent['severity']]: Tone } = {
   info: 'info',
@@ -553,6 +554,7 @@ export function StatusSection({
       <HealthRuntimePanel system={system} health={health} query={healthQuery} />
       <PublicAddressPanel />
       <BrowsersPanel system={system} />
+      <TemplateBrowsersPanel />
       {mcpConnections !== undefined ? (
         <McpConnectionsPanel
           query={mcpConnections}

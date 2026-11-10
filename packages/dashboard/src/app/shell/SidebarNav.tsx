@@ -1,24 +1,49 @@
 /** @module app/shell/SidebarNav — nav items from the route table: expanded rows or 40px rail buttons with tooltips, badges (dot in the rail), "Not enabled" group only once `/system` is known */
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useApi } from '@/app/providers/AuthProvider.tsx';
 import { useTopic } from '@/app/providers/SocketProvider.tsx';
 import { Hint } from '@/components/ui/tooltip.tsx';
+import { TEMPLATES_TOPIC } from '@/features/templates/live.ts';
 import { keys } from '@/lib/api/keys.ts';
 import { ICONS } from '@/lib/icons.ts';
 import { cn } from '@/lib/utils.ts';
 import { type NavItem, useNavItems } from './use-route-table.ts';
 
-/** Badge counts and capabilities the nav needs. `vaultEnabled` is `null` until `/system` answered. */
+/** Health states of a template site that need the operator to sign in again (spec 13 §11.4). */
+const NEEDS_SIGN_IN: ReadonlySet<unknown> = new Set(['signed_out', 'challenged']);
+
+/** Sites that need a sign-in, from the `health` facet of `GET /templates` (pure, tested). */
+export function sitesNeedingSignIn(
+  health: readonly { readonly value: unknown; readonly count: number }[] | undefined,
+): number {
+  return (health ?? []).reduce((n, f) => (NEEDS_SIGN_IN.has(f.value) ? n + f.count : n), 0);
+}
+
+/** `true`/`false` from a boolean config key's value; `null` while unknown. */
+function configFlag(
+  config:
+    | { readonly keys: readonly { readonly key: string; readonly value: unknown }[] }
+    | undefined,
+  key: string,
+): boolean | null {
+  const value = config?.keys.find((k) => k.key === key)?.value;
+  return typeof value === 'boolean' ? value : null;
+}
+
+/** Badge counts and capabilities the nav needs. A capability is `null` until its source answered. */
 export function useNavSignals() {
   const api = useApi();
+  const queryClient = useQueryClient();
   const system = useQuery({ queryKey: keys.system.status(), queryFn: () => api.getSystem() });
+  const config = useQuery({ queryKey: keys.system.config(), queryFn: () => api.getSystemConfig() });
   const attention = useQuery({
     queryKey: keys.attention.openCount(),
     queryFn: async () =>
       (await api.listAttention({ query: { status: ['pending'], limit: 1 } })).open_count,
   });
   const vaultEnabled = system.data === undefined ? null : system.data.vault.enabled;
+  const templatesEnabled = configFlag(config.data, 'templates');
   const confirms = useQuery({
     queryKey: keys.vault.confirmCount(),
     queryFn: async () =>
@@ -27,13 +52,28 @@ export function useNavSignals() {
     // Only when the vault is known to be on: otherwise the endpoint 404s.
     enabled: vaultEnabled === true,
   });
+  const signIns = useQuery({
+    queryKey: [...keys.templates.lists(), 'nav-badge'],
+    queryFn: async () =>
+      sitesNeedingSignIn((await api.listTemplates({ query: { limit: 1 } })).facets.health),
+    enabled: templatesEnabled !== false,
+  });
   useTopic('attention');
   useTopic(vaultEnabled === true ? 'vault.confirm' : null);
   useTopic('system');
+  useTopic(templatesEnabled === false ? null : TEMPLATES_TOPIC, () => {
+    void queryClient.invalidateQueries({ queryKey: keys.templates.lists() });
+  });
   return {
-    vaultEnabled,
+    capabilities: {
+      vault: vaultEnabled,
+      templates: templatesEnabled,
+      // Site packs ship with a later phase of the templates program (spec 13 §17 T3a).
+      sitePacks: false,
+    } satisfies NavCapabilities,
     attentionOpen: attention.data ?? 0,
     confirmsOpen: confirms.data ?? 0,
+    signInsNeeded: signIns.data ?? 0,
     version: system.data?.version ?? null,
   };
 }
@@ -44,24 +84,63 @@ export interface SidebarNavProps {
   readonly onNavigate?: () => void;
 }
 
-/** Split items into enabled and not-enabled groups; vault items wait for `/system` (pure, tested). */
+/** What is on, per `requires` value; `null` = not known yet. */
+export interface NavCapabilities {
+  readonly vault: boolean | null;
+  readonly templates: boolean | null;
+  readonly sitePacks: boolean | null;
+}
+
+/**
+ * Where an item goes: `enabled`, `disabled` ("Not enabled") or `hidden`. Vault items wait for
+ * `/system`; template items show while the config is loading (templates are on by default).
+ */
+function placement(
+  requires: NavItem['requires'],
+  caps: NavCapabilities,
+): 'enabled' | 'disabled' | 'hidden' {
+  switch (requires) {
+    case 'vault':
+      return caps.vault === true ? 'enabled' : caps.vault === false ? 'disabled' : 'hidden';
+    case 'templates':
+      return caps.templates === false ? 'disabled' : 'enabled';
+    case 'sitePacks':
+      return caps.sitePacks === true && caps.templates !== false ? 'enabled' : 'disabled';
+    default:
+      return 'enabled';
+  }
+}
+
+/** Split items into enabled and not-enabled groups (pure, tested). */
 export function groupNavItems(
   items: readonly NavItem[],
-  vaultEnabled: boolean | null,
+  caps: NavCapabilities,
 ): { readonly enabled: readonly NavItem[]; readonly disabled: readonly NavItem[] } {
   return {
-    enabled: items.filter((i) => i.requires !== 'vault' || vaultEnabled === true),
-    disabled: items.filter((i) => i.requires === 'vault' && vaultEnabled === false),
+    enabled: items.filter((i) => placement(i.requires, caps) === 'enabled'),
+    disabled: items.filter((i) => placement(i.requires, caps) === 'disabled'),
   };
+}
+
+/** A nav badge: the count and what it counts, for screen readers and the rail tooltip. */
+interface Badge {
+  readonly count: number;
+  readonly noun: string;
 }
 
 /** Sidebar nav. */
 export function SidebarNav({ collapsed, onNavigate }: SidebarNavProps) {
   const items = useNavItems();
-  const { vaultEnabled, attentionOpen, confirmsOpen } = useNavSignals();
-  const { enabled, disabled } = groupNavItems(items, vaultEnabled);
-  const badgeFor = (item: NavItem): number =>
-    item.to === '/attention' ? attentionOpen : item.to === '/vault' ? confirmsOpen : 0;
+  const { capabilities, attentionOpen, confirmsOpen, signInsNeeded } = useNavSignals();
+  const { enabled, disabled } = groupNavItems(items, capabilities);
+  const badgeFor = (item: NavItem): Badge => {
+    if (item.to === '/attention') return { count: attentionOpen, noun: 'open' };
+    if (item.to === '/vault') return { count: confirmsOpen, noun: 'open' };
+    if (item.to === '/templates') return { count: signInsNeeded, noun: 'need a sign-in' };
+    return { count: 0, noun: '' };
+  };
+  const nested = (item: NavItem, list: readonly NavItem[]) =>
+    item.parent !== undefined && list.some((other) => other.to === item.parent);
   return (
     <nav
       aria-label="Primary"
@@ -77,6 +156,7 @@ export function SidebarNav({ collapsed, onNavigate }: SidebarNavProps) {
               item={item}
               badge={badgeFor(item)}
               collapsed={collapsed}
+              child={nested(item, enabled)}
               {...(onNavigate !== undefined && { onNavigate })}
             />
           </li>
@@ -96,8 +176,9 @@ export function SidebarNav({ collapsed, onNavigate }: SidebarNavProps) {
               <li key={item.id}>
                 <NavLink
                   item={item}
-                  badge={0}
+                  badge={{ count: 0, noun: '' }}
                   collapsed={collapsed}
+                  child={nested(item, disabled)}
                   {...(onNavigate !== undefined && { onNavigate })}
                   locked
                 />
@@ -112,14 +193,17 @@ export function SidebarNav({ collapsed, onNavigate }: SidebarNavProps) {
 
 function NavLink({
   item,
-  badge,
+  badge: { count: badge, noun },
   collapsed,
+  child = false,
   locked = false,
   onNavigate,
 }: {
   readonly item: NavItem;
-  readonly badge: number;
+  readonly badge: Badge;
   readonly collapsed: boolean;
+  /** Indented under its parent item (expanded sidebar only). */
+  readonly child?: boolean;
   readonly locked?: boolean;
   readonly onNavigate?: () => void;
 }) {
@@ -135,6 +219,7 @@ function NavLink({
       className={cn(
         'group/nav relative flex items-center rounded-md text-sidebar-foreground transition-colors duration-(--duration-fast) hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground [&.active]:bg-sidebar-accent [&.active]:text-sidebar-accent-foreground',
         collapsed ? 'size-10 justify-center' : 'h-9 gap-3 px-2.5 text-base',
+        child && !collapsed && 'ml-5 h-8 pl-2.5 text-sm',
         // Locked items stay readable (≥ 4.5:1) and look like any active item once opened.
         locked && 'text-muted-foreground',
       )}
@@ -144,7 +229,7 @@ function NavLink({
         aria-hidden="true"
         className={cn(
           'shrink-0 text-muted-foreground transition-colors group-hover/nav:text-sidebar-accent-foreground group-[.active]/nav:text-sidebar-accent-foreground',
-          collapsed ? 'size-5' : 'size-4.5',
+          collapsed ? 'size-5' : child ? 'size-4' : 'size-4.5',
           locked && 'opacity-70 group-[.active]/nav:opacity-100',
         )}
       />
@@ -152,7 +237,7 @@ function NavLink({
       {!collapsed && locked ? (
         <Lock aria-hidden="true" className="size-3.5 shrink-0 text-subtle-foreground" />
       ) : null}
-      {badge > 0 ? <span className="sr-only">{`, ${badge} open`}</span> : null}
+      {badge > 0 ? <span className="sr-only">{`, ${badge} ${noun}`}</span> : null}
       {badge > 0 && !collapsed ? (
         <span
           aria-hidden="true"
@@ -177,7 +262,7 @@ function NavLink({
         locked
           ? `${item.label} · not enabled`
           : badge > 0
-            ? `${item.label} · ${badgeText} open`
+            ? `${item.label} · ${badgeText} ${noun}`
             : item.label
       }
     >

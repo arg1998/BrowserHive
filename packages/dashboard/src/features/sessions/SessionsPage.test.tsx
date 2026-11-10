@@ -2,6 +2,7 @@
 
 import { describe, expect, it } from 'bun:test';
 import { sessionSummary, sessionsPage, setViewport, T0 } from '../../../test/fixtures/sessions.ts';
+import { templateSummary, templatesPage } from '../../../test/fixtures/templates.ts';
 import { expectNoA11yViolations } from '../../../test/helpers/axe.ts';
 import { renderPage } from '../../../test/helpers/page-harness.tsx';
 import { act, fireEvent, screen, waitFor, within } from '../../../test/helpers/render.tsx';
@@ -19,14 +20,17 @@ const ROWS = [
   }),
 ];
 
-function mount(url: string, rows = ROWS) {
+function mount(url: string, rows = ROWS, templates: { value: string; count: number }[] = []) {
   return renderPage({
     path: '/sessions',
     component: SessionsPage,
     validateSearch: (s) => sessionsSearch.parse(s),
     routes: {
-      'GET /sessions': (req: { query: URLSearchParams }) =>
-        req.query.get('q') === 'zzz' ? sessionsPage([]) : sessionsPage(rows),
+      'GET /templates': templatesPage([templateSummary(1)]),
+      'GET /sessions': (req: { query: URLSearchParams }) => {
+        const page = req.query.get('q') === 'zzz' ? sessionsPage([]) : sessionsPage(rows);
+        return { ...page, facets: { ...page.facets, templates } };
+      },
       'POST /sessions/bulk': (req: { body: { session_ids: string[] } }) => ({
         results: req.body.session_ids.map((id, i) =>
           i === 0
@@ -47,6 +51,32 @@ function mount(url: string, rows = ROWS) {
 
 const lastList = (requests: readonly { method: string; path: string; query: URLSearchParams }[]) =>
   requests.filter((r) => r.method === 'GET' && r.path === '/api/v1/sessions').at(-1);
+
+describe('SessionsPage with template sessions', () => {
+  const rows = [
+    sessionSummary(1, {
+      template: { template_id: 'tp-0000000001', name: 'job-hunt', version: 1, mode: 'live' },
+      sealed: true,
+    }),
+  ];
+
+  it('offers a Template chip labelled by display name and sends the template filter', async () => {
+    const view = mount('/sessions', rows, [{ value: 'tp-0000000001', count: 1 }]);
+    const table = await screen.findByRole('region', { name: 'Sessions' });
+    expect(within(table).getAllByText('· job-hunt').length).toBeGreaterThan(0);
+    const chip = await screen.findByRole('button', { name: /Job hunt/ });
+    await act(async () => {
+      fireEvent.click(chip);
+    });
+    await waitFor(() =>
+      expect(view.router.state.location.search).toMatchObject({ template: ['tp-0000000001'] }),
+    );
+    await waitFor(() =>
+      expect(lastList(view.requests)?.query.get('template')).toBe('tp-0000000001'),
+    );
+    await expectNoA11yViolations(view.container, { disable: ['aria-hidden-focus'] });
+  });
+});
 
 describe('SessionsPage', () => {
   it('renders rows, header count and facet chips; axe clean', async () => {

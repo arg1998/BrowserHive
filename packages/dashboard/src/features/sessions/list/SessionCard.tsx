@@ -39,6 +39,7 @@ export function SessionCard({ session, now, selected, onSelect, actions }: Sessi
           <span className="truncate text-sm text-muted-foreground">
             <span className="font-mono">{idSuffix(session)}</span>
             {browser !== null ? ` · ${browser}` : ''}
+            {session.template !== undefined ? ` · ${session.template.name}` : ''}
           </span>
           <HarnessName harness={session.harness} className="mt-1 self-start text-sm" />
         </div>

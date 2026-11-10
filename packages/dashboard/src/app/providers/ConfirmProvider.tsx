@@ -51,6 +51,10 @@ export function ConfirmProvider({ children }: { readonly children: ReactNode }) 
         {...(pending?.options.requireText !== undefined && {
           requireText: pending.options.requireText,
         })}
+        {...(pending?.options.items !== undefined && { items: pending.options.items })}
+        {...(pending?.options.itemsLabel !== undefined && {
+          itemsLabel: pending.options.itemsLabel,
+        })}
       />
     </ConfirmContext.Provider>
   );
