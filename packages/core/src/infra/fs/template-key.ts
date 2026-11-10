@@ -1,7 +1,7 @@
-/** @module infra/fs/template-key — resolving the template key once per process (spec 13 §2.4): `templateKey` from the configuration, else `<data-dir>/admin/template.key`, created with `O_CREAT | O_EXCL` and mode 0600 only while no encrypted template file exists, never re-created over existing files. */
+/** @module infra/fs/template-key — resolving the template key once per process (spec 13 §2.4): `templateKey` from the configuration, else `<data-dir>/admin/template.key`, created exclusively (`O_EXCL` temporary file, then an exclusive hard link) with mode 0600 only while no encrypted template file exists, never re-created over existing files. */
 
 import { randomBytes } from 'node:crypto';
-import { mkdir, open, readFile, stat } from 'node:fs/promises';
+import { link, mkdir, open, readFile, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { KEY_BYTES, type TemplateKey, templateKeyOf } from '../../domain/templates/envelope.ts';
 
@@ -84,26 +84,34 @@ export async function readKeyFile(
 }
 
 /**
- * Creates the key file exclusively (`O_CREAT | O_EXCL`, mode 0600) in `admin/` (0700). Returns the
- * key, or `null` when another process created the file first (`EEXIST`): the caller reads it.
+ * Creates the key file exclusively with its content in place: the key is written to a private
+ * temporary file (`O_CREAT | O_EXCL`, mode 0600, `fsync`) in `admin/` (0700), which is then
+ * hard-linked to the key file's name. The link fails with `EEXIST` when another process created
+ * the key first, so the name never exists half-written and two processes never both win. Returns
+ * the key, or `null` when another process won (the caller reads its key).
  */
 export async function createKeyFile(path: string, dir: string): Promise<TemplateKey | null> {
   await mkdir(dir, { recursive: true, mode: 0o700 });
   const bytes = new Uint8Array(randomBytes(KEY_BYTES));
-  let handle: Awaited<ReturnType<typeof open>>;
+  const tmp = `${path}.${randomBytes(8).toString('hex')}.tmp`;
+  const handle = await open(tmp, 'wx', 0o600);
   try {
-    handle = await open(path, 'wx', 0o600);
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'EEXIST') return null;
-    throw err;
-  }
-  try {
-    await handle.writeFile(`${Buffer.from(bytes).toString('base64')}\n`, 'utf8');
-    await handle.sync();
+    try {
+      await handle.writeFile(`${Buffer.from(bytes).toString('base64')}\n`, 'utf8');
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    try {
+      await link(tmp, path);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'EEXIST') return null;
+      throw err;
+    }
+    return templateKeyOf(bytes);
   } finally {
-    await handle.close();
+    await rm(tmp, { force: true });
   }
-  return templateKeyOf(bytes);
 }
 
 /**

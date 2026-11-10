@@ -154,7 +154,8 @@ const operationSubcommands = [
       {
         name: 'version',
         required: true,
-        describe: "A version number (as listed by browserhive templates versions), or latest (the rolling checkpoint).",
+        describe:
+          'A version number (as listed by browserhive templates versions), or latest (the rolling checkpoint).',
       },
     ],
     flags: [
