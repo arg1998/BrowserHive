@@ -21,11 +21,20 @@ function template(sealing = SEALED): SessionTemplate {
     mode: 'live',
     sealed: true,
     sealing,
-    sites: [],
+    sites: [{ site: 'site-a.test', status: 'signed_in' }],
   };
 }
 
-function session(jar: { cookies: Cookie[] | null }, sealing = SEALED) {
+/** A page of the session: its URL and the storage values it reports. */
+function page(url: string, values: string[]) {
+  return { url: () => url, isClosed: () => false, evaluate: async () => values };
+}
+
+function session(
+  jar: { cookies: Cookie[] | null },
+  sealing = SEALED,
+  pages: ReturnType<typeof page>[] = [],
+) {
   return {
     template: template(sealing),
     view: {
@@ -33,6 +42,7 @@ function session(jar: { cookies: Cookie[] | null }, sealing = SEALED) {
         if (jar.cookies === null) throw new Error('browser closed');
         return jar.cookies;
       },
+      pages: () => pages,
     },
   } as never;
 }
@@ -45,9 +55,11 @@ describe('SealedRedaction', () => {
     const s = session(jar);
     expect((await redaction.scrubberFor(s))?.('a first-token-0123456789 b')).toBe('a [sealed] b');
     jar.cookies = [fakeCookie('site-a.test', 'sid', 'second-token-0123456789')];
+    // Inside the memory window the rotated value is still covered.
+    await clock.advance(SEALED_VALUE_MEMORY_MS - 60_000);
     const scrub = await redaction.scrubberFor(s);
     expect(scrub?.('first-token-0123456789 second-token-0123456789')).toBe('[sealed] [sealed]');
-    await clock.advance(SEALED_VALUE_MEMORY_MS + 1);
+    await clock.advance(60_001);
     expect((await redaction.scrubberFor(s))?.('first-token-0123456789')).toBe(
       'first-token-0123456789',
     );
@@ -70,5 +82,28 @@ describe('SealedRedaction', () => {
     expect(await redaction.scrubberFor(null)).toBeNull();
     expect(await redaction.scrubberFor({ template: null, view: null } as never)).toBeNull();
     expect(await redaction.scrubberFor(session({ cookies: [] }, NO_SEALING))).toBeNull();
+  });
+
+  it("redacts the storage values of the sessions's pages on the template's sites only", async () => {
+    const redaction = new SealedRedaction(new FakeClock());
+    const s = session({ cookies: [] }, SEALED, [
+      page('https://www.site-a.test/app', ['msal-refresh-token-0123456789']),
+      page('https://other.test/', ['other-site-value-0123456789']),
+    ]);
+    const scrub = await redaction.scrubberFor(s);
+    expect(scrub?.('a msal-refresh-token-0123456789 b other-site-value-0123456789')).toBe(
+      'a [sealed] b other-site-value-0123456789',
+    );
+  });
+
+  it("other domains' cookies cannot push a rotated site value out of the memory (review L-2)", async () => {
+    const redaction = new SealedRedaction(new FakeClock());
+    const jar = { cookies: [fakeCookie('site-a.test', 'sid', 'site-token-0123456789')] };
+    const s = session(jar);
+    await redaction.scrubberFor(s);
+    jar.cookies = Array.from({ length: 2_500 }, (_, i) =>
+      fakeCookie(`t${i}.tracker.test`, 'id', `tracker-value-${i}-0123456789`),
+    );
+    expect((await redaction.scrubberFor(s))?.('site-token-0123456789')).toBe('[sealed]');
   });
 });

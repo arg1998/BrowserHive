@@ -163,6 +163,7 @@ describe('templates create: signing in', () => {
     const server = fakeServer({ 'a.test': 'unknown', 'b.test': 'unknown', 'c.test': 'unknown' });
     server.refuse.add('c.test');
     server.unlisted = ['google.com'];
+    server.uncleared = ['google.com'];
     const op = operator();
     server.onPoll = (poll) => {
       if (poll === 1) server.sites.set('a.test', 'signed_in');
@@ -197,6 +198,10 @@ describe('templates create: signing in', () => {
     // Without a terminal the unlisted sign-ins are removed (preselected).
     expect(result.stdout).toContain('Also signed in to: google.com — agents can use this.');
     expect(server.calls.at(-1)?.body).toEqual({ remove_sign_ins: ['google.com'] });
+    // Site data the server could not clear is reported, never silent (review H-1).
+    expect(`${result.stdout}${result.stderr}`).toContain(
+      'google.com: site data not cleared for https://google.com',
+    );
   });
 
   it('on a terminal, answering n keeps the unlisted sign-ins; Enter alone removes them', async () => {

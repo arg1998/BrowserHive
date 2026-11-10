@@ -86,6 +86,13 @@ export const TEMPLATE_VAULT_NOTE =
 /** `press_key`'s refusal of a clipboard shortcut in a template session (spec 13 §3.3). */
 export const TEMPLATE_CLIPBOARD_TEXT = 'clipboard shortcuts are not available in template sessions';
 
+/**
+ * `click`'s refusal of the middle button in a template session (review M-3): on Linux a middle
+ * click pastes the desktop's primary selection, which on a headed template is the operator's.
+ */
+export const TEMPLATE_MIDDLE_CLICK_TEXT =
+  'middle-button clicks are not available in template sessions';
+
 /** `list_templates`: the templates the caller may launch, sorted by name (spec 13 §5.1). */
 export const LIST_TEMPLATES = defineTool({
   name: 'list_templates',

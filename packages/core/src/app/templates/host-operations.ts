@@ -7,7 +7,7 @@ import type { Cookie } from '../../ports/browser-driver.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type { Page } from '../../ports/page-types.ts';
 import type { TemplateRecord } from '../../ports/persistence/index.ts';
-import type { TemplateHostLauncher } from '../../ports/template-host.ts';
+import type { SignInRemoval, TemplateHostLauncher } from '../../ports/template-host.ts';
 import type {
   RecordingRequest,
   SharedWindowView,
@@ -60,7 +60,7 @@ export class TemplateHostOperations implements TemplateHostOps {
     }
   }
 
-  async removeSignIn(template: TemplateRecord, domain: string): Promise<number> {
+  async removeSignIn(template: TemplateRecord, domain: string): Promise<SignInRemoval> {
     const { supervisor } = this.#deps;
     let host = supervisor.runningHost(template.templateId);
     let system: Session | null = null;
@@ -75,7 +75,8 @@ export class TemplateHostOperations implements TemplateHostOps {
       host = supervisor.runningHost(template.templateId);
     }
     try {
-      return host === null ? 0 : await host.clearSignIn(domain);
+      if (host === null) return { cookiesRemoved: 0, origins: [], unclearedOrigins: [domain] };
+      return await host.clearSignIn(domain);
     } finally {
       if (system !== null) await this.#deps.sessions.close(system.id, 'operator');
     }

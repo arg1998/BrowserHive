@@ -1,6 +1,7 @@
 /** @module interface/mcp/tools/templates.test — list_templates and launch_session.template through the real server, dispatcher and schemas (spec 13 §5.1–§5.3, §6.1). The host side is a fake runtime until templates T1a-2. */
 
 import { afterEach, describe, expect, it } from 'bun:test';
+import { FakeSessionView } from '../../../../test/helpers/fake-session-view.ts';
 import {
   createToolHarness,
   type ToolHarness,
@@ -183,4 +184,48 @@ describe('server instructions', () => {
       'list_templates',
     );
   });
+});
+
+describe('switch_tab in a template session (spec 13 §3.3)', () => {
+  async function templateSession(
+    headless: boolean,
+  ): Promise<{ id: string; view: FakeSessionView }> {
+    const view = new FakeSessionView('tabs-00000001');
+    const session = await h.services.sessions.createVirtual(
+      { slug: 'tabs', headless },
+      { subject: 'local' },
+      {
+        template: {
+          templateId: 'tp-fixture001',
+          name: 'job-hunt',
+          version: null,
+          mode: 'live',
+          sealed: true,
+          sealing: {
+            hideCookieValues: true,
+            forceDisableEvaluate: true,
+            refuseCookieWrites: true,
+            refuseStateExport: true,
+          },
+          sites: [],
+        },
+        proxyLabel: null,
+        reserve: () => () => undefined,
+        acquire: async () => undefined,
+        open: async () => view,
+      },
+    );
+    return { id: session.id, view };
+  }
+
+  for (const headless of [true, false]) {
+    it(`brings the tab to the front only on a headless template (headless: ${headless})`, async () => {
+      h = await createToolHarness();
+      const { id, view } = await templateSession(headless);
+      const first = h.services.sessions.peek(id)?.tabs.activeTabId() ?? '';
+      expect((await h.call('new_tab', { session_id: id })).isError).toBeFalsy();
+      expect((await h.call('switch_tab', { session_id: id, tab_id: first })).isError).toBeFalsy();
+      expect(view.firstPage.methods().includes('bringToFront')).toBe(headless);
+    });
+  }
 });

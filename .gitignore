@@ -24,3 +24,7 @@ Thumbs.db
 # temporary artifacts
 *.tgz
 tmp/
+# declarations emitted beside sources (a stray `tsc` emit); only the generated DB types belong there
+packages/*/src/**/*.d.ts
+packages/*/src/**/*.d.ts.map
+!packages/core/src/infra/persistence/generated/db.d.ts

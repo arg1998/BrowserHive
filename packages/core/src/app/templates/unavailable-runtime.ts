@@ -3,6 +3,7 @@
 import { ERROR_REGISTRY, renderMessage } from '@browserhive/contracts/errors';
 import type { Session } from '../../domain/session/session.ts';
 import { AppError } from '../../kernel/errors/app-error.ts';
+import type { SignInRemoval } from '../../ports/template-host.ts';
 import {
   type SharedWindowView,
   STOPPED_HOST,
@@ -63,7 +64,7 @@ export class UnavailableTemplateHostOps implements TemplateHostOps {
     return [];
   }
 
-  removeSignIn(): Promise<number> {
+  removeSignIn(): Promise<SignInRemoval> {
     return Promise.reject(templatesOff());
   }
 

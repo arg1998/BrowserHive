@@ -14,8 +14,11 @@ import { FakeBrowserContext } from './fake-session-view.ts';
 export class FakeCdp {
   readonly sent: string[] = [];
   answers: Record<string, unknown> = {};
+  failures: string[] = [];
   async send(method: string): Promise<unknown> {
     this.sent.push(method);
+    if (this.failures.includes(method))
+      throw new Error(`Protocol error (${method}): Internal error`);
     return this.answers[method] ?? {};
   }
   on(): this {
@@ -30,9 +33,12 @@ export class FakeCdp {
 export class FakeHostContext extends FakeBrowserContext {
   readonly cdps: FakeCdp[] = [];
   cdpAnswers: Record<string, unknown> = {};
+  /** Methods the next sessions refuse. */
+  cdpFailures: string[] = [];
   async newCDPSession(): Promise<FakeCdp> {
     const cdp = new FakeCdp();
     cdp.answers = { ...this.cdpAnswers };
+    cdp.failures = [...this.cdpFailures];
     this.cdps.push(cdp);
     return cdp;
   }
@@ -88,7 +94,6 @@ export class FakeTargets {
   /** Window ids by target id; a created window `W<n>` is window `n` unless scripted here. */
   readonly windows = new Map<string, number>();
   readonly minimized: string[] = [];
-  readonly clearedOrigins: string[] = [];
 
   async windowOf(targetId: string): Promise<number | null> {
     const scripted = this.windows.get(targetId);
@@ -103,9 +108,7 @@ export class FakeTargets {
   async minimize(targetId: string): Promise<void> {
     this.minimized.push(targetId);
   }
-  async clearOriginData(origins: readonly string[]): Promise<void> {
-    this.clearedOrigins.push(...origins);
-  }
+
   async resize(): Promise<void> {
     return;
   }

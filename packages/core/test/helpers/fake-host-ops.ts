@@ -3,6 +3,7 @@
 import type { Session } from '../../src/domain/session/session.ts';
 import type { Cookie } from '../../src/ports/browser-driver.ts';
 import type { TemplateRecord } from '../../src/ports/persistence/index.ts';
+import type { SignInRemoval } from '../../src/ports/template-host.ts';
 import type {
   RecordingRequest,
   SharedWindowView,
@@ -28,13 +29,20 @@ export class FakeTemplateHostOps implements TemplateHostOps {
     return this.shared;
   }
 
-  async removeSignIn(_template: TemplateRecord, domain: string): Promise<number> {
+  /** Origins the next removals report as not cleared. */
+  uncleared: string[] = [];
+
+  async removeSignIn(_template: TemplateRecord, domain: string): Promise<SignInRemoval> {
     this.removed.push(domain);
     const before = this.jarCookies?.length ?? 0;
     this.jarCookies =
       this.jarCookies?.filter((c) => !`.${c.domain.replace(/^\./, '')}`.endsWith(`.${domain}`)) ??
       null;
-    return before - (this.jarCookies?.length ?? 0);
+    return {
+      cookiesRemoved: before - (this.jarCookies?.length ?? 0),
+      origins: [`https://${domain}`],
+      unclearedOrigins: [...this.uncleared],
+    };
   }
 
   async clearProfileSecrets(template: TemplateRecord): Promise<void> {

@@ -279,7 +279,14 @@ export class ToolDispatcher {
     const resolved = holder.session;
     const sessionId = resolved?.id ?? resultSessionId;
     // A sealed template session's results never carry a cookie value of its template (spec 13 §5.4).
-    const sealedScrub = await this.sealed.scrubberFor(resolved);
+    // A result about the caller's sessions without one attached (`list_sessions`, `launch_session`)
+    // is scrubbed with the values of every sealed session the caller owns.
+    const sealedScrub =
+      resolved !== null
+        ? await this.sealed.scrubberFor(resolved)
+        : await this.sealed.scrubberForAll(
+            services.sessions.listAll().filter((s) => s.request.owner === call.principal.subject),
+          );
     const scrub = (text: string): string => {
       const scrubbed = services.redaction.scrubText(sessionId, text);
       return sealedScrub === null ? scrubbed : sealedScrub(scrubbed);

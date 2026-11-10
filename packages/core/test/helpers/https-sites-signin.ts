@@ -2,6 +2,8 @@
 
 /** The value of the sealing sentinel cookie (also embedded in the `/sealed` page's HTML). */
 export const SENTINEL_COOKIE_VALUE = 'sentinel-cookie-7f3a9c2e5b1d';
+/** A cookie value with quotes (RFC 6265 quoted form): its JSON-escaped form must be redacted too. */
+export const SENTINEL_QUOTED_VALUE = '"quoted-sentinel-9f2c4e7a1b"';
 /** The localStorage and IndexedDB sentinels the `/sealed` page stores. */
 export const SENTINEL_STORAGE_VALUE = 'sentinel-storage-4e8b2a6c0f9d';
 
@@ -73,20 +75,55 @@ export async function signInRoute(
     );
   }
   if (path === '/sealed') {
-    return html(
+    const response = html(
       'sealed',
       `<p id="token">token ${SENTINEL_COOKIE_VALUE}</p>
+       <p id="quoted">quoted ${SENTINEL_QUOTED_VALUE}</p>
+       <p id="stored">stored (pending)</p>
        <script>
-         // Built at run time: the storage sentinel is never in the page's source.
+         // Built at run time: the storage sentinel is never in the page's source, only in its DOM
+         // once stored (as an SPA's debug panel or bootstrapped JSON would show it).
          const value = ${JSON.stringify(SENTINEL_STORAGE_VALUE.split('-'))}.join('-');
          localStorage.setItem('bh_ls', value);
          const open = indexedDB.open('bh_db', 1);
          open.onupgradeneeded = () => open.result.createObjectStore('s');
-         open.onsuccess = () => open.result.transaction('s', 'readwrite').objectStore('s').put(value, 'k');
+         open.onsuccess = () => {
+           open.result.transaction('s', 'readwrite').objectStore('s').put({ token: value }, 'k').onsuccess = () => {
+             document.getElementById('stored').textContent = 'stored ' + value;
+           };
+         };
        </script>`,
-      {
-        'set-cookie': `bh_sentinel=${SENTINEL_COOKIE_VALUE}; Path=/; Max-Age=86400; HttpOnly; Secure; SameSite=Lax`,
-      },
+    );
+    response.headers.append(
+      'set-cookie',
+      `bh_sentinel=${SENTINEL_COOKIE_VALUE}; Path=/; Max-Age=86400; HttpOnly; Secure; SameSite=Lax`,
+    );
+    response.headers.append(
+      'set-cookie',
+      `bh_quoted=${SENTINEL_QUOTED_VALUE}; Path=/; Max-Age=86400; HttpOnly; Secure; SameSite=Lax`,
+    );
+    return response;
+  }
+  if (path === '/store') {
+    // An SPA that keeps its sign-in in site data, as MSAL or Firebase do (spec 13 §2.3 Remove sign-in).
+    return html(
+      'store',
+      `<p id="store">store</p><script>
+        window.stored = (async () => {
+          localStorage.setItem('msal.token', 'token-' + location.host);
+          await new Promise((done) => {
+            const open = indexedDB.open('auth', 1);
+            open.onupgradeneeded = () => open.result.createObjectStore('tokens');
+            open.onsuccess = () => {
+              open.result.transaction('tokens', 'readwrite').objectStore('tokens').put('refresh-' + location.host, 'k').onsuccess = done;
+            };
+          });
+          await (await caches.open('auth')).put('/me', new Response('me'));
+          await navigator.serviceWorker.register('/sw.js');
+          await navigator.serviceWorker.ready;
+          return true;
+        })();
+      </script>`,
     );
   }
   if (path === '/stall') {

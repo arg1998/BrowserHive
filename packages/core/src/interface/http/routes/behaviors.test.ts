@@ -107,6 +107,43 @@ describe('screenshots', () => {
   });
 });
 
+describe('screenshots of template sessions (spec 13 §11.1)', () => {
+  it('need templates:read, and templates:login for a maintenance session', async () => {
+    const { kit, cookie } = await authed();
+    const issue = async (scopes: string[]) => {
+      const response = await kit.request('POST', '/api/v1/auth/tokens', {
+        cookie,
+        body: { owner_kind: 'operator', display: `viewer-${scopes.length}`, scopes },
+      });
+      const { token } = (await response.json()) as { token: string };
+      return { authorization: `Bearer ${token}` };
+    };
+    const sessionsOnly = await issue(['sessions:read']);
+    const reader = await issue(['sessions:read', 'templates:read']);
+    const login = await issue(['sessions:read', 'templates:read', 'templates:login']);
+    const image = `/api/v1/sessions/${CLOSED_ID}/screenshots/${EVENT_OK}`;
+    const list = `/api/v1/sessions/${CLOSED_ID}/screenshots`;
+    const row = kit.repos.sessions.rows.get(CLOSED_ID);
+    if (row === undefined) throw new Error('no closed session row');
+    const as = (mode: 'live' | 'maintenance') =>
+      kit.repos.sessions.rows.set(CLOSED_ID, {
+        ...row,
+        template: { templateId: 'tp-fixture001', name: 'job-hunt', version: null, mode },
+        sealed: mode === 'live',
+      });
+    as('live');
+    for (const path of [image, list]) {
+      expect((await kit.request('GET', path, { headers: sessionsOnly })).status).toBe(403);
+      expect((await kit.request('GET', path, { headers: reader })).status).toBe(200);
+    }
+    as('maintenance');
+    for (const path of [image, list]) {
+      expect((await kit.request('GET', path, { headers: reader })).status).toBe(403);
+      expect((await kit.request('GET', path, { headers: login })).status).toBe(200);
+    }
+  });
+});
+
 describe('sessions', () => {
   it('overlays the live registry on stored rows and 404s unknown ids', async () => {
     const { kit, cookie } = await authed();

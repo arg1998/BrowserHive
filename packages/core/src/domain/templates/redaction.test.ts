@@ -24,3 +24,32 @@ describe('redactSealed', () => {
     expect(redactSealed('abcdefghijk', sealedValues(['abcdefghijk']))).toBe('abcdefghijk');
   });
 });
+
+describe('escaped and encoded forms (review H-2, L-1)', () => {
+  const secret = 'v1"quoted\\back\u0001slash-token';
+  const values = sealedValues([secret]);
+
+  it('redacts the JSON text block of a result, where quotes and backslashes are escaped', () => {
+    const text = JSON.stringify({
+      html: `<p>${secret}</p>`,
+      nested: { yaml: JSON.stringify(secret) },
+    });
+    const redacted = redactSealed(text, values);
+    expect(redacted).not.toContain(JSON.stringify(secret).slice(1, -1));
+    expect(JSON.parse(redacted)).toEqual({
+      html: `<p>${SEALED_MARK}</p>`,
+      nested: { yaml: `"${SEALED_MARK}"` },
+    });
+  });
+
+  it('redacts the URL-encoded and HTML-escaped forms', () => {
+    const plain = 'from-site-a.test&x<y>"z"';
+    const forms = sealedValues([plain]);
+    expect(redactSealed(`https://x.test/?sid=${encodeURIComponent(plain)}`, forms)).toBe(
+      `https://x.test/?sid=${SEALED_MARK}`,
+    );
+    expect(redactSealed('<p>from-site-a.test&amp;x&lt;y&gt;&quot;z&quot;</p>', forms)).toBe(
+      `<p>${SEALED_MARK}</p>`,
+    );
+  });
+});

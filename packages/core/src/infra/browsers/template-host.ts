@@ -16,11 +16,13 @@ import type { Logger } from '../../ports/logger.ts';
 import type {
   ParkedPageInfo,
   SharedWindowInfo,
+  SignInRemoval,
   TemplateHost,
   TemplateHostExit,
   TemplateViewOptions,
 } from '../../ports/template-host.ts';
 import { closeContextWithin, readBrowserPid } from './host-process.ts';
+import { SentinelKeeper } from './host-sentinel.ts';
 import type { IdentityApplier } from './identity-applier.ts';
 import type { InterceptionChain } from './interception-chain.ts';
 import { PARKED, type PageOwner, sessionOwner, type TargetFacts } from './page-attribution.ts';
@@ -33,14 +35,8 @@ import { TemplateSessionView, type TemplateViewHost } from './template-view.ts';
 
 /** How long a created window may take to be adopted and attributed (spec 13 §3.3). */
 export const ADOPTION_DEADLINE_MS = 10_000;
+export { OPERATOR_STOP_WINDOW_MS, SENTINEL_GRACE_MS } from './host-sentinel.ts';
 export { MAX_PARKED_PAGES } from './parked-pages.ts';
-/** A browser exit this soon after the sentinel was closed by hand is an operator stop (spec 13 §3.2). */
-export const OPERATOR_STOP_WINDOW_MS = 10_000;
-/**
- * How long a host whose last window was closed by hand may take to exit before it gets a new
- * sentinel anyway (macOS keeps a browser with no window running, PR #76 F15).
- */
-export const SENTINEL_GRACE_MS = 2_000;
 
 /** What the launcher hands the host. */
 export interface TemplateHostInput {
@@ -56,6 +52,8 @@ export interface TemplateHostInput {
   readonly window: { readonly width: number; readonly height: number };
   /** Saved passwords or autofill data were found in the profile before the start (spec 13 §3.1). */
   readonly profileSecrets?: boolean;
+  /** The profile directory (a sign-in removal finds origins stored by earlier starts). */
+  readonly userDataDir?: string;
   readonly clock: Clock;
   readonly logger: Logger;
 }
@@ -83,10 +81,11 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
   private readonly views = new Map<string, TemplateSessionView>();
   private readonly waiters: PageWaiters;
   private readonly parked: ParkedPages;
+  private readonly origins = new Set<string>();
+  private readonly userDataDir: string | null;
   private readonly exitListeners = new Set<(exit: TemplateHostExit) => void>();
   private applied: { identity: AppliedIdentity; applier: IdentityApplier } | null = null;
-  private sentinel: Page | null = null;
-  private sentinelClosedAt: number | null = null;
+  private readonly keeper: SentinelKeeper;
   private closing = false;
   private closed: Promise<readonly LaunchWarning[]> | undefined;
   private pid: Promise<number | null> | undefined;
@@ -105,6 +104,7 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
     this.window = input.window;
     this.clock = input.clock;
     this.profileSecrets = input.profileSecrets === true;
+    this.userDataDir = input.userDataDir ?? null;
     this.waiters = new PageWaiters(input.clock);
     this.log = input.logger.child({
       module: 'browsers.template-host',
@@ -119,8 +119,19 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
       onCommitted: (page, owner, facts) => this.committed(page, owner, facts),
       onReleased: (page) => void page.close({ runBeforeUnload: false }).catch(() => undefined),
     });
+    this.keeper = new SentinelKeeper({
+      context: this.context,
+      dispatcher: this.dispatcher,
+      targets: this.targets,
+      headless: this.headless,
+      clock: input.clock,
+      log: this.log,
+      closing: () => this.closing,
+      openParkedWindow: () => this.openWindow(null, !this.headless),
+      adopted: (page) => this.parked.delete(page),
+    });
     this.targets.onLostTarget((facts) => this.dispatcher.adoptClosedTarget(facts));
-    this.targets.onDestroyed((targetId) => this.targetDestroyed(targetId));
+    this.targets.onDestroyed((targetId) => this.keeper.targetDestroyed(targetId));
     this.browser?.on('disconnected', () => this.exited('browser disconnected'));
     this.context.on('close', () => this.exited('context closed'));
     this.context.on('page', (page) => this.dispatcher.adopt(page));
@@ -130,22 +141,9 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
     return this.applied?.identity ?? null;
   }
 
-  /**
-   * Takes the context's open pages at start: the first is the sentinel (parked, minimized when
-   * headed), every other one (a restored window) is closed before any session is admitted.
-   */
-  async adoptStartPages(): Promise<void> {
-    const [first, ...restored] = this.context.pages();
-    for (const page of this.context.pages()) this.dispatcher.adopt(page);
-    if (first === undefined) {
-      await this.recreateSentinel();
-    } else {
-      this.watchSentinel(first);
-      if (!this.headless) await this.minimize(first);
-    }
-    await Promise.all(
-      restored.map((page) => page.close({ runBeforeUnload: false }).catch(() => undefined)),
-    );
+  /** The start pages: the sentinel parked (minimized when headed), restored pages closed. */
+  adoptStartPages(): Promise<void> {
+    return this.keeper.adoptStartPages();
   }
 
   /** Records the identity the launcher applied (the applier's page subscription stays host-level). */
@@ -264,8 +262,31 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
     return await this.context.cookies();
   }
 
-  clearSignIn(domain: string): Promise<number> {
-    return ops.clearSignIn(this, domain);
+  clearSignIn(domain: string): Promise<SignInRemoval> {
+    const page = this.keeper.page ?? this.context.pages()[0];
+    return ops.clearSignIn(
+      {
+        context: this.context,
+        dispatcher: this.dispatcher,
+        targets: this.targets,
+        committedOrigins: this.origins,
+        userDataDir: this.userDataDir,
+        log: this.log,
+        storageSession: () =>
+          page === undefined
+            ? Promise.reject(new Error('no page'))
+            : this.context.newCDPSession(page),
+      },
+      domain,
+    );
+  }
+
+  async stepAside(page: Page): Promise<void> {
+    if (this.headless) return;
+    const sign = [...this.views.values()].filter((v) => v.recording);
+    const windows = new Set(sign.flatMap((v) => v.windowIds()));
+    const outcome = await ops.stepAside(this, page, { windows, front: sign[0]?.page ?? null });
+    this.log.info('agent window stepped aside', { outcome });
   }
 
   sharedWindows(): Promise<readonly SharedWindowInfo[]> {
@@ -311,62 +332,17 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
     // A session's page may open tabs Chromium gives no opener (modifier clicks): watch for them.
     if (owner.kind === 'session') void this.targets.watchNewTabs(page, facts.targetId);
     ops.deleteUnclaimedDownloads(page);
+    ops.watchOrigins(page, this.origins);
     if (this.waiters.committed(page, owner, facts)) return;
-    if (owner.kind !== 'parked' || page === this.sentinel) return;
+    if (owner.kind !== 'parked' || page === this.keeper.page) return;
     this.parked.add(page, facts.targetId);
-  }
-
-  private watchSentinel(page: Page): void {
-    this.sentinel = page;
-    this.parked.delete(page);
-  }
-
-  /**
-   * Chromium destroyed a target. The sentinel's means its window was closed in the browser (by
-   * hand, or by quitting it): a killed browser reports no target destroyed (spec 13 §3.2).
-   */
-  private targetDestroyed(targetId: string): void {
-    const sentinel = this.sentinel;
-    if (this.closing || sentinel === null || this.dispatcher.targetIdOf(sentinel) !== targetId) {
-      return;
-    }
-    this.sentinel = null;
-    this.sentinelClosedAt = this.clock.now();
-    this.log.info('sentinel closed by hand');
-    // With other pages open the browser lives on: give it a new sentinel at once.
-    if (this.context.pages().some((p) => p !== sentinel)) {
-      void this.recreateSentinel();
-      return;
-    }
-    // Its last window: Linux and Windows quit the browser now (an operator stop). macOS keeps a
-    // browser with no window running; one still up after the grace gets a new sentinel.
-    const timer = setTimeout(() => {
-      if (!this.closing && this.sentinel === null) void this.recreateSentinel();
-    }, SENTINEL_GRACE_MS);
-    if (typeof timer === 'object' && 'unref' in timer) timer.unref();
-  }
-
-  private async recreateSentinel(): Promise<void> {
-    try {
-      const page = await this.openWindow(null, !this.headless);
-      this.watchSentinel(page);
-    } catch (err) {
-      this.log.warn('sentinel not recreated', { err: serializeError(err) });
-    }
-  }
-
-  private async minimize(page: Page): Promise<void> {
-    const targetId =
-      this.dispatcher.targetIdOf(page) ?? (await this.targets.factsOf(page)).targetId;
-    await this.targets.minimize(targetId);
   }
 
   private exited(reason: string): void {
     if (this.closing) return;
     this.closing = true;
     const at = this.clock.now();
-    const operatorStop =
-      this.sentinelClosedAt !== null && at - this.sentinelClosedAt <= OPERATOR_STOP_WINDOW_MS;
+    const operatorStop = this.keeper.operatorStop(at);
     this.log.warn('template host exited', { reason, operatorStop });
     this.dispose();
     for (const listener of [...this.exitListeners]) {

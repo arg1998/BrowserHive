@@ -30,12 +30,12 @@ export const TEMPLATE_RECORDING_ROUTES = [
     responses: { 200: RemoveSignInResponse },
     errors: ['TEMPLATE_NOT_FOUND'],
     async handler({ input, principal, services }) {
-      const removed = await services.templateRecording.removeSignIn(
+      const { domain: _domain, ...removed } = await services.templateRecording.removeSignIn(
         input.params.template_id,
         input.params.domain,
         requirePrincipal(principal).subject,
       );
-      return reply(200, { ok: true as const, cookies_removed: removed });
+      return reply(200, { ok: true as const, ...removed });
     },
   }),
   defineRoute({

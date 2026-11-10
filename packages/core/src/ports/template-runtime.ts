@@ -7,6 +7,7 @@ import type { TemplateSessionSettings } from '../domain/templates/launch-options
 import type { SessionSealing, TemplateHostFacts } from '../domain/templates/model.ts';
 import type { Cookie } from './browser-driver.ts';
 import type { TemplateRecord, TemplateSiteRecord } from './persistence/index.ts';
+import type { SignInRemoval } from './template-host.ts';
 
 /** A page of a host no session owns (spec 13 §3.4); `url` already sanitized (D-20). */
 export interface ParkedPageView {
@@ -127,12 +128,8 @@ export interface TemplateHostOps {
   jar(templateId: string): Promise<readonly Cookie[] | null>;
   /** Windows that show pages of several sessions (`[]` when not running). */
   sharedWindows(templateId: string): Promise<readonly SharedWindowView[]>;
-  /**
-   * Removes a registrable domain's cookies and site data, starting the browser when it is stopped.
-   *
-   * @returns The number of cookies removed.
-   */
-  removeSignIn(template: TemplateRecord, domain: string): Promise<number>;
+  /** Removes a registrable domain's cookies and site data, starting the browser when it is stopped. */
+  removeSignIn(template: TemplateRecord, domain: string): Promise<SignInRemoval>;
   /** Stops the browser (its sessions close with `operator`) and empties saved passwords and autofill. */
   clearProfileSecrets(template: TemplateRecord): Promise<void>;
   /**

@@ -22835,11 +22835,25 @@
           "cookies_removed": {
             "type": "integer",
             "minimum": 0
+          },
+          "origins_cleared": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "uncleared_origins": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
           "ok",
-          "cookies_removed"
+          "cookies_removed",
+          "origins_cleared",
+          "uncleared_origins"
         ]
       },
       "StartRecordingResponse": {
@@ -23697,11 +23711,45 @@
               "null"
             ],
             "exclusiveMinimum": 0
+          },
+          "removed_sign_ins": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "domain": {
+                  "type": "string"
+                },
+                "cookies_removed": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "origins_cleared": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "uncleared_origins": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "domain",
+                "cookies_removed",
+                "origins_cleared",
+                "uncleared_origins"
+              ]
+            }
           }
         },
         "required": [
           "template",
-          "version"
+          "version",
+          "removed_sign_ins"
         ]
       },
       "FinishRecordingRequest": {

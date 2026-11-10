@@ -60,6 +60,8 @@ export interface FakeServer {
   /** Status and problem code of `POST …/recording` when it fails. */
   startFails?: { status: number; code: string };
   calls: { method: string; path: string; body: unknown }[];
+  /** Removed sign-ins whose site data the server reports as not cleared. */
+  uncleared: string[];
   /** Runs on every `GET /templates/{id}` with the number of earlier polls (0 first). */
   onPoll?: (poll: number) => void;
 }
@@ -71,6 +73,7 @@ export function fakeServer(sites: Record<string, TemplateHealthState>): FakeServ
     unlisted: [],
     refuse: new Set(),
     calls: [],
+    uncleared: [],
   };
 }
 
@@ -201,7 +204,15 @@ function route(server: FakeServer, method: string, path: string, body: unknown):
       if (state !== 'signed_in') server.sites.set(site, 'signed_out');
     }
     server.status = 'ready';
-    return [200, { template: template(server), version: null }];
+    const requested = (body as { remove_sign_ins?: unknown } | undefined)?.remove_sign_ins;
+    const removals = Array.isArray(requested) ? requested.map(String) : [];
+    const removed_sign_ins = removals.map((domain) => ({
+      domain,
+      cookies_removed: 1,
+      origins_cleared: server.uncleared.includes(domain) ? [] : [`https://${domain}`],
+      uncleared_origins: server.uncleared.includes(domain) ? [`https://${domain}`] : [],
+    }));
+    return [200, { template: template(server), version: null, removed_sign_ins }];
   }
   return [404, problem(404, 'NOT_FOUND', `no route ${method} ${path}`)];
 }

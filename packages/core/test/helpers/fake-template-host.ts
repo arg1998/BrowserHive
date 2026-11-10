@@ -11,6 +11,7 @@ import type {
 import type {
   ParkedPageInfo,
   SharedWindowInfo,
+  SignInRemoval,
   TemplateHost,
   TemplateHostExit,
   TemplateHostLauncher,
@@ -143,13 +144,13 @@ export class FakeTemplateHost implements TemplateHost {
     return [...this.cookies];
   }
 
-  async clearSignIn(domain: string): Promise<number> {
+  async clearSignIn(domain: string): Promise<SignInRemoval> {
     this.cleared.push(domain);
     const before = this.cookies.length;
     this.cookies = this.cookies.filter(
       (c) => !`.${c.domain.replace(/^\./, '')}`.endsWith(`.${domain}`),
     );
-    return before - this.cookies.length;
+    return { cookiesRemoved: before - this.cookies.length, origins: [], unclearedOrigins: [] };
   }
 
   async sharedWindows(): Promise<readonly SharedWindowInfo[]> {

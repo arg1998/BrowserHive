@@ -35,6 +35,9 @@ export interface TemplateRecordingDeps {
   readonly logger: Logger;
 }
 
+/** One removed sign-in as REST reports it. */
+export type RemovedSignIn = FinishRecordingResponse['removed_sign_ins'][number];
+
 /** `CONFLICT` with an operator-facing message. */
 function conflict(message: string): AppError<'CONFLICT'> {
   return new AppError('CONFLICT', {}, { publicMessage: message });
@@ -138,9 +141,11 @@ export class TemplateRecordingService {
       throw conflict(`Template '${template.name}' is not being recorded.`);
     }
     const removals = this.#removals(sites, request.removeSignIns ?? []);
-    const removed: Record<string, number> = {};
+    // The window's pages close first, so none of them writes a removed sign-in back.
+    await this.#deps.ops.closeRecording(templateId);
+    const removed: RemovedSignIn[] = [];
     for (const domain of removals) {
-      removed[domain] = await this.#deps.ops.removeSignIn(template, domain);
+      removed.push(await this.#remove(template, domain));
     }
     const now = this.#deps.clock.now();
     const finished = sites.map((site) =>
@@ -162,16 +167,15 @@ export class TemplateRecordingService {
         resourceId: templateId,
         details: {
           signed_in: finished.filter((s) => s.health.state === 'signed_in').map((s) => s.siteId),
-          removed_sign_ins: removed,
+          removed_sign_ins: removed.map((r) => ({ ...r })),
         },
         occurredAt: now,
       });
       return updated;
     });
-    await this.#deps.ops.closeRecording(templateId);
     this.#baselines.delete(templateId);
     this.#log.info('recording finished', { templateId, removed: removals.length });
-    return { template: toTemplateView(ready, finished), version: null };
+    return { template: toTemplateView(ready, finished), version: null, removed_sign_ins: removed };
   }
 
   /** `DELETE /templates/{id}/recording`: closes the window; the template is unchanged. */
@@ -183,16 +187,31 @@ export class TemplateRecordingService {
   }
 
   /** `POST /templates/{id}/domains/{domain}/remove-sign-in` (spec 13 §2.3). */
-  async removeSignIn(templateId: string, domain: string, by: string): Promise<number> {
+  async removeSignIn(templateId: string, domain: string, by: string): Promise<RemovedSignIn> {
     const { template, sites } = await this.#load(templateId);
     const [site] = this.#removals(sites, [domain]);
     if (site === undefined) throw notFoundForOperator(templateId);
-    const removed = await this.#deps.ops.removeSignIn(template, site);
-    await this.#audit(by, 'template.signin.remove', templateId, {
-      domain: site,
-      cookies_removed: removed,
-    });
+    const removed = await this.#remove(template, site);
+    await this.#audit(by, 'template.signin.remove', templateId, { ...removed });
     return removed;
+  }
+
+  /** Removes one sign-in; origins left with data are a warning, never silent (spec 13 §2.3). */
+  async #remove(template: TemplateRecord, domain: string): Promise<RemovedSignIn> {
+    const result = await this.#deps.ops.removeSignIn(template, domain);
+    if (result.unclearedOrigins.length > 0) {
+      this.#log.warn('sign-in removal incomplete', {
+        templateId: template.templateId,
+        domain,
+        uncleared: [...result.unclearedOrigins],
+      });
+    }
+    return {
+      domain,
+      cookies_removed: result.cookiesRemoved,
+      origins_cleared: [...result.origins],
+      uncleared_origins: [...result.unclearedOrigins],
+    };
   }
 
   /** `POST /templates/{id}/host/clear-profile-secrets` (spec 13 §3.1). */

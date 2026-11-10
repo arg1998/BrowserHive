@@ -1,5 +1,6 @@
 /** @module interface/mcp/tools/interaction/pointer — click, type_text, fill, press_key, hover. */
 
+import { TEMPLATE_MIDDLE_CLICK_TEXT } from '@browserhive/contracts/tools';
 import {
   CLIPBOARD_CHORD_MESSAGE,
   isClipboardChord,
@@ -19,6 +20,14 @@ export const click = defineTool('click', {
   policies: [sessionOwnership],
   async handler(ctx, args) {
     const session = requireSession(ctx);
+    // On Linux a middle click pastes the primary selection: on a headed template, the operator's.
+    if (session.template !== null && args.button === 'middle') {
+      throw new AppError(
+        'INVALID_ARGUMENTS',
+        { issues: [{ path: 'button', message: TEMPLATE_MIDDLE_CLICK_TEXT }] },
+        { publicMessage: `button: ${TEMPLATE_MIDDLE_CLICK_TEXT}` },
+      );
+    }
     const page = pageOf(ctx, session, args.tab_id);
     const native = async (): Promise<void> =>
       page.click(args.selector, {

@@ -17,6 +17,10 @@ export const RemoveSignInResponse = z.object({
   ok: z.literal(true),
   /** Cookies of the domain's registrable domain removed from the template's browser. */
   cookies_removed: Count,
+  /** Origins under the domain whose site data (storage, IndexedDB, service workers, caches) was cleared. */
+  origins_cleared: z.array(z.string()),
+  /** Origins whose site data could not be cleared: the sign-in may survive there. */
+  uncleared_origins: z.array(z.string()),
 });
 /** `POST …/remove-sign-in` body. */
 export type RemoveSignInResponse = z.infer<typeof RemoveSignInResponse>;
@@ -69,6 +73,15 @@ export type FinishRecordingRequest = z.infer<typeof FinishRecordingRequest>;
 export const FinishRecordingResponse = z.object({
   template: Template,
   version: z.number().int().positive().nullable(),
+  /** The unlisted sign-ins removed, with what could not be cleared. */
+  removed_sign_ins: z.array(
+    z.object({
+      domain: z.string(),
+      cookies_removed: Count,
+      origins_cleared: z.array(z.string()),
+      uncleared_origins: z.array(z.string()),
+    }),
+  ),
 });
 /** `POST …/recording/finish` body. */
 export type FinishRecordingResponse = z.infer<typeof FinishRecordingResponse>;

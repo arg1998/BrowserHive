@@ -1,9 +1,12 @@
 /** @module infra/browsers/template-host-ops — operator operations on a running template host (spec 13 §2.3, §3.3, §3.4): removing a domain's sign-in, minimizing agent windows while a recording is open, and the windows several sessions share. */
 
-import type { BrowserContext, Page } from 'playwright';
+import type { BrowserContext, CDPSession, Page } from 'playwright';
+import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import { registrableDomain } from '../../kernel/url.ts';
-import type { SharedWindowInfo } from '../../ports/template-host.ts';
+import type { Logger } from '../../ports/logger.ts';
+import type { SharedWindowInfo, SignInRemoval } from '../../ports/template-host.ts';
 import type { HostPageDispatcher } from './page-dispatcher.ts';
+import { profileOrigins } from './profile-origins.ts';
 import type { HostTargets } from './template-targets.ts';
 
 /** What the operations read from a host. */
@@ -30,19 +33,66 @@ function cookieHost(domain: string): string {
   return domain.replace(/^\./, '');
 }
 
+/** What removing a sign-in needs beyond {@link HostOpsTarget}. */
+export interface SignInHost extends HostOpsTarget {
+  /** Origins the browser committed (every frame) since it started. */
+  readonly committedOrigins: ReadonlySet<string>;
+  /** The profile directory (origins stored by earlier starts); `null` = not scanned. */
+  readonly userDataDir: string | null;
+  /** A page-target DevTools session of the host (`Storage.*` needs a storage partition). */
+  storageSession(): Promise<CDPSession>;
+  readonly log: Logger;
+}
+
+function originSite(origin: string): string {
+  try {
+    return registrableDomain(new URL(origin).hostname);
+  } catch {
+    return '';
+  }
+}
+
 /**
  * Removes the sign-in of `domain` (a registrable domain) from the host (spec 13 §2.3 **Remove
- * sign-in**): every cookie on it or a subdomain, and the site data of the origins those cookies and
- * the domain name. Returns the number of cookies removed.
+ * sign-in**): every cookie on it or a subdomain, and the site data (local and session storage,
+ * IndexedDB, service workers, Cache Storage, …) of every origin under it that the browser
+ * committed, a cookie names, or the profile holds data for. Origins whose data could not be cleared
+ * are logged as a warning and reported, never dropped.
  */
-export async function clearSignIn(host: HostOpsTarget, domain: string): Promise<number> {
+export async function clearSignIn(host: SignInHost, domain: string): Promise<SignInRemoval> {
   const cookies = await host.context.cookies();
   const matching = cookies.filter((c) => registrableDomain(cookieHost(c.domain)) === domain);
+  const hosts = [domain, `www.${domain}`, ...matching.map((c) => cookieHost(c.domain))];
+  const candidates = new Set([
+    ...hosts.flatMap((h) => [`https://${h}`, `http://${h}`]),
+    ...host.committedOrigins,
+    ...(host.userDataDir === null ? [] : await profileOrigins(host.userDataDir)),
+  ]);
+  const origins = [...candidates].filter((o) => originSite(o) === domain).sort();
+  const uncleared: string[] = [];
+  let cdp: CDPSession | null = null;
+  try {
+    cdp = await host.storageSession();
+    for (const origin of origins) {
+      try {
+        await cdp.send('Storage.clearDataForOrigin', { origin, storageTypes: 'all' });
+      } catch (err) {
+        host.log.warn('site data not cleared', { origin, err: serializeError(err) });
+        uncleared.push(origin);
+      }
+    }
+  } catch (err) {
+    host.log.warn('site data not cleared', { domain, err: serializeError(err) });
+    uncleared.splice(0, uncleared.length, ...origins);
+  } finally {
+    await cdp?.detach().catch(() => undefined);
+  }
   await host.context.clearCookies({ domain: new RegExp(`(^|\\.)${escapeRegExp(domain)}$`) });
-  const hosts = new Set([domain, `www.${domain}`, ...matching.map((c) => cookieHost(c.domain))]);
-  const origins = [...hosts].flatMap((h) => [`https://${h}`, `http://${h}`]);
-  await host.targets.clearOriginData(origins);
-  return matching.length;
+  return {
+    cookiesRemoved: matching.length,
+    origins: origins.filter((o) => !uncleared.includes(o)),
+    unclearedOrigins: uncleared,
+  };
 }
 
 /** The distinct windows that hold `pages` (unreadable ones skipped). */
@@ -115,4 +165,54 @@ export function deleteUnclaimedDownloads(page: Page): void {
     }, UNCLAIMED_DOWNLOAD_MS);
     if (typeof timer === 'object' && 'unref' in timer) timer.unref();
   });
+}
+
+/** Origins remembered per host at most (newest kept). */
+const MAX_COMMITTED_ORIGINS = 10_000;
+
+/**
+ * Records the `http(s)` origin of every frame `page` commits into `origins` (a sign-in removal
+ * clears every origin under the domain, also those without a cookie of their own).
+ */
+export function watchOrigins(page: Page, origins: Set<string>): void {
+  const emitter: { on?: unknown } = page;
+  if (typeof emitter.on !== 'function') return;
+  const add = (url: string): void => {
+    if (!/^https?:/i.test(url)) return;
+    try {
+      origins.add(new URL(url).origin);
+    } catch {
+      return;
+    }
+    if (origins.size > MAX_COMMITTED_ORIGINS) {
+      const oldest = origins.values().next();
+      if (oldest.done !== true) origins.delete(oldest.value);
+    }
+  };
+  page.on('framenavigated', (frame) => add(frame.url()));
+}
+
+/**
+ * A page an agent's site opened while a sign-in window is open (spec 13 §3.3, review M-1): when it
+ * landed in the sign-in window (placement is not attribution) it is closed; otherwise its window is
+ * minimized. Then the sign-in window is shown again, so the operator's typing goes back to it.
+ */
+export async function stepAside(
+  host: HostOpsTarget,
+  page: Page,
+  recording: { readonly windows: ReadonlySet<number>; readonly front: Page | null },
+): Promise<'closed' | 'minimized' | 'none'> {
+  const targetId = host.dispatcher.targetIdOf(page);
+  if (targetId === undefined || page.isClosed()) return 'none';
+  const windowId = await host.targets.windowOf(targetId);
+  let outcome: 'closed' | 'minimized';
+  if (windowId !== null && recording.windows.has(windowId)) {
+    await page.close({ runBeforeUnload: false }).catch(() => undefined);
+    outcome = 'closed';
+  } else {
+    await host.targets.minimize(targetId);
+    outcome = 'minimized';
+  }
+  await recording.front?.bringToFront().catch(() => undefined);
+  return outcome;
 }

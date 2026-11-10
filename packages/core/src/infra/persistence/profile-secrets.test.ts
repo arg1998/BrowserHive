@@ -48,4 +48,10 @@ describe('profile secrets', () => {
     await Bun.write(join(dir, 'Default', 'Login Data'), 'not a database');
     expect(profileHasSecrets(dir)).toBe(false);
   });
+
+  it('a clear that cannot clear fails instead of reporting an empty profile (review L-4)', async () => {
+    const dir = profile();
+    await Bun.write(join(dir, 'Default', 'Login Data'), 'not a database');
+    expect(() => clearProfileSecrets(dir)).toThrow();
+  });
 });

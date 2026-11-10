@@ -8,11 +8,20 @@ import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { agentPrincipal } from '../../src/domain/auth/principal.ts';
 import { textOf } from '../helpers/fake-transport.ts';
-import { SENTINEL_COOKIE_VALUE, SENTINEL_STORAGE_VALUE } from '../helpers/https-sites-signin.ts';
+import {
+  SENTINEL_COOKIE_VALUE,
+  SENTINEL_QUOTED_VALUE,
+  SENTINEL_STORAGE_VALUE,
+} from '../helpers/https-sites-signin.ts';
 import { SELF_ORIGIN, type TemplateMcp, templateMcp } from './template-mcp-fixture.ts';
 
 const DRIVERS = ['playwright', 'patchright'] as const;
-const SENTINELS = [SENTINEL_COOKIE_VALUE, SENTINEL_STORAGE_VALUE];
+/** What must never appear, raw or escaped: the quoted value is checked by its unquoted core. */
+const SENTINELS = [
+  SENTINEL_COOKIE_VALUE,
+  SENTINEL_STORAGE_VALUE,
+  SENTINEL_QUOTED_VALUE.replace(/"/g, ''),
+];
 
 let world: TemplateMcp | null = null;
 afterEach(async () => {
@@ -41,9 +50,11 @@ async function launch(w: TemplateMcp, client?: Client): Promise<string> {
 }
 
 /** Every agent-facing text this test saw, plus the observed (stored) result texts. */
-function leaks(w: TemplateMcp, results: readonly unknown[]): string[] {
+function leaks(w: TemplateMcp, results: readonly CallToolResult[]): string[] {
   const texts = [
-    ...results.map((r) => JSON.stringify(r)),
+    // The raw text blocks as the agent reads them, and the structured content.
+    ...results.flatMap((r) => r.content.map((c) => (c.type === 'text' ? c.text : ''))),
+    ...results.map((r) => JSON.stringify(r.structuredContent ?? {})),
     ...w.harness.observations().map((o) => `${o.resultText ?? ''} ${o.errorMessage ?? ''}`),
   ];
   return SENTINELS.filter((s) => texts.some((t) => t.includes(s)));
@@ -64,6 +75,8 @@ for (const driver of DRIVERS) {
       };
       expect(codeOf(await call('navigate', { url }))).toBe('ok');
       await call('wait_for_selector', { selector: '#token' });
+      // The page shows its stored value once IndexedDB has it (the storage sentinel in the DOM).
+      await call('wait_for_selector', { selector: 'text=/stored sentinel/' });
       // The sentinel cookie value is in the page's HTML: get_content and snapshot show `[sealed]`.
       const content = textOf(await call('get_content'));
       expect(content).toContain('[sealed]');
@@ -84,6 +97,23 @@ for (const driver of DRIVERS) {
       expect(listed?.cookies.every((c) => c.value === '' && c.domain.endsWith('site-a.test'))).toBe(
         true,
       );
+      // A URL carrying a cookie value (`?sid=…`) is sealed wherever an agent reads it (review M-2).
+      expect(
+        codeOf(
+          await call('navigate', {
+            url: w.sites.url(
+              'site-a.test',
+              `/landing?sid=${encodeURIComponent(SENTINEL_COOKIE_VALUE)}`,
+            ),
+          }),
+        ),
+      ).toBe('ok');
+      for (const name of ['list_sessions', 'session_info', 'list_tabs']) {
+        const args = name === 'list_sessions' ? {} : { session_id: id };
+        const result = await w.harness.call(name, args);
+        results.push(result);
+        expect([name, textOf(result).includes('[sealed]')]).toEqual([name, true]);
+      }
       // Every sealed tool refuses, typed.
       expect(codeOf(await call('evaluate', { expression: 'document.cookie' }))).toBe(
         'EVALUATE_DISABLED',
@@ -111,6 +141,13 @@ for (const driver of DRIVERS) {
       // Clipboard chords never reach the page.
       expect(codeOf(await call('press_key', { key: 'Control+V' }))).toBe('INVALID_ARGUMENTS');
       expect(codeOf(await call('press_key', { key: 'Tab' }))).toBe('ok');
+      // A middle click would paste the operator's primary selection (Linux): refused (review M-3).
+      expect(codeOf(await call('click', { selector: '#token', button: 'middle' }))).toBe(
+        'INVALID_ARGUMENTS',
+      );
+      expect(
+        codeOf(await call('click', { selector: 'body', button: 'right', timeout: 5_000 })),
+      ).toBe('ok');
       // The vault: nothing offered, every fill refused and audited as a template session.
       const available = structured<{ entries: unknown[]; note?: string }>(
         await call('vault_list_available'),

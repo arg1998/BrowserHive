@@ -92,6 +92,15 @@ export interface ParkedPageInfo {
   readonly openedAt: number;
 }
 
+/** What removing a sign-in did (spec 13 §2.3). */
+export interface SignInRemoval {
+  readonly cookiesRemoved: number;
+  /** The origins whose site data (storage, IndexedDB, service workers, caches) was cleared. */
+  readonly origins: readonly string[];
+  /** Origins whose site data could not be cleared: the removal is incomplete for them. */
+  readonly unclearedOrigins: readonly string[];
+}
+
 /** A window that shows pages of several sessions (spec 13 §3.4). */
 export interface SharedWindowInfo {
   readonly windowId: number;
@@ -135,11 +144,10 @@ export interface TemplateHost extends BrowserHost {
   /** Every cookie of the template's one jar (operator surfaces: learned names, unlisted sign-ins). */
   jar(): Promise<readonly Cookie[]>;
   /**
-   * Removes a registrable domain's cookies and site data (spec 13 §2.3 **Remove sign-in**).
-   *
-   * @returns The number of cookies removed.
+   * Removes a registrable domain's cookies and site data (spec 13 §2.3 **Remove sign-in**): every
+   * origin under the domain that the browser has committed or the profile holds data for.
    */
-  clearSignIn(domain: string): Promise<number>;
+  clearSignIn(domain: string): Promise<SignInRemoval>;
   /** Windows that show pages of more than one session (spec 13 §3.4). */
   sharedWindows(): Promise<readonly SharedWindowInfo[]>;
 }

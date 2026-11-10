@@ -213,8 +213,50 @@ describe('PlaywrightTemplateHost over fakes', () => {
       { name: 'x', domain: 'www.idp.test' },
       { name: 'keep', domain: 'site-a.test' },
     ];
-    expect(await host.clearSignIn('idp.test')).toBe(2);
-    expect(targets.clearedOrigins).toContain('https://www.idp.test');
+    const removed = await host.clearSignIn('idp.test');
+    expect(removed.cookiesRemoved).toBe(2);
+    expect(removed.origins).toContain('https://www.idp.test');
+    expect(removed.origins.some((o) => o.includes('site-a.test'))).toBe(false);
+    expect(removed.unclearedOrigins).toEqual([]);
+    // Cleared through a page-target session (a browser session has no storage partition).
+    expect(
+      context.cdps.at(-1)?.sent.filter((m) => m === 'Storage.clearDataForOrigin'),
+    ).toHaveLength(removed.origins.length);
     expect(context.clearedCookies).toHaveLength(1);
+  });
+
+  it('reports the origins whose site data could not be cleared', async () => {
+    const { host, context } = fakeTemplateHost();
+    await host.adoptStartPages();
+    context.cookieJar = [{ name: 'sid', domain: '.idp.test' }];
+    context.cdpFailures = ['Storage.clearDataForOrigin'];
+    const removed = await host.clearSignIn('idp.test');
+    expect(removed.origins).toEqual([]);
+    expect(removed.unclearedOrigins).toContain('https://idp.test');
+  });
+
+  it('a popup an agent site opens during a recording is minimized, or closed in the sign-in window (review M-1)', async () => {
+    const { host, targets } = fakeTemplateHost({ headless: false });
+    await host.adoptStartPages();
+    const alpha = await host.openView('alpha', { windowState: 'normal' });
+    const recording = await host.openView('recording-1', {
+      windowState: 'normal',
+      maintenance: true,
+      recording: true,
+    });
+    const signInWindow = await targets.windowOf(host.dispatcher.targetIdOf(recording.page) ?? '');
+    const opener = host.dispatcher.targetIdOf(alpha.page) ?? '';
+    targets.minimized.length = 0;
+    targets.windows.set('P2', signInWindow ?? -1);
+    targets.page('P1', opener);
+    const landed = targets.page('P2', opener);
+    await settle();
+    await settle();
+    expect(targets.minimized).toEqual(['P1']);
+    expect(landed.isClosed()).toBe(true);
+    // A viewport change never restores a minimized agent window meanwhile.
+    const before = targets.created.length;
+    await alpha.fitWindow?.(alpha.page, 640, 480);
+    expect(targets.created.length).toBe(before);
   });
 });

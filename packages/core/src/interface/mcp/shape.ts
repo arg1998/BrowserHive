@@ -122,8 +122,9 @@ function scrubValue(value: unknown, scrub: (text: string) => string, depth: numb
   // Deeper than the walk goes: scrub the serialized subtree, so no string escapes redaction.
   if (depth > 32) return scrubSerialized(value, scrub);
   if (Array.isArray(value)) return value.map((v) => scrubValue(v, scrub, depth + 1));
+  // Keys too: a result keyed by page data must not carry a secret in a key.
   return Object.fromEntries(
-    Object.entries(value).map(([k, v]) => [k, scrubValue(v, scrub, depth + 1)]),
+    Object.entries(value).map(([k, v]) => [scrub(k), scrubValue(v, scrub, depth + 1)]),
   );
 }
 

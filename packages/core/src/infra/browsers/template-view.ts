@@ -42,6 +42,11 @@ export interface TemplateViewHost extends SessionHost {
   readonly recording: boolean;
   /** The window that holds `page`, or `null` when it cannot be read. */
   windowOf(page: Page): Promise<number | null>;
+  /**
+   * While a sign-in window is open, a page an agent's site opened: its window is minimized (or the
+   * page closed when it landed in the sign-in window) and the sign-in window raised again.
+   */
+  stepAside(page: Page): Promise<void>;
   /** Resizes the window of `page` on a headed host (never moves it). */
   resizeWindow(page: Page, width: number, height: number): Promise<void>;
   /** The end of the browser (crash or operator stop); not called for a supervisor close. */
@@ -101,6 +106,8 @@ export class TemplateSessionView implements SessionView {
         return;
       }
       void this.prepare(opened);
+      // A sign-in window is open: an agent's site-opened window steps aside at once (spec 13 §3.3).
+      if (!this.maintenance && this.owner.recording) void this.owner.stepAside(opened);
     });
   }
 
@@ -144,8 +151,10 @@ export class TemplateSessionView implements SessionView {
     return page;
   }
 
+  /** Never while a sign-in window is open: a resize must not restore a minimized agent window. */
   async fitWindow(page: Page, width: number, height: number): Promise<void> {
-    if (!this.owner.headless && this.owns(page)) await this.owner.resizeWindow(page, width, height);
+    if (this.owner.headless || this.owner.recording || !this.owns(page)) return;
+    await this.owner.resizeWindow(page, width, height);
   }
 
   /** The window ids of the session's own windows (operator views and tests). */

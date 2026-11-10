@@ -46,8 +46,22 @@ function hasRows(db: Database, tables: readonly string[]): boolean {
   );
 }
 
+/** Deletes the rows and overwrites the freed pages, so the values do not linger in the file. */
 function clearTables(db: Database, tables: readonly string[]): void {
+  db.run('PRAGMA secure_delete = ON');
   for (const t of tablesOf(db, tables)) db.run(`DELETE FROM "${t}"`);
+  db.run('VACUUM');
+}
+
+/** Runs `use` on an existing database, letting its errors through (a clear must not fail open). */
+function clearDb(path: string, tables: readonly string[]): void {
+  if (!existsSync(path)) return;
+  const db = new Database(path, { readwrite: true });
+  try {
+    clearTables(db, tables);
+  } finally {
+    db.close();
+  }
 }
 
 /**
@@ -64,11 +78,17 @@ export function profileHasSecrets(userDataDir: string): boolean {
   );
 }
 
-/** Empties saved passwords and autofill data of the profile; only while no browser has it open. */
+/**
+ * Empties saved passwords and autofill data of the profile; only while no browser has it open.
+ *
+ * @throws when a database cannot be cleared (held by a browser, unreadable) or still holds data
+ *   afterwards: the operator must not be told it is empty when it is not.
+ */
 export function clearProfileSecrets(userDataDir: string): void {
   const dir = join(userDataDir, 'Default');
-  for (const file of LOGIN_FILES) {
-    withDb(join(dir, file), false, undefined, (db) => clearTables(db, ['logins']));
+  for (const file of LOGIN_FILES) clearDb(join(dir, file), ['logins']);
+  clearDb(join(dir, WEB_DATA_FILE), AUTOFILL_TABLES);
+  if (profileHasSecrets(userDataDir)) {
+    throw new Error('saved passwords or autofill data are still in the profile');
   }
-  withDb(join(dir, WEB_DATA_FILE), false, undefined, (db) => clearTables(db, AUTOFILL_TABLES));
 }

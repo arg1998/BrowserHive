@@ -214,6 +214,7 @@ function buildHost(
     headless: spec.headless,
     window: spec.window,
     profileSecrets: facts.profileSecrets,
+    userDataDir: spec.userDataDir,
     clock: ctx.clock,
     logger: ctx.logger,
   });

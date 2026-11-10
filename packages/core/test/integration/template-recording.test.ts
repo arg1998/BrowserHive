@@ -2,6 +2,7 @@
 /** @module test/integration/template-recording.test — recording a template on a real host (spec 13 §7.1 step 5, §3.1, §3.3, §2.2; §17 T1a acceptance): the marked sign-in window with one tab per site, agent windows stepping aside, a pack-less site confirmed by **I'm signed in** with learned cookie names, an unlisted sign-in listed and removed at Finish, no saved password after a password form, and the pinned identity surviving restarts and a changed `TZ`. */
 
 import { afterEach, describe, expect, it } from 'bun:test';
+import { spawnSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Page } from 'playwright';
@@ -202,6 +203,69 @@ for (const driver of DRIVERS) {
         if (before === undefined) delete process.env['TZ'];
         else process.env['TZ'] = before;
       }
+    });
+
+    it('Remove sign-in clears the site data of the domain and its subdomains, and keeps the rest', async () => {
+      world = await templateWorld(driver);
+      const w = world;
+      const session = await w.launch('storage');
+      const page = session.view?.page;
+      if (page === undefined) throw new Error('no page');
+      const origins = ['https://idp.test', 'https://app.idp.test', 'https://site-a.test'];
+      for (const origin of origins) {
+        await page.goto(`${origin}/store`);
+        await page.evaluate(() => (window as unknown as { stored: Promise<boolean> }).stored);
+      }
+      // A later start of the browser knows the origins only from the profile on disk.
+      await w.supervisor.stopAll();
+      const again = (await w.launch('storage-two')).view?.page;
+      if (again === undefined) throw new Error('no page');
+      const left = async (origin: string) => {
+        await again.goto(`${origin}/landing`);
+        return await again.evaluate(async () => ({
+          local: localStorage.getItem('msal.token'),
+          databases: (await indexedDB.databases()).map((d) => d.name),
+          caches: await caches.keys(),
+          workers: (await navigator.serviceWorker.getRegistrations()).length,
+        }));
+      };
+      const kept = await left('https://site-a.test');
+      expect(kept.local).toBe('token-site-a.test');
+      const removed = await w.host().clearSignIn('idp.test');
+      expect(removed.unclearedOrigins).toEqual([]);
+      expect(removed.origins).toEqual(
+        expect.arrayContaining(['https://app.idp.test', 'https://idp.test']),
+      );
+      const empty = { local: null, databases: [], caches: [], workers: 0 };
+      expect(await left('https://idp.test')).toEqual(empty);
+      expect(await left('https://app.idp.test')).toEqual(empty);
+      expect(await left('https://site-a.test')).toEqual(kept);
+    });
+
+    it('a popup an agent site opens while the operator signs in does not keep the focus (review M-1)', async () => {
+      if (!HEADED || process.platform !== 'linux') return;
+      world = await templateWorld(driver);
+      const w = world;
+      const agent = await w.launch('popups');
+      const agentPage = agent.view?.page;
+      if (agentPage === undefined) throw new Error('no agent page');
+      await agentPage.goto('https://site-a.test/');
+      const { service } = await recorder(w);
+      await service.start(w.template.templateId, {}, { subject: 'operator' });
+      const found = spawnSync('xdotool', ['search', '--sync', '--name', 'BrowserHive'], {
+        encoding: 'utf8',
+        timeout: 15_000,
+      });
+      const signIn = found.stdout.trim().split('\n')[0] ?? '';
+      spawnSync('xdotool', ['windowfocus', '--sync', signIn], { timeout: 10_000 });
+      const focus = () =>
+        spawnSync('xdotool', ['getwindowfocus'], { encoding: 'utf8' }).stdout.trim();
+      const before = focus();
+      expect(before).not.toBe('');
+      await agentPage.click('#popup-window');
+      await agentPage.click('#open');
+      await new Promise((resolve) => setTimeout(resolve, 2_000));
+      expect(focus()).toBe(before);
     });
   });
 }

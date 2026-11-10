@@ -85,11 +85,16 @@ for (const driver of DRIVERS) {
       const tab = await world.sessions.newTab(session);
       await tab.page.goto(sites.url('site-a.test', '/unload-beacon'));
       expect(routed).toContain('/unload-beacon');
-      await tab.page.close();
+      // Bounded as production closes are (template-view.ts): on Windows a keepalive beacon paused in
+      // the route can hold the target's destruction (one CI hang of 30 s).
+      await Promise.race([
+        tab.page.close({ runBeforeUnload: false }).catch(() => undefined),
+        new Promise((resolve) => setTimeout(resolve, 5_000)),
+      ]);
       await new Promise((resolve) => setTimeout(resolve, 2_000));
       // Whether it reaches the site depends on timing (measured both ways on CI); it is never routed,
       // so no owner and no site rule ever sees it.
       expect(routed).not.toContain('/api/pagehide');
-    });
+    }, 60_000);
   });
 }

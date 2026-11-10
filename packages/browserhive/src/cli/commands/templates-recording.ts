@@ -233,12 +233,21 @@ export async function finishRecording(
     context.out.diagnostic('browserhive: the server answered with an unexpected result.');
     return EXIT.fatal;
   }
-  const { template, version } = parsed.data;
+  const { template, version, removed_sign_ins: removed } = parsed.data;
   const sites = enabledSites(template);
   if (target.json) {
     context.out.json({ template, version, sites, removed_sign_ins: removals });
   } else {
     printSummary(context, target.name, sites);
+    // A removal that left site data behind is never silent (the sign-in may survive there).
+    for (const entry of removed) {
+      if (entry.uncleared_origins.length === 0) continue;
+      context.out.status(
+        'warn',
+        `${entry.domain}: site data not cleared for ${entry.uncleared_origins.join(', ')}`,
+        'the sign-in may survive there; remove it again from the template page',
+      );
+    }
   }
   return sites.every((site) => site.health.state === 'signed_in') ? EXIT.ok : EXIT.warnings;
 }

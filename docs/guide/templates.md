@@ -63,7 +63,7 @@ If no new cookie appeared on the site, the confirmation is refused (`409 CONFLIC
 
 The template's browser keeps every sign-in that happens in it, including ones on domains that are not its sites: if you open your webmail in the sign-in window to read a code, the template is now signed in to your webmail too, and **agents can use that sign-in**.
 
-BrowserHive lists such domains as "Also signed in to: … — agents can use this": every registrable domain that holds a persistent `HttpOnly` and `Secure` cookie and is not a site of the template. The command line removes them at Finish unless you answer no. Removing a sign-in clears that domain's cookies and site data in the template's browser; it does not sign you out at the site.
+BrowserHive lists such domains as "Also signed in to: … — agents can use this": every registrable domain that holds a persistent `HttpOnly` and `Secure` cookie and is not a site of the template. The command line removes them at Finish unless you answer no. Removing a sign-in clears that domain's cookies and the site data (local and session storage, IndexedDB, service workers, Cache Storage) of every origin under it that the template's browser has visited or holds data for, subdomains included. The result lists the origins it cleared and any it could not clear (`uncleared_origins`, also logged as a warning); a sign-in may survive on an origin listed there. It does not sign you out at the site. The sign-in window closes before the removal, so none of its tabs writes the sign-in back.
 
 ### Finish, cancel and finish later
 
@@ -73,7 +73,9 @@ BrowserHive lists such domains as "Also signed in to: … — agents can use thi
 
 Closing the sign-in window by hand cancels nothing: the template's browser keeps running, and the recording stays open until you finish or cancel.
 
-While the sign-in window is open, every agent window of that template is minimized and new agent windows open minimized, so you are not typing into an agent's page by mistake.
+While the sign-in window is open, every agent window of that template is minimized and new agent windows open minimized, so you are not typing into an agent's page by mistake. A window an agent's site opens by itself meanwhile (a popup, a new tab) is minimized as soon as it appears, or closed when Chromium placed it in your sign-in window, and the sign-in window is shown again; an agent's `set_viewport` does not restore a minimized window.
+
+The residual risk: Chromium shows a site-opened popup as an active window before BrowserHive can minimize it, so for a moment it can take the keyboard focus, and a page can call `window.focus()`. Keystrokes typed in that instant can land in the agent's page. If agents may be using the template, check the window title (`[BrowserHive] Sign in to …`) before you type a password, or sign in while no agent session is open.
 
 ### Over the REST API
 
@@ -106,7 +108,7 @@ curl -sH "$H" -H 'Content-Type: application/json' -X POST $B/templates/tp-…/re
 | `POST /templates/{id}/recording/finish` `{remove_sign_ins?}` | `templates:login` | `{template, version: null}`; the template is `ready`. `version` stays `null` until versions arrive. |
 | `DELETE /templates/{id}/recording` | `templates:login` | Closes the window; the template stays `recording`. |
 | `GET /templates/{id}` | `templates:read` | The template, its browser (`host`, with `state`, `last_error` and `profile_secrets`), its sites, and `unlisted_domains` (computed while the browser runs). |
-| `POST /templates/{id}/domains/{domain}/remove-sign-in` | `templates:write` | `{ok, cookies_removed}`: clears that registrable domain's cookies and site data. |
+| `POST /templates/{id}/domains/{domain}/remove-sign-in` | `templates:write` | `{ok, cookies_removed, origins_cleared, uncleared_origins}`: clears that registrable domain's cookies and the site data of every origin under it. |
 | `POST /templates/{id}/host/clear-profile-secrets` | `templates:write` | `{ok}`: empties saved passwords and autofill data ([below](#saved-passwords-and-autofill)). |
 | `DELETE /templates/{id}` | `templates:write` | Stops the browser and deletes `templates/<id>/`. `409 TEMPLATE_IN_USE` while sessions run; `?force=true` closes them. |
 
@@ -187,7 +189,7 @@ Template sessions are **sealed** unless you unseal the template. Sealing keeps t
 | `cookie_writes` | `set_cookies` answers [`SESSION_SEALED`](../reference/errors.md#SESSION_SEALED). | Allowed; it changes the sign-ins of every session of the template. |
 | `state_export` | `save_storage_state` answers `SESSION_SEALED`. | Allowed; the snapshot is saved under the agent's own saved logins, with `source_template_id` in its manifest. |
 
-**Redaction.** In a session without `cookie_values`, every text result (and the result text BrowserHive stores for the tool call) has every occurrence of a cookie value of 12 or more characters, of any cookie currently in the template's browser, replaced with `[sealed]`. Screenshots and the live view are not redacted, and tokens a page shows that are not cookie values are not redacted.
+**Redaction.** In a session without `cookie_values`, every text result (and the result text BrowserHive stores for the tool call) has every occurrence of a value of 12 or more characters replaced with `[sealed]`: of any cookie currently in the template's browser (and the template sites' cookies of the last 10 minutes), and of the local storage, session storage and IndexedDB of the session's open pages on the template's sites. The value is matched as is and in its JSON-escaped, URL-encoded and HTML-escaped forms. Results about several sessions (`list_sessions`) are redacted with the values of every sealed session of the caller. Screenshots and the live view are not redacted, nor are tokens a page shows that are neither a cookie nor a stored value, nor other encodings (base64, a value split by markup).
 
 **Unsealing.** Set the flags in `policy.unseal` when you create the template over the REST API, optionally only for some principals:
 
@@ -212,7 +214,7 @@ Sealed or not:
 - `save_full_profile` answers [`INVALID_PERSISTENCE_CONFIG`](../reference/errors.md#INVALID_PERSISTENCE_CONFIG).
 - The vault is not available: `vault_list_available` returns no entries with a note, and `vault_fill` returns `blocked` (`not_authorized`) and writes a `vault_access` audit row with the reason `template_session`. A fill would sign every session of the template in, past the binding's own rules; keeping the template signed in is your job.
 - `navigate` and `new_tab` open `http:`, `https:` and `about:blank` only: `data:` is refused too (other sessions still allow it), with [`URL_SCHEME_NOT_ALLOWED`](../reference/errors.md#URL_SCHEME_NOT_ALLOWED). BrowserHive's own addresses answer [`URL_BLOCKED`](../reference/errors.md#URL_BLOCKED) with the pattern `#browserhive`.
-- `press_key` refuses clipboard shortcuts (Ctrl/Cmd+C, V and X, Shift+Insert, Ctrl+Insert) with `INVALID_ARGUMENTS`: on a headed browser a paste would read your clipboard.
+- `press_key` refuses clipboard shortcuts (Ctrl/Cmd+C, V and X, Shift+Insert, Ctrl+Insert) with `INVALID_ARGUMENTS`: on a headed browser a paste would read your clipboard. `click` refuses the middle button for the same reason (on Linux a middle click pastes the primary selection, whatever you last highlighted).
 - `switch_tab` brings the tab to the front only on a headless template, so a headed template's windows never steal your focus.
 - `set_viewport` also resizes the session's window on a headed template (never moves it).
 - A screenshot that does not finish in 10 s is retried once directly from the window surface, because minimized windows can stall rendering.

@@ -1,4 +1,4 @@
-/** @module interface/mcp/tools/sealing — what sealing changes in the tools of a template session (spec 13 §5.4, D-51): cookie values hidden, cookie writes and state export refused. Checked per call, so a re-sealed template applies at once. */
+/** @module interface/mcp/tools/sealing — what sealing changes in the tools of a template session (spec 13 §5.4, D-51): cookie values hidden, cookie writes and state export refused. The flags are fixed per session at launch; a policy edit (T1b) must update or close live sessions. */
 
 import type { Session } from '../../../domain/session/session.ts';
 import type { SessionSealing } from '../../../domain/templates/model.ts';

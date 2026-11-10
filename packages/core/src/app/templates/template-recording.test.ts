@@ -81,6 +81,31 @@ describe('recording a template', () => {
     expect(stored.find((s) => s.siteId === 'site-a.test')?.learnedCookieNames).toEqual(['sid']);
   });
 
+  it('keeps only the learned names still in the jar when no new cookie appeared (re-recording)', async () => {
+    await repos.templateSites.upsert(
+      templateSiteRecord({ siteId: 'site-a.test', learnedCookieNames: ['old', 'gone'] }),
+    );
+    ops.jarCookies = [fakeCookie('.site-a.test', 'old')];
+    await service.start(ID, {}, OPERATOR);
+    const site = await service.confirm(ID, 'site-a.test', 'operator');
+    expect(site.learned_cookie_names).toEqual(['old']);
+  });
+
+  it('reports the origins a removal could not clear (never silently)', async () => {
+    await service.start(ID, {}, OPERATOR);
+    ops.jarCookies?.push(fakeCookie('.idp.test', 'idp'));
+    ops.uncleared = ['https://app.idp.test'];
+    const done = await service.finish(ID, { removeSignIns: ['idp.test'] }, 'operator');
+    expect(done.removed_sign_ins).toEqual([
+      {
+        domain: 'idp.test',
+        cookies_removed: 1,
+        origins_cleared: ['https://idp.test'],
+        uncleared_origins: ['https://app.idp.test'],
+      },
+    ]);
+  });
+
   it('answers CONFLICT without a window or without a new cookie on the site', async () => {
     expect(await codeOf(service.confirm(ID, 'site-a.test', 'operator'))).toBe('CONFLICT');
     await service.start(ID, {}, OPERATOR);
@@ -127,7 +152,7 @@ describe('recording a template', () => {
 
   it('removes an unlisted sign-in and clears saved passwords on request', async () => {
     ops.jarCookies = [fakeCookie('.idp.test', 'idp'), fakeCookie('www.idp.test', 'x')];
-    expect(await service.removeSignIn(ID, 'idp.test', 'operator')).toBe(2);
+    expect((await service.removeSignIn(ID, 'idp.test', 'operator')).cookies_removed).toBe(2);
     await service.clearProfileSecrets(ID, 'operator');
     expect(ops.clearedSecrets).toEqual([ID]);
     expect(actions.rows.map((r) => r.action)).toEqual([
