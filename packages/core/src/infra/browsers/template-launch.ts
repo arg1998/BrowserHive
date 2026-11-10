@@ -102,6 +102,11 @@ export async function launchTemplateHostWith(
     const { chromiumSandbox: _ignored, ...rest } = launch.options;
     return ctx.browserType.launchPersistentContext(spec.userDataDir, {
       ...rest,
+      // The daemon's own shutdown drains and closes hosts (spec 13 §3.2); Playwright's signal
+      // handlers would quit the browser first, which a host reads as the operator quitting it.
+      handleSIGINT: false,
+      handleSIGTERM: false,
+      handleSIGHUP: false,
       ...(sandboxed && { chromiumSandbox: true }),
       ...contextOptions,
     });
