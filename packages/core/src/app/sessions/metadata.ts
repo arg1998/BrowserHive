@@ -91,6 +91,25 @@ export function toSessionMetadata(session: Session): SessionMetadataWithDriver {
     identity: toWireIdentity(session.identity),
     proxy_label: session.proxyLabel,
     driver: session.driver,
+    // The additive key of template sessions only (spec 13 §5.2); exclusive sessions do not carry it.
+    ...(session.template !== null && {
+      template: {
+        name: session.template.name,
+        sites: session.template.sites.map((s) => ({ site: s.site, status: s.status })),
+      },
+    }),
+  };
+}
+
+/** The `sessions` template columns of a virtual session; `null` for an exclusive one. */
+function templateColumns(session: Session): SessionRecord['template'] {
+  const template = session.template;
+  if (template === null) return null;
+  return {
+    templateId: template.templateId,
+    name: template.name,
+    version: template.version,
+    mode: template.mode,
   };
 }
 
@@ -265,10 +284,9 @@ export function toSessionRecord(session: Session): SessionRecord {
     harness: launchHarnessOf(request.client),
     harnessDeclared: launchDeclaredHarnessOf(request.client),
     ...launchColumns(session),
-    // Exclusive sessions. A virtual session's template columns are written here by the template
-    // launch path (spec 13 §3.7 `reserve`, templates T1a-2).
-    template: null,
-    sealed: null,
+    // Exclusive sessions have none (spec 13 §3.7 `reserve`).
+    template: templateColumns(session),
+    sealed: session.template?.sealed ?? null,
   };
 }
 

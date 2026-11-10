@@ -55,6 +55,13 @@ export const sessionInfo = defineTool('session_info', {
       last_tool_at: session.lastToolAt,
       lease_expires_at: session.lease.expiresAt,
       navigation_count: session.counts.navigations,
+      // Template sessions only (spec 13 §5.2): the template's name and its sites' status.
+      ...(session.template !== null && {
+        template: {
+          name: session.template.name,
+          sites: session.template.sites.map((s) => ({ site: s.site, status: s.status })),
+        },
+      }),
     });
   },
 });

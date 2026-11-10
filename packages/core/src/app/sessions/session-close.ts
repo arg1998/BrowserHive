@@ -49,8 +49,11 @@ export async function closeSession(
   const session = await deps.registry.withLock(() => {
     const found = deps.registry.get(sessionId);
     if (found === undefined) return undefined;
-    if (options.principal !== undefined && !ownsSession(options.principal, found.owner))
-      return undefined;
+    if (options.principal !== undefined) {
+      // An agent never closes a maintenance session (spec 13 §6.1): it reads as unknown.
+      if (found.template?.mode === 'maintenance') return undefined;
+      if (!ownsSession(options.principal, found.owner)) return undefined;
+    }
     deps.registry.release(sessionId);
     return found;
   });

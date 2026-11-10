@@ -205,6 +205,8 @@ export {
   type UserAgentOverride,
   uaChPlatformFor,
 } from './stealth-identity.ts';
+export { PlaywrightTemplateHost } from './template-host.ts';
+export { TemplateSessionView } from './template-view.ts';
 export {
   mergeTraceParts,
   PlaywrightTracingHandle,

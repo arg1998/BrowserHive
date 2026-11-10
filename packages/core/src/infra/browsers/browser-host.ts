@@ -12,6 +12,7 @@ import type {
 } from '../../ports/browser-driver.ts';
 import type { Clock } from '../../ports/clock.ts';
 import type { Logger } from '../../ports/logger.ts';
+import { killBrowserProcess, readBrowserPid, rejectOnAbort } from './host-process.ts';
 import type { IdentityApplier } from './identity-applier.ts';
 import { sessionOwner } from './page-attribution.ts';
 import { HostPageDispatcher } from './page-dispatcher.ts';
@@ -178,48 +179,13 @@ export class PlaywrightBrowserHost implements BrowserHost {
     return this.pid;
   }
 
-  private async readBrowserPid(): Promise<number | null> {
-    const browser = this.browser ?? this.context.browser();
-    if (browser === null || this.closing) return null;
-    try {
-      const cdp = await browser.newBrowserCDPSession();
-      try {
-        const info = await cdp.send('SystemInfo.getProcessInfo');
-        return info.processInfo.find((p) => p.type === 'browser')?.id ?? null;
-      } finally {
-        await cdp.detach().catch(() => undefined);
-      }
-    } catch (err) {
-      this.logger.debug('browser pid unavailable', { err: serializeError(err) });
-      return null;
-    }
+  private readBrowserPid(): Promise<number | null> {
+    if (this.closing) return Promise.resolve(null);
+    return readBrowserPid(this.browser ?? this.context.browser(), this.logger);
   }
 
   /** Last resort on overrun: the process, not the protocol, is what holds the resources. */
   private killProcess(): void {
-    const browser = this.browser ?? this.context.browser();
-    if (browser === null) return;
-    try {
-      // `Browser.process()` is not part of the public typings; probe for it structurally.
-      const candidate: unknown = browser;
-      if (typeof candidate !== 'object' || candidate === null || !('process' in candidate)) return;
-      const processFn: unknown = candidate.process;
-      if (typeof processFn !== 'function') return;
-      const proc: unknown = processFn.call(candidate);
-      if (typeof proc !== 'object' || proc === null || !('kill' in proc)) return;
-      const kill: unknown = proc.kill;
-      if (typeof kill !== 'function') return;
-      kill.call(proc, 'SIGKILL');
-      this.logger.warn('browser process killed', { reason: 'close deadline' });
-    } catch (err) {
-      this.logger.error('browser kill failed', { err: serializeError(err) });
-    }
+    killBrowserProcess(this.browser ?? this.context.browser(), this.logger);
   }
-}
-
-function rejectOnAbort(signal: AbortSignal): Promise<never> {
-  return new Promise((_, reject) => {
-    if (signal.aborted) reject(signal.reason);
-    signal.addEventListener('abort', () => reject(signal.reason), { once: true });
-  });
 }

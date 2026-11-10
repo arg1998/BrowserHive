@@ -13,6 +13,7 @@ import {
 } from '../policies/launch-options.ts';
 import type { SessionClientInfo } from './client-info.ts';
 import type { SessionPrincipal } from './principal.ts';
+import type { SessionTemplate } from './session-template.ts';
 
 /** Server defaults a request inherits (from `ServerConfig`; see `sessionDefaultsFromConfig`). */
 export interface SessionDefaults {
@@ -128,6 +129,8 @@ export interface CreateSessionRequest {
   readonly connectionId: string | null;
   /** Self-reported client of that connection, fixed at creation (dashboard only). */
   readonly client: SessionClientInfo | null;
+  /** The template of a virtual session (spec 13 §3.7); absent for exclusive sessions. */
+  readonly template?: SessionTemplate;
 }
 
 function invalidPersistence(reason: string): AppError<'INVALID_PERSISTENCE_CONFIG'> {

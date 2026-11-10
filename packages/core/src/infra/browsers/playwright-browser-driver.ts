@@ -5,16 +5,19 @@ import type { Browser, BrowserContext, BrowserContextOptions, BrowserType, Page 
 import { AppError, isAppError } from '../../kernel/errors/app-error.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type {
-  AppliedDisplay,
   AppliedIdentity,
   BrowserDriver,
-  EngineCapabilities,
   LaunchedSession,
   LaunchSpec,
   LaunchWarning,
 } from '../../ports/browser-driver.ts';
 import type { Clock } from '../../ports/clock.ts';
 import type { Logger } from '../../ports/logger.ts';
+import type {
+  TemplateHost,
+  TemplateHostLauncher,
+  TemplateHostSpec,
+} from '../../ports/template-host.ts';
 import { ATTR, SPAN, withSpan } from '../telemetry/spans.ts';
 import { channelExecutable, playwrightChannelExecutable } from './browser-detection.ts';
 import { PlaywrightBrowserHost } from './browser-host.ts';
@@ -25,15 +28,16 @@ import {
   type ChromiumResolverDeps,
 } from './chromium-resolver.ts';
 import { DriverResolver } from './driver-resolver.ts';
+import { capabilitiesFor, defaultSandboxPolicy, displayFor } from './driver-support.ts';
 import { contextOptionsFor, scriptPayloadFor } from './fingerprint.ts';
 import type { HostFacts } from './host-facts.ts';
 import { IdentityApplier } from './identity-applier.ts';
 import { buildLaunchOptions, executablePathWarning } from './launch-args.ts';
 import { installNativeGetters, mergeNativeGetterPayloads } from './native-getter.ts';
-import { sandboxUnavailable } from './sandbox-error.ts';
-import { SandboxPolicy } from './sandbox-policy.ts';
+import type { SandboxPolicy } from './sandbox-policy.ts';
 import { ExclusiveSessionView } from './session-view.ts';
 import { deviceMemoryPayload } from './stealth-identity.ts';
+import { launchTemplateHostWith, type TemplateLaunchContext } from './template-launch.ts';
 import { PlaywrightTracingHandle, traceStartWarning } from './tracing.ts';
 
 /** Constructor dependencies of {@link PlaywrightBrowserDriver}. */
@@ -51,31 +55,8 @@ export interface PlaywrightBrowserDriverDeps {
   readonly sandbox?: SandboxPolicy;
   /** Test seam: the executable a branded channel launches (Playwright's own lookup by default). */
   readonly locateChannel?: (playwrightChannel: 'chrome' | 'msedge') => string | null;
-}
-
-/** What an agent is told when nothing better is known about this host. */
-export const ASK_OPERATOR_GUIDANCE: readonly string[] = [
-  "Ask the operator to run 'browserhive doctor' for the options on this host.",
-  'Or launch without launch_options.chromiumSandbox.',
-];
-
-/** The `off` policy used when none is configured: required sandboxes still fail typed. */
-function defaultSandboxPolicy(deps: PlaywrightBrowserDriverDeps): SandboxPolicy {
-  return new SandboxPolicy({
-    mode: 'off',
-    root: false,
-    logger: deps.logger,
-    clock: deps.clock,
-    unavailable: ({ target, reason, requiredBy, err }) =>
-      sandboxUnavailable({
-        channel: target.channel,
-        reason,
-        requiredBy,
-        alternatives: [],
-        guidance: [...ASK_OPERATOR_GUIDANCE],
-        ...(err !== undefined && { err }),
-      }),
-  });
+  /** The configured blocklist, which every template host's chain carries (spec 13 §3.8). */
+  readonly templateBlocklist?: TemplateLaunchContext['blocklist'];
 }
 
 /**
@@ -83,7 +64,7 @@ function defaultSandboxPolicy(deps: PlaywrightBrowserDriverDeps): SandboxPolicy 
  * `browserType.launch(...)`. One browser subprocess + one context per session is the isolation
  * primitive; nothing here is shared between launches.
  */
-export class PlaywrightBrowserDriver implements BrowserDriver {
+export class PlaywrightBrowserDriver implements BrowserDriver, TemplateHostLauncher {
   private readonly logger: Logger;
   private readonly clock: Clock;
   private readonly host: HostFacts;
@@ -92,6 +73,7 @@ export class PlaywrightBrowserDriver implements BrowserDriver {
   private readonly chromiumDeps: ChromiumResolverDeps;
   private readonly sandbox: SandboxPolicy;
   private readonly locateChannel: (playwrightChannel: 'chrome' | 'msedge') => string | null;
+  private readonly templateBlocklist: TemplateLaunchContext['blocklist'];
 
   constructor(deps: PlaywrightBrowserDriverDeps) {
     this.logger = deps.logger.child({ module: 'browsers.launcher' });
@@ -102,6 +84,32 @@ export class PlaywrightBrowserDriver implements BrowserDriver {
     this.chromiumDeps = { env: deps.host.env, ...deps.chromium };
     this.sandbox = deps.sandbox ?? defaultSandboxPolicy(deps);
     this.locateChannel = deps.locateChannel ?? playwrightChannelExecutable;
+    this.templateBlocklist = deps.templateBlocklist ?? null;
+  }
+
+  /** Starts a template host (spec 13 §3.1); the start is not abortable once Chromium is spawning. */
+  launchTemplateHost(spec: TemplateHostSpec): Promise<TemplateHost> {
+    const resolved = spec.stealth
+      ? this.resolver.resolveStealth(spec.stealthDriver)
+      : { browserType: this.resolver.stock(), driver: 'playwright' as const };
+    assertChromiumInstalled(resolved.browserType, spec.channel, this.chromiumDeps);
+    return launchTemplateHostWith(
+      {
+        browserType: resolved.browserType,
+        driver: resolved.driver,
+        sandbox: this.sandbox,
+        sandboxTarget: {
+          channel: spec.channel,
+          executablePath: this.executableFor(resolved.browserType, spec.channel),
+        },
+        chromium: this.chromiumDeps,
+        host: this.host,
+        clock: this.clock,
+        logger: this.logger,
+        blocklist: this.templateBlocklist,
+      },
+      spec,
+    );
   }
 
   /** The executable a channel launches, the sandbox policy's cache key (null when unknown). */
@@ -380,31 +388,4 @@ export class PlaywrightBrowserDriver implements BrowserDriver {
   }
 }
 
-/** Only record the display half when it was actually asserted, so metadata never claims a geometry the page was not given. */
-function displayFor(spec: LaunchSpec): AppliedDisplay | null {
-  const identity = spec.identity;
-  if (identity === undefined || !identity.assertDisplay) return null;
-  const fp = identity.fingerprint;
-  return {
-    screen: { width: fp.screen.width, height: fp.screen.height },
-    viewport: { ...fp.viewport },
-    deviceScaleFactor: fp.deviceScaleFactor,
-  };
-}
-
-/** Engine capabilities of a Chromium session (spec 11 §2.1). */
-export function capabilitiesFor(
-  driver: 'patchright' | 'playwright',
-  spec: Pick<LaunchSpec, 'headless'>,
-): EngineCapabilities {
-  return {
-    cdpScreencast: true,
-    // Chromium can only print to PDF in headless mode.
-    pdf: spec.headless,
-    trace: true,
-    closedShadowRoot: driver === 'patchright',
-    perContextProxy: true,
-    // Patchright's isolated-world `evaluate` needs the `isolatedContext: false` argument.
-    isolatedEvaluate: driver === 'patchright',
-  };
-}
+export { ASK_OPERATOR_GUIDANCE, capabilitiesFor } from './driver-support.ts';

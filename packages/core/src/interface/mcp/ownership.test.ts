@@ -3,6 +3,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { ALL_TOOL_NAMES, TOOL_CONTRACTS, type ToolName } from '@browserhive/contracts/tools';
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { FakeSessionView } from '../../../test/helpers/fake-session-view.ts';
 import {
   createToolHarness,
   type ToolHarness,
@@ -98,5 +99,41 @@ describe('ownership table', () => {
       textOf(await h.call('get_attention_result', { request_id: 'a-000000000009' }, alice)),
     );
     expect(result.status).toBe('rejected');
+  });
+});
+
+describe('maintenance sessions (spec 13 §6.1)', () => {
+  it('are refused to every agent, even one named after their owner, for every tool', async () => {
+    // An agent authenticated by an `authTokens` item named `browserhive` (warned, not refused).
+    const named = await h.connect(agentPrincipal('browserhive', {}));
+    const maintenance = await h.services.sessions.createVirtual(
+      { slug: 'maintenance' },
+      { subject: 'browserhive' },
+      {
+        template: {
+          templateId: 'tp-fixture001',
+          name: 'job-hunt',
+          version: null,
+          mode: 'maintenance',
+          sealed: false,
+          sites: [],
+        },
+        proxyLabel: null,
+        reserve: () => () => undefined,
+        acquire: async () => undefined,
+        open: async (sessionId) => new FakeSessionView(sessionId),
+      },
+    );
+    for (const name of ALL_TOOL_NAMES.filter(namesSession).filter((n) => n !== 'close_session')) {
+      const refused = await h.call(name, { session_id: maintenance.id, ...ARGS[name] }, named);
+      expect(textOf(refused)).toBe(
+        `[SESSION_NOT_FOUND] No browser session with id '${maintenance.id}'`,
+      );
+    }
+    expect(JSON.parse(textOf(await h.call('list_sessions', {}, named)))).toEqual([]);
+    expect(
+      JSON.parse(textOf(await h.call('close_session', { session_id: maintenance.id }, named))),
+    ).toEqual({ session_id: maintenance.id, closed: false });
+    expect(h.services.sessions.peek(maintenance.id)).toBe(maintenance);
   });
 });

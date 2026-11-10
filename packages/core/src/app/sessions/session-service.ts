@@ -20,6 +20,8 @@ import type { Logger } from '../../ports/logger.ts';
 import { type CreateOptions, type PhaseTiming, runCreatePipeline } from './create-pipeline.ts';
 import type { LeaseController } from './lease-controller.ts';
 import { type SessionMetadataWithDriver, toSessionMetadata, toSessionSummary } from './metadata.ts';
+import { notFound } from './not-found.ts';
+import type { VirtualSessionLauncher } from './pipeline-context.ts';
 import type { PipelineHooks } from './pipeline-deps.ts';
 import { createNodeSessionDirFs, type SessionDirFs, sessionDirLayout } from './profile-dir.ts';
 import { SessionRegistry } from './registry.ts';
@@ -51,7 +53,8 @@ export class SessionService {
   private readonly hooks: PipelineHooks;
   private readonly publisher: SessionPublisher;
   private lastTimings: readonly PhaseTiming[] = [];
-
+  /** Template hosts holding a browser slot (set by the host supervisor; spec 13 §6.3). */
+  private hostSlots: () => number = () => 0;
   constructor(deps: SessionServiceDeps) {
     this.deps = deps;
     this.defaults = sessionDefaultsFromConfig(deps.config);
@@ -90,6 +93,40 @@ export class SessionService {
     principal: SessionPrincipal,
     options: Partial<CreateOptions> = {},
   ): Promise<Session> {
+    return this.run(input, principal, options, undefined);
+  }
+
+  /** The template branch of the pipeline (spec 13 §3.7); `input` comes from the template's settings. */
+  createVirtual(
+    input: CreateSessionInput,
+    principal: SessionPrincipal,
+    virtual: VirtualSessionLauncher,
+    options: Partial<CreateOptions> = {},
+  ): Promise<Session> {
+    return this.run(input, principal, options, virtual);
+  }
+
+  /** Counts starting or running template hosts as browser slots (spec 13 §6.3, D-56). */
+  setHostSlots(count: () => number): void {
+    this.hostSlots = count;
+  }
+
+  /** Browser slots in use: exclusive sessions plus template hosts (what `maxSessions` bounds). */
+  occupiedSlots(): number {
+    return this.registry.exclusiveSize() + this.hostSlots();
+  }
+
+  /** The admission policy's cap (`null` = unbounded). */
+  capacity(): number | null {
+    return this.admission.capacity();
+  }
+
+  private async run(
+    input: CreateSessionInput,
+    principal: SessionPrincipal,
+    options: Partial<CreateOptions>,
+    virtual: VirtualSessionLauncher | undefined,
+  ): Promise<Session> {
     const create: CreateOptions = {
       ...(options.signal !== undefined && { signal: options.signal }),
       deadlineMs: options.deadlineMs ?? DEFAULT_CREATE_DEADLINE_MS,
@@ -108,7 +145,7 @@ export class SessionService {
       }
       try {
         const outcome = await runCreatePipeline(
-          this.pipelineDeps(input, principal),
+          this.pipelineDeps(input, principal, virtual),
           this.hooks,
           create,
         );
@@ -262,8 +299,6 @@ export class SessionService {
     return this.tabs.listTabs(session);
   }
 
-  // --- facts ---------------------------------------------------------------------------------------
-
   /** Records the URL a tool observed and publishes `session.updated`. */
   setCurrentUrl(session: Session, url: string | null): void {
     session.setCurrentUrl(url, this.deps.clock.now());
@@ -298,8 +333,9 @@ export class SessionService {
 
   /** Facts for `server_status`. */
   serverStatus(): SessionServerStatus {
+    // Browser slots in use, which `limit` bounds: agents never see template sessions counted (§6.3).
     return {
-      count: this.registry.liveCount(),
+      count: this.registry.exclusiveLiveCount() + this.hostSlots(),
       limit: this.admission.capacity(),
       driver: this.deps.driver.stealthDriverName(),
       persistenceMode: this.deps.config.persistence,
@@ -308,9 +344,15 @@ export class SessionService {
 
   // --- internals ---------------------------------------------------------------------------------
 
-  private pipelineDeps(input: CreateSessionInput, principal: SessionPrincipal) {
+  private pipelineDeps(
+    input: CreateSessionInput,
+    principal: SessionPrincipal,
+    virtual: VirtualSessionLauncher | undefined,
+  ) {
     const d = this.deps;
     return {
+      occupiedSlots: () => this.occupiedSlots(),
+      ...(virtual !== undefined && { virtual }),
       input,
       principal,
       defaults: this.defaults,
@@ -354,16 +396,4 @@ export class SessionService {
       });
     }
   }
-}
-
-function notFound(
-  code: 'SESSION_NOT_FOUND' | 'SESSION_ACCESS_DENIED',
-  sessionId: string,
-): AppError {
-  // `SESSION_ACCESS_DENIED` mirrors `SESSION_NOT_FOUND` text so a caller cannot probe for sessions it does not own.
-  return new AppError(
-    code,
-    { session_id: sessionId },
-    { publicMessage: `No browser session with id '${sessionId}'` },
-  );
 }

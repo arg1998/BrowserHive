@@ -10,43 +10,26 @@ import {
   sameOwner,
   sessionOwner,
   type TargetFacts,
+  TOMBSTONE_LIMIT,
 } from './page-attribution.ts';
+import {
+  ATTRIBUTION_HOLD_MS,
+  type HostPageDispatcherOptions,
+  type TargetFactsReader,
+} from './page-dispatcher-options.ts';
 
-/**
- * How long an undecided page waits for a pending `createTarget` response (spec 13 §3.4 rule 3);
- * also the deadline of one target-facts read. A page following a held opener waits at most one
- * more hold.
- */
-export const ATTRIBUTION_HOLD_MS = 2_000;
-
-/**
- * Reads a new page's target facts. Synchronous facts keep delivery in the `page` event's own turn;
- * a template host reads `Target.getTargetInfo` (PR T1a). A read that fails, or does not settle
- * within the facts deadline, leaves the page with no known target id or opener: it goes to the
- * fallback owner (parked on a template host).
- */
-export type TargetFactsReader = (page: Page) => TargetFacts | Promise<TargetFacts>;
-
-/** Constructor options of {@link HostPageDispatcher}. */
-export interface HostPageDispatcherOptions {
-  /** Owner of an unclaimed page without a known opener: the session (exclusive) or parked (template). */
-  readonly fallback: PageOwner;
-  /** Absent: every page gets a fresh id with no opener (an exclusive host needs neither). */
-  readonly factsOf?: TargetFactsReader;
-  readonly clock: Clock;
-  readonly logger: Logger;
-  /** Hold length (default {@link ATTRIBUTION_HOLD_MS}). */
-  readonly holdMs?: number;
-  /** Deadline of one facts read (default {@link ATTRIBUTION_HOLD_MS}). */
-  readonly factsTimeoutMs?: number;
-  readonly tombstoneLimit?: number;
-}
+export {
+  ATTRIBUTION_HOLD_MS,
+  type HostPageDispatcherOptions,
+  type TargetFactsReader,
+} from './page-dispatcher-options.ts';
 
 /** How far a held page's own clock has run: `held` → `expired` (one hold) → `final` (two). */
 type HoldStage = 'held' | 'expired' | 'final';
 
 interface HeldPage {
-  readonly page: Page;
+  /** `null` for a target that closed before any page of it was adopted ({@link HostPageDispatcher.adoptClosedTarget}). */
+  readonly page: Page | null;
   readonly facts: TargetFacts;
   readonly timer: AbortController;
   stage: HoldStage;
@@ -82,7 +65,15 @@ export class HostPageDispatcher {
   private readonly held: HeldPage[] = [];
   private readonly listeners = new Map<string, Set<(page: Page) => void>>();
   /** Attributed pages waiting for their listeners, in commit order. */
-  private readonly deliveries: Array<{ readonly page: Page; readonly sessionId: string }> = [];
+  private readonly deliveries: Array<{
+    readonly page: Page;
+    readonly owner: PageOwner;
+    readonly facts: TargetFacts;
+  }> = [];
+  private readonly onCommitted: HostPageDispatcherOptions['onCommitted'];
+  private readonly onReleased: HostPageDispatcherOptions['onReleased'];
+  /** Sessions released on this host, insertion-ordered so the oldest is forgotten first. */
+  private readonly released = new Set<string>();
   private delivering = false;
   private nextSynthetic = 0;
   /** Pages whose facts are still being read: a named opener may be one of them. */
@@ -99,6 +90,8 @@ export class HostPageDispatcher {
     this.logger = options.logger.child({ module: 'browsers.attribution' });
     this.holdMs = options.holdMs ?? ATTRIBUTION_HOLD_MS;
     this.factsTimeoutMs = options.factsTimeoutMs ?? ATTRIBUTION_HOLD_MS;
+    this.onCommitted = options.onCommitted;
+    this.onReleased = options.onReleased;
   }
 
   /** Feeds one page (a context `page` event, or a page present at host start). Idempotent. */
@@ -122,6 +115,21 @@ export class HostPageDispatcher {
       return;
     }
     this.awaitFacts(page, facts);
+  }
+
+  /** A target that closed before any page of it was read (spec 13 §3.4): decided like a page, tombstoned at once. */
+  adoptClosedTarget(facts: TargetFacts): void {
+    if (this.disposed || this.attribution.ownerOf(facts.targetId) !== undefined) return;
+    if (this.held.some((entry) => entry.facts.targetId === facts.targetId)) return;
+    this.run(() => this.place(null, facts));
+  }
+
+  /** True when `targetId` was attributed or is being decided. */
+  knows(targetId: string): boolean {
+    return (
+      this.attribution.ownerOf(targetId) !== undefined ||
+      this.held.some((entry) => entry.facts.targetId === targetId)
+    );
   }
 
   /**
@@ -156,6 +164,11 @@ export class HostPageDispatcher {
   attributionOf(page: Page): PageOwner | undefined {
     const targetId = this.targets.get(page);
     return targetId === undefined ? undefined : this.attribution.ownerOf(targetId);
+  }
+
+  /** The target id `page` was placed under (a synthetic one when its facts were unreadable). */
+  targetIdOf(page: Page): string | undefined {
+    return this.targets.get(page);
   }
 
   /** True when `page` is or was attributed to `sessionId`, open or closed. */
@@ -194,6 +207,11 @@ export class HostPageDispatcher {
   /** Forgets a closed session's listeners and pending claims; its tombstones stay. */
   releaseSession(sessionId: string): void {
     this.listeners.delete(sessionId);
+    this.released.add(sessionId);
+    // Bounded like the tombstones: the oldest released session is forgotten first.
+    const oldest = this.released.values().next();
+    if (this.released.size > TOMBSTONE_LIMIT && oldest.done !== true)
+      this.released.delete(oldest.value);
     this.run(() => this.attribution.releaseSession(sessionId));
   }
 
@@ -242,14 +260,14 @@ export class HostPageDispatcher {
     );
   }
 
-  private place(page: Page, facts: TargetFacts): void {
-    if (this.disposed || this.targets.has(page)) return;
-    this.targets.set(page, facts.targetId);
-    const isClosed = page.isClosed();
-    if (!isClosed) page.once('close', () => this.run(() => this.closed(page)));
+  private place(page: Page | null, facts: TargetFacts): void {
+    if (this.disposed || (page !== null && this.targets.has(page))) return;
+    if (page !== null) this.targets.set(page, facts.targetId);
+    const isClosed = page === null || page.isClosed();
+    if (page !== null && !isClosed) page.once('close', () => this.run(() => this.closed(page)));
     const decision = this.attribution.decide(facts, this.decideOptions('held'));
     if (decision.kind === 'attributed') {
-      this.commit(page, facts.targetId, decision.owner, isClosed);
+      this.commit(page, facts, decision.owner, isClosed);
       return;
     }
     this.attribution.hold(facts.targetId);
@@ -305,7 +323,7 @@ export class HostPageDispatcher {
         if (decision.kind === 'held') continue;
         this.held.splice(index, 1);
         entry.timer.abort();
-        this.commit(entry.page, entry.facts.targetId, decision.owner, entry.closed);
+        this.commit(entry.page, entry.facts, decision.owner, entry.closed);
         progressed = true;
       }
     }
@@ -324,14 +342,14 @@ export class HostPageDispatcher {
   }
 
   /** Records the decision; an open page is queued for its session's listeners, a closed one tombstoned. */
-  private commit(page: Page, targetId: string, owner: PageOwner, closed: boolean): void {
-    const inForce = this.attribution.commit(targetId, owner);
-    if (closed) {
-      this.attribution.close(targetId);
+  private commit(page: Page | null, facts: TargetFacts, owner: PageOwner, closed: boolean): void {
+    const inForce = this.attribution.commit(facts.targetId, owner);
+    if (closed || page === null) {
+      this.attribution.close(facts.targetId);
       return;
     }
     this.open.set(page, inForce);
-    if (inForce.kind === 'session') this.deliveries.push({ page, sessionId: inForce.sessionId });
+    this.deliveries.push({ page, owner: inForce, facts });
   }
 
   /** Calls listeners for queued pages; reentrant calls only enqueue, the outermost call drains. */
@@ -340,19 +358,30 @@ export class HostPageDispatcher {
     this.delivering = true;
     try {
       for (let next = this.deliveries.shift(); next !== undefined; next = this.deliveries.shift()) {
-        const { page, sessionId } = next;
+        const { page, owner, facts } = next;
         // A page that closed before its turn is no longer the session's to receive.
         if (!this.open.has(page)) continue;
-        for (const listener of [...(this.listeners.get(sessionId) ?? [])]) {
-          try {
-            listener(page);
-          } catch (err) {
-            this.logger.error('page listener threw', { err: serializeError(err) });
-          }
+        this.notify(() => this.onCommitted?.(page, owner, facts));
+        if (owner.kind !== 'session') continue;
+        if (this.released.has(owner.sessionId)) {
+          this.notify(() => this.onReleased?.(page, owner.sessionId));
+          continue;
+        }
+        for (const listener of [...(this.listeners.get(owner.sessionId) ?? [])]) {
+          this.notify(() => listener(page), 'page listener threw');
         }
       }
     } finally {
       this.delivering = false;
+    }
+  }
+
+  /** Runs a listener or host hook; one that throws is logged and never stops the drain. */
+  private notify(hook: () => void, what = 'page hook threw'): void {
+    try {
+      hook();
+    } catch (err) {
+      this.logger.error(what, { err: serializeError(err) });
     }
   }
 

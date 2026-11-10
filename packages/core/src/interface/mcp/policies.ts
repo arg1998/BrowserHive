@@ -3,6 +3,7 @@
 import { ERROR_REGISTRY, renderMessage } from '@browserhive/contracts/errors';
 import { assertAttentionTransport } from '../../domain/operator-requests/heartbeat.ts';
 import { checkAgentUrl, type SchemeOptions } from '../../domain/policies/url-scheme.ts';
+import { isMaintenance } from '../../domain/session/session-template.ts';
 import { AppError } from '../../kernel/errors/app-error.ts';
 import type { PolicyContext, ToolPolicy } from './definition.ts';
 import { resolveScreenshotSavePath, resolveUploadPath } from './sandbox.ts';
@@ -22,6 +23,15 @@ export const sessionOwnership: ToolPolicy = {
   name: 'sessionOwnership',
   apply(ctx: PolicyContext, args) {
     const sessionId = stringArg(args, 'session_id') ?? '';
+    // A maintenance session is BrowserHive's own: refused to every agent principal before the
+    // owner comparison, with the text of an unknown id (spec 13 §6.1, from `template_mode` only).
+    if (isMaintenance(ctx.services.sessions.peek(sessionId)?.template)) {
+      throw new AppError(
+        'SESSION_NOT_FOUND',
+        { session_id: sessionId },
+        { publicMessage: `No browser session with id '${sessionId}'` },
+      );
+    }
     ctx.attachSession(ctx.services.sessions.get(sessionId, ctx.principal));
   },
 };

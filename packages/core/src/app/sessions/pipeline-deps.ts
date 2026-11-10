@@ -15,6 +15,7 @@ import type { IdentityResolver } from '../../ports/identity-resolver.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type { ProxyResolver } from '../../ports/proxy-resolver.ts';
 import type { SessionPolicyInstaller } from '../../ports/session-policies.ts';
+import type { VirtualSessionLauncher } from './pipeline-context.ts';
 import type { SessionDirFs, SessionDirLayout } from './profile-dir.ts';
 import type { SessionRegistry } from './registry.ts';
 
@@ -41,6 +42,13 @@ export interface PipelineDeps {
   readonly screenshotTrace: boolean;
   readonly closeTimeoutMs: number;
   readonly stealthDriver: StealthDriver;
+  /**
+   * Browser slots in use: exclusive sessions plus starting or running template hosts (spec 13
+   * §6.3, D-56). The admission input; a virtual session occupies no slot of its own.
+   */
+  readonly occupiedSlots: () => number;
+  /** Set for a virtual session: the template branch of the pipeline (spec 13 §3.7). */
+  readonly virtual?: VirtualSessionLauncher;
 }
 
 /** Callbacks into the service so the pipeline never publishes or logs on its own. */

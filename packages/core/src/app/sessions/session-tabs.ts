@@ -38,7 +38,7 @@ export class SessionTabs {
         { publicMessage: `Session '${session.id}' is not live.` },
       );
     }
-    const page = await view.newPage();
+    const page = await view.newPage(session.tabs.activePage());
     await view.host.ensureIdentityForPage(page);
     const tabId = session.tabs.add(page);
     session.tabs.setActive(tabId);
