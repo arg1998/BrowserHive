@@ -14,7 +14,7 @@ describe('selfOriginsOf', () => {
   it('a loopback bind: the canonical loopback names, allowedHosts and publicUrl', () => {
     const origins = selfOriginsOf(
       config({ allowedHosts: ['hive.lan'], publicUrl: 'https://hive.example.com' }),
-      MACHINE,
+      () => MACHINE,
     );
     expect(origins).toContain('http://127.0.0.1:9876');
     expect(origins).toContain('http://localhost:9876');
@@ -25,7 +25,7 @@ describe('selfOriginsOf', () => {
   });
 
   it('a wildcard bind adds the machine name and every interface address', () => {
-    const origins = selfOriginsOf(config({ host: '0.0.0.0' }), MACHINE);
+    const origins = selfOriginsOf(config({ host: '0.0.0.0' }), () => MACHINE);
     for (const origin of [
       'http://0.0.0.0:9876',
       'http://box:9876',
@@ -38,6 +38,6 @@ describe('selfOriginsOf', () => {
   });
 
   it('nothing for an ephemeral port that is not known yet', () => {
-    expect(selfOriginsOf(config({ port: 0 }), MACHINE)).toEqual([]);
+    expect(selfOriginsOf(config({ port: 0 }), () => MACHINE)).toEqual([]);
   });
 });

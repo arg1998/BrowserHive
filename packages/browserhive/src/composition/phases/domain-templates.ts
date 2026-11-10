@@ -82,11 +82,13 @@ export function machineNames(): MachineNames {
  */
 export function selfOriginsOf(
   config: Readonly<ServerConfig>,
-  machine: MachineNames = machineNames(),
+  machineOf: () => MachineNames = machineNames,
 ): string[] {
   const port = config.port;
   const hosts = new Set([config.host, 'localhost', '127.0.0.1', '::1', ...config.allowedHosts]);
   if (['0.0.0.0', '::', ''].includes(config.host)) {
+    // Read only for a wildcard bind: the interface list can be slow to read (Windows).
+    const machine = machineOf();
     hosts.add(machine.hostname);
     hosts.add(`${machine.hostname}.local`);
     for (const address of machine.addresses) hosts.add(address);
