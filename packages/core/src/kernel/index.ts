@@ -99,6 +99,7 @@ export {
   isPrivateNetworkHost,
   NETWORK_SCHEMES,
   normalizeHost,
+  registrableDomain,
   type SanitizeUrlOptions,
   sanitizeUrl,
   URL_CATEGORIES,

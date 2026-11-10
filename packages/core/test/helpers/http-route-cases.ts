@@ -49,6 +49,23 @@ async function webhookChannel(ctx: CaseContext): Promise<void> {
   ctx.state['channel'] = body.channel?.channel_id ?? 'nc-placeholder01';
 }
 
+/** A valid `POST /templates` body (auth=token needs an explicit access choice, spec 13 §6.1). */
+export const TEMPLATE_BODY = {
+  name: 'job-hunt',
+  sites: [{ site_id: 'www.site-a.test' }],
+  policy: { authorized_principals: [] },
+};
+
+async function template(ctx: CaseContext): Promise<void> {
+  const response = await ctx.kit.request('POST', api('/templates'), {
+    cookie: ctx.cookie,
+    body: TEMPLATE_BODY,
+  });
+  // Under a pending password change the create is refused: a well-formed id keeps the path valid.
+  const body = (await response.json()) as { template?: { template_id: string } };
+  ctx.state['template'] = body.template?.template_id ?? 'tp-placehold0';
+}
+
 /** An in-app digest copy (D-45) for the report routes. */
 async function inAppReport(ctx: CaseContext): Promise<void> {
   const rule = { every: 'day', at: '09:00' } as const;
@@ -759,6 +776,32 @@ export const ROUTE_CASES: readonly RouteCase[] = [
     operationId: 'search',
     success: { path: api('/search?q=shop'), status: 200 },
     invalid: { path: api('/search?q=s') },
+  },
+  {
+    operationId: 'listTemplates',
+    success: { path: api('/templates'), status: 200 },
+    invalid: { path: api('/templates?sort=bogus') },
+  },
+  {
+    operationId: 'createTemplate',
+    success: { method: 'POST', path: api('/templates'), body: TEMPLATE_BODY, status: 201 },
+    invalid: { method: 'POST', path: api('/templates'), body: { name: 'X', sites: [] } },
+  },
+  {
+    operationId: 'getTemplate',
+    setup: template,
+    success: { path: (ctx) => api(`/templates/${ctx.state['template'] ?? ''}`), status: 200 },
+    invalid: { path: api('/templates/bad') },
+  },
+  {
+    operationId: 'deleteTemplate',
+    setup: template,
+    success: {
+      method: 'DELETE',
+      path: (ctx) => api(`/templates/${ctx.state['template'] ?? ''}`),
+      status: 200,
+    },
+    invalid: { method: 'DELETE', path: api('/templates/bad') },
   },
   {
     operationId: 'reportClientError',

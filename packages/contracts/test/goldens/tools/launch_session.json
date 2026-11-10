@@ -1,7 +1,7 @@
 {
   "name": "launch_session",
   "title": "Launch session",
-  "description": "Launch a new isolated browser session. Each session owns its own Playwright driver, browser, context, and page so cookies and storage never leak between sessions. The resolved session_id is '<slug>-<nanoid8>' and is returned as the 'session_id' field.",
+  "description": "Launch a new browser session. Without `template`, the session is fully isolated: it owns its own Playwright driver, browser, context and page, and its cookies and storage are its own. With `template`, the session starts signed in to the template's sites (see list_templates). The resolved session_id is '<slug>-<nanoid8>' and is returned as the 'session_id' field.",
   "inputSchema": {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "type": "object",
@@ -13,7 +13,11 @@
       "channel": {
         "default": "chromium",
         "type": "string",
-        "enum": ["chromium", "chrome", "edge"]
+        "enum": [
+          "chromium",
+          "chrome",
+          "edge"
+        ]
       },
       "incognito": {
         "default": false,
@@ -25,7 +29,11 @@
       },
       "persistence_mode": {
         "type": "string",
-        "enum": ["memory", "persistent", "storage-state"]
+        "enum": [
+          "memory",
+          "persistent",
+          "storage-state"
+        ]
       },
       "restore_profile": {
         "type": "string"
@@ -66,9 +74,16 @@
       },
       "humanize": {
         "type": "boolean"
+      },
+      "template": {
+        "description": "Name of a session template from list_templates. The session starts signed in to the template's sites; sign-ins and site data it changes are kept in the template.",
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9-]{1,31}$"
       }
     },
-    "required": ["slug"]
+    "required": [
+      "slug"
+    ]
   },
   "outputSchema": {
     "$schema": "http://json-schema.org/draft-07/schema#",
@@ -82,7 +97,11 @@
       },
       "channel": {
         "type": "string",
-        "enum": ["chromium", "chrome", "edge"]
+        "enum": [
+          "chromium",
+          "chrome",
+          "edge"
+        ]
       },
       "incognito": {
         "type": "boolean"
@@ -92,10 +111,17 @@
       },
       "persistence_mode": {
         "type": "string",
-        "enum": ["memory", "persistent", "storage-state"]
+        "enum": [
+          "memory",
+          "persistent",
+          "storage-state"
+        ]
       },
       "current_url": {
-        "type": ["string", "null"]
+        "type": [
+          "string",
+          "null"
+        ]
       },
       "created_at": {
         "type": "number"
@@ -107,7 +133,10 @@
         "type": "number"
       },
       "lease_paused_at": {
-        "type": ["number", "null"]
+        "type": [
+          "number",
+          "null"
+        ]
       },
       "disable_evaluate": {
         "type": "boolean"
@@ -144,7 +173,10 @@
                       "type": "string"
                     }
                   },
-                  "required": ["brand", "version"],
+                  "required": [
+                    "brand",
+                    "version"
+                  ],
                   "additionalProperties": false
                 }
               },
@@ -172,17 +204,29 @@
                         }
                       },
                       "countryCode": {
-                        "type": ["string", "null"]
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "timezoneId": {
                         "type": "string"
                       },
                       "source": {
                         "type": "string",
-                        "enum": ["host", "proxy"]
+                        "enum": [
+                          "host",
+                          "proxy"
+                        ]
                       }
                     },
-                    "required": ["locale", "languages", "countryCode", "timezoneId", "source"],
+                    "required": [
+                      "locale",
+                      "languages",
+                      "countryCode",
+                      "timezoneId",
+                      "source"
+                    ],
                     "additionalProperties": false
                   },
                   {
@@ -205,7 +249,10 @@
                             "type": "number"
                           }
                         },
-                        "required": ["width", "height"],
+                        "required": [
+                          "width",
+                          "height"
+                        ],
                         "additionalProperties": false
                       },
                       "viewport": {
@@ -218,14 +265,21 @@
                             "type": "number"
                           }
                         },
-                        "required": ["width", "height"],
+                        "required": [
+                          "width",
+                          "height"
+                        ],
                         "additionalProperties": false
                       },
                       "deviceScaleFactor": {
                         "type": "number"
                       }
                     },
-                    "required": ["screen", "viewport", "deviceScaleFactor"],
+                    "required": [
+                      "screen",
+                      "viewport",
+                      "deviceScaleFactor"
+                    ],
                     "additionalProperties": false
                   },
                   {
@@ -251,7 +305,49 @@
         ]
       },
       "proxy_label": {
-        "type": ["string", "null"]
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "template": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "sites": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "site": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "unknown",
+                    "signed_in",
+                    "signed_out",
+                    "challenged",
+                    "inconclusive"
+                  ]
+                }
+              },
+              "required": [
+                "site",
+                "status"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "name",
+          "sites"
+        ],
+        "additionalProperties": false
       }
     },
     "required": [

@@ -10,7 +10,9 @@
         "type": "string"
       }
     },
-    "required": ["session_id"]
+    "required": [
+      "session_id"
+    ]
   },
   "outputSchema": {
     "$schema": "http://json-schema.org/draft-07/schema#",
@@ -27,7 +29,11 @@
           },
           "channel": {
             "type": "string",
-            "enum": ["chromium", "chrome", "edge"]
+            "enum": [
+              "chromium",
+              "chrome",
+              "edge"
+            ]
           },
           "headless": {
             "type": "boolean"
@@ -37,7 +43,11 @@
           },
           "persistence_mode": {
             "type": "string",
-            "enum": ["memory", "persistent", "storage-state"]
+            "enum": [
+              "memory",
+              "persistent",
+              "storage-state"
+            ]
           },
           "disable_evaluate": {
             "type": "boolean"
@@ -77,7 +87,10 @@
         "type": "number"
       },
       "current_url": {
-        "type": ["string", "null"]
+        "type": [
+          "string",
+          "null"
+        ]
       },
       "created_at": {
         "type": "number"
@@ -90,6 +103,45 @@
       },
       "navigation_count": {
         "type": "number"
+      },
+      "template": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "sites": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "site": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "unknown",
+                    "signed_in",
+                    "signed_out",
+                    "challenged",
+                    "inconclusive"
+                  ]
+                }
+              },
+              "required": [
+                "site",
+                "status"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "name",
+          "sites"
+        ],
+        "additionalProperties": false
       }
     },
     "required": [

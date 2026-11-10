@@ -22,6 +22,11 @@ import {
   PersistenceMode,
   PrincipalKind,
   SessionStatus,
+  SiteWritePolicy,
+  StealthLevel,
+  TemplateHealthState,
+  TemplateMode,
+  TemplateStatus,
   Transport,
   UrlCategory,
 } from '@browserhive/contracts/enums';
@@ -47,7 +52,12 @@ import {
   PRINCIPAL_KINDS,
   SESSION_CHANNELS,
   SESSION_STATES,
+  SITE_WRITE_POLICIES,
   SYSTEM_EVENT_SEVERITIES,
+  TEMPLATE_HEALTH_STATES,
+  TEMPLATE_MODES,
+  TEMPLATE_STATUSES,
+  TEMPLATE_STEALTH_LEVELS,
 } from './enums.ts';
 
 describe('persistence enums', () => {
@@ -75,6 +85,11 @@ describe('persistence enums', () => {
       [SESSION_STATES, SessionStatus.options],
       [MCP_TRANSPORTS, [...Transport.options].sort()],
       [PAGE_CATEGORIES, UrlCategory.options],
+      [TEMPLATE_STATUSES, TemplateStatus.options],
+      [TEMPLATE_STEALTH_LEVELS, StealthLevel.options],
+      [TEMPLATE_HEALTH_STATES, TemplateHealthState.options],
+      [SITE_WRITE_POLICIES, SiteWritePolicy.options],
+      [TEMPLATE_MODES, TemplateMode.options],
     ];
     for (const [ours, theirs] of pairs) expect([...ours].sort()).toEqual([...theirs].sort());
   });

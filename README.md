@@ -25,7 +25,7 @@ Agents that browse need more than a headless browser:
 - **They get stuck** on CAPTCHAs, 2FA prompts and judgment calls.
 - **You need to see what they did**, after the fact and live.
 
-BrowserHive handles all of that behind 43 MCP tools and a best in class admin dashboard.
+BrowserHive handles all of that behind 44 MCP tools and a best in class admin dashboard.
 
 ## Features
 

@@ -172,6 +172,30 @@ export async function openCliStorage(
         return [];
       }
     },
+    templateAccess: async () => {
+      let rows: unknown[];
+      try {
+        rows = handle.raw
+          .query('SELECT name, authorized_principals_json AS principals FROM templates')
+          .all();
+      } catch {
+        // A database from before schema v9 has no templates table.
+        return [];
+      }
+      return z
+        .array(z.object({ name: z.string(), principals: z.string() }))
+        .parse(rows)
+        .map((row) => {
+          let principals: readonly string[] | null = null;
+          try {
+            const parsed = z.array(z.string()).safeParse(JSON.parse(row.principals));
+            principals = parsed.success ? parsed.data : null;
+          } catch {
+            principals = null;
+          }
+          return { name: row.name, principals };
+        });
+    },
     createToken: async ({ principal, expiresInMs }) => {
       const created = await storage.auth.createToken(CLI_ISSUER, {
         ownerKind: 'agent',

@@ -237,4 +237,97 @@ export const SESSION_ERRORS = {
     resolution:
       "Use save_storage_state for a live session. A full-profile snapshot needs the browser's files released, which happens when the session closes.",
   }),
+  // --- Session templates (spec 13 §12, D-49…D-52). Messages, hints and details are agent-facing:
+  // they say what the session can and cannot do, never how templates work or that other sessions
+  // exist (spec 13 §5, pinned by `test/tools/template-wording.test.ts`). `cause` and `resolution`
+  // are operator documentation and may name the mechanism.
+  TEMPLATE_NOT_FOUND: defineError({
+    code: 'TEMPLATE_NOT_FOUND',
+    httpStatus: 404,
+    category: 'domain',
+    retryable: 'different_args',
+    title: 'Template not found',
+    message:
+      "No session template named '{template}'. Use list_templates to see the templates you can use.",
+    hint: 'Call list_templates and use one of the returned names.',
+    details: z.object({ template: z.string() }),
+    docs: true,
+    cause:
+      'No template has that name, the caller is not allowed to use it (its principal or harness is not in the template’s access rule), the template is still being set up (`recording`), or templates are turned off (`templates=false`). All four answer identically, so an agent cannot tell a template it may not use from one that does not exist (D-52).',
+    resolution:
+      'The operator sees the real reason in the template’s access tester and in the `template launch refused` log line; grant the caller access, finish the recording, or enable templates.',
+  }),
+  TEMPLATE_BUSY: defineError({
+    code: 'TEMPLATE_BUSY',
+    httpStatus: 429,
+    category: 'domain',
+    retryable: 'backoff',
+    title: 'Template busy',
+    // `{limit_text}`: capacity "Template '<name>' is at capacity."; tabs "This session has reached
+    // its tab limit; close a tab you no longer need."; pace "Actions on <site> are being paced."
+    message: '{limit_text} Retry in {retry_after_s} s.',
+    hint: 'Wait for the time given, then retry.',
+    details: z.object({
+      template: z.string(),
+      limit_kind: z.enum(['capacity', 'tabs', 'pace']),
+      limit_text: z.string(),
+      retry_after_ms: z.number().int().nonnegative(),
+      retry_after_s: z.number().int().nonnegative(),
+    }),
+    docs: true,
+    cause:
+      'The template is at its session cap (`max_concurrent`, further bounded by its sites’ packs), its browser holds `templateMaxPagesPerHost` agent pages, the session holds its share of them (`tabs`), or a site strategy paces actions (`pace`, spec 13 §6.3, §9.4).',
+    resolution:
+      'Close sessions or tabs that are no longer needed, or raise the template’s cap or `templateMaxPagesPerHost`.',
+  }),
+  TEMPLATE_UNAVAILABLE: defineError({
+    code: 'TEMPLATE_UNAVAILABLE',
+    httpStatus: 503,
+    category: 'domain',
+    retryable: 'backoff',
+    title: 'Template temporarily unavailable',
+    message: "Template '{template}' is temporarily unavailable. Retry in a few seconds.",
+    hint: 'Wait a few seconds, then retry.',
+    details: z.object({
+      template: z.string(),
+      reason: z.enum(['starting', 'restarting', 'recovering']),
+      retry_after_ms: z.number().int().nonnegative(),
+    }),
+    docs: true,
+    cause:
+      'The template’s browser is starting and did not finish within the launch budget (`starting`), is being drained for a recycle, restore or operator restart (`restarting`), or is restarting after a crash (`recovering`, spec 13 §3.2).',
+    resolution:
+      'Retry after `retry_after_ms`. A template that stays unavailable shows its browser state and last error on the template page.',
+  }),
+  TEMPLATE_DISABLED: defineError({
+    code: 'TEMPLATE_DISABLED',
+    httpStatus: 409,
+    category: 'domain',
+    retryable: 'after_operator',
+    title: 'Template disabled',
+    message: "Template '{template}' cannot be used until the operator fixes it.",
+    hint: 'Use another template, or retry after the operator has fixed this one.',
+    details: z.object({ template: z.string(), reason: z.enum(['disabled', 'needs_operator']) }),
+    docs: true,
+    cause:
+      'The operator disabled the template (`disabled`), or its browser cannot start until the operator acts (`needs_operator`: five failed starts, no display, an unreachable proxy or no sandbox under `sandbox=on`; the cause is shown on operator surfaces only).',
+    resolution:
+      'Enable the template, or fix the cause shown on the template page and restart its browser.',
+  }),
+  SESSION_SEALED: defineError({
+    code: 'SESSION_SEALED',
+    httpStatus: 403,
+    category: 'domain',
+    retryable: 'never',
+    title: 'Not available in this session',
+    message:
+      "{tool} is not available in this session: its sign-ins belong to the operator's session template.",
+    hint: 'Continue without it, or ask the operator to allow it for this template.',
+    details: z.object({ session_id: z.string(), tool: z.string() }),
+    docs: true,
+    cause:
+      'The session was launched from a sealed template: `set_cookies` (cookie writes) and `save_storage_state` (state export) are refused unless the operator unseals that flag for the template and the caller (spec 13 §5.4, D-51).',
+    resolution:
+      'Unseal the flag on the template’s Access tab, for every principal or only for the ones that need it.',
+  }),
 } as const;

@@ -56,6 +56,11 @@ export {
   InMemoryVaultAuditRepository,
 } from './in-memory-repos-facts.ts';
 
+import {
+  InMemoryTemplateRepository,
+  InMemoryTemplateSiteRepository,
+} from './in-memory-template-repos.ts';
+
 /**
  * A repository this bundle does not model. Any member access yields a function that throws, so a
  * test reaching an unmodelled port fails loudly instead of silently succeeding. The `as T` here is
@@ -325,6 +330,8 @@ export class InMemoryRepositories implements Repositories {
     (id) => [...this.sessions.rows.values()].filter((r) => r.connectionId === id).length,
   );
   readonly schemaMigrations = notImplemented<Repositories['schemaMigrations']>('schemaMigrations');
+  readonly templateSites = new InMemoryTemplateSiteRepository();
+  readonly templates = new InMemoryTemplateRepository(this.templateSites);
 
   constructor() {
     this.sessions = new InMemorySessionRepository((sessionId) => this.countsFor(sessionId));

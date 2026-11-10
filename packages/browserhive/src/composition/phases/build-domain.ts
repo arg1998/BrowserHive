@@ -37,6 +37,7 @@ import type { PhaseHandle } from '../unwind.ts';
 import { buildOperators } from './domain-operators.ts';
 import { buildOps, reconcile } from './domain-ops.ts';
 import { buildSessions } from './domain-sessions.ts';
+import { buildTemplates } from './domain-templates.ts';
 import { buildTools } from './domain-tools.ts';
 
 /** How often expired auth sessions, grants and rate buckets are swept. */
@@ -252,6 +253,16 @@ async function buildDomain(
     .reconcileRequests(repos.operatorRequests)
     .catch((err: unknown) => logger.warn('catch-up failed', { err: serializeError(err) }));
 
+  const templates = buildTemplates({
+    config,
+    host: hostFactsOf(ctx.input.host),
+    uow: storage.uow,
+    clock,
+    ids,
+    logger,
+    degradations,
+  });
+
   const tools = buildTools({
     config,
     transport,
@@ -264,6 +275,7 @@ async function buildDomain(
     vaultRedaction: operators.vaultRedaction,
     authStates: sessionParts.authStates,
     blocklist: sessionParts.blocklist,
+    templates,
     pageActions,
     redactor,
     bus,
@@ -309,6 +321,7 @@ async function buildDomain(
     reportSettings: ops.reportSettings,
     reportService: ops.reportService,
     publicUrl: ops.publicUrl,
+    templates,
     instanceId,
     preferences: ops.preferences,
     recorder: ops.recorder,

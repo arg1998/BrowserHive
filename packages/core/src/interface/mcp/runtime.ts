@@ -14,6 +14,8 @@ export interface RuntimeFacts {
   readonly vault: { readonly enabled: boolean; readonly backend: string | null };
   readonly dataDir: string;
   readonly persistenceMode: PersistenceMode;
+  /** `templates` (spec 08 §5.9): adds the `list_templates` sentence to the server instructions. */
+  readonly templates: boolean;
   /** `defaultChannel` / `defaultHeadless` baked into the `launch_session` schema (spec 02 §4). */
   readonly launchDefaults: { readonly channel: Channel; readonly headless: boolean };
 }

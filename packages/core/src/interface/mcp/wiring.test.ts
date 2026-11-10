@@ -16,7 +16,7 @@ afterEach(async () => {
 });
 
 describe('tool wiring', () => {
-  it('the registry is exactly ALL_TOOL_NAMES in registration order, in 13 packs', () => {
+  it('the registry is exactly ALL_TOOL_NAMES in registration order, in 14 packs', () => {
     expect(REGISTERED_TOOL_NAMES).toEqual(ALL_TOOL_NAMES);
     expect(TOOL_PACK_LIST.map((p) => p.id)).toEqual([
       'lifecycle',
@@ -32,6 +32,7 @@ describe('tool wiring', () => {
       'authStates',
       'attention',
       'vault',
+      'templates',
     ]);
     for (const pack of TOOL_PACK_LIST)
       for (const tool of pack.tools) expect(tool.pack).toBe(pack.id);

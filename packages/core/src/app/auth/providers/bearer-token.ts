@@ -7,7 +7,7 @@ import {
   principalFromRecord,
   type RequestPrincipal,
 } from '../../../domain/auth/principal.ts';
-import { parseScopes } from '../../../domain/auth/scopes.ts';
+import { resolveStoredScopes } from '../../../domain/auth/scopes.ts';
 import { parseToken } from '../../../domain/auth/token-format.ts';
 import type { AuthDeps } from '../types.ts';
 import { type AuthenticationProvider, unauthorized } from './provider.ts';
@@ -84,7 +84,7 @@ export function createBearerTokenProvider(
           credentialId: credential.credentialId,
           ...(credential.expiresAt !== null && { expiresAt: credential.expiresAt }),
         },
-        scopes: parseScopes(credential.scopes),
+        scopes: resolveStoredScopes(credential.scopes, principal.kind),
       });
     },
   };

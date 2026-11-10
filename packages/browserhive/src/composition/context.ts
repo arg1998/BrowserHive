@@ -48,6 +48,7 @@ import type {
   RuntimeFacts,
   SessionService,
   SystemStatusService,
+  TemplateService,
   ToolDispatcher,
   VaultRedaction,
   VaultService,
@@ -132,6 +133,8 @@ export interface DomainPart {
   readonly reportService: ReportService;
   /** The `publicUrl` check (spec 08 §5.8). */
   readonly publicUrl: PublicUrlChecker;
+  /** Session templates (spec 13). */
+  readonly templates: TemplateService;
   /** Random per start; `GET /health` reports it (D-37). */
   readonly instanceId: string;
   readonly preferences: PreferenceService;

@@ -3,11 +3,13 @@ import { z } from 'zod';
 import { LOGGING_KEYS, RECORDING_KEYS, TELEMETRY_KEYS } from './keys-observability.ts';
 import { SERVER_KEYS } from './keys-server.ts';
 import { SESSION_KEYS, STEALTH_KEYS } from './keys-sessions.ts';
+import { TEMPLATE_KEYS } from './keys-templates.ts';
 
-/** Every key schema, in help order (server, sessions, stealth, logging, recording, telemetry). */
+/** Every key schema, in help order (server, sessions and templates, stealth, logging, recording, telemetry). */
 export const CONFIG_SHAPE = {
   ...SERVER_KEYS,
   ...SESSION_KEYS,
+  ...TEMPLATE_KEYS,
   ...STEALTH_KEYS,
   ...LOGGING_KEYS,
   ...RECORDING_KEYS,

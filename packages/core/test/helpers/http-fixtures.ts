@@ -58,6 +58,8 @@ export function sessionRecord(overrides: Partial<SessionRecord> = {}): SessionRe
     harnessDeclared: null,
     sandboxed: null,
     browserVersion: null,
+    template: null,
+    sealed: null,
     ...overrides,
   };
 }

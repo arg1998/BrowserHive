@@ -11,6 +11,7 @@ export const COMMAND_NAMES = [
   'db',
   'admin',
   'channels',
+  'templates',
   'version',
   'help',
 ] as const;
@@ -363,6 +364,34 @@ export const COMMANDS: readonly CommandDescriptor[] = [
               'Sample notification: attention, attention-resolved, vault-confirm, tool-errors, crash, degraded, test, digest or anomaly.',
             defaultText: 'attention',
           },
+          ...remoteFlags,
+        ],
+      }),
+    ],
+    defaultSubcommand: ['list'],
+    args: [],
+  },
+  {
+    name: 'templates',
+    summary: 'List and delete session templates',
+    description:
+      'Talks to a running server over its REST API (--url, default the configured host and port) with an operator bearer (--token) or the dashboard cookie (--cookie). Creating and signing in to templates arrive in a later release; until then use the REST API.',
+    flags: [],
+    configKeys: ['host', 'port', 'config', 'color'],
+    subcommands: [
+      sub(['list'], 'List templates with their sites, status, browser state and sessions', {
+        flags: [json, ...remoteFlags],
+      }),
+      sub(['rm'], 'Delete a template and its browser profile (does not sign out at the sites)', {
+        args: [{ name: 'name', required: true, describe: 'Template name.' }],
+        flags: [
+          json,
+          {
+            name: 'force',
+            kind: 'boolean',
+            describe: 'Close the sessions launched from the template first.',
+          },
+          { name: 'yes', kind: 'boolean', describe: 'Skip the confirmation prompt.' },
           ...remoteFlags,
         ],
       }),

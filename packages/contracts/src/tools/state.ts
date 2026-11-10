@@ -31,7 +31,8 @@ export const GET_COOKIES = defineTool({
     "Return the session context's cookies, optionally filtered to those that would be sent " +
     'to the given URLs.',
   input: z.object({ session_id: z.string(), urls: z.array(z.string()).optional() }),
-  output: z.object({ cookies: z.array(Cookie) }),
+  // `sealed: true` only in a sealed template session, whose cookie values are empty (spec 13 §5.4).
+  output: z.object({ cookies: z.array(Cookie), sealed: z.literal(true).optional() }),
   annotations: annotations(true, false, true, false),
   pack: 'state',
   capability: 'read',
@@ -54,7 +55,7 @@ export const SET_COOKIES = defineTool({
   annotations: annotations(false, false, true, false),
   pack: 'state',
   capability: 'mutate',
-  errors: [...SESSION_ERRORS, 'INVALID_ARGUMENTS'],
+  errors: [...SESSION_ERRORS, 'INVALID_ARGUMENTS', 'SESSION_SEALED'],
   since: SINCE,
 });
 

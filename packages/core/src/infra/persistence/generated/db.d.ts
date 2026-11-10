@@ -369,10 +369,15 @@ export interface Sessions {
   persistence_mode: string;
   proxy_label: string | null;
   sandboxed: number | null;
+  sealed: number | null;
   session_id: string;
   slug: string;
   state: string;
   stealth: number;
+  template_id: string | null;
+  template_mode: string | null;
+  template_name: string | null;
+  template_version: number | null;
   tenant_id: string | null;
   vault_enabled: Generated<number>;
 }
@@ -388,6 +393,88 @@ export interface SystemEvents {
   resolved_at: number | null;
   seq: Generated<number>;
   severity: string;
+}
+
+export interface TemplateProbes {
+  at: number;
+  duration_ms: number;
+  final_url: string | null;
+  outcome: string;
+  reason: string;
+  seq: Generated<number | null>;
+  site_id: string;
+  template_id: string;
+  trigger: string;
+}
+
+export interface Templates {
+  agent_windows: Generated<string>;
+  authorized_principals_json: Generated<string>;
+  channel: string;
+  checkpoint_at: number | null;
+  checkpoint_size_bytes: number | null;
+  created_at: number;
+  current_version: number | null;
+  description: Generated<string>;
+  disabled_at: number | null;
+  display_name: string;
+  fingerprint: number;
+  harnesses_json: string | null;
+  headless: Generated<number>;
+  health_interval_ms: number;
+  humanize: number;
+  identity_json: string;
+  identity_observed_json: string | null;
+  last_used_at: number | null;
+  max_concurrent: Generated<number>;
+  name: string;
+  owner: string;
+  prelaunch_check: Generated<number>;
+  proxy_json: string | null;
+  status: string;
+  stealth: string;
+  template_id: string;
+  tenant_id: string | null;
+  unseal_json: Generated<string>;
+  updated_at: number;
+  version: Generated<number>;
+}
+
+export interface TemplateSites {
+  added_at: number;
+  auto_relogin: Generated<number>;
+  consecutive_inconclusive: Generated<number>;
+  device_bound: Generated<number>;
+  enabled: Generated<number>;
+  form_json: string | null;
+  health_changed_at: number | null;
+  health_checked_at: number | null;
+  health_reason: string | null;
+  health_state: Generated<string>;
+  learned_cookie_names_json: Generated<string>;
+  pack_id: string | null;
+  pack_version: number | null;
+  site_id: string;
+  stopped_at: number | null;
+  template_id: string;
+  vault_handle: string | null;
+  write_policy: string | null;
+}
+
+export interface TemplateVersions {
+  created_at: number;
+  created_by: string | null;
+  health_json: string;
+  key_id: string;
+  pinned: Generated<number>;
+  reason: string;
+  restored_from: number | null;
+  sha256: string;
+  size_bytes: number;
+  structure_sha256: string;
+  summary_json: string;
+  template_id: string;
+  version: number;
 }
 
 export interface ToolCalls {
@@ -491,6 +578,10 @@ export interface DB {
   screenshots: Screenshots;
   sessions: Sessions;
   system_events: SystemEvents;
+  template_probes: TemplateProbes;
+  template_sites: TemplateSites;
+  template_versions: TemplateVersions;
+  templates: Templates;
   tool_calls: ToolCalls;
   vault_access: VaultAccess;
   vault_bindings: VaultBindings;

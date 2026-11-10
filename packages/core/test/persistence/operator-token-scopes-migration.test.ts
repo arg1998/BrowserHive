@@ -11,8 +11,13 @@ import { FakeClock, FakeLogger, tempDir } from './helpers.ts';
 
 const FIXTURES = join(import.meta.dir, 'fixtures');
 
+/**
+ * Every scope of 0.2.x (the 19 up to `mcp:tools`; the template and site-pack scopes of schema v9
+ * are appended after them), as a 0.2.x token issued without `scopes` stored it.
+ */
+const FULL_V02 = Scope.options.slice(0, Scope.options.indexOf('mcp:tools') + 1);
 /** Every scope of 0.1.x, as a 0.1.x token issued without `scopes` stored it. */
-const FULL_V01 = Scope.options.filter((s) => s !== 'channels:read' && s !== 'channels:write');
+const FULL_V01 = FULL_V02.filter((s) => s !== 'channels:read' && s !== 'channels:write');
 
 /** Copies a fixture, lets `prepare` write to it at its own version, then opens it (migrating). */
 async function openCopy(
@@ -77,11 +82,11 @@ describe('migration 0008-operator-token-scopes', () => {
       // The first 0.2.0 migration reached this database at `upgradedAt`.
       raw.query('UPDATE schema_migrations SET applied_at = ? WHERE version = 3').run(upgradedAt);
       insertPrincipal(raw, 'bot', 'agent');
-      insertToken(raw, 'op-full', 'local', Scope.options, 3_000);
+      insertToken(raw, 'op-full', 'local', FULL_V02, 3_000);
       insertToken(raw, 'op-v01', 'local', FULL_V01, 1_000);
       insertToken(raw, 'op-v01-chosen', 'local', FULL_V01, 3_000);
       insertToken(raw, 'op-subset', 'local', ['system:read'], 1_000);
-      insertToken(raw, 'op-reordered', 'local', [...Scope.options].reverse(), 3_000);
+      insertToken(raw, 'op-reordered', 'local', [...FULL_V02].reverse(), 3_000);
       insertToken(raw, 'agent', 'bot', ['mcp:tools'], 1_000);
     });
     try {
@@ -92,7 +97,7 @@ describe('migration 0008-operator-token-scopes', () => {
         'op-v01': '[]',
         'op-v01-chosen': JSON.stringify(FULL_V01),
         'op-subset': '["system:read"]',
-        'op-reordered': JSON.stringify([...Scope.options].reverse()),
+        'op-reordered': JSON.stringify([...FULL_V02].reverse()),
         agent: '["mcp:tools"]',
       });
       const reader = handle.raw

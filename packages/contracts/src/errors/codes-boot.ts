@@ -278,4 +278,45 @@ export const BOOT_ERRORS = {
       'Chromium processes launched by an earlier BrowserHive survived its exit (crash or SIGKILL). Recorded as a boot-time degradation, never fatal.',
     resolution: 'Kill the listed processes; they are not adopted by the new server.',
   }),
+  TEMPLATE_HOST_FAILED: defineError({
+    code: 'TEMPLATE_HOST_FAILED',
+    httpStatus: 500,
+    category: 'boot',
+    retryable: 'never',
+    title: 'Template browser failed',
+    message: "The browser of template '{template_id}' cannot start ({reason}).",
+    hint: 'Fix the cause on the template page, then restart its browser.',
+    details: z.object({
+      template_id: z.string(),
+      reason: z.enum(['host_failed', 'no_display', 'proxy_unreachable', 'sandbox_unavailable']),
+      attempts: z.number().int().nonnegative(),
+    }),
+    docs: true,
+    exitCode: 1,
+    cause:
+      'A template host failed five consecutive starts within 30 minutes, found no display for a headed browser, could not reach its pinned proxy, or could not sandbox under `sandbox=on` (spec 13 §3.2). Recorded as a degradation; launches answer `TEMPLATE_DISABLED` until an operator restart clears it.',
+    resolution:
+      'Read the reason on the template page or in `doctor`; for `no_display` run under `xvfb-run -a` or set the template headless.',
+  }),
+  TEMPLATE_ROW_UNREADABLE: defineError({
+    code: 'TEMPLATE_ROW_UNREADABLE',
+    httpStatus: 500,
+    category: 'boot',
+    retryable: 'never',
+    title: 'Template row unreadable',
+    message:
+      "A stored row of template '{template_id}' cannot be read; agents do not see the template.",
+    hint: 'Check the template on the dashboard or with GET /api/v1/templates/{template_id}.',
+    details: z.object({
+      template_id: z.string(),
+      table: z.enum(['templates', 'template_sites']),
+      reason: z.string(),
+    }),
+    docs: true,
+    exitCode: 1,
+    cause:
+      'A `templates` or `template_sites` row holds a value this binary cannot read (a hand edit, a corrupt JSON column, an enum value from another build). `list_templates` leaves that template out instead of failing for every agent (spec 13 §5.1). Recorded as a degradation; it resolves on the next clean listing.',
+    resolution:
+      'Delete and recreate the template, or restore the database from a backup taken before the change.',
+  }),
 } as const;

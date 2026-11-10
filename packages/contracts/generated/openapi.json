@@ -145,6 +145,11 @@
               "PATH_NOT_ALLOWED",
               "AUTH_STATE_NOT_FOUND",
               "PROFILE_FILE_LOCKED",
+              "TEMPLATE_NOT_FOUND",
+              "TEMPLATE_BUSY",
+              "TEMPLATE_UNAVAILABLE",
+              "TEMPLATE_DISABLED",
+              "SESSION_SEALED",
               "EVALUATE_DISABLED",
               "ELEMENT_NOT_ACTIONABLE",
               "ELEMENT_NOT_FOUND",
@@ -186,6 +191,8 @@
               "DELIVERY_NOT_FOUND",
               "REPORT_NOT_FOUND",
               "INTERNAL_ERROR",
+              "TEMPLATE_NAME_TAKEN",
+              "TEMPLATE_IN_USE",
               "ADMIN_REQUIRES_HTTP",
               "INSECURE_BIND_REFUSED",
               "PORT_IN_USE",
@@ -203,6 +210,8 @@
               "UNHANDLED",
               "RETENTION_FAILED",
               "STALE_BROWSER_PROCESSES",
+              "TEMPLATE_HOST_FAILED",
+              "TEMPLATE_ROW_UNREADABLE",
               "UNAUTHORIZED",
               "INVALID_CREDENTIALS",
               "FORBIDDEN",
@@ -375,7 +384,12 @@
                     "channels:read",
                     "channels:write",
                     "preferences:write",
-                    "mcp:tools"
+                    "mcp:tools",
+                    "templates:read",
+                    "templates:write",
+                    "templates:login",
+                    "sitepacks:read",
+                    "sitepacks:write"
                   ]
                 }
               },
@@ -577,7 +591,12 @@
                       "channels:read",
                       "channels:write",
                       "preferences:write",
-                      "mcp:tools"
+                      "mcp:tools",
+                      "templates:read",
+                      "templates:write",
+                      "templates:login",
+                      "sitepacks:read",
+                      "sitepacks:write"
                     ]
                   }
                 },
@@ -670,7 +689,12 @@
                 "channels:read",
                 "channels:write",
                 "preferences:write",
-                "mcp:tools"
+                "mcp:tools",
+                "templates:read",
+                "templates:write",
+                "templates:login",
+                "sitepacks:read",
+                "sitepacks:write"
               ]
             },
             "minItems": 1
@@ -20625,6 +20649,2068 @@
           "build"
         ],
         "additionalProperties": false
+      },
+      "TemplatesPage": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "template_id": {
+                  "type": "string",
+                  "pattern": "^tp-[A-Za-z0-9_-]{10}$"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "display_name": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "recording",
+                    "ready",
+                    "disabled"
+                  ]
+                },
+                "channel": {
+                  "type": "string",
+                  "enum": [
+                    "chromium",
+                    "chrome",
+                    "edge"
+                  ]
+                },
+                "headless": {
+                  "type": "boolean"
+                },
+                "sites": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "site_id": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "health_state": {
+                        "type": "string",
+                        "enum": [
+                          "unknown",
+                          "signed_in",
+                          "signed_out",
+                          "challenged",
+                          "inconclusive"
+                        ]
+                      },
+                      "checked_at": {
+                        "type": [
+                          "integer",
+                          "null"
+                        ],
+                        "minimum": 0
+                      }
+                    },
+                    "required": [
+                      "site_id",
+                      "title",
+                      "health_state",
+                      "checked_at"
+                    ]
+                  }
+                },
+                "host": {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "stopped",
+                        "starting",
+                        "running",
+                        "draining",
+                        "crashed",
+                        "failed"
+                      ]
+                    },
+                    "since": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0
+                    },
+                    "pages": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "rss_bytes": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "since",
+                    "pages"
+                  ]
+                },
+                "in_use": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "cap": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "current_version": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "checkpoint_at": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "last_used_at": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "sealed": {
+                  "type": "boolean"
+                },
+                "identity_drift": {
+                  "type": "object",
+                  "properties": {
+                    "from": {
+                      "type": "string"
+                    },
+                    "to": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "from",
+                    "to"
+                  ]
+                }
+              },
+              "required": [
+                "template_id",
+                "name",
+                "display_name",
+                "status",
+                "channel",
+                "headless",
+                "sites",
+                "host",
+                "in_use",
+                "cap",
+                "current_version",
+                "checkpoint_at",
+                "last_used_at",
+                "sealed"
+              ]
+            }
+          },
+          "page": {
+            "type": "object",
+            "properties": {
+              "next_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "prev_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "limit": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "total": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "next_cursor",
+              "limit"
+            ]
+          },
+          "facets": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "value": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "count"
+                  ]
+                }
+              },
+              "host_state": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "value": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "count"
+                  ]
+                }
+              },
+              "health": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "value": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "count"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "status",
+              "host_state",
+              "health"
+            ]
+          },
+          "applied": {
+            "type": "object",
+            "properties": {
+              "filters": {
+                "type": "object",
+                "additionalProperties": {}
+              },
+              "sort": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  },
+                  "dir": {
+                    "type": "string",
+                    "enum": [
+                      "asc",
+                      "desc"
+                    ]
+                  }
+                },
+                "required": [
+                  "key",
+                  "dir"
+                ]
+              }
+            },
+            "required": [
+              "filters",
+              "sort"
+            ]
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "now": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "now"
+            ]
+          }
+        },
+        "required": [
+          "data",
+          "page",
+          "facets",
+          "applied",
+          "meta"
+        ]
+      },
+      "TemplateResponse": {
+        "type": "object",
+        "properties": {
+          "template": {
+            "type": "object",
+            "properties": {
+              "template_id": {
+                "type": "string",
+                "pattern": "^tp-[A-Za-z0-9_-]{10}$"
+              },
+              "name": {
+                "type": "string"
+              },
+              "display_name": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "recording",
+                  "ready",
+                  "disabled"
+                ]
+              },
+              "owner": {
+                "type": "string"
+              },
+              "sites": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "site_id": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "pack_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "pack_version": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "write_policy": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "enum": [
+                        "allow",
+                        "warn",
+                        "confirm",
+                        null
+                      ]
+                    },
+                    "vault_handle": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "auto_relogin": {
+                      "type": "boolean"
+                    },
+                    "form": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "username": {
+                          "type": "string"
+                        },
+                        "password": {
+                          "type": "string"
+                        },
+                        "submit": {
+                          "type": "string"
+                        },
+                        "next": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "username",
+                        "password"
+                      ]
+                    },
+                    "learned_cookie_names": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "health": {
+                      "type": "object",
+                      "properties": {
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "unknown",
+                            "signed_in",
+                            "signed_out",
+                            "challenged",
+                            "inconclusive"
+                          ]
+                        },
+                        "checked_at": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0
+                        },
+                        "changed_at": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0
+                        },
+                        "reason": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "consecutive_inconclusive": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "state",
+                        "checked_at",
+                        "changed_at",
+                        "reason",
+                        "consecutive_inconclusive"
+                      ]
+                    },
+                    "stopped_at": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0
+                    },
+                    "device_bound": {
+                      "type": "boolean"
+                    },
+                    "added_at": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "site_id",
+                    "title",
+                    "pack_id",
+                    "pack_version",
+                    "enabled",
+                    "write_policy",
+                    "vault_handle",
+                    "auto_relogin",
+                    "form",
+                    "learned_cookie_names",
+                    "health",
+                    "stopped_at",
+                    "device_bound",
+                    "added_at"
+                  ]
+                }
+              },
+              "identity": {
+                "type": "object",
+                "properties": {
+                  "seed": {
+                    "type": "string"
+                  },
+                  "locale": {
+                    "type": "string"
+                  },
+                  "languages": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "timezone_id": {
+                    "type": "string"
+                  },
+                  "country_code": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "geolocation": {
+                    "type": "object",
+                    "properties": {
+                      "latitude": {
+                        "type": "number",
+                        "minimum": -90,
+                        "maximum": 90
+                      },
+                      "longitude": {
+                        "type": "number",
+                        "minimum": -180,
+                        "maximum": 180
+                      },
+                      "accuracy": {
+                        "type": "number",
+                        "minimum": 0
+                      }
+                    },
+                    "required": [
+                      "latitude",
+                      "longitude"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "seed",
+                  "locale",
+                  "languages",
+                  "timezone_id",
+                  "country_code"
+                ]
+              },
+              "identity_observed": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "chrome_major": {
+                    "type": "string"
+                  },
+                  "user_agent": {
+                    "type": "string"
+                  },
+                  "ua_ch": {
+                    "type": "object",
+                    "properties": {
+                      "brands": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "brand": {
+                              "type": "string"
+                            },
+                            "version": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "brand",
+                            "version"
+                          ]
+                        }
+                      },
+                      "full_version_list": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "brand": {
+                              "type": "string"
+                            },
+                            "version": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "brand",
+                            "version"
+                          ]
+                        }
+                      },
+                      "platform": {
+                        "type": "string"
+                      },
+                      "platform_version": {
+                        "type": "string"
+                      },
+                      "architecture": {
+                        "type": "string"
+                      },
+                      "bitness": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "brands",
+                      "full_version_list",
+                      "platform",
+                      "platform_version",
+                      "architecture",
+                      "bitness"
+                    ]
+                  },
+                  "screen": {
+                    "type": "object",
+                    "properties": {
+                      "width": {
+                        "type": "integer"
+                      },
+                      "height": {
+                        "type": "integer"
+                      },
+                      "device_scale_factor": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "width",
+                      "height",
+                      "device_scale_factor"
+                    ]
+                  },
+                  "window": {
+                    "type": "object",
+                    "properties": {
+                      "width": {
+                        "type": "integer"
+                      },
+                      "height": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "width",
+                      "height"
+                    ]
+                  },
+                  "observed_at": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "chrome_major",
+                  "user_agent",
+                  "ua_ch",
+                  "screen",
+                  "window",
+                  "observed_at"
+                ]
+              },
+              "channel": {
+                "type": "string",
+                "enum": [
+                  "chromium",
+                  "chrome",
+                  "edge"
+                ]
+              },
+              "headless": {
+                "type": "boolean"
+              },
+              "stealth": {
+                "type": "string",
+                "enum": [
+                  "off",
+                  "standard",
+                  "max"
+                ]
+              },
+              "fingerprint": {
+                "type": "boolean"
+              },
+              "humanize": {
+                "type": "boolean"
+              },
+              "proxy": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "server": {
+                    "type": "string"
+                  },
+                  "bypass": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "username": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "password_env": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "label": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "server",
+                  "bypass",
+                  "username",
+                  "password_env",
+                  "label"
+                ]
+              },
+              "policy": {
+                "type": "object",
+                "properties": {
+                  "authorized_principals": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "harnesses": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "max_concurrent": {
+                    "type": "integer"
+                  },
+                  "unseal": {
+                    "type": "object",
+                    "properties": {
+                      "cookie_values": {
+                        "type": "boolean"
+                      },
+                      "evaluate": {
+                        "type": "boolean"
+                      },
+                      "cookie_writes": {
+                        "type": "boolean"
+                      },
+                      "state_export": {
+                        "type": "boolean"
+                      },
+                      "principals": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": [
+                      "cookie_values",
+                      "evaluate",
+                      "cookie_writes",
+                      "state_export"
+                    ]
+                  },
+                  "health_interval_ms": {
+                    "type": "integer"
+                  },
+                  "prelaunch_check": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "authorized_principals",
+                  "max_concurrent",
+                  "unseal",
+                  "health_interval_ms",
+                  "prelaunch_check"
+                ]
+              },
+              "agent_windows": {
+                "type": "string",
+                "enum": [
+                  "normal",
+                  "minimized"
+                ]
+              },
+              "current_version": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "checkpoint_at": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "checkpoint_size_bytes": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "version": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "created_at": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "updated_at": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "last_used_at": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "disabled_at": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              }
+            },
+            "required": [
+              "template_id",
+              "name",
+              "display_name",
+              "description",
+              "status",
+              "owner",
+              "sites",
+              "identity",
+              "identity_observed",
+              "channel",
+              "headless",
+              "stealth",
+              "fingerprint",
+              "humanize",
+              "proxy",
+              "policy",
+              "agent_windows",
+              "current_version",
+              "checkpoint_at",
+              "checkpoint_size_bytes",
+              "version",
+              "created_at",
+              "updated_at",
+              "last_used_at",
+              "disabled_at"
+            ]
+          }
+        },
+        "required": [
+          "template"
+        ]
+      },
+      "TemplateInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{1,31}$"
+          },
+          "display_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "sites": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "site_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 253,
+                  "pattern": "^[a-z0-9.-]+$"
+                },
+                "write_policy": {
+                  "type": "string",
+                  "enum": [
+                    "allow",
+                    "warn",
+                    "confirm"
+                  ]
+                }
+              },
+              "required": [
+                "site_id"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 1,
+            "maxItems": 16
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "chromium",
+              "chrome",
+              "edge"
+            ]
+          },
+          "headless": {
+            "type": "boolean"
+          },
+          "stealth": {
+            "type": "string",
+            "enum": [
+              "off",
+              "standard",
+              "max"
+            ]
+          },
+          "fingerprint": {
+            "type": "boolean"
+          },
+          "humanize": {
+            "type": "boolean"
+          },
+          "proxy": {
+            "type": "object",
+            "properties": {
+              "server": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2048
+              },
+              "bypass": {
+                "type": "string",
+                "maxLength": 2048
+              },
+              "username": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "password_env": {
+                "type": "string",
+                "maxLength": 128,
+                "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              }
+            },
+            "required": [
+              "server"
+            ],
+            "additionalProperties": false
+          },
+          "locale": {
+            "type": "string",
+            "maxLength": 35,
+            "pattern": "^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$"
+          },
+          "timezone_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "geolocation": {
+            "type": "object",
+            "properties": {
+              "latitude": {
+                "type": "number",
+                "minimum": -90,
+                "maximum": 90
+              },
+              "longitude": {
+                "type": "number",
+                "minimum": -180,
+                "maximum": 180
+              },
+              "accuracy": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "latitude",
+              "longitude"
+            ],
+            "additionalProperties": false
+          },
+          "agent_windows": {
+            "type": "string",
+            "enum": [
+              "normal",
+              "minimized"
+            ]
+          },
+          "policy": {
+            "type": "object",
+            "properties": {
+              "authorized_principals": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "maxItems": 64
+              },
+              "harnesses": {
+                "type": [
+                  "array",
+                  "null"
+                ],
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64,
+                  "pattern": "^[^\\u0000-\\u001f\\u007f]*$"
+                },
+                "maxItems": 32
+              },
+              "max_concurrent": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "unseal": {
+                "type": "object",
+                "properties": {
+                  "cookie_values": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "evaluate": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "cookie_writes": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "state_export": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "principals": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128
+                    },
+                    "maxItems": 64
+                  }
+                },
+                "additionalProperties": false
+              },
+              "health_interval_ms": {
+                "type": "integer",
+                "minimum": 1800000,
+                "maximum": 604800000
+              },
+              "prelaunch_check": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "name",
+          "sites"
+        ],
+        "additionalProperties": false
+      },
+      "TemplateDetailResponse": {
+        "type": "object",
+        "properties": {
+          "template": {
+            "type": "object",
+            "properties": {
+              "template_id": {
+                "type": "string",
+                "pattern": "^tp-[A-Za-z0-9_-]{10}$"
+              },
+              "name": {
+                "type": "string"
+              },
+              "display_name": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "recording",
+                  "ready",
+                  "disabled"
+                ]
+              },
+              "owner": {
+                "type": "string"
+              },
+              "sites": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "site_id": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "pack_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "pack_version": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "write_policy": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "enum": [
+                        "allow",
+                        "warn",
+                        "confirm",
+                        null
+                      ]
+                    },
+                    "vault_handle": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "auto_relogin": {
+                      "type": "boolean"
+                    },
+                    "form": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "username": {
+                          "type": "string"
+                        },
+                        "password": {
+                          "type": "string"
+                        },
+                        "submit": {
+                          "type": "string"
+                        },
+                        "next": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "username",
+                        "password"
+                      ]
+                    },
+                    "learned_cookie_names": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "health": {
+                      "type": "object",
+                      "properties": {
+                        "state": {
+                          "type": "string",
+                          "enum": [
+                            "unknown",
+                            "signed_in",
+                            "signed_out",
+                            "challenged",
+                            "inconclusive"
+                          ]
+                        },
+                        "checked_at": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0
+                        },
+                        "changed_at": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ],
+                          "minimum": 0
+                        },
+                        "reason": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "consecutive_inconclusive": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "state",
+                        "checked_at",
+                        "changed_at",
+                        "reason",
+                        "consecutive_inconclusive"
+                      ]
+                    },
+                    "stopped_at": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0
+                    },
+                    "device_bound": {
+                      "type": "boolean"
+                    },
+                    "added_at": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "site_id",
+                    "title",
+                    "pack_id",
+                    "pack_version",
+                    "enabled",
+                    "write_policy",
+                    "vault_handle",
+                    "auto_relogin",
+                    "form",
+                    "learned_cookie_names",
+                    "health",
+                    "stopped_at",
+                    "device_bound",
+                    "added_at"
+                  ]
+                }
+              },
+              "identity": {
+                "type": "object",
+                "properties": {
+                  "seed": {
+                    "type": "string"
+                  },
+                  "locale": {
+                    "type": "string"
+                  },
+                  "languages": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "timezone_id": {
+                    "type": "string"
+                  },
+                  "country_code": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "geolocation": {
+                    "type": "object",
+                    "properties": {
+                      "latitude": {
+                        "type": "number",
+                        "minimum": -90,
+                        "maximum": 90
+                      },
+                      "longitude": {
+                        "type": "number",
+                        "minimum": -180,
+                        "maximum": 180
+                      },
+                      "accuracy": {
+                        "type": "number",
+                        "minimum": 0
+                      }
+                    },
+                    "required": [
+                      "latitude",
+                      "longitude"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "seed",
+                  "locale",
+                  "languages",
+                  "timezone_id",
+                  "country_code"
+                ]
+              },
+              "identity_observed": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "chrome_major": {
+                    "type": "string"
+                  },
+                  "user_agent": {
+                    "type": "string"
+                  },
+                  "ua_ch": {
+                    "type": "object",
+                    "properties": {
+                      "brands": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "brand": {
+                              "type": "string"
+                            },
+                            "version": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "brand",
+                            "version"
+                          ]
+                        }
+                      },
+                      "full_version_list": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "brand": {
+                              "type": "string"
+                            },
+                            "version": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "brand",
+                            "version"
+                          ]
+                        }
+                      },
+                      "platform": {
+                        "type": "string"
+                      },
+                      "platform_version": {
+                        "type": "string"
+                      },
+                      "architecture": {
+                        "type": "string"
+                      },
+                      "bitness": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "brands",
+                      "full_version_list",
+                      "platform",
+                      "platform_version",
+                      "architecture",
+                      "bitness"
+                    ]
+                  },
+                  "screen": {
+                    "type": "object",
+                    "properties": {
+                      "width": {
+                        "type": "integer"
+                      },
+                      "height": {
+                        "type": "integer"
+                      },
+                      "device_scale_factor": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "width",
+                      "height",
+                      "device_scale_factor"
+                    ]
+                  },
+                  "window": {
+                    "type": "object",
+                    "properties": {
+                      "width": {
+                        "type": "integer"
+                      },
+                      "height": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "width",
+                      "height"
+                    ]
+                  },
+                  "observed_at": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "chrome_major",
+                  "user_agent",
+                  "ua_ch",
+                  "screen",
+                  "window",
+                  "observed_at"
+                ]
+              },
+              "channel": {
+                "type": "string",
+                "enum": [
+                  "chromium",
+                  "chrome",
+                  "edge"
+                ]
+              },
+              "headless": {
+                "type": "boolean"
+              },
+              "stealth": {
+                "type": "string",
+                "enum": [
+                  "off",
+                  "standard",
+                  "max"
+                ]
+              },
+              "fingerprint": {
+                "type": "boolean"
+              },
+              "humanize": {
+                "type": "boolean"
+              },
+              "proxy": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "server": {
+                    "type": "string"
+                  },
+                  "bypass": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "username": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "password_env": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "label": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "server",
+                  "bypass",
+                  "username",
+                  "password_env",
+                  "label"
+                ]
+              },
+              "policy": {
+                "type": "object",
+                "properties": {
+                  "authorized_principals": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "harnesses": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "max_concurrent": {
+                    "type": "integer"
+                  },
+                  "unseal": {
+                    "type": "object",
+                    "properties": {
+                      "cookie_values": {
+                        "type": "boolean"
+                      },
+                      "evaluate": {
+                        "type": "boolean"
+                      },
+                      "cookie_writes": {
+                        "type": "boolean"
+                      },
+                      "state_export": {
+                        "type": "boolean"
+                      },
+                      "principals": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": [
+                      "cookie_values",
+                      "evaluate",
+                      "cookie_writes",
+                      "state_export"
+                    ]
+                  },
+                  "health_interval_ms": {
+                    "type": "integer"
+                  },
+                  "prelaunch_check": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "authorized_principals",
+                  "max_concurrent",
+                  "unseal",
+                  "health_interval_ms",
+                  "prelaunch_check"
+                ]
+              },
+              "agent_windows": {
+                "type": "string",
+                "enum": [
+                  "normal",
+                  "minimized"
+                ]
+              },
+              "current_version": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "checkpoint_at": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "checkpoint_size_bytes": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "version": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "created_at": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "updated_at": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "last_used_at": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "disabled_at": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              }
+            },
+            "required": [
+              "template_id",
+              "name",
+              "display_name",
+              "description",
+              "status",
+              "owner",
+              "sites",
+              "identity",
+              "identity_observed",
+              "channel",
+              "headless",
+              "stealth",
+              "fingerprint",
+              "humanize",
+              "proxy",
+              "policy",
+              "agent_windows",
+              "current_version",
+              "checkpoint_at",
+              "checkpoint_size_bytes",
+              "version",
+              "created_at",
+              "updated_at",
+              "last_used_at",
+              "disabled_at"
+            ]
+          },
+          "host": {
+            "type": "object",
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": [
+                  "stopped",
+                  "starting",
+                  "running",
+                  "draining",
+                  "crashed",
+                  "failed"
+                ]
+              },
+              "since": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "started_at": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "restarts": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "last_error": {
+                "type": "string"
+              },
+              "pages": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "parked_pages": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "rss_bytes": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "recycle_at": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "sandboxed": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              },
+              "profile_secrets": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "state",
+              "since",
+              "started_at",
+              "restarts",
+              "pages",
+              "parked_pages",
+              "sandboxed",
+              "profile_secrets"
+            ]
+          },
+          "sites": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "site_id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "pack_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "pack_version": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "enabled": {
+                  "type": "boolean"
+                },
+                "write_policy": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "enum": [
+                    "allow",
+                    "warn",
+                    "confirm",
+                    null
+                  ]
+                },
+                "vault_handle": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "auto_relogin": {
+                  "type": "boolean"
+                },
+                "form": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "properties": {
+                    "username": {
+                      "type": "string"
+                    },
+                    "password": {
+                      "type": "string"
+                    },
+                    "submit": {
+                      "type": "string"
+                    },
+                    "next": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "username",
+                    "password"
+                  ]
+                },
+                "learned_cookie_names": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "health": {
+                  "type": "object",
+                  "properties": {
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "unknown",
+                        "signed_in",
+                        "signed_out",
+                        "challenged",
+                        "inconclusive"
+                      ]
+                    },
+                    "checked_at": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0
+                    },
+                    "changed_at": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0
+                    },
+                    "reason": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "consecutive_inconclusive": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "checked_at",
+                    "changed_at",
+                    "reason",
+                    "consecutive_inconclusive"
+                  ]
+                },
+                "stopped_at": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0
+                },
+                "device_bound": {
+                  "type": "boolean"
+                },
+                "added_at": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "site_id",
+                "title",
+                "pack_id",
+                "pack_version",
+                "enabled",
+                "write_policy",
+                "vault_handle",
+                "auto_relogin",
+                "form",
+                "learned_cookie_names",
+                "health",
+                "stopped_at",
+                "device_bound",
+                "added_at"
+              ]
+            }
+          },
+          "sessions_live": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "parked_pages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "target_id": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "opened_at": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "target_id",
+                "url",
+                "title",
+                "opened_at"
+              ]
+            }
+          },
+          "shared_windows": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "window_id": {
+                  "type": "integer"
+                },
+                "session_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "window_id",
+                "session_ids"
+              ]
+            }
+          },
+          "unlisted_domains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "now": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "template",
+          "host",
+          "sites",
+          "sessions_live",
+          "parked_pages",
+          "shared_windows",
+          "unlisted_domains",
+          "now"
+        ]
+      },
+      "DeleteTemplateResponse": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "closed_sessions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "deleted_bytes": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "ok",
+          "closed_sessions",
+          "deleted_bytes"
+        ]
       }
     },
     "parameters": {}
@@ -34280,6 +36366,537 @@
           },
           "413": {
             "description": "PAYLOAD_TOO_LARGE",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/templates": {
+      "get": {
+        "operationId": "listTemplates",
+        "tags": [
+          "templates"
+        ],
+        "summary": "Every session template with its sites, browser state, live sessions and cap; facets by status, browser state and site health.",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-browserhive-scope": "templates:read",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "desc"
+            },
+            "required": false,
+            "name": "dir",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "required": false,
+            "name": "total",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "name",
+                "created_at",
+                "last_used_at",
+                "in_use"
+              ],
+              "default": "name"
+            },
+            "required": false,
+            "name": "sort",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "string",
+                "enum": [
+                  "recording",
+                  "ready",
+                  "disabled"
+                ]
+              },
+              "minItems": 1
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "string",
+                "enum": [
+                  "stopped",
+                  "starting",
+                  "running",
+                  "draining",
+                  "crashed",
+                  "failed"
+                ]
+              },
+              "minItems": 1
+            },
+            "required": false,
+            "name": "host_state",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 253
+            },
+            "required": false,
+            "name": "site",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "required": false,
+            "name": "q",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Every session template with its sites, browser state, live sessions and cap; facets by status, browser state and site health.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplatesPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, PASSWORD_CHANGE_REQUIRED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createTemplate",
+        "tags": [
+          "templates"
+        ],
+        "summary": "Create a template in `recording` with its sites, pinned identity and access rule. Under auth=token `policy.authorized_principals` is required (`[]` = every agent).",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-browserhive-scope": "templates:write",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TemplateInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Create a template in `recording` with its sites, pinned identity and access rule. Under auth=token `policy.authorized_principals` is required (`[]` = every agent).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, PASSWORD_CHANGE_REQUIRED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "TEMPLATE_NAME_TAKEN",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "PAYLOAD_TOO_LARGE",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/templates/{template_id}": {
+      "get": {
+        "operationId": "getTemplate",
+        "tags": [
+          "templates"
+        ],
+        "summary": "One template with its browser, sites, live session count, other windows and the windows shared by several sessions.",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-browserhive-scope": "templates:read",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^tp-[A-Za-z0-9_-]{10}$"
+            },
+            "required": true,
+            "name": "template_id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One template with its browser, sites, live session count, other windows and the windows shared by several sessions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateDetailResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, PASSWORD_CHANGE_REQUIRED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "TEMPLATE_NOT_FOUND",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteTemplate",
+        "tags": [
+          "templates"
+        ],
+        "summary": "Delete a template: stops its browser and deletes its directory. With live sessions it needs force=true, which closes them. Deleting does not sign out at the sites.",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-browserhive-scope": "templates:write",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^tp-[A-Za-z0-9_-]{10}$"
+            },
+            "required": true,
+            "name": "template_id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "required": false,
+            "name": "force",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Delete a template: stops its browser and deletes its directory. With live sessions it needs force=true, which closes them. Deleting does not sign out at the sites.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteTemplateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, PASSWORD_CHANGE_REQUIRED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "TEMPLATE_NOT_FOUND",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "TEMPLATE_IN_USE",
             "content": {
               "application/problem+json": {
                 "schema": {

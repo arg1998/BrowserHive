@@ -163,6 +163,11 @@ export const HTTP_ENDPOINTS: readonly HttpEndpoint[] = [
   ep('getPreferences', 'get', '/me/preferences', null),
   ep('putPreferences', 'put', '/me/preferences', 'preferences:write'),
   ep('search', 'get', '/search', 'sessions:read'),
+  // spec 13 §11.1 session templates (T1a; the other template routes arrive with T1a-3 and T1b)
+  ep('listTemplates', 'get', '/templates', 'templates:read'),
+  ep('createTemplate', 'post', '/templates', 'templates:write'),
+  ep('getTemplate', 'get', '/templates/{template_id}', 'templates:read'),
+  ep('deleteTemplate', 'delete', '/templates/{template_id}', 'templates:write'),
   // §4.9 client errors
   ep('reportClientError', 'post', '/client-errors', null),
   // §6 realtime upgrade (auth runs at upgrade; scopes are checked per WS command)

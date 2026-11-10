@@ -27,20 +27,27 @@ function wireArgs(args: ToolArgs<'launch_session'>): LaunchSessionWireArgs {
   };
 }
 
-/** `launch_session`: the schema bakes in `defaultChannel`/`defaultHeadless` (spec 02 §4). */
+/**
+ * `launch_session`: the schema bakes in `defaultChannel`/`defaultHeadless` (spec 02 §4). With
+ * `template`, the template service resolves the template, checks access and the option rules, and
+ * hands the launch to the template runtime (spec 13 §3.7, §5.2, §5.3).
+ */
 export const launchSession = defineTool('launch_session', {
   input: (runtime) => launchSessionInput(runtime.launchDefaults),
   policies: [],
   async handler(ctx, args) {
-    const sessions = ctx.services.sessions;
+    const { sessions, templates } = ctx.services;
+    const input = createSessionInputFromWire(wireArgs(args), ctx.connectionId, ctx.client);
+    const template = args.template;
     const session = await drive(ctx, {}, () =>
-      sessions.create(
-        createSessionInputFromWire(wireArgs(args), ctx.connectionId, ctx.client),
-        ctx.principal,
-        {
-          signal: ctx.signal,
-        },
-      ),
+      template === undefined
+        ? sessions.create(input, ctx.principal, { signal: ctx.signal })
+        : templates.launch(
+            template,
+            input,
+            { principal: ctx.principal, client: ctx.client },
+            ctx.signal,
+          ),
     );
     return json(sessions.metadata(session));
   },

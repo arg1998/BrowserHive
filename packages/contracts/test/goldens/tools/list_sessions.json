@@ -20,7 +20,11 @@
         },
         "channel": {
           "type": "string",
-          "enum": ["chromium", "chrome", "edge"]
+          "enum": [
+            "chromium",
+            "chrome",
+            "edge"
+          ]
         },
         "incognito": {
           "type": "boolean"
@@ -30,10 +34,17 @@
         },
         "persistence_mode": {
           "type": "string",
-          "enum": ["memory", "persistent", "storage-state"]
+          "enum": [
+            "memory",
+            "persistent",
+            "storage-state"
+          ]
         },
         "current_url": {
-          "type": ["string", "null"]
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "created_at": {
           "type": "number"
@@ -45,7 +56,10 @@
           "type": "number"
         },
         "lease_paused_at": {
-          "type": ["number", "null"]
+          "type": [
+            "number",
+            "null"
+          ]
         },
         "disable_evaluate": {
           "type": "boolean"
@@ -82,7 +96,10 @@
                         "type": "string"
                       }
                     },
-                    "required": ["brand", "version"],
+                    "required": [
+                      "brand",
+                      "version"
+                    ],
                     "additionalProperties": false
                   }
                 },
@@ -110,17 +127,29 @@
                           }
                         },
                         "countryCode": {
-                          "type": ["string", "null"]
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         },
                         "timezoneId": {
                           "type": "string"
                         },
                         "source": {
                           "type": "string",
-                          "enum": ["host", "proxy"]
+                          "enum": [
+                            "host",
+                            "proxy"
+                          ]
                         }
                       },
-                      "required": ["locale", "languages", "countryCode", "timezoneId", "source"],
+                      "required": [
+                        "locale",
+                        "languages",
+                        "countryCode",
+                        "timezoneId",
+                        "source"
+                      ],
                       "additionalProperties": false
                     },
                     {
@@ -143,7 +172,10 @@
                               "type": "number"
                             }
                           },
-                          "required": ["width", "height"],
+                          "required": [
+                            "width",
+                            "height"
+                          ],
                           "additionalProperties": false
                         },
                         "viewport": {
@@ -156,14 +188,21 @@
                               "type": "number"
                             }
                           },
-                          "required": ["width", "height"],
+                          "required": [
+                            "width",
+                            "height"
+                          ],
                           "additionalProperties": false
                         },
                         "deviceScaleFactor": {
                           "type": "number"
                         }
                       },
-                      "required": ["screen", "viewport", "deviceScaleFactor"],
+                      "required": [
+                        "screen",
+                        "viewport",
+                        "deviceScaleFactor"
+                      ],
                       "additionalProperties": false
                     },
                     {
@@ -189,7 +228,49 @@
           ]
         },
         "proxy_label": {
-          "type": ["string", "null"]
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "template": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "sites": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "site": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "unknown",
+                      "signed_in",
+                      "signed_out",
+                      "challenged",
+                      "inconclusive"
+                    ]
+                  }
+                },
+                "required": [
+                  "site",
+                  "status"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "name",
+            "sites"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [

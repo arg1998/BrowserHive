@@ -13,6 +13,11 @@ import type {
   ToolCallRecord,
   VaultAccessRecord,
 } from '../../src/ports/persistence/records.ts';
+import {
+  type TemplateRecord,
+  type TemplateSiteRecord,
+  UNKNOWN_SITE_HEALTH,
+} from '../../src/ports/persistence/records-templates.ts';
 
 /** A settable clock; `sleep` resolves immediately after advancing. */
 export class FakeClock implements Clock {
@@ -104,6 +109,83 @@ export function sessionRecord(overrides: Partial<SessionRecord> = {}): SessionRe
     harnessDeclared: null,
     sandboxed: null,
     browserVersion: null,
+    template: null,
+    sealed: null,
+    ...overrides,
+  };
+}
+
+/** The template id the fixtures use. */
+export const TEMPLATE_ID = 'tp-fixture001';
+
+/** A template record with sensible defaults (spec 13 §2.1). */
+export function templateRecord(overrides: Partial<TemplateRecord> = {}): TemplateRecord {
+  return {
+    templateId: TEMPLATE_ID,
+    name: 'job-hunt',
+    displayName: 'Job hunt',
+    description: 'Signed in to the job sites.',
+    status: 'ready',
+    owner: 'local',
+    tenantId: null,
+    channel: 'chromium',
+    headless: false,
+    stealth: 'standard',
+    fingerprint: false,
+    humanize: false,
+    identity: {
+      seed: 'a'.repeat(21),
+      locale: 'en-CA',
+      languages: ['en-CA', 'en'],
+      timezoneId: 'America/Toronto',
+      countryCode: 'CA',
+    },
+    identityObserved: null,
+    proxy: null,
+    agentWindows: 'normal',
+    authorizedPrincipals: [],
+    harnesses: null,
+    maxConcurrent: 5,
+    unseal: {
+      cookieValues: false,
+      evaluate: false,
+      cookieWrites: false,
+      stateExport: false,
+      principals: null,
+    },
+    healthIntervalMs: 21_600_000,
+    prelaunchCheck: true,
+    currentVersion: null,
+    checkpointAt: null,
+    checkpointSizeBytes: null,
+    version: 1,
+    createdAt: 1_700_000_000_000,
+    updatedAt: 1_700_000_000_000,
+    lastUsedAt: null,
+    disabledAt: null,
+    ...overrides,
+  };
+}
+
+/** A template site record with sensible defaults (spec 13 §2.3). */
+export function templateSiteRecord(
+  overrides: Partial<TemplateSiteRecord> = {},
+): TemplateSiteRecord {
+  return {
+    templateId: TEMPLATE_ID,
+    siteId: 'site-a.test',
+    packId: null,
+    packVersion: null,
+    enabled: true,
+    writePolicy: null,
+    vaultHandle: null,
+    autoRelogin: false,
+    form: null,
+    learnedCookieNames: [],
+    health: UNKNOWN_SITE_HEALTH,
+    stoppedAt: null,
+    deviceBound: false,
+    addedAt: 1_700_000_000_000,
     ...overrides,
   };
 }

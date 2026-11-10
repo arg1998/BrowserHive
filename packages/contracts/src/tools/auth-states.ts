@@ -31,7 +31,7 @@ export const SAVE_STORAGE_STATE = defineTool({
   annotations: annotations(false, false, true, false),
   pack: 'authStates',
   capability: 'mutate',
-  errors: [...SESSION_ERRORS, 'PATH_NOT_ALLOWED'],
+  errors: [...SESSION_ERRORS, 'PATH_NOT_ALLOWED', 'SESSION_SEALED'],
   since: SINCE,
 });
 

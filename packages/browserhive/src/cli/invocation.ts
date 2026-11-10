@@ -129,6 +129,19 @@ export type Invocation =
       readonly json: boolean;
       readonly remote: RemoteTarget;
     }
+  | {
+      readonly command: 'templates-list';
+      readonly json: boolean;
+      readonly remote: RemoteTarget;
+    }
+  | {
+      readonly command: 'templates-rm';
+      readonly name: string;
+      readonly force: boolean;
+      readonly yes: boolean;
+      readonly json: boolean;
+      readonly remote: RemoteTarget;
+    }
   | { readonly command: 'version'; readonly json: boolean };
 
 /** Help topic: the whole CLI, one command, or one subcommand. */

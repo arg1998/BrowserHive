@@ -1,4 +1,4 @@
-/** @module contracts/tools — the frozen 43-tool catalog: contracts, names, packs and JSON Schema helpers */
+/** @module contracts/tools — the 44-tool catalog (43 frozen by D-12, plus `list_templates`, D-49): contracts, names, packs and JSON Schema helpers */
 import { z } from 'zod';
 import { GET_ATTENTION_RESULT, REQUEST_ATTENTION } from './attention.ts';
 import { LIST_SAVED_AUTHS, SAVE_FULL_PROFILE, SAVE_STORAGE_STATE } from './auth-states.ts';
@@ -20,6 +20,7 @@ import { CLOSE_SESSION, LAUNCH_SESSION, LIST_SESSIONS } from './lifecycle.ts';
 import { GO_BACK, GO_FORWARD, NAVIGATE, RELOAD, WAIT_FOR_URL } from './navigation.ts';
 import { GET_COOKIES, SET_COOKIES, SET_EXTRA_HTTP_HEADERS, SET_VIEWPORT } from './state.ts';
 import { CLOSE_TAB, LIST_TABS, NEW_TAB, SWITCH_TAB } from './tabs.ts';
+import { LIST_TEMPLATES } from './templates.ts';
 import type { ToolContract, ToolPackId } from './types.ts';
 import { VAULT_FILL, VAULT_LIST_AVAILABLE } from './vault.ts';
 import { WAIT_FOR_LOAD_STATE, WAIT_FOR_SELECTOR } from './waits.ts';
@@ -72,11 +73,12 @@ const ORDERED_CONTRACTS = [
   GET_ATTENTION_RESULT,
   VAULT_LIST_AVAILABLE,
   VAULT_FILL,
+  LIST_TEMPLATES,
 ] as const;
 
 type AnyContract = (typeof ORDERED_CONTRACTS)[number];
 
-/** Union of the 43 frozen tool names. */
+/** Union of the 44 tool names. */
 export type ToolName = AnyContract['name'];
 
 /** The contract for tool `N`, with its precise input/output schema types. */
@@ -107,13 +109,13 @@ function indexByName(list: readonly AnyContract[]): ContractRecord {
 /** Contracts keyed by name. */
 export const TOOL_CONTRACTS: ContractRecord = indexByName(ORDERED_CONTRACTS);
 
-/** The 43 names in registration order (pinned by the golden and the stdio handshake test). */
+/** The 44 names in registration order (pinned by the golden and the stdio handshake test). */
 export const ALL_TOOL_NAMES: readonly ToolName[] = ORDERED_CONTRACTS.map((c) => c.name);
 
 /** Zod schema of a tool name (for parsing wire input). */
 export const ToolNameSchema = z.enum(ALL_TOOL_NAMES as [ToolName, ...ToolName[]]);
 
-/** Whether `value` names one of the 43 tools. */
+/** Whether `value` names one of the 44 tools. */
 export function isToolName(value: string): value is ToolName {
   return Object.hasOwn(TOOL_CONTRACTS, value);
 }
@@ -135,6 +137,7 @@ function groupByPack(list: readonly AnyContract[]): {
     authStates: [],
     attention: [],
     vault: [],
+    templates: [],
   };
   for (const contract of list) groups[contract.pack].push(contract.name);
   return groups;
@@ -178,15 +181,30 @@ export { AUTH_NAME_RE, SavedAuthEntry, SavedAuthResult } from './auth-states.ts'
 export {
   BASE_LAUNCH_DEFAULTS,
   BrowserContextOptions,
+  LAUNCH_SESSION_DESCRIPTION,
   LaunchOptions,
   type LaunchSessionDefaults,
   launchSessionInput,
+  PER_SESSION_TEMPLATE_CONTEXT_OPTIONS,
   SLUG_RE,
+  TEMPLATE_PARAM_DESCRIPTION,
 } from './lifecycle.ts';
 export { AppliedIdentity, SessionMetadata } from './session-metadata.ts';
 export { SESSION_ERRORS, Selector, TabId, Timeout, WaitUntil } from './shared.ts';
 export { Cookie, CookieInput } from './state.ts';
 export { TabSummary } from './tabs.ts';
+export {
+  AgentTemplate,
+  AgentTemplateSite,
+  LIST_TEMPLATES_DESCRIPTION,
+  SessionTemplateInfo,
+  TEMPLATE_BUSY_LIMIT_TEXT,
+  TEMPLATE_NAME_RE,
+  TEMPLATE_VAULT_NOTE,
+  TEMPLATES_SERVER_INSTRUCTION,
+  TEMPLATES_SINCE,
+  templateFixesOptionText,
+} from './templates.ts';
 export {
   defineTool,
   type ToolAnnotations,

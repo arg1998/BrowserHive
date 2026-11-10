@@ -1,4 +1,4 @@
-/** @module interface/mcp/tools/checklist.test — fails when any of the 43 tools lacks a successful execution test (`executeTool(h, '<name>'` in a tools/*.test.ts file). */
+/** @module interface/mcp/tools/checklist.test — fails when any of the 44 tools lacks a successful execution test (`executeTool(h, '<name>'` in a tools/*.test.ts file). */
 
 import { describe, expect, it } from 'bun:test';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -17,6 +17,6 @@ describe('tool execution checklist (spec 09 §3.2)', () => {
     );
     const missing = ALL_TOOL_NAMES.filter((name) => !executed.has(name));
     expect(missing).toEqual([]);
-    expect(ALL_TOOL_NAMES).toHaveLength(43);
+    expect(ALL_TOOL_NAMES).toHaveLength(44);
   });
 });

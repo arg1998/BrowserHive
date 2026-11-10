@@ -266,6 +266,54 @@
       "x-browserhive-env": "BROWSERHIVE_VAULT",
       "x-browserhive-cli": "--vault"
     },
+    "templates": {
+      "description": "Session templates. false: list_templates answers TOOL_NOT_AVAILABLE, launch_session template answers TEMPLATE_NOT_FOUND, and no template browser starts.",
+      "x-browserhive-env": "BROWSERHIVE_TEMPLATES",
+      "x-browserhive-cli": "--templates",
+      "type": [
+        "boolean",
+        "string"
+      ]
+    },
+    "templateHostIdleTimeout": {
+      "description": "How long a template's browser stays open with no session before it is stopped; 0 = never.",
+      "default": "1h",
+      "x-browserhive-env": "BROWSERHIVE_TEMPLATE_HOST_IDLE_TIMEOUT",
+      "x-browserhive-cli": "--templateHostIdleTimeout",
+      "type": [
+        "number",
+        "string"
+      ]
+    },
+    "templateMaxPagesPerHost": {
+      "description": "Agent pages per template browser (parked and maintenance pages excluded); each session may hold max(2, floor(value / cap)).",
+      "x-browserhive-env": "BROWSERHIVE_TEMPLATE_MAX_PAGES_PER_HOST",
+      "x-browserhive-cli": "--templateMaxPagesPerHost",
+      "type": [
+        "number",
+        "string"
+      ]
+    },
+    "templateRecycleAfter": {
+      "description": "Age after which a template's browser is drained and restarted.",
+      "default": "24h",
+      "x-browserhive-env": "BROWSERHIVE_TEMPLATE_RECYCLE_AFTER",
+      "x-browserhive-cli": "--templateRecycleAfter",
+      "type": [
+        "number",
+        "string"
+      ]
+    },
+    "templateDrainTimeout": {
+      "description": "How long a draining template browser waits for its sessions before closing them.",
+      "default": "15m",
+      "x-browserhive-env": "BROWSERHIVE_TEMPLATE_DRAIN_TIMEOUT",
+      "x-browserhive-cli": "--templateDrainTimeout",
+      "type": [
+        "number",
+        "string"
+      ]
+    },
     "stealth": {
       "default": "standard",
       "anyOf": [

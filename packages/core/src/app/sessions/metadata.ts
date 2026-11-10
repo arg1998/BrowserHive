@@ -265,6 +265,10 @@ export function toSessionRecord(session: Session): SessionRecord {
     harness: launchHarnessOf(request.client),
     harnessDeclared: launchDeclaredHarnessOf(request.client),
     ...launchColumns(session),
+    // Exclusive sessions. A virtual session's template columns are written here by the template
+    // launch path (spec 13 §3.7 `reserve`, templates T1a-2).
+    template: null,
+    sealed: null,
   };
 }
 

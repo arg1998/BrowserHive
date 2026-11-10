@@ -1,4 +1,4 @@
-/** @module contracts/test/goldens/tools — per-tool wire goldens for the frozen 43-tool catalog (D-12) */
+/** @module contracts/test/goldens/tools — per-tool wire goldens for the 44-tool catalog (43 frozen by D-12, plus list_templates, D-49) */
 /// <reference types="bun-types" />
 
 import { describe, expect, it } from 'bun:test';
@@ -54,9 +54,9 @@ async function loadErrorCodes(): Promise<readonly string[] | null> {
 }
 
 describe('tool goldens (D-12)', () => {
-  it('has 43 unique tools in registration order', () => {
-    expect(ALL_TOOL_NAMES).toHaveLength(43);
-    expect(new Set(ALL_TOOL_NAMES).size).toBe(43);
+  it('has 44 unique tools in registration order (list_templates appended, D-49)', () => {
+    expect(ALL_TOOL_NAMES).toHaveLength(44);
+    expect(new Set(ALL_TOOL_NAMES).size).toBe(44);
     expect(ALL_TOOL_NAMES).toEqual([
       'launch_session',
       'close_session',
@@ -101,6 +101,7 @@ describe('tool goldens (D-12)', () => {
       'get_attention_result',
       'vault_list_available',
       'vault_fill',
+      'list_templates',
     ]);
   });
 

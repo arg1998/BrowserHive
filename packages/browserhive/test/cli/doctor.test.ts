@@ -375,6 +375,29 @@ describe('doctor', () => {
     });
   });
 
+  it('template access: under auth=token, templates limited to local are a warning naming them (spec 13 §6.1)', async () => {
+    const storage = storageState({
+      templates: [
+        { name: 'job-hunt', principals: ['local'] },
+        { name: 'shared', principals: [] },
+        { name: 'bots', principals: ['p-bot', 'local'] },
+      ],
+    });
+    const { byName } = await doctorJson({ argv: ['--auth', 'token'], fs: healthyFs(), storage });
+    expect(byName.get('template access')).toEqual({
+      check: 'template access',
+      status: 'warn',
+      detail:
+        "job-hunt: access names only 'local', which no agent token can be under auth=token; agents cannot use them until their access is edited",
+    });
+    const fine = storageState({ templates: [{ name: 'bots', principals: ['p-bot'] }] });
+    const ok = await doctorJson({ argv: ['--auth', 'token'], fs: healthyFs(), storage: fine });
+    expect(ok.byName.get('template access')?.status).toBe('ok');
+    // No row under auth=off, where every caller is local.
+    const off = await doctorJson({ argv: ['--auth', 'off'], fs: healthyFs(), storage });
+    expect(off.byName.has('template access')).toBe(false);
+  });
+
   it('maxSessions unbounded or above RAM is a warning', async () => {
     expect(
       (await doctorJson({ argv: ['--maxSessions', 'unbounded'], fs: healthyFs() })).byName.get(

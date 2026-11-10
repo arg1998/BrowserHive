@@ -21,6 +21,7 @@ import type { ChannelService } from '../../app/notifications/channel-service.ts'
 import type { PublicUrlChecker } from '../../app/notifications/public-url.ts';
 import type { SessionDirLayout } from '../../app/sessions/profile-dir.ts';
 import type { SessionService } from '../../app/sessions/session-service.ts';
+import type { TemplateService } from '../../app/templates/template-service.ts';
 import type { VaultAdmin } from '../../app/vault/vault-admin.ts';
 import type { VaultService } from '../../app/vault/vault-service.ts';
 import type { RequestPrincipal } from '../../domain/auth/principal.ts';
@@ -302,7 +303,12 @@ export interface HttpServices {
   readonly channels: ChannelsPort;
   /** The `publicUrl` check (spec 08 §5.8). */
   readonly publicUrl: PublicUrlPort;
+  /** Session templates (spec 13 §11.1). */
+  readonly templates: TemplatesPort;
 }
+
+/** The template routes' service (a structural slice of `TemplateService`). */
+export type TemplatesPort = Pick<TemplateService, 'list' | 'get' | 'create' | 'remove'>;
 
 /** The notification channels API (a structural slice of `ChannelService`). */
 export type ChannelsPort = Pick<

@@ -33,12 +33,14 @@ import { createRedactor, SecretRegistry } from '../../src/kernel/redact.ts';
 import { removeTree } from '../../src/kernel/remove.ts';
 import type { BrowserDriver } from '../../src/ports/browser-driver.ts';
 import type { PageActions } from '../../src/ports/page-actions.ts';
+import type { TemplateRuntime } from '../../src/ports/template-runtime.ts';
 import { FakeBrowserDriver } from './fake-browser-driver.ts';
 import { FakeClock } from './fake-clock.ts';
 import { FakeIdGenerator } from './fake-id-generator.ts';
 import { FakeVaultBackend } from './fake-vault-backend.ts';
 import { createVaultRepos } from './in-memory-vault-repos.ts';
 import { RecordingEventBus } from './recording-event-bus.ts';
+import { createTemplateKit, type TemplateKit } from './template-kit.ts';
 import { type CollectingLogger, createCollectingLogger } from './test-logger.ts';
 import { extendHandle, type ToolFakeScript, toolFakeScript } from './tool-fakes.ts';
 
@@ -69,6 +71,10 @@ export interface ToolHarnessOptions {
   readonly ids?: FakeIdGenerator | ToolServices['ids'];
   /** When set, every connection resolves its identity (spec 02 §1.4) as a stdio process with this environment. */
   readonly identityEnv?: Readonly<Record<string, string>>;
+  /** `templates` (default `true`); `false` also disables the `templates` pack, as composition does. */
+  readonly templates?: boolean;
+  /** The template runtime (default: a {@link FakeTemplateRuntime} without hosts). */
+  readonly templateRuntime?: TemplateRuntime;
 }
 
 /** A connected in-process MCP client over the real server + dispatcher. */
@@ -84,6 +90,8 @@ export interface ToolHarness {
   readonly secrets: SecretRegistry;
   readonly vaultBackend: FakeVaultBackend | null;
   readonly attentionBroker: OperatorRequestBroker;
+  /** The template service, its in-memory repositories and runtime. */
+  readonly templates: TemplateKit;
   readonly client: Client;
   /** A second client authenticated as `principal`. */
   connect(principal: RequestPrincipal): Promise<Client>;
@@ -209,11 +217,19 @@ export async function createToolHarness(options: ToolHarnessOptions = {}): Promi
     vault: { enabled: vaultBackend !== null, backend: vaultBackend === null ? null : 'bitwarden' },
     dataDir,
     persistenceMode: 'memory',
+    templates: options.templates ?? true,
     launchDefaults: {
       channel: options.defaultChannel ?? 'chromium',
       headless: options.defaultHeadless ?? true,
     },
   };
+  const templates = createTemplateKit({
+    clock,
+    ids,
+    logger,
+    ...(options.templateRuntime !== undefined && { runtime: options.templateRuntime }),
+    config: { enabled: options.templates ?? true },
+  });
   const services: ToolServices = {
     sessions,
     attention:
@@ -228,6 +244,7 @@ export async function createToolHarness(options: ToolHarnessOptions = {}): Promi
     vault,
     authStates,
     blocklist,
+    templates: templates.service,
     pageActions: options.pageActions ?? createPlaywrightPageActions(),
     fs: createNodeToolFs(),
     redaction: {
@@ -240,9 +257,11 @@ export async function createToolHarness(options: ToolHarnessOptions = {}): Promi
     ids,
     runtime,
   };
-  const registry = createToolRegistry(runtime, {
-    ...(options.disabledPacks !== undefined && { disabledPacks: options.disabledPacks }),
-  });
+  const disabledPacks: ToolPackId[] = [
+    ...(options.disabledPacks ?? []),
+    ...(options.templates === false ? (['templates'] as const) : []),
+  ];
+  const registry = createToolRegistry(runtime, { disabledPacks });
   const dispatcher = new ToolDispatcher({
     services,
     registry,
@@ -320,6 +339,7 @@ export async function createToolHarness(options: ToolHarnessOptions = {}): Promi
     secrets,
     vaultBackend,
     attentionBroker,
+    templates,
     client,
     connect,
     call,

@@ -200,6 +200,8 @@ export interface StorageState {
   tables: { table: string; rows: number }[];
   openSessions: number;
   tokens: TokenRow[];
+  /** Template names and access lists (`templateAccess`). */
+  templates: { name: string; principals: readonly string[] | null }[];
   backups: string[];
   quickCheckOk: boolean;
   resets: number;
@@ -223,6 +225,7 @@ export function storageState(overrides: Partial<StorageState> = {}): StorageStat
     ],
     openSessions: 0,
     tokens: [],
+    templates: [],
     backups: [],
     quickCheckOk: true,
     resets: 0,
@@ -285,6 +288,7 @@ function fakeStorage(
       return { password: 'Kq7-generated-password-24', credentialsPath };
     },
     listTokens: async () => state.tokens,
+    templateAccess: async () => state.templates,
     createToken: async ({ principal, expiresInMs }) => {
       const row: TokenRow = {
         credentialId: `cred-${state.tokens.length + 1}`,

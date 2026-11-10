@@ -51,6 +51,7 @@ export {
   isSubsetOf,
   OPERATOR_SCOPES,
   parseScopes,
+  resolveStoredScopes,
   SERVICE_SCOPES,
   scopesForKind,
 } from './scopes.ts';

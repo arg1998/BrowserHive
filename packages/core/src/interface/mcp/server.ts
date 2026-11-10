@@ -1,5 +1,6 @@
-/** @module interface/mcp/server — `createMcpServer`: the official-SDK `McpServer` with the 43 tools registered from the registry and `tools/call` routed through the dispatcher (spec 02 §1.1, D-02). */
+/** @module interface/mcp/server — `createMcpServer`: the official-SDK `McpServer` with the 44 tools registered from the registry and `tools/call` routed through the dispatcher (spec 02 §1.1, D-02). */
 
+import { TEMPLATES_SERVER_INSTRUCTION } from '@browserhive/contracts/tools';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import {
   CallToolRequestSchema,
@@ -38,6 +39,9 @@ export interface CreateMcpServerOptions {
   readonly identity?: ConnectionIdentity;
 }
 
+/** The instructions sentence about session templates (spec 13 §5.1); present while `templates` is on. */
+export const TEMPLATES_INSTRUCTION = TEMPLATES_SERVER_INSTRUCTION;
+
 /** The additive server-level instructions (spec 02 §1.1). */
 export function serverInstructions(runtime: RuntimeFacts): string {
   const floorSeconds = Math.floor(runtime.minAttentionWaitMs / 1000);
@@ -46,6 +50,7 @@ export function serverInstructions(runtime: RuntimeFacts): string {
     'Call launch_session first and pass the returned session_id to every page tool; close_session when done.',
     'request_attention BLOCKS until a human operator resolves it (http transport only).',
   ];
+  if (runtime.templates) lines.push(TEMPLATES_INSTRUCTION);
   if (floorSeconds > 0) {
     lines.push(`The operator requires a minimum attention wait of ${floorSeconds}s.`);
   }

@@ -35,6 +35,11 @@ export { PreferenceService } from '../app/preferences/preference-service.ts';
 export { LeaseSweeper } from '../app/sessions/lease-sweeper.ts';
 export { sessionDirLayout } from '../app/sessions/profile-dir.ts';
 export { SessionService } from '../app/sessions/session-service.ts';
+export {
+  TemplateService,
+  type TemplateServiceConfig,
+} from '../app/templates/template-service.ts';
+export { UnavailableTemplateRuntime } from '../app/templates/unavailable-runtime.ts';
 export { VaultService } from '../app/vault/vault-service.ts';
 export { OperatorRequestBroker } from '../domain/operator-requests/broker.ts';
 export { VaultBroker } from '../domain/vault/broker.ts';
@@ -89,7 +94,9 @@ export {
   type SandboxTarget,
   type SandboxUnavailableFactory,
 } from '../infra/browsers/sandbox-policy.ts';
+export { createTemplateGeoResolver } from '../infra/browsers/template-geo.ts';
 export { createBunDesktop } from '../infra/desktop/bun-desktop.ts';
+export { createTemplateFiles } from '../infra/fs/template-files.ts';
 export { createArtifactFiles } from '../infra/static/artifact-files.ts';
 export { createBunStaticAssets } from '../infra/static/bun-static-assets.ts';
 export { createTraceViewerAssets } from '../infra/static/playwright-trace-viewer.ts';
@@ -121,3 +128,5 @@ export { playwrightBridgeFactory } from '../interface/ws/cdp-bridge.ts';
 export { createRealtimeHub, type Realtime } from '../interface/ws/index.ts';
 export type { PageActions } from '../ports/page-actions.ts';
 export type { SessionPolicyInstaller } from '../ports/session-policies.ts';
+export type { TemplateFiles } from '../ports/template-files.ts';
+export type { TemplateRuntime } from '../ports/template-runtime.ts';

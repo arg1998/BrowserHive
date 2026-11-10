@@ -19,6 +19,7 @@ export type {
 export type { BlockedRequestListRow, BlocklistAuditRepository } from './blocklist-audit.ts';
 export type {
   ActorKind,
+  AgentWindowState,
   ArtifactKind,
   AttentionMode,
   AuthEventType,
@@ -44,12 +45,18 @@ export type {
   SessionChannel,
   SessionEngine,
   SessionState,
+  SiteWritePolicy,
   SystemEventSeverity,
+  TemplateHealthState,
+  TemplateMode,
+  TemplateStatus,
+  TemplateStealthLevel,
   VaultAccessMode,
   VaultAccessResult,
 } from './enums.ts';
 export {
   ACTOR_KINDS,
+  AGENT_WINDOW_STATES,
   ARTIFACT_KINDS,
   ATTENTION_MODES,
   AUTH_EVENT_TYPES,
@@ -75,7 +82,12 @@ export {
   SESSION_CHANNELS,
   SESSION_ENGINES,
   SESSION_STATES,
+  SITE_WRITE_POLICIES,
   SYSTEM_EVENT_SEVERITIES,
+  TEMPLATE_HEALTH_STATES,
+  TEMPLATE_MODES,
+  TEMPLATE_STATUSES,
+  TEMPLATE_STEALTH_LEVELS,
   VAULT_ACCESS_MODES,
   VAULT_ACCESS_RESULTS,
 } from './enums.ts';
@@ -203,8 +215,24 @@ export type {
   VaultExportDocument,
   VaultGroupPolicyRecord,
 } from './records.ts';
+export type {
+  BrandRecord,
+  ObservedIdentityRecord,
+  PinnedIdentityRecord,
+  SessionTemplateRecord,
+  TemplateGeolocationRecord,
+  TemplatePatch,
+  TemplateProxyRecord,
+  TemplateRecord,
+  TemplateSiteFormRecord,
+  TemplateSiteHealthRecord,
+  TemplateSiteRecord,
+  TemplateUnsealRecord,
+} from './records-templates.ts';
+export { UNKNOWN_SITE_HEALTH } from './records-templates.ts';
 export type { ScreenshotListRow, ScreenshotRepository } from './screenshots.ts';
 export type { SessionDeleteResult, SessionRepository } from './sessions.ts';
+export type { TemplateRepository, TemplateSiteRepository } from './templates.ts';
 export type { ToolCallListRow, ToolCallRepository } from './tool-calls.ts';
 export type { Repositories, UnitOfWork } from './unit-of-work.ts';
 export type { VaultAccessListRow, VaultAuditRepository } from './vault-audit.ts';

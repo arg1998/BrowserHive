@@ -37,6 +37,7 @@ import {
 import { SqlitePageRepository } from './pages.ts';
 import { SqliteScreenshotRepository } from './screenshots.ts';
 import { SqliteSessionRepository } from './sessions.ts';
+import { SqliteTemplateRepository, SqliteTemplateSiteRepository } from './templates.ts';
 import { SqliteToolCallRepository } from './tool-calls.ts';
 import { SqliteVaultAuditRepository } from './vault-audit.ts';
 import { SqliteVaultBindingRepository, SqliteVaultGroupPolicyRepository } from './vault-policy.ts';
@@ -74,5 +75,7 @@ export function createRepositories(db: Kysely<DB>): Repositories {
     artifactOutbox: new SqliteArtifactOutboxRepository(db),
     mcpConnections: new SqliteMcpConnectionRepository(db),
     schemaMigrations: new SqliteSchemaMigrationRepository(db),
+    templates: new SqliteTemplateRepository(db),
+    templateSites: new SqliteTemplateSiteRepository(db),
   };
 }
