@@ -5,12 +5,19 @@ import { AppError } from '../../../../kernel/errors/app-error.ts';
 import { requireSession } from '../../context.ts';
 import { defineTool, json, type ToolPack } from '../../definition.ts';
 import { sessionOwnership } from '../../policies.ts';
+import { assertUnsealed } from '../sealing.ts';
 
-/** `save_storage_state`: cookies, localStorage and IndexedDB snapshot (0600 file + manifest). */
+/**
+ * `save_storage_state`: cookies, localStorage and IndexedDB snapshot (0600 file + manifest). In a
+ * template session it is refused while `state_export` is sealed (`SESSION_SEALED`); unsealed, it
+ * exports the template's state into the caller's own saved logins with `source_template_id`
+ * (spec 13 §5.4).
+ */
 export const saveStorageState = defineTool('save_storage_state', {
   policies: [sessionOwnership],
   async handler(ctx, args) {
     const session = requireSession(ctx);
+    assertUnsealed(session, 'save_storage_state');
     const view = session.view;
     if (view === null) {
       throw new AppError(
@@ -21,7 +28,7 @@ export const saveStorageState = defineTool('save_storage_state', {
     }
     const source = view.storageStateSource();
     if (source === null) {
-      // Only a virtual session has no source of its own (PR T1a refuses it before this point).
+      // Every view has a source; a missing one is a wiring bug.
       throw new AppError(
         'INTERNAL_ERROR',
         { ref: 'storage-state-source' },
@@ -33,6 +40,7 @@ export const saveStorageState = defineTool('save_storage_state', {
       args.name,
       session.id,
       ctx.principal,
+      session.template === null ? {} : { sourceTemplateId: session.template.templateId },
     );
     return json(saved);
   },

@@ -41,6 +41,12 @@ export interface VaultFillSession {
   readonly harness: string | null;
   /** The launch declared harness name (`sessions.harness_declared`), or `null` (D-48). */
   readonly harnessDeclared: string | null;
+  /**
+   * A session launched from a session template: every fill is refused (`not_authorized`, audited
+   * as `template_session`), because a fill would sign the template in for every principal it
+   * allows, past the binding's own rules (spec 13 §5.5).
+   */
+  readonly template?: boolean;
 }
 
 /** The `vault_fill` tool input (camelCase). */

@@ -2,7 +2,11 @@
 
 import type { CreateSessionInput } from '../../domain/session/create-request.ts';
 import type { SessionTemplate } from '../../domain/session/session-template.ts';
-import type { PageCaps } from '../../domain/templates/model.ts';
+import {
+  isSessionSealed,
+  type PageCaps,
+  type SessionSealing,
+} from '../../domain/templates/model.ts';
 import { isAppError } from '../../kernel/errors/app-error.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { TemplateRecord, TemplateSiteRecord } from '../../ports/persistence/index.ts';
@@ -46,14 +50,15 @@ export function sessionTemplateOf(
   template: TemplateRecord,
   sites: readonly TemplateSiteRecord[],
   mode: SessionTemplate['mode'],
-  sealed: boolean,
+  sealing: SessionSealing,
 ): SessionTemplate {
   return {
     templateId: template.templateId,
     name: template.name,
     version: template.currentVersion,
     mode,
-    sealed,
+    sealed: isSessionSealed(sealing),
+    sealing,
     sites: sites.filter((s) => s.enabled).map((s) => ({ site: s.siteId, status: s.health.state })),
   };
 }
@@ -64,6 +69,8 @@ export function virtualLauncher(input: {
   readonly template: TemplateRecord;
   readonly session: SessionTemplate;
   readonly caps: PageCaps | null;
+  /** A recording or re-login window (spec 13 §3.3). */
+  readonly recording?: boolean;
   /** A site-opened page over the session's cap was closed. */
   readonly onPageLimit?: (sessionId: string) => void;
 }): VirtualSessionLauncher {
@@ -84,6 +91,7 @@ export function virtualLauncher(input: {
           windowState: template.agentWindows,
           pageOptions,
           ...(input.session.mode === 'maintenance' && { maintenance: true }),
+          ...(input.recording === true && { recording: true }),
           signal,
           // Maintenance sessions are bounded by nothing but their own work (spec 13 §6.3).
           ...(caps !== null && {

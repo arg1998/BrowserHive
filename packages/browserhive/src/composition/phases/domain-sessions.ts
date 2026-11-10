@@ -41,6 +41,8 @@ export interface SessionsInput {
   readonly configFilePath: string | undefined;
   /** Test seam for the sandbox probes. */
   readonly sandboxHost?: SandboxHost;
+  /** Chromium switches of the internal testing seam (spec 13 §14). */
+  readonly testingArgs?: readonly string[];
 }
 
 /** Built session-side services. */
@@ -137,6 +139,7 @@ export async function buildSessions(input: SessionsInput): Promise<SessionsParts
     stealthDriver: config.stealthDriver,
     driverResolver: resolver,
     sandbox: sandbox.policy,
+    ...(input.testingArgs !== undefined && { testingArgs: input.testingArgs }),
     // Every template host's chain carries the configured blocklist (spec 13 §3.8).
     templateBlocklist: blocklist.configured
       ? { blocklist: blocklist.holder, observer: blocklist.requestObserver }

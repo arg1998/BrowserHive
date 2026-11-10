@@ -4,8 +4,10 @@ USAGE
   browserhive templates rm <name> [flags]
 
 Talks to a running server over its REST API (--url, default the configured host and port) with an
-operator bearer (--token) or the dashboard cookie (--cookie). Creating and signing in to templates
-arrive in a later release; until then use the REST API.
+operator bearer (--token) or the dashboard cookie (--cookie). create opens a sign-in window on the
+machine running the server, wherever the CLI runs, and waits until every site is signed in, you
+press Enter, or --timeout passes. create and finish exit 0 when every site is signed in, 2 when one
+is not, 1 on an API error.
 
 ARGUMENTS
   <name>  Template name.

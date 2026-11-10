@@ -280,7 +280,16 @@ export interface SessionView {
   addCookies(cookies: readonly CookieInput[]): Promise<void>;
   /** Replaces the extra request headers (exclusive: context-wide; virtual: per page, replayed on new pages). */
   setExtraHTTPHeaders(headers: Record<string, string>): Promise<void>;
-  /** What `save_storage_state` reads; `null` for a virtual session. */
+  /**
+   * After `set_viewport` on `page`: a virtual session on a headed template also resizes the page's
+   * window (size only, clamped to the template's window, never moved; spec 13 §3.3). Absent for
+   * exclusive sessions.
+   */
+  fitWindow?(page: Page, width: number, height: number): Promise<void>;
+  /**
+   * What `save_storage_state` reads: the session's context, or for a virtual session the template's
+   * (one jar), which only an unsealed `state_export` reaches (spec 13 §5.4); `null` when none exists.
+   */
   storageStateSource(): StorageStateSource | null;
   /** The managed profile directory of a persistent session; `null` otherwise and for virtual sessions. */
   userDataDir(): string | null;

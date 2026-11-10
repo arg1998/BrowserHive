@@ -9,6 +9,7 @@ import type {
   LaunchWarning,
   SessionHost,
   SessionView,
+  StorageStateSource,
 } from '../../ports/browser-driver.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type {
@@ -37,6 +38,15 @@ export interface TemplateViewHost extends SessionHost {
     match: (facts: TargetFacts) => boolean,
     ms: number,
   ): Promise<Page | null>;
+  /** A recording or re-login window is open: agent windows open minimized (spec 13 §3.3). */
+  readonly recording: boolean;
+  /** The window that holds `page`, or `null` when it cannot be read. */
+  windowOf(page: Page): Promise<number | null>;
+  /**
+   * While a sign-in window is open, a page an agent's site opened: its window is minimized (or the
+   * page closed when it landed in the sign-in window) and the sign-in window raised again.
+   */
+  stepAside(page: Page): Promise<void>;
   /** Resizes the window of `page` on a headed host (never moves it). */
   resizeWindow(page: Page, width: number, height: number): Promise<void>;
   /** The end of the browser (crash or operator stop); not called for a supervisor close. */
@@ -48,8 +58,8 @@ export interface TemplateViewHost extends SessionHost {
 /**
  * One virtual session over a template host. Every page method goes through the host's attribution
  * dispatcher, so the view sees exactly the pages attributed to its session; cookies are the host's
- * one jar (a template is one person); storage-state export and the profile directory do not exist
- * for a virtual session.
+ * one jar (a template is one person); a storage-state export is the template's (tools gate it by
+ * sealing); the profile directory does not exist for a virtual session.
  */
 export class TemplateSessionView implements SessionView {
   readonly sessionId: string;
@@ -57,6 +67,8 @@ export class TemplateSessionView implements SessionView {
   readonly page: Page;
   /** A maintenance session's view (its pages are not agent pages, spec 13 §6.3). */
   readonly maintenance: boolean;
+  /** A recording or re-login window (spec 13 §3.3). */
+  readonly recording: boolean;
   private readonly owner: TemplateViewHost;
   private readonly options: TemplateViewOptions;
   private readonly log: Logger;
@@ -65,6 +77,8 @@ export class TemplateSessionView implements SessionView {
   /** Host exit subscriptions, removed when the view closes (a long-lived host keeps none per closed session). */
   private readonly exitSubscriptions = new Set<() => void>();
   private closing: Promise<readonly LaunchWarning[]> | undefined;
+  /** The windows created for this session (its window set, spec 13 §3.3). */
+  private readonly windows = new Set<number>();
 
   constructor(
     host: TemplateViewHost,
@@ -79,6 +93,7 @@ export class TemplateSessionView implements SessionView {
     this.page = page;
     this.options = options;
     this.maintenance = options.maintenance === true;
+    this.recording = this.maintenance && options.recording === true;
     this.log = logger.child({ module: 'browsers.view', sessionId });
     this.headers = options.pageOptions?.extraHTTPHeaders;
     // Every page of the session gets its per-session options, whoever opened it.
@@ -91,11 +106,14 @@ export class TemplateSessionView implements SessionView {
         return;
       }
       void this.prepare(opened);
+      // A sign-in window is open: an agent's site-opened window steps aside at once (spec 13 §3.3).
+      if (!this.maintenance && this.owner.recording) void this.owner.stepAside(opened);
     });
   }
 
   /** Applies the per-session options to the first page (the pipeline awaits it). */
   async prepareFirstPage(): Promise<void> {
+    await this.recordWindow(this.page);
     await this.prepare(this.page);
   }
 
@@ -113,17 +131,35 @@ export class TemplateSessionView implements SessionView {
   }
 
   /**
-   * A tab beside the session's active page when it sits in a normal tabbed window (`window.open`
-   * in an isolated world with a user gesture: Patchright drops `--disable-popup-blocking`), else a
-   * new background window; never `context.newPage()` (spec 13 §3.3).
+   * A tab beside the session's active page when it sits in a normal tabbed window of the session's
+   * own window set (`window.open` in an isolated world with a user gesture: Patchright drops
+   * `--disable-popup-blocking`), else a new background window; never `context.newPage()` (spec 13
+   * §3.3). A page of this session placed in another session's window gets a window of its own, so
+   * that window's tabs never change (PR #76 F11).
    */
   async newPage(beside?: Page | null): Promise<Page> {
     if (this.closing !== undefined) throw closedView(this.sessionId);
     this.options.beforeNewPage?.();
-    const tab = beside == null || !this.owns(beside) ? null : await this.openTab(beside);
-    const page = tab ?? (await this.owner.openWindow(this.sessionId, this.minimized()));
+    const tab =
+      beside != null && (await this.inOwnWindow(beside)) ? await this.openTab(beside) : null;
+    let page = tab;
+    if (page === null) {
+      page = await this.owner.openWindow(this.sessionId, this.minimized());
+      await this.recordWindow(page);
+    }
     await this.prepare(page);
     return page;
+  }
+
+  /** Never while a sign-in window is open: a resize must not restore a minimized agent window. */
+  async fitWindow(page: Page, width: number, height: number): Promise<void> {
+    if (this.owner.headless || this.owner.recording || !this.owns(page)) return;
+    await this.owner.resizeWindow(page, width, height);
+  }
+
+  /** The window ids of the session's own windows (operator views and tests). */
+  windowIds(): readonly number[] {
+    return [...this.windows];
   }
 
   cookies(urls?: readonly string[]): Promise<Cookie[]> {
@@ -141,8 +177,12 @@ export class TemplateSessionView implements SessionView {
     await Promise.all(this.pages().map((page) => page.setExtraHTTPHeaders(headers)));
   }
 
-  storageStateSource(): null {
-    return null;
+  /**
+   * The template's whole state (one jar for the template): only an unsealed `state_export` reaches
+   * it, which the tool checks per call (spec 13 §5.4).
+   */
+  storageStateSource(): StorageStateSource {
+    return this.owner.context;
   }
 
   userDataDir(): null {
@@ -223,7 +263,20 @@ export class TemplateSessionView implements SessionView {
   }
 
   private minimized(): boolean {
-    return !this.owner.headless && this.options.windowState === 'minimized';
+    if (this.owner.headless || this.maintenance) return false;
+    return this.options.windowState === 'minimized' || this.owner.recording;
+  }
+
+  /** True when `page` is this session's and sits in one of the session's own windows. */
+  private async inOwnWindow(page: Page): Promise<boolean> {
+    if (!this.owns(page)) return false;
+    const windowId = await this.owner.windowOf(page);
+    return windowId !== null && this.windows.has(windowId);
+  }
+
+  private async recordWindow(page: Page): Promise<void> {
+    const windowId = await this.owner.windowOf(page);
+    if (windowId !== null) this.windows.add(windowId);
   }
 
   /** `window.open` beside `active`, or `null` when that is not possible here. */

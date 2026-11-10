@@ -2,7 +2,7 @@
 
 # REST API reference
 
-The admin REST API served under `/api/v1` on the same port as MCP and the dashboard when `--admin` is on (116 operations), generated from `HTTP_ENDPOINTS` in `@browserhive/contracts/http`. Request and response schemas are in the OpenAPI 3.1 document the server serves at `/api/v1/openapi.json`, with an interactive reference UI at `/api/v1/docs`.
+The admin REST API served under `/api/v1` on the same port as MCP and the dashboard when `--admin` is on (122 operations), generated from `HTTP_ENDPOINTS` in `@browserhive/contracts/http`. Request and response schemas are in the OpenAPI 3.1 document the server serves at `/api/v1/openapi.json`, with an interactive reference UI at `/api/v1/docs`.
 
 Summaries come from `packages/contracts/generated/openapi.json`.
 
@@ -208,6 +208,12 @@ Summaries come from `packages/contracts/generated/openapi.json`.
 | POST | `/api/v1/templates` | `createTemplate` | `templates:write` | cookie, bearer | Create a template in `recording` with its sites, pinned identity and access rule. Under auth=token `policy.authorized_principals` is required (`[]` = every agent). |
 | GET | `/api/v1/templates/{template_id}` | `getTemplate` | `templates:read` | cookie, bearer | One template with its browser, sites, live session count, other windows and the windows shared by several sessions. |
 | DELETE | `/api/v1/templates/{template_id}` | `deleteTemplate` | `templates:write` | cookie, bearer | Delete a template: stops its browser and deletes its directory. With live sessions it needs force=true, which closes them. Deleting does not sign out at the sites. |
+| POST | `/api/v1/templates/{template_id}/domains/{domain}/remove-sign-in` | `removeTemplateSignIn` | `templates:write` | cookie, bearer | Remove a sign-in that is not a site of the template (an unlisted sign-in): the domain's cookies and site data in the template's browser. |
+| POST | `/api/v1/templates/{template_id}/recording` | `startTemplateRecording` | `templates:login` | cookie, bearer | Open the sign-in window on the machine running BrowserHive: one tab per site, agents' windows minimized meanwhile. An open recording is returned again and its window raised. |
+| POST | `/api/v1/templates/{template_id}/recording/confirm` | `confirmTemplateRecording` | `templates:login` | cookie, bearer | I'm signed in, for a site without a pack: the cookie names that appeared on it since the window opened (analytics excluded) become its learned sign-in cookies. |
+| POST | `/api/v1/templates/{template_id}/recording/finish` | `finishTemplateRecording` | `templates:login` | cookie, bearer | Finish: remove the chosen unlisted sign-ins, mark sites not confirmed signed out, set the template ready and close the window. |
+| DELETE | `/api/v1/templates/{template_id}/recording` | `cancelTemplateRecording` | `templates:login` | cookie, bearer | Close the sign-in window; the template stays in recording (setting up). |
+| POST | `/api/v1/templates/{template_id}/host/clear-profile-secrets` | `clearTemplateProfileSecrets` | `templates:write` | cookie, bearer | Empty the saved passwords and autofill data found in the template's browser profile; its browser stops (its sessions close) and starts again on the next use. |
 
 ## Client errors
 

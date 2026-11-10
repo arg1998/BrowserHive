@@ -1,6 +1,7 @@
 /** @module infra/browsers/host-process — the browser process behind a host: its pid (for the memory metric and the supervisor's sampler) and a last-resort kill when a close overruns its deadline. */
 
-import type { Browser } from 'playwright';
+import type { Browser, BrowserContext } from 'playwright';
+import { withDeadline } from '../../kernel/deadline.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { Logger } from '../../ports/logger.ts';
 
@@ -53,4 +54,30 @@ export function rejectOnAbort(signal: AbortSignal): Promise<never> {
     if (signal.aborted) reject(signal.reason);
     signal.addEventListener('abort', () => reject(signal.reason), { once: true });
   });
+}
+
+/**
+ * Closes a persistent context (and so its browser) within `deadlineMs`; on overrun the browser
+ * process is killed. Never throws.
+ */
+export async function closeContextWithin(
+  context: BrowserContext,
+  browser: Browser | null,
+  deadlineMs: number,
+  signal: AbortSignal | undefined,
+  logger: Logger,
+): Promise<void> {
+  const deadline = withDeadline(signal, deadlineMs);
+  try {
+    await Promise.race([context.close(), rejectOnAbort(deadline.signal)]);
+  } catch (err) {
+    if (deadline.signal.aborted) {
+      logger.warn('host close timed out', { deadline_ms: deadlineMs });
+      killBrowserProcess(browser, logger);
+    } else {
+      logger.debug('host close failed', { err: serializeError(err) });
+    }
+  } finally {
+    deadline.clear();
+  }
 }

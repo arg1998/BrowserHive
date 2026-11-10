@@ -108,7 +108,9 @@ export function unknownCommandMessage(word: string): string {
  * @returns The message without the `browserhive: ` prefix.
  */
 export function strayFlagMessage(name: string, invocationName: string): string {
-  const owners = COMMAND_FLAGS.has(name) ? commandsAccepting(name) : [];
+  // A server key that is also a command flag (`--stealth`) is accepted by more than its command.
+  const serverKey = lookupKey('cli', `--${name}`).kind !== 'unknown';
+  const owners = COMMAND_FLAGS.has(name) && !serverKey ? commandsAccepting(name) : [];
   const where =
     owners.length === 1
       ? `--${name} only applies to 'browserhive ${owners[0]}'.`

@@ -1,4 +1,4 @@
-/** @module cli/commands/templates — `browserhive templates list | rm <name>`: session templates over a running server's REST API (spec 13 §11.5). `create`, `finish` and the other subcommands arrive with the later template PRs. */
+/** @module cli/commands/templates — `browserhive templates list | rm <name>`: session templates over a running server's REST API (spec 13 §11.5); `create` and `finish` are in `templates-create.ts`. */
 import {
   DeleteTemplateResponse,
   type TemplateSummary,
@@ -22,6 +22,24 @@ async function listTemplates(
     return EXIT.fatal;
   }
   return parsed.data.data;
+}
+
+/**
+ * The template named `name` (`GET /templates`); prints the failure when there is none.
+ *
+ * @returns The list row, or an exit code.
+ */
+export async function findTemplate(
+  context: CommandContext,
+  remote: RemoteTarget,
+  name: string,
+): Promise<TemplateSummary | ExitCode> {
+  const templates = await listTemplates(context, remote);
+  if (typeof templates === 'number') return templates;
+  const template = templates.find((t) => t.name === name);
+  if (template !== undefined) return template;
+  context.out.diagnostic(`browserhive: no session template named '${name}'.`);
+  return EXIT.fatal;
 }
 
 const STATUS_TEXT: Readonly<Record<TemplateSummary['status'], string>> = {
@@ -61,7 +79,7 @@ export async function runTemplatesList(
   }
   if (templates.length === 0) {
     out.line(
-      'No session templates. Create one with POST /api/v1/templates (the CLI and dashboard arrive in a later release).',
+      'No session templates. Create one with: browserhive templates create <name> --sites <site,…>',
     );
     return EXIT.ok;
   }
@@ -98,13 +116,8 @@ export async function runTemplatesRm(
 ): Promise<ExitCode> {
   const { out, deps } = context;
   const { remote, name } = invocation;
-  const templates = await listTemplates(context, remote);
-  if (typeof templates === 'number') return templates;
-  const template = templates.find((t) => t.name === name);
-  if (template === undefined) {
-    out.diagnostic(`browserhive: no session template named '${name}'.`);
-    return EXIT.fatal;
-  }
+  const template = await findTemplate(context, remote, name);
+  if (typeof template === 'number') return template;
   if (!invocation.yes) {
     if (deps.prompt === null) {
       out.diagnostic(

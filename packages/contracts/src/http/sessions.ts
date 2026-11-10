@@ -116,6 +116,17 @@ export const SessionSummary = z.object({
   /** The raw harness name the launching client declared, fixed with `harness`; absent when none was declared (D-48). */
   harness_declared: z.string().optional(),
   client: SessionClient.nullable(),
+  /** The template a session was launched from (spec 13 §11.1); absent for exclusive sessions. */
+  template: z
+    .object({
+      template_id: z.string().nullable(),
+      name: z.string(),
+      version: z.number().int().nullable(),
+      mode: z.enum(['live', 'maintenance']),
+    })
+    .optional(),
+  /** Any sealing protection in force (spec 13 §5.4); template sessions only. */
+  sealed: z.boolean().optional(),
 });
 /** The one session shape used by lists, detail and WS. */
 export type SessionSummary = z.infer<typeof SessionSummary>;
@@ -143,6 +154,7 @@ export const SessionSortKey = sortable([
   'persistence_mode',
   'blocked',
   'harness',
+  'template',
 ]);
 /** Sort keys accepted by `GET /sessions`. */
 export type SessionSortKey = z.infer<typeof SessionSortKey>;
@@ -158,6 +170,10 @@ export const SessionsQuery = listQuery({
     channel: csv(Channel),
     persistence_mode: csv(PersistenceMode),
     harness: csv(HarnessSlug),
+    /** Template ids (spec 13 §11.1). */
+    template: csv(z.string().min(1).max(64)),
+    /** BrowserHive's own sessions of templates (recording, upkeep): hidden unless asked for. */
+    maintenance: ArchivedFilter.default('exclude'),
     q: QueryText.optional(),
     ...windowQuery,
   },
@@ -172,6 +188,8 @@ export const SessionFacets = z.object({
   persistence_modes: z.array(Facet),
   states: z.array(Facet),
   harnesses: z.array(Facet),
+  /** Template ids of template sessions (spec 13 §11.1). */
+  templates: z.array(Facet),
 });
 /** Facets returned with the session list. */
 export type SessionFacets = z.infer<typeof SessionFacets>;

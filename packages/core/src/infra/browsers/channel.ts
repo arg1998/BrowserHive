@@ -81,3 +81,8 @@ export function launchKwargsForChannel(
 export function isChannel(value: string): value is Channel {
   return Channel.safeParse(value).success;
 }
+
+/** `kwargs` with extra switches appended (the internal testing seam, spec 13 §14). */
+export function withExtraArgs(kwargs: LaunchKwargs, extra: readonly string[]): LaunchKwargs {
+  return extra.length === 0 ? kwargs : { ...kwargs, args: [...(kwargs.args ?? []), ...extra] };
+}

@@ -10,6 +10,7 @@ browserhive db status|backup|restore <file>|migrate
 browserhive admin reset-password
 browserhive admin tokens list|create <name>|revoke <name>
 browserhive channels list | test <name> | preview <name> [--sample <kind>]
+browserhive templates list | create <name> --sites <site,…> | finish <name> | rm <name>
 browserhive version | --version | -v
 browserhive help [command] | --help | -h
 ```
@@ -149,6 +150,54 @@ Token commands work on the database directly when the server is stopped, or thro
 
 They talk to the running server: `--url` defaults to the configured host and port, and `--token` (an operator API token) or `--cookie` authenticates. See [Notifications](notifications.md).
 
+## `templates`
+
+Manage [session templates](templates.md) on a running server started with `--admin`. Like `channels`, these commands use the REST API: `--url` defaults to the configured host and port, and `--token` (an operator API token with the `templates:*` scopes the command needs) or `--cookie` authenticates. `--json` prints the API's answer.
+
+| Command | Meaning |
+|---|---|
+| `templates list [--json]` | Every template: name, status (`setting up`, `ready`, `disabled`), each site with a mark for its sign-in state (✓ signed in, ✗ signed out, · not checked), the state of its browser, sessions against the cap, and when it was last used. |
+| `templates create <name> --sites <site,…> [flags]` | Create a template, open the sign-in window and wait for you to sign in (below). |
+| `templates finish <name>` | Complete a template that is still setting up (after `--timeout`, a cancel or `--noLogin`): sites you never confirmed are kept and marked signed out, and the template becomes `ready`. |
+| `templates rm <name> [--force] [--yes]` | Delete a template: stop its browser and delete its directory. Asks you to type the name on a terminal and refuses without one unless `--yes`. With live sessions it fails (`TEMPLATE_IN_USE`) unless `--force`, which closes them. Deleting does not sign you out at the sites. |
+
+### `templates create`
+
+```
+browserhive templates create <name> --sites <site,…> [--displayName <text>] [--description <text>]
+    [--channel <chromium|chrome|edge>] [--headless] [--stealth <off|standard|max>]
+    [--proxy <url> --proxyUsername <name> --proxyPasswordEnv <ENV>] [--locale <tag> --timezone <iana>]
+    [--maxConcurrent <1-20>] [--allPrincipals | --principal <subject>…] [--noLogin] [--timeout <duration>]
+```
+
+| Flag | Meaning |
+|---|---|
+| `<name>` | What agents pass as `template`: 2 to 32 characters, lower-case letters, digits and `-`, starting with a letter. |
+| `--sites` | 1 to 16 sites, comma-separated. Each is reduced to its registrable domain (`www.linkedin.com` is `linkedin.com`). |
+| `--displayName`, `--description` | Shown in lists; agents see the description in `list_templates`. |
+| `--channel` | The browser: the bundled `chromium`, or the installed `chrome` or `edge`. Default: `defaultChannel`. |
+| `--headless` | No window. Sites challenge headless browsers more often, and you cannot sign in by hand. |
+| `--stealth` | Default: the server's `stealth`. Avoid `off`, which runs on the stock driver ([known limits](templates.md#known-limits)). |
+| `--proxy`, `--proxyUsername`, `--proxyPasswordEnv` | One fixed proxy (`scheme://host:port`, no credentials in the URL). The password is the **name** of an environment variable on the server, not starting with `BROWSERHIVE_`. With `--proxy`, `--locale` and `--timezone` are required. |
+| `--locale`, `--timezone` | The identity's language tag and IANA time zone. Default: this machine's. Fixed for the template's life. |
+| `--maxConcurrent` | Sessions of this template at once, 1 to 20. Default 5. |
+| `--allPrincipals` | Every agent may launch it. |
+| `--principal <subject>` | Only this principal (an agent token's name) may launch it; repeat for more. Under `--auth token` one of `--allPrincipals` and `--principal` is required. |
+| `--noLogin` | Create the template and exit without opening a window. |
+| `--timeout` | How long to wait for you, default `30m`. |
+
+What it does:
+
+1. Creates the template (status `setting up`) and opens the sign-in window **on the machine running the server**, with one tab per site. When `--url` points at another machine, the command warns that the window opens there.
+2. Prints one line per site, and waits.
+3. Ends when every site is signed in, when you press **Enter**, or at `--timeout`:
+   - **Enter** confirms every site you have not confirmed yet ("I'm signed in"); a site where no new cookie appeared since the window opened stays signed out. It then lists unlisted sign-ins (`Also signed in to: mail.example — agents can use this`) and removes them unless you answer no, and sets the template `ready`.
+   - **`--timeout`** leaves the template setting up; `templates finish <name>` completes it later.
+
+Exit codes: `0` the template is ready with every site signed in; `1` failure (server unreachable, an API error printed as `[CODE] message`); `2` finished with a site not signed in, or timed out; `64` usage error.
+
+`templates show`, `seed`, `login`, `probe`, `versions`, `restore`, `host`, `disable`, `enable` and `rekey`, and seeding with `--fromState`, arrive in later releases.
+
 ## `version`
 
 ```
@@ -163,7 +212,7 @@ browserhive 0.2.0 (bun 1.4.2, sqlite 3.53.2, playwright 1.63.0, patchright 1.63.
 |---|---|
 | `0` | Success, or clean shutdown after a signal. |
 | `1` | Fatal runtime error (a boot phase failed after configuration, storage corruption, `purge` or `doctor` failure). |
-| `2` | `doctor` found warnings only. |
+| `2` | `doctor` found warnings only; `templates create` finished with a site not signed in, or timed out. |
 | `3` | Policy refusal at startup: [`INSECURE_BIND_REFUSED`](../reference/errors.md#INSECURE_BIND_REFUSED), [`ADMIN_REQUIRES_HTTP`](../reference/errors.md#ADMIN_REQUIRES_HTTP), [`BLOCKLIST_LOAD_FAILED`](../reference/errors.md#BLOCKLIST_LOAD_FAILED), [`PORT_IN_USE`](../reference/errors.md#PORT_IN_USE), [`DB_NEWER_THAN_BINARY`](../reference/errors.md#DB_NEWER_THAN_BINARY), [`SANDBOX_UNAVAILABLE`](../reference/errors.md#SANDBOX_UNAVAILABLE) (`--sandbox on`). Printed as `[CODE] message`. |
 | `64` | Usage error: unknown flag or key, invalid value, conflicting settings, missing argument. |
 | `130` | A second interrupt arrived before graceful shutdown finished. |

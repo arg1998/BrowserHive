@@ -2,11 +2,7 @@
 
 import type { Page, Request } from 'playwright';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
-import {
-  canonicalHost,
-  isLoopbackByMeaning,
-  TEMPLATE_HOST_COOKIE,
-} from '../../kernel/self-address.ts';
+import { isSelfAddress, selfAddressesOf, TEMPLATE_HOST_COOKIE } from '../../kernel/self-address.ts';
 import type { CookieInput } from '../../ports/browser-driver.ts';
 import type { Clock } from '../../ports/clock.ts';
 import type { Logger } from '../../ports/logger.ts';
@@ -27,61 +23,6 @@ const ABORT_BLOCKED: InterceptionVerdict = Object.freeze({
 
 /** How often a frameless navigation is re-read while its page is being adopted. */
 const OWNER_POLL_MS = 25;
-
-/** The port a URL addresses (the scheme's default when absent). */
-function portOf(url: URL): number {
-  if (url.port !== '') return Number(url.port);
-  return url.protocol === 'https:' ? 443 : 80;
-}
-
-/** What the self-origin guard matches, compiled from BrowserHive's own origins. */
-export interface SelfAddresses {
-  /** Exact origins (`publicUrl`, every own origin). */
-  readonly origins: ReadonlySet<string>;
-  /** The ports BrowserHive answers on. */
-  readonly ports: ReadonlySet<number>;
-  /** Host names of its own origins (bound host, interface addresses, `publicUrl` host), canonical. */
-  readonly hosts: ReadonlySet<string>;
-}
-
-/** Compiles {@link SelfAddresses} from origins such as `http://127.0.0.1:9876`. */
-export function selfAddressesOf(origins: readonly string[]): SelfAddresses {
-  const exact = new Set<string>();
-  const ports = new Set<number>();
-  const hosts = new Set<string>();
-  for (const raw of origins) {
-    try {
-      const url = new URL(raw);
-      if (url.protocol !== 'http:' && url.protocol !== 'https:') continue;
-      exact.add(url.origin.toLowerCase());
-      ports.add(portOf(url));
-      hosts.add(canonicalHost(url.hostname));
-    } catch {
-      // Not a URL: nothing to guard.
-    }
-  }
-  return { origins: exact, ports, hosts };
-}
-
-/**
- * True when `raw` addresses BrowserHive itself, by meaning rather than spelling (spec 13 §3.8): one
- * of its own origins, or any `http(s)` URL on one of its ports whose host is loopback in any form
- * (`*.localhost`, 127/8, `::1`, IPv4-mapped, `0.0.0.0`, case and a trailing dot ignored) or one of
- * its own host names.
- */
-export function isSelfAddress(raw: string, self: SelfAddresses): boolean {
-  let url: URL;
-  try {
-    url = new URL(raw);
-  } catch {
-    return false;
-  }
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
-  if (self.origins.has(url.origin.toLowerCase())) return true;
-  if (!self.ports.has(portOf(url))) return false;
-  const host = canonicalHost(url.hostname);
-  return isLoopbackByMeaning(host) || self.hosts.has(host);
-}
 
 /**
  * Handler 1 of a template host's chain: aborts every request, of every method and resource type,
@@ -112,7 +53,12 @@ export function selfOriginHandler(deps: {
   };
 }
 
-export { TEMPLATE_HOST_COOKIE } from '../../kernel/self-address.ts';
+export {
+  isSelfAddress,
+  type SelfAddresses,
+  selfAddressesOf,
+  TEMPLATE_HOST_COOKIE,
+} from '../../kernel/self-address.ts';
 
 /**
  * The marker cookies a template host carries for each of BrowserHive's own origins: sent on every

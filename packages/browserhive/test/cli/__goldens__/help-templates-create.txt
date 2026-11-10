@@ -1,0 +1,53 @@
+browserhive templates create — Create a template and sign in to its sites in a window on the server
+
+USAGE
+  browserhive templates create <name> [flags]
+
+Talks to a running server over its REST API (--url, default the configured host and port) with an
+operator bearer (--token) or the dashboard cookie (--cookie). create opens a sign-in window on the
+machine running the server, wherever the CLI runs, and waits until every site is signed in, you
+press Enter, or --timeout passes. create and finish exit 0 when every site is signed in, 2 when one
+is not, 1 on an API error.
+
+ARGUMENTS
+  <name>  Template name agents use: 2–32 characters, a–z first, then a–z, 0–9 or -.
+
+FLAGS
+  --sites <site,…>                  Sites to sign in to, comma-separated (linkedin.com,indeed.com).
+                                    Required.
+  --displayName <text>              Name shown in the dashboard. default: the name
+  --description <text>              What it is for.
+  --channel <chromium|chrome|edge>  The template's browser. default: defaultChannel
+  --headless                        Run the template's browser without a window. Sites may challenge
+                                    it more often.
+  --stealth <off|standard|max>      Stealth level of the template's browser. default: stealth
+  --proxy <url>                     Proxy the template's browser always uses (http://host:port).
+  --proxyUsername <name>            Proxy user name (needs --proxy).
+  --proxyPasswordEnv <ENV>          Environment variable holding the proxy password on the server's
+                                    machine (needs --proxy). The password itself is never passed.
+  --locale <tag>                    Language the browser reports (en-CA).
+  --timezone <iana>                 Time zone the browser reports (America/Toronto).
+  --maxConcurrent <1-20>            Sessions that may use the template at once. default: 5
+  --allPrincipals                   Let every agent principal use the template.
+  --principal <subject>             Let this agent principal use the template (repeatable). Under
+                                    auth=token one of --allPrincipals or --principal is required.
+  --noLogin                         Create the template and exit without opening a sign-in window.
+  --timeout <duration>              How long to wait for the sign-ins. The template then stays in
+                                    setup; 'templates finish' completes it. default: 30m
+  --json                            Print machine-readable JSON instead of text.
+  --url <url>                       Talk to a running server over its REST API instead of opening
+                                    the database (http://127.0.0.1:9876).
+  --token <bearer>                  Operator bearer token for --url (bh_operator_…).
+  --cookie <value>                  Dashboard session cookie value for --url (browserhive_session).
+  --host <address>                  Bind address. A non-loopback host requires auth=token or
+                                    allowInsecureBind=true. default: 127.0.0.1
+  --port <1-65535>                  Bind port for MCP, REST, WebSocket and the dashboard.
+                                    default: 9876
+  --config <path>                   Config file path. CLI and environment only: a config file cannot
+                                    point at another.
+  --color <auto|always|never>       Colour for logs and CLI output. auto honours NO_COLOR,
+                                    FORCE_COLOR, TERM=dumb and TTY. default: auto
+
+GLOBAL FLAGS
+  -h, --help     Show help.
+  -v, --version  Print the version.

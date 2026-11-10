@@ -3,12 +3,15 @@
 import type { BrowserContext } from 'playwright';
 import type {
   AppliedIdentity,
+  Cookie,
   EngineCapabilities,
   LaunchWarning,
   SessionView,
 } from '../../src/ports/browser-driver.ts';
 import type {
   ParkedPageInfo,
+  SharedWindowInfo,
+  SignInRemoval,
   TemplateHost,
   TemplateHostExit,
   TemplateHostLauncher,
@@ -46,6 +49,12 @@ export class FakeTemplateHost implements TemplateHost {
   failOpen: Error | null = null;
   /** Exit listeners (the supervisor's, and one per open view, like the real host). */
   readonly exits = new Set<(exit: TemplateHostExit) => void>();
+  profileSecrets = false;
+  /** The template's jar as the test scripts it. */
+  cookies: Cookie[] = [];
+  /** Domains whose sign-in was removed, in order. */
+  readonly cleared: string[] = [];
+  shared: SharedWindowInfo[] = [];
 
   constructor(templateId: string, identity: AppliedIdentity | null = null) {
     this.hostId = templateId;
@@ -130,6 +139,37 @@ export class FakeTemplateHost implements TemplateHost {
   browserPid(): Promise<number | null> {
     return Promise.resolve(4242);
   }
+
+  async jar(): Promise<readonly Cookie[]> {
+    return [...this.cookies];
+  }
+
+  async clearSignIn(domain: string): Promise<SignInRemoval> {
+    this.cleared.push(domain);
+    const before = this.cookies.length;
+    this.cookies = this.cookies.filter(
+      (c) => !`.${c.domain.replace(/^\./, '')}`.endsWith(`.${domain}`),
+    );
+    return { cookiesRemoved: before - this.cookies.length, origins: [], unclearedOrigins: [] };
+  }
+
+  async sharedWindows(): Promise<readonly SharedWindowInfo[]> {
+    return this.shared;
+  }
+}
+
+/** A cookie for {@link FakeTemplateHost.cookies}. */
+export function fakeCookie(domain: string, name: string, value = `${name}-value-000000`): Cookie {
+  return {
+    name,
+    value,
+    domain,
+    path: '/',
+    expires: 2_000_000_000,
+    httpOnly: true,
+    secure: true,
+    sameSite: 'Lax',
+  };
 }
 
 /** A launcher whose starts the test scripts: resolve now, fail, or hold until released. */

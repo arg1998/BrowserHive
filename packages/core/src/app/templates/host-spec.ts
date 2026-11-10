@@ -111,3 +111,58 @@ export function observedIdentity(
     observedAt: now,
   };
 }
+
+/** What a host start means for the template's observed identity (spec 13 §2.2). */
+export type StartObservation =
+  | { readonly kind: 'record'; readonly record: ObservedIdentityRecord }
+  | { readonly kind: 'drift'; readonly from: string; readonly to: string }
+  | null;
+
+/**
+ * The first start records the observed identity (from the applied identity, or with stealth off
+ * from the browser version only: nothing is invented); a later start whose Chrome major differs is
+ * an identity drift; anything else changes nothing.
+ */
+export function observeStart(
+  template: Pick<TemplateRecord, 'identityObserved'>,
+  host: {
+    readonly identity: AppliedIdentity | null;
+    readonly browserInfo?: { readonly version: string | null };
+  },
+  now: number,
+): StartObservation {
+  const version = host.browserInfo?.version ?? null;
+  const major = host.identity?.chromeMajor ?? version?.split('.')[0] ?? null;
+  if (major === null || major === '') return null;
+  const observed = template.identityObserved;
+  if (observed !== null) {
+    return observed.chromeMajor === major
+      ? null
+      : { kind: 'drift', from: observed.chromeMajor, to: major };
+  }
+  if (host.identity !== null) {
+    return {
+      kind: 'record',
+      record: observedIdentity(host.identity, DEFAULT_TEMPLATE_WINDOW, now),
+    };
+  }
+  const window = DEFAULT_TEMPLATE_WINDOW;
+  return {
+    kind: 'record',
+    record: {
+      chromeMajor: major,
+      userAgent: '',
+      uaCh: {
+        brands: [],
+        fullVersionList: [],
+        platform: '',
+        platformVersion: '',
+        architecture: '',
+        bitness: '',
+      },
+      screen: { width: window.width, height: window.height, deviceScaleFactor: 1 },
+      window: { width: window.width, height: window.height },
+      observedAt: now,
+    },
+  };
+}

@@ -48,6 +48,7 @@ import type {
   RuntimeFacts,
   SessionService,
   SystemStatusService,
+  TemplateRecordingService,
   TemplateService,
   ToolDispatcher,
   VaultRedaction,
@@ -135,6 +136,8 @@ export interface DomainPart {
   readonly publicUrl: PublicUrlChecker;
   /** Session templates (spec 13). */
   readonly templates: TemplateService;
+  /** Recording a template's sign-ins and the T1a host routes (spec 13 §7.1, §11.1). */
+  readonly templateRecording: TemplateRecordingService;
   /** Random per start; `GET /health` reports it (D-37). */
   readonly instanceId: string;
   readonly preferences: PreferenceService;

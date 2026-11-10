@@ -5,7 +5,9 @@ import type { SessionPrincipal } from '../domain/session/principal.ts';
 import type { Session } from '../domain/session/session.ts';
 import type { TemplateSessionSettings } from '../domain/templates/launch-options.ts';
 import type { SessionSealing, TemplateHostFacts } from '../domain/templates/model.ts';
+import type { Cookie } from './browser-driver.ts';
 import type { TemplateRecord, TemplateSiteRecord } from './persistence/index.ts';
+import type { SignInRemoval } from './template-host.ts';
 
 /** A page of a host no session owns (spec 13 §3.4); `url` already sanitized (D-20). */
 export interface ParkedPageView {
@@ -104,4 +106,41 @@ export interface TemplateRuntime {
    * host and resolves once nothing has the profile open. Returns the closed session ids.
    */
   shutdown(templateId: string): Promise<readonly string[]>;
+}
+
+/** Who opens a recording, and for which sites (spec 13 §7.1 step 5). */
+export interface RecordingRequest {
+  readonly template: TemplateRecord;
+  readonly sites: readonly TemplateSiteRecord[];
+  /** The sites that get a tab, in order. */
+  readonly siteIds: readonly string[];
+  /** The operator; the maintenance session is theirs (spec 13 §1.1). */
+  readonly principal: SessionPrincipal;
+}
+
+/**
+ * Operator operations on a template's browser (spec 13 §2.3, §3.1, §3.4, §7.1): the recording
+ * window, the jar's sign-ins, shared windows and saved passwords. Implemented over the host
+ * supervisor; never reachable by agents.
+ */
+export interface TemplateHostOps {
+  /** Every cookie of the template's jar, or `null` when its browser is not running. */
+  jar(templateId: string): Promise<readonly Cookie[] | null>;
+  /** Windows that show pages of several sessions (`[]` when not running). */
+  sharedWindows(templateId: string): Promise<readonly SharedWindowView[]>;
+  /** Removes a registrable domain's cookies and site data, starting the browser when it is stopped. */
+  removeSignIn(template: TemplateRecord, domain: string): Promise<SignInRemoval>;
+  /** Stops the browser (its sessions close with `operator`) and empties saved passwords and autofill. */
+  clearProfileSecrets(template: TemplateRecord): Promise<void>;
+  /**
+   * Opens the recording window (a maintenance session owned by the operator) with one tab per site,
+   * or raises the one already open; agent windows are minimized meanwhile (spec 13 §3.3).
+   *
+   * @throws AppError `TEMPLATE_DISABLED`, `TEMPLATE_UNAVAILABLE`, `SESSION_LIMIT_REACHED`.
+   */
+  openRecording(request: RecordingRequest): Promise<Session>;
+  /** The open recording session of a template, or `null`. */
+  recordingOf(templateId: string): Session | null;
+  /** Closes the recording window (its maintenance session); the template is unchanged. */
+  closeRecording(templateId: string): Promise<void>;
 }

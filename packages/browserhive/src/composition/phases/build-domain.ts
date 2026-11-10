@@ -87,6 +87,7 @@ async function buildDomain(
 
   const sessionParts = await buildSessions({
     config,
+    ...(ctx.input.testingArgs !== undefined && { testingArgs: ctx.input.testingArgs }),
     host: hostFactsOf(ctx.input.host),
     clock,
     ids,
@@ -256,6 +257,7 @@ async function buildDomain(
 
   const tpl = buildTemplates({
     config,
+    ...(ctx.input.testingArgs !== undefined && { testingArgs: ctx.input.testingArgs }),
     host: hostFactsOf(ctx.input.host),
     uow: storage.uow,
     clock,
@@ -327,6 +329,7 @@ async function buildDomain(
     reportService: ops.reportService,
     publicUrl: ops.publicUrl,
     templates,
+    templateRecording: tpl.recording,
     instanceId,
     preferences: ops.preferences,
     recorder: ops.recorder,
@@ -349,8 +352,10 @@ async function buildDomain(
       sessionParts.sweeper.stop();
       sessionParts.stopWatcher?.();
       tpl.stopTicks();
+      const began = clock.now();
       await sessions.closeAll('shutdown', Math.max(1_000, deadlineMs - 500));
-      await tpl.supervisor?.stopAll(); // template hosts close after their sessions (spec 13 §3.2)
+      // Template hosts close after their sessions, within what is left (spec 13 §3.2).
+      await tpl.supervisor?.stopAll(Math.max(1_000, deadlineMs - 500 - (clock.now() - began)));
       await operators.broker.shutdown();
       operators.vaultRedaction.closeAll();
       offClosed();

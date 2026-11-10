@@ -3,10 +3,10 @@
 import type { ClosedReason } from '@browserhive/contracts/enums';
 import type { SessionPrincipal } from '../../domain/session/principal.ts';
 import type { Session } from '../../domain/session/session.ts';
+import { NO_SEALING } from '../../domain/session/session-template.ts';
 import { effectiveCap, pageCaps } from '../../domain/templates/model.ts';
-import { withDeadline } from '../../kernel/deadline.ts';
+import { settlesWithin, withDeadline } from '../../kernel/deadline.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
-import { sanitizeUrl } from '../../kernel/url.ts';
 import type { Clock } from '../../ports/clock.ts';
 import type { DegradationReporter } from '../../ports/degradation-reporter.ts';
 import type { Logger } from '../../ports/logger.ts';
@@ -16,21 +16,16 @@ import type {
   TemplateSiteRecord,
 } from '../../ports/persistence/index.ts';
 import type { TemplateHost, TemplateHostLauncher } from '../../ports/template-host.ts';
-import {
-  STOPPED_HOST,
-  type TemplateHostView,
-  type TemplateLaunchRequest,
-  type TemplateRuntime,
+import type {
+  TemplateHostView,
+  TemplateLaunchRequest,
+  TemplateRuntime,
 } from '../../ports/template-runtime.ts';
 import type { SessionService } from '../sessions/session-service.ts';
 import { HostLifecycle } from './host-lifecycle.ts';
-import {
-  buildHostSpec,
-  DEFAULT_TEMPLATE_WINDOW,
-  type HostSpecDeps,
-  observedIdentity,
-} from './host-spec.ts';
+import { buildHostSpec, type HostSpecDeps, observeStart } from './host-spec.ts';
 import { idleExpired, nextIdleSince, recycleAt, TEMPLATE_LAUNCH_BUDGET_MS } from './host-state.ts';
+import { hostViewOf } from './host-view.ts';
 import { admitTemplateLaunch } from './template-admission.ts';
 import { sessionTemplateOf, virtualLauncher, virtualSessionInput } from './virtual-launch.ts';
 
@@ -88,31 +83,21 @@ export class TemplateHostSupervisor implements TemplateRuntime {
   }
 
   host(templateId: string): TemplateHostView {
-    const live = this.liveSessions(templateId).length;
-    const lifecycle = this.hosts.get(templateId);
-    if (lifecycle === undefined) return { ...STOPPED_HOST, liveAgentSessions: live };
-    const host = lifecycle.current;
-    return {
-      state: lifecycle.state,
-      liveAgentSessions: live,
-      since: lifecycle.since,
-      startedAt: lifecycle.startedAt,
-      restarts: lifecycle.restarts,
-      lastError: lifecycle.failure ?? lifecycle.lastError,
-      pages: host?.agentPageCount() ?? 0,
-      parkedPages:
-        host?.parkedPages().map((p) => ({
-          targetId: p.targetId,
-          url: sanitizeUrl(p.url),
-          title: '',
-          openedAt: p.openedAt,
-        })) ?? [],
-      sharedWindows: [],
+    return hostViewOf(this.hosts.get(templateId), {
+      liveAgentSessions: this.liveSessions(templateId).length,
       rssBytes: this.rss.get(templateId) ?? null,
-      recycleAt: recycleAt(lifecycle.startedAt, this.deps.config.recycleAfterMs),
-      sandboxed: host?.browserInfo?.sandboxed ?? null,
-      profileSecrets: false,
-    };
+      recycleAfterMs: this.deps.config.recycleAfterMs,
+    });
+  }
+
+  /** The running host of a template, or `null` (operator operations, `TemplateHostOps`). */
+  runningHost(templateId: string): TemplateHost | null {
+    return this.hosts.get(templateId)?.running ?? null;
+  }
+
+  /** Stops a template's host, closing its sessions with `operator` (clearing saved passwords). */
+  async stopHost(templateId: string, reason: string): Promise<void> {
+    await this.hosts.get(templateId)?.stop(reason, 'operator');
   }
 
   liveSessions(templateId: string): readonly string[] {
@@ -139,7 +124,7 @@ export class TemplateHostSupervisor implements TemplateRuntime {
       agentPages: lifecycle.current?.agentPageCount() ?? 0,
       caps,
     });
-    const session = sessionTemplateOf(template, request.sites, 'live', request.sealed);
+    const session = sessionTemplateOf(template, request.sites, 'live', request.sealing);
     return this.run(
       template.templateId,
       async (budget) => {
@@ -176,6 +161,8 @@ export class TemplateHostSupervisor implements TemplateRuntime {
     readonly sites: readonly TemplateSiteRecord[];
     readonly slug: string;
     readonly principal: SessionPrincipal;
+    /** A recording or re-login window: agent windows are minimized while it is open (§3.3). */
+    readonly recording?: boolean;
     readonly signal?: AbortSignal;
   }): Promise<Session> {
     const { template } = input;
@@ -187,7 +174,7 @@ export class TemplateHostSupervisor implements TemplateRuntime {
     ) {
       throw lifecycle.refusal();
     }
-    const session = sessionTemplateOf(template, input.sites, 'maintenance', false);
+    const session = sessionTemplateOf(template, input.sites, 'maintenance', NO_SEALING);
     return this.run(
       template.templateId,
       (budget) =>
@@ -205,7 +192,13 @@ export class TemplateHostSupervisor implements TemplateRuntime {
             humanize: false,
           },
           input.principal,
-          virtualLauncher({ lifecycle, template, session, caps: null }),
+          virtualLauncher({
+            lifecycle,
+            template,
+            session,
+            caps: null,
+            ...(input.recording === true && { recording: true }),
+          }),
           { signal: budget, deadlineMs: TEMPLATE_LAUNCH_BUDGET_MS },
         ),
       input.signal,
@@ -274,18 +267,28 @@ export class TemplateHostSupervisor implements TemplateRuntime {
     );
   }
 
-  /** Daemon shutdown: every template session closes with `shutdown`, then every host. */
-  async stopAll(): Promise<void> {
-    const ids = [...this.hosts.keys()];
-    await Promise.allSettled(
-      ids.map(async (id) => {
-        await this.hosts.get(id)?.stop('shutdown');
-        await this.closeSessions(
-          this.sessionsOf(id, null).map((s) => s.id),
-          'shutdown',
-        );
+  /**
+   * Daemon shutdown: every template session closes with `shutdown`, then every host, within
+   * `deadlineMs` when given (PR #76 F12): a host still starting at the deadline is closed when its
+   * start finishes, and a close that overruns kills its browser.
+   */
+  async stopAll(deadlineMs?: number): Promise<void> {
+    // Only what exists now: a stop that overruns the deadline must never close a later session.
+    const stops = [...this.hosts].map(([id, lifecycle]) => ({
+      lifecycle,
+      sessions: this.sessionsOf(id, null).map((s) => s.id),
+    }));
+    const stopping = Promise.allSettled(
+      stops.map(async ({ lifecycle, sessions }) => {
+        await lifecycle.stop('shutdown');
+        await this.closeSessions(sessions, 'shutdown');
       }),
     );
+    const sleep = (ms: number, signal?: AbortSignal) => this.deps.clock.sleep(ms, signal);
+    if (deadlineMs === undefined) await stopping;
+    else if (!(await settlesWithin(stopping, sleep, deadlineMs))) {
+      this.log.warn('hosts closing past budget', { deadlineMs });
+    }
     this.hosts.clear();
   }
 
@@ -335,7 +338,7 @@ export class TemplateHostSupervisor implements TemplateRuntime {
   }
 
   /** Sessions of a template: `live` (agents), `maintenance`, or every one (`null`). */
-  private sessionsOf(templateId: string, mode: 'live' | 'maintenance' | null): readonly Session[] {
+  sessionsOf(templateId: string, mode: 'live' | 'maintenance' | null): readonly Session[] {
     return this.deps.sessions
       .listAll()
       .filter(
@@ -357,21 +360,12 @@ export class TemplateHostSupervisor implements TemplateRuntime {
 
   /** First start: record the observed identity (spec 13 §2.2); later ones only compare the major. */
   private started(template: TemplateRecord, host: TemplateHost): void {
-    const identity = host.identity;
-    if (identity === null) return;
-    const observed = template.identityObserved;
-    if (observed !== null) {
-      if (observed.chromeMajor !== identity.chromeMajor) {
-        this.log.warn('identity drift', {
-          templateId: template.templateId,
-          from: observed.chromeMajor,
-          to: identity.chromeMajor,
-        });
-      }
-      return;
+    const seen = observeStart(template, host, this.deps.clock.now());
+    if (seen?.kind === 'drift') {
+      this.log.warn('identity drift', { templateId: template.templateId, ...seen });
     }
-    const record = observedIdentity(identity, DEFAULT_TEMPLATE_WINDOW, this.deps.clock.now());
-    this.deps.templates.update(template.templateId, { identityObserved: record }).then(
+    if (seen?.kind !== 'record') return;
+    this.deps.templates.update(template.templateId, { identityObserved: seen.record }).then(
       (updated) => this.hosts.get(template.templateId)?.refresh(updated),
       (err: unknown) => this.log.warn('observed identity unsaved', { err: serializeError(err) }),
     );

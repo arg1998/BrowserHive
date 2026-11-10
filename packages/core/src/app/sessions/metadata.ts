@@ -222,6 +222,15 @@ export function toSessionSummary(session: Session, now: number): SessionSummary 
     harness: launchHarnessOf(request.client) ?? UNKNOWN_HARNESS,
     ...declaredOf(launchDeclaredHarnessOf(request.client)),
     client: toWireClient(request.client),
+    ...(session.template !== null && {
+      template: {
+        template_id: session.template.templateId,
+        name: session.template.name,
+        version: session.template.version,
+        mode: session.template.mode,
+      },
+      sealed: session.template.sealed,
+    }),
   };
 }
 

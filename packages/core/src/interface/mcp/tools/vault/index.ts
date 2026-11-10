@@ -1,5 +1,6 @@
 /** @module interface/mcp/tools/vault — vault_list_available, vault_fill (delegating to VaultService; failures are returned statuses). */
 
+import { TEMPLATE_VAULT_NOTE } from '@browserhive/contracts/tools';
 import { safeCurrentUrl } from '../../../../app/sessions/metadata.ts';
 import type { Session } from '../../../../domain/session/session.ts';
 import type { VaultPage } from '../../../../domain/vault/types.ts';
@@ -42,6 +43,15 @@ export const vaultListAvailable = defineTool('vault_list_available', {
   policies: [vaultEnabled, sessionOwnership],
   async handler(ctx, args) {
     const session = requireSession(ctx);
+    // A template session never fills: no entry is offered (spec 13 §5.5).
+    if (session.template !== null) {
+      return json({
+        entries: [],
+        scope: 'page' as const,
+        scoped_to: null,
+        note: TEMPLATE_VAULT_NOTE,
+      });
+    }
     const result = await ctx.services.vault.listAvailable(
       { principal: ctx.principal.subject, slug: session.slug, ...launchHarness(session) },
       {
@@ -96,6 +106,7 @@ export const vaultFill = defineTool('vault_fill', {
           vaultEnabled: session.request.vaultEnabled,
           humanize: session.request.humanize,
           ...launchHarness(session),
+          template: session.template !== null,
         },
         page: vaultPage(page),
         tracing: session.view?.host.tracing ?? null,

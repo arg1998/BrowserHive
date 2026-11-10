@@ -73,8 +73,15 @@ export interface ToolHarnessOptions {
   readonly identityEnv?: Readonly<Record<string, string>>;
   /** `templates` (default `true`); `false` also disables the `templates` pack, as composition does. */
   readonly templates?: boolean;
-  /** The template runtime (default: a {@link FakeTemplateRuntime} without hosts). */
-  readonly templateRuntime?: TemplateRuntime;
+  /**
+   * The template runtime (default: a {@link FakeTemplateRuntime} without hosts), or a factory over
+   * the harness's own session service (a real host supervisor in the integration suites).
+   */
+  readonly templateRuntime?:
+    | TemplateRuntime
+    | ((sessions: SessionService, dataDir: string) => TemplateRuntime);
+  /** BrowserHive's own origins (template sessions' `#browserhive` refusal, spec 13 §3.8). */
+  readonly selfOrigins?: readonly string[];
 }
 
 /** A connected in-process MCP client over the real server + dispatcher. */
@@ -218,6 +225,7 @@ export async function createToolHarness(options: ToolHarnessOptions = {}): Promi
     dataDir,
     persistenceMode: 'memory',
     templates: options.templates ?? true,
+    ...(options.selfOrigins !== undefined && { selfOrigins: options.selfOrigins }),
     launchDefaults: {
       channel: options.defaultChannel ?? 'chromium',
       headless: options.defaultHeadless ?? true,
@@ -227,7 +235,12 @@ export async function createToolHarness(options: ToolHarnessOptions = {}): Promi
     clock,
     ids,
     logger,
-    ...(options.templateRuntime !== undefined && { runtime: options.templateRuntime }),
+    ...(options.templateRuntime !== undefined && {
+      runtime:
+        typeof options.templateRuntime === 'function'
+          ? options.templateRuntime(sessions, dataDir)
+          : options.templateRuntime,
+    }),
     config: { enabled: options.templates ?? true },
   });
   const services: ToolServices = {

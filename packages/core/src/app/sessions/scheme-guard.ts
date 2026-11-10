@@ -5,9 +5,6 @@ import { refusedCommittedScheme, type SchemeOptions } from '../../domain/policie
 import type { TabRegistry } from '../../domain/session/tabs.ts';
 import type { Logger } from '../../ports/logger.ts';
 
-/** Every session is exclusive today, so its pages may show `data:` documents. */
-const SESSION_SCHEME_OPTIONS: SchemeOptions = { allowData: true };
-
 /** How long a close may take before it is sent again over CDP, and how many times. */
 const CLOSE_WAIT_MS = 1_000;
 const CLOSE_RETRIES = 3;
@@ -54,6 +51,11 @@ export interface SchemeGuardTarget {
   readonly sessionId: string;
   readonly tabs: TabRegistry;
   readonly logger: Logger;
+  /**
+   * Whether the session's pages may show `data:` documents: exclusive sessions may, template
+   * sessions may not (spec 13 §5.5, follow-up 1).
+   */
+  readonly allowData: boolean;
   /** A DevTools session on one of the session's own pages (`SessionView.newCDPSession`). */
   newCDPSession(page: Page): Promise<CDPSession>;
 }
@@ -62,7 +64,7 @@ export interface SchemeGuardTarget {
  * Watches `page` for main-frame commits. The `urlScheme` tool policy stops agents from asking for
  * a non-web URL; this catches navigations no tool requested (a site, a popup, a driver quirk). When
  * the main frame commits a URL outside `http:`, `https:`, `about:blank`/`about:srcdoc`, `blob:`,
- * `chrome-error:` and `data:`, the page's tab is removed, the page closed and
+ * `chrome-error:` and (outside template sessions) `data:`, the page's tab is removed, the page closed and
  * `non-web scheme page closed` logged with the session id and scheme. A page already showing such
  * a URL when the guard attaches is closed at once. Pages without an event emitter (unit fakes) are
  * left alone.
@@ -71,10 +73,11 @@ export function guardPageScheme(page: Page, target: SchemeGuardTarget): void {
   const emitter: { on?: unknown } = page;
   if (typeof emitter.on !== 'function') return;
   let closing = false;
+  const options: SchemeOptions = { allowData: target.allowData };
   const check = (url: string): void => {
     // A page that has not committed anything yet reports an empty URL.
     if (closing || url === '') return;
-    const scheme = refusedCommittedScheme(url, SESSION_SCHEME_OPTIONS);
+    const scheme = refusedCommittedScheme(url, options);
     if (scheme === null) return;
     closing = true;
     const tabId = target.tabs.idFor(page);

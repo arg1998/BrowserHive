@@ -39,7 +39,7 @@ import {
 } from '../serializers/operator-requests.ts';
 import { envelope, pagingOf } from '../serializers/page.ts';
 import { timelineItemToWire } from '../serializers/timeline.ts';
-import { requireSession } from './common.ts';
+import { assertTemplateViewScope, requireSession } from './common.ts';
 
 const tags = ['sessions'];
 const errors = ['SESSION_NOT_FOUND'] as const;
@@ -150,8 +150,9 @@ export const SESSION_FACT_ROUTES = [
     request: { params: SessionIdParams, query: SessionScreenshotsQuery },
     responses: { 200: ScreenshotsPage },
     errors,
-    async handler({ input, services, ctx }) {
+    async handler({ input, principal, services, ctx }) {
       const known = await requireSession(services, input.params.session_id);
+      assertTemplateViewScope(principal, known);
       const page = await services.repos.screenshots.listBySession(
         known.id,
         screenshotsQueryToRepo(input.query),

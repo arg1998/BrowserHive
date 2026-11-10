@@ -16,7 +16,102 @@ function headers(remote: RemoteTarget, withBody: boolean): Record<string, string
     accept: 'application/json',
     ...(withBody && { 'content-type': 'application/json' }),
     ...(remote.token !== undefined && { authorization: `Bearer ${remote.token}` }),
-    ...(remote.cookie !== undefined && { cookie: `${SESSION_COOKIE}=${remote.cookie}` }),
+    // A cookie-authenticated write must name the server's own origin (the CSRF check, 03 §2); the
+    // CLI holding the operator's cookie is the operator.
+    ...(remote.cookie !== undefined && {
+      cookie: `${SESSION_COOKIE}=${remote.cookie}`,
+      origin: new URL(remote.url).origin,
+    }),
+  };
+}
+
+/**
+ * A REST answer: the JSON of a 2xx, or a failure. A refusal (`status` set) is not printed yet:
+ * `report()` prints it; a network or body failure (`status: null`) was already printed.
+ */
+export type RemoteAnswer =
+  | { readonly ok: true; readonly json: unknown }
+  | {
+      readonly ok: false;
+      readonly code: ExitCode;
+      readonly status: number | null;
+      readonly problem: ProblemDetails | null;
+      report(): void;
+    };
+
+function readProblem(text: string): ProblemDetails | null {
+  try {
+    const parsed = ProblemDetails.safeParse(JSON.parse(text));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
+function printRefusal(
+  context: CommandContext,
+  label: string,
+  status: number,
+  problem: ProblemDetails | null,
+): void {
+  const detail =
+    problem === null
+      ? `HTTP ${status}`
+      : `[${problem.code}] ${problem.detail ?? problem.title}${problem.hint === undefined ? '' : ` ${problem.hint}`}`;
+  context.out.diagnostic(`browserhive: ${label} failed: ${detail}`);
+  if (status === 401 || status === 403) {
+    context.out.diagnostic(
+      'Pass an operator bearer with --token, or the dashboard session cookie with --cookie.',
+    );
+  }
+}
+
+/**
+ * One REST call to a running server with the remote target's credentials. Refusals are returned
+ * unprinted so the caller can treat an expected one (a 409) as an answer.
+ *
+ * @returns The parsed JSON, or the failure.
+ */
+export async function remoteRequest(
+  context: CommandContext,
+  remote: RemoteTarget,
+  method: string,
+  path: string,
+  body?: unknown,
+): Promise<RemoteAnswer> {
+  const url = `${remote.url}${API_PREFIX}${path}`;
+  const printed = (message: string): RemoteAnswer => {
+    context.out.diagnostic(message);
+    return { ok: false, code: EXIT.fatal, status: null, problem: null, report: () => undefined };
+  };
+  let response: Awaited<ReturnType<CommandContext['deps']['http']>>;
+  try {
+    response = await context.deps.http(url, {
+      method,
+      headers: headers(remote, body !== undefined),
+      ...(body !== undefined && { body: JSON.stringify(body) }),
+    });
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : 'request failed';
+    return printed(`browserhive: cannot reach ${url}: ${reason}`);
+  }
+  const text = await response.text();
+  if (response.status >= 200 && response.status < 300) {
+    if (text === '') return { ok: true, json: null };
+    try {
+      return { ok: true, json: JSON.parse(text) };
+    } catch {
+      return printed(`browserhive: ${url} answered ${response.status} with a non-JSON body.`);
+    }
+  }
+  const status = response.status;
+  const problem = readProblem(text);
+  return {
+    ok: false,
+    code: EXIT.fatal,
+    status,
+    problem,
+    report: () => printRefusal(context, `${method} ${url}`, status, problem),
   };
 }
 
@@ -34,50 +129,10 @@ export async function remoteCall(
 ): Promise<
   { readonly ok: true; readonly json: unknown } | { readonly ok: false; readonly code: ExitCode }
 > {
-  const url = `${remote.url}${API_PREFIX}${path}`;
-  let response: Awaited<ReturnType<CommandContext['deps']['http']>>;
-  try {
-    response = await context.deps.http(url, {
-      method,
-      headers: headers(remote, body !== undefined),
-      ...(body !== undefined && { body: JSON.stringify(body) }),
-    });
-  } catch (err) {
-    const reason = err instanceof Error ? err.message : 'request failed';
-    context.out.diagnostic(`browserhive: cannot reach ${url}: ${reason}`);
-    return { ok: false, code: EXIT.fatal };
-  }
-  if (response.status >= 200 && response.status < 300) {
-    const text = await response.text();
-    if (text === '') return { ok: true, json: null };
-    try {
-      return { ok: true, json: JSON.parse(text) };
-    } catch {
-      context.out.diagnostic(
-        `browserhive: ${url} answered ${response.status} with a non-JSON body.`,
-      );
-      return { ok: false, code: EXIT.fatal };
-    }
-  }
-  const text = await response.text();
-  let problem: ProblemDetails | null = null;
-  try {
-    const parsed = ProblemDetails.safeParse(JSON.parse(text));
-    problem = parsed.success ? parsed.data : null;
-  } catch {
-    problem = null;
-  }
-  const detail =
-    problem === null
-      ? `HTTP ${response.status}`
-      : `[${problem.code}] ${problem.detail ?? problem.title}${problem.hint === undefined ? '' : ` ${problem.hint}`}`;
-  context.out.diagnostic(`browserhive: ${method} ${url} failed: ${detail}`);
-  if (response.status === 401 || response.status === 403) {
-    context.out.diagnostic(
-      'Pass an operator bearer with --token, or the dashboard session cookie with --cookie.',
-    );
-  }
-  return { ok: false, code: EXIT.fatal };
+  const answer = await remoteRequest(context, remote, method, path, body);
+  if (answer.ok) return answer;
+  answer.report();
+  return { ok: false, code: answer.code };
 }
 
 /**

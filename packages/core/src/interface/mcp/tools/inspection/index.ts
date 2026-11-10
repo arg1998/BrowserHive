@@ -17,6 +17,7 @@ import { isolatedEvaluate } from '../interaction/act.ts';
 import { drive, pageOf, safeUrl } from '../shared.ts';
 import { contentWhenSettled } from './content.ts';
 import { wrapFunctionExpression } from './evaluate-wrap.ts';
+import { captureScreenshot } from './screenshot-capture.ts';
 
 /** Content type of every tool screenshot. */
 export const SCREENSHOT_CONTENT_TYPE = 'image/png';
@@ -65,16 +66,12 @@ export const screenshot = defineTool('screenshot', {
       savedTo = await resolveScreenshotSavePath(dataDir, session.id, args.save_path);
       await ctx.services.fs.mkdir(dirname(savedTo));
     }
-    const path = savedTo;
-    const buffer = await drive(ctx, { sessionId: session.id, what: 'screenshot' }, () =>
-      page.screenshot({
-        fullPage: args.full_page,
-        ...(args.clip !== undefined && { clip: args.clip }),
-        omitBackground: args.omit_background,
-        ...(path !== undefined && { path }),
-      }),
-    );
-    const bytes = new Uint8Array(buffer);
+    const bytes = await captureScreenshot(ctx, session, page, {
+      fullPage: args.full_page,
+      ...(args.clip !== undefined && { clip: args.clip }),
+      omitBackground: args.omit_background,
+      ...(savedTo !== undefined && { path: savedTo }),
+    });
     const viewport = page.viewportSize() ?? { width: 0, height: 0 };
     const artifact = await archive(ctx, session.id, bytes, {
       width: viewport.width,

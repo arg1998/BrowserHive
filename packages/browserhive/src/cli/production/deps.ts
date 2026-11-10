@@ -17,6 +17,7 @@ import { processStreams, terminalPrompter } from '../output/process-io.ts';
 import { runCli } from '../run.ts';
 import { createHostProbes } from './probes.ts';
 import { inspectDatabaseFile, openCliStorage } from './storage.ts';
+import { processWait } from './wait.ts';
 
 /**
  * The production dependency record. Heavy modules (composition root, persistence, browsers) are
@@ -68,6 +69,7 @@ export function productionDeps(argv: readonly string[]): CliDeps {
         headers: init.headers,
         ...(init.body !== undefined && { body: init.body }),
       }),
+    wait: processWait(),
     schemaVersion: SCHEMA_VERSION,
     applicationId: APPLICATION_ID,
   };

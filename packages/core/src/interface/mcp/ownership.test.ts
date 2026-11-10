@@ -10,6 +10,7 @@ import {
   textOf,
 } from '../../../test/helpers/fake-transport.ts';
 import { agentPrincipal } from '../../domain/auth/principal.ts';
+import { NO_SEALING } from '../../domain/session/session-template.ts';
 
 /** Minimal schema-valid arguments besides `session_id`. */
 const ARGS: Partial<Record<ToolName, Record<string, unknown>>> = {
@@ -116,6 +117,7 @@ describe('maintenance sessions (spec 13 §6.1)', () => {
           version: null,
           mode: 'maintenance',
           sealed: false,
+          sealing: NO_SEALING,
           sites: [],
         },
         proxyLabel: null,

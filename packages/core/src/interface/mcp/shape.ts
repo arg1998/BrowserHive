@@ -108,12 +108,23 @@ export function shapeSuccess(result: ToolResult<unknown>, output: z.ZodType): Sh
   return { content: [{ type: 'text', text }], structuredContent: structured };
 }
 
+function scrubSerialized(value: object, scrub: (text: string) => string): unknown {
+  try {
+    return JSON.parse(scrub(JSON.stringify(value))) as unknown;
+  } catch {
+    return null;
+  }
+}
+
 function scrubValue(value: unknown, scrub: (text: string) => string, depth: number): unknown {
   if (typeof value === 'string') return scrub(value);
-  if (depth > 32 || typeof value !== 'object' || value === null) return value;
+  if (typeof value !== 'object' || value === null) return value;
+  // Deeper than the walk goes: scrub the serialized subtree, so no string escapes redaction.
+  if (depth > 32) return scrubSerialized(value, scrub);
   if (Array.isArray(value)) return value.map((v) => scrubValue(v, scrub, depth + 1));
+  // Keys too: a result keyed by page data must not carry a secret in a key.
   return Object.fromEntries(
-    Object.entries(value).map(([k, v]) => [k, scrubValue(v, scrub, depth + 1)]),
+    Object.entries(value).map(([k, v]) => [scrub(k), scrubValue(v, scrub, depth + 1)]),
   );
 }
 

@@ -55,6 +55,8 @@ export const AuthManifest = z.object({
   source_session_id: z.string(),
   size: z.number(),
   owner: z.string().default(DEFAULT_OWNER),
+  /** Set when the snapshot was exported from a template session (spec 13 §5.4 `state_export`). */
+  source_template_id: z.string().optional(),
 });
 /** Parsed {@link AuthManifest}. */
 export type AuthManifest = z.infer<typeof AuthManifest>;
@@ -181,6 +183,7 @@ export class AuthStateStore implements AuthStateLocator {
     name: string,
     sourceSessionId: string,
     principal: SessionPrincipal,
+    options: { readonly sourceTemplateId?: string } = {},
   ): Promise<SavedAuthResult> {
     assertValidAuthName(name);
     const files = await this.prepareSave(name, principal);
@@ -198,6 +201,9 @@ export class AuthStateStore implements AuthStateLocator {
       source_session_id: sourceSessionId,
       size,
       owner: principal.subject,
+      ...(options.sourceTemplateId !== undefined && {
+        source_template_id: options.sourceTemplateId,
+      }),
     });
     return { name, path, size };
   }

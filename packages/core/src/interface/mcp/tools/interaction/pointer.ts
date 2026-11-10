@@ -1,5 +1,11 @@
 /** @module interface/mcp/tools/interaction/pointer — click, type_text, fill, press_key, hover. */
 
+import { TEMPLATE_MIDDLE_CLICK_TEXT } from '@browserhive/contracts/tools';
+import {
+  CLIPBOARD_CHORD_MESSAGE,
+  isClipboardChord,
+} from '../../../../domain/templates/clipboard-chords.ts';
+import { AppError } from '../../../../kernel/errors/app-error.ts';
 import { requireSession } from '../../context.ts';
 import { defineTool, json } from '../../definition.ts';
 import { sessionOwnership } from '../../policies.ts';
@@ -14,6 +20,14 @@ export const click = defineTool('click', {
   policies: [sessionOwnership],
   async handler(ctx, args) {
     const session = requireSession(ctx);
+    // On Linux a middle click pastes the primary selection: on a headed template, the operator's.
+    if (session.template !== null && args.button === 'middle') {
+      throw new AppError(
+        'INVALID_ARGUMENTS',
+        { issues: [{ path: 'button', message: TEMPLATE_MIDDLE_CLICK_TEXT }] },
+        { publicMessage: `button: ${TEMPLATE_MIDDLE_CLICK_TEXT}` },
+      );
+    }
     const page = pageOf(ctx, session, args.tab_id);
     const native = async (): Promise<void> =>
       page.click(args.selector, {
@@ -100,6 +114,14 @@ export const pressKey = defineTool('press_key', {
   policies: [sessionOwnership],
   async handler(ctx, args) {
     const session = requireSession(ctx);
+    // A template's browser may be on the operator's desktop: no paste of their clipboard (§3.3).
+    if (session.template !== null && isClipboardChord(args.key)) {
+      throw new AppError(
+        'INVALID_ARGUMENTS',
+        { issues: [{ path: 'key', message: CLIPBOARD_CHORD_MESSAGE }] },
+        { publicMessage: `key: ${CLIPBOARD_CHORD_MESSAGE}` },
+      );
+    }
     const page = pageOf(ctx, session, args.tab_id);
     const selector = args.selector;
     if (selector !== undefined) {

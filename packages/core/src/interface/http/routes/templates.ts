@@ -1,4 +1,4 @@
-/** @module interface/http/routes/templates — session templates for operators: list, create, read and delete (spec 13 §11.1, the T1a routes that need no running host; recording arrives with templates T1a-3, the rest with T1b). */
+/** @module interface/http/routes/templates — session templates for operators: list, create, read and delete (spec 13 §11.1; recording and the T1a host routes are in `template-recording.ts`, the rest arrive with T1b). */
 
 import {
   DeleteTemplateQuery,

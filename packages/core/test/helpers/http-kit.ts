@@ -20,6 +20,7 @@ import { sampleAnomalyFacts, sampleDigestFacts } from '../../src/app/notificatio
 import { sessionDirLayout } from '../../src/app/sessions/profile-dir.ts';
 import { SessionService } from '../../src/app/sessions/session-service.ts';
 import { FakeSessionDirFs, testConfig } from '../../src/app/sessions/test-support.ts';
+import { TemplateRecordingService } from '../../src/app/templates/template-recording.ts';
 import { TemplateService } from '../../src/app/templates/template-service.ts';
 import { VaultService } from '../../src/app/vault/vault-service.ts';
 import { OperatorRequestBroker } from '../../src/domain/operator-requests/broker.ts';
@@ -30,6 +31,7 @@ import type { StaticAssets } from '../../src/ports/static-assets.ts';
 import { CollectingLogger } from './collecting-logger.ts';
 import { createAuthTestKit, seedOperator } from './fake-auth.ts';
 import { FakeBrowserDriver } from './fake-browser-driver.ts';
+import { FakeTemplateHostOps } from './fake-host-ops.ts';
 import { FakeVaultBackend } from './fake-vault-backend.ts';
 import {
   FakeAnalytics,
@@ -224,10 +226,21 @@ export async function createHttpKit(options: HttpKitOptions = {}) {
   const templateRepos = { ...repos, operatorActions: vaultRepos.actions };
   const templateRuntime = new FakeTemplateRuntime();
   const templateFiles = new FakeTemplateFiles();
+  const templateOps = new FakeTemplateHostOps();
+  const templateRecording = new TemplateRecordingService({
+    repos: templateRepos,
+    uow: new InMemoryUnitOfWork(templateRepos),
+    runtime: templateRuntime,
+    ops: templateOps,
+    ids: auth.ids,
+    clock,
+    logger,
+  });
   const templates = new TemplateService({
     repos: templateRepos,
     uow: new InMemoryUnitOfWork(templateRepos),
     runtime: templateRuntime,
+    ops: templateOps,
     geo: FAKE_TEMPLATE_GEO,
     files: templateFiles,
     degradations: new RecordingDegradations(),
@@ -277,6 +290,7 @@ export async function createHttpKit(options: HttpKitOptions = {}) {
     channels,
     publicUrl,
     templates,
+    templateRecording,
   };
   if (options.seed !== false) await seedDataset(repos, vaultRepos, files, sessionDirs);
   const http: HttpApp = createHttpApp({
@@ -351,6 +365,7 @@ export async function createHttpKit(options: HttpKitOptions = {}) {
     templates,
     templateRuntime,
     templateFiles,
+    templateOps,
   };
 }
 

@@ -87,6 +87,43 @@ Check the session's Identity tab. Make sure `browserhive init` installed Patchri
 
 **`origin_mismatch`** — the page is not on the binding's allowed origins. Remember that `github.com` does not match `gist.github.com`; use `*.github.com`.
 
+## Session templates
+
+Where to look: `browserhive templates list` shows each template's status and the state of its browser; `GET /api/v1/templates/{id}` shows the browser's `state` and `last_error`; a browser that cannot start is also a [`TEMPLATE_HOST_FAILED`](../reference/errors.md#TEMPLATE_HOST_FAILED) degradation on the System page and in the log. Agents only ever see [`TEMPLATE_DISABLED`](../reference/errors.md#TEMPLATE_DISABLED), whatever the cause.
+
+**`no_display`: the template's browser cannot open a window**
+The template is headed and the machine running BrowserHive has no display BrowserHive can use. On a Linux server, run it under `xvfb-run -a browserhive serve --admin`, or a sidecar `Xvfb :99 -nolisten tcp -auth <file>` with `DISPLAY` and `XAUTHORITY` set; on macOS run it from a LaunchAgent (not a LaunchDaemon); on Windows run it in a logged-in session, not as a service. Then restart BrowserHive. See [Displays](templates.md#displays). A headless template needs no display, but you cannot sign in to one by hand.
+
+**`host_failed`: the browser failed five times in 30 minutes**
+After five failed starts or crashes within 30 minutes, BrowserHive stops trying and the template stays down. The daemon log has each failure. Common causes: the browser channel is not installed (`browserhive init`, or `browserhive init --installChrome`), the machine is out of memory, or the profile is held by a process outside BrowserHive. Fix the cause, then restart BrowserHive; a restart action for one template's browser arrives in a later release. Other causes that stop the browser at once: `proxy_unreachable` (BrowserHive could not open a connection to the template's proxy within 3 s; it never falls back to your own IP) and `sandbox_unavailable` (`--sandbox on` and the browser cannot sandbox here, see [the browser sandbox](security.md#the-browser-sandbox)).
+
+**Agents get [`TEMPLATE_NOT_FOUND`](../reference/errors.md#TEMPLATE_NOT_FOUND) for a template that exists**
+Agents get the same answer for a name that does not exist, a template they may not use, and one still being set up. Check, in order: the template's status is `ready` (`templates list`; finish it with `templates finish <name>`); the agent's principal is in the template's access rule (under `--auth token` it is the token's name; a template created under `--auth off` without `--allPrincipals` or `--principal` allows only `local`, which no token can be); the agent's harness is allowed, if the template lists harnesses. The log line `template launch refused` gives the reason for each refusal. `templates=false` also turns every template off.
+
+**[`SESSION_LIMIT_REACHED`](../reference/errors.md#SESSION_LIMIT_REACHED) on a template launch**
+The template's browser was not running, and starting it needs a browser slot: it takes one `maxSessions` slot, like one ordinary session. Close a session or raise `--maxSessions`. Once the browser runs, further sessions of the template need no slot.
+
+**[`TEMPLATE_BUSY`](../reference/errors.md#TEMPLATE_BUSY)**
+`limit_kind: capacity`: the template already runs `max_concurrent` sessions, or its browser holds `templateMaxPagesPerHost` agent pages. `limit_kind: tabs`: this session holds its share of those pages. Close sessions or tabs that are no longer needed, or raise `templateMaxPagesPerHost`.
+
+**[`TEMPLATE_UNAVAILABLE`](../reference/errors.md#TEMPLATE_UNAVAILABLE)**
+The browser is starting, restarting (after `templateRecycleAfter`) or recovering from a crash. Agents should retry after `retry_after_ms`.
+
+**"I'm signed in" answers `409 CONFLICT`, or a site stays signed out after Enter**
+No new cookie appeared on that site's registrable domain since the sign-in window opened (analytics cookies do not count), or no recording is open. Finish the sign-in in the site's own tab and confirm again. A site that signs you in on another domain only (a separate single sign-on domain) cannot be confirmed this way yet.
+
+**A window took the focus when an agent launched**
+Starting a template's browser shows its first window for a moment before BrowserHive minimizes it, so the first launch after the browser was stopped can take the focus once. Sessions' own windows never do. Raise `templateHostIdleTimeout` (or set it to `0`) to restart the browser less often.
+
+**The log says the template's identity drifted**
+The browser reported a different Chrome major version than at the template's first start: Chrome or BrowserHive's Chromium was updated. Launches continue, and the user agent follows the real browser. Some sites ask you to sign in again after a browser update; delete and recreate the template if one does.
+
+**`host.profile_secrets` is true**
+The template's profile holds saved passwords or autofill data, which agents could trigger. Clear them with `POST /api/v1/templates/{id}/host/clear-profile-secrets` (scope `templates:write`); the browser stops and starts again on its next use.
+
+**`templates rm` fails with [`TEMPLATE_IN_USE`](../reference/errors.md#TEMPLATE_IN_USE)**
+Sessions of the template are still running. Wait for them, or pass `--force` to close them.
+
 ## Dashboard
 
 **"offline" or back at the login page** — the server restarted or your session expired (15 minutes idle, 8 hours total). Sign in again.

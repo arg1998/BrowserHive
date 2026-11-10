@@ -213,6 +213,7 @@ export function buildPhases(
         sessionId: session.id,
         tabs: session.tabs,
         logger: deps.logger.child({ module: 'sessions.scheme-guard' }),
+        allowData: session.template === null,
         newCDPSession: (page) => view.newCDPSession(page),
       };
       session.tabs.add(view.page);

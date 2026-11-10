@@ -105,12 +105,14 @@
         "value": "unknown",
         "count": 1
       }
-    ]
+    ],
+    "templates": []
   },
   "applied": {
     "filters": {
       "view": "all",
-      "archived": "include"
+      "archived": "include",
+      "maintenance": "exclude"
     },
     "sort": {
       "key": "created_at",

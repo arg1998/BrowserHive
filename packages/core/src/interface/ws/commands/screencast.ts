@@ -7,9 +7,29 @@ import {
   screencastTopic,
 } from '@browserhive/contracts/ws';
 import type { z } from 'zod';
+import { authorizer } from '../../../domain/auth/authorizer.ts';
+import { templateViewScope } from '../../../domain/templates/model.ts';
+import { AppError } from '../../../kernel/errors/app-error.ts';
 import type { WsConnection } from '../connection.ts';
 import { DEFAULT_SCREENCAST_SIZE, type LiveFrame, type LiveMeta } from '../live-view.ts';
 import type { HubCommandHost } from './host.ts';
+
+/**
+ * A template session's live view needs `templates:read` as well, a maintenance session's (a
+ * recording shows the operator typing) `templates:login` (spec 13 §11.1).
+ *
+ * @throws AppError `FORBIDDEN` `{scope}`
+ */
+export function assertTemplateView(
+  host: HubCommandHost,
+  conn: WsConnection,
+  sessionId: string,
+): void {
+  const scope = templateViewScope(host.liveView.templateOf(sessionId));
+  if (scope !== null && !authorizer.can(conn.principal, scope)) {
+    throw new AppError('FORBIDDEN', { scope });
+  }
+}
 
 /** Viewer id of a connection on a session. */
 export function viewerId(conn: WsConnection): string {
@@ -27,6 +47,7 @@ export async function screencastStart(
   command: z.output<typeof ScreencastStartCommand>,
 ): Promise<void> {
   const sessionId = command.session_id;
+  assertTemplateView(host, conn, sessionId);
   const topic = screencastTopic(sessionId);
   const existing = conn.screencasts.get(sessionId);
   const width = command.max_width ?? DEFAULT_SCREENCAST_SIZE.width;

@@ -40,6 +40,10 @@ export interface TemplateWorld {
   readonly degradations: RecordingDegradations;
   /** Every host the supervisor started, oldest first. */
   readonly hosts: PlaywrightTemplateHost[];
+  /** Every template update the supervisor made (the observed identity), in order. */
+  readonly updates: Partial<TemplateRecord>[];
+  /** The data directory. */
+  readonly dataDir: string;
   launch(slug: string): Promise<Session>;
   /** The newest host. */
   host(): PlaywrightTemplateHost;
@@ -88,12 +92,21 @@ export async function templateWorld(
       screenshotTrace: false,
     },
   });
+  const template = templateRecord({
+    headless: !HEADED,
+    stealth: driver === 'patchright' ? 'standard' : 'off',
+    maxConcurrent: 5,
+  });
   const degradations = new RecordingDegradations();
+  const updates: Partial<TemplateRecord>[] = [];
   const supervisor = new TemplateHostSupervisor({
     launcher,
     sessions,
     templates: {
-      update: async (id, patch) => templateRecord({ templateId: id, ...patch }),
+      update: async (id, patch) => {
+        updates.push(patch);
+        return templateRecord({ ...template, templateId: id, ...patch });
+      },
       touchLastUsed: async () => undefined,
     },
     clock,
@@ -115,11 +128,6 @@ export async function templateWorld(
       closeTimeoutMs: 10_000,
     },
   });
-  const template = templateRecord({
-    headless: !HEADED,
-    stealth: driver === 'patchright' ? 'standard' : 'off',
-    maxConcurrent: 5,
-  });
   const site = templateSiteRecord();
   return {
     sites,
@@ -128,6 +136,8 @@ export async function templateWorld(
     template,
     degradations,
     hosts,
+    updates,
+    dataDir,
     launch: (slug) =>
       supervisor.launch({
         template,

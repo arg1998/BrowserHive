@@ -236,6 +236,27 @@ export type HttpFetch = (
   },
 ) => Promise<{ readonly status: number; json(): Promise<unknown>; text(): Promise<string> }>;
 
+/** A pending read of one stdin line. */
+export interface LineRead {
+  /** The line without its newline, or `null` at the end of input. */
+  readonly line: Promise<string | null>;
+  /** Stops reading and releases stdin; `line` then never settles. */
+  cancel(): void;
+}
+
+/**
+ * Waiting on the operator while a command keeps a window open (`templates create`, spec 13 §7.2):
+ * timers, Enter on stdin (a terminal or a pipe) and Ctrl+C.
+ */
+export interface OperatorWait {
+  /** Resolves after `ms` milliseconds (the poll interval, bounded by the deadline). */
+  sleep(ms: number): Promise<void>;
+  /** Starts reading the next stdin line; works whether or not stdin is a terminal. */
+  readLine(): LineRead;
+  /** Calls `listener` on Ctrl+C (SIGINT) instead of exiting, until the returned function runs. */
+  onInterrupt(listener: () => void): () => void;
+}
+
 /** Everything a CLI run needs. */
 export interface CliDeps {
   readonly argv: readonly string[];
@@ -269,6 +290,8 @@ export interface CliDeps {
   };
   readonly probes: HostProbes;
   readonly http: HttpFetch;
+  /** Timers, stdin lines and Ctrl+C for commands that wait on the operator. */
+  readonly wait: OperatorWait;
   /** Head schema version of this binary. */
   readonly schemaVersion: number;
   /** SQLite `application_id` BrowserHive stamps (`0x42484956`). */

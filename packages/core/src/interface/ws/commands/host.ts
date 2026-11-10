@@ -15,6 +15,7 @@ export type LiveViewPort = Pick<
   | 'setViewport'
   | 'hasViewers'
   | 'activeCount'
+  | 'templateOf'
 >;
 
 /** Hub services exposed to command handlers. */

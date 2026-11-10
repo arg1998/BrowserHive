@@ -146,3 +146,28 @@ function unrefTimer(timer: ReturnType<typeof setTimeout>): void {
   const maybe: { unref?: () => void } = timer;
   maybe.unref?.();
 }
+
+/**
+ * Waits for `work` to settle, at most `ms` (measured with `sleep`, so a fake clock drives it).
+ * Resolves `true` when `work` settled in time, `false` when the time ran out first.
+ */
+export async function settlesWithin(
+  work: Promise<unknown>,
+  sleep: (ms: number, signal?: AbortSignal) => Promise<void>,
+  ms: number,
+): Promise<boolean> {
+  const timer = new AbortController();
+  const late = sleep(ms, timer.signal).then(
+    () => false,
+    () => true,
+  );
+  const settled = work.then(
+    () => true,
+    () => true,
+  );
+  try {
+    return await Promise.race([settled, late]);
+  } finally {
+    timer.abort();
+  }
+}

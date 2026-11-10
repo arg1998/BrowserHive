@@ -118,6 +118,11 @@ export class LiveView {
     return [...this.bridges.values()].filter((b) => b.screencasting).length;
   }
 
+  /** The template of a live session (watching one needs a template scope too, spec 13 §11.1). */
+  templateOf(sessionId: string): Session['template'] {
+    return this.deps.sessions.peek(sessionId)?.template ?? null;
+  }
+
   /** True when the session has at least one viewer. */
   hasViewers(sessionId: string): boolean {
     return (this.bridges.get(sessionId)?.viewers.size ?? 0) > 0;

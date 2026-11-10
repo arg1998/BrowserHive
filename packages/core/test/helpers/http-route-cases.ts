@@ -66,6 +66,30 @@ async function template(ctx: CaseContext): Promise<void> {
   ctx.state['template'] = body.template?.template_id ?? 'tp-placehold0';
 }
 
+/** A template with its sign-in window open and a new sign-in cookie on its site. */
+async function recording(ctx: CaseContext): Promise<void> {
+  await template(ctx);
+  await ctx.kit.request('POST', api(`/templates/${ctx.state['template'] ?? ''}/recording`), {
+    cookie: ctx.cookie,
+    body: {},
+  });
+  ctx.kit.templateOps.jarCookies = [
+    {
+      name: 'sid',
+      value: 'sid-value-0000000',
+      domain: '.site-a.test',
+      path: '/',
+      expires: 2_000_000_000,
+      httpOnly: true,
+      secure: true,
+      sameSite: 'Lax',
+    },
+  ];
+}
+
+const tpl = (path: string) => (ctx: CaseContext) =>
+  api(`/templates/${ctx.state['template'] ?? ''}${path}`);
+
 /** An in-app digest copy (D-45) for the report routes. */
 async function inAppReport(ctx: CaseContext): Promise<void> {
   const rule = { every: 'day', at: '09:00' } as const;
@@ -802,6 +826,51 @@ export const ROUTE_CASES: readonly RouteCase[] = [
       status: 200,
     },
     invalid: { method: 'DELETE', path: api('/templates/bad') },
+  },
+  {
+    operationId: 'removeTemplateSignIn',
+    setup: template,
+    success: {
+      method: 'POST',
+      path: tpl('/domains/idp.test/remove-sign-in'),
+      status: 200,
+    },
+    invalid: { method: 'POST', path: api('/templates/bad/domains/idp.test/remove-sign-in') },
+  },
+  {
+    operationId: 'startTemplateRecording',
+    setup: template,
+    success: { method: 'POST', path: tpl('/recording'), body: {}, status: 200 },
+    invalid: { method: 'POST', path: tpl('/recording'), body: { sites: [] } },
+  },
+  {
+    operationId: 'confirmTemplateRecording',
+    setup: recording,
+    success: {
+      method: 'POST',
+      path: tpl('/recording/confirm'),
+      body: { site_id: 'site-a.test' },
+      status: 200,
+    },
+    invalid: { method: 'POST', path: tpl('/recording/confirm'), body: {} },
+  },
+  {
+    operationId: 'finishTemplateRecording',
+    setup: recording,
+    success: { method: 'POST', path: tpl('/recording/finish'), body: {}, status: 200 },
+    invalid: { method: 'POST', path: tpl('/recording/finish'), body: { remove_sign_ins: 'x' } },
+  },
+  {
+    operationId: 'cancelTemplateRecording',
+    setup: template,
+    success: { method: 'DELETE', path: tpl('/recording'), status: 200 },
+    invalid: { method: 'DELETE', path: api('/templates/bad/recording') },
+  },
+  {
+    operationId: 'clearTemplateProfileSecrets',
+    setup: template,
+    success: { method: 'POST', path: tpl('/host/clear-profile-secrets'), status: 200 },
+    invalid: { method: 'POST', path: api('/templates/bad/host/clear-profile-secrets') },
   },
   {
     operationId: 'reportClientError',

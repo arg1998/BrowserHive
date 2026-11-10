@@ -4,7 +4,7 @@ import { requireSession } from '../../context.ts';
 import { defineTool, json, type PageVisit, type ToolPack } from '../../definition.ts';
 import { agentUrlHref, sessionOwnership, urlBlocklist, urlScheme } from '../../policies.ts';
 import { gotoCapturingDownload, type SavedDownload } from '../files/capture.ts';
-import { recordNavigation, safeUrl } from '../shared.ts';
+import { drive, recordNavigation, safeUrl } from '../shared.ts';
 
 /**
  * `new_tab`: opens a tab (identity override awaited first), makes it active, optionally navigates.
@@ -50,12 +50,19 @@ export const closeTab = defineTool('close_tab', {
   },
 });
 
-/** `switch_tab`. */
+/**
+ * `switch_tab`: makes the tab active. On a headless template it is also brought to the front of its
+ * window; a headed template's window is never raised (it would take the operator's focus, spec 13
+ * §3.3); focus emulation keeps a background tab visible.
+ */
 export const switchTab = defineTool('switch_tab', {
   policies: [sessionOwnership],
   async handler(ctx, args) {
     const session = requireSession(ctx);
     const page = ctx.services.sessions.switchTab(session, args.tab_id);
+    if (session.template !== null && session.request.headless) {
+      await drive(ctx, { sessionId: session.id, tabId: args.tab_id }, () => page.bringToFront());
+    }
     return json({ session_id: session.id, tab_id: args.tab_id, url: safeUrl(page) });
   },
 });

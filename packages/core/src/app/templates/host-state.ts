@@ -32,6 +32,12 @@ export function holdsSlot(state: HostState): boolean {
  * Consecutive failures (crashes and failed starts) within {@link FAILURE_WINDOW_MS}; an operator
  * stop or restart clears them.
  */
+/**
+ * A host that ran at least this long before it crashed was healthy: its crash starts a new count,
+ * so `failed` needs five failures in a row (spec 13 §3.2 "consecutive", PR #76 F13).
+ */
+export const HEALTHY_RUN_MS = 5 * 60_000;
+
 export class FailureWindow {
   private readonly at: number[] = [];
 

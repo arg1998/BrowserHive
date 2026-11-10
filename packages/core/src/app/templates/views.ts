@@ -155,6 +155,7 @@ export function toTemplateDetail(
   host: TemplateHostView,
   sessionsLive: number,
   now: number,
+  live: { readonly unlistedDomains: readonly string[] } = { unlistedDomains: [] },
 ): TemplateDetailResponse {
   return {
     template: toTemplateView(template, sites),
@@ -171,8 +172,8 @@ export function toTemplateDetail(
       window_id: w.windowId,
       session_ids: [...w.sessionIds],
     })),
-    // Computed from version summaries (spec 13 §2.3), which arrive with T1b.
-    unlisted_domains: [],
+    // From the running browser's jar (spec 13 §2.3); version summaries add more from T1b.
+    unlisted_domains: [...live.unlistedDomains],
     now,
   };
 }

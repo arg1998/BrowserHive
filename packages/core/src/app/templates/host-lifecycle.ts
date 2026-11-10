@@ -14,6 +14,7 @@ import type {
 } from '../../ports/template-host.ts';
 import {
   FailureWindow,
+  HEALTHY_RUN_MS,
   HOST_START_DEADLINE_MS,
   type HostFailure,
   type HostState,
@@ -52,6 +53,8 @@ export class HostLifecycle {
   /** When a crashed host restarts. */
   restartAt: number | null = null;
   idleSince: number | null = null;
+  /** Saved passwords or autofill data were found at the last start (spec 13 §3.1). */
+  profileSecrets = false;
   private template: TemplateRecord;
   private instance: TemplateHost | null = null;
   private starting: Promise<TemplateHost> | null = null;
@@ -211,6 +214,7 @@ export class HostLifecycle {
     this.startedAt = this.deps.clock.now();
     this.idleSince = null;
     this.lastError = null;
+    this.profileSecrets = host.profileSecrets;
     this.offExit = host.onExit((exit) => this.onExit(host, exit));
     this.enter('running');
     this.log.info('template host running', { start_ms: this.startedAt - began });
@@ -228,7 +232,10 @@ export class HostLifecycle {
   private onExit(host: TemplateHost, exit: TemplateHostExit): void {
     if (this.instance !== host) return;
     this.detach();
+    const ranFor = this.startedAt === null ? 0 : this.deps.clock.now() - this.startedAt;
     this.startedAt = null;
+    // A crash after a healthy run is not one more in a row (spec 13 §3.2 "consecutive").
+    if (ranFor >= HEALTHY_RUN_MS) this.failures.clear();
     if (exit.operatorStop) {
       // The operator quit the browser: its sessions end, nothing restarts until the next launch.
       this.enter('stopped');

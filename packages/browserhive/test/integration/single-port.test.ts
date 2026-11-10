@@ -202,7 +202,8 @@ describe('single port: the browserhive executable', () => {
     const decoder = new TextDecoder();
     let stdout = '';
     const reader = child.stdout.getReader();
-    const deadline = Date.now() + 30_000;
+    // Windows runners deliver the banner's second half late (seen 30 s+ after its first lines).
+    const deadline = Date.now() + 60_000;
     while (!stdout.includes('Press Ctrl-C to stop.') && Date.now() < deadline) {
       const chunk = await reader.read();
       if (chunk.done) break;
@@ -214,6 +215,8 @@ describe('single port: the browserhive executable', () => {
     const health = await fetch(`${origin}/health`);
     expect(await health.json()).toMatchObject({ status: 'ready' });
     const token = /bearer token for principal agent-1: (bh_agent_\S+)/.exec(stdout)?.[1] ?? '';
+    // The banner is the evidence when the token line is missing (a slow runner, a changed banner).
+    expect(token, stdout).not.toBe('');
     const client = await mcpClient(token, origin);
     const result = await client.callTool({ name: 'list_sessions', arguments: {} });
     expect(result.isError).not.toBe(true);
@@ -257,5 +260,5 @@ describe('single port: the browserhive executable', () => {
       await again.exited;
       own.cleanup();
     }
-  }, 90_000);
+  }, 150_000);
 });

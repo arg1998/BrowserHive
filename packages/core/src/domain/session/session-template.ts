@@ -1,6 +1,7 @@
 /** @module domain/session/session-template — what a virtual session knows about the template it was launched from (spec 13 §3.7 `reserve`, §5.2): the `sessions` template columns, its agent-facing `template` key and the maintenance flag. */
 
 import type { TemplateHealthState } from '../../ports/persistence/enums.ts';
+import type { SessionSealing } from '../templates/model.ts';
 
 /** One site of the template as the session reports it (`session_info.template.sites`). */
 export interface SessionTemplateSite {
@@ -24,6 +25,11 @@ export interface SessionTemplate {
   readonly mode: 'live' | 'maintenance';
   /** Any protection in force (`sessions.sealed`, spec 13 §5.4). */
   readonly sealed: boolean;
+  /**
+   * The protections in force for this session's principal (spec 13 §5.4), checked per tool call.
+   * A maintenance session has none: it is BrowserHive's own and never an agent's.
+   */
+  readonly sealing: SessionSealing;
   /** Enabled sites with their health at launch (spec 13 §5.2). */
   readonly sites: readonly SessionTemplateSite[];
 }
@@ -31,4 +37,17 @@ export interface SessionTemplate {
 /** True for a maintenance session (from `template_mode` only, never from the slug, spec 13 §1.1). */
 export function isMaintenance(template: SessionTemplate | null | undefined): boolean {
   return template?.mode === 'maintenance';
+}
+
+/** No protection: a maintenance session's (spec 13 §1.1), never reachable by an agent. */
+export const NO_SEALING: SessionSealing = {
+  hideCookieValues: false,
+  forceDisableEvaluate: false,
+  refuseCookieWrites: false,
+  refuseStateExport: false,
+};
+
+/** The protections of `session`'s template, or `null` for an exclusive session. */
+export function sealingOf(template: SessionTemplate | null | undefined): SessionSealing | null {
+  return template === null || template === undefined ? null : template.sealing;
 }

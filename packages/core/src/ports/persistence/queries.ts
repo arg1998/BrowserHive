@@ -58,7 +58,8 @@ export type SessionSortKey =
   | 'owner'
   | 'persistence_mode'
   | 'blocked'
-  | 'harness';
+  | 'harness'
+  | 'template';
 
 /** Filters of `GET /sessions`. */
 export interface SessionListQuery extends PageQuery, TimeWindow {
@@ -71,6 +72,10 @@ export interface SessionListQuery extends PageQuery, TimeWindow {
   readonly persistenceModes?: readonly PersistenceMode[];
   /** Launch harness slugs; `unknown` also matches sessions without one. */
   readonly harnesses?: readonly string[];
+  /** Template ids (spec 13 §11.1). */
+  readonly templateIds?: readonly string[];
+  /** Maintenance sessions of templates: `exclude` (the default), `include` or `only`. */
+  readonly maintenance?: 'exclude' | 'include' | 'only';
   /** Free text over slug and session id. */
   readonly q?: string;
   readonly sort?: SessionSortKey;
@@ -84,6 +89,8 @@ export interface SessionFacets {
   readonly states: readonly FacetCount[];
   /** Launch harness, `unknown` for sessions without one. */
   readonly harnesses: readonly FacetCount[];
+  /** Template ids of template sessions. */
+  readonly templates: readonly FacetCount[];
 }
 
 /** One facet value with its row count. */

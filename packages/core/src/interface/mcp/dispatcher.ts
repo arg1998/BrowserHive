@@ -19,6 +19,7 @@ import type { ResolvedIdentity } from './identity.ts';
 import { exceedsInputElements, MAX_TOOL_INPUT_ELEMENTS } from './input-limit.ts';
 import { publishObservation, type TerminalOutcome } from './observe.ts';
 import type { ToolRegistry } from './registry.ts';
+import { SealedRedaction } from './sealed-redaction.ts';
 import type { ToolServices } from './services.ts';
 import {
   firstText,
@@ -107,9 +108,11 @@ export class ToolDispatcher {
   private readonly tracer: Tracer;
   private readonly log: Logger;
   private readonly seqs = new Map<string, number>();
+  private readonly sealed: SealedRedaction;
 
   constructor(deps: ToolDispatcherDeps) {
     this.deps = deps;
+    this.sealed = new SealedRedaction(deps.services.clock);
     this.tracer = deps.tracer ?? trace.getTracer('browserhive');
     this.log = deps.logger.child({ module: 'mcp.dispatcher' });
   }
@@ -275,7 +278,19 @@ export class ToolDispatcher {
     }
     const resolved = holder.session;
     const sessionId = resolved?.id ?? resultSessionId;
-    const scrub = (text: string): string => services.redaction.scrubText(sessionId, text);
+    // A sealed template session's results never carry a cookie value of its template (spec 13 §5.4).
+    // A result about the caller's sessions without one attached (`list_sessions`, `launch_session`)
+    // is scrubbed with the values of every sealed session the caller owns.
+    const sealedScrub =
+      resolved !== null
+        ? await this.sealed.scrubberFor(resolved)
+        : await this.sealed.scrubberForAll(
+            services.sessions.listAll().filter((s) => s.request.owner === call.principal.subject),
+          );
+    const scrub = (text: string): string => {
+      const scrubbed = services.redaction.scrubText(sessionId, text);
+      return sealedScrub === null ? scrubbed : sealedScrub(scrubbed);
+    };
     shaped = redactShaped(shaped, scrub);
     if (errorMessage !== null) errorMessage = scrub(errorMessage);
     const tabArg = stringField(rawArgs, 'tab_id');

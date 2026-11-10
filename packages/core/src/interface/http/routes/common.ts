@@ -2,7 +2,10 @@
 
 import { SessionId } from '@browserhive/contracts/ids';
 import type { z } from 'zod';
+import { authorizer } from '../../../domain/auth/authorizer.ts';
+import type { RequestPrincipal } from '../../../domain/auth/principal.ts';
 import type { Session } from '../../../domain/session/session.ts';
+import { templateViewScope } from '../../../domain/templates/model.ts';
 import { AppError } from '../../../kernel/errors/app-error.ts';
 import type { SessionListRow } from '../../../ports/persistence/records.ts';
 import type { HttpServices } from '../services.ts';
@@ -52,4 +55,18 @@ export function requireVault(services: HttpServices): void {
 export function requirePrincipal<P>(principal: P | null): P {
   if (principal === null) throw new AppError('UNAUTHORIZED', {});
   return principal;
+}
+
+/**
+ * A template session's live view and screenshots need a template scope as well as the session
+ * scope (spec 13 §11.1): `templates:read`, or `templates:login` for a maintenance session.
+ *
+ * @throws AppError `FORBIDDEN` `{scope}`
+ */
+export function assertTemplateViewScope(
+  principal: RequestPrincipal | null,
+  known: KnownSession,
+): void {
+  const scope = templateViewScope(known.live?.template ?? known.row?.template);
+  if (scope !== null) authorizer.assertCan(principal, scope);
 }

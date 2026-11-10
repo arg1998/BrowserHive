@@ -2,51 +2,41 @@
 import { isAbsolute, resolve as resolvePath } from 'node:path';
 import { lookupKey } from '@browserhive/contracts/config';
 import { Channel } from '@browserhive/contracts/enums';
-import { PREVIEW_SAMPLES, PreviewSample } from '@browserhive/contracts/notifications';
-import type { ConfigFailure, ConfigFs, ResolvedConfigBundle } from '@browserhive/core/config';
-import { keyKind, parseNotificationChannelFlags, resolveConfig } from '@browserhive/core/config';
-import type { HostEnvironment } from '@browserhive/core/ports/host-environment';
-import { type CliPlan, EXIT, type Invocation, type RemoteTarget } from './invocation.ts';
+import type { ConfigFs } from '@browserhive/core/config';
+import { keyKind, parseNotificationChannelFlags } from '@browserhive/core/config';
+import type { CliPlan, Invocation } from './invocation.ts';
 import type { ColorMode } from './output/style.ts';
 import {
   FlagReader,
   isAccepted,
   lastValue,
   matchSubcommand,
-  serverArgv,
   strayFlagMessage,
   tokenizeCli,
   unknownCommandMessage,
   unknownFlagMessage,
 } from './plan-args.ts';
+import { planChannels, planTemplates, remoteTarget } from './plan-remote.ts';
+import {
+  colorOf,
+  type Env,
+  failurePlan,
+  fallbackDataDir,
+  type PlanContext,
+  type PlanInput,
+  resolveDataDir,
+  resolveFull,
+  run,
+  usage,
+} from './plan-resolve.ts';
 import { acceptedFlags, type CommandName, commandDescriptor, isCommandName } from './registry.ts';
 
-/** Environment facts `planCli` needs besides argv/env/fs. */
-export interface PlanContext {
-  readonly cwd: string;
-  readonly host: HostEnvironment;
-  /** Logger module names for `logLevel` validation (`LOG_MODULES`). */
-  readonly knownLogModules?: readonly string[];
-}
-
-type Env = Readonly<Record<string, string | undefined>>;
+export type { PlanContext } from './plan-resolve.ts';
 
 const COLOR_MODES: readonly ColorMode[] = ['auto', 'always', 'never'];
 
 function isColorMode(value: string | undefined): value is ColorMode {
   return value !== undefined && (COLOR_MODES as readonly string[]).includes(value);
-}
-
-function usage(lines: readonly string[]): CliPlan {
-  return { kind: 'exit', code: EXIT.usage, lines: lines.map((line) => `browserhive: ${line}`) };
-}
-
-function failurePlan(failure: ConfigFailure): CliPlan {
-  return {
-    kind: 'exit',
-    code: failure.exitCode === 3 ? EXIT.policy : EXIT.usage,
-    lines: failure.render().split('\n'),
-  };
 }
 
 /**
@@ -141,16 +131,6 @@ export function planCli(
   return planInvocation(subcommand === undefined ? command : invocationName, input);
 }
 
-interface PlanInput {
-  readonly tokens: ReturnType<typeof tokenizeCli>;
-  readonly env: Env;
-  readonly fs: ConfigFs;
-  readonly context: PlanContext;
-  readonly reader: FlagReader;
-  readonly args: readonly string[];
-  readonly color: ColorMode;
-}
-
 function helpPlan(command: CommandName, positionals: readonly string[], color: ColorMode): CliPlan {
   if (command === 'help') {
     const topic = positionals[0];
@@ -164,66 +144,6 @@ function helpPlan(command: CommandName, positionals: readonly string[], color: C
   const matched = matchSubcommand(commandDescriptor(command), positionals);
   const words = matched.ok && positionals.length > 0 ? (matched.subcommand?.words ?? null) : null;
   return { kind: 'help', topic: { command, subcommand: words }, color };
-}
-
-function resolveFull(input: PlanInput): ReturnType<typeof resolveConfig> {
-  return resolveConfig({
-    argv: serverArgv(input.tokens),
-    env: input.env,
-    cwd: input.context.cwd,
-    host: input.context.host,
-    fs: input.fs,
-    ...(input.context.knownLogModules !== undefined && {
-      knownLogModules: input.context.knownLogModules,
-    }),
-  });
-}
-
-const DATA_DIR_ENV = ['BROWSERHIVE_DATA_DIR', 'BROWSERHIVE_CONFIG', 'BROWSERHIVE_COLOR'] as const;
-
-/**
- * Resolves only `dataDir` (with `config` and `color`): unrelated invalid keys never block purge,
- * db or admin. A broken discovered config file falls back to env/flags/OS default.
- */
-function resolveDataDir(input: PlanInput): ReturnType<typeof resolveConfig> {
-  const scopedEnv: Record<string, string | undefined> = {};
-  for (const name of DATA_DIR_ENV) {
-    if (input.env[name] !== undefined) scopedEnv[name] = input.env[name];
-  }
-  const base = {
-    argv: serverArgv(input.tokens),
-    env: scopedEnv,
-    cwd: input.context.cwd,
-    host: input.context.host,
-    fs: input.fs,
-  };
-  const withFile = resolveConfig(base);
-  if (withFile.ok) return withFile;
-  const explicit =
-    input.tokens.flags.has('config') || scopedEnv['BROWSERHIVE_CONFIG'] !== undefined;
-  if (explicit) return withFile;
-  const withoutFile = resolveConfig({ ...base, configFile: false });
-  return withoutFile.ok ? withoutFile : withFile;
-}
-
-function run(invocation: Invocation, color: ColorMode, stdio = false): CliPlan {
-  return { kind: 'run', invocation, color, stdio };
-}
-
-function colorOf(resolved: ResolvedConfigBundle, planned: ColorMode): ColorMode {
-  return planned !== 'auto' ? planned : resolved.config.color;
-}
-
-function remoteTarget(reader: FlagReader): RemoteTarget | null {
-  const url = reader.url('url');
-  const token = reader.text('token');
-  const cookie = reader.text('cookie');
-  if (url === undefined) {
-    if (token !== undefined) reader.problems.push('--token requires --url.');
-    if (cookie !== undefined) reader.problems.push('--cookie requires --url.');
-    return null;
-  }
-  return { url, ...(token !== undefined && { token }), ...(cookie !== undefined && { cookie }) };
 }
 
 function planInvocation(name: string, input: PlanInput): CliPlan {
@@ -314,6 +234,8 @@ function planInvocation(name: string, input: PlanInput): CliPlan {
     case 'channels preview':
       return planChannels(name, input);
     case 'templates list':
+    case 'templates create':
+    case 'templates finish':
     case 'templates rm':
       return planTemplates(name, input);
     case 'version': {
@@ -324,59 +246,6 @@ function planInvocation(name: string, input: PlanInput): CliPlan {
     default:
       return planDataDirCommand(name, input);
   }
-}
-
-/** `--url` when given, else the configured host and port (a wildcard bind is reached on loopback). */
-function remoteOrConfigured(input: PlanInput, explicit: RemoteTarget | null): RemoteTarget {
-  if (explicit !== null) return explicit;
-  const resolved = resolveFull(input);
-  const host = resolved.ok ? resolved.value.config.host : '127.0.0.1';
-  const port = resolved.ok ? resolved.value.config.port : 9876;
-  const reachable = host === '0.0.0.0' || host === '::' ? '127.0.0.1' : host;
-  return { url: `http://${reachable.includes(':') ? `[${reachable}]` : reachable}:${port}` };
-}
-
-function planTemplates(name: string, input: PlanInput): CliPlan {
-  const { reader, color, args } = input;
-  const json = reader.bool('json');
-  const force = name === 'templates rm' && reader.bool('force');
-  const yes = name === 'templates rm' && reader.bool('yes');
-  const explicit = remoteTarget(reader);
-  if (reader.problems.length > 0) return usage(reader.problems);
-  const remote = remoteOrConfigured(input, explicit);
-  if (name === 'templates list') return run({ command: 'templates-list', json, remote }, color);
-  return run({ command: 'templates-rm', name: args[0] ?? '', force, yes, json, remote }, color);
-}
-
-function planChannels(name: string, input: PlanInput): CliPlan {
-  const { reader, color, args } = input;
-  const json = reader.bool('json');
-  const sampleText = reader.oneOf('sample', PREVIEW_SAMPLES) ?? 'attention';
-  const explicit = remoteTarget(reader);
-  if (reader.problems.length > 0) return usage(reader.problems);
-  const remote = remoteOrConfigured(input, explicit);
-  const sample = PreviewSample.parse(sampleText);
-  const channel = args[0] ?? '';
-  switch (name) {
-    case 'channels list':
-      return run({ command: 'channels-list', json, remote }, color);
-    case 'channels test':
-      return run({ command: 'channels-test', name: channel, json, remote }, color);
-    default:
-      return run({ command: 'channels-preview', name: channel, sample, json, remote }, color);
-  }
-}
-
-function fallbackDataDir(input: PlanInput): string {
-  const resolved = resolveConfig({
-    argv: [],
-    env: {},
-    cwd: input.context.cwd,
-    host: input.context.host,
-    fs: input.fs,
-    configFile: false,
-  });
-  return resolved.ok ? resolved.value.config.dataDir : input.context.cwd;
 }
 
 function planDataDirCommand(name: string, input: PlanInput): CliPlan {

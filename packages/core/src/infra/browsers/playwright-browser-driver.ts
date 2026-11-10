@@ -18,10 +18,11 @@ import type {
   TemplateHostLauncher,
   TemplateHostSpec,
 } from '../../ports/template-host.ts';
+import { clearProfileSecrets } from '../persistence/profile-secrets.ts';
 import { ATTR, SPAN, withSpan } from '../telemetry/spans.ts';
 import { channelExecutable, playwrightChannelExecutable } from './browser-detection.ts';
 import { PlaywrightBrowserHost } from './browser-host.ts';
-import { launchKwargsForChannel } from './channel.ts';
+import { launchKwargsForChannel, withExtraArgs } from './channel.ts';
 import {
   assertChromiumInstalled,
   browserNotInstalledFromLaunchError,
@@ -57,6 +58,8 @@ export interface PlaywrightBrowserDriverDeps {
   readonly locateChannel?: (playwrightChannel: 'chrome' | 'msedge') => string | null;
   /** The configured blocklist, which every template host's chain carries (spec 13 §3.8). */
   readonly templateBlocklist?: TemplateLaunchContext['blocklist'];
+  /** Switches of the internal testing seam for exclusive sessions (spec 13 §14); never agent input. */
+  readonly testingArgs?: readonly string[];
 }
 
 /**
@@ -67,6 +70,7 @@ export interface PlaywrightBrowserDriverDeps {
 export class PlaywrightBrowserDriver implements BrowserDriver, TemplateHostLauncher {
   private readonly logger: Logger;
   private readonly clock: Clock;
+  private readonly testingArgs: readonly string[];
   private readonly host: HostFacts;
   private readonly mode: StealthDriver;
   private readonly resolver: DriverResolver;
@@ -85,6 +89,7 @@ export class PlaywrightBrowserDriver implements BrowserDriver, TemplateHostLaunc
     this.sandbox = deps.sandbox ?? defaultSandboxPolicy(deps);
     this.locateChannel = deps.locateChannel ?? playwrightChannelExecutable;
     this.templateBlocklist = deps.templateBlocklist ?? null;
+    this.testingArgs = deps.testingArgs ?? [];
   }
 
   /** Starts a template host (spec 13 §3.1); the start is not abortable once Chromium is spawning. */
@@ -111,6 +116,9 @@ export class PlaywrightBrowserDriver implements BrowserDriver, TemplateHostLaunc
       spec,
     );
   }
+
+  /** Empties saved passwords and autofill of a stopped template profile (spec 13 §3.1). */
+  readonly clearProfileSecrets = async (dir: string): Promise<void> => clearProfileSecrets(dir);
 
   /** The executable a channel launches, the sandbox policy's cache key (null when unknown). */
   private executableFor(browserType: BrowserType, channel: LaunchSpec['channel']): string | null {
@@ -163,7 +171,7 @@ export class PlaywrightBrowserDriver implements BrowserDriver, TemplateHostLaunc
       headless: spec.headless,
     });
     const launch = buildLaunchOptions({
-      kwargs,
+      kwargs: withExtraArgs(kwargs, this.testingArgs),
       stealth: spec.stealth,
       launchOptions: spec.launchOptions,
       proxy: spec.proxy,

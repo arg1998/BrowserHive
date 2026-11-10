@@ -136,3 +136,15 @@ export function availabilityOf(
   if (host.liveAgentSessions >= effectiveCap(template)) return 'busy';
   return 'available';
 }
+
+/**
+ * The extra scope watching a template session needs (its live view and screenshots, spec 13
+ * §11.1): `templates:login` for a maintenance session (a recording shows the operator typing),
+ * `templates:read` for an agent's template session, none for an exclusive session.
+ */
+export function templateViewScope(
+  template: { readonly mode: 'live' | 'maintenance' } | null | undefined,
+): 'templates:read' | 'templates:login' | null {
+  if (template == null) return null;
+  return template.mode === 'live' ? 'templates:read' : 'templates:login';
+}

@@ -59,6 +59,7 @@ export interface AuthStatesLike {
     name: string,
     sourceSessionId: string,
     principal: SessionPrincipal,
+    options?: { readonly sourceTemplateId?: string },
   ): Promise<SavedAuthResult>;
   saveFullProfile(
     userDataDir: string,
