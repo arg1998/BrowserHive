@@ -41,7 +41,7 @@ module.exports = {
       // Resolved npm paths start with `node_modules/`; reading a driver's `package.json` (its
       // version, for `server_status`) is not a use of the driver.
       to: {
-        path: '^node_modules/(playwright|patchright|playwright-core)/',
+        path: '^node_modules/(playwright|playwright-core|patchright|patchright-core)/',
         pathNot: '/package\\.json$',
         dependencyTypesNot: ['type-only'],
       },
@@ -54,7 +54,7 @@ module.exports = {
       name: 'interface-no-playwright',
       severity: 'error',
       from: { path: '^packages/core/src/interface', pathNot: '\\.test\\.tsx?$' },
-      to: { path: '^node_modules/(playwright|patchright|playwright-core)/' },
+      to: { path: '^node_modules/(playwright|playwright-core|patchright|patchright-core)/' },
     },
     {
       name: 'sqlite-only-in-persistence',
@@ -73,7 +73,15 @@ module.exports = {
       name: 'contracts-platform-neutral',
       severity: 'error',
       from: { path: '^packages/contracts/src', pathNot: '\\.test\\.tsx?$' },
-      to: { path: '^(node:|bun:|bun-types|bun$)' },
+      // `node:fs` resolves to the core module `fs` (the prefix is gone), so match the dependency
+      // type; Bun's own modules are matched by name.
+      to: { dependencyTypes: ['core'] },
+    },
+    {
+      name: 'contracts-platform-neutral-bun',
+      severity: 'error',
+      from: { path: '^packages/contracts/src', pathNot: '\\.test\\.tsx?$' },
+      to: { path: '^(bun:|bun-types|bun$|node_modules/(bun-types|@types/bun)/)' },
     },
     {
       name: 'dashboard-only-contracts',
@@ -111,7 +119,11 @@ module.exports = {
     // `node_modules` is not followed, but it is not excluded either: an excluded module vanishes
     // from the dependency list, so no rule could ever match an npm package.
     doNotFollow: { path: 'node_modules' },
-    exclude: { path: ['dist', '\\.gen\\.ts$', 'generated/'] },
+    // Anchored to the repository's own build output: an unanchored `dist` also hid every npm
+    // package that resolves into its `dist/` (`node_modules/kysely/dist/index.js`).
+    exclude: {
+      path: ['^dist/', '^packages/[^/]+/dist/', '\\.gen\\.ts$', '^packages/.*/generated/'],
+    },
     tsPreCompilationDeps: 'specify',
     tsConfig: { fileName: 'tsconfig.json' },
     enhancedResolveOptions: {
