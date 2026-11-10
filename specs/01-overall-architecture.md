@@ -162,7 +162,7 @@ PR → Changeset → merge to `main` → Changesets bot opens "Version Packages"
 
 | Seam | Where | Reserved for |
 |---|---|---|
-| `BrowserDriver.launch(spec) → SessionView` over a `BrowserHost{capabilities}` (spec 13 §3.13; `SessionHandle` until PR T0c) | ports | Firefox/WebKit/Camoufox engines, direct-CDP; template hosts shared by virtual sessions (spec 13) |
+| `BrowserDriver.launch(spec) → SessionView` over a `BrowserHost{capabilities}` (spec 13 §3.13) | ports | Firefox/WebKit/Camoufox engines, direct-CDP; template hosts shared by virtual sessions (spec 13) |
 | `ProxyResolver`, `LaunchSpec.proxy`, `proxy_label` | ports/domain | managed pool, rotation, exit-geo |
 | `GeoSeedResolver` (`source: host|proxy`) | ports | proxy-exit geo |
 | `VaultBackend` + `capabilities` | ports | local vault, 1Password, HTTP vault, TOTP |

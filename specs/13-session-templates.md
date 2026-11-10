@@ -389,7 +389,7 @@ One dispatcher per host subscribes to `context.on('page')`. For every new page i
 
 1. **Claim.** `targetId` matches a pending claim: a session's (from §3.3) → that session; the host's own (sentinel, probe page, Playwright's internal storage-state page is not claimed) → parked.
 2. **Opener.** `openerId` names a target attributed to session S → S; a parked opener → parked. CDP sets `openerId` for `noopener` popups and `target=_blank` links too (`canAccessOpener: false`). The dispatcher keeps a **tombstone map** of closed targets to their attribution for the host's life (bounded to the newest 10 000 entries), so a page whose opener closed first (`window.open(url); window.close()`, common in OAuth flows) still goes to the opener's session.
-3. **Hold.** A page that matches neither while a `createTarget` of this host is still awaiting its response is held for at most 2 000 ms and re-evaluated when the response arrives.
+3. **Hold.** A page that matches neither while a `createTarget` of this host is still awaiting its response, or whose named opener is itself held or may be among the pages whose target info is still being read, is held for at most 2 000 ms and re-evaluated when the response (or that target info) arrives; when the hold expires, an opener still unknown counts as none.
 4. **Park.** Anything else: a tab or window the operator opened by hand (Ctrl+T, a bookmark, even inside an agent's window), a service worker's `clients.openWindow`, a page Chromium restored, Playwright's internal storage-state page (§3.9).
 
 The window a page appears in is never used for attribution. **Invariant (the isolation boundary of live mode, D-50).** For every host at every instant: each page is attributed to at most one session; an attribution never changes; a page enters a session's `TabRegistry` only after it is attributed to that session; a parked page is in no `TabRegistry`; a page whose opener is (or was) attributed to S belongs to S. The site-opened-page subscription that today adds every page of the context to the one session (`packages/core/src/app/sessions/create-phases.ts:250-254`) becomes a subscription to the session's own `SessionView.onPage`. Property tests (§17, T0c) guard the invariant.
@@ -530,6 +530,7 @@ interface SessionView {
   cookies(urls?: readonly string[]): Promise<Cookie[]>;
   addCookies(cookies: readonly CookieInput[]): Promise<void>;
   setExtraHTTPHeaders(headers: Record<string, string>): Promise<void>;   // exclusive: context-wide; virtual: per page, replayed on new pages
+  newCDPSession(page: Page): Promise<CDPSession>;                         // the live view's bridge; refuses a page never attributed to this session
   storageStateSource(): StorageStateSource | null;                       // null for virtual sessions
   userDataDir(): string | null;                                          // null for virtual sessions
   onCrash(listener: (reason: string) => void): () => void;              // host crash fan-out plus its own
@@ -557,11 +558,11 @@ The port's isolation sentence becomes: "An exclusive host MUST NOT be shared bet
 | identity and `browserInfo` from the handle (`packages/core/src/domain/session/session.ts:128`, `:277-279`) | `SessionView.host.identity`/`browserInfo` |
 | `SessionPolicies.install(handle, …)` (`packages/core/src/ports/session-policies.ts`, `domain-sessions.ts:146` uses `handle.context`) | `install(host, …)` registering with the host's `InterceptionChain` |
 | the live view's handle access (`packages/core/src/interface/ws/live-view.ts:288`, `:344`) | `SessionView.pages()` and the host for the screencast |
-| the CDP bridge's `newCDPSession` (`packages/core/src/interface/ws/cdp-bridge.ts:127`) | the host context, scoped to the view's pages |
+| the CDP bridge's `newCDPSession` (`packages/core/src/interface/ws/cdp-bridge.ts:127`) | `SessionView.newCDPSession` (the host context, scoped to the view's pages) |
 | `browserPid` for metrics (`packages/browserhive/src/composition/phases/wire-observers.ts:41-45`) | `BrowserHost.browserPid` (keyed by host) |
 | the vault's tracing handle (`packages/core/src/interface/mcp/tools/vault/index.ts:97`) | `SessionView.host.tracing` |
 
-`IdentityApplier`'s context-wide `context.on('page')` (`identity-applier.ts:137`) stays on the host. T0c's acceptance includes that no module under `interface/` imports `BrowserContext` (a dependency-cruiser rule).
+`IdentityApplier`'s context-wide `context.on('page')` (`identity-applier.ts:137`) stays on the host. T0c's acceptance includes that no module under `interface/` imports `BrowserContext` (a dependency-cruiser rule, `interface-no-playwright`: dependency-cruiser cannot match imported names, so `interface/` takes Playwright's page-level types only from `ports/page-types.ts`, which does not export `BrowserContext`).
 
 ## 4. Settings shared by the whole browser
 
