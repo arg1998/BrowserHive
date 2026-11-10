@@ -247,7 +247,50 @@ export function startFixtureServer(): FixtureServer {
              <input id="file" type="file">
              <div id="tall" style="height:3000px"></div><p id="bottom">bottom</p>`,
           );
+        case '/logout':
+          // GitHub's shape (issue #59): a GET shows a confirm form, the sign-out is its POST.
+          return req.method === 'POST'
+            ? html('<p id="signed-out">signed out</p>')
+            : html(
+                `<form id="logout" method="post" action="/logout"><button id="sign-out" type="submit">Sign out</button></form>
+                <form id="search" method="get" action="/logout"><button id="search-go" type="submit">Search</button></form>`,
+              );
+        case '/cached':
+          // Fresh for an hour: a second `force-cache` fetch is served from the HTTP cache when
+          // the context has one (routing disables it).
+          return new Response('cached', {
+            headers: { 'content-type': 'text/plain', 'cache-control': 'public, max-age=3600' },
+          });
+        case '/shared-worker.js':
+          // A SharedWorker that POSTs once per connection (spec 13 §3.8: never routed).
+          return new Response(
+            "onconnect = (e) => { const port = e.ports[0]; fetch('/api/shared-worker', { method: 'POST', body: 'x' }).then((r) => port.postMessage('ok:' + r.status), (x) => port.postMessage('err:' + x.name)); };",
+            { headers: { 'content-type': 'application/javascript' } },
+          );
+        case '/worker.js':
+          // A dedicated worker that POSTs once (routed like the page's own requests).
+          return new Response(
+            "fetch('/api/worker', { method: 'POST', body: 'x' }).then((r) => postMessage('ok:' + r.status), (x) => postMessage('err:' + x.name));",
+            { headers: { 'content-type': 'application/javascript' } },
+          );
+        case '/unload-beacon':
+          // Sends a beacon from `pagehide` (spec 13 §3.8: not routed when the page is closed).
+          return html(
+            `<p id="unload">unload</p><script>addEventListener('pagehide', () => navigator.sendBeacon('/api/pagehide', 'bye'));</script>`,
+          );
         default:
+          if (url.pathname.startsWith('/cors/')) {
+            // A cross-origin endpoint whose preflight refuses: an unrouted browser never sends
+            // the write itself.
+            if (req.method === 'OPTIONS') return new Response('no', { status: 403 });
+            return new Response('cors write reached');
+          }
+          if (url.pathname.startsWith('/api/')) {
+            // Any method: what a page's fetch, XHR or beacon reached.
+            return new Response(JSON.stringify({ method: req.method, path: url.pathname }), {
+              headers: { 'content-type': 'application/json' },
+            });
+          }
           return new Response('not found', { status: 404 });
       }
     },

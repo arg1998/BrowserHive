@@ -146,7 +146,7 @@ This is a fixed rule, not configuration. As a backstop for navigations no tool a
 
 ## The blocklist is not an egress firewall
 
-`--blocklist` stops navigations at the tool boundary and aborts document requests in the browser. Subresources still load, and an agent with `evaluate` can `fetch()` a blocked URL. Use it to keep agents off pages, not to contain them. The blocklist covers network schemes only (`http`, `https`, `ws`, `wss`, `ftp`, `ftps`); [the scheme rule above](#agents-open-web-urls-only) keeps agents off every other scheme.
+`--blocklist` stops navigations at the tool boundary and aborts document requests in the browser. Subresources still load, and an agent with `evaluate` can `fetch()` a blocked URL. Use it to keep agents off pages, not to contain them. While a blocklist is configured (even an empty one), sessions run with browser request interception on: their HTTP cache is off, and cross-origin requests skip the site's CORS preflight answer (the automation layer answers it), so a cross-origin write a server would refuse at preflight can still be sent. The blocklist covers network schemes only (`http`, `https`, `ws`, `wss`, `ftp`, `ftps`); [the scheme rule above](#agents-open-web-urls-only) keeps agents off every other scheme.
 
 ## The browser sandbox
 

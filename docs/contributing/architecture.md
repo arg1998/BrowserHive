@@ -89,7 +89,7 @@ A failure in phase N unwinds phases N-1…1 in reverse and exits with a typed bo
 
 ## Extension points
 
-Seams exist for features that are deliberately not built yet: other browser engines (`BrowserDriver` capabilities), managed proxies (`ProxyResolver`, `LaunchSpec.proxy`), other vault backends (`VaultBackend`), security intercepts and approval gates (`OperatorRequestBroker.kind`, `InterceptionChain`), multi-user auth (`AuthenticationProvider`, `tenant_id`), external notification channels (`NotificationChannel` plus a factory per channel kind in `ChannelRegistry`), resource governance (`AdmissionPolicy`). See [spec 01 §9](../../specs/01-overall-architecture.md#9-extension-points-seams-that-exist-without-their-features).
+Seams exist for features that are deliberately not built yet: other browser engines (`BrowserDriver` capabilities), managed proxies (`ProxyResolver`, `LaunchSpec.proxy`), other vault backends (`VaultBackend`), security intercepts and approval gates (`OperatorRequestBroker.kind`, and `InterceptionChain`: one route per browser context running ordered handlers, the blocklist and a method-aware request guard that has no rules yet), multi-user auth (`AuthenticationProvider`, `tenant_id`), external notification channels (`NotificationChannel` plus a factory per channel kind in `ChannelRegistry`), resource governance (`AdmissionPolicy`). See [spec 01 §9](../../specs/01-overall-architecture.md#9-extension-points-seams-that-exist-without-their-features).
 
 ## Working on the code
 
