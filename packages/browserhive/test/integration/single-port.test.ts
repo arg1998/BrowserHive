@@ -202,7 +202,8 @@ describe('single port: the browserhive executable', () => {
     const decoder = new TextDecoder();
     let stdout = '';
     const reader = child.stdout.getReader();
-    const deadline = Date.now() + 30_000;
+    // Windows runners deliver the banner's second half late (seen 30 s+ after its first lines).
+    const deadline = Date.now() + 60_000;
     while (!stdout.includes('Press Ctrl-C to stop.') && Date.now() < deadline) {
       const chunk = await reader.read();
       if (chunk.done) break;
@@ -259,5 +260,5 @@ describe('single port: the browserhive executable', () => {
       await again.exited;
       own.cleanup();
     }
-  }, 90_000);
+  }, 150_000);
 });
