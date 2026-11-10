@@ -461,6 +461,8 @@ export interface HarnessOptions {
   inspect?: DatabaseFileInfo | null;
   boot?: (input: ServeBootInput) => Promise<ServeRunningServer>;
   http?: CliDeps['http'];
+  /** Timers, stdin lines and Ctrl+C (default: sleeps resolve at once, stdin never answers). */
+  wait?: CliDeps['wait'];
   stdoutTty?: boolean;
   openError?: unknown;
   /** Replaces individual deps (real storage, real filesystem) after the fakes are built. */
@@ -568,6 +570,14 @@ export async function cliHarness(options: HarnessOptions): Promise<HarnessResult
       (async () => {
         throw new Error('network disabled in tests');
       }),
+    wait: options.wait ?? {
+      sleep: async () => undefined,
+      readLine: () => ({
+        line: new Promise<string | null>(() => undefined),
+        cancel: () => undefined,
+      }),
+      onInterrupt: () => () => undefined,
+    },
     schemaVersion: 1,
     applicationId: APPLICATION_ID,
   };

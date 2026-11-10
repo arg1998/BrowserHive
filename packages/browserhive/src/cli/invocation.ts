@@ -1,5 +1,6 @@
 /** @module cli/invocation — `CliPlan`: the pure decision `planCli` reaches from argv before any side effect (spec 09 §3.3) */
 import type { Channel } from '@browserhive/contracts/enums';
+import type { TemplateInput } from '@browserhive/contracts/http';
 import type {
   PreviewSample,
   StartupNotificationChannel,
@@ -131,6 +132,24 @@ export type Invocation =
     }
   | {
       readonly command: 'templates-list';
+      readonly json: boolean;
+      readonly remote: RemoteTarget;
+    }
+  | {
+      readonly command: 'templates-create';
+      readonly name: string;
+      /** The `POST /templates` body built from the flags. */
+      readonly input: TemplateInput;
+      /** `--noLogin`: create and exit without opening a sign-in window. */
+      readonly noLogin: boolean;
+      /** `--timeout` in milliseconds (default 30 min). */
+      readonly timeoutMs: number;
+      readonly json: boolean;
+      readonly remote: RemoteTarget;
+    }
+  | {
+      readonly command: 'templates-finish';
+      readonly name: string;
       readonly json: boolean;
       readonly remote: RemoteTarget;
     }

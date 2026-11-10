@@ -1,85 +1,26 @@
 /** @module cli/registry — the command surface as data: commands, subcommands, positional arguments and command-owned flags (spec 08 §7, spec 12 §11) */
 import { CONFIG_KEYS, type ConfigKey } from '@browserhive/contracts/config';
+import { ADMIN_COMMAND, CHANNELS_COMMAND } from './registry-admin.ts';
+import { jsonFlag, sub } from './registry-parts.ts';
+import { TEMPLATES_COMMAND } from './registry-templates.ts';
+import type {
+  CommandDescriptor,
+  CommandName,
+  FlagDescriptor,
+  SubcommandDescriptor,
+} from './registry-types.ts';
 
-/** Every command word. */
-export const COMMAND_NAMES = [
-  'serve',
-  'init',
-  'doctor',
-  'purge',
-  'config',
-  'db',
-  'admin',
-  'channels',
-  'templates',
-  'version',
-  'help',
-] as const;
-/** A command word. */
-export type CommandName = (typeof COMMAND_NAMES)[number];
+export {
+  type ArgumentDescriptor,
+  COMMAND_NAMES,
+  type CommandDescriptor,
+  type CommandName,
+  type FlagDescriptor,
+  isCommandName,
+  type SubcommandDescriptor,
+} from './registry-types.ts';
 
-/**
- * Whether `word` is a command word.
- *
- * @returns `true` for the words in {@link COMMAND_NAMES}.
- */
-export function isCommandName(word: string): word is CommandName {
-  return (COMMAND_NAMES as readonly string[]).includes(word);
-}
-
-/** A flag owned by a command (not a config key). */
-export interface FlagDescriptor {
-  /** Bare name, camelCase (`dryRun`). */
-  readonly name: string;
-  /** Booleans never consume the next token; `--noName` negates. */
-  readonly kind: 'boolean' | 'value';
-  /** Value placeholder for help (`<path>`). */
-  readonly placeholder?: string;
-  readonly describe: string;
-  /** Human default for help. */
-  readonly defaultText?: string;
-}
-
-/** A positional argument of a subcommand. */
-export interface ArgumentDescriptor {
-  readonly name: string;
-  readonly required: boolean;
-  readonly describe: string;
-}
-
-/** A subcommand (`db restore`, `admin tokens create`). */
-export interface SubcommandDescriptor {
-  /** Words after the command (`['tokens', 'create']`). */
-  readonly words: readonly string[];
-  readonly summary: string;
-  readonly args: readonly ArgumentDescriptor[];
-  readonly flags: readonly FlagDescriptor[];
-  /** Config keys accepted as flags in addition to the command's own. */
-  readonly configKeys: readonly ConfigKey[];
-}
-
-/** A command. */
-export interface CommandDescriptor {
-  readonly name: CommandName;
-  readonly summary: string;
-  /** Longer help paragraph. */
-  readonly description: string;
-  /** Flags accepted by the command and every subcommand. */
-  readonly flags: readonly FlagDescriptor[];
-  /** Config keys accepted as flags by the command and every subcommand. */
-  readonly configKeys: readonly ConfigKey[];
-  readonly subcommands: readonly SubcommandDescriptor[];
-  /** Subcommand words used when none is given (`config` → `show`); `null` = a subcommand is required. */
-  readonly defaultSubcommand: readonly string[] | null;
-  /** Positional arguments of a command without subcommands (`help [command]`). */
-  readonly args: readonly ArgumentDescriptor[];
-}
-
-const json: FlagDescriptor = {
-  name: 'json',
-  kind: 'boolean',
-  describe: 'Print machine-readable JSON instead of text.',
-};
+const json = jsonFlag;
 const dataDirKeys: readonly ConfigKey[] = ['dataDir', 'config', 'color'];
 const notificationChannelFlag: FlagDescriptor = {
   name: 'notificationChannel',
@@ -88,45 +29,6 @@ const notificationChannelFlag: FlagDescriptor = {
   describe:
     'Declare a notification channel for this run (repeatable; secrets as env:NAME), e.g. "telegram:name=phone,token=env:BH_TG_TOKEN,chat=123456".',
 };
-const remoteFlags: readonly FlagDescriptor[] = [
-  {
-    name: 'url',
-    kind: 'value',
-    placeholder: '<url>',
-    describe:
-      'Talk to a running server over its REST API instead of opening the database (http://127.0.0.1:9876).',
-  },
-  {
-    name: 'token',
-    kind: 'value',
-    placeholder: '<bearer>',
-    describe: 'Operator bearer token for --url (bh_operator_…).',
-  },
-  {
-    name: 'cookie',
-    kind: 'value',
-    placeholder: '<value>',
-    describe: 'Dashboard session cookie value for --url (browserhive_session).',
-  },
-];
-
-function sub(
-  words: readonly string[],
-  summary: string,
-  options: {
-    readonly args?: readonly ArgumentDescriptor[];
-    readonly flags?: readonly FlagDescriptor[];
-    readonly configKeys?: readonly ConfigKey[];
-  } = {},
-): SubcommandDescriptor {
-  return {
-    words,
-    summary,
-    args: options.args ?? [],
-    flags: options.flags ?? [],
-    configKeys: options.configKeys ?? [],
-  };
-}
 
 /** The command registry, in help order. */
 export const COMMANDS: readonly CommandDescriptor[] = [
@@ -296,109 +198,9 @@ export const COMMANDS: readonly CommandDescriptor[] = [
     defaultSubcommand: null,
     args: [],
   },
-  {
-    name: 'admin',
-    summary: 'Administrative actions (reset-password, tokens)',
-    description:
-      'Works on the database directly and refuses while a server is running on the data directory; tokens subcommands can instead talk to a running server with --url.',
-    flags: [],
-    configKeys: dataDirKeys,
-    subcommands: [
-      sub(['reset-password'], 'Generate a new dashboard password (shown once)', {
-        flags: [json],
-      }),
-      sub(['tokens', 'list'], 'List agent and operator bearer tokens', {
-        flags: [json, ...remoteFlags],
-      }),
-      sub(['tokens', 'create'], 'Issue a bearer token for a principal (plaintext shown once)', {
-        args: [{ name: 'principal', required: true, describe: 'Agent principal, e.g. agent-2.' }],
-        flags: [
-          json,
-          {
-            name: 'expiresIn',
-            kind: 'value',
-            placeholder: '<duration>',
-            describe: 'Token lifetime, e.g. 30d. Never expires when omitted.',
-          },
-          ...remoteFlags,
-        ],
-      }),
-      sub(['tokens', 'revoke'], "Revoke every active token of a principal (or one token's id)", {
-        args: [
-          {
-            name: 'principal',
-            required: true,
-            describe: 'Principal, credential id, or public prefix.',
-          },
-        ],
-        flags: [json, ...remoteFlags],
-      }),
-    ],
-    defaultSubcommand: null,
-    args: [],
-  },
-  {
-    name: 'channels',
-    summary: 'List, test and preview notification channels',
-    description:
-      'Talks to a running server over its REST API (--url, default the configured host and port) with an operator bearer (--token) or the dashboard cookie (--cookie). test sends a real message and exits 1 when the platform refused it; preview sends nothing.',
-    flags: [],
-    configKeys: ['host', 'port', 'config', 'color'],
-    subcommands: [
-      sub(['list'], 'List channels with status, target, secret variables and 24 h counts', {
-        flags: [json, ...remoteFlags],
-      }),
-      sub(['test'], 'Send a real test message through a channel', {
-        args: [{ name: 'name', required: true, describe: 'Channel name.' }],
-        flags: [json, ...remoteFlags],
-      }),
-      sub(['preview'], 'Print the platform request a channel would send (sends nothing)', {
-        args: [{ name: 'name', required: true, describe: 'Channel name.' }],
-        flags: [
-          json,
-          {
-            name: 'sample',
-            kind: 'value',
-            placeholder: '<kind>',
-            describe:
-              'Sample notification: attention, attention-resolved, vault-confirm, tool-errors, crash, degraded, test, digest or anomaly.',
-            defaultText: 'attention',
-          },
-          ...remoteFlags,
-        ],
-      }),
-    ],
-    defaultSubcommand: ['list'],
-    args: [],
-  },
-  {
-    name: 'templates',
-    summary: 'List and delete session templates',
-    description:
-      'Talks to a running server over its REST API (--url, default the configured host and port) with an operator bearer (--token) or the dashboard cookie (--cookie). Creating and signing in to templates arrive in a later release; until then use the REST API.',
-    flags: [],
-    configKeys: ['host', 'port', 'config', 'color'],
-    subcommands: [
-      sub(['list'], 'List templates with their sites, status, browser state and sessions', {
-        flags: [json, ...remoteFlags],
-      }),
-      sub(['rm'], 'Delete a template and its browser profile (does not sign out at the sites)', {
-        args: [{ name: 'name', required: true, describe: 'Template name.' }],
-        flags: [
-          json,
-          {
-            name: 'force',
-            kind: 'boolean',
-            describe: 'Close the sessions launched from the template first.',
-          },
-          { name: 'yes', kind: 'boolean', describe: 'Skip the confirmation prompt.' },
-          ...remoteFlags,
-        ],
-      }),
-    ],
-    defaultSubcommand: ['list'],
-    args: [],
-  },
+  ADMIN_COMMAND,
+  CHANNELS_COMMAND,
+  TEMPLATES_COMMAND,
   {
     name: 'version',
     summary: 'Print version information',
