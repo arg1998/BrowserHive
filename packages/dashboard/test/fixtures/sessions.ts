@@ -82,6 +82,7 @@ export function sessionsPage(
     facets: {
       owners: [{ value: 'claude', count: rows.length }],
       harnesses: [{ value: 'claude-code', count: rows.length }],
+      templates: [],
       channels: [
         { value: 'chromium', count: rows.length },
         { value: 'chrome', count: 0 },

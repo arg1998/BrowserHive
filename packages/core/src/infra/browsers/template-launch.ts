@@ -9,6 +9,7 @@ import type { LaunchWarning } from '../../ports/browser-driver.ts';
 import type { Clock } from '../../ports/clock.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type { TemplateHost, TemplateHostSpec } from '../../ports/template-host.ts';
+import { profileHasSecrets } from '../persistence/profile-secrets.ts';
 import { type BlocklistRouteDeps, blocklistHandler } from './blocklist-route.ts';
 import { launchKwargsForChannel } from './channel.ts';
 import {
@@ -76,6 +77,8 @@ export async function launchTemplateHostWith(
   await mkdir(spec.userDataDir, { recursive: true, mode: 0o700 });
   await mkdir(spec.downloadsDir, { recursive: true, mode: 0o700 });
   await applyTemplatePreferences(spec.userDataDir);
+  // Read before the browser holds the files (spec 13 §3.1).
+  const profileSecrets = profileHasSecrets(spec.userDataDir);
 
   const kwargs = launchKwargsForChannel(spec.channel, {
     incognito: false,
@@ -136,7 +139,7 @@ export async function launchTemplateHostWith(
     await context.addCookies(templateHostCookies(spec.selfOrigins));
     const anchor = context.pages()[0] ?? (await context.newPage());
     const targets = await HostTargets.open(context, anchor, log);
-    const host = buildHost(ctx, spec, context, targets, sandboxed);
+    const host = buildHost(ctx, spec, context, targets, { sandboxed, profileSecrets });
     await installHostChain(host);
     await host.adoptStartPages();
     if (spec.stealth) await applyIdentity(ctx, spec, host, anchor, log);
@@ -145,6 +148,7 @@ export async function launchTemplateHostWith(
       channel: spec.channel,
       headless: spec.headless,
       sandboxed,
+      ...(profileSecrets && { profileSecrets }),
     });
     return host;
   } catch (err) {
@@ -165,8 +169,9 @@ function buildHost(
   spec: TemplateHostSpec,
   context: BrowserContext,
   targets: HostTargets,
-  sandboxed: boolean,
+  facts: { readonly sandboxed: boolean; readonly profileSecrets: boolean },
 ): PlaywrightTemplateHost {
+  const { sandboxed } = facts;
   let attribution: PlaywrightTemplateHost | null = null;
   const handlers: InterceptionHandler[] = [
     selfOriginHandler({ origins: spec.selfOrigins, logger: ctx.logger }),
@@ -208,6 +213,7 @@ function buildHost(
     warnings: [],
     headless: spec.headless,
     window: spec.window,
+    profileSecrets: facts.profileSecrets,
     clock: ctx.clock,
     logger: ctx.logger,
   });

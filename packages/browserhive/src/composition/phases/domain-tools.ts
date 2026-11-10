@@ -21,6 +21,7 @@ import type {
   VaultService,
 } from '@browserhive/core/server';
 import { createNodeToolFs, createToolRegistry, ToolDispatcher } from '@browserhive/core/server';
+import { selfOriginsOf } from './domain-templates.ts';
 
 /** Inputs of {@link buildTools}. */
 export interface ToolsInput {
@@ -60,6 +61,8 @@ export function runtimeFactsFor(input: ToolsInput): RuntimeFacts {
     dataDir: config.dataDir,
     persistenceMode: config.persistence,
     templates: config.templates,
+    // Template sessions' `navigate`/`new_tab` to BrowserHive itself answer `#browserhive` (§3.8).
+    selfOrigins: config.templates ? selfOriginsOf(config) : [],
     launchDefaults: { channel: config.defaultChannel, headless: config.defaultHeadless },
   };
 }

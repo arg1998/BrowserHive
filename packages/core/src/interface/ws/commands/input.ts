@@ -5,6 +5,7 @@ import type { z } from 'zod';
 import { AppError } from '../../../kernel/errors/app-error.ts';
 import type { WsConnection } from '../connection.ts';
 import type { HubCommandHost } from './host.ts';
+import { assertTemplateView } from './screencast.ts';
 
 /**
  * Forwards one input to the page via CDP. The gate is re-checked on every message: without an open
@@ -15,6 +16,7 @@ export async function input(
   conn: WsConnection,
   command: z.output<typeof InputCommand>,
 ): Promise<void> {
+  assertTemplateView(host, conn, command.session_id);
   if (!host.isInputPermitted(command.session_id, 'input')) {
     throw new AppError(
       'INPUT_NOT_PERMITTED',

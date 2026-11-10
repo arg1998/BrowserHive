@@ -857,6 +857,49 @@
                             "type": "null"
                           }
                         ]
+                      },
+                      "template": {
+                        "type": "object",
+                        "properties": {
+                          "template_id": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "version": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "mode": {
+                            "type": "string",
+                            "enum": [
+                              "live",
+                              "maintenance"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "template_id",
+                          "name",
+                          "version",
+                          "mode"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "sealed": {
+                        "type": "boolean"
                       }
                     },
                     "required": [
@@ -1230,6 +1273,49 @@
                             "type": "null"
                           }
                         ]
+                      },
+                      "template": {
+                        "type": "object",
+                        "properties": {
+                          "template_id": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "version": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "mode": {
+                            "type": "string",
+                            "enum": [
+                              "live",
+                              "maintenance"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "template_id",
+                          "name",
+                          "version",
+                          "mode"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "sealed": {
+                        "type": "boolean"
                       }
                     },
                     "required": [
@@ -5374,6 +5460,49 @@
                     "type": "null"
                   }
                 ]
+              },
+              "template": {
+                "type": "object",
+                "properties": {
+                  "template_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "live",
+                      "maintenance"
+                    ]
+                  }
+                },
+                "required": [
+                  "template_id",
+                  "name",
+                  "version",
+                  "mode"
+                ],
+                "additionalProperties": false
+              },
+              "sealed": {
+                "type": "boolean"
               }
             },
             "required": [
@@ -5747,6 +5876,49 @@
                     "type": "null"
                   }
                 ]
+              },
+              "template": {
+                "type": "object",
+                "properties": {
+                  "template_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "live",
+                      "maintenance"
+                    ]
+                  }
+                },
+                "required": [
+                  "template_id",
+                  "name",
+                  "version",
+                  "mode"
+                ],
+                "additionalProperties": false
+              },
+              "sealed": {
+                "type": "boolean"
               }
             },
             "required": [

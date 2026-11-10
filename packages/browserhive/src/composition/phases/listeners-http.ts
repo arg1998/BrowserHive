@@ -269,6 +269,7 @@ export async function openHttpListener(
         channels: domain.channelService,
         publicUrl: domain.publicUrl,
         templates: domain.templates,
+        templateRecording: domain.templateRecording,
         traceViewerAvailable: traceViewer.available,
       },
       adminAuthenticator: domain.adminAuthenticator,

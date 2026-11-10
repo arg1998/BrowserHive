@@ -29,6 +29,7 @@ import {
   sealingFor,
   templateGate,
 } from '../../domain/templates/model.ts';
+import { unlistedDomains } from '../../domain/templates/sign-ins.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { Clock } from '../../ports/clock.ts';
 import type { DegradationReporter } from '../../ports/degradation-reporter.ts';
@@ -37,7 +38,7 @@ import type { IdGenerator } from '../../ports/id-generator.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type { Repositories, TemplateRecord, UnitOfWork } from '../../ports/persistence/index.ts';
 import type { TemplateFiles } from '../../ports/template-files.ts';
-import type { TemplateRuntime } from '../../ports/template-runtime.ts';
+import type { TemplateHostOps, TemplateRuntime } from '../../ports/template-runtime.ts';
 import { launchDeclaredHarnessOf, launchHarnessOf } from '../sessions/metadata.ts';
 import {
   deleteRunning,
@@ -71,6 +72,8 @@ export interface TemplateServiceDeps {
   readonly repos: Pick<Repositories, 'templates' | 'templateSites' | 'operatorActions'>;
   readonly uow: UnitOfWork;
   readonly runtime: TemplateRuntime;
+  /** The running browser's live facts for the detail view; absent = none (no hosts). */
+  readonly ops?: Pick<TemplateHostOps, 'jar' | 'sharedWindows'>;
   readonly geo: TemplateGeoResolver;
   readonly files: TemplateFiles;
   readonly ids: Pick<IdGenerator, 'opaque' | 'eventId'>;
@@ -185,12 +188,25 @@ export class TemplateService {
     const template = await this.#deps.repos.templates.get(templateId);
     if (template === null) throw notFoundForOperator(templateId);
     const sites = await this.#deps.repos.templateSites.list(templateId);
+    const ops = this.#deps.ops;
+    const host = this.#deps.runtime.host(templateId);
+    const jar = (await ops?.jar(templateId)) ?? null;
+    const shared = (await ops?.sharedWindows(templateId)) ?? [];
     return toTemplateDetail(
       template,
       sites,
-      this.#deps.runtime.host(templateId),
+      { ...host, sharedWindows: shared },
       this.#deps.runtime.liveSessions(templateId).length,
       this.#deps.clock.now(),
+      {
+        unlistedDomains:
+          jar === null
+            ? []
+            : unlistedDomains(
+                jar,
+                sites.map((s) => s.siteId),
+              ),
+      },
     );
   }
 

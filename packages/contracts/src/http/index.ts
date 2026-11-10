@@ -322,6 +322,17 @@ export {
   TemplateUnsealInput,
 } from './template-parts.ts';
 export {
+  ConfirmRecordingRequest,
+  ConfirmRecordingResponse,
+  FinishRecordingRequest,
+  FinishRecordingResponse,
+  RemoveSignInResponse,
+  StartRecordingRequest,
+  StartRecordingResponse,
+  TemplateDomainParams,
+  TemplateOkResponse,
+} from './template-recording.ts';
+export {
   AgentWindows,
   DeleteTemplateQuery,
   DeleteTemplateResponse,

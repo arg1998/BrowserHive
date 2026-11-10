@@ -3,6 +3,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { signInRoute } from './https-sites-signin.ts';
+
 const TLS_DIR = join(import.meta.dir, '..', 'fixtures', 'tls');
 
 /** base64 SHA-256 of the fixture certificate's SubjectPublicKeyInfo (`--ignore-certificate-errors-spki-list`). */
@@ -130,11 +132,15 @@ export function startHttpsSites(): HttpsSites {
       cert: readFileSync(join(TLS_DIR, 'test.crt'), 'utf8'),
       key: readFileSync(join(TLS_DIR, 'test.key'), 'utf8'),
     },
-    fetch(req) {
+    async fetch(req) {
       const url = new URL(req.url);
       const host = req.headers.get('host') ?? url.host;
       requests.push({ host, method: req.method, path: url.pathname + url.search });
-      return route(host, url.pathname, req.method, url.search);
+      const site = host.split(':')[0] ?? host;
+      return (
+        (await signInRoute(req, site, url.pathname)) ??
+        route(host, url.pathname, req.method, url.search)
+      );
     },
   });
   const port = server.port ?? 0;

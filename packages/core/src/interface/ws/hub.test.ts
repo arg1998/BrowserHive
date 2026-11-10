@@ -7,6 +7,7 @@ import { FakeClock } from '../../../test/helpers/fake-clock.ts';
 import { FakeIdGenerator } from '../../../test/helpers/fake-id-generator.ts';
 import { FakeSocket } from '../../../test/helpers/fake-socket.ts';
 import type { RequestPrincipal } from '../../domain/auth/principal.ts';
+import { NO_SEALING } from '../../domain/session/session-template.ts';
 import { AppError } from '../../kernel/errors/app-error.ts';
 import type { LiveViewPort } from './commands/host.ts';
 import { RealtimeHub } from './hub.ts';
@@ -46,6 +47,22 @@ class FakeLive implements LiveViewPort {
   readonly viewports: { width: number; height: number }[] = [];
   readonly sizes: { width: number; height: number }[] = [];
   activeCount = 0;
+  /** Template sessions by id (their live view needs a template scope, spec 13 §11.1). */
+  readonly templates = new Map<string, { mode: 'live' | 'maintenance' }>();
+  templateOf(sessionId: string) {
+    const mode = this.templates.get(sessionId)?.mode;
+    return mode === undefined
+      ? null
+      : {
+          templateId: 'tp-fixture001',
+          name: 'job-hunt',
+          version: null,
+          mode,
+          sealed: false,
+          sealing: NO_SEALING,
+          sites: [],
+        };
+  }
   async addViewer(_s: string, viewer: ScreencastViewer) {
     this.viewers.set(viewer.id, viewer);
     this.activeCount = 1;
@@ -207,6 +224,34 @@ describe('feed', () => {
     expect(socket.last()).toMatchObject({
       kind: 'error',
       corr: 'l',
+      payload: { code: 'FORBIDDEN' },
+    });
+  });
+
+  it("a template session's live view needs templates:read, a maintenance session's templates:login (spec 13 §11.1)", async () => {
+    const viewer: RequestPrincipal = {
+      ...OPERATOR,
+      auth: { method: 'bearer', credentialId: 'cred-2' },
+      scopes: ['sessions:read', 'templates:read'],
+    };
+    live.templates.set(SID, { mode: 'live' });
+    live.templates.set('recording-0000aaaa', { mode: 'maintenance' });
+    const socket = new FakeSocket();
+    const conn = hub.open(socket, viewer);
+    await send(conn, { type: 'screencast.start', session_id: SID, corr: 'a' });
+    expect(socket.messages().some((m) => m.kind === 'error' && m.corr === 'a')).toBe(false);
+    await send(conn, { type: 'screencast.start', session_id: 'recording-0000aaaa', corr: 'm' });
+    expect(socket.last()).toMatchObject({
+      kind: 'error',
+      corr: 'm',
+      payload: { code: 'FORBIDDEN' },
+    });
+    const other = new FakeSocket();
+    const conn2 = hub.open(other, { ...viewer, scopes: ['sessions:read'] });
+    await send(conn2, { type: 'screencast.start', session_id: SID, corr: 'b' });
+    expect(other.last()).toMatchObject({
+      kind: 'error',
+      corr: 'b',
       payload: { code: 'FORBIDDEN' },
     });
   });

@@ -1,7 +1,7 @@
 /** @module ports/template-host — the shared browser of a session template and its launcher (spec 13 §3.1, §3.3, §3.13): one persistent context, a sentinel window, one background window set per virtual session, attribution of every page before any session sees it. */
 
 import type { Channel, StealthDriver } from '@browserhive/contracts/enums';
-import type { BrowserHost, GeoSeed, ProxySpec, SessionView } from './browser-driver.ts';
+import type { BrowserHost, Cookie, GeoSeed, ProxySpec, SessionView } from './browser-driver.ts';
 
 /** The pinned identity a host presents (spec 13 §2.2): the seed of its display and its geo story. */
 export interface TemplateHostIdentity {
@@ -69,6 +69,11 @@ export interface TemplateViewOptions {
   readonly signal?: AbortSignal;
   /** A maintenance session (spec 13 §1.1): its pages are not agent pages and count toward no cap. */
   readonly maintenance?: boolean;
+  /**
+   * A recording or re-login window (a maintenance session): while one is open every agent window
+   * of the host is minimized and new agent windows open minimized (spec 13 §3.3).
+   */
+  readonly recording?: boolean;
   /** The three per-session context options (spec 13 §4), applied to each of the session's pages. */
   readonly pageOptions?: TemplatePageOptions;
 }
@@ -85,6 +90,12 @@ export interface ParkedPageInfo {
   readonly targetId: string;
   readonly url: string;
   readonly openedAt: number;
+}
+
+/** A window that shows pages of several sessions (spec 13 §3.4). */
+export interface SharedWindowInfo {
+  readonly windowId: number;
+  readonly sessionIds: readonly string[];
 }
 
 /**
@@ -116,6 +127,21 @@ export interface TemplateHost extends BrowserHost {
   viewIds(): readonly string[];
   /** Subscribes to the end of the browser (crash or operator stop); not called for `close()`. */
   onExit(listener: (exit: TemplateHostExit) => void): () => void;
+  /**
+   * Saved passwords or autofill data were in the profile when this host started (spec 13 §3.1);
+   * the profile is scanned before the browser opens it.
+   */
+  readonly profileSecrets: boolean;
+  /** Every cookie of the template's one jar (operator surfaces: learned names, unlisted sign-ins). */
+  jar(): Promise<readonly Cookie[]>;
+  /**
+   * Removes a registrable domain's cookies and site data (spec 13 §2.3 **Remove sign-in**).
+   *
+   * @returns The number of cookies removed.
+   */
+  clearSignIn(domain: string): Promise<number>;
+  /** Windows that show pages of more than one session (spec 13 §3.4). */
+  sharedWindows(): Promise<readonly SharedWindowInfo[]>;
 }
 
 /** Starts template hosts (the Playwright driver; spec 13 §3.1). */
@@ -128,4 +154,9 @@ export interface TemplateHostLauncher {
    *   `ref` `no_display` (Chromium's display errors), `proxy_unreachable` or `browser-launch`.
    */
   launchTemplateHost(spec: TemplateHostSpec, signal?: AbortSignal): Promise<TemplateHost>;
+  /**
+   * Empties saved passwords and autofill data of a profile no browser has open (spec 13 §3.1,
+   * `POST /templates/{id}/host/clear-profile-secrets`). Absent where unsupported (fakes).
+   */
+  clearProfileSecrets?(userDataDir: string): Promise<void>;
 }

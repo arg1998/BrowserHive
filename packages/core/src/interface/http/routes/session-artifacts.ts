@@ -18,7 +18,7 @@ import { parseByteRange } from '../byte-range.ts';
 import { defineRoute, raw, reply } from '../define-route.ts';
 import { timelineItemToWire } from '../serializers/timeline.ts';
 import type { HttpServices } from '../services.ts';
-import { requireSession } from './common.ts';
+import { assertTemplateViewScope, requireSession } from './common.ts';
 
 const tags = ['sessions'];
 
@@ -103,11 +103,12 @@ export const SESSION_ARTIFACT_ROUTES = [
     raw: [{ status: 200, contentType: 'image/*', description: 'The image bytes.' }],
     errors: ['NOT_FOUND', 'SCREENSHOT_UNAVAILABLE'],
     grantRoute: 'screenshot',
-    async handler({ input, services }) {
+    async handler({ input, principal, services }) {
       const row = await services.repos.screenshots.get(input.params.event_id);
       if (row === null || row.sessionId !== input.params.session_id) {
         throw new AppError('NOT_FOUND', {});
       }
+      assertTemplateViewScope(principal, await requireSession(services, row.sessionId));
       const root = services.sessionDirs.forSession(row.sessionId).root;
       const bytes = isWithin(root, row.path) ? await services.files.read(row.path) : null;
       if (bytes === null) throw new AppError('SCREENSHOT_UNAVAILABLE', { event_id: row.eventId });

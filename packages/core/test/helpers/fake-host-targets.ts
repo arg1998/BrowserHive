@@ -36,8 +36,14 @@ export class FakeHostContext extends FakeBrowserContext {
     this.cdps.push(cdp);
     return cdp;
   }
+  /** The jar `cookies()` answers (name and domain are enough for the host's operations). */
+  cookieJar: { name: string; domain: string }[] = [];
+  readonly clearedCookies: unknown[] = [];
   async cookies(): Promise<unknown[]> {
-    return [];
+    return [...this.cookieJar];
+  }
+  async clearCookies(filter: unknown): Promise<void> {
+    this.clearedCookies.push(filter);
   }
 }
 
@@ -79,11 +85,26 @@ export class FakeTargets {
     return targetId;
   }
 
+  /** Window ids by target id; a created window `W<n>` is window `n` unless scripted here. */
+  readonly windows = new Map<string, number>();
+  readonly minimized: string[] = [];
+  readonly clearedOrigins: string[] = [];
+
+  async windowOf(targetId: string): Promise<number | null> {
+    const scripted = this.windows.get(targetId);
+    if (scripted !== undefined) return scripted;
+    const created = /^W(\d+)$/.exec(targetId);
+    return created === null ? null : Number(created[1]);
+  }
+
   async closeTarget(targetId: string): Promise<void> {
     this.closedTargets.push(targetId);
   }
-  async minimize(): Promise<void> {
-    return;
+  async minimize(targetId: string): Promise<void> {
+    this.minimized.push(targetId);
+  }
+  async clearOriginData(origins: readonly string[]): Promise<void> {
+    this.clearedOrigins.push(...origins);
   }
   async resize(): Promise<void> {
     return;
@@ -103,7 +124,9 @@ export class FakeTargets {
 }
 
 /** A `PlaywrightTemplateHost` over the fakes. */
-export function fakeTemplateHost(options: { readonly startPages?: number } = {}) {
+export function fakeTemplateHost(
+  options: { readonly startPages?: number; readonly headless?: boolean } = {},
+) {
   const context = new FakeHostContext();
   const targets = new FakeTargets(context);
   for (let i = 0; i < (options.startPages ?? 1); i++) targets.page(`S${i}`, null, false);
@@ -125,7 +148,7 @@ export function fakeTemplateHost(options: { readonly startPages?: number } = {})
     driver: 'playwright',
     browserInfo: { version: null, sandboxed: false },
     warnings: [],
-    headless: true,
+    headless: options.headless ?? true,
     window: { width: 800, height: 600 },
     clock,
     logger,

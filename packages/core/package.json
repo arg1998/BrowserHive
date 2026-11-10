@@ -14,7 +14,8 @@
     "./notifications": "./src/infra/notifications/index.ts",
     "./maintenance": "./src/app/maintenance/index.ts",
     "./runtime": "./src/public/runtime.ts",
-    "./server": "./src/public/server.ts"
+    "./server": "./src/public/server.ts",
+    "./test/https-sites": "./test/helpers/https-sites.ts"
   },
   "scripts": {
     "build": "tsdown",

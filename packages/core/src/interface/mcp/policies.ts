@@ -3,8 +3,10 @@
 import { ERROR_REGISTRY, renderMessage } from '@browserhive/contracts/errors';
 import { assertAttentionTransport } from '../../domain/operator-requests/heartbeat.ts';
 import { checkAgentUrl, type SchemeOptions } from '../../domain/policies/url-scheme.ts';
+import type { Session } from '../../domain/session/session.ts';
 import { isMaintenance } from '../../domain/session/session-template.ts';
 import { AppError } from '../../kernel/errors/app-error.ts';
+import { isSelfAddress, type SelfAddresses, selfAddressesOf } from '../../kernel/self-address.ts';
 import type { PolicyContext, ToolPolicy } from './definition.ts';
 import { resolveScreenshotSavePath, resolveUploadPath } from './sandbox.ts';
 
@@ -36,8 +38,13 @@ export const sessionOwnership: ToolPolicy = {
   },
 };
 
-/** Every session is exclusive today, so `data:` is allowed; virtual sessions (spec 13 T1a) will refuse it. */
-const AGENT_SCHEME_OPTIONS: SchemeOptions = { allowData: true };
+/** Exclusive sessions may open `data:`; template sessions may not (spec 13 §5.5, follow-up 1). */
+function schemeOptionsFor(session: Session | null): SchemeOptions {
+  return { allowData: session?.template == null };
+}
+
+/** The `URL_BLOCKED` pattern of BrowserHive's own origins in a template session (spec 13 §3.8). */
+export const SELF_ORIGIN_PATTERN = '#browserhive';
 
 /** Public text of `URL_SCHEME_NOT_ALLOWED` for input that does not parse as an absolute URL. */
 export const UNPARSEABLE_URL_MESSAGE =
@@ -45,20 +52,26 @@ export const UNPARSEABLE_URL_MESSAGE =
 
 /**
  * Refuses a URL whose scheme an agent may not open (only when `field` is present): anything but
- * `http:`, `https:`, exactly `about:blank` and `data:` (spec 13 T0d, D-57). Runs after
+ * `http:`, `https:`, exactly `about:blank` and, outside template sessions, `data:` (spec 13 T0d,
+ * D-57, §5.5). In a template session it also refuses BrowserHive's own origins with `URL_BLOCKED`
+ * (`pattern: '#browserhive'`, §3.8), which the host's network guard would abort anyway. Runs after
  * `sessionOwnership` and before `urlBlocklist`, so the blocklist only ever sees web schemes from
  * agents. The handler then navigates to {@link agentUrlHref} of the same input.
  *
- * @throws `URL_SCHEME_NOT_ALLOWED` `{ scheme }`
+ * @throws `URL_SCHEME_NOT_ALLOWED` `{ scheme }`, `URL_BLOCKED` `{ url, pattern: '#browserhive' }`
  */
 export function urlScheme(field: string): ToolPolicy {
   return {
     name: `urlScheme(${field})`,
-    apply(_ctx, args) {
+    apply(ctx, args) {
       const url = stringArg(args, field);
       if (url === undefined) return;
-      const checked = checkAgentUrl(url, AGENT_SCHEME_OPTIONS);
-      if (checked.ok) return;
+      const session = ctx.session;
+      const checked = checkAgentUrl(url, schemeOptionsFor(session));
+      if (checked.ok) {
+        if (session?.template != null) assertNotSelf(checked.value.href, ctx);
+        return;
+      }
       const { scheme } = checked.error;
       const publicMessage =
         scheme === ''
@@ -76,7 +89,8 @@ export function urlScheme(field: string): ToolPolicy {
  * @throws `URL_SCHEME_NOT_ALLOWED` if called on input the policy would refuse (a wiring bug)
  */
 export function agentUrlHref(url: string): string {
-  const checked = checkAgentUrl(url, AGENT_SCHEME_OPTIONS);
+  // Only input the policy allowed reaches here, so the widest options give the same `href`.
+  const checked = checkAgentUrl(url, { allowData: true });
   if (checked.ok) return checked.value.href;
   const { scheme } = checked.error;
   throw new AppError(
@@ -84,6 +98,25 @@ export function agentUrlHref(url: string): string {
     { scheme },
     { publicMessage: renderMessage(ERROR_REGISTRY.URL_SCHEME_NOT_ALLOWED.message, { scheme }) },
   );
+}
+
+/** Compiled own origins per `selfOrigins` array (the runtime facts never change). */
+const selfAddressCache = new WeakMap<readonly string[], SelfAddresses>();
+
+/** `URL_BLOCKED` with `#browserhive` when `href` is BrowserHive itself (template sessions only). */
+function assertNotSelf(href: string, ctx: PolicyContext): void {
+  const origins = ctx.services.runtime.selfOrigins;
+  if (origins === undefined || origins.length === 0) return;
+  let self = selfAddressCache.get(origins);
+  if (self === undefined) {
+    self = selfAddressesOf(origins);
+    selfAddressCache.set(origins, self);
+  }
+  if (!isSelfAddress(href, self)) return;
+  const details = { url: href, pattern: SELF_ORIGIN_PATTERN };
+  throw new AppError('URL_BLOCKED', details, {
+    publicMessage: renderMessage(ERROR_REGISTRY.URL_BLOCKED.message, details),
+  });
 }
 
 /**

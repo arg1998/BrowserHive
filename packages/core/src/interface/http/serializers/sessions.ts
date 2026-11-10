@@ -59,6 +59,15 @@ export function sessionRowToSummary(
     harness: row.harness ?? UNKNOWN_HARNESS,
     ...declaredOf(row.harnessDeclared),
     client: toWireClient(row.client),
+    ...(row.template !== null && {
+      template: {
+        template_id: row.template.templateId,
+        name: row.template.name,
+        version: row.template.version,
+        mode: row.template.mode,
+      },
+    }),
+    ...(row.sealed !== null && { sealed: row.sealed }),
   };
 }
 
@@ -115,6 +124,8 @@ export function sessionsQueryToRepo(query: z.output<typeof SessionsQuery>): Sess
     ...(query.channel !== undefined && { channels: query.channel }),
     ...(query.persistence_mode !== undefined && { persistenceModes: query.persistence_mode }),
     ...(query.harness !== undefined && { harnesses: query.harness }),
+    ...(query.template !== undefined && { templateIds: query.template }),
+    maintenance: query.maintenance,
     ...(query.q !== undefined && { q: query.q }),
     ...(query.since !== undefined && { since: query.since }),
     ...(query.until !== undefined && { until: query.until }),
@@ -130,5 +141,6 @@ export function facetsToWire(facets: RepoFacets): z.input<typeof SessionFacets> 
     persistence_modes: map(facets.persistenceModes),
     states: map(facets.states),
     harnesses: map(facets.harnesses),
+    templates: map(facets.templates),
   };
 }

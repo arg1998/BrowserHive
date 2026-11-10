@@ -1,11 +1,11 @@
 /** @module infra/browsers/template-host — the shared browser of a template (spec 13 §3.1–§3.6): every page attributed before any session sees it, background windows claimed by target id, the parked sentinel (recreated when closed by hand), the parked-page bound, crash and operator-stop detection, and a close only the supervisor calls. */
 
 import type { Browser, BrowserContext, Page } from 'playwright';
-import { withDeadline } from '../../kernel/deadline.ts';
 import { AppError } from '../../kernel/errors/app-error.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type {
   AppliedIdentity,
+  Cookie,
   EngineCapabilities,
   LaunchWarning,
   SessionBrowserInfo,
@@ -15,25 +15,32 @@ import type { Clock } from '../../ports/clock.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type {
   ParkedPageInfo,
+  SharedWindowInfo,
   TemplateHost,
   TemplateHostExit,
   TemplateViewOptions,
 } from '../../ports/template-host.ts';
-import { killBrowserProcess, readBrowserPid, rejectOnAbort } from './host-process.ts';
+import { closeContextWithin, readBrowserPid } from './host-process.ts';
 import type { IdentityApplier } from './identity-applier.ts';
 import type { InterceptionChain } from './interception-chain.ts';
 import { PARKED, type PageOwner, sessionOwner, type TargetFacts } from './page-attribution.ts';
 import { HostPageDispatcher } from './page-dispatcher.ts';
 import { PageWaiters } from './page-waiters.ts';
+import { ParkedPages } from './parked-pages.ts';
+import * as ops from './template-host-ops.ts';
 import type { HostTargets } from './template-targets.ts';
 import { TemplateSessionView, type TemplateViewHost } from './template-view.ts';
 
 /** How long a created window may take to be adopted and attributed (spec 13 §3.3). */
 export const ADOPTION_DEADLINE_MS = 10_000;
-/** Parked pages kept open per host, the sentinel excluded (spec 13 §3.4). */
-export const MAX_PARKED_PAGES = 10;
+export { MAX_PARKED_PAGES } from './parked-pages.ts';
 /** A browser exit this soon after the sentinel was closed by hand is an operator stop (spec 13 §3.2). */
 export const OPERATOR_STOP_WINDOW_MS = 10_000;
+/**
+ * How long a host whose last window was closed by hand may take to exit before it gets a new
+ * sentinel anyway (macOS keeps a browser with no window running, PR #76 F15).
+ */
+export const SENTINEL_GRACE_MS = 2_000;
 
 /** What the launcher hands the host. */
 export interface TemplateHostInput {
@@ -47,6 +54,8 @@ export interface TemplateHostInput {
   readonly warnings: readonly LaunchWarning[];
   readonly headless: boolean;
   readonly window: { readonly width: number; readonly height: number };
+  /** Saved passwords or autofill data were found in the profile before the start (spec 13 §3.1). */
+  readonly profileSecrets?: boolean;
   readonly clock: Clock;
   readonly logger: Logger;
 }
@@ -66,13 +75,14 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
   readonly dispatcher: HostPageDispatcher;
   /** The host's one interception chain (spec 13 §3.8); it lives as long as the context. */
   readonly chain: InterceptionChain;
-  private readonly targets: HostTargets;
+  readonly profileSecrets: boolean;
+  readonly targets: HostTargets;
   private readonly window: { readonly width: number; readonly height: number };
   private readonly clock: Clock;
   private readonly log: Logger;
   private readonly views = new Map<string, TemplateSessionView>();
   private readonly waiters: PageWaiters;
-  private readonly parked = new Map<Page, ParkedPageInfo>();
+  private readonly parked: ParkedPages;
   private readonly exitListeners = new Set<(exit: TemplateHostExit) => void>();
   private applied: { identity: AppliedIdentity; applier: IdentityApplier } | null = null;
   private sentinel: Page | null = null;
@@ -94,11 +104,13 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
     this.headless = input.headless;
     this.window = input.window;
     this.clock = input.clock;
+    this.profileSecrets = input.profileSecrets === true;
     this.waiters = new PageWaiters(input.clock);
     this.log = input.logger.child({
       module: 'browsers.template-host',
       templateId: input.templateId,
     });
+    this.parked = new ParkedPages(input.clock, this.log);
     this.dispatcher = new HostPageDispatcher({
       fallback: PARKED,
       factsOf: (page) => this.targets.factsOf(page),
@@ -150,13 +162,23 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
     return this.applied === null ? Promise.resolve() : this.applied.applier.ensureForPage(page);
   }
 
+  /** A recording or re-login window is open on this host (spec 13 §3.3). */
+  get recording(): boolean {
+    for (const view of this.views.values()) if (view.recording) return true;
+    return false;
+  }
+
   async openView(sessionId: string, options: TemplateViewOptions): Promise<SessionView> {
     if (this.closing) throw unavailable('host closing');
-    const minimized = !this.headless && options.windowState === 'minimized';
+    const agent = options.maintenance !== true;
+    const minimized =
+      !this.headless && agent && (options.windowState === 'minimized' || this.recording);
     const page = await this.openWindow(sessionId, minimized, options.signal);
     const view = new TemplateSessionView(this, sessionId, page, options, this.log);
     this.views.set(sessionId, view);
     await view.prepareFirstPage();
+    // The operator signs in now: agent windows step aside (never raised again by BrowserHive).
+    if (view.recording && !this.headless) await ops.minimizeAgentWindows(this, this.views.values());
     return view;
   }
 
@@ -235,7 +257,25 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
   }
 
   parkedPages(): readonly ParkedPageInfo[] {
-    return [...this.parked].map(([page, info]) => ({ ...info, url: urlOf(page) }));
+    return this.parked.list();
+  }
+
+  async jar(): Promise<readonly Cookie[]> {
+    return await this.context.cookies();
+  }
+
+  clearSignIn(domain: string): Promise<number> {
+    return ops.clearSignIn(this, domain);
+  }
+
+  sharedWindows(): Promise<readonly SharedWindowInfo[]> {
+    return ops.sharedWindows(this, this.views.values());
+  }
+
+  /** The window that holds `page`, or `null` when it cannot be read. */
+  async windowOf(page: Page): Promise<number | null> {
+    const targetId = this.dispatcher.targetIdOf(page);
+    return targetId === undefined ? null : await this.targets.windowOf(targetId);
   }
 
   onCrash(listener: (reason: string) => void): () => void {
@@ -256,7 +296,13 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
 
   /** Closes the browser (only the supervisor calls this: idle stop, recycle, shutdown, delete). */
   close(deadlineMs: number, signal?: AbortSignal): Promise<readonly LaunchWarning[]> {
-    this.closed ??= this.teardown(deadlineMs, signal);
+    this.closed ??= (async () => {
+      this.closing = true;
+      this.dispose();
+      // A persistent context: closing it closes the browser too.
+      await closeContextWithin(this.context, this.browser, deadlineMs, signal, this.log);
+      return [];
+    })();
     return this.closed;
   }
 
@@ -264,16 +310,10 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
   private committed(page: Page, owner: PageOwner, facts: TargetFacts): void {
     // A session's page may open tabs Chromium gives no opener (modifier clicks): watch for them.
     if (owner.kind === 'session') void this.targets.watchNewTabs(page, facts.targetId);
+    ops.deleteUnclaimedDownloads(page);
     if (this.waiters.committed(page, owner, facts)) return;
     if (owner.kind !== 'parked' || page === this.sentinel) return;
-    this.parked.set(page, { targetId: facts.targetId, url: '', openedAt: this.clock.now() });
-    page.once('close', () => this.parked.delete(page));
-    if (this.parked.size <= MAX_PARKED_PAGES) return;
-    const oldest = this.parked.keys().next();
-    if (oldest.done === true) return;
-    this.parked.delete(oldest.value);
-    this.log.info('parked page closed', { reason: 'limit', limit: MAX_PARKED_PAGES });
-    void oldest.value.close({ runBeforeUnload: false }).catch(() => undefined);
+    this.parked.add(page, facts.targetId);
   }
 
   private watchSentinel(page: Page): void {
@@ -294,7 +334,16 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
     this.sentinelClosedAt = this.clock.now();
     this.log.info('sentinel closed by hand');
     // With other pages open the browser lives on: give it a new sentinel at once.
-    if (this.context.pages().some((p) => p !== sentinel)) void this.recreateSentinel();
+    if (this.context.pages().some((p) => p !== sentinel)) {
+      void this.recreateSentinel();
+      return;
+    }
+    // Its last window: Linux and Windows quit the browser now (an operator stop). macOS keeps a
+    // browser with no window running; one still up after the grace gets a new sentinel.
+    const timer = setTimeout(() => {
+      if (!this.closing && this.sentinel === null) void this.recreateSentinel();
+    }, SENTINEL_GRACE_MS);
+    if (typeof timer === 'object' && 'unref' in timer) timer.unref();
   }
 
   private async recreateSentinel(): Promise<void> {
@@ -334,37 +383,6 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
     this.waiters.cancelAll();
     void this.targets.dispose();
     void this.applied?.applier.dispose();
-  }
-
-  private async teardown(
-    deadlineMs: number,
-    signal?: AbortSignal,
-  ): Promise<readonly LaunchWarning[]> {
-    this.closing = true;
-    this.dispose();
-    const deadline = withDeadline(signal, deadlineMs);
-    try {
-      // A persistent context: closing it closes the browser too.
-      await Promise.race([this.context.close(), rejectOnAbort(deadline.signal)]);
-    } catch (err) {
-      if (deadline.signal.aborted) {
-        this.log.warn('host close timed out', { deadline_ms: deadlineMs });
-        killBrowserProcess(this.browser, this.log);
-      } else {
-        this.log.debug('host close failed', { err: serializeError(err) });
-      }
-    } finally {
-      deadline.clear();
-    }
-    return [];
-  }
-}
-
-function urlOf(page: Page): string {
-  try {
-    return page.url();
-  } catch {
-    return '';
   }
 }
 

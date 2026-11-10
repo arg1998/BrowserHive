@@ -16,6 +16,11 @@ export interface RuntimeFacts {
   readonly persistenceMode: PersistenceMode;
   /** `templates` (spec 08 §5.9): adds the `list_templates` sentence to the server instructions. */
   readonly templates: boolean;
+  /**
+   * BrowserHive's own origins (spec 13 §3.8): template sessions' `navigate`/`new_tab` to them answer
+   * `URL_BLOCKED` (`#browserhive`). Absent = none known (tests, embedders without HTTP).
+   */
+  readonly selfOrigins?: readonly string[];
   /** `defaultChannel` / `defaultHeadless` baked into the `launch_session` schema (spec 02 §4). */
   readonly launchDefaults: { readonly channel: Channel; readonly headless: boolean };
 }

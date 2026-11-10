@@ -128,6 +128,17 @@ export class InMemorySessionRepository implements SessionRepository {
           query.harnesses.length === 0 ||
           query.harnesses.includes(r.harness ?? 'unknown'),
       )
+      .filter(
+        (r) =>
+          query.templateIds === undefined ||
+          query.templateIds.length === 0 ||
+          (r.template?.templateId != null && query.templateIds.includes(r.template.templateId)),
+      )
+      .filter((r) => {
+        const maintenance = r.template != null && r.template.mode !== 'live';
+        const wanted = query.maintenance ?? 'exclude';
+        return wanted === 'include' || (wanted === 'only') === maintenance;
+      })
       .sort((a, b) => b.createdAt - a.createdAt);
     return pageOf(
       rows.map((r) => this.row(r)),
@@ -137,9 +148,12 @@ export class InMemorySessionRepository implements SessionRepository {
 
   async facets(_query: SessionListQuery): Promise<SessionFacets> {
     const harnesses = new Map<string, number>();
+    const templates = new Map<string, number>();
     for (const row of this.rows.values()) {
       const harness = row.harness ?? 'unknown';
       harnesses.set(harness, (harnesses.get(harness) ?? 0) + 1);
+      const template = row.template?.templateId;
+      if (template != null) templates.set(template, (templates.get(template) ?? 0) + 1);
     }
     return {
       owners: [],
@@ -147,6 +161,9 @@ export class InMemorySessionRepository implements SessionRepository {
       persistenceModes: [],
       states: [],
       harnesses: [...harnesses.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([value, count]) => ({ value, count })),
+      templates: [...templates.entries()]
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([value, count]) => ({ value, count })),
     };

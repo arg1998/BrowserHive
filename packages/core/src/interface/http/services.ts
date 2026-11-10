@@ -21,6 +21,7 @@ import type { ChannelService } from '../../app/notifications/channel-service.ts'
 import type { PublicUrlChecker } from '../../app/notifications/public-url.ts';
 import type { SessionDirLayout } from '../../app/sessions/profile-dir.ts';
 import type { SessionService } from '../../app/sessions/session-service.ts';
+import type { TemplateRecordingService } from '../../app/templates/template-recording.ts';
 import type { TemplateService } from '../../app/templates/template-service.ts';
 import type { VaultAdmin } from '../../app/vault/vault-admin.ts';
 import type { VaultService } from '../../app/vault/vault-service.ts';
@@ -305,7 +306,15 @@ export interface HttpServices {
   readonly publicUrl: PublicUrlPort;
   /** Session templates (spec 13 §11.1). */
   readonly templates: TemplatesPort;
+  /** Recording a template's sign-ins and the T1a host routes (spec 13 §7.1, §11.1). */
+  readonly templateRecording: TemplateRecordingPort;
 }
+
+/** The recording routes' service (a structural slice of `TemplateRecordingService`). */
+export type TemplateRecordingPort = Pick<
+  TemplateRecordingService,
+  'start' | 'confirm' | 'finish' | 'cancel' | 'removeSignIn' | 'clearProfileSecrets'
+>;
 
 /** The template routes' service (a structural slice of `TemplateService`). */
 export type TemplatesPort = Pick<TemplateService, 'list' | 'get' | 'create' | 'remove'>;

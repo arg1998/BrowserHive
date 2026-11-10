@@ -4,7 +4,9 @@ import { ERROR_REGISTRY, renderMessage } from '@browserhive/contracts/errors';
 import type { Session } from '../../domain/session/session.ts';
 import { AppError } from '../../kernel/errors/app-error.ts';
 import {
+  type SharedWindowView,
   STOPPED_HOST,
+  type TemplateHostOps,
   type TemplateHostView,
   type TemplateLaunchRequest,
   type TemplateRuntime,
@@ -39,5 +41,45 @@ export class UnavailableTemplateRuntime implements TemplateRuntime {
 
   shutdown(): Promise<readonly string[]> {
     return Promise.resolve([]);
+  }
+}
+
+/** `CONFLICT`: templates are off on this server (`templates=false`). */
+function templatesOff(): AppError<'CONFLICT'> {
+  return new AppError(
+    'CONFLICT',
+    {},
+    { publicMessage: 'Session templates are turned off on this server (templates=false).' },
+  );
+}
+
+/** Host operations without hosts (`templates=false`): nothing runs, recording is refused. */
+export class UnavailableTemplateHostOps implements TemplateHostOps {
+  async jar(): Promise<null> {
+    return null;
+  }
+
+  async sharedWindows(): Promise<readonly SharedWindowView[]> {
+    return [];
+  }
+
+  removeSignIn(): Promise<number> {
+    return Promise.reject(templatesOff());
+  }
+
+  clearProfileSecrets(): Promise<void> {
+    return Promise.reject(templatesOff());
+  }
+
+  openRecording(): Promise<Session> {
+    return Promise.reject(templatesOff());
+  }
+
+  recordingOf(): null {
+    return null;
+  }
+
+  async closeRecording(): Promise<void> {
+    return;
   }
 }

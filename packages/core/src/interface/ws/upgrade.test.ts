@@ -96,6 +96,7 @@ describe('websocket handler', () => {
         setViewport: async () => ({ width: 1, height: 1 }),
         hasViewers: () => false,
         activeCount: 0,
+        templateOf: () => null,
       },
       serverVersion: '0',
       epoch: 'e',

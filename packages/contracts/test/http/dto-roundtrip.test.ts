@@ -79,6 +79,7 @@ const cases: ReadonlyArray<readonly [string, z.ZodType, unknown]> = [
         persistence_modes: [{ value: 'memory', count: 1 }],
         states: [{ value: 'live', count: 1 }],
         harnesses: [{ value: 'claude-code', count: 1 }],
+        templates: [{ value: 'tp-fixture001', count: 1 }],
       },
     },
   ],

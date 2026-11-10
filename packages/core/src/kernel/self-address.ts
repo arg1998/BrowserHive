@@ -63,3 +63,58 @@ export function isCanonicalLoopback(host: string): boolean {
  * API or a login page, also through a redirect hop the host's route cannot see.
  */
 export const TEMPLATE_HOST_COOKIE = 'browserhive_template_host';
+
+/** The port a URL addresses (the scheme's default when absent). */
+function portOf(url: URL): number {
+  if (url.port !== '') return Number(url.port);
+  return url.protocol === 'https:' ? 443 : 80;
+}
+
+/** What the self-origin guard matches, compiled from BrowserHive's own origins. */
+export interface SelfAddresses {
+  /** Exact origins (`publicUrl`, every own origin). */
+  readonly origins: ReadonlySet<string>;
+  /** The ports BrowserHive answers on. */
+  readonly ports: ReadonlySet<number>;
+  /** Host names of its own origins (bound host, interface addresses, `publicUrl` host), canonical. */
+  readonly hosts: ReadonlySet<string>;
+}
+
+/** Compiles {@link SelfAddresses} from origins such as `http://127.0.0.1:9876`. */
+export function selfAddressesOf(origins: readonly string[]): SelfAddresses {
+  const exact = new Set<string>();
+  const ports = new Set<number>();
+  const hosts = new Set<string>();
+  for (const raw of origins) {
+    try {
+      const url = new URL(raw);
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') continue;
+      exact.add(url.origin.toLowerCase());
+      ports.add(portOf(url));
+      hosts.add(canonicalHost(url.hostname));
+    } catch {
+      // Not a URL: nothing to guard.
+    }
+  }
+  return { origins: exact, ports, hosts };
+}
+
+/**
+ * True when `raw` addresses BrowserHive itself, by meaning rather than spelling (spec 13 §3.8): one
+ * of its own origins, or any `http(s)` URL on one of its ports whose host is loopback in any form
+ * (`*.localhost`, 127/8, `::1`, IPv4-mapped, `0.0.0.0`, case and a trailing dot ignored) or one of
+ * its own host names.
+ */
+export function isSelfAddress(raw: string, self: SelfAddresses): boolean {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+  if (self.origins.has(url.origin.toLowerCase())) return true;
+  if (!self.ports.has(portOf(url))) return false;
+  const host = canonicalHost(url.hostname);
+  return isLoopbackByMeaning(host) || self.hosts.has(host);
+}

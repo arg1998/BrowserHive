@@ -83,6 +83,9 @@ export const TEMPLATE_BUSY_LIMIT_TEXT = {
 export const TEMPLATE_VAULT_NOTE =
   'Vault fills are not available in template sessions; the operator keeps the template signed in.';
 
+/** `press_key`'s refusal of a clipboard shortcut in a template session (spec 13 §3.3). */
+export const TEMPLATE_CLIPBOARD_TEXT = 'clipboard shortcuts are not available in template sessions';
+
 /** `list_templates`: the templates the caller may launch, sorted by name (spec 13 §5.1). */
 export const LIST_TEMPLATES = defineTool({
   name: 'list_templates',

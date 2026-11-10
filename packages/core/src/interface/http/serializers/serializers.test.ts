@@ -132,6 +132,7 @@ describe('serializers', () => {
       sort: 'slug',
       view: 'all',
       archived: 'exclude',
+      maintenance: 'exclude',
       state: ['live'],
       q: 'sh',
     });
@@ -142,6 +143,7 @@ describe('serializers', () => {
       sort: 'slug',
       view: 'all',
       archived: 'exclude',
+      maintenance: 'exclude',
       states: ['live'],
       q: 'sh',
     });

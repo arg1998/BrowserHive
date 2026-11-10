@@ -163,11 +163,37 @@ export const HTTP_ENDPOINTS: readonly HttpEndpoint[] = [
   ep('getPreferences', 'get', '/me/preferences', null),
   ep('putPreferences', 'put', '/me/preferences', 'preferences:write'),
   ep('search', 'get', '/search', 'sessions:read'),
-  // spec 13 §11.1 session templates (T1a; the other template routes arrive with T1a-3 and T1b)
+  // spec 13 §11.1 session templates (T1a; the other template routes arrive with T1b, T2 and T3a)
   ep('listTemplates', 'get', '/templates', 'templates:read'),
   ep('createTemplate', 'post', '/templates', 'templates:write'),
   ep('getTemplate', 'get', '/templates/{template_id}', 'templates:read'),
   ep('deleteTemplate', 'delete', '/templates/{template_id}', 'templates:write'),
+  ep(
+    'removeTemplateSignIn',
+    'post',
+    '/templates/{template_id}/domains/{domain}/remove-sign-in',
+    'templates:write',
+  ),
+  ep('startTemplateRecording', 'post', '/templates/{template_id}/recording', 'templates:login'),
+  ep(
+    'confirmTemplateRecording',
+    'post',
+    '/templates/{template_id}/recording/confirm',
+    'templates:login',
+  ),
+  ep(
+    'finishTemplateRecording',
+    'post',
+    '/templates/{template_id}/recording/finish',
+    'templates:login',
+  ),
+  ep('cancelTemplateRecording', 'delete', '/templates/{template_id}/recording', 'templates:login'),
+  ep(
+    'clearTemplateProfileSecrets',
+    'post',
+    '/templates/{template_id}/host/clear-profile-secrets',
+    'templates:write',
+  ),
   // §4.9 client errors
   ep('reportClientError', 'post', '/client-errors', null),
   // §6 realtime upgrade (auth runs at upgrade; scopes are checked per WS command)

@@ -35,6 +35,11 @@ export interface BootInput {
   readonly startupChannels?: readonly StartupNotificationChannel[];
   /** Warnings of those flags (a literal ntfy.sh topic), logged at boot. */
   readonly startupChannelWarnings?: readonly string[];
+  /**
+   * Chromium switches of the internal testing seam (`createServer({testing})`, spec 13 §14): added
+   * to every template host and exclusive session this server launches. Never from the CLI.
+   */
+  readonly testingArgs?: readonly string[];
 }
 
 /** A running server. */

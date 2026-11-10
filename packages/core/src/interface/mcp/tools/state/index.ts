@@ -6,6 +6,7 @@ import type { CookieInput, SessionView } from '../../../../ports/browser-driver.
 import { requireSession } from '../../context.ts';
 import { defineTool, json, type ToolPack } from '../../definition.ts';
 import { sessionOwnership } from '../../policies.ts';
+import { assertUnsealed, sealedCookies } from '../sealing.ts';
 import { drive, firstLine, pageOf } from '../shared.ts';
 import { clampToAssertedDisplay, splitIdentityHeaders } from './headers.ts';
 
@@ -22,7 +23,10 @@ function viewOf(session: Session): SessionView {
   return view;
 }
 
-/** `get_cookies`: full values go to the agent; the observation records shape only (D-20). */
+/**
+ * `get_cookies`: full values go to the agent; the observation records shape only (D-20). A sealed
+ * template session gets its sites' cookies without values and `sealed: true` (spec 13 §5.4).
+ */
 export const getCookies = defineTool('get_cookies', {
   policies: [sessionOwnership],
   telemetry: { captureResult: 'size' },
@@ -31,16 +35,22 @@ export const getCookies = defineTool('get_cookies', {
     const view = viewOf(session);
     const urls = args.urls;
     const cookies = await drive(ctx, { sessionId: session.id }, () => view.cookies(urls));
+    const sealed = sealedCookies(session, cookies);
+    if (sealed !== null) return json({ cookies: sealed, sealed: true as const });
     return json({ cookies: cookies.map((c) => ({ ...c })) });
   },
 });
 
-/** `set_cookies`: Playwright's cookie validation surfaces as `INVALID_ARGUMENTS` (was raw). */
+/**
+ * `set_cookies`: Playwright's cookie validation surfaces as `INVALID_ARGUMENTS` (was raw). Refused in
+ * a sealed template session (`SESSION_SEALED`, spec 13 §5.4).
+ */
 export const setCookies = defineTool('set_cookies', {
   policies: [sessionOwnership],
   telemetry: { captureArgs: 'shape' },
   async handler(ctx, args) {
     const session = requireSession(ctx);
+    assertUnsealed(session, 'set_cookies');
     const view = viewOf(session);
     try {
       // The loose cookie schema forwards Playwright's full cookie surface; Playwright validates it.
@@ -60,7 +70,7 @@ export const setCookies = defineTool('set_cookies', {
   },
 });
 
-/** `set_viewport`: clamped to the asserted display; invalidates the humanize cursor mirror. */
+/** `set_viewport`: clamped to the asserted display (and, on a headed template, the window resized); invalidates the humanize cursor mirror. */
 export const setViewport = defineTool('set_viewport', {
   policies: [sessionOwnership],
   async handler(ctx, args) {
@@ -72,6 +82,8 @@ export const setViewport = defineTool('set_viewport', {
       args.height,
     );
     await drive(ctx, { sessionId: session.id }, () => page.setViewportSize({ width, height }));
+    // A headed template's window follows, or the page is letterboxed in it (spec 13 §3.3).
+    await session.view?.fitWindow?.(page, width, height);
     ctx.services.pageActions.invalidateCursor(session.id, page);
     return json({
       session_id: session.id,

@@ -165,6 +165,12 @@ export class VaultBroker {
       });
     };
 
+    // 0. A template session never fills (spec 13 §5.5): nothing is resolved or fetched.
+    if (session.template === true) {
+      await audit('blocked', 'skipped', { reason: 'template_session' });
+      return blocked('not_authorized');
+    }
+
     // 2. Resolve the handle (the allow-all path may find the backend locked).
     const policies = new PolicySet(await this.deps.policies.list());
     let entry: ResolvedEntry | undefined;

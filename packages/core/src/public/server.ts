@@ -36,15 +36,23 @@ export { LeaseSweeper } from '../app/sessions/lease-sweeper.ts';
 export { sessionDirLayout } from '../app/sessions/profile-dir.ts';
 export { SessionService } from '../app/sessions/session-service.ts';
 export {
+  RECORDING_SLUG,
+  TemplateHostOperations,
+} from '../app/templates/host-operations.ts';
+export {
   type HostSupervisorConfig,
   type HostSupervisorDeps,
   TemplateHostSupervisor,
 } from '../app/templates/host-supervisor.ts';
+export { TemplateRecordingService } from '../app/templates/template-recording.ts';
 export {
   TemplateService,
   type TemplateServiceConfig,
 } from '../app/templates/template-service.ts';
-export { UnavailableTemplateRuntime } from '../app/templates/unavailable-runtime.ts';
+export {
+  UnavailableTemplateHostOps,
+  UnavailableTemplateRuntime,
+} from '../app/templates/unavailable-runtime.ts';
 export { VaultService } from '../app/vault/vault-service.ts';
 export { OperatorRequestBroker } from '../domain/operator-requests/broker.ts';
 export { VaultBroker } from '../domain/vault/broker.ts';

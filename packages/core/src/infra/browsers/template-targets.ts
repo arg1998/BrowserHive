@@ -195,6 +195,25 @@ export class HostTargets {
     await this.setBounds(windowId, { width, height });
   }
 
+  /**
+   * Clears the site data of `origins` (local storage, IndexedDB, cache storage, service workers and
+   * the rest of Chromium's per-origin storage, cookies excluded) in the host's browser. Best effort
+   * per origin.
+   */
+  async clearOriginData(origins: readonly string[]): Promise<void> {
+    for (const origin of origins) {
+      try {
+        await this.cdp.send('Storage.clearDataForOrigin', {
+          origin,
+          storageTypes:
+            'file_systems,indexeddb,local_storage,shader_cache,websql,service_workers,cache_storage,storage_buckets',
+        });
+      } catch (err) {
+        this.log.debug('origin data not cleared', { err: serializeError(err) });
+      }
+    }
+  }
+
   /** Closes a target that was never handed to anyone (an adoption that failed). */
   async closeTarget(targetId: string): Promise<void> {
     try {

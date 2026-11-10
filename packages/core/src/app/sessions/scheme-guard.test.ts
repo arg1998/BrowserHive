@@ -10,7 +10,7 @@ function frame(url: string, main = true): { url(): string; parentFrame(): unknow
   return { url: () => url, parentFrame: () => (main ? null : {}) };
 }
 
-function setup(url = 'about:blank') {
+function setup(url = 'about:blank', allowData = true) {
   let n = 0;
   const tabs = new TabRegistry('s-1', () => `t-${++n}`);
   const logger = createCollectingLogger();
@@ -20,6 +20,7 @@ function setup(url = 'about:blank') {
     sessionId: 's-1',
     tabs,
     logger,
+    allowData,
     newCDPSession: () => Promise.reject(new Error('no CDP in unit tests')),
   });
   return { tabs, logger, fake, tabId };
@@ -76,5 +77,16 @@ describe('guardPageScheme', () => {
     await settle(fake);
     expect(logger.find('non-web scheme page closed')).toHaveLength(1);
     expect(fake.methods().filter((m) => m === 'close')).toHaveLength(1);
+  });
+
+  it('closes a data: commit in a template session, where data: is not a web scheme (spec 13 §5.5)', async () => {
+    const { tabs, logger, fake, tabId } = setup('about:blank', false);
+    fake.emit('framenavigated', frame('data:text/html,<p>x</p>'));
+    expect(tabs.has(tabId)).toBe(false);
+    await settle(fake);
+    expect(fake.isClosed()).toBe(true);
+    expect(logger.find('non-web scheme page closed').at(0)?.fields).toMatchObject({
+      scheme: 'data',
+    });
   });
 });

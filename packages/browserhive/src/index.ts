@@ -27,6 +27,7 @@ import {
   type RunningServer,
 } from './composition/index.ts';
 import { urlFor } from './composition/phases/listeners-http.ts';
+import { type ServerTesting, testingArgsOf } from './testing.ts';
 
 export type { Provenance, ServerConfig, ServerConfigInput } from '@browserhive/contracts/config';
 export type {
@@ -86,6 +87,13 @@ export interface CreateServerOptions extends ServerOptions {
    * as `env:NAME`, read from `env`.
    */
   readonly notificationChannels?: readonly string[];
+  /**
+   * The internal testing seam (spec 13 §14): Chromium switches for BrowserHive's own suites. Its
+   * type is exported from `browserhive/testing` only.
+   *
+   * @internal
+   */
+  readonly testing?: ServerTesting;
 }
 
 /** A created (not yet listening) server. */
@@ -124,6 +132,7 @@ const EXTRA_OPTIONS: ReadonlySet<string> = new Set([
   'logger',
   'hostMemory',
   'notificationChannels',
+  'testing',
 ]);
 
 function isConfigKey(name: string): name is ConfigKey {
@@ -231,6 +240,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<B
       installProcessHandlers: false,
       startupChannels: channelFlags.channels,
       startupChannelWarnings: channelFlags.warnings,
+      ...(options.testing !== undefined && { testingArgs: testingArgsOf(options.testing) }),
       ...(logger !== undefined && {
         logSink: {
           name: 'external',

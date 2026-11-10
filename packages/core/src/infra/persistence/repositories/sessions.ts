@@ -47,6 +47,7 @@ const SORT: Record<SessionSortKey, SortExpr> = {
   persistence_mode: { expr: sql.ref('v.persistence_mode'), nullValue: '' },
   blocked: { expr: sql.ref('v.blocked'), nullValue: 0 },
   harness: { expr: sql.ref('v.harness_key'), nullValue: 'unknown' },
+  template: { expr: sql.ref('v.template_name'), nullValue: '' },
 };
 
 /** A session's launch harness for facets, filters and sorting: NULL (pre-v3) reads `unknown`. */
@@ -113,6 +114,20 @@ function applyFilters(qb: ViewQuery, q: SessionListQuery): ViewQuery {
   }
   if (q.harnesses !== undefined && q.harnesses.length > 0) {
     out = out.where('v.harness_key', 'in', [...q.harnesses]);
+  }
+  if (q.templateIds !== undefined && q.templateIds.length > 0) {
+    out = out.where('v.template_id', 'in', [...q.templateIds]);
+  }
+  // A maintenance session is any template session whose mode is not `live` (unknown modes read
+  // as maintenance, spec 13 §2.5): hidden unless asked for (§11.1).
+  const maintenance = q.maintenance ?? 'exclude';
+  if (maintenance === 'exclude') {
+    out = out.where((eb) =>
+      eb.or([eb('v.template_mode', 'is', null), eb('v.template_mode', '=', 'live')]),
+    );
+  }
+  if (maintenance === 'only') {
+    out = out.where('v.template_mode', 'is not', null).where('v.template_mode', '!=', 'live');
   }
   if (q.q !== undefined && q.q !== '') {
     const term = q.q;
@@ -262,9 +277,10 @@ export class SqliteSessionRepository implements SessionRepository {
 
   async facets(query: SessionListQuery): Promise<SessionFacets> {
     const facet = async (
-      column: 'owner' | 'channel' | 'persistence_mode' | 'state' | 'harness_key',
+      column: 'owner' | 'channel' | 'persistence_mode' | 'state' | 'harness_key' | 'template_id',
     ): Promise<FacetCount[]> => {
       const rows = await applyFilters(this.#view(), query)
+        .where(sql.ref(`v.${column}`), 'is not', null)
         .clearSelect()
         .select([
           sql<string>`${sql.ref(`v.${column}`)}`.as('value'),
@@ -281,6 +297,7 @@ export class SqliteSessionRepository implements SessionRepository {
       persistenceModes: await facet('persistence_mode'),
       states: await facet('state'),
       harnesses: await facet('harness_key'),
+      templates: await facet('template_id'),
     };
   }
 
@@ -363,6 +380,7 @@ export class SqliteSessionRepository implements SessionRepository {
 }
 
 function sortValue(row: ViewRow, key: SessionSortKey, nullValue: number | string): number | string {
-  const value = key === 'harness' ? row.harness_key : row[key];
+  const value =
+    key === 'harness' ? row.harness_key : key === 'template' ? row.template_name : row[key];
   return value === null ? nullValue : value;
 }

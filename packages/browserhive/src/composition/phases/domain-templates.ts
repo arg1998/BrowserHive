@@ -20,8 +20,11 @@ import {
   PassThroughProxyResolver,
   type PlaywrightBrowserDriver,
   type SessionService,
+  TemplateHostOperations,
   TemplateHostSupervisor,
+  TemplateRecordingService,
   TemplateService,
+  UnavailableTemplateHostOps,
   UnavailableTemplateRuntime,
 } from '@browserhive/core/server';
 
@@ -38,6 +41,8 @@ export interface TemplatesInput {
   readonly sessions: SessionService;
   /** Starts template hosts. */
   readonly driver: PlaywrightBrowserDriver;
+  /** Chromium switches of the internal testing seam (spec 13 §14). */
+  readonly testingArgs?: readonly string[];
   /** The composition's interval timer (the supervisor's periodic pass). */
   readonly repeat: (fn: () => void, ms: number) => () => void;
 }
@@ -48,6 +53,8 @@ export const TEMPLATE_HOST_TICK_MS = 60_000;
 /** The template service and the supervisor behind it (`null` under `templates=false`). */
 export interface TemplatesParts {
   readonly service: TemplateService;
+  /** Recording and the T1a host routes (spec 13 §7.1, §11.1). */
+  readonly recording: TemplateRecordingService;
   readonly supervisor: TemplateHostSupervisor | null;
   /** Stops the supervisor's periodic pass. */
   readonly stopTicks: () => void;
@@ -118,7 +125,7 @@ export function buildTemplates(input: TemplatesInput): TemplatesParts {
           proxyResolver: new PassThroughProxyResolver(),
           env: input.host.env,
           selfOrigins: () => selfOriginsOf(config),
-          testingArgs: [],
+          testingArgs: input.testingArgs ?? [],
         },
         config: {
           idleTimeoutMs: config.templateHostIdleTimeout,
@@ -132,10 +139,31 @@ export function buildTemplates(input: TemplatesInput): TemplatesParts {
         }),
       })
     : null;
+  const runtime = supervisor ?? new UnavailableTemplateRuntime();
+  const ops =
+    supervisor === null
+      ? new UnavailableTemplateHostOps()
+      : new TemplateHostOperations({
+          supervisor,
+          sessions: input.sessions,
+          launcher: input.driver,
+          dataDir: config.dataDir,
+          logger: input.logger,
+        });
+  const recording = new TemplateRecordingService({
+    repos: input.uow.repos,
+    uow: input.uow,
+    runtime,
+    ops,
+    ids: input.ids,
+    clock: input.clock,
+    logger: input.logger,
+  });
   const service = new TemplateService({
     repos: input.uow.repos,
     uow: input.uow,
-    runtime: supervisor ?? new UnavailableTemplateRuntime(),
+    runtime,
+    ops,
     geo: createTemplateGeoResolver(new HostGeoSeedResolver(input.host)),
     files: createTemplateFiles(templatesDirOf(config.dataDir)),
     degradations: input.degradations,
@@ -165,5 +193,5 @@ export function buildTemplates(input: TemplatesInput): TemplatesParts {
               input.logger.warn('host tick failed', { err: serializeError(err) }),
             );
         }, TEMPLATE_HOST_TICK_MS);
-  return { service, supervisor, stopTicks };
+  return { service, recording, supervisor, stopTicks };
 }

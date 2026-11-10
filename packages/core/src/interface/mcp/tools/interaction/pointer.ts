@@ -1,5 +1,10 @@
 /** @module interface/mcp/tools/interaction/pointer — click, type_text, fill, press_key, hover. */
 
+import {
+  CLIPBOARD_CHORD_MESSAGE,
+  isClipboardChord,
+} from '../../../../domain/templates/clipboard-chords.ts';
+import { AppError } from '../../../../kernel/errors/app-error.ts';
 import { requireSession } from '../../context.ts';
 import { defineTool, json } from '../../definition.ts';
 import { sessionOwnership } from '../../policies.ts';
@@ -100,6 +105,14 @@ export const pressKey = defineTool('press_key', {
   policies: [sessionOwnership],
   async handler(ctx, args) {
     const session = requireSession(ctx);
+    // A template's browser may be on the operator's desktop: no paste of their clipboard (§3.3).
+    if (session.template !== null && isClipboardChord(args.key)) {
+      throw new AppError(
+        'INVALID_ARGUMENTS',
+        { issues: [{ path: 'key', message: CLIPBOARD_CHORD_MESSAGE }] },
+        { publicMessage: `key: ${CLIPBOARD_CHORD_MESSAGE}` },
+      );
+    }
     const page = pageOf(ctx, session, args.tab_id);
     const selector = args.selector;
     if (selector !== undefined) {
