@@ -389,7 +389,7 @@ One dispatcher per host subscribes to `context.on('page')`. For every new page i
 
 1. **Claim.** `targetId` matches a pending claim: a session's (from §3.3) → that session; the host's own (sentinel, probe page, Playwright's internal storage-state page is not claimed) → parked.
 2. **Opener.** `openerId` names a target attributed to session S → S; a parked opener → parked. CDP sets `openerId` for `noopener` popups and `target=_blank` links too (`canAccessOpener: false`). The dispatcher keeps a **tombstone map** of closed targets to their attribution for the host's life (bounded to the newest 10 000 entries), so a page whose opener closed first (`window.open(url); window.close()`, common in OAuth flows) still goes to the opener's session.
-3. **Hold.** A page that matches neither while a `createTarget` of this host is still awaiting its response, or whose named opener is itself held or may be among the pages whose target info is still being read, is held for at most 2 000 ms and re-evaluated when the response (or that target info) arrives; when the hold expires, an opener still unknown counts as none.
+3. **Hold.** A page that matches neither while a `createTarget` of this host is still awaiting its response is held for at most 2 000 ms and re-evaluated when the response arrives. *Extension made in PR T0c* (the dispatcher reads target info asynchronously, so an opener's attribution can arrive after its child): a page whose named opener is not known yet is also held while some page's target info is still being read (the opener may be among them; at most until its own 2 000 ms run out), and while its opener is itself held, past its own 2 000 ms, until the opener is decided (bounded by the opener's own hold, and by a hard stop after a second 2 000 ms). Without this a popup of a session's page could be parked only because the opener's target info answered later. A target-info read has a 2 000 ms deadline; a page whose read fails or times out has no known target id or opener and falls to rule 4. A page that closes while undecided keeps waiting and is then recorded as a tombstone at once, so a page it opened still follows it.
 4. **Park.** Anything else: a tab or window the operator opened by hand (Ctrl+T, a bookmark, even inside an agent's window), a service worker's `clients.openWindow`, a page Chromium restored, Playwright's internal storage-state page (§3.9).
 
 The window a page appears in is never used for attribution. **Invariant (the isolation boundary of live mode, D-50).** For every host at every instant: each page is attributed to at most one session; an attribution never changes; a page enters a session's `TabRegistry` only after it is attributed to that session; a parked page is in no `TabRegistry`; a page whose opener is (or was) attributed to S belongs to S. The site-opened-page subscription that today adds every page of the context to the one session (`packages/core/src/app/sessions/create-phases.ts:250-254`) becomes a subscription to the session's own `SessionView.onPage`. Property tests (§17, T0c) guard the invariant.
@@ -517,11 +517,14 @@ interface BrowserHost {
   close(deadlineMs: number, signal?: AbortSignal): Promise<readonly LaunchWarning[]>;
   browserPid?(): Promise<number | null>;
 }
+// As built in T0c, BrowserHost extends SessionHost: the facts and page-scoped helpers above
+// (hostId, kind, capabilities, driver, identity, browserInfo, warnings, tracing,
+// ensureIdentityForPage, browserPid) without browser, context, onCrash and close.
 
 /** What one session may touch: its own pages only. */
 interface SessionView {
   readonly sessionId: string;
-  readonly host: BrowserHost;
+  readonly host: SessionHost;                      // T0c: never the context, the browser or close()
   readonly page: Page;                             // the first page
   pages(): readonly Page[];
   owns(page: Page): boolean;
@@ -539,7 +542,7 @@ interface SessionView {
 
 interface BrowserDriver {
   stealthDriverName(): 'patchright' | 'playwright';
-  launch(spec: LaunchSpec, signal?: AbortSignal): Promise<SessionView>;            // an exclusive host and its one view
+  launch(spec: LaunchSpec, signal?: AbortSignal): Promise<{ view: SessionView; host: BrowserHost }>;  // an exclusive host and its one view; the session keeps the view, the pipeline uses the host for policy install
   launchTemplateHost(spec: TemplateHostSpec, signal?: AbortSignal): Promise<TemplateHost>;   // PR T1a
 }
 interface TemplateHost extends BrowserHost { openView(sessionId: string, opts: { windowState: 'normal' | 'minimized' }): Promise<SessionView>; parkedPages(): readonly Page[]; }
@@ -562,7 +565,7 @@ The port's isolation sentence becomes: "An exclusive host MUST NOT be shared bet
 | `browserPid` for metrics (`packages/browserhive/src/composition/phases/wire-observers.ts:41-45`) | `BrowserHost.browserPid` (keyed by host) |
 | the vault's tracing handle (`packages/core/src/interface/mcp/tools/vault/index.ts:97`) | `SessionView.host.tracing` |
 
-`IdentityApplier`'s context-wide `context.on('page')` (`identity-applier.ts:137`) stays on the host. T0c's acceptance includes that no module under `interface/` imports `BrowserContext` (a dependency-cruiser rule, `interface-no-playwright`: dependency-cruiser cannot match imported names, so `interface/` takes Playwright's page-level types only from `ports/page-types.ts`, which does not export `BrowserContext`).
+`IdentityApplier`'s context-wide `context.on('page')` (`identity-applier.ts:137`) stays on the host. T0c's acceptance includes that no module under `interface/` imports `BrowserContext` (a dependency-cruiser rule, `interface-no-playwright`: dependency-cruiser cannot match imported names, so `interface/` takes Playwright's page-level types only from `ports/page-types.ts`, which does not export `BrowserContext`). An import rule alone would still let a session reach the context through a value, so T0c also types `SessionView.host` as the narrow `SessionHost`, and a grep rule (`packages/core/test/lint/grep-rules.test.ts`) forbids `.context()` and `host.context`/`browser`/`close`/`onCrash` in `interface/` and `app/` (Playwright's `Page.context()` cannot be hidden by a type). The scheme guard's CDP retry uses `SessionView.newCDPSession`. `test/lint/depcruise-rules.test.ts` runs the rules against a fixture tree that breaks each one, so an inert rule fails CI.
 
 ## 4. Settings shared by the whole browser
 
