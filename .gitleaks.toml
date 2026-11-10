@@ -1,0 +1,7 @@
+# gitleaks: the default rules, plus the one deliberate key in the tree.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "The test-only TLS key of the *.test fixture sites (spec 13 §14); it protects nothing."
+paths = ['''packages/core/test/fixtures/tls/test\.key''']
