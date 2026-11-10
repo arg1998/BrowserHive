@@ -12,7 +12,8 @@ the exception: it runs locally against the data directory with the server stoppe
 
 ARGUMENTS
   <name>     Template name.
-  <version>  A version number from 'templates versions', or latest (the rolling checkpoint).
+  <version>  A version number (as listed by browserhive templates versions), or latest (the rolling
+             checkpoint).
 
 FLAGS
   --json                       Print machine-readable JSON instead of text.

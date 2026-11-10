@@ -109,7 +109,7 @@ function versionArgument(reader: FlagReader, raw: string): number | 'latest' {
   if (raw === 'latest') return 'latest';
   if (/^[1-9][0-9]{0,8}$/.test(raw)) return Number(raw);
   reader.problems.push(
-    `invalid version '${raw}'. Expected a version number from 'templates versions', or latest (the rolling checkpoint).`,
+    `invalid version '${raw}'. Expected a version number (as listed by browserhive templates versions), or latest (the rolling checkpoint).`,
   );
   return 'latest';
 }
