@@ -1,4 +1,4 @@
-/** @module interface/mcp/tools/checklist.test — fails when any of the 43 tools lacks a successful execution test (`executeTool(h, '<name>'` in a tools/*.test.ts file). */
+/** @module interface/mcp/tools/checklist.test — fails when any of the 44 tools lacks a successful execution test (`executeTool(h, '<name>'` in a tools/*.test.ts file). */
 
 import { describe, expect, it } from 'bun:test';
 import { readdirSync, readFileSync } from 'node:fs';
