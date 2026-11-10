@@ -89,23 +89,24 @@ export function TemplateHeader({ detail }: { readonly detail: TemplateDetailResp
   const actions = useTemplateActions(template);
   const More = ICONS.more;
   const SignIn = ICONS.signIn;
+  // Separators are drawn before each item and clipped at the start of a line (as on the session
+  // page), so a wrap never leaves a dangling "·".
   const meta = (
-    <>
-      <span className="inline-flex min-w-0 items-center gap-0.5" data-reveal-scope="">
-        <span className="truncate font-mono text-sm text-foreground/85">{template.name}</span>
-        <CopyButton value={template.name} label="Copy template name" visibility="always" />
+    <span className="-my-1 flex w-full min-w-0 overflow-hidden py-1">
+      <span className="-ml-5 flex min-w-0 flex-wrap items-center gap-y-1 [&>*]:relative [&>*]:pl-5 [&>*]:before:absolute [&>*]:before:left-2 [&>*]:before:text-subtle-foreground [&>*]:before:content-['·']">
+        <span className="inline-flex max-w-full min-w-0 items-center gap-0.5" data-reveal-scope="">
+          <span className="truncate font-mono text-sm text-foreground/85">{template.name}</span>
+          <CopyButton value={template.name} label="Copy template name" visibility="always" />
+        </span>
+        <span>{template.owner}</span>
+        <span>
+          {CHANNEL_LABEL[template.channel]} · {template.headless ? 'headless' : 'headed'}
+        </span>
+        <span className="inline-flex items-center gap-1">
+          created <RelativeTime at={template.created_at} className="min-w-0 text-sm" />
+        </span>
       </span>
-      <span aria-hidden="true">·</span>
-      <span>{template.owner}</span>
-      <span aria-hidden="true">·</span>
-      <span>
-        {CHANNEL_LABEL[template.channel]} · {template.headless ? 'headless' : 'headed'}
-      </span>
-      <span aria-hidden="true">·</span>
-      <span>
-        created <RelativeTime at={template.created_at} className="min-w-0 text-sm" />
-      </span>
-    </>
+    </span>
   );
   return (
     <PageHeader

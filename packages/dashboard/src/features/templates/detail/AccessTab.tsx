@@ -14,6 +14,7 @@ import { useVaultEnabled } from '@/features/sessions/api.ts';
 import { useSystem } from '@/features/system/api.ts';
 import { useVaultHarnesses } from '@/features/vault/api.ts';
 import { HarnessRuleField } from '@/features/vault/harnesses/HarnessRuleField.tsx';
+import { cn } from '@/lib/utils.ts';
 import { useTemplateOperations } from '../api-operations.ts';
 import { accessChangeConfirm, unsealConfirm } from '../confirm-copy.ts';
 import { PrincipalsInput } from '../fields.tsx';
@@ -202,7 +203,13 @@ export function AccessTab({ detail }: { readonly detail: TemplateDetailResponse 
           ) : null}
         </div>
       </Panel>
-      <div className="sticky bottom-4 z-(--z-sticky) flex flex-wrap items-center justify-end gap-2 rounded-xl border bg-card/95 px-4 py-3 shadow-sm backdrop-blur dark:shadow-none">
+      <div
+        className={cn(
+          'flex flex-wrap items-center justify-end gap-2 rounded-xl border bg-card/95 px-4 py-3 backdrop-blur',
+          // Only unsaved changes keep the bar in view; otherwise it stays in place under the form.
+          dirty && 'sticky bottom-4 z-(--z-sticky) shadow-sm dark:shadow-none',
+        )}
+      >
         <span className="mr-auto text-sm text-muted-foreground">
           {dirty ? 'Unsaved changes' : 'No unsaved changes'}
         </span>
