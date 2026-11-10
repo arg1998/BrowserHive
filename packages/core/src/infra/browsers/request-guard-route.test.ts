@@ -10,17 +10,20 @@ import {
   RequestGuardRuleSet,
   type RequestGuardRules,
 } from '../../domain/policies/request-guard.ts';
-import { InMemoryRequestGuardHits } from '../../domain/policies/request-guard-hits.ts';
 import type {
   RequestConfirmation,
   RequestConfirmer,
   RequestConfirmResult,
   RequestOwner,
 } from '../../ports/request-guard.ts';
+import { InMemoryRequestGuardHits } from '../audit/in-memory-guard-hits.ts';
 import { createCollectingLogger } from '../logging/collecting-logger.ts';
 import { type BlockedUrlHit, blocklistHandler } from './blocklist-route.ts';
 import { fixedOwner, InterceptionChain, type OwnerResolver } from './interception-chain.ts';
 import { type RequestGuardHandlerDeps, requestGuardHandler } from './request-guard-route.ts';
+
+/** Lets the hits recorded after the owner resolves land. */
+const flush = () => Bun.sleep(0);
 
 function rules(...inputs: RequestGuardRuleInput[]): RequestGuardRuleSet {
   const result = compileRequestGuardRules(inputs);
@@ -80,7 +83,14 @@ function setup(
     resolveOwner: options.resolveOwner ?? fixedOwner('sess-1'),
     logger,
   });
-  return { chain, hits, logger };
+  // `handle`, then let the hits that are recorded once the owner resolves land.
+  const settled = {
+    handle: async (route: Route) => {
+      await chain.handle(route);
+      await flush();
+    },
+  };
+  return { chain: settled, hits, logger };
 }
 
 const LOGOUT: RequestGuardRuleInput = {
@@ -191,6 +201,7 @@ describe('requestGuardHandler', () => {
         method: 'POST',
         resourceType: 'fetch',
         url: 'https://site.test/post',
+        signal: expect.any(AbortSignal),
       },
     ]);
     release();
@@ -232,15 +243,80 @@ describe('requestGuardHandler', () => {
     expect(hits.list()).toEqual([]);
   });
 
-  it('a matched request whose owner cannot be resolved is aborted', async () => {
-    const { chain } = setup(rules(LOGOUT), {
+  it('a block whose owner cannot be resolved is still blocked, its hit without a session', async () => {
+    const { chain, hits } = setup(rules(LOGOUT), {
       resolveOwner: async () => {
         throw new Error('no page');
       },
     });
     const { route, outcome } = fakeRoute('POST', 'ping', 'https://site.test/logout');
     await chain.handle(route);
+    await flush();
+    expect(outcome).toEqual(['abort:blockedbyclient']);
+    expect(hits.list().map((h) => [h.ruleId, h.sessionId])).toEqual([['logout', null]]);
+  });
+
+  it('a confirm whose owner cannot be resolved is aborted with failed', async () => {
+    const { confirmer, asked } = fakeConfirmer({
+      outcome: 'approved',
+      decidedBy: null,
+      requestId: null,
+    });
+    const { chain } = setup(rules({ id: 'write', url: 'site.test/post', action: 'confirm' }), {
+      confirmer,
+      resolveOwner: async () => {
+        throw new Error('no page');
+      },
+    });
+    const { route, outcome } = fakeRoute('POST', 'fetch', 'https://site.test/post');
+    await chain.handle(route);
     expect(outcome).toEqual(['abort:failed']);
+    expect(asked).toEqual([]);
+  });
+
+  it('allow never resolves the owner; block aborts before the owner resolves', async () => {
+    let asked = 0;
+    let resolveOwner = (_owner: RequestOwner): void => undefined;
+    const { chain, hits } = setup(
+      rules(
+        { id: 'ok', url: 'site.test/ok', action: 'allow' },
+        { id: 'no', url: 'site.test/no', action: 'block' },
+      ),
+      {
+        resolveOwner: () => {
+          asked += 1;
+          return new Promise((resolve) => {
+            resolveOwner = resolve;
+          });
+        },
+      },
+    );
+    const allowed = fakeRoute('POST', 'fetch', 'https://site.test/ok');
+    await chain.handle(allowed.route);
+    expect(allowed.outcome).toEqual(['fallback']);
+    expect(asked).toBe(0);
+    const blocked = fakeRoute('POST', 'fetch', 'https://site.test/no');
+    await chain.handle(blocked.route);
+    expect(blocked.outcome).toEqual(['abort:blockedbyclient']);
+    await flush();
+    expect(hits.list()).toEqual([]);
+    resolveOwner({ kind: 'session', sessionId: 'late' });
+    await flush();
+    expect(hits.list().map((h) => [h.ruleId, h.sessionId])).toEqual([['no', 'late']]);
+  });
+
+  it('a rule set with an action the guard does not know fails closed (never hangs)', async () => {
+    const compiledRules = compileRequestGuardRules([LOGOUT]);
+    if (!compiledRules.ok) throw new Error('bad fixture');
+    const [rule] = compiledRules.value.rules;
+    if (rule === undefined) throw new Error('bad fixture');
+    // As a rule source that skipped the compiler would hand it over: an unresolved write policy.
+    const unresolved = { ...rule, action: 'write_policy' as unknown as 'block' };
+    const { chain, logger } = setup({ rulesFor: () => ({ rules: [unresolved] }) });
+    const { route, outcome } = fakeRoute('POST', 'fetch', 'https://site.test/logout');
+    await chain.handle(route);
+    expect(outcome).toEqual(['abort:failed']);
+    expect(logger.has('request guard failed')).toBe(true);
   });
 
   it('a hit sink that throws does not change the decision', async () => {
@@ -315,7 +391,13 @@ describe('blocklist then request guard in one chain', () => {
       resolveOwner: fixedOwner('sess-1'),
       logger,
     });
-    return { chain, blocked, guardHits };
+    const settled = {
+      handle: async (route: Route) => {
+        await chain.handle(route);
+        await flush();
+      },
+    };
+    return { chain: settled, blocked, guardHits };
   }
 
   it('a document the blocklist blocks is the blocklist hit; the guard never sees it', async () => {

@@ -51,9 +51,21 @@ describe('matchRequestGuard', () => {
     ['POST', 'ping', 'https://site.test/logout', 'logout-post'],
     ['GET', 'document', 'https://site.test/logout', null],
     ['post', 'fetch', 'https://SITE.test/LOGOUT', 'logout-post'],
-    // The implicit `/*` suffix of the spec 11 §5 grammar: paths beneath are covered, a query is not.
+    // The implicit `/*` suffix of the spec 11 §5 grammar covers paths beneath; for guards a
+    // pattern not ending in `*` also covers the same path with any query (spec 13 §9.3).
     ['POST', 'fetch', 'https://site.test/logout/now', 'logout-post'],
-    ['POST', 'fetch', 'https://site.test/logout?next=/', null],
+    ['POST', 'fetch', 'https://site.test/logout?next=/', 'logout-post'],
+    ['POST', 'document', 'https://site.test/logout?', 'logout-post'],
+    ['POST', 'fetch', 'https://site.test/logout/now?x=1', 'logout-post'],
+    // ...but not a longer path, and `?` in the pattern stays a one-character wildcard.
+    ['POST', 'fetch', 'https://site.test/logout-help', null],
+    ['POST', 'fetch', 'https://site.test/logoutpage', null],
+    ['POST', 'fetch', 'https://site.test/logoutx?y=1', null],
+    // Percent-encoded unreserved characters are what the server decodes them to.
+    ['POST', 'fetch', 'https://site.test/log%6Fut', 'logout-post'],
+    ['POST', 'fetch', 'https://site.test/LOG%4Fut?next=1', 'logout-post'],
+    // A reserved character stays encoded: `%2F` is not a path separator.
+    ['POST', 'fetch', 'https://site.test/logout%2Fnow', null],
     // Types outside the default set are not covered by a rule without resource types.
     ['POST', 'image', 'https://site.test/logout', null],
     ['POST', 'script', 'https://site.test/logout', null],
@@ -119,6 +131,21 @@ describe('matchRequestGuard', () => {
     expect([...(rule?.resourceTypes ?? [])]).toEqual(['document', 'xhr', 'fetch', 'ping']);
     expect(rule?.methods).toBeNull();
   });
+
+  it('compiles matchers once per rule set', () => {
+    const rule = compiled({ id: 'r', url: 'a.test/x*', action: 'block' }).rules[0];
+    expect(rule?.matchers).toHaveLength(1);
+    const plain = compiled({ id: 'r', url: 'a.test/x', action: 'block' }).rules[0];
+    expect(plain?.matchers.map((m) => m.kind)).toEqual(['equals', 'regexp', 'regexp']);
+  });
+
+  it('a pattern with wildcards still gets the query variant', () => {
+    const wild = compiled({ id: 'w', url: '*.site.test/api/?/delete', action: 'block' });
+    const at = (url: string) => matchRequestGuard(wild, req('POST', 'fetch', url))?.rule.id ?? null;
+    expect(at('https://a.site.test/api/7/delete')).toBe('w');
+    expect(at('https://a.site.test/api/7/delete?id=1')).toBe('w');
+    expect(at('https://a.site.test/api/7/deleted')).toBeNull();
+  });
 });
 
 describe('compileRequestGuardRules', () => {
@@ -145,6 +172,19 @@ describe('compileRequestGuardRules', () => {
     [
       { id: 'r', url: 'a.test', resourceTypes: ['image' as 'other'], action: 'block' },
       'resource types must be a non-empty list of known types',
+    ],
+    [
+      // A pack's `write_policy` must be resolved before a rule reaches the guard.
+      { id: 'r', url: 'a.test', action: 'write_policy' as 'block' },
+      'action must be block, confirm, warn or allow',
+    ],
+    [
+      { id: 'r', url: 'bücher.test/logout', action: 'block' },
+      'url must be printable ASCII (punycode hosts, percent-encoded paths)',
+    ],
+    [
+      { id: 'r', url: 'a.test/two words', action: 'block' },
+      'url must be printable ASCII (punycode hosts, percent-encoded paths)',
     ],
   ];
 

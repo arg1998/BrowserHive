@@ -51,6 +51,12 @@ export interface RequestConfirmation {
   readonly resourceType: string;
   /** Sanitized (D-20). */
   readonly url: string;
+  /**
+   * Aborted when the held request goes away first (Chromium failed it: a superseded navigation,
+   * a closed tab; or the context closed). The confirmer should withdraw the operator request and
+   * answer `cancelled`.
+   */
+  readonly signal: AbortSignal;
 }
 
 /** The operator's answer. */
@@ -63,7 +69,8 @@ export interface RequestConfirmResult {
 /**
  * Asks an operator whether a held request may go out (a `security_intercept` with reason
  * `write_confirm`, PR T3a). The request stays held while the promise is pending; only `approved`
- * releases it. The deadline (the attention timeout, D-15) is the implementation's.
+ * releases it. The deadline (the attention timeout, D-15) is the implementation's, and so is
+ * answering `cancelled` once {@link RequestConfirmation.signal} aborts.
  */
 export interface RequestConfirmer {
   confirm(request: RequestConfirmation): Promise<RequestConfirmResult>;

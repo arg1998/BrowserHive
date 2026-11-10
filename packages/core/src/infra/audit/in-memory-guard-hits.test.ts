@@ -1,8 +1,8 @@
-/** @module domain/policies/request-guard-hits.test — the in-memory hit sink keeps the newest hits within its bound. */
+/** @module infra/audit/in-memory-guard-hits.test — the in-memory hit sink keeps the newest hits within its bound. */
 
 import { describe, expect, it } from 'bun:test';
 import type { RequestGuardHit } from '../../ports/request-guard.ts';
-import { InMemoryRequestGuardHits, MAX_IN_MEMORY_GUARD_HITS } from './request-guard-hits.ts';
+import { InMemoryRequestGuardHits, MAX_IN_MEMORY_GUARD_HITS } from './in-memory-guard-hits.ts';
 
 const hit = (ts: number): RequestGuardHit => ({
   sessionId: 'sess-1',

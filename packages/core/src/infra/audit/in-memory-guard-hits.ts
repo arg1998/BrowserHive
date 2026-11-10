@@ -1,4 +1,4 @@
-/** @module domain/policies/request-guard-hits — the in-memory request-guard hit sink, bounded, until the `site_guard_hits` table of PR T3a (spec 13 §9.9). */
+/** @module infra/audit/in-memory-guard-hits — the in-memory request-guard hit sink, bounded, until the `site_guard_hits` table of PR T3a (spec 13 §9.9). */
 
 import type { RequestGuardHit, RequestGuardHits } from '../../ports/request-guard.ts';
 

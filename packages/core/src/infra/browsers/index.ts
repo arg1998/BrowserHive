@@ -85,10 +85,13 @@ export {
 } from './identity-resolver.ts';
 export {
   fixedOwner,
+  HANDLER_ORDER,
   InterceptionChain,
   type InterceptionChainDeps,
   type InterceptionContext,
+  type InterceptionDisposer,
   type InterceptionHandler,
+  type InterceptionHandlerId,
   type InterceptionVerdict,
   type OwnerResolver,
   PASS,

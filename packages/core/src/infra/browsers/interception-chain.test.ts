@@ -69,14 +69,100 @@ function chainOf(handlers: InterceptionHandler[], logger = createCollectingLogge
 }
 
 describe('InterceptionChain', () => {
-  it('installs exactly one **/* route and refuses a second install', async () => {
+  it('installs exactly one **/* route; installing again is a no-op, another context is refused', async () => {
     const { context, routes } = fakeContext();
     const chain = chainOf([handler('blocklist', [], PASS)]);
     expect((await chain.install(context)).ok).toBe(true);
     expect(routes.map((r) => r.pattern)).toEqual(['**/*']);
-    const again = await chain.install(context);
-    expect(again.ok).toBe(false);
+    expect((await chain.install(context)).ok).toBe(true);
     expect(routes).toHaveLength(1);
+    const other = fakeContext();
+    expect((await chain.install(other.context)).ok).toBe(false);
+    expect(other.routes).toHaveLength(0);
+  });
+
+  it('runs handlers in the fixed slot order whatever order they are given in', async () => {
+    const calls: string[] = [];
+    const chain = chainOf([
+      handler('request-guard', calls, PASS),
+      handler('blocklist', calls, PASS),
+      handler('self-origin', calls, PASS),
+    ]);
+    expect(chain.handlers.map((h) => h.id)).toEqual(['self-origin', 'blocklist', 'request-guard']);
+    await chain.handle(fakeRoute('fetch').route);
+    expect(calls).toEqual(['self-origin', 'blocklist', 'request-guard']);
+  });
+
+  it('register adds a handler in its slot; the disposer removes exactly it; one per id', async () => {
+    const calls: string[] = [];
+    const chain = chainOf([handler('request-guard', calls, PASS)]);
+    const added = chain.register(handler('blocklist', calls, PASS));
+    if (!added.ok) throw added.error;
+    expect(chain.register(handler('blocklist', calls, PASS)).ok).toBe(false);
+    await chain.handle(fakeRoute('fetch').route);
+    expect(calls).toEqual(['blocklist', 'request-guard']);
+    added.value();
+    added.value();
+    calls.length = 0;
+    await chain.handle(fakeRoute('fetch').route);
+    expect(calls).toEqual(['request-guard']);
+    expect(chain.register(handler('blocklist', calls, PASS)).ok).toBe(true);
+  });
+
+  it('a handler returning no verdict is treated as one that threw (never leaves the route open)', async () => {
+    const broken: InterceptionHandler = {
+      id: 'request-guard',
+      onError: 'closed',
+      handle: async () => undefined as unknown as InterceptionVerdict,
+    };
+    const doc = fakeRoute('document');
+    const sub = fakeRoute('fetch');
+    const logger = createCollectingLogger();
+    await chainOf([broken], logger).handle(doc.route);
+    await chainOf([broken]).handle(sub.route);
+    expect(doc.outcome).toEqual(['abort:failed']);
+    expect(sub.outcome).toEqual(['fallback']);
+    expect(logger.has('interception handler threw')).toBe(true);
+  });
+
+  it("aborts a held request's signal when Chromium fails it or the context closes", async () => {
+    const listeners = new Map<string, (arg: unknown) => void>();
+    const context: unknown = {
+      route: async () => undefined,
+      on: (event: string, listener: (arg: unknown) => void) => void listeners.set(event, listener),
+    };
+    const signals: AbortSignal[] = [];
+    const releases: Array<() => void> = [];
+    const holding: InterceptionHandler = {
+      id: 'request-guard',
+      onError: 'closed',
+      handle: async (_request, ctx) => {
+        signals.push(ctx.signal());
+        await new Promise<void>((resolve) => releases.push(resolve));
+        return PASS;
+      },
+    };
+    const chain = chainOf([holding]);
+    await chain.install(context as BrowserContext);
+    const first = fakeRoute('fetch');
+    const second = fakeRoute('fetch');
+    const done = [chain.handle(first.route), chain.handle(second.route)];
+    await Bun.sleep(0);
+    expect(listeners.size).toBe(2);
+    listeners.get('requestfailed')?.(first.request);
+    expect(signals.map((s) => s.aborted)).toEqual([true, false]);
+    listeners.get('close')?.(undefined);
+    expect(signals.map((s) => s.aborted)).toEqual([true, true]);
+    for (const release of releases) release();
+    await Promise.all(done);
+  });
+
+  it('subscribes to context events only once a handler holds a request', async () => {
+    const { context } = fakeContext();
+    const chain = chainOf([handler('blocklist', [], PASS)]);
+    await chain.install(context);
+    // The fake context has no `on`: a chain that never holds a request never calls it.
+    await chain.handle(fakeRoute('document').route);
   });
 
   it('returns the install error instead of throwing', async () => {
@@ -115,27 +201,27 @@ describe('InterceptionChain', () => {
     const calls: string[] = [];
     const logger = createCollectingLogger();
     const chain = chainOf(
-      [handler('request-guard', calls, new Error('boom')), handler('blocklist', calls, PASS)],
+      [handler('blocklist', calls, new Error('boom')), handler('request-guard', calls, PASS)],
       logger,
     );
     const { route, outcome } = fakeRoute('document');
     await chain.handle(route);
     expect(outcome).toEqual(['abort:failed']);
-    expect(calls).toEqual(['request-guard']);
+    expect(calls).toEqual(['blocklist']);
     expect(logger.find('interception handler threw').at(-1)?.all).toMatchObject({
-      handler: 'request-guard',
+      handler: 'blocklist',
     });
   });
 
   it('a fail-closed handler that throws on a subresource hands it to the next handler', async () => {
     const calls: string[] = [];
     const chain = chainOf([
-      handler('request-guard', calls, new Error('boom')),
-      handler('blocklist', calls, PASS),
+      handler('blocklist', calls, new Error('boom')),
+      handler('request-guard', calls, PASS),
     ]);
     const { route, outcome } = fakeRoute('fetch');
     await chain.handle(route);
-    expect(calls).toEqual(['request-guard', 'blocklist']);
+    expect(calls).toEqual(['blocklist', 'request-guard']);
     expect(outcome).toEqual(['fallback']);
   });
 

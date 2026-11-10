@@ -10,8 +10,9 @@ import {
   RequestGuardRuleSet,
   type RequestGuardRuleSource,
 } from '../../src/domain/policies/request-guard.ts';
-import { InMemoryRequestGuardHits } from '../../src/domain/policies/request-guard-hits.ts';
+import { InMemoryRequestGuardHits } from '../../src/infra/audit/in-memory-guard-hits.ts';
 import {
+  type BlockedUrlHit,
   blocklistHandler,
   installBlocklistRoute,
 } from '../../src/infra/browsers/blocklist-route.ts';
@@ -24,7 +25,7 @@ import { requestGuardHandler } from '../../src/infra/browsers/request-guard-rout
 import { createSystemClock } from '../../src/infra/clock/system-clock.ts';
 import { createCollectingLogger } from '../../src/infra/logging/collecting-logger.ts';
 import type { RequestConfirmer, RequestConfirmResult } from '../../src/ports/request-guard.ts';
-import type { FixtureServer } from '../helpers/fixture-server.ts';
+import { type FixtureServer, startFixtureServer } from '../helpers/fixture-server.ts';
 import { type LaunchedSession, useDriverFixtures } from './driver-fixture.ts';
 
 const clock = createSystemClock();
@@ -47,6 +48,7 @@ async function guard(
   options: { blocklist?: string; confirmer?: RequestConfirmer } = {},
 ) {
   const hits = new InMemoryRequestGuardHits();
+  const blocked: BlockedUrlHit[] = [];
   const logger = createCollectingLogger();
   const handlers: InterceptionHandler[] = [];
   if (options.blocklist !== undefined) {
@@ -55,8 +57,8 @@ async function guard(
     handlers.push(
       blocklistHandler({
         blocklist: new Blocklist(parsed.value),
-        observer: { blocked: () => undefined },
-        sessionId: session.handle.sessionId,
+        observer: { blocked: (hit) => void blocked.push(hit) },
+        sessionId: session.view.sessionId,
         clock,
         logger,
       }),
@@ -73,12 +75,12 @@ async function guard(
   );
   const chain = new InterceptionChain({
     handlers,
-    resolveOwner: fixedOwner(session.handle.sessionId),
+    resolveOwner: fixedOwner(session.view.sessionId),
     logger,
   });
   const installed = await chain.install(session.handle.context);
   expect(installed.ok).toBe(true);
-  return { hits, logger };
+  return { hits, blocked, logger };
 }
 
 /** `fetch` from the page: the status, or `blocked:<error name>` when the request was aborted. */
@@ -137,7 +139,7 @@ describe('request guard (real Chromium)', () => {
       expect(await page.locator('#signed-out').count()).toBe(0);
       expect(hits.list()).toEqual([
         expect.objectContaining({
-          sessionId: session.handle.sessionId,
+          sessionId: session.view.sessionId,
           ruleId: 'logout',
           action: 'block',
           method: 'POST',
@@ -166,9 +168,17 @@ describe('request guard (real Chromium)', () => {
       expect(await pageFetch(session.page, '/api/logout', 'POST')).toBe('blocked:TypeError');
       expect(await pageFetch(session.page, '/api/logout', 'GET')).toBe('200');
       expect(await pageFetch(session.page, '/api/other', 'POST')).toBe('200');
+      // The same path with a query string is guarded too; a longer path is not (spec 13 §9.3).
+      expect(await pageFetch(session.page, '/api/logout?next=/', 'POST')).toBe('blocked:TypeError');
+      expect(await pageFetch(session.page, '/api/logout-help', 'POST')).toBe('200');
+      expect(state.fixture.requests.some((r) => r.path.startsWith('/api/logout?'))).toBe(false);
       expect(seen(state.fixture, 'POST', '/api/logout')).toBe(0);
       expect(seen(state.fixture, 'GET', '/api/logout')).toBe(1);
-      expect(hits.list().map((h) => [h.method, h.resourceType])).toEqual([['POST', 'fetch']]);
+      expect(await waitFor(() => hits.list().length === 2)).toBe(true);
+      expect(hits.list().map((h) => [h.method, h.resourceType, h.url])).toEqual([
+        ['POST', 'fetch', `${state.fixture.origin}/api/logout`],
+        ['POST', 'fetch', `${state.fixture.origin}/api/logout`],
+      ]);
     });
 
     it(`[${driver}] a beacon is a ping: matched by default, not by a fetch-only rule`, async () => {
@@ -221,6 +231,7 @@ describe('request guard (real Chromium)', () => {
     );
     expect(failure).toContain('net::ERR_BLOCKED_BY_CLIENT');
     expect(seen(state.fixture, 'GET', '/elements')).toBe(1);
+    expect(await waitFor(() => hits.list().length === 1)).toBe(true);
     expect(hits.list().map((h) => h.resourceType)).toEqual(['document']);
   });
 
@@ -243,14 +254,24 @@ describe('request guard (real Chromium)', () => {
 
   it('the blocklist runs first in the same chain; the guard sees what it passes', async () => {
     const session = await state.launch({ slug: 'chain' });
-    const { hits } = await guard(
+    const { hits, blocked: blocklistHits } = await guard(
       session,
-      ruleSet({
-        id: 'api-delete',
-        url: `${hostOf(state.fixture)}/api/delete`,
-        methods: ['POST', 'DELETE'],
-        action: 'block',
-      }),
+      ruleSet(
+        {
+          id: 'api-delete',
+          url: `${hostOf(state.fixture)}/api/delete`,
+          methods: ['POST', 'DELETE'],
+          action: 'block',
+        },
+        // Also matches the blocklisted document: whichever handler runs first records the hit,
+        // so reversing the order fails this test.
+        {
+          id: 'elements-doc',
+          url: `${hostOf(state.fixture)}/elements`,
+          resourceTypes: ['document'],
+          action: 'block',
+        },
+      ),
       { blocklist: `${hostOf(state.fixture)}/elements\n` },
     );
     await session.page.goto(state.fixture.url('/'));
@@ -262,6 +283,10 @@ describe('request guard (real Chromium)', () => {
       (e: Error) => e.message,
     );
     expect(blocked).toContain('net::ERR_BLOCKED_BY_CLIENT');
+    expect(blocklistHits.map((h) => [h.pattern, h.sessionId])).toEqual([
+      [`${hostOf(state.fixture)}/elements`, session.view.sessionId],
+    ]);
+    await Bun.sleep(100);
     expect(hits.list().map((h) => h.ruleId)).toEqual(['api-delete']);
   });
 
@@ -298,6 +323,36 @@ describe('request guard (real Chromium)', () => {
     expect(hits.list().map((h) => h.outcome)).toEqual(['approved', 'denied']);
   });
 
+  it("a held request's signal aborts when its page closes", async () => {
+    const session = await state.launch({ slug: 'held-close' });
+    const signals: AbortSignal[] = [];
+    const confirmer: RequestConfirmer = {
+      confirm: ({ signal }) => {
+        signals.push(signal);
+        return new Promise((resolve) =>
+          signal.addEventListener('abort', () =>
+            resolve({ outcome: 'cancelled', decidedBy: null, requestId: null }),
+          ),
+        );
+      },
+    };
+    const { hits } = await guard(
+      session,
+      ruleSet({ id: 'write', url: `${hostOf(state.fixture)}/api/write`, action: 'confirm' }),
+      { confirmer },
+    );
+    const page = await session.handle.context.newPage();
+    await page.goto(state.fixture.url('/'));
+    void pageFetch(page, '/api/write', 'POST').catch(() => undefined);
+    expect(await waitFor(() => signals.length === 1)).toBe(true);
+    expect(signals[0]?.aborted).toBe(false);
+    await page.close();
+    expect(await waitFor(() => signals[0]?.aborted === true)).toBe(true);
+    expect(await waitFor(() => hits.list().length === 1)).toBe(true);
+    expect(hits.list()[0]?.outcome).toBe('cancelled');
+    expect(seen(state.fixture, 'POST', '/api/write')).toBe(0);
+  });
+
   it('documented limit: a redirect hop to a guarded URL is not routed (spec 13 §3.8)', async () => {
     const session = await state.launch({ slug: 'redirect' });
     const { hits } = await guard(
@@ -324,6 +379,90 @@ describe('request guard (real Chromium)', () => {
   });
 });
 
+/**
+ * What the chain cannot see (spec 13 §3.8), pinned as observed: if one of these starts being
+ * routed, the test fails and the documented blind spot can be removed.
+ */
+describe('documented blind spots (real Chromium)', () => {
+  const { state } = useDriverFixtures();
+  const everything = (fixture: FixtureServer) =>
+    ruleSet({
+      id: 'api',
+      url: `${hostOf(fixture)}/api/*`,
+      resourceTypes: ['document', 'xhr', 'fetch', 'ping', 'eventsource', 'other'],
+      action: 'block',
+    });
+
+  for (const stealth of [false, true]) {
+    const driver = stealth ? 'patchright' : 'playwright';
+
+    it(`[${driver}] a SharedWorker's requests are not routed; a dedicated worker's are`, async () => {
+      const session = await state.launch({ slug: `workers-${driver}`, stealth });
+      await guard(session, everything(state.fixture));
+      await session.page.goto(state.fixture.url('/'));
+      const results = await session.page.evaluate(async () => {
+        const dedicated = await new Promise<string>((resolve) => {
+          const worker = new Worker('/worker.js');
+          worker.onmessage = (e) => resolve(String(e.data));
+          setTimeout(() => resolve('timeout'), 5_000);
+        });
+        const shared = await new Promise<string>((resolve) => {
+          const worker = new SharedWorker('/shared-worker.js');
+          worker.port.onmessage = (e) => resolve(String(e.data));
+          worker.port.start();
+          setTimeout(() => resolve('timeout'), 5_000);
+        });
+        return { dedicated, shared };
+      });
+      expect(results).toEqual({ dedicated: 'err:TypeError', shared: 'ok:200' });
+      expect(seen(state.fixture, 'POST', '/api/worker')).toBe(0);
+      expect(seen(state.fixture, 'POST', '/api/shared-worker')).toBe(1);
+    });
+
+    it(`[${driver}] a beacon sent from pagehide while the page closes is not routed`, async () => {
+      const session = await state.launch({ slug: `unload-${driver}`, stealth });
+      const { hits } = await guard(session, everything(state.fixture));
+      const page = await session.handle.context.newPage();
+      await page.goto(state.fixture.url('/unload-beacon'));
+      await page.close();
+      expect(await waitFor(() => seen(state.fixture, 'POST', '/api/pagehide') === 1)).toBe(true);
+      expect(hits.list()).toEqual([]);
+    });
+  }
+
+  it('[playwright] CORS preflights are answered by Playwright, so a refused write is sent', async () => {
+    const other = startFixtureServer();
+    try {
+      const target = other.url('/cors/write');
+      const write = (page: Page) =>
+        page.evaluate(
+          (url) =>
+            fetch(url, {
+              method: 'POST',
+              headers: { 'content-type': 'application/json', 'x-custom': '1' },
+              body: '{}',
+            }).then(
+              (r) => `ok:${r.status}`,
+              (e: Error) => `err:${e.name}`,
+            ),
+          target,
+        );
+      const plain = await state.launch({ slug: 'cors-plain' });
+      await plain.page.goto(state.fixture.url('/'));
+      expect(await write(plain.page)).toBe('err:TypeError');
+      expect(other.requests.map((r) => r.method)).toEqual(['OPTIONS']);
+
+      const routed = await state.launch({ slug: 'cors-routed' });
+      await guard(routed, ruleSet());
+      await routed.page.goto(state.fixture.url('/'));
+      await write(routed.page);
+      expect(other.requests.map((r) => r.method)).toEqual(['OPTIONS', 'POST']);
+    } finally {
+      other.stop();
+    }
+  });
+});
+
 describe('interception and the HTTP cache (real Chromium)', () => {
   const { state } = useDriverFixtures();
 
@@ -346,7 +485,7 @@ describe('interception and the HTTP cache (real Chromium)', () => {
     const warning = await installBlocklistRoute(session.handle.context, {
       blocklist: new Blocklist(),
       observer: { blocked: () => undefined },
-      sessionId: session.handle.sessionId,
+      sessionId: session.view.sessionId,
       clock,
       logger: createCollectingLogger(),
     });

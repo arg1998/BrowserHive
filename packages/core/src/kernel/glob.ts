@@ -30,7 +30,8 @@ const REGEX_META = /[.*+?^${}()|[\]\\]/g;
 /**
  * Compiles `pattern` to an anchored RegExp under the module's glob semantics.
  *
- * @remarks Exported for tests; callers use {@link matchesGlob}. Carries no flags (case-sensitive).
+ * @remarks Callers use {@link matchesGlob}, or compile once here when they match many values
+ * (the request guard). Carries no flags (case-sensitive).
  */
 export function globToRegExp(pattern: string): RegExp {
   // Step 1: escape every regex metacharacter, so the user's input can inject nothing.

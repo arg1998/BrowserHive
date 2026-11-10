@@ -17,6 +17,7 @@ import {
 
 /** One blocked navigation, reported to the audit sink (`blocklist_hits`, `source: 'request'`). */
 export interface BlockedUrlHit {
+  /** The owning session; `''` for a host-owned request (spec 13 §3.8), stored as `NULL`. */
   readonly sessionId: string;
   readonly url: string;
   readonly pattern: string;
@@ -34,6 +35,7 @@ export interface BlocklistRouteDeps {
   /** The live holder: the handler reads the *current* rules on every request (hot reload). */
   readonly blocklist: Blocklist;
   readonly observer: BlockedUrlObserver;
+  /** The exclusive session: its owner ({@link fixedOwner}) and the log context. */
   readonly sessionId: string;
   readonly clock: Clock;
   readonly logger: Logger;
@@ -56,7 +58,7 @@ export function blocklistHandler(deps: BlocklistRouteDeps): InterceptionHandler 
   return {
     id: 'blocklist',
     onError: 'closed',
-    handle: async (request: Request) => {
+    handle: async (request: Request, context) => {
       let isDocument = false;
       try {
         isDocument = request.resourceType() === 'document';
@@ -64,8 +66,11 @@ export function blocklistHandler(deps: BlocklistRouteDeps): InterceptionHandler 
         const url = request.url();
         const hit = deps.blocklist.match(url);
         if (hit === null) return PASS;
+        // The owner, not a fixed id (spec 13 §3.8): the same session for an exclusive host; a
+        // host-owned request (T1a) is reported without one (`''`, stored as `NULL`).
+        const owner = await context.owner();
         deps.observer.blocked({
-          sessionId: deps.sessionId,
+          sessionId: owner.kind === 'session' ? owner.sessionId : '',
           url,
           pattern: hit.pattern,
           source: 'request',
