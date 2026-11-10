@@ -31,6 +31,7 @@ import {
   templateGate,
 } from '../../domain/templates/model.ts';
 import { AppError } from '../../kernel/errors/app-error.ts';
+import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { Clock } from '../../ports/clock.ts';
 import type { TemplateGeoResolver } from '../../ports/geo-seed-resolver.ts';
 import type { IdGenerator } from '../../ports/id-generator.ts';
@@ -506,7 +507,7 @@ export class TemplateService {
     } catch (cause) {
       this.#log.warn('template dir not removed', {
         templateId,
-        error: cause instanceof Error ? cause.message : String(cause),
+        err: serializeError(cause),
       });
       return 0;
     }
