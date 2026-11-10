@@ -1,15 +1,10 @@
 /// <reference lib="dom" />
-/** @module test/integration/template-known-limits.test — what a template host's always-on routing changes, pinned under both drivers (spec 13 §3.8 "Known limits", `docs/guide/templates.md`; PR #76 F2): no HTTP cache and CORS preflights answered by Playwright (a refused write is sent) but not by Patchright, on every OS headless (routing does not depend on the display); a close-time beacon is unrouted and reaches the site, headless and headed. */
+/** @module test/integration/template-known-limits.test — what a template host's always-on routing changes, pinned under both drivers (spec 13 §3.8 "Known limits", `docs/guide/templates.md`; PR #76 F2): no HTTP cache and CORS preflights answered by Playwright (a refused write is sent) but not by Patchright, on every OS headless (routing does not depend on the display); a close-time beacon is never routed (whether it reaches the site depends on timing). */
 
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { Session } from '../../src/domain/session/session.ts';
-import {
-  type DriverName,
-  HEADED,
-  type TemplateWorld,
-  templateWorld,
-  until,
-} from './template-fixture.ts';
+import { PASS } from '../../src/infra/browsers/interception-chain.ts';
+import { type DriverName, HEADED, type TemplateWorld, templateWorld } from './template-fixture.ts';
 
 const DRIVERS: readonly DriverName[] = ['playwright', 'patchright'];
 
@@ -72,18 +67,29 @@ for (const driver of DRIVERS) {
       },
     );
 
-    it('a beacon sent from pagehide while the page closes reaches the site unrouted', async () => {
+    it('a beacon sent from pagehide while the page closes is never routed', async () => {
       world = await templateWorld(driver);
       const session = await world.launch('alpha');
       const sites = world.sites;
+      // What the host's chain sees (the request-guard slot is free until site packs).
+      const routed: string[] = [];
+      const added = world.host().chain.register({
+        id: 'request-guard',
+        onError: 'open',
+        handle: async (request) => {
+          routed.push(new URL(request.url()).pathname);
+          return PASS;
+        },
+      });
+      if (!added.ok) throw added.error;
       const tab = await world.sessions.newTab(session);
       await tab.page.goto(sites.url('site-a.test', '/unload-beacon'));
+      expect(routed).toContain('/unload-beacon');
       await tab.page.close();
-      await until(
-        () => sites.requests.some((r) => r.path === '/api/pagehide'),
-        5_000,
-        'the beacon',
-      );
+      await new Promise((resolve) => setTimeout(resolve, 2_000));
+      // Whether it reaches the site depends on timing (measured both ways on CI); it is never routed,
+      // so no owner and no site rule ever sees it.
+      expect(routed).not.toContain('/api/pagehide');
     });
   });
 }
