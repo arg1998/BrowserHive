@@ -95,6 +95,8 @@ export class Session {
   private url: string | null = null;
   private toolAt: number;
   private activityAt: number;
+  /** The template facts after an operator edit (sealing, sites), spec 13 §3.2; `null` = as launched. */
+  private templateNow: SessionTemplate | null = null;
 
   constructor(seed: SessionSeed) {
     this.id = seed.id;
@@ -189,7 +191,18 @@ export class Session {
 
   /** The template of a virtual session, or `null` for an exclusive session (spec 13 §3.7). */
   get template(): SessionTemplate | null {
-    return this.request.template ?? null;
+    return this.templateNow ?? this.request.template ?? null;
+  }
+
+  /**
+   * An operator edit reached a live virtual session (spec 13 §3.2: re-sealing and removed sites
+   * apply at once; sealing is checked per tool call). The template id, name, version and mode stay
+   * those of the launch. A no-op for an exclusive session.
+   */
+  retemplate(next: Pick<SessionTemplate, 'sealing' | 'sealed' | 'sites'>): void {
+    const current = this.template;
+    if (current === null) return;
+    this.templateNow = { ...current, ...next };
   }
 
   /** True once the browser crashed (tools answer `SESSION_DEAD`). */

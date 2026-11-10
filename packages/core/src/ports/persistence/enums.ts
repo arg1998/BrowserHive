@@ -233,6 +233,19 @@ export const TEMPLATE_HEALTH_STATES = [
 /** Element of {@link TEMPLATE_HEALTH_STATES}. */
 export type TemplateHealthState = (typeof TEMPLATE_HEALTH_STATES)[number];
 
+/** Why a template version was written (spec 13 §3.9; `template_versions.reason`). */
+export const TEMPLATE_VERSION_REASONS = [
+  'recording',
+  'relogin',
+  'restore',
+  'manual',
+  'import',
+  'signin_change',
+  'daily',
+] as const;
+/** Element of {@link TEMPLATE_VERSION_REASONS}. */
+export type TemplateVersionReason = (typeof TEMPLATE_VERSION_REASONS)[number];
+
 /** Per-site write policy; `null` in the column = the pack's default (spec 13 §9.3). */
 export const SITE_WRITE_POLICIES = ['allow', 'warn', 'confirm'] as const;
 /** Element of {@link SITE_WRITE_POLICIES}. */

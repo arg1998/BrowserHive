@@ -30,6 +30,7 @@ import {
   Transport,
   UrlCategory,
 } from '@browserhive/contracts/enums';
+import { TemplateVersionReason } from '@browserhive/contracts/http';
 import {
   ACTOR_KINDS,
   ATTENTION_MODES,
@@ -58,6 +59,7 @@ import {
   TEMPLATE_MODES,
   TEMPLATE_STATUSES,
   TEMPLATE_STEALTH_LEVELS,
+  TEMPLATE_VERSION_REASONS,
 } from './enums.ts';
 
 describe('persistence enums', () => {
@@ -88,6 +90,7 @@ describe('persistence enums', () => {
       [TEMPLATE_STATUSES, TemplateStatus.options],
       [TEMPLATE_STEALTH_LEVELS, StealthLevel.options],
       [TEMPLATE_HEALTH_STATES, TemplateHealthState.options],
+      [TEMPLATE_VERSION_REASONS, TemplateVersionReason.options],
       [SITE_WRITE_POLICIES, SiteWritePolicy.options],
       [TEMPLATE_MODES, TemplateMode.options],
     ];

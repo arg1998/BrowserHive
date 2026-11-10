@@ -51,6 +51,7 @@ export type {
   TemplateMode,
   TemplateStatus,
   TemplateStealthLevel,
+  TemplateVersionReason,
   VaultAccessMode,
   VaultAccessResult,
 } from './enums.ts';
@@ -227,12 +228,22 @@ export type {
   TemplateSiteFormRecord,
   TemplateSiteHealthRecord,
   TemplateSiteRecord,
+  TemplateStateFileRecord,
   TemplateUnsealRecord,
+  TemplateVersionDomainRecord,
+  TemplateVersionHealthRecord,
+  TemplateVersionRecord,
+  TemplateVersionSummaryRecord,
 } from './records-templates.ts';
 export { UNKNOWN_SITE_HEALTH } from './records-templates.ts';
 export type { ScreenshotListRow, ScreenshotRepository } from './screenshots.ts';
 export type { SessionDeleteResult, SessionRepository } from './sessions.ts';
-export type { TemplateRepository, TemplateSiteRepository } from './templates.ts';
+export type {
+  TemplateRepository,
+  TemplateSiteRepository,
+  TemplateStateFacts,
+  TemplateVersionRepository,
+} from './templates.ts';
 export type { ToolCallListRow, ToolCallRepository } from './tool-calls.ts';
 export type { Repositories, UnitOfWork } from './unit-of-work.ts';
 export type { VaultAccessListRow, VaultAuditRepository } from './vault-audit.ts';

@@ -2,12 +2,17 @@
 
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { DegradationReporter } from '../../ports/degradation-reporter.ts';
+import type { EventPublisher } from '../../ports/event-bus.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type {
   Repositories,
   TemplateRecord,
   TemplateSiteRecord,
+  TemplateVersionRepository,
 } from '../../ports/persistence/index.ts';
+import type { TemplateRuntime } from '../../ports/template-runtime.ts';
+import type { DomainEvents } from '../events/catalog.ts';
+import { toTemplateSummary } from './views.ts';
 
 /** The degradation code of a template row `list_templates` had to skip. */
 export const ROW_UNREADABLE = 'TEMPLATE_ROW_UNREADABLE';
@@ -63,4 +68,43 @@ export async function readTemplates(
     else list.push(site);
   }
   return { templates: read.filter((t) => !broken.has(t.templateId)), sites };
+}
+
+/** Publishes `template.changed` with the template's summary now; never throws. */
+export function publishTemplateChanged(
+  deps: {
+    readonly repos: Pick<Repositories, 'templates' | 'templateSites'>;
+    readonly runtime: Pick<TemplateRuntime, 'host'>;
+    readonly bus?: EventPublisher<DomainEvents> | undefined;
+  },
+  templateId: string,
+  log: Logger,
+): void {
+  const bus = deps.bus;
+  if (bus === undefined) return;
+  void (async () => {
+    const template = await deps.repos.templates.get(templateId);
+    if (template === null) return;
+    const sites = await deps.repos.templateSites.list(templateId);
+    bus.publish('template.changed', {
+      type: 'template.changed',
+      template: toTemplateSummary(template, sites, deps.runtime.host(templateId)),
+    });
+  })().catch((err: unknown) => log.debug('template event failed', { err: serializeError(err) }));
+}
+
+/**
+ * Unlisted sign-ins of a stopped browser (spec 13 §2.3): domains of the newest version that are not
+ * sites and hold a persistent cookie (the live jar answers precisely while the browser runs).
+ */
+export async function storedUnlisted(
+  versions: Pick<TemplateVersionRepository, 'list'> | undefined,
+  templateId: string,
+  own: ReadonlySet<string>,
+): Promise<string[]> {
+  const newest = (await versions?.list(templateId))?.[0];
+  if (newest === undefined) return [];
+  return newest.summary.domains
+    .filter((d) => !own.has(d.domain) && d.earliestExpiry !== null)
+    .map((d) => d.domain);
 }

@@ -1,0 +1,36 @@
+browserhive templates restore — Roll a template back to a saved version or its rolling checkpoint
+
+USAGE
+  browserhive templates restore <name> <version> [flags]
+
+Talks to a running server over its REST API (--url, default the configured host and port) with an
+operator bearer (--token) or the dashboard cookie (--cookie). create opens a sign-in window on the
+machine running the server, wherever the CLI runs, and waits until every site is signed in, you
+press Enter, or --timeout passes. create and finish exit 0 when every site is signed in, 2 when one
+is not, 1 on an API error. seed and restore run on the server and the CLI waits for them. rekey is
+the exception: it runs locally against the data directory with the server stopped.
+
+ARGUMENTS
+  <name>     Template name.
+  <version>  A version number from 'templates versions', or latest (the rolling checkpoint).
+
+FLAGS
+  --json                       Print machine-readable JSON instead of text.
+  --url <url>                  Talk to a running server over its REST API instead of opening the
+                               database (http://127.0.0.1:9876).
+  --token <bearer>             Operator bearer token for --url (bh_operator_…).
+  --cookie <value>             Dashboard session cookie value for --url (browserhive_session).
+  --forceClose                 Close the template's sessions at once instead of waiting for them (up
+                               to templateDrainTimeout).
+  --yes                        Skip the confirmation prompt.
+  --host <address>             Bind address. A non-loopback host requires auth=token or
+                               allowInsecureBind=true. default: 127.0.0.1
+  --port <1-65535>             Bind port for MCP, REST, WebSocket and the dashboard. default: 9876
+  --config <path>              Config file path. CLI and environment only: a config file cannot
+                               point at another.
+  --color <auto|always|never>  Colour for logs and CLI output. auto honours NO_COLOR, FORCE_COLOR,
+                               TERM=dumb and TTY. default: auto
+
+GLOBAL FLAGS
+  -h, --help     Show help.
+  -v, --version  Print the version.

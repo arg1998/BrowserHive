@@ -1,7 +1,6 @@
 /** @module infra/browsers/template-host — the shared browser of a template (spec 13 §3.1–§3.6): every page attributed before any session sees it, background windows claimed by target id, the parked sentinel (recreated when closed by hand), the parked-page bound, crash and operator-stop detection, and a close only the supervisor calls. */
 
 import type { Browser, BrowserContext, Page } from 'playwright';
-import { AppError } from '../../kernel/errors/app-error.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type {
   AppliedIdentity,
@@ -14,6 +13,7 @@ import type {
 import type { Clock } from '../../ports/clock.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type {
+  PageHeap,
   ParkedPageInfo,
   SharedWindowInfo,
   SignInRemoval,
@@ -21,6 +21,7 @@ import type {
   TemplateHostExit,
   TemplateViewOptions,
 } from '../../ports/template-host.ts';
+import type { TemplateState } from '../../ports/template-state.ts';
 import { closeContextWithin, readBrowserPid } from './host-process.ts';
 import { SentinelKeeper } from './host-sentinel.ts';
 import type { IdentityApplier } from './identity-applier.ts';
@@ -30,6 +31,7 @@ import { HostPageDispatcher } from './page-dispatcher.ts';
 import { PageWaiters } from './page-waiters.ts';
 import { ParkedPages } from './parked-pages.ts';
 import * as ops from './template-host-ops.ts';
+import * as hostState from './template-host-state.ts';
 import type { HostTargets } from './template-targets.ts';
 import { TemplateSessionView, type TemplateViewHost } from './template-view.ts';
 
@@ -82,6 +84,8 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
   private readonly waiters: PageWaiters;
   private readonly parked: ParkedPages;
   private readonly origins = new Set<string>();
+  /** Origins whose data a sign-in removal cleared: never carried forward (spec 13 §3.9). */
+  private readonly cleared = new Set<string>();
   private readonly userDataDir: string | null;
   private readonly exitListeners = new Set<(exit: TemplateHostExit) => void>();
   private applied: { identity: AppliedIdentity; applier: IdentityApplier } | null = null;
@@ -167,7 +171,7 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
   }
 
   async openView(sessionId: string, options: TemplateViewOptions): Promise<SessionView> {
-    if (this.closing) throw unavailable('host closing');
+    if (this.closing) throw ops.windowUnavailable('host closing');
     const agent = options.maintenance !== true;
     const minimized =
       !this.headless && agent && (options.windowState === 'minimized' || this.recording);
@@ -196,7 +200,7 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
       targetId = await this.targets.createWindow({ ...this.window, minimized });
     } catch (err) {
       settle();
-      throw unavailable('window not created', err);
+      throw ops.windowUnavailable('window not created', err);
     }
     const adopted = this.waiters.wait(
       sessionId,
@@ -210,7 +214,9 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
     const page = await adopted.promise;
     if (page === null) {
       await this.targets.closeTarget(targetId);
-      throw unavailable(accepted ? 'window not adopted in time' : 'window parked before its claim');
+      throw ops.windowUnavailable(
+        accepted ? 'window not adopted in time' : 'window parked before its claim',
+      );
     }
     return page;
   }
@@ -262,9 +268,37 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
     return await this.context.cookies();
   }
 
-  clearSignIn(domain: string): Promise<SignInRemoval> {
+  async storageState(): Promise<TemplateState> {
+    return await hostState.readStorageState(this.context);
+  }
+
+  async setStorageState(state: TemplateState): Promise<void> {
+    await hostState.applyStorageState(this.context, state);
+    for (const origin of state.origins) this.origins.add(origin.origin);
+  }
+
+  visitedOrigins(): ReadonlySet<string> {
+    return new Set([...this.origins, ...this.cleared]);
+  }
+
+  pageHeaps(): Promise<readonly PageHeap[]> {
+    return hostState.pageHeaps(this.context, this.dispatcher, this.views.values(), this.log);
+  }
+
+  closePage(targetId: string, scope: 'parked' | 'session'): Promise<boolean> {
+    const parked = this.parked.pageOf(targetId);
+    const pages =
+      scope === 'parked'
+        ? parked === undefined
+          ? []
+          : [parked]
+        : [...this.views.values()].filter((v) => !v.maintenance).flatMap((v) => v.pages());
+    return hostState.closePageByTarget(this.dispatcher, pages, targetId, this.log);
+  }
+
+  async clearSignIn(domain: string): Promise<SignInRemoval> {
     const page = this.keeper.page ?? this.context.pages()[0];
-    return ops.clearSignIn(
+    const removal = await ops.clearSignIn(
       {
         context: this.context,
         dispatcher: this.dispatcher,
@@ -279,6 +313,8 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
       },
       domain,
     );
+    for (const origin of removal.origins) this.cleared.add(origin);
+    return removal;
   }
 
   async stepAside(page: Page): Promise<void> {
@@ -360,13 +396,4 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
     void this.targets.dispose();
     void this.applied?.applier.dispose();
   }
-}
-
-/** `TEMPLATE_UNAVAILABLE` `starting` without the template name (the supervisor rewrites it). */
-function unavailable(why: string, cause?: unknown): AppError<'INTERNAL_ERROR'> {
-  return new AppError(
-    'INTERNAL_ERROR',
-    { ref: 'template-window' },
-    { message: `template window failed: ${why}`, ...(cause !== undefined && { cause }) },
-  );
 }

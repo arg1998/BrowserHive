@@ -7,7 +7,7 @@ import type { TemplateSessionSettings } from '../domain/templates/launch-options
 import type { SessionSealing, TemplateHostFacts } from '../domain/templates/model.ts';
 import type { Cookie } from './browser-driver.ts';
 import type { TemplateRecord, TemplateSiteRecord } from './persistence/index.ts';
-import type { SignInRemoval } from './template-host.ts';
+import type { SignInRemoval, TemplateHost } from './template-host.ts';
 
 /** A page of a host no session owns (spec 13 §3.4); `url` already sanitized (D-20). */
 export interface ParkedPageView {
@@ -41,6 +41,8 @@ export interface TemplateHostView extends TemplateHostFacts {
   readonly sandboxed: boolean | null;
   /** Saved passwords or autofill data were found in the profile at the last start (spec 13 §3.1). */
   readonly profileSecrets: boolean;
+  /** The Chrome major changed since the first start (spec 13 §2.2); absent = no drift seen. */
+  readonly identityDrift?: { readonly from: string; readonly to: string };
 }
 
 /** The host view of a template whose host never ran in this process. */
@@ -143,4 +145,42 @@ export interface TemplateHostOps {
   recordingOf(templateId: string): Session | null;
   /** Closes the recording window (its maintenance session); the template is unchanged. */
   closeRecording(templateId: string): Promise<void>;
+  /**
+   * Takes a template's operation hold (restore, seed, clearing saved passwords): agent launches
+   * answer `TEMPLATE_UNAVAILABLE` `restarting` until it is released. `null` when another
+   * operation holds it.
+   */
+  hold(templateId: string): TemplateOperationHold | null;
+  /**
+   * Runs `fn` on the template's running browser, starting it through BrowserHive's own maintenance
+   * session when it is stopped (`holdToken`: the operation holding the template).
+   */
+  withHost<T>(
+    template: TemplateRecord,
+    fn: (host: TemplateHost) => Promise<T>,
+    holdToken?: symbol,
+  ): Promise<T>;
+  /** `POST …/host/start`: starts the browser and returns once it runs. */
+  startHost(template: TemplateRecord): Promise<void>;
+  /** `POST …/host/stop`: final checkpoint, then the browser closes; sessions close with `operator`. */
+  stopHost(template: TemplateRecord): Promise<readonly string[]>;
+  /**
+   * `POST …/host/restart`: clears `failed`, drains (sessions get `templateDrainTimeout`, then close
+   * with `operator`) and starts again, in the background.
+   */
+  restartHost(template: TemplateRecord): Promise<void>;
+  /** `POST …/host/pages/{target_id}/close`: closes a parked page; false when there is none. */
+  closeParkedPage(templateId: string, targetId: string): Promise<boolean>;
+  /**
+   * Ends every session of the template before an operation (spec 13 §3.12): at once with
+   * `forceClose`, else after they finish or `templateDrainTimeout`; then the browser stops (with a
+   * final checkpoint). Returns the closed session ids.
+   */
+  drainForOperation(template: TemplateRecord, forceClose: boolean): Promise<readonly string[]>;
+}
+
+/** A template's operation hold (`TemplateHostOps.hold`). */
+export interface TemplateOperationHold {
+  readonly token: symbol;
+  release(): void;
 }

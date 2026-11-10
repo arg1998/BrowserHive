@@ -237,6 +237,15 @@ function planInvocation(name: string, input: PlanInput): CliPlan {
     case 'templates create':
     case 'templates finish':
     case 'templates rm':
+    case 'templates show':
+    case 'templates seed':
+    case 'templates versions':
+    case 'templates save':
+    case 'templates restore':
+    case 'templates host':
+    case 'templates disable':
+    case 'templates enable':
+    case 'templates rekey':
       return planTemplates(name, input);
     case 'version': {
       const json = reader.bool('json');

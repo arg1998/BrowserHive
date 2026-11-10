@@ -1,6 +1,7 @@
 /** @module infra/browsers/template-host-ops — operator operations on a running template host (spec 13 §2.3, §3.3, §3.4): removing a domain's sign-in, minimizing agent windows while a recording is open, and the windows several sessions share. */
 
 import type { BrowserContext, CDPSession, Page } from 'playwright';
+import { AppError } from '../../kernel/errors/app-error.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import { registrableDomain } from '../../kernel/url.ts';
 import type { Logger } from '../../ports/logger.ts';
@@ -215,4 +216,13 @@ export async function stepAside(
   }
   await recording.front?.bringToFront().catch(() => undefined);
   return outcome;
+}
+
+/** `TEMPLATE_UNAVAILABLE` `starting` without the template name (the supervisor rewrites it). */
+export function windowUnavailable(why: string, cause?: unknown): AppError<'INTERNAL_ERROR'> {
+  return new AppError(
+    'INTERNAL_ERROR',
+    { ref: 'template-window' },
+    { message: `template window failed: ${why}`, ...(cause !== undefined && { cause }) },
+  );
 }

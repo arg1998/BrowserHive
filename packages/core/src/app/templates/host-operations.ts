@@ -2,16 +2,23 @@
 
 import { join } from 'node:path';
 import type { Session } from '../../domain/session/session.ts';
+import { AppError } from '../../kernel/errors/app-error.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { Cookie } from '../../ports/browser-driver.ts';
+import type { Clock } from '../../ports/clock.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type { Page } from '../../ports/page-types.ts';
 import type { TemplateRecord } from '../../ports/persistence/index.ts';
-import type { SignInRemoval, TemplateHostLauncher } from '../../ports/template-host.ts';
+import type {
+  SignInRemoval,
+  TemplateHost,
+  TemplateHostLauncher,
+} from '../../ports/template-host.ts';
 import type {
   RecordingRequest,
   SharedWindowView,
   TemplateHostOps,
+  TemplateOperationHold,
 } from '../../ports/template-runtime.ts';
 import type { SessionService } from '../sessions/session-service.ts';
 import { templateDir } from './host-spec.ts';
@@ -32,6 +39,9 @@ export interface HostOperationsDeps {
   readonly launcher: Pick<TemplateHostLauncher, 'clearProfileSecrets'>;
   readonly dataDir: string;
   readonly logger: Logger;
+  readonly clock: Clock;
+  /** `templateDrainTimeout`: how long an operation waits for sessions to finish. */
+  readonly drainTimeoutMs: number;
 }
 
 /** The operator's operations on template browsers. */
@@ -61,6 +71,14 @@ export class TemplateHostOperations implements TemplateHostOps {
   }
 
   async removeSignIn(template: TemplateRecord, domain: string): Promise<SignInRemoval> {
+    return await this.withHost(template, (host) => host.clearSignIn(domain));
+  }
+
+  async withHost<T>(
+    template: TemplateRecord,
+    fn: (host: TemplateHost) => Promise<T>,
+    holdToken?: symbol,
+  ): Promise<T> {
     const { supervisor } = this.#deps;
     let host = supervisor.runningHost(template.templateId);
     let system: Session | null = null;
@@ -71,21 +89,89 @@ export class TemplateHostOperations implements TemplateHostOps {
         sites: [],
         slug: SYSTEM_SLUG,
         principal: { subject: 'browserhive' },
+        ...(holdToken !== undefined && { holdToken }),
       });
       host = supervisor.runningHost(template.templateId);
     }
     try {
-      if (host === null) return { cookiesRemoved: 0, origins: [], unclearedOrigins: [domain] };
-      return await host.clearSignIn(domain);
+      if (host === null) throw notRunning();
+      return await fn(host);
     } finally {
       if (system !== null) await this.#deps.sessions.close(system.id, 'operator');
     }
   }
 
+  /** Stops the browser and empties saved passwords; launches wait meanwhile (D17). */
   async clearProfileSecrets(template: TemplateRecord): Promise<void> {
-    await this.#deps.supervisor.stopHost(template.templateId, 'clear saved passwords');
-    const userDataDir = join(templateDir(this.#deps.dataDir, template.templateId), 'userdata');
-    await this.#deps.launcher.clearProfileSecrets?.(userDataDir);
+    const hold = this.hold(template.templateId);
+    if (hold === null) throw busy();
+    try {
+      await this.#deps.supervisor.stopHost(template.templateId, 'clear saved passwords');
+      const userDataDir = join(templateDir(this.#deps.dataDir, template.templateId), 'userdata');
+      await this.#deps.launcher.clearProfileSecrets?.(userDataDir);
+    } finally {
+      hold.release();
+    }
+  }
+
+  hold(templateId: string): TemplateOperationHold | null {
+    return this.#deps.supervisor.hold(templateId);
+  }
+
+  async startHost(template: TemplateRecord): Promise<void> {
+    this.#deps.supervisor.lifecycle(template).clearFailure();
+    await this.withHost(template, async () => undefined);
+  }
+
+  async stopHost(template: TemplateRecord): Promise<readonly string[]> {
+    const live = this.#deps.supervisor.liveSessions(template.templateId);
+    await this.#deps.supervisor.stopHost(template.templateId, 'operator stop');
+    return live;
+  }
+
+  async restartHost(template: TemplateRecord): Promise<void> {
+    const { supervisor } = this.#deps;
+    const lifecycle = supervisor.lifecycle(template);
+    lifecycle.clearFailure();
+    if (lifecycle.running === null) {
+      await this.startHost(template);
+      return;
+    }
+    // In the background: the drain may wait up to `templateDrainTimeout` for sessions.
+    void supervisor
+      .recycle(lifecycle, 'operator')
+      .then(() => this.startHost(template))
+      .catch((err: unknown) =>
+        this.#log.warn('host restart failed', {
+          templateId: template.templateId,
+          err: serializeError(err),
+        }),
+      );
+  }
+
+  async closeParkedPage(templateId: string, targetId: string): Promise<boolean> {
+    const host = this.#deps.supervisor.runningHost(templateId);
+    return host === null ? false : await host.closePage(targetId, 'parked');
+  }
+
+  async drainForOperation(
+    template: TemplateRecord,
+    forceClose: boolean,
+  ): Promise<readonly string[]> {
+    const { supervisor, sessions, clock } = this.#deps;
+    const id = template.templateId;
+    const live = () => supervisor.liveSessions(id);
+    const closed = [...live()];
+    if (!forceClose) {
+      const until = clock.now() + this.#deps.drainTimeoutMs;
+      while (live().length > 0 && clock.now() < until) {
+        await clock.sleep(Math.min(1_000, until - clock.now()));
+      }
+    }
+    const rest = supervisor.sessionsOf(id, null).map((s) => s.id);
+    await Promise.allSettled(rest.map((sid) => sessions.close(sid, 'operator')));
+    await supervisor.stopHost(id, 'operation');
+    return closed.filter((sid) => !live().includes(sid));
   }
 
   recordingOf(templateId: string): Session | null {
@@ -144,6 +230,27 @@ export class TemplateHostOperations implements TemplateHostOps {
     if (first !== null) this.#deps.sessions.switchTab(session, first);
     await raise(view.page);
   }
+}
+
+/** `CONFLICT`: the browser could not be started for the operation. */
+function notRunning(): AppError<'CONFLICT'> {
+  return new AppError(
+    'CONFLICT',
+    {},
+    { publicMessage: "The template's browser is not running and could not be started." },
+  );
+}
+
+/** `CONFLICT`: another operation (restore, seed, clearing saved passwords) is running. */
+export function busy(): AppError<'CONFLICT'> {
+  return new AppError(
+    'CONFLICT',
+    {},
+    {
+      publicMessage:
+        'Another operation on this template is running (a restore, a seed or clearing saved passwords); retry when it finishes.',
+    },
+  );
 }
 
 /** Shows the window of `page` in front (recording is an explicit operator action, spec 13 §3.3). */

@@ -12,10 +12,12 @@ export function hostViewOf(
     readonly liveAgentSessions: number;
     readonly rssBytes: number | null;
     readonly recycleAfterMs: number;
+    readonly identityDrift?: { readonly from: string; readonly to: string } | undefined;
   },
 ): TemplateHostView {
+  const drift = facts.identityDrift === undefined ? {} : { identityDrift: facts.identityDrift };
   if (lifecycle === undefined)
-    return { ...STOPPED_HOST, liveAgentSessions: facts.liveAgentSessions };
+    return { ...STOPPED_HOST, liveAgentSessions: facts.liveAgentSessions, ...drift };
   const host = lifecycle.current;
   return {
     state: lifecycle.state,
@@ -38,5 +40,6 @@ export function hostViewOf(
     recycleAt: recycleAt(lifecycle.startedAt, facts.recycleAfterMs),
     sandboxed: host?.browserInfo?.sandboxed ?? null,
     profileSecrets: host?.profileSecrets ?? lifecycle.profileSecrets,
+    ...drift,
   };
 }

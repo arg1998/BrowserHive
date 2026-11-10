@@ -4568,6 +4568,790 @@
                 "properties": {
                   "type": {
                     "type": "string",
+                    "const": "template.changed"
+                  },
+                  "template": {
+                    "type": "object",
+                    "properties": {
+                      "template_id": {
+                        "type": "string",
+                        "pattern": "^tp-[A-Za-z0-9_-]{10}$"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "display_name": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "recording",
+                          "ready",
+                          "disabled"
+                        ]
+                      },
+                      "channel": {
+                        "type": "string",
+                        "enum": [
+                          "chromium",
+                          "chrome",
+                          "edge"
+                        ]
+                      },
+                      "headless": {
+                        "type": "boolean"
+                      },
+                      "sites": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "site_id": {
+                              "type": "string"
+                            },
+                            "title": {
+                              "type": "string"
+                            },
+                            "health_state": {
+                              "type": "string",
+                              "enum": [
+                                "unknown",
+                                "signed_in",
+                                "signed_out",
+                                "challenged",
+                                "inconclusive"
+                              ]
+                            },
+                            "checked_at": {
+                              "anyOf": [
+                                {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "site_id",
+                            "title",
+                            "health_state",
+                            "checked_at"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "host": {
+                        "type": "object",
+                        "properties": {
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "stopped",
+                              "starting",
+                              "running",
+                              "draining",
+                              "crashed",
+                              "failed"
+                            ]
+                          },
+                          "since": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "pages": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "rss_bytes": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "required": [
+                          "state",
+                          "since",
+                          "pages"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "in_use": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "cap": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "current_version": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "checkpoint_at": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "last_used_at": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "sealed": {
+                        "type": "boolean"
+                      },
+                      "identity_drift": {
+                        "type": "object",
+                        "properties": {
+                          "from": {
+                            "type": "string"
+                          },
+                          "to": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "from",
+                          "to"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "template_id",
+                      "name",
+                      "display_name",
+                      "status",
+                      "channel",
+                      "headless",
+                      "sites",
+                      "host",
+                      "in_use",
+                      "cap",
+                      "current_version",
+                      "checkpoint_at",
+                      "last_used_at",
+                      "sealed"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "type",
+                  "template"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "template.removed"
+                  },
+                  "template_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "template_id"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "template.host"
+                  },
+                  "template_id": {
+                    "type": "string"
+                  },
+                  "host": {
+                    "type": "object",
+                    "properties": {
+                      "state": {
+                        "type": "string",
+                        "enum": [
+                          "stopped",
+                          "starting",
+                          "running",
+                          "draining",
+                          "crashed",
+                          "failed"
+                        ]
+                      },
+                      "since": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "started_at": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "restarts": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "last_error": {
+                        "type": "string"
+                      },
+                      "pages": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "parked_pages": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "rss_bytes": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "recycle_at": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "sandboxed": {
+                        "type": [
+                          "boolean",
+                          "null"
+                        ]
+                      },
+                      "profile_secrets": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "state",
+                      "since",
+                      "started_at",
+                      "restarts",
+                      "pages",
+                      "parked_pages",
+                      "sandboxed",
+                      "profile_secrets"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "type",
+                  "template_id",
+                  "host"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "template.health"
+                  },
+                  "template_id": {
+                    "type": "string"
+                  },
+                  "site": {
+                    "type": "object",
+                    "properties": {
+                      "site_id": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "pack_id": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "pack_version": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "enabled": {
+                        "type": "boolean"
+                      },
+                      "write_policy": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "allow",
+                              "warn",
+                              "confirm"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "vault_handle": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "auto_relogin": {
+                        "type": "boolean"
+                      },
+                      "form": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "username": {
+                                "type": "string"
+                              },
+                              "password": {
+                                "type": "string"
+                              },
+                              "submit": {
+                                "type": "string"
+                              },
+                              "next": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "username",
+                              "password"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "learned_cookie_names": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "health": {
+                        "type": "object",
+                        "properties": {
+                          "state": {
+                            "type": "string",
+                            "enum": [
+                              "unknown",
+                              "signed_in",
+                              "signed_out",
+                              "challenged",
+                              "inconclusive"
+                            ]
+                          },
+                          "checked_at": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "changed_at": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "reason": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "consecutive_inconclusive": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "required": [
+                          "state",
+                          "checked_at",
+                          "changed_at",
+                          "reason",
+                          "consecutive_inconclusive"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "stopped_at": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "device_bound": {
+                        "type": "boolean"
+                      },
+                      "added_at": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "required": [
+                      "site_id",
+                      "title",
+                      "pack_id",
+                      "pack_version",
+                      "enabled",
+                      "write_policy",
+                      "vault_handle",
+                      "auto_relogin",
+                      "form",
+                      "learned_cookie_names",
+                      "health",
+                      "stopped_at",
+                      "device_bound",
+                      "added_at"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "type",
+                  "template_id",
+                  "site"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "template.version"
+                  },
+                  "template_id": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "object",
+                    "properties": {
+                      "version": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "reason": {
+                        "type": "string",
+                        "enum": [
+                          "recording",
+                          "relogin",
+                          "restore",
+                          "manual",
+                          "import",
+                          "signin_change",
+                          "daily"
+                        ]
+                      },
+                      "restored_from": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "size_bytes": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "summary": {
+                        "type": "object",
+                        "properties": {
+                          "domains": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "domain": {
+                                  "type": "string"
+                                },
+                                "cookies": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "sign_in_cookies": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
+                                "earliest_expiry": {
+                                  "anyOf": [
+                                    {
+                                      "type": "integer",
+                                      "minimum": 0,
+                                      "maximum": 9007199254740991
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "session_cookie": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "domain",
+                                "cookies",
+                                "sign_in_cookies",
+                                "earliest_expiry",
+                                "session_cookie"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "storage_origins": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "required": [
+                          "domains",
+                          "storage_origins"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "health": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "site_id": {
+                              "type": "string"
+                            },
+                            "state": {
+                              "type": "string",
+                              "enum": [
+                                "unknown",
+                                "signed_in",
+                                "signed_out",
+                                "challenged",
+                                "inconclusive"
+                              ]
+                            },
+                            "enabled": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "site_id",
+                            "state",
+                            "enabled"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "pinned": {
+                        "type": "boolean"
+                      },
+                      "last_good": {
+                        "type": "boolean"
+                      },
+                      "readable": {
+                        "type": "boolean"
+                      },
+                      "created_by": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "created_at": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "required": [
+                      "version",
+                      "reason",
+                      "restored_from",
+                      "size_bytes",
+                      "summary",
+                      "health",
+                      "pinned",
+                      "last_good",
+                      "readable",
+                      "created_by",
+                      "created_at"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "type",
+                  "template_id",
+                  "version"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "template.operation"
+                  },
+                  "operation_id": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "restore",
+                      "seed"
+                    ]
+                  },
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "running",
+                      "done",
+                      "failed"
+                    ]
+                  },
+                  "template_id": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "error": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "message": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "message"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "type",
+                  "operation_id",
+                  "kind",
+                  "state",
+                  "template_id"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
                     "const": "log.record"
                   },
                   "record": {
@@ -9163,6 +9947,790 @@
         "required": [
           "type",
           "action"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "template.changed"
+          },
+          "template": {
+            "type": "object",
+            "properties": {
+              "template_id": {
+                "type": "string",
+                "pattern": "^tp-[A-Za-z0-9_-]{10}$"
+              },
+              "name": {
+                "type": "string"
+              },
+              "display_name": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "recording",
+                  "ready",
+                  "disabled"
+                ]
+              },
+              "channel": {
+                "type": "string",
+                "enum": [
+                  "chromium",
+                  "chrome",
+                  "edge"
+                ]
+              },
+              "headless": {
+                "type": "boolean"
+              },
+              "sites": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "site_id": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "health_state": {
+                      "type": "string",
+                      "enum": [
+                        "unknown",
+                        "signed_in",
+                        "signed_out",
+                        "challenged",
+                        "inconclusive"
+                      ]
+                    },
+                    "checked_at": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "site_id",
+                    "title",
+                    "health_state",
+                    "checked_at"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "host": {
+                "type": "object",
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "stopped",
+                      "starting",
+                      "running",
+                      "draining",
+                      "crashed",
+                      "failed"
+                    ]
+                  },
+                  "since": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "pages": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "rss_bytes": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "state",
+                  "since",
+                  "pages"
+                ],
+                "additionalProperties": false
+              },
+              "in_use": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "cap": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "current_version": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "checkpoint_at": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "last_used_at": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "sealed": {
+                "type": "boolean"
+              },
+              "identity_drift": {
+                "type": "object",
+                "properties": {
+                  "from": {
+                    "type": "string"
+                  },
+                  "to": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "from",
+                  "to"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "template_id",
+              "name",
+              "display_name",
+              "status",
+              "channel",
+              "headless",
+              "sites",
+              "host",
+              "in_use",
+              "cap",
+              "current_version",
+              "checkpoint_at",
+              "last_used_at",
+              "sealed"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "type",
+          "template"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "template.removed"
+          },
+          "template_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "template_id"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "template.host"
+          },
+          "template_id": {
+            "type": "string"
+          },
+          "host": {
+            "type": "object",
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": [
+                  "stopped",
+                  "starting",
+                  "running",
+                  "draining",
+                  "crashed",
+                  "failed"
+                ]
+              },
+              "since": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "started_at": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "restarts": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "last_error": {
+                "type": "string"
+              },
+              "pages": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "parked_pages": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "rss_bytes": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "recycle_at": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "sandboxed": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              },
+              "profile_secrets": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "state",
+              "since",
+              "started_at",
+              "restarts",
+              "pages",
+              "parked_pages",
+              "sandboxed",
+              "profile_secrets"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "type",
+          "template_id",
+          "host"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "template.health"
+          },
+          "template_id": {
+            "type": "string"
+          },
+          "site": {
+            "type": "object",
+            "properties": {
+              "site_id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "pack_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "pack_version": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "enabled": {
+                "type": "boolean"
+              },
+              "write_policy": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "allow",
+                      "warn",
+                      "confirm"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "vault_handle": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "auto_relogin": {
+                "type": "boolean"
+              },
+              "form": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "username": {
+                        "type": "string"
+                      },
+                      "password": {
+                        "type": "string"
+                      },
+                      "submit": {
+                        "type": "string"
+                      },
+                      "next": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "username",
+                      "password"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "learned_cookie_names": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "health": {
+                "type": "object",
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "unknown",
+                      "signed_in",
+                      "signed_out",
+                      "challenged",
+                      "inconclusive"
+                    ]
+                  },
+                  "checked_at": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "changed_at": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "reason": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "consecutive_inconclusive": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "state",
+                  "checked_at",
+                  "changed_at",
+                  "reason",
+                  "consecutive_inconclusive"
+                ],
+                "additionalProperties": false
+              },
+              "stopped_at": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "device_bound": {
+                "type": "boolean"
+              },
+              "added_at": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "site_id",
+              "title",
+              "pack_id",
+              "pack_version",
+              "enabled",
+              "write_policy",
+              "vault_handle",
+              "auto_relogin",
+              "form",
+              "learned_cookie_names",
+              "health",
+              "stopped_at",
+              "device_bound",
+              "added_at"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "type",
+          "template_id",
+          "site"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "template.version"
+          },
+          "template_id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "object",
+            "properties": {
+              "version": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "reason": {
+                "type": "string",
+                "enum": [
+                  "recording",
+                  "relogin",
+                  "restore",
+                  "manual",
+                  "import",
+                  "signin_change",
+                  "daily"
+                ]
+              },
+              "restored_from": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "size_bytes": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "summary": {
+                "type": "object",
+                "properties": {
+                  "domains": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "domain": {
+                          "type": "string"
+                        },
+                        "cookies": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "sign_in_cookies": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "earliest_expiry": {
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "session_cookie": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "domain",
+                        "cookies",
+                        "sign_in_cookies",
+                        "earliest_expiry",
+                        "session_cookie"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "storage_origins": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "domains",
+                  "storage_origins"
+                ],
+                "additionalProperties": false
+              },
+              "health": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "site_id": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "unknown",
+                        "signed_in",
+                        "signed_out",
+                        "challenged",
+                        "inconclusive"
+                      ]
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "site_id",
+                    "state",
+                    "enabled"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "pinned": {
+                "type": "boolean"
+              },
+              "last_good": {
+                "type": "boolean"
+              },
+              "readable": {
+                "type": "boolean"
+              },
+              "created_by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "created_at": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "version",
+              "reason",
+              "restored_from",
+              "size_bytes",
+              "summary",
+              "health",
+              "pinned",
+              "last_good",
+              "readable",
+              "created_by",
+              "created_at"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "type",
+          "template_id",
+          "version"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "template.operation"
+          },
+          "operation_id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "restore",
+              "seed"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "running",
+              "done",
+              "failed"
+            ]
+          },
+          "template_id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "type",
+          "operation_id",
+          "kind",
+          "state",
+          "template_id"
         ],
         "additionalProperties": false
       },

@@ -4,6 +4,7 @@ import { hostname, networkInterfaces } from 'node:os';
 import { join } from 'node:path';
 import type { ServerConfig } from '@browserhive/contracts/config';
 import type { SqliteUnitOfWork } from '@browserhive/core/persistence';
+import type { DomainEvents, EventPublisher } from '@browserhive/core/runtime';
 import {
   type Clock,
   createProcessTreeReader,
@@ -15,15 +16,22 @@ import {
 import {
   createTemplateFiles,
   createTemplateGeoResolver,
+  FileTemplateStateStore,
   type HostFacts,
   HostGeoSeedResolver,
   PassThroughProxyResolver,
   type PlaywrightBrowserDriver,
+  reconcileTemplateState,
+  resolveTemplateKeys,
   type SessionService,
+  TemplateActions,
+  TemplateEditService,
   TemplateHostOperations,
   TemplateHostSupervisor,
+  TemplateOperations,
   TemplateRecordingService,
   TemplateService,
+  TemplateStateService,
   UnavailableTemplateHostOps,
   UnavailableTemplateRuntime,
 } from '@browserhive/core/server';
@@ -45,6 +53,10 @@ export interface TemplatesInput {
   readonly testingArgs?: readonly string[];
   /** The composition's interval timer (the supervisor's periodic pass). */
   readonly repeat: (fn: () => void, ms: number) => () => void;
+  /** The `templates` topic and the checkpoint metric. */
+  readonly bus: EventPublisher<DomainEvents>;
+  /** `templateKey` came from a command-line flag (warned: argv is readable by other users). */
+  readonly keyFromFlag?: boolean;
 }
 
 /** How often template hosts are checked for idleness, age and memory (spec 13 §3.2). */
@@ -56,6 +68,11 @@ export interface TemplatesParts {
   /** Recording and the T1a host routes (spec 13 §7.1, §11.1). */
   readonly recording: TemplateRecordingService;
   readonly supervisor: TemplateHostSupervisor | null;
+  /** Edits, actions, versions and operations (T1b). */
+  readonly edit: TemplateEditService;
+  readonly actions: TemplateActions;
+  readonly state: TemplateStateService;
+  readonly operations: TemplateOperations;
   /** Stops the supervisor's periodic pass. */
   readonly stopTicks: () => void;
 }
@@ -110,8 +127,37 @@ export function templatesDirOf(dataDir: string): string {
 }
 
 /** Builds the template service. */
-export function buildTemplates(input: TemplatesInput): TemplatesParts {
+export async function buildTemplates(input: TemplatesInput): Promise<TemplatesParts> {
   const { config } = input;
+  const templatesDir = templatesDirOf(config.dataDir);
+  const probe = new FileTemplateStateStore({
+    templatesDir,
+    keys: { current: null, previous: null },
+  });
+  // Resolved once per process (spec 13 §2.4); the key file is never created over existing files.
+  const keys = await resolveTemplateKeys({
+    dataDir: config.dataDir,
+    configured: config.templateKey,
+    previous: config.templateKeyPrevious,
+    filesExist: async () => (await probe.templatesWithFiles()).length > 0,
+  });
+  if (keys.problem !== null)
+    input.logger.error('template key unreadable', { detail: keys.problem });
+  if (input.keyFromFlag === true) {
+    input.logger.warn('templateKey given as flag', {
+      detail: 'process arguments are readable by other users; use BROWSERHIVE_TEMPLATE_KEY',
+    });
+  }
+  const store = new FileTemplateStateStore({
+    templatesDir,
+    keys: { current: keys.current, previous: keys.previous },
+  });
+  await reconcileTemplateState({
+    store,
+    repos: input.uow.repos,
+    degradations: input.degradations,
+    logger: input.logger,
+  });
   const reader = createProcessTreeReader();
   const supervisor = config.templates
     ? new TemplateHostSupervisor({
@@ -135,13 +181,31 @@ export function buildTemplates(input: TemplatesInput): TemplatesParts {
           drainTimeoutMs: config.templateDrainTimeout,
           maxPagesPerHost: config.templateMaxPagesPerHost,
           closeTimeoutMs: config.sessionCloseTimeout,
+          recycleRssBytes: config.templateRecycleRss,
         },
+        bus: input.bus,
+        onTemplateChanged: (id) => changed(id),
         ...(reader !== null && {
           rssOf: async (pid: number) => (await reader.rssOfTrees([pid])).get(pid) ?? null,
         }),
       })
     : null;
   const runtime = supervisor ?? new UnavailableTemplateRuntime();
+  const state = new TemplateStateService({
+    repos: input.uow.repos,
+    store,
+    hostOf: (id) => supervisor?.runningHost(id) ?? null,
+    clock: input.clock,
+    logger: input.logger,
+    degradations: input.degradations,
+    bus: input.bus,
+    config: {
+      checkpointIntervalMs: config.templateCheckpointInterval,
+      versionsKeep: config.templateVersionsKeep,
+    },
+  });
+  supervisor?.attachCheckpoints(state);
+  let changed: (templateId: string) => void = () => undefined;
   const ops =
     supervisor === null
       ? new UnavailableTemplateHostOps()
@@ -151,6 +215,8 @@ export function buildTemplates(input: TemplatesInput): TemplatesParts {
           launcher: input.driver,
           dataDir: config.dataDir,
           logger: input.logger,
+          clock: input.clock,
+          drainTimeoutMs: config.templateDrainTimeout,
         });
   const recording = new TemplateRecordingService({
     repos: input.uow.repos,
@@ -160,14 +226,19 @@ export function buildTemplates(input: TemplatesInput): TemplatesParts {
     ids: input.ids,
     clock: input.clock,
     logger: input.logger,
+    state,
+    changed: (id) => changed(id),
   });
+  const files = createTemplateFiles(templatesDir);
   const service = new TemplateService({
     repos: input.uow.repos,
     uow: input.uow,
     runtime,
     ops,
     geo: createTemplateGeoResolver(new HostGeoSeedResolver(input.host)),
-    files: createTemplateFiles(templatesDirOf(config.dataDir)),
+    files,
+    bus: input.bus,
+    versions: input.uow.repos.templateVersions,
     degradations: input.degradations,
     ids: input.ids,
     clock: input.clock,
@@ -184,7 +255,33 @@ export function buildTemplates(input: TemplatesInput): TemplatesParts {
       },
     },
   });
-  // Idle stop, age recycle and memory sampling of template hosts (spec 13 §3.2).
+  changed = (id) => service.publishChanged(id);
+  const common = { ids: input.ids, clock: input.clock, logger: input.logger, changed };
+  const edit = new TemplateEditService({
+    repos: input.uow.repos,
+    uow: input.uow,
+    runtime,
+    ops,
+    sessions: input.sessions,
+    bus: input.bus,
+    ...common,
+  });
+  const actions = new TemplateActions({
+    repos: input.uow.repos,
+    runtime,
+    ops,
+    state,
+    files,
+    ...common,
+  });
+  const operations = new TemplateOperations({
+    repos: input.uow.repos,
+    ops,
+    state,
+    bus: input.bus,
+    ...common,
+  });
+  // Idle stop, age recycle, memory and checkpoints of template hosts (spec 13 §3.2, §3.9).
   const stopTicks =
     supervisor === null
       ? () => undefined
@@ -195,5 +292,5 @@ export function buildTemplates(input: TemplatesInput): TemplatesParts {
               input.logger.warn('host tick failed', { err: serializeError(err) }),
             );
         }, TEMPLATE_HOST_TICK_MS);
-  return { service, recording, supervisor, stopTicks };
+  return { service, recording, supervisor, edit, actions, state, operations, stopTicks };
 }

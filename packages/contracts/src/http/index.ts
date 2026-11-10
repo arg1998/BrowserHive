@@ -302,6 +302,18 @@ export {
   SystemRealtimeResponse,
 } from './system.ts';
 export {
+  PutTemplateSiteRequest,
+  ResolveTemplateAccessRequest,
+  ResolveTemplateAccessResponse,
+  TemplateChangeResponse,
+  TemplateHostResponse,
+  TemplateIfMatchHeaders,
+  TemplatePageParams,
+  TemplatePatchInput,
+  TemplateSiteParams,
+  TemplateSiteResponse,
+} from './template-edit.ts';
+export {
   ObservedIdentity,
   PinnedIdentity,
   TEMPLATE_HEALTH_INTERVAL_MS,
@@ -332,6 +344,32 @@ export {
   TemplateDomainParams,
   TemplateOkResponse,
 } from './template-recording.ts';
+export {
+  PatchTemplateVersionRequest,
+  RestoreTemplateVersionRequest,
+  SaveTemplateVersionResponse,
+  SeedTemplateQuery,
+  StorageStateCookie,
+  StorageStateOrigin,
+  TEMPLATE_SEED_MAX_BYTES,
+  TemplateCheckpoint,
+  TemplateOperation,
+  TemplateOperationAccepted,
+  TemplateOperationKind,
+  TemplateOperationParams,
+  TemplateOperationState,
+  TemplateStorageState,
+  TemplateVersionDomain,
+  TemplateVersionHealth,
+  TemplateVersionParams,
+  TemplateVersionReason,
+  TemplateVersionRef,
+  TemplateVersionResponse,
+  TemplateVersionRow,
+  TemplateVersionSummary,
+  TemplateVersionsPage,
+  TemplateVersionsQuery,
+} from './template-versions.ts';
 export {
   AgentWindows,
   DeleteTemplateQuery,

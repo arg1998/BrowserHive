@@ -158,6 +158,9 @@ export function wireMetrics(
     bus.subscribe('blocklist.hit', ({ payload }) =>
       instruments.blocklistHits.add(1, { source: payload.row.source }),
     ),
+    bus.subscribe('template.checkpoint.written', ({ payload }) =>
+      instruments.templateCheckpoints.add(1, { reason: payload.reason }),
+    ),
     bus.subscribe('retention.completed', ({ payload }) => {
       for (const [table, rows] of Object.entries(payload.prunedByTable ?? {})) {
         if (rows > 0) instruments.retentionPrunedRows.add(rows, { table });

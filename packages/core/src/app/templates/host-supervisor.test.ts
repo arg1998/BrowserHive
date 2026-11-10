@@ -435,3 +435,102 @@ describe('review fixes (PR #76)', () => {
     await first;
   });
 });
+
+describe('T1b: holds, checkpoints and memory (spec 13 §3.2, §3.9, §3.12)', () => {
+  it('a held template refuses agent launches and foreign maintenance launches until released', async () => {
+    const { supervisor } = setup();
+    const template = templateRecord({ headless: true });
+    const hold = supervisor.hold(template.templateId);
+    expect(hold).not.toBeNull();
+    if (hold === null) throw new Error('no hold');
+    expect(supervisor.hold(template.templateId)).toBeNull();
+    expect(await codeOf(supervisor.launch(request(template)))).toBe('TEMPLATE_UNAVAILABLE');
+    const maintenance = {
+      template,
+      sites: [],
+      slug: 'maintenance',
+      principal: { subject: 'browserhive' },
+    };
+    expect(await codeOf(supervisor.launchMaintenance(maintenance))).toBe('TEMPLATE_UNAVAILABLE');
+    expect(
+      await codeOf(supervisor.launchMaintenance({ ...maintenance, holdToken: hold.token })),
+    ).toBe('ok');
+    hold.release();
+    expect(await codeOf(supervisor.launch(request(template)))).toBe('ok');
+  });
+
+  it('a clean stop checkpoints before the browser closes; a delete does not', async () => {
+    const { supervisor, launcher } = setup();
+    const calls: string[] = [];
+    supervisor.attachCheckpoints({
+      checkpoint: async (id) => {
+        calls.push(`checkpoint:${id}:closed=${launcher.hosts[0]?.closed ?? -1}`);
+      },
+      checkpointIfDue: async (id) => void calls.push(`due:${id}`),
+    });
+    const template = templateRecord({ headless: true });
+    await supervisor.launch(request(template));
+    await supervisor.tick();
+    expect(calls).toEqual([`due:${template.templateId}`]);
+    await supervisor.stopHost(template.templateId, 'operator');
+    expect(calls.at(-1)).toBe(`checkpoint:${template.templateId}:closed=0`);
+    await supervisor.launch(request(template, 'again'));
+    const before = calls.length;
+    await supervisor.shutdown(template.templateId);
+    expect(calls.length).toBe(before);
+  });
+
+  it('a host above templateRecycleRss warns its largest session first, then drains', async () => {
+    const { clock, sessions, launcher, degradations } = setup();
+    const supervisor = new TemplateHostSupervisor({
+      launcher,
+      sessions: new SessionService({
+        clock,
+        ids: new FakeIdGenerator(),
+        logger: new CollectingLogger(),
+        bus: new InProcessEventBus<DomainEvents>({ clock, logger: new CollectingLogger() }),
+        driver: new FakeBrowserDriver(),
+        proxyResolver: { resolve: async (r) => r.requested },
+        config: testConfig({ maxSessions: 3 }),
+        fs: new FakeSessionDirFs(),
+      }),
+      templates: {
+        update: async (id, patch) => templateRecord({ templateId: id, ...patch }),
+        touchLastUsed: async () => undefined,
+      },
+      clock,
+      logger: new CollectingLogger(),
+      degradations,
+      spec: {
+        dataDir: '/data',
+        stealthDriver: 'auto',
+        proxyResolver: { resolve: async (r) => r.requested },
+        env: {},
+        selfOrigins: () => [],
+        testingArgs: [],
+      },
+      config: {
+        idleTimeoutMs: 0,
+        recycleAfterMs: 0,
+        drainTimeoutMs: 60_000,
+        maxPagesPerHost: 40,
+        closeTimeoutMs: 1_000,
+        recycleRssBytes: 1_000,
+      },
+      rssOf: async () => 5_000,
+    });
+    void sessions;
+    const template = templateRecord({ headless: true });
+    const a = await supervisor.launch(request(template, 'alpha'));
+    const host = launcher.hosts.at(-1);
+    if (host === undefined) throw new Error('no host');
+    host.heaps = [{ sessionId: a.id, targetId: 'A1', jsHeapTotalBytes: 900 }];
+    await supervisor.tick();
+    expect(host.closedPages).toEqual([{ targetId: 'A1', scope: 'session' }]);
+    expect(a.warnings.map((w) => w.code)).toEqual(['SESSION_RESOURCE_LIMIT']);
+    expect(supervisor.host(template.templateId).state).toBe('running');
+    await clock.advance(6 * 60_000);
+    await supervisor.tick();
+    expect(supervisor.host(template.templateId).state).toBe('draining');
+  });
+});

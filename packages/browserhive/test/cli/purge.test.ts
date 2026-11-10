@@ -1,4 +1,4 @@
-/** @module test/cli/purge — `browserhive purge`: inventory from a fixture data dir, typed YES, a second YES for --all, --dryRun writes nothing, no-TTY refusal, open-session warning */
+/** @module test/cli/purge — `browserhive purge`: inventory from a fixture data dir, typed YES, a second YES for --all, --dryRun writes nothing, no-TTY refusal, open-session and orphaned-template warnings */
 import { describe, expect, it } from 'bun:test';
 import { cliHarness, DATA_DIR, MemoryFs, storageState } from './helpers.ts';
 
@@ -74,7 +74,7 @@ describe('purge', () => {
     expect(run.stdout).toContain('--all includes saved auth states');
     expect(run.stdout).toContain('Vault bindings and group policies live in the database');
     expect(run.stdout).not.toContain('WILL BE KEPT');
-    for (const dir of ['sessions', 'auth-states', 'uploads', 'backups', 'admin']) {
+    for (const dir of ['sessions', 'auth-states', 'templates', 'uploads', 'backups', 'admin']) {
       expect(await fs.stat(`${DATA_DIR}/${dir}`)).toBeNull();
     }
   });
@@ -108,6 +108,29 @@ describe('purge', () => {
     });
     expect(run.stdout).toContain('2 session(s) are still marked open.');
     expect(run.stdout).toContain('A BrowserHive process (pid 4242) holds this data directory.');
+  });
+
+  it('warns that purging the database alone orphans template directories (spec 13 §11.10)', async () => {
+    const fs = fixture();
+    fs.put(`${DATA_DIR}/templates/tp-abcdefghij/versions/v1.state.enc`, 'sealed');
+    fs.put(`${DATA_DIR}/admin/template.key`, 'key\n');
+    const run = await cliHarness({ argv: ['purge', '--dryRun'], fs });
+    expect(run.stdout).toContain(
+      'templates/ holds 1 session template directory. Purging the database',
+    );
+    expect(run.stdout).toContain('Pass --all to delete them too.');
+    expect(run.stdout).toContain(
+      'Session templates (signed-in browsers and their versions) — 1 files',
+    );
+    const all = await cliHarness({ argv: ['purge', '--all', '--yes'], fs, answers: null });
+    expect(all.code).toBe(0);
+    expect(all.stdout).not.toContain('orphans them');
+    expect(all.stdout).toContain('--all includes session templates and the template key');
+    expect(all.stdout).toContain(
+      'deleted  Session templates (signed-in browsers and their versions)',
+    );
+    expect(await fs.stat(`${DATA_DIR}/templates`)).toBeNull();
+    expect(await fs.stat(`${DATA_DIR}/admin/template.key`)).toBeNull();
   });
 
   it('a missing data dir is nothing to do', async () => {

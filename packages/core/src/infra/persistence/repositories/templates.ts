@@ -12,6 +12,7 @@ import type {
   ListAllOptions,
   TemplateRepository,
   TemplateSiteRepository,
+  TemplateStateFacts,
 } from '../../../ports/persistence/templates.ts';
 import type { DB } from '../generated/db.d.ts';
 import { templateSiteFromRow, templateSiteToRow } from '../mappers/template-sites.ts';
@@ -140,6 +141,22 @@ export class SqliteTemplateRepository implements TemplateRepository {
     await this.#db
       .updateTable('templates')
       .set({ last_used_at: at })
+      .where('template_id', '=', templateId)
+      .execute();
+  }
+
+  async setStateFacts(templateId: string, facts: TemplateStateFacts): Promise<void> {
+    const set = {
+      ...(facts.checkpointAt !== undefined && { checkpoint_at: facts.checkpointAt }),
+      ...(facts.checkpointSizeBytes !== undefined && {
+        checkpoint_size_bytes: facts.checkpointSizeBytes,
+      }),
+      ...(facts.currentVersion !== undefined && { current_version: facts.currentVersion }),
+    };
+    if (Object.keys(set).length === 0) return;
+    await this.#db
+      .updateTable('templates')
+      .set(set)
       .where('template_id', '=', templateId)
       .execute();
   }

@@ -3,11 +3,12 @@
 import type { Session } from '../../src/domain/session/session.ts';
 import type { Cookie } from '../../src/ports/browser-driver.ts';
 import type { TemplateRecord } from '../../src/ports/persistence/index.ts';
-import type { SignInRemoval } from '../../src/ports/template-host.ts';
+import type { SignInRemoval, TemplateHost } from '../../src/ports/template-host.ts';
 import type {
   RecordingRequest,
   SharedWindowView,
   TemplateHostOps,
+  TemplateOperationHold,
 } from '../../src/ports/template-runtime.ts';
 
 /** Fake host operations; `jarCookies === null` = the browser is stopped. */
@@ -63,5 +64,53 @@ export class FakeTemplateHostOps implements TemplateHostOps {
   async closeRecording(): Promise<void> {
     this.closed += 1;
     this.recording = null;
+  }
+
+  /** The browser `withHost` hands out (`null`: it cannot start). */
+  host: TemplateHost | null = null;
+  /** Templates held by an operation. */
+  readonly holds = new Set<string>();
+  /** Host operations, in order (`start:<id>`, `stop:<id>`, `restart:<id>`, `drain:<id>:<force>`). */
+  readonly calls: string[] = [];
+  /** Sessions `drainForOperation` and `stopHost` report closed. */
+  liveSessions: string[] = [];
+  parkedTargets: string[] = [];
+
+  hold(templateId: string): TemplateOperationHold | null {
+    if (this.holds.has(templateId)) return null;
+    this.holds.add(templateId);
+    return { token: Symbol(templateId), release: () => void this.holds.delete(templateId) };
+  }
+
+  async withHost<T>(_template: TemplateRecord, fn: (host: TemplateHost) => Promise<T>): Promise<T> {
+    if (this.host === null) throw new Error('no browser');
+    return await fn(this.host);
+  }
+
+  async startHost(template: TemplateRecord): Promise<void> {
+    this.calls.push(`start:${template.templateId}`);
+  }
+
+  async stopHost(template: TemplateRecord): Promise<readonly string[]> {
+    this.calls.push(`stop:${template.templateId}`);
+    return this.liveSessions.splice(0);
+  }
+
+  async restartHost(template: TemplateRecord): Promise<void> {
+    this.calls.push(`restart:${template.templateId}`);
+  }
+
+  async closeParkedPage(_templateId: string, targetId: string): Promise<boolean> {
+    const before = this.parkedTargets.length;
+    this.parkedTargets = this.parkedTargets.filter((t) => t !== targetId);
+    return this.parkedTargets.length < before;
+  }
+
+  async drainForOperation(
+    template: TemplateRecord,
+    forceClose: boolean,
+  ): Promise<readonly string[]> {
+    this.calls.push(`drain:${template.templateId}:${forceClose}`);
+    return this.liveSessions.splice(0);
   }
 }

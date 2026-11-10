@@ -14,7 +14,7 @@ COMMANDS
   db         Inspect, back up, restore, or migrate the database
   admin      Administrative actions (reset-password, tokens)
   channels   List, test and preview notification channels
-  templates  Create, finish, list and delete session templates
+  templates  Create, inspect, seed, version, restore and delete session templates
   version    Print version information
   help       Show help for a command
 
@@ -88,6 +88,19 @@ FLAGS — sessions
                                     TOOL_NOT_AVAILABLE, launch_session template answers
                                     TEMPLATE_NOT_FOUND, and no template browser starts.
                                     default: true
+  --templateKey <text>              Key that encrypts template checkpoints and versions (base64 of
+                                    32 bytes). Prefer BROWSERHIVE_TEMPLATE_KEY; absent =
+                                    <dataDir>/admin/template.key, created on first use. [secret]
+  --templateKeyPrevious <text>      The previous template key, read only: lets the server read files
+                                    not yet re-encrypted by browserhive templates rekey. [secret]
+  --templateCheckpointInterval <duration>
+                                    How often a running template browser's rolling checkpoint is
+                                    rewritten; versions are written at milestones only. default: 15m
+  --templateVersionsKeep <n>        Versions kept per template, plus every pinned version and the
+                                    newest one with every site signed in. default: 10
+  --templateRecycleRss <bytes>      A template browser's resident memory above which its largest
+                                    session's largest page is closed, then the browser is drained
+                                    and restarted. default: 3GiB
   --templateHostIdleTimeout <duration>
                                     How long a template's browser stays open with no session before
                                     it is stopped; 0 = never. default: 1h

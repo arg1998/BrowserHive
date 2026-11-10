@@ -58,7 +58,7 @@ function isValidTimezone(timeZone: string): boolean {
   }
 }
 
-function validateProxy(
+export function validateProxy(
   input: NonNullable<TemplateInput['proxy']>,
   issues: TemplateInputIssue[],
 ): TemplateProxyRecord | null {

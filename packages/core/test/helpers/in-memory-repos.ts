@@ -59,6 +59,7 @@ export {
 import {
   InMemoryTemplateRepository,
   InMemoryTemplateSiteRepository,
+  InMemoryTemplateVersionRepository,
 } from './in-memory-template-repos.ts';
 
 /**
@@ -348,7 +349,8 @@ export class InMemoryRepositories implements Repositories {
   );
   readonly schemaMigrations = notImplemented<Repositories['schemaMigrations']>('schemaMigrations');
   readonly templateSites = new InMemoryTemplateSiteRepository();
-  readonly templates = new InMemoryTemplateRepository(this.templateSites);
+  readonly templateVersions = new InMemoryTemplateVersionRepository();
+  readonly templates = new InMemoryTemplateRepository(this.templateSites, this.templateVersions);
 
   constructor() {
     this.sessions = new InMemorySessionRepository((sessionId) => this.countsFor(sessionId));

@@ -16,6 +16,15 @@ import { runPurge } from './commands/purge.ts';
 import { runServe } from './commands/serve.ts';
 import { runTemplatesList, runTemplatesRm } from './commands/templates.ts';
 import { runTemplatesCreate, runTemplatesFinish } from './commands/templates-create.ts';
+import {
+  runTemplatesAvailability,
+  runTemplatesHost,
+  runTemplatesSave,
+  runTemplatesShow,
+  runTemplatesVersions,
+} from './commands/templates-ops.ts';
+import { runTemplatesRekey } from './commands/templates-rekey.ts';
+import { runTemplatesRestore, runTemplatesSeed } from './commands/templates-state.ts';
 import { runVersion } from './commands/version.ts';
 import type { CliDeps, CommandContext } from './deps.ts';
 import { renderCommandHelp } from './help.ts';
@@ -98,6 +107,23 @@ export async function runInvocation(
       return runTemplatesFinish(context, invocation);
     case 'templates-rm':
       return runTemplatesRm(context, invocation);
+    case 'templates-show':
+      return runTemplatesShow(context, invocation);
+    case 'templates-seed':
+      return runTemplatesSeed(context, invocation);
+    case 'templates-versions':
+      return runTemplatesVersions(context, invocation);
+    case 'templates-save':
+      return runTemplatesSave(context, invocation);
+    case 'templates-restore':
+      return runTemplatesRestore(context, invocation);
+    case 'templates-host':
+      return runTemplatesHost(context, invocation);
+    case 'templates-disable':
+    case 'templates-enable':
+      return runTemplatesAvailability(context, invocation);
+    case 'templates-rekey':
+      return runTemplatesRekey(context, invocation);
     case 'version':
       return runVersion(context, invocation.json);
   }

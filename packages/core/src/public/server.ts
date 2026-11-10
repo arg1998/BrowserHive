@@ -39,22 +39,32 @@ export {
   RECORDING_SLUG,
   TemplateHostOperations,
 } from '../app/templates/host-operations.ts';
-export {
-  type HostSupervisorConfig,
-  type HostSupervisorDeps,
-  TemplateHostSupervisor,
-} from '../app/templates/host-supervisor.ts';
+export { TemplateHostSupervisor } from '../app/templates/host-supervisor.ts';
+export type {
+  HostSupervisorConfig,
+  HostSupervisorDeps,
+} from '../app/templates/host-supervisor-types.ts';
+export { reconcileTemplateState } from '../app/templates/state-reconcile.ts';
+export { TemplateActions } from '../app/templates/template-actions.ts';
+export { TemplateEditService } from '../app/templates/template-edit.ts';
+export { TemplateOperations } from '../app/templates/template-operations.ts';
 export { TemplateRecordingService } from '../app/templates/template-recording.ts';
 export {
   TemplateService,
   type TemplateServiceConfig,
 } from '../app/templates/template-service.ts';
+export { TemplateStateService } from '../app/templates/template-state.ts';
 export {
   UnavailableTemplateHostOps,
   UnavailableTemplateRuntime,
 } from '../app/templates/unavailable-runtime.ts';
 export { VaultService } from '../app/vault/vault-service.ts';
 export { OperatorRequestBroker } from '../domain/operator-requests/broker.ts';
+export {
+  type TemplateKey,
+  templateKeyId,
+  templateKeyOf,
+} from '../domain/templates/envelope.ts';
 export { VaultBroker } from '../domain/vault/broker.ts';
 export { VaultRedaction } from '../domain/vault/redaction.ts';
 export { installBlocklistRoute } from '../infra/browsers/blocklist-route.ts';
@@ -110,7 +120,18 @@ export {
 export { createTemplateGeoResolver } from '../infra/browsers/template-geo.ts';
 export { createBunDesktop } from '../infra/desktop/bun-desktop.ts';
 export { createTemplateFiles } from '../infra/fs/template-files.ts';
+export {
+  decodeTemplateKey,
+  type ResolvedTemplateKeys,
+  readKeyFile,
+  resolveTemplateKeys,
+  type TemplateKeySource,
+  templateKeyPath,
+} from '../infra/fs/template-key.ts';
+export { type RekeyResult, rekeyTemplateFiles } from '../infra/fs/template-rekey.ts';
+export { FileTemplateStateStore } from '../infra/fs/template-state-store.ts';
 export { sweepStaleTemplateBrowsers } from '../infra/host/stale-template-browsers.ts';
+export { profileHasSecrets } from '../infra/persistence/profile-secrets.ts';
 export { createArtifactFiles } from '../infra/static/artifact-files.ts';
 export { createBunStaticAssets } from '../infra/static/bun-static-assets.ts';
 export { createTraceViewerAssets } from '../infra/static/playwright-trace-viewer.ts';

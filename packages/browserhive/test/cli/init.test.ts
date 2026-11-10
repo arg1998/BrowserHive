@@ -26,7 +26,15 @@ describe('init', () => {
     });
     expect(run.code).toBe(0);
     expect(run.stdout).toContain(`✓ data directory ${DATA_DIR}  created (0700)`);
-    for (const sub of ['sessions', 'auth-states', 'uploads', 'backups', 'admin']) {
+    for (const sub of [
+      'sessions',
+      'auth-states',
+      'uploads',
+      'backups',
+      'admin',
+      'templates',
+      'site-packs',
+    ]) {
       expect(await fs.stat(`${DATA_DIR}/${sub}`)).not.toBeNull();
     }
     expect(run.runs).toEqual([

@@ -3,35 +3,12 @@
 import { buildDigest, reportMessage } from '../../src/app/notifications/reports.ts';
 import { sampleDigestFacts } from '../../src/app/notifications/samples.ts';
 import { ARCHIVED_ID, CLOSED_ID, EVENT_OK } from './http-fixtures.ts';
-import type { HttpKit } from './http-kit.ts';
 import { PASSWORD } from './http-kit.ts';
+import { TEMPLATE_OPS_CASES } from './http-route-cases-templates.ts';
 
-/** Context handed to dynamic paths and setup hooks. */
-export interface CaseContext {
-  readonly kit: HttpKit;
-  readonly cookie: string;
-  /** Values produced by `setup`. */
-  readonly state: Record<string, string>;
-}
+export type { CaseContext, CaseRequest, RouteCase } from './http-route-case-types.ts';
 
-/** One request of a case. */
-export interface CaseRequest {
-  readonly method?: string;
-  readonly path: string | ((ctx: CaseContext) => string);
-  readonly body?: unknown;
-  readonly headers?: Record<string, string>;
-  /** Send without the session cookie. */
-  readonly anonymous?: boolean;
-}
-
-/** The cases of one operation. */
-export interface RouteCase {
-  readonly operationId: string;
-  readonly success: CaseRequest & { readonly status: number };
-  /** `null` when the route declares no request schema (nothing can fail validation). */
-  readonly invalid: CaseRequest | null;
-  readonly setup?: (ctx: CaseContext) => Promise<void>;
-}
+import type { CaseContext, RouteCase } from './http-route-case-types.ts';
 
 /** A valid `Idempotency-Key`. */
 export const IDEMPOTENCY_KEY = '5b3e6f2a-6d8f-4e8a-9d62-2b0d8a1d2c11';
@@ -49,22 +26,9 @@ async function webhookChannel(ctx: CaseContext): Promise<void> {
   ctx.state['channel'] = body.channel?.channel_id ?? 'nc-placeholder01';
 }
 
-/** A valid `POST /templates` body (auth=token needs an explicit access choice, spec 13 §6.1). */
-export const TEMPLATE_BODY = {
-  name: 'job-hunt',
-  sites: [{ site_id: 'www.site-a.test' }],
-  policy: { authorized_principals: [] },
-};
+export { TEMPLATE_BODY, template } from './http-route-case-types.ts';
 
-async function template(ctx: CaseContext): Promise<void> {
-  const response = await ctx.kit.request('POST', api('/templates'), {
-    cookie: ctx.cookie,
-    body: TEMPLATE_BODY,
-  });
-  // Under a pending password change the create is refused: a well-formed id keeps the path valid.
-  const body = (await response.json()) as { template?: { template_id: string } };
-  ctx.state['template'] = body.template?.template_id ?? 'tp-placehold0';
-}
+import { TEMPLATE_BODY, template } from './http-route-case-types.ts';
 
 /** A template with its sign-in window open and a new sign-in cookie on its site. */
 async function recording(ctx: CaseContext): Promise<void> {
@@ -199,6 +163,7 @@ const bad = api('/sessions/NOT_AN_ID');
 
 /** Every case, in manifest order. */
 export const ROUTE_CASES: readonly RouteCase[] = [
+  ...TEMPLATE_OPS_CASES,
   { operationId: 'getHealth', success: { path: api('/health'), status: 200 }, invalid: null },
   {
     operationId: 'login',

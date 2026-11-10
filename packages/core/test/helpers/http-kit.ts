@@ -20,8 +20,12 @@ import { sampleAnomalyFacts, sampleDigestFacts } from '../../src/app/notificatio
 import { sessionDirLayout } from '../../src/app/sessions/profile-dir.ts';
 import { SessionService } from '../../src/app/sessions/session-service.ts';
 import { FakeSessionDirFs, testConfig } from '../../src/app/sessions/test-support.ts';
+import { TemplateActions } from '../../src/app/templates/template-actions.ts';
+import { TemplateEditService } from '../../src/app/templates/template-edit.ts';
+import { TemplateOperations } from '../../src/app/templates/template-operations.ts';
 import { TemplateRecordingService } from '../../src/app/templates/template-recording.ts';
 import { TemplateService } from '../../src/app/templates/template-service.ts';
+import { TemplateStateService } from '../../src/app/templates/template-state.ts';
 import { VaultService } from '../../src/app/vault/vault-service.ts';
 import { OperatorRequestBroker } from '../../src/domain/operator-requests/broker.ts';
 import { CHANNEL_RENDERERS, channelFactories } from '../../src/infra/notifications/index.ts';
@@ -32,6 +36,7 @@ import { CollectingLogger } from './collecting-logger.ts';
 import { createAuthTestKit, seedOperator } from './fake-auth.ts';
 import { FakeBrowserDriver } from './fake-browser-driver.ts';
 import { FakeTemplateHostOps } from './fake-host-ops.ts';
+import { FakeTemplateStateStore } from './fake-state-store.ts';
 import { FakeVaultBackend } from './fake-vault-backend.ts';
 import {
   FakeAnalytics,
@@ -254,6 +259,48 @@ export async function createHttpKit(options: HttpKitOptions = {}) {
       defaults: { channel: 'chromium', stealth: 'standard', fingerprint: false, humanize: false },
     },
   });
+  let opSeq = 0;
+  const templateStore = new FakeTemplateStateStore();
+  const templateState = new TemplateStateService({
+    repos: templateRepos,
+    store: templateStore,
+    hostOf: () => templateOps.host,
+    clock,
+    logger,
+    degradations: new RecordingDegradations(),
+    bus: events,
+    config: { checkpointIntervalMs: 900_000, versionsKeep: 10 },
+  });
+  const templateCommon = { ids: auth.ids, clock, logger, changed: () => undefined };
+  const templateEdit = new TemplateEditService({
+    repos: templateRepos,
+    uow: new InMemoryUnitOfWork(templateRepos),
+    runtime: templateRuntime,
+    ops: templateOps,
+    sessions,
+    bus: events,
+    ...templateCommon,
+  });
+  const templateActions = new TemplateActions({
+    repos: templateRepos,
+    runtime: templateRuntime,
+    ops: templateOps,
+    state: templateState,
+    files: templateFiles,
+    ...templateCommon,
+  });
+  const templateOperations = new TemplateOperations({
+    repos: templateRepos,
+    ops: templateOps,
+    state: templateState,
+    bus: events,
+    ids: {
+      eventId: () => auth.ids.eventId(),
+      opaque: (n: number) => String(++opSeq).padStart(n, '0'),
+    },
+    clock,
+    logger,
+  });
   const services: HttpServices = {
     sessions,
     repos: { ...repos, operatorActions: vaultRepos.actions },
@@ -291,6 +338,10 @@ export async function createHttpKit(options: HttpKitOptions = {}) {
     publicUrl,
     templates,
     templateRecording,
+    templateEdit,
+    templateActions,
+    templateVersions: templateState,
+    templateOperations,
   };
   if (options.seed !== false) await seedDataset(repos, vaultRepos, files, sessionDirs);
   const http: HttpApp = createHttpApp({
@@ -366,6 +417,8 @@ export async function createHttpKit(options: HttpKitOptions = {}) {
     templateRuntime,
     templateFiles,
     templateOps,
+    templateStore,
+    templateState,
   };
 }
 

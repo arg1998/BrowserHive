@@ -9,13 +9,15 @@ import { appErrorFacts, withStorage } from './common.ts';
 import { sandboxModeOf } from './doctor-browsers.ts';
 import { stepBrowserChoice } from './init-browser.ts';
 
-/** Subdirectories created under the data dir (D-24). */
+/** Subdirectories created under the data dir (D-24; `templates` and `site-packs`, spec 13 §11.10). */
 export const DATA_SUBDIRS: readonly string[] = [
   'sessions',
   'auth-states',
   'uploads',
   'backups',
   'admin',
+  'templates',
+  'site-packs',
 ];
 /** Browser download ceiling. */
 export const INSTALL_TIMEOUT_MS = 15 * 60_000;

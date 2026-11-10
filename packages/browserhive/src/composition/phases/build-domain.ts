@@ -255,8 +255,10 @@ async function buildDomain(
     .reconcileRequests(repos.operatorRequests)
     .catch((err: unknown) => logger.warn('catch-up failed', { err: serializeError(err) }));
 
-  const tpl = buildTemplates({
+  const tpl = await buildTemplates({
     config,
+    bus,
+    keyFromFlag: ctx.input.resolved.provenance['templateKey']?.source === 'cli',
     ...(ctx.input.testingArgs !== undefined && { testingArgs: ctx.input.testingArgs }),
     host: hostFactsOf(ctx.input.host),
     uow: storage.uow,
@@ -330,6 +332,7 @@ async function buildDomain(
     publicUrl: ops.publicUrl,
     templates,
     templateRecording: tpl.recording,
+    templateParts: tpl,
     instanceId,
     preferences: ops.preferences,
     recorder: ops.recorder,

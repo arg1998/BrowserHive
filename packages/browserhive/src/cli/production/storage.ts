@@ -9,6 +9,7 @@ import type {
   DatabaseStatus,
   MigrationRef,
   OpenStorageInput,
+  TemplateRowFacts,
   TokenRow,
 } from '../deps.ts';
 
@@ -196,6 +197,9 @@ export async function openCliStorage(
           return { name: row.name, principals };
         });
     },
+    templateRows: async () => readTemplateRows(storage),
+    updateTemplateVersionFile: (templateId, version, file) =>
+      storage.repos.templateVersions.updateFile(templateId, version, file),
     createToken: async ({ principal, expiresInMs }) => {
       const created = await storage.auth.createToken(CLI_ISSUER, {
         ownerKind: 'agent',
@@ -216,6 +220,56 @@ export async function openCliStorage(
     },
     close: () => storage.close(),
   };
+}
+
+const TemplateRow = z.object({
+  template_id: z.string(),
+  name: z.string(),
+  channel: z.enum(['chromium', 'chrome', 'edge']),
+  headless: z.number(),
+  observed: z.string().nullable(),
+  proxy: z.string().nullable(),
+  last_used_at: z.number().nullable(),
+});
+
+/** A JSON column's string field, or `null` when the column is absent, not JSON or lacks it. */
+function jsonField(text: string | null, field: string): string | null {
+  if (text === null) return null;
+  try {
+    const value: unknown = JSON.parse(text);
+    if (typeof value !== 'object' || value === null) return null;
+    const found: unknown = (value as Record<string, unknown>)[field];
+    return typeof found === 'string' ? found : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The `templates` rows `doctor` and `templates rekey` read; none before schema v9. */
+function readTemplateRows(storage: ComposedStorage): readonly TemplateRowFacts[] {
+  let rows: unknown[];
+  try {
+    rows = storage.handle.raw
+      .query(
+        'SELECT template_id, name, channel, headless, identity_observed_json AS observed, proxy_json AS proxy, last_used_at FROM templates ORDER BY name',
+      )
+      .all();
+  } catch {
+    // A database from before schema v9 has no templates table.
+    return [];
+  }
+  return z
+    .array(TemplateRow)
+    .parse(rows)
+    .map((row) => ({
+      templateId: row.template_id,
+      name: row.name,
+      channel: row.channel,
+      headless: row.headless === 1,
+      chromeMajor: jsonField(row.observed, 'chrome_major'),
+      proxyPasswordEnv: jsonField(row.proxy, 'password_env'),
+      lastUsedAt: row.last_used_at,
+    }));
 }
 
 const SQLITE_MAGIC = 'SQLite format 3\u0000';

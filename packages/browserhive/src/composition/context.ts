@@ -59,6 +59,7 @@ import type { RealtimeMetricsSource } from './adapters/metrics.ts';
 import type { DataDirLayout } from './data-dir.ts';
 import type { PhaseTracker } from './health.ts';
 import type { DataDirLock } from './lock-file.ts';
+import type { TemplatesParts } from './phases/domain-templates.ts';
 import type { SandboxWiring } from './sandbox.ts';
 import type { BootInput } from './types.ts';
 
@@ -138,6 +139,8 @@ export interface DomainPart {
   readonly templates: TemplateService;
   /** Recording a template's sign-ins and the T1a host routes (spec 13 §7.1, §11.1). */
   readonly templateRecording: TemplateRecordingService;
+  /** Template edits, actions, versions and operations (T1b). */
+  readonly templateParts: Pick<TemplatesParts, 'edit' | 'actions' | 'state' | 'operations'>;
   /** Random per start; `GET /health` reports it (D-37). */
   readonly instanceId: string;
   readonly preferences: PreferenceService;

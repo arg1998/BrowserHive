@@ -9,6 +9,7 @@ import type {
   SessionView,
 } from '../../src/ports/browser-driver.ts';
 import type {
+  PageHeap,
   ParkedPageInfo,
   SharedWindowInfo,
   SignInRemoval,
@@ -18,6 +19,7 @@ import type {
   TemplateHostSpec,
   TemplateViewOptions,
 } from '../../src/ports/template-host.ts';
+import type { TemplateState } from '../../src/ports/template-state.ts';
 import { FakeSessionView } from './fake-session-view.ts';
 
 const CAPABILITIES: EngineCapabilities = {
@@ -55,6 +57,18 @@ export class FakeTemplateHost implements TemplateHost {
   /** Domains whose sign-in was removed, in order. */
   readonly cleared: string[] = [];
   shared: SharedWindowInfo[] = [];
+  /** The storage origins of the fake jar (`storageState`, `setStorageState`). */
+  origins: TemplateState['origins'] = [];
+  /** Origins the "process" visited (carry-forward). */
+  readonly visited = new Set<string>();
+  /** States applied with `setStorageState`, in order. */
+  readonly applied: TemplateState[] = [];
+  /** Agent page heaps the memory trim reads. */
+  heaps: PageHeap[] = [];
+  /** Pages closed by target id, with their scope. */
+  readonly closedPages: { targetId: string; scope: 'parked' | 'session' }[] = [];
+  /** When set, `storageState` fails with it. */
+  failState: Error | null = null;
 
   constructor(templateId: string, identity: AppliedIdentity | null = null) {
     this.hostId = templateId;
@@ -155,6 +169,43 @@ export class FakeTemplateHost implements TemplateHost {
 
   async sharedWindows(): Promise<readonly SharedWindowInfo[]> {
     return this.shared;
+  }
+
+  async storageState(): Promise<TemplateState> {
+    if (this.failState !== null) throw this.failState;
+    return {
+      cookies: this.cookies.map((c) => ({ ...c, sameSite: c.sameSite })),
+      origins: this.origins,
+    };
+  }
+
+  async setStorageState(state: TemplateState): Promise<void> {
+    this.applied.push(state);
+    this.cookies = state.cookies.map((c) => ({ ...c }));
+    this.origins = state.origins;
+    for (const o of state.origins) this.visited.add(o.origin);
+  }
+
+  visitedOrigins(): ReadonlySet<string> {
+    return this.visited;
+  }
+
+  async pageHeaps(): Promise<readonly PageHeap[]> {
+    return this.heaps.filter((h) => this.views.has(h.sessionId));
+  }
+
+  async closePage(targetId: string, scope: 'parked' | 'session'): Promise<boolean> {
+    if (scope === 'parked') {
+      const before = this.parked.length;
+      this.parked = this.parked.filter((p) => p.targetId !== targetId);
+      if (this.parked.length === before) return false;
+    } else {
+      const heap = this.heaps.find((h) => h.targetId === targetId);
+      if (heap === undefined) return false;
+      this.heaps = this.heaps.filter((h) => h !== heap);
+    }
+    this.closedPages.push({ targetId, scope });
+    return true;
   }
 }
 

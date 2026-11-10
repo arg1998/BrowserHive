@@ -2,7 +2,7 @@
 import { PREVIEW_SAMPLES, PreviewSample } from '@browserhive/contracts/notifications';
 import type { CliPlan, RemoteTarget } from './invocation.ts';
 import type { FlagReader } from './plan-args.ts';
-import { type PlanInput, resolveFull, run, usage } from './plan-resolve.ts';
+import { colorOf, failurePlan, type PlanInput, resolveFull, run, usage } from './plan-resolve.ts';
 import { templatesInvocation } from './plan-templates.ts';
 import { commandDescriptor } from './registry.ts';
 
@@ -34,19 +34,56 @@ function remoteOrConfigured(input: PlanInput, explicit: RemoteTarget | null): Re
 }
 
 /**
- * Plans `templates list | create | finish | rm`.
+ * Plans the `templates` subcommands: every one talks to a running server, except `rekey`, which
+ * runs locally against the data directory (spec 13 §2.4, §11.5).
  *
  * @returns The plan.
  */
 export function planTemplates(name: string, input: PlanInput): CliPlan {
   const { reader, color } = input;
-  const invocation = templatesInvocation(name, input);
+  if (name === 'templates rekey') return planTemplatesRekey(input);
+  const invocation = templatesInvocation(name, { ...input, cwd: input.context.cwd });
   const explicit = remoteTarget(reader);
   if (reader.problems.length > 0) return usage(reader.problems);
   // `--stealth` and `--proxy` of `templates create` are not the server keys of the same names.
   const flags = new Map([...input.tokens.flags].filter(([flag]) => !TEMPLATE_FLAGS.has(flag)));
   const remote = remoteOrConfigured({ ...input, tokens: { ...input.tokens, flags } }, explicit);
   return run(invocation(remote), color);
+}
+
+/**
+ * `templates rekey --oldKeyEnv <ENV>`: the data directory and the current keys as `serve` resolves
+ * them (the environment, the config file and its references). The old key is read from `<ENV>` when
+ * the command runs, never from argv.
+ */
+function planTemplatesRekey(input: PlanInput): CliPlan {
+  const { reader, color } = input;
+  const json = reader.bool('json');
+  const oldKeyEnv = reader.text('oldKeyEnv');
+  if (oldKeyEnv === undefined) {
+    reader.problems.push(
+      "'templates rekey' requires --oldKeyEnv <ENV>: the name of the environment variable holding the old key.",
+    );
+  } else if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(oldKeyEnv)) {
+    reader.problems.push(
+      `invalid value for --oldKeyEnv: expected an environment variable name like BH_OLD_TEMPLATE_KEY, not the key itself.`,
+    );
+  }
+  if (reader.problems.length > 0) return usage(reader.problems);
+  const resolved = resolveFull(input);
+  if (!resolved.ok) return failurePlan(resolved.error);
+  const { config } = resolved.value;
+  return run(
+    {
+      command: 'templates-rekey',
+      dataDir: config.dataDir,
+      oldKeyEnv: oldKeyEnv ?? '',
+      templateKey: config.templateKey ?? null,
+      templateKeyPrevious: config.templateKeyPrevious ?? null,
+      json,
+    },
+    colorOf(resolved.value, color),
+  );
 }
 
 const TEMPLATE_FLAGS: ReadonlySet<string> = new Set(
