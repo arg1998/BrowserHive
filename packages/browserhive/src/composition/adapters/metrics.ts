@@ -16,6 +16,7 @@ import {
   WS_BUFFERED_BYTES_MAX_SERIES,
 } from '@browserhive/core/runtime';
 import type { ActionCounter, DeliveryCounter, ReportCounter } from '@browserhive/core/server';
+import { rssAttributes } from './browser-memory.ts';
 
 /** What the realtime hub exposes to the metrics (http transport only). */
 export interface RealtimeMetricsSource {
@@ -45,7 +46,7 @@ export interface MetricSources {
   readonly analytics: Pick<AnalyticsQueries, 'databaseSize'>;
   /** The hub once the listeners are open; `undefined` before that and under stdio. */
   readonly realtime?: () => RealtimeMetricsSource | undefined;
-  /** RSS bytes per session id from the browser-memory sampler's latest sample. */
+  /** RSS bytes per host key (`hostKey`) from the browser-memory sampler's latest sample. */
   readonly browserMemory?: () => ReadonlyMap<string, number>;
   /** Starts the event-loop monitor (default the `perf_hooks` one); `null` disables the gauge. */
   readonly eventLoop?: () => EventLoopLagMonitor | null;
@@ -232,8 +233,9 @@ export function wireMetrics(
     [
       instruments.browserRssBytes,
       (r) => {
-        for (const [sessionId, bytes] of sources.browserMemory?.() ?? []) {
-          r.observe(bytes, { session_id: sessionId });
+        // One series per exclusive session, one per template host (never per virtual session).
+        for (const [key, bytes] of sources.browserMemory?.() ?? []) {
+          r.observe(bytes, rssAttributes(key));
         }
       },
     ],

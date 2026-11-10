@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import { listBackups } from '@browserhive/core/persistence';
 import { createProcessTreeReader, type Logger, serializeError } from '@browserhive/core/runtime';
 import { pinnedPlaywrightVersion, SystemStatusService } from '@browserhive/core/server';
-import { startBrowserMemorySampler } from '../adapters/browser-memory.ts';
+import { hostKey, startBrowserMemorySampler } from '../adapters/browser-memory.ts';
 import { wireMetrics } from '../adapters/metrics.ts';
 import { createTimers } from '../adapters/timers.ts';
 import { type BootContext, part } from '../context.ts';
@@ -37,10 +37,10 @@ function wireMetricsFor(ctx: BootContext, logger: Logger): () => void {
   const sampler = startBrowserMemorySampler({
     sessions: () =>
       domain.sessions.listAll().map((session) => {
-        // Keyed by host (spec 13 §3.13): an exclusive host's id is its session's id.
+        // Keyed by host (spec 13 §3.13, §11.7): a template host's sessions share one key.
         const host = session.view?.host;
         return {
-          id: host?.hostId ?? session.id,
+          id: host === undefined ? session.id : hostKey(host),
           ...(host?.browserPid !== undefined && {
             browserPid: () => host.browserPid?.() ?? Promise.resolve(null),
           }),

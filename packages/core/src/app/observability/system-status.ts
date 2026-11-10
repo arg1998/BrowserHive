@@ -51,6 +51,7 @@ export interface SystemStatusSources {
   readonly sessions: {
     serverStatus(): {
       readonly count: number;
+      readonly liveSessions: number;
       readonly limit: number | null;
       readonly driver: string;
       readonly persistenceMode: string;
@@ -192,7 +193,12 @@ export class SystemStatusService {
       port: s.port,
       admin: s.admin,
       auth_mode: s.authMode,
-      capacity: { live: server.count, max: server.limit, max_source: s.capacitySource },
+      capacity: {
+        live: server.liveSessions,
+        browsers: server.count,
+        max: server.limit,
+        max_source: s.capacitySource,
+      },
       open_attention: s.attention?.openCount() ?? 0,
       active_screencasts: s.realtime?.activeScreencasts() ?? 0,
       realtime: { connections: s.realtime?.connections() ?? 0 },

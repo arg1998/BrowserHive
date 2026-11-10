@@ -292,7 +292,7 @@ export const SYSTEM_INFO: z.input<typeof SystemInfo> = {
   port: 9876,
   admin: true,
   auth_mode: 'token',
-  capacity: { live: 0, max: 8, max_source: 'derived' },
+  capacity: { live: 0, browsers: 0, max: 8, max_source: 'derived' },
   open_attention: 0,
   active_screencasts: 0,
   realtime: { connections: 0 },

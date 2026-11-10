@@ -4,9 +4,30 @@ import type { ProcessTreeReader } from '@browserhive/core/runtime';
 import { BROWSER_RSS_SAMPLE_INTERVAL_MS } from '@browserhive/core/runtime';
 import type { EveryFn } from './timers.ts';
 
+/** Key prefix of a template host (a space never occurs in a session id). */
+const TEMPLATE_KEY = 'template ';
+
+/**
+ * The sampler key of a host: the session id for an exclusive host, `template <id>` for a template
+ * host, whose virtual sessions share its process tree (spec 13 §11.7).
+ */
+export function hostKey(host: {
+  readonly kind: 'exclusive' | 'template';
+  readonly hostId: string;
+}): string {
+  return host.kind === 'template' ? `${TEMPLATE_KEY}${host.hostId}` : host.hostId;
+}
+
+/** The metric attributes of a sampler key: `session_id`, or `template_id` for a template host. */
+export function rssAttributes(key: string): Record<string, string> {
+  return key.startsWith(TEMPLATE_KEY)
+    ? { template_id: key.slice(TEMPLATE_KEY.length) }
+    : { session_id: key };
+}
+
 /** A live browser host as the sampler sees it (spec 13 §3.13: keyed by host). */
 export interface SampledSession {
-  /** The host id: an exclusive host's id is its session's id, so `session_id` stays exact today. */
+  /** {@link hostKey}: an exclusive host's session id, or `template <id>`. */
   readonly id: string;
   /** The browser's main pid (cached by the host); absent before launch and in fakes. */
   readonly browserPid?: () => Promise<number | null>;

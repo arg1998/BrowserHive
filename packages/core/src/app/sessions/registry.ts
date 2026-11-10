@@ -86,6 +86,15 @@ export class SessionRegistry {
     return n;
   }
 
+  /** Live sessions, virtual ones included, maintenance ones excluded (operator capacity). */
+  agentLiveCount(): number {
+    let n = 0;
+    for (const s of this.sessions.values()) {
+      if (s.template?.mode !== 'maintenance' && canServeTools(s.state)) n++;
+    }
+    return n;
+  }
+
   /** Sessions tools may drive (`live` or `paused`). */
   liveCount(): number {
     let n = 0;

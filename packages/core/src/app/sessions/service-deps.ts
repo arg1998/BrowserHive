@@ -62,7 +62,10 @@ export interface SessionServiceDeps {
 
 /** Facts for `server_status` and the System page. */
 export interface SessionServerStatus {
+  /** Browser slots in use (exclusive live sessions plus template hosts): what `limit` bounds. */
   readonly count: number;
+  /** Live sessions, virtual ones included and maintenance ones excluded (operator surfaces only). */
+  readonly liveSessions: number;
   readonly limit: number | null;
   readonly driver: 'patchright' | 'playwright';
   readonly persistenceMode: PersistenceMode;

@@ -136,8 +136,8 @@ export const METRIC_DEFINITIONS: readonly MetricDefinition[] = [
     METRIC.BROWSER_RSS_BYTES,
     'gauge',
     'By',
-    ['session_id'],
-    'Browser process-tree RSS by session',
+    ['session_id', 'template_id'],
+    'Browser process-tree RSS by session or template host',
     true,
   ),
   def(

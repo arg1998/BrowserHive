@@ -336,6 +336,7 @@ export class SessionService {
     // Browser slots in use, which `limit` bounds: agents never see template sessions counted (§6.3).
     return {
       count: this.registry.exclusiveLiveCount() + this.hostSlots(),
+      liveSessions: this.registry.agentLiveCount(),
       limit: this.admission.capacity(),
       driver: this.deps.driver.stealthDriverName(),
       persistenceMode: this.deps.config.persistence,

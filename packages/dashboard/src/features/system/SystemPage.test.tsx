@@ -60,7 +60,7 @@ describe('system section mapping', () => {
   it('groups static configuration and flags runtime problems with a fix', () => {
     const s = systemInfo({
       runtime: { ...systemInfo().runtime, chromium: null },
-      capacity: { live: 0, max: 8, max_source: 'config' },
+      capacity: { live: 0, browsers: 0, max: 8, max_source: 'config' },
       allow_evaluate: true,
       vault: { enabled: true, backend: 'bitwarden' },
     });
@@ -88,7 +88,7 @@ describe('system section mapping', () => {
     const noVersion = { ...systemInfo().runtime, chromium: null };
     const idle = systemInfo({
       runtime: noVersion,
-      capacity: { live: 0, max: 8, max_source: 'config' },
+      capacity: { live: 0, browsers: 0, max: 8, max_source: 'config' },
     });
     const running = systemInfo({ runtime: noVersion });
     const row = (s: SystemInfo, health?: unknown) =>
