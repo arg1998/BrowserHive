@@ -32,7 +32,7 @@ export function SiteChip({
 }: {
   readonly site: string;
   readonly state: TemplateHealthState;
-  readonly className?: string;
+  readonly className?: string | undefined;
 }) {
   return (
     <span
@@ -48,10 +48,14 @@ export function SiteChip({
   );
 }
 
-/** A row's sites: up to `max` chips, then "+N more". */
+/**
+ * A row's sites: up to `max` chips, then "+N more". With `wideMax`, a container of at least 80rem
+ * (a wide table) shows that many instead (container query, so the sidebar's width counts).
+ */
 export function SiteChips({
   sites,
   max = 3,
+  wideMax,
   className,
 }: {
   readonly sites: readonly {
@@ -59,16 +63,33 @@ export function SiteChips({
     readonly health_state: TemplateHealthState;
   }[];
   readonly max?: number;
+  readonly wideMax?: number;
   readonly className?: string;
 }) {
-  const shown = sites.slice(0, max);
-  const rest = sites.length - shown.length;
+  const wide = Math.max(wideMax ?? max, max);
+  const shown = sites.slice(0, wide);
+  const rest = sites.length - Math.min(sites.length, max);
+  const restWide = sites.length - shown.length;
   return (
     <span className={cn('flex min-w-0 flex-wrap items-center gap-1', className)}>
-      {shown.map((site) => (
-        <SiteChip key={site.site_id} site={site.site_id} state={site.health_state} />
+      {shown.map((site, index) => (
+        <SiteChip
+          key={site.site_id}
+          site={site.site_id}
+          state={site.health_state}
+          className={index >= max ? 'hidden @min-[80rem]:inline-flex' : undefined}
+        />
       ))}
-      {rest > 0 ? <span className="text-sm text-muted-foreground">+{rest} more</span> : null}
+      {rest > 0 ? (
+        <span className={cn('text-sm text-muted-foreground', wide > max && '@min-[80rem]:hidden')}>
+          +{rest} more
+        </span>
+      ) : null}
+      {wide > max && restWide > 0 ? (
+        <span className="hidden text-sm text-muted-foreground @min-[80rem]:inline">
+          +{restWide} more
+        </span>
+      ) : null}
     </span>
   );
 }

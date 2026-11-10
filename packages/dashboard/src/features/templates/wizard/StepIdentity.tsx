@@ -94,11 +94,7 @@ export function StepIdentity({
         <Field
           label="Browser"
           htmlFor={ids.channel}
-          help={
-            draft.channel === null
-              ? `The server default, ${CHANNEL_LABEL[defaults.channel]}.`
-              : undefined
-          }
+          help="Kept for the template’s life: sites remember the browser an account uses."
         >
           <SimpleSelect
             id={ids.channel}

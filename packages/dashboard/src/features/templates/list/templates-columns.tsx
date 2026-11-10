@@ -107,7 +107,7 @@ export function templateColumns(
       priority: 1,
       grow: true,
       className: 'min-w-[9rem] py-2',
-      cell: (t) => <SiteChips sites={t.sites} />,
+      cell: (t) => <SiteChips sites={t.sites} wideMax={8} />,
     },
     {
       id: 'browser',
