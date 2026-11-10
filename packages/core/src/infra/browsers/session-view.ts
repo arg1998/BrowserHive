@@ -3,23 +3,32 @@
 import type { CDPSession, Page } from 'playwright';
 import { AppError } from '../../kernel/errors/app-error.ts';
 import type {
+  BrowserHost,
   Cookie,
   CookieInput,
   LaunchWarning,
   SessionView,
   StorageStateSource,
 } from '../../ports/browser-driver.ts';
-import type { PlaywrightBrowserHost } from './browser-host.ts';
+import type { HostPageDispatcher } from './page-dispatcher.ts';
+
+/** What the exclusive view needs from its host: the full host plus its attribution dispatcher. */
+export interface ExclusiveViewHost extends BrowserHost {
+  readonly dispatcher: HostPageDispatcher;
+}
 
 /**
- * The one view over an exclusive {@link PlaywrightBrowserHost}. Pages come from the host's
- * attribution dispatcher (whose fallback owner is this session, so every page of the context is
- * this session's); cookies, extra headers and the storage state are context-wide, which is exact
- * for a context nobody else uses.
+ * The one view over an exclusive host (`PlaywrightBrowserHost`, or the test fake). Pages come from
+ * the host's attribution dispatcher (whose fallback owner is this session, so every page of the
+ * context is this session's); cookies, extra headers and the storage state are context-wide, which
+ * is exact for a context nobody else uses. Callers that hold the view through the `SessionView`
+ * port see `host` as a `SessionHost` only.
  */
-export class ExclusiveSessionView implements SessionView {
+export class ExclusiveSessionView<H extends ExclusiveViewHost = ExclusiveViewHost>
+  implements SessionView
+{
   readonly sessionId: string;
-  readonly host: PlaywrightBrowserHost;
+  readonly host: H;
   readonly page: Page;
   private readonly profileDir: string | null;
 
@@ -28,7 +37,7 @@ export class ExclusiveSessionView implements SessionView {
    * @param page The first page.
    * @param userDataDir The managed profile directory of a `persistent` session, else `null`.
    */
-  constructor(host: PlaywrightBrowserHost, page: Page, userDataDir: string | null) {
+  constructor(host: H, page: Page, userDataDir: string | null) {
     this.sessionId = host.hostId;
     this.host = host;
     this.page = page;

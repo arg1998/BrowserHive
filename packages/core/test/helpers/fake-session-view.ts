@@ -1,19 +1,16 @@
 /** @module test/helpers/fake-session-view — FakeBrowserContext, FakeTracingHandle, FakeBrowserHost and FakeSessionView: an in-memory exclusive host and its one view, with crash injection (spec 09 §4, 13 §3.13). */
 
-import type { Browser, BrowserContext, CDPSession, Page } from 'playwright';
+import type { Browser, BrowserContext, Page } from 'playwright';
 import { sessionOwner } from '../../src/infra/browsers/page-attribution.ts';
 import { HostPageDispatcher } from '../../src/infra/browsers/page-dispatcher.ts';
+import { ExclusiveSessionView } from '../../src/infra/browsers/session-view.ts';
 import { createCollectingLogger } from '../../src/infra/logging/collecting-logger.ts';
 import type {
   AppliedIdentity,
   BrowserHost,
-  Cookie,
-  CookieInput,
   EngineCapabilities,
   LaunchWarning,
   SessionBrowserInfo,
-  SessionView,
-  StorageStateSource,
   TracingHandle,
 } from '../../src/ports/browser-driver.ts';
 import { FakeClock } from './fake-clock.ts';
@@ -188,6 +185,8 @@ export class FakeBrowserHost implements BrowserHost {
   readonly warnings: readonly LaunchWarning[];
   readonly tracing: FakeTracingHandle | null;
   readonly dispatcher: HostPageDispatcher;
+  /** The context's first page. */
+  readonly firstPage: FakePage;
   /** Pages `ensureIdentityForPage` was called with. */
   readonly identityPages: Page[] = [];
   readonly closes: RecordedClose[] = [];
@@ -217,6 +216,10 @@ export class FakeBrowserHost implements BrowserHost {
       clock: new FakeClock(),
       logger: createCollectingLogger(),
     });
+    // The first page, adopted before any listener exists (as `PlaywrightBrowserHost` adopts
+    // `context.pages()` at construction).
+    this.firstPage = this.fakeContext.addPage();
+    this.dispatcher.adopt(asPage(this.firstPage));
     this.fakeContext.on('page', (page) => this.dispatcher.adopt(asPageEvent(page)));
   }
 
@@ -250,29 +253,25 @@ function asPageEvent(payload: unknown): Page {
 }
 
 /**
- * In-memory `SessionView` over its own {@link FakeBrowserHost}. The test conveniences the old
- * `FakeSessionView` had (`fakeContext`, `firstPage`, `tracing`, `closes`, `closed`,
+ * The real {@link ExclusiveSessionView} over its own {@link FakeBrowserHost}, so ownership checks
+ * (`owns`, `newCDPSession`) and delegation are the production code. The test conveniences the
+ * former `FakeSessionHandle` had (`fakeContext`, `firstPage`, `tracing`, `closes`, `closed`,
  * `identityPages`, `crash()`) forward to the host so suites read the same.
  */
-export class FakeSessionView implements SessionView {
-  readonly sessionId: string;
-  readonly host: FakeBrowserHost;
-  readonly firstPage: FakePage;
-  readonly page: Page;
-  private readonly profileDir: string | null;
-
+export class FakeSessionView extends ExclusiveSessionView<FakeBrowserHost> {
   constructor(sessionId: string, options: FakeSessionViewOptions = {}) {
-    this.sessionId = sessionId;
-    this.host = new FakeBrowserHost(sessionId, options);
-    this.firstPage = this.host.fakeContext.addPage();
-    this.page = asPage(this.firstPage);
-    this.host.dispatcher.adopt(this.page);
-    this.profileDir = options.userDataDir ?? null;
+    const host = new FakeBrowserHost(sessionId, options);
+    super(host, asPage(host.firstPage), options.userDataDir ?? null);
   }
 
   /** The host's fake context. */
   get fakeContext(): FakeBrowserContext {
     return this.host.fakeContext;
+  }
+
+  /** The context's first page as a fake. */
+  get firstPage(): FakePage {
+    return this.host.firstPage;
   }
 
   /** The host's tracing handle. */
@@ -298,55 +297,5 @@ export class FakeSessionView implements SessionView {
   /** Fires the host's crash listeners. */
   crash(reason?: string): void {
     this.host.crash(reason);
-  }
-
-  pages(): readonly Page[] {
-    return this.host.dispatcher.pagesOf(this.sessionId);
-  }
-
-  owns(page: Page): boolean {
-    const owner = this.host.dispatcher.ownerOf(page);
-    return owner?.kind === 'session' && owner.sessionId === this.sessionId;
-  }
-
-  onPage(listener: (page: Page) => void): () => void {
-    return this.host.dispatcher.onAttributed(this.sessionId, listener);
-  }
-
-  newPage(): Promise<Page> {
-    return this.host.context.newPage();
-  }
-
-  cookies(urls?: readonly string[]): Promise<Cookie[]> {
-    const context = this.host.context;
-    return urls !== undefined ? context.cookies(urls) : context.cookies();
-  }
-
-  addCookies(cookies: readonly CookieInput[]): Promise<void> {
-    return this.host.context.addCookies(cookies);
-  }
-
-  setExtraHTTPHeaders(headers: Record<string, string>): Promise<void> {
-    return this.host.context.setExtraHTTPHeaders(headers);
-  }
-
-  storageStateSource(): StorageStateSource {
-    return this.host.context;
-  }
-
-  userDataDir(): string | null {
-    return this.profileDir;
-  }
-
-  newCDPSession(page: Page): Promise<CDPSession> {
-    return this.host.context.newCDPSession(page);
-  }
-
-  onCrash(listener: (reason: string) => void): () => void {
-    return this.host.onCrash(listener);
-  }
-
-  close(deadlineMs: number, signal?: AbortSignal): Promise<readonly LaunchWarning[]> {
-    return this.host.close(deadlineMs, signal);
   }
 }

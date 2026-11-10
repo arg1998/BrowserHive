@@ -175,7 +175,7 @@ export {
   type SandboxUnavailableFactory,
   type SandboxVerdict,
 } from './sandbox-policy.ts';
-export { ExclusiveSessionView } from './session-view.ts';
+export { ExclusiveSessionView, type ExclusiveViewHost } from './session-view.ts';
 export {
   archFor,
   type CoherentIdentity,

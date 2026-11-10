@@ -139,9 +139,9 @@ export function useDriverFixtures(): { state: IntegrationState } {
           },
         }),
       };
-      const view = await state.driver.launch(spec);
+      const { view, host } = await state.driver.launch(spec);
       state.sessions.push(view);
-      return { handle: view.host, view, page: view.page, geo: resolved?.identity.geo ?? null };
+      return { handle: host, view, page: view.page, geo: resolved?.identity.geo ?? null };
     };
   });
 

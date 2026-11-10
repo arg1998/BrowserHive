@@ -9,9 +9,9 @@ import type {
   AppliedIdentity,
   BrowserDriver,
   EngineCapabilities,
+  LaunchedSession,
   LaunchSpec,
   LaunchWarning,
-  SessionView,
 } from '../../ports/browser-driver.ts';
 import type { Clock } from '../../ports/clock.ts';
 import type { Logger } from '../../ports/logger.ts';
@@ -124,7 +124,7 @@ export class PlaywrightBrowserDriver implements BrowserDriver {
     return this.resolver.stealthDriverName(this.mode);
   }
 
-  launch(spec: LaunchSpec, signal?: AbortSignal): Promise<SessionView> {
+  launch(spec: LaunchSpec, signal?: AbortSignal): Promise<LaunchedSession> {
     const resolved = spec.stealth
       ? this.resolver.resolveStealth(spec.stealthDriver)
       : { browserType: this.resolver.stock(), driver: 'playwright' as const };
@@ -147,7 +147,7 @@ export class PlaywrightBrowserDriver implements BrowserDriver {
     driver: 'patchright' | 'playwright',
     spec: LaunchSpec,
     signal: AbortSignal | undefined,
-  ): Promise<SessionView> {
+  ): Promise<LaunchedSession> {
     const log = this.logger.child({ sessionId: spec.sessionId });
     const warnings: LaunchWarning[] = [];
     const kwargs = launchKwargsForChannel(spec.channel, {
@@ -376,7 +376,7 @@ export class PlaywrightBrowserDriver implements BrowserDriver {
     });
     // An exclusive host has exactly one view (spec 13 §3.13).
     const userData = spec.persistenceMode === 'persistent' ? (userDataDir ?? null) : null;
-    return new ExclusiveSessionView(host, page, userData);
+    return { view: new ExclusiveSessionView(host, page, userData), host };
   }
 }
 

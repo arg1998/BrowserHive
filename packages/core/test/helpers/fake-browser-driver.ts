@@ -1,6 +1,6 @@
 /** @module test/helpers/fake-browser-driver — FakeBrowserDriver: records LaunchSpecs, returns a FakeSessionView per launch; fail / hang / crash modes for pipeline and deadline tests (spec 09 §4). */
 
-import type { BrowserDriver, LaunchSpec, SessionView } from '../../src/ports/browser-driver.ts';
+import type { BrowserDriver, LaunchedSession, LaunchSpec } from '../../src/ports/browser-driver.ts';
 import { FakeSessionView, type FakeSessionViewOptions } from './fake-session-view.ts';
 
 /** A launch parked by `hang()`; `release()` lets it complete, `fail(err)` rejects it. */
@@ -69,20 +69,20 @@ export class FakeBrowserDriver implements BrowserDriver {
     for (const p of [...this.pending]) p.release();
   }
 
-  launch(spec: LaunchSpec, _signal?: AbortSignal): Promise<SessionView> {
+  launch(spec: LaunchSpec, _signal?: AbortSignal): Promise<LaunchedSession> {
     this.launches.push(spec);
     const failure = this.permanentFailure ?? this.nextFailure;
     if (failure !== undefined) {
       this.nextFailure = undefined;
       return Promise.reject(failure);
     }
-    if (!this.hanging) return Promise.resolve(this.build(spec));
-    return new Promise<SessionView>((resolve, reject) => {
+    if (!this.hanging) return Promise.resolve(launched(this.build(spec)));
+    return new Promise<LaunchedSession>((resolve, reject) => {
       const entry: PendingLaunch = {
         spec,
         release: () => {
           this.forget(entry);
-          resolve(this.build(spec));
+          resolve(launched(this.build(spec)));
         },
         fail: (error) => {
           this.forget(entry);
@@ -110,4 +110,9 @@ export class FakeBrowserDriver implements BrowserDriver {
     for (const hook of this.launchHooks) hook(view, spec);
     return view;
   }
+}
+
+/** A fake view and its host, as the driver port returns them. */
+function launched(view: FakeSessionView): LaunchedSession {
+  return { view, host: view.host };
 }

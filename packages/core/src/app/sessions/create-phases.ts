@@ -12,6 +12,8 @@ import { raceSignal } from '../../kernel/deadline.ts';
 import { AppError } from '../../kernel/errors/app-error.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type {
+  BrowserHost,
+  LaunchedSession,
   LaunchIdentity,
   LaunchSpec,
   ProxySpec,
@@ -20,7 +22,7 @@ import type {
 import type { Logger } from '../../ports/logger.ts';
 import type { PipelineDeps, PipelineHooks } from './pipeline-deps.ts';
 import { prepareSessionDirs, removeSessionDir, type SessionDirs } from './profile-dir.ts';
-import { guardPageScheme } from './scheme-guard.ts';
+import { guardPageScheme, type SchemeGuardTarget } from './scheme-guard.ts';
 
 /** Warning codes the driver emits that later phases adopt (so each phase reports its own findings). */
 const TRACING_CODES: ReadonlySet<string> = new Set(['TRACE_START_FAILED']);
@@ -36,6 +38,8 @@ export interface PipelineContext {
   proxy: ProxySpec | null;
   identity?: LaunchIdentity;
   view?: SessionView;
+  /** The full host, for `installPolicies` only; the session keeps the view. */
+  host?: BrowserHost;
 }
 
 /** Registers a compensator that never throws (failures are logged, the unwind continues). */
@@ -198,8 +202,9 @@ export function buildPhases(
           partsDir: dirs.traceParts,
         },
       };
-      const view = await launchRaced(deps, spec, signal, deadlineMs);
+      const { view, host } = await launchRaced(deps, spec, signal, deadlineMs);
       ctx.view = view;
+      ctx.host = host;
       compensate(stack, log, 'launch', async () => {
         await view.close(deps.closeTimeoutMs);
       });
@@ -218,9 +223,9 @@ export function buildPhases(
     },
     installPolicies: async (ctx) => {
       const session = need(ctx.session, 'session');
-      const view = need(ctx.view, 'view');
+      const host = need(ctx.host, 'host');
       if (deps.policies === undefined) return;
-      const warnings = await deps.policies.install(view.host, { sessionId: session.id });
+      const warnings = await deps.policies.install(host, { sessionId: session.id });
       for (const warning of warnings) hooks.warn(session, warningFromLaunch(session.id, warning));
     },
     startTracing: async (ctx) => {
@@ -252,10 +257,11 @@ export function buildPhases(
       const view = need(ctx.view, 'view');
       // Every page of the session, the first one, tool-opened tabs and site-opened popups, is
       // watched for main-frame commits of non-web schemes (spec 13 T0d).
-      const guard = {
+      const guard: SchemeGuardTarget = {
         sessionId: session.id,
         tabs: session.tabs,
         logger: deps.logger.child({ module: 'sessions.scheme-guard' }),
+        newCDPSession: (page) => view.newCDPSession(page),
       };
       session.tabs.add(view.page);
       guardPageScheme(view.page, guard);
@@ -293,13 +299,13 @@ async function launchRaced(
   spec: LaunchSpec,
   signal: AbortSignal,
   deadlineMs: number,
-): Promise<SessionView> {
+): Promise<LaunchedSession> {
   let settled = false;
   const launching = deps.driver.launch(spec, signal);
   launching
-    .then((view) => {
+    .then((launched) => {
       if (!settled) return;
-      void view.close(deps.closeTimeoutMs).catch(() => undefined);
+      void launched.view.close(deps.closeTimeoutMs).catch(() => undefined);
     })
     .catch(() => undefined);
   try {
