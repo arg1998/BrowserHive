@@ -248,17 +248,17 @@ jobs:
         shell: bash
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then printf 'BROWSERHIVE_DATA_DIR=%s\\bh\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"; fi
-      # Linux runs the suites on a virtual display, so template hosts run headed as they do by
-      # default (spec 13 §3.11, spec 06); xdotool reads the input focus the launches must not move.
-      # macOS and Windows run headless templates.
+      - if: env.RUN == 'true'
+        run: bun run test:integration
+      # Linux also runs the template suite on a virtual display, so template hosts run headed as
+      # they do by default (spec 13 §3.11, spec 06); xdotool reads the input focus the launches must
+      # not move. Only that suite: the other suites keep the display-less environment they pin.
       - if: env.RUN == 'true' && runner.os == 'Linux'
         run: sudo apt-get install -y --no-install-recommends xvfb xdotool
       - if: env.RUN == 'true' && runner.os == 'Linux'
         env:
           BROWSERHIVE_TEMPLATES_HEADED: '1'
-        run: xvfb-run -a bun run test:integration
-      - if: env.RUN == 'true' && runner.os != 'Linux'
-        run: bun run test:integration
+        run: xvfb-run -a bun run test:integration packages/core/test/integration/templates-live.test.ts
 
   ntfy:
     # The ntfy adapter against a real ntfy server (binwiederhier/ntfy): publish, read back, upload

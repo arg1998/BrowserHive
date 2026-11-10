@@ -40,13 +40,13 @@ for (const driver of DRIVERS) {
   describe(`template host (${driver}${HEADED ? ', headed' : ''})`, () => {
     it('three sessions get their own background windows and see only their own pages', async () => {
       world = await templateWorld(driver);
+      // The first launch starts the host (its sentinel is the browser's first window); every
+      // session window after that opens in the background and never moves the focus (no-op headless).
+      const a = await world.launch('alpha');
       const before = focusedWindow();
-      const [a, b, c] = [
-        await world.launch('alpha'),
-        await world.launch('bravo'),
-        await world.launch('charlie'),
-      ];
-      // Launching windows in the background never moves the operator's focus (no-op headless).
+      const b = await world.launch('bravo');
+      expect(focusedWindow()).toBe(before);
+      const c = await world.launch('charlie');
       expect(focusedWindow()).toBe(before);
       const host = world.host();
       expect(world.hosts).toHaveLength(1);
