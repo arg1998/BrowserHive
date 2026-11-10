@@ -128,7 +128,10 @@ describe('request guard (real Chromium)', () => {
       const shown = await page.goto(state.fixture.url('/logout'));
       expect(shown?.status()).toBe(200);
       await page.click('#sign-out', { noWaitAfter: true });
-      await waitFor(() => hits.list().length > 0);
+      // The aborted form POST commits Chromium's error page; wait for it so it cannot interrupt
+      // the next `goto` (seen on macOS CI).
+      // (`waitForURL` rejects with the navigation's own error, so poll the committed URL.)
+      expect(await waitFor(() => page.url().startsWith('chrome-error:'))).toBe(true);
       await page.waitForLoadState('load').catch(() => undefined);
       expect(seen(state.fixture, 'POST', '/logout')).toBe(0);
       expect(await page.locator('#signed-out').count()).toBe(0);
