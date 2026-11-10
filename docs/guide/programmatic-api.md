@@ -41,6 +41,22 @@ Extra fields:
 
 `port: 0` picks a free port (programmatic API only), which is convenient in tests; read the real URL from `server.url` after `listen()`.
 
+## Session templates
+
+[Session templates](templates.md) are on by default. The template keys are options like any other:
+
+```ts
+const server = await createServer({
+  admin: true,
+  auth: 'token',
+  templates: true,
+  templateHostIdleTimeout: '30m',
+  templateMaxPagesPerHost: 60,
+});
+```
+
+Templates themselves are not options: you create, sign in, finish and delete them over the REST API of the running server (`${server.url}/api/v1/templates`, with an operator token holding the `templates:*` scopes), as in [creating a template over the REST API](templates.md#over-the-rest-api). Signing in opens a window on the machine running the server, so a headed template needs a display there ([Displays](templates.md#displays)). Agents use templates over MCP with `list_templates` and `launch_session`'s `template`.
+
 ## Errors
 
 `createServer` resolves and validates the configuration eagerly and throws a configuration error with the same message the CLI would print (unknown key, invalid value, conflicting settings, insecure bind). `listen()` rejects with a typed error such as [`PORT_IN_USE`](../reference/errors.md#PORT_IN_USE) or [`DB_NEWER_THAN_BINARY`](../reference/errors.md#DB_NEWER_THAN_BINARY), after undoing whatever it had started.

@@ -170,6 +170,20 @@ Secrets stay hidden. For `authTokens` and `otelHeaders`, BrowserHive shows the v
 
 `maxSessions` defaults to `min(floor(RAM in GiB / 1.5), 20)`. `trace` defaults to the value of `admin`, and `fingerprint` defaults to true only when `stealth=max`.
 
+## Session templates
+
+These keys apply to every [session template](templates.md). What belongs to one template (its sites, identity, proxy, access and cap) is set when you create it, not in configuration.
+
+| Key | Default | Purpose |
+|---|---|---|
+| [`templates`](../reference/configuration.md#templates) | `true` | `false` turns templates off: `list_templates` answers `TOOL_NOT_AVAILABLE`, a launch with `template` answers `TEMPLATE_NOT_FOUND`, and no template browser starts |
+| [`templateHostIdleTimeout`](../reference/configuration.md#templateHostIdleTimeout) | `1h` | stop a template's browser after this long with no session; `0` = never |
+| [`templateMaxPagesPerHost`](../reference/configuration.md#templateMaxPagesPerHost) | `40` | agent pages per template browser (2 to 200); each session may hold `max(2, floor(value / cap))` |
+| [`templateRecycleAfter`](../reference/configuration.md#templateRecycleAfter) | `24h` | restart a template's browser after this age (at least `1h`), once its sessions finish |
+| [`templateDrainTimeout`](../reference/configuration.md#templateDrainTimeout) | `15m` | how long such a restart waits for sessions before closing them (`1m` to `2h`) |
+
+A template's browser takes one `maxSessions` slot however many sessions it serves.
+
 ## Environment-only deployments
 
 For a service manager (systemd `EnvironmentFile`, `docker --env-file`):
@@ -191,7 +205,7 @@ Standard `OTEL_*` variables are honoured below `BROWSERHIVE_*` ones; see [the re
 
 ## Per-session settings are tool arguments
 
-An agent can override some defaults for one session through `launch_session` arguments: `persistence_mode`, `headless`, `channel`, `stealth`, `fingerprint`, `humanize`, `disable_evaluate`, `vault_enabled`, `context_options` and `launch_options`. These are not configuration and never appear in `config show`. See [`launch_session`](../reference/tools.md#launch_session).
+An agent can override some defaults for one session through `launch_session` arguments: `persistence_mode`, `headless`, `channel`, `stealth`, `fingerprint`, `humanize`, `disable_evaluate`, `vault_enabled`, `context_options` and `launch_options`. These are not configuration and never appear in `config show`. See [`launch_session`](../reference/tools.md#launch_session). A session launched from a template takes most of these from the template instead ([options a template fixes](templates.md#options-a-template-fixes)).
 
 ## Runtime changes
 

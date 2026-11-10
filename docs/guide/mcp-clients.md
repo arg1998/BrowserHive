@@ -281,9 +281,30 @@ Each connection's harness, model, workspace, client name and version, protocol v
 
 A W3C `traceparent` in a tool call's `_meta` becomes the parent of the tool span when [telemetry](telemetry.md) is on.
 
+## Session templates
+
+A [session template](templates.md) is a browser the operator signed in to sites once. An agent finds the templates it may use with `list_templates` and launches a signed-in session with `launch_session` and `template`:
+
+```jsonc
+list_templates({})
+// → { "templates": [{ "name": "job-hunt", "display_name": "Job hunt", "description": "…",
+//      "sites": [{ "site": "linkedin.com", "title": "linkedin.com", "status": "signed_in", "checked_at": 1762770000000 }],
+//      "availability": "available", "sealed": true }] }
+launch_session({ "slug": "jobs", "template": "job-hunt" })
+// → { "session_id": "jobs-a1b2c3d4", "template": { "name": "job-hunt", "sites": [...] }, ... }
+```
+
+- [`list_templates`](../reference/tools.md#list_templates) lists only the templates the calling principal and harness may launch, with each site's status and an `availability` of `available`, `busy`, `needs_login` or `unavailable`.
+- [`launch_session`](../reference/tools.md#launch_session) takes the template's `name` as `template`; `slug` is still required. Arguments that would change the browser or identity (`launch_options`, most `context_options`, `restore_profile`, a `persistence_mode` other than `memory`, a different `stealth` or `fingerprint`) are refused with `INVALID_ARGUMENTS`; `channel`, `headless`, `incognito` and `vault_enabled` are ignored. See [options a template fixes](templates.md#options-a-template-fixes).
+- An unknown name, a template the agent may not use and one still being set up all answer [`TEMPLATE_NOT_FOUND`](../reference/errors.md#TEMPLATE_NOT_FOUND).
+- Sessions are sealed by default: no cookie values, no `evaluate`, no `set_cookies`, no `save_storage_state`, no vault fills. See [sealing](templates.md#sealing).
+
+Agents are told what a template session can and cannot do, never how it works. To let several agents use a template with separate rights, give each its own token and list the principals in the template's access rule.
+
 ## What differs under stdio
 
 - `request_attention` and `get_attention_result` stay listed but return [`ATTENTION_REQUIRES_HTTP`](../reference/errors.md#ATTENTION_REQUIRES_HTTP).
+- Templates can be launched, but not created: creating and signing in needs `--admin`, which needs HTTP. A stdio agent usually runs commands as your user, which sealing does not protect against; see [Security](security.md#session-templates).
 - The vault works, except entries that require a dashboard confirmation, which are denied automatically.
 - `--admin` and `--auth token` are rejected at startup.
 - Every caller is the principal `local`.

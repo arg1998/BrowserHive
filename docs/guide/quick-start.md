@@ -47,7 +47,30 @@ screenshot({ "session_id": "shop-a1b2c3d4" })
 close_session({ "session_id": "shop-a1b2c3d4" })
 ```
 
-Every session is its own Chromium process with its own cookies, storage, IndexedDB and service workers. The full catalog is in the [tool reference](../reference/tools.md).
+Every session is its own Chromium process with its own cookies, storage, IndexedDB and service workers (sessions launched from a [template](#templates-in-three-steps) are the exception). The full catalog is in the [tool reference](../reference/tools.md).
+
+## Templates in three steps
+
+A [session template](templates.md) lets agents start sessions that are already signed in to your sites, without ever seeing your password or the cookie values. With the server running with `--admin`, on a machine with a desktop:
+
+1. **Create it and sign in.** This opens a window on the machine running BrowserHive, with one tab per site:
+
+   ```bash
+   browserhive templates create job-hunt --sites linkedin.com,indeed.com --allPrincipals
+   ```
+
+   Sign in to each site in its tab. Type rather than paste.
+
+2. **Press Enter** in the terminal. BrowserHive notes which sites you signed in to, offers to remove sign-ins to other sites you visited, closes the window and marks the template ready.
+
+3. **Launch from your agent:**
+
+   ```jsonc
+   list_templates({})                                          // → job-hunt, with its sites
+   launch_session({ "slug": "jobs", "template": "job-hunt" })  // → { "session_id": "jobs-a1b2c3d4", ... }, signed in
+   ```
+
+Every session of the template shares one browser, each in its own window. On a server without a desktop, see [Displays](templates.md#displays).
 
 ## Common setups
 
@@ -60,6 +83,7 @@ Every session is its own Chromium process with its own cookies, storage, Indexed
 | Log in without the model seeing the password | `bw login`, then `browserhive --admin --vault bitwarden`; paste a token from `bw unlock --raw` on the Vault page | see [Vault](vault.md) |
 | Replay a run | dashboard → Sessions → a session → Files → Open trace viewer | Playwright Trace Viewer with DOM snapshots, network and console |
 | Keep agents off some sites | `browserhive --admin --blocklist ./blocklist.txt --blocklistWatch` | refused navigations, visible on the Blocklist page |
+| Agents signed in to your sites | `browserhive --admin`, then `browserhive templates create <name> --sites <site,…> --allPrincipals` | see [Session templates](templates.md) |
 | Human in the loop | `browserhive --admin` and the agent calls `request_attention` | see [Human takeover](attention.md) |
 | Expose on the LAN | `browserhive --host 0.0.0.0 --auth token --admin` | bearer tokens required; see [Security](security.md) |
 | Export telemetry | `browserhive --admin --otel --otelEndpoint http://127.0.0.1:4318` | see [Telemetry](telemetry.md) |
