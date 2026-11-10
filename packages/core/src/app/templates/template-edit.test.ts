@@ -192,10 +192,15 @@ describe('disable and enable', () => {
     const off = await edit.setEnabled(TEMPLATE_ID, false, 'admin');
     expect(off.template.status).toBe('disabled');
     expect(off.closed_sessions.sort()).toEqual(['alice-aaaaaaaa', 'bob-bbbbbbbb']);
+    // No version and no site ever checked: back to setting up.
+    expect((await edit.setEnabled(TEMPLATE_ID, true, 'admin')).template.status).toBe('recording');
+    await edit.setEnabled(TEMPLATE_ID, false, 'admin');
     await repos.templates.setStateFacts(TEMPLATE_ID, { currentVersion: 1 });
     const on = await edit.setEnabled(TEMPLATE_ID, true, 'admin');
     expect(on.template.status).toBe('ready');
     expect(repos.operatorActions.rows.map((r) => r.action)).toEqual([
+      'template.disable',
+      'template.enable',
       'template.disable',
       'template.enable',
     ]);

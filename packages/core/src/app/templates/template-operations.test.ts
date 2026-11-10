@@ -127,6 +127,14 @@ describe('restore (spec 13 §3.12)', () => {
     );
   });
 
+  it('refuses to restore a disabled template', async () => {
+    await state.saveVersion(TEMPLATE_ID, { reason: 'manual', by: 'a' });
+    await repos.templates.update(TEMPLATE_ID, { status: 'disabled' });
+    expect(await code(operations.restore(TEMPLATE_ID, 1, { forceClose: true, by: 'a' }))).toBe(
+      'TEMPLATE_DISABLED',
+    );
+  });
+
   it('reports a failure on the operation and releases the hold', async () => {
     await state.saveVersion(TEMPLATE_ID, { reason: 'manual', by: 'a' });
     ops.host = null;

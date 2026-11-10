@@ -232,7 +232,7 @@ export async function runTemplatesSeed(
   if (typeof template === 'number') return template;
   const confirmed = await confirmByName(context, { name, command: 'seed', yes: invocation.yes }, [
     `This replaces the sign-ins of template '${name}' (${template.status}) with ${invocation.file}: ${state.cookies} cookie(s), ${state.origins} origin(s).`,
-    "Its browser restarts with the new state, and it becomes the template's newest version.",
+    "Its live sessions close now, its browser restarts with the new state, and it becomes the template's newest version.",
   ]);
   if (confirmed !== true) return confirmed;
   return seedTemplate(

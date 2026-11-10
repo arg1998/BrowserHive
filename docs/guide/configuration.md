@@ -180,9 +180,16 @@ These keys apply to every [session template](templates.md). What belongs to one 
 | [`templateHostIdleTimeout`](../reference/configuration.md#templateHostIdleTimeout) | `1h` | stop a template's browser after this long with no session; `0` = never |
 | [`templateMaxPagesPerHost`](../reference/configuration.md#templateMaxPagesPerHost) | `40` | agent pages per template browser (2 to 200); each session may hold `max(2, floor(value / cap))` |
 | [`templateRecycleAfter`](../reference/configuration.md#templateRecycleAfter) | `24h` | restart a template's browser after this age (at least `1h`), once its sessions finish |
-| [`templateDrainTimeout`](../reference/configuration.md#templateDrainTimeout) | `15m` | how long such a restart waits for sessions before closing them (`1m` to `2h`) |
+| [`templateDrainTimeout`](../reference/configuration.md#templateDrainTimeout) | `15m` | how long such a restart, or a restore, waits for sessions before closing them (`1m` to `2h`) |
+| [`templateRecycleRss`](../reference/configuration.md#templateRecycleRss) | `3GiB` | a template browser's memory limit (at least `512MiB`): above it the largest page of the heaviest session is closed, and if that is not enough, the browser is restarted |
+| [`templateCheckpointInterval`](../reference/configuration.md#templateCheckpointInterval) | `15m` | how often a running template browser's encrypted checkpoint is rewritten (at least `1m`) |
+| [`templateVersionsKeep`](../reference/configuration.md#templateVersionsKeep) | `10` | versions kept per template (1 to 100), besides pinned versions and the last one with every site signed in |
+| [`templateKey`](../reference/configuration.md#templateKey) | unset | the key that encrypts checkpoints and versions: base64 of exactly 32 bytes; unset = `<data-dir>/admin/template.key` |
+| [`templateKeyPrevious`](../reference/configuration.md#templateKeyPrevious) | unset | the previous key while you rotate it: read, never written with |
 
 A template's browser takes one `maxSessions` slot however many sessions it serves.
+
+`templateKey` and `templateKeyPrevious` are secrets. Set them in the environment (`BROWSERHIVE_TEMPLATE_KEY`, `BROWSERHIVE_TEMPLATE_KEY_PREVIOUS`) or through an `{env:…}` [reference](#references) in the config file. `--templateKey` on the command line works but logs a warning, because other users of the machine can read process arguments. Generate a key with `openssl rand -base64 32`, and keep it apart from your backups of the data directory: see [Backups and the template key](templates.md#backups-and-the-template-key) and [Rotating the key](templates.md#rotating-the-key).
 
 ## Environment-only deployments
 

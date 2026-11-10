@@ -177,7 +177,7 @@ async function checkKey(
     );
   }
   if (warnings.length > 0) return result(name, 'warn', warnings.join('; '));
-  if (current === null) return result(name, 'ok', 'no key yet; created at the first checkpoint');
+  if (current === null) return result(name, 'ok', 'no key yet; created at the next server start');
   return result(name, 'ok', `from ${source} · ${files.length} file(s) on it`);
 }
 

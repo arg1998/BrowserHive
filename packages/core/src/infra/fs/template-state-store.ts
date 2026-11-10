@@ -53,7 +53,10 @@ export function unreadable(
 export async function writeAtomic(path: string, bytes: Uint8Array): Promise<void> {
   const tmp = `${path}.tmp`;
   try {
-    const handle = await open(tmp, 'w', 0o600);
+    // A stale `.tmp` (an interrupted write) is removed first, so the new file is created with 0600
+    // rather than inheriting the old file's mode.
+    await rm(tmp, { force: true });
+    const handle = await open(tmp, 'wx', 0o600);
     try {
       await handle.writeFile(bytes);
       await handle.sync();

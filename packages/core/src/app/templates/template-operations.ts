@@ -79,7 +79,8 @@ export class TemplateOperations {
 
   /**
    * `POST /templates/{id}/versions/{version}/restore` (spec 13 §3.12). The version must exist and
-   * be readable now (`TEMPLATE_VERSION_NOT_FOUND`, `TEMPLATE_VERSION_UNREADABLE`); the decrypted
+   * be readable now (`TEMPLATE_VERSION_NOT_FOUND`, `TEMPLATE_VERSION_UNREADABLE`) and the template not
+   * disabled (`TEMPLATE_DISABLED`); the decrypted
    * state stays in memory.
    */
   async restore(
@@ -88,6 +89,7 @@ export class TemplateOperations {
     options: { readonly forceClose: boolean; readonly by: string },
   ): Promise<{ readonly operation_id: string }> {
     const template = await this.#template(templateId);
+    if (template.status === 'disabled') throw disabled(template.name);
     const state = await this.#deps.state.read(templateId, slot);
     const restoredFrom = slot === 'latest' ? 0 : slot;
     return await this.#start(template, 'restore', options.by, {

@@ -114,7 +114,7 @@ export class TemplateEditService {
 
   /**
    * `POST /templates/{id}/disable|enable`. Disabling closes every live session; enabling returns
-   * the template to `ready` (or `recording` when it never got a version).
+   * the template to `ready` (or `recording` when it has no version and no site was ever checked).
    */
   async setEnabled(
     templateId: string,
@@ -125,7 +125,7 @@ export class TemplateEditService {
     const now = this.#deps.clock.now();
     const target = enabled
       ? template.status === 'disabled'
-        ? template.currentVersion === null
+        ? template.currentVersion === null && sites.every((site) => site.health.state === 'unknown')
           ? 'recording'
           : 'ready'
         : template.status
