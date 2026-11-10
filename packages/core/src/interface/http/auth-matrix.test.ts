@@ -241,6 +241,30 @@ describe('auth matrix: bearer principals', () => {
     expect((await kit.request('DELETE', path, { headers: writer })).status).toBe(200);
   });
 
+  it('a token whose stored scopes are all unknown holds none (never the full set)', async () => {
+    const kit = await createHttpKit();
+    const cookie = await kit.login();
+    const created = await kit.request('POST', '/api/v1/auth/tokens', {
+      cookie,
+      body: { owner_kind: 'operator', display: 'from-newer', scopes: ['system:read'] },
+    });
+    const { token, credential_id } = (await created.json()) as {
+      token: string;
+      credential_id: string;
+    };
+    // As a binary would read a token issued by a newer release with only scopes it does not know.
+    const table = kit.authKit.repos.tables.credentials;
+    const stored = table.get(credential_id);
+    if (stored === undefined) throw new Error('credential not stored');
+    table.set(credential_id, { ...stored, scopes: ['no:such-scope'] });
+    const bearer = { authorization: `Bearer ${token}` };
+    const me = await kit.request('GET', '/api/v1/auth/me', { headers: bearer });
+    expect(((await me.json()) as { principal: { scopes: string[] } }).principal.scopes).toEqual([]);
+    expect((await kit.request('GET', '/api/v1/system', { headers: bearer })).status).toBe(403);
+    expect((await kit.request('GET', '/api/v1/auth/tokens', { headers: bearer })).status).toBe(403);
+    expect((await kit.request('POST', '/mcp', { headers: bearer })).status).toBe(403);
+  });
+
   it('a present-but-invalid bearer is 401, never anonymous', async () => {
     const kit = await createHttpKit();
     const response = await kit.request('GET', '/api/v1/openapi.json', {});

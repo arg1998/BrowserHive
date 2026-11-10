@@ -24,15 +24,19 @@ import {
 } from './codec.ts';
 
 /**
- * The session's template, or `null` for an exclusive session. `template_mode` is an open set in SQL
- * (spec 13 §16): a value this binary does not know reads as `maintenance`, which refuses agents.
+ * The session's template, or `null` for an exclusive session (every template column `NULL`). Any
+ * template column set makes it a template session, so a partial row fails closed: `template_mode`
+ * is an open set in SQL (spec 13 §16) and a missing or unknown mode reads as `maintenance`, which
+ * refuses agents.
  */
 function templateFromRow(row: Selectable<Sessions>): SessionTemplateRecord | null {
-  if (row.template_name === null) return null;
+  if (row.template_name === null && row.template_mode === null && row.template_id === null) {
+    return null;
+  }
   const mode = TEMPLATE_MODES.find((m) => m === row.template_mode) ?? 'maintenance';
   return {
     templateId: row.template_id,
-    name: row.template_name,
+    name: row.template_name ?? '',
     version: row.template_version,
     mode,
   };

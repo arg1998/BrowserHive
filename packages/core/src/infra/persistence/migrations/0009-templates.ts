@@ -13,7 +13,8 @@ import type { Migration } from './migration.ts';
  * issued as "every scope"; without a rewrite it would no longer hold every operator scope and would
  * lose the account routes (`hasFullOperatorAccess`). Migration v8 rewrote the ones that existed when
  * it ran; a token issued later with that explicit list is rewritten here, with v8's statement.
- * `[]` reads as the kind's full set in every binary, so this stays compatible.
+ * `[]` reads as the kind's full set in every binary. A token issued later with only the new scopes
+ * holds no scope in a binary that does not know them (`resolveStoredScopes` fails closed).
  */
 const FULL_V02 =
   '["sessions:read","sessions:write","sessions:takeover","attention:read","attention:resolve","vault:read","vault:write","vault:confirm","blocklist:read","blocklist:write","system:read","system:write","logs:read","notifications:read","notifications:write","channels:read","channels:write","preferences:write","mcp:tools"]';
@@ -114,9 +115,10 @@ WHERE kind = 'api_token'
 `;
 
 /**
- * Schema v9. `compatible`: four new tables, five nullable `sessions` columns and an index, plus one
- * data rewrite an older binary reads the same way (`[]` is the operator's full set), so
- * `meta.min_reader_version` is not raised. A virtual session is recorded as `persistence_mode =
+ * Schema v9. `compatible` as a migration: four new tables, five nullable `sessions` columns and an
+ * index, plus one data rewrite (`[]` is the operator's full set), so it does not raise
+ * `meta.min_reader_version` itself. Templates reach a release together with v10 (`min_reader_version`
+ * 10, spec 13 §2.5), so no released older binary opens a v9 database. A virtual session is recorded as `persistence_mode =
  * 'memory'`, so the frozen `sessions` CHECKs need no rebuild (D-12).
  */
 export const templates: Migration = {

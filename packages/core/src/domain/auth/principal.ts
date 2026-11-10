@@ -56,7 +56,10 @@ export const LOCAL_PRINCIPAL: RequestPrincipal = Object.freeze({
 /** Options for {@link principalFromRecord}. */
 export interface PrincipalFromRecordOptions {
   readonly auth: PrincipalAuth;
-  /** Credential-granted subset; an empty list means the kind's full set. */
+  /**
+   * The credential's resolved scopes (`resolveStoredScopes`); absent means the kind's full set (a
+   * dashboard session or a grant). An empty list grants nothing.
+   */
   readonly scopes?: readonly Scope[];
 }
 
@@ -65,10 +68,7 @@ export function principalFromRecord(
   record: PrincipalRecord,
   options: PrincipalFromRecordOptions,
 ): RequestPrincipal {
-  const scopes =
-    options.scopes !== undefined && options.scopes.length > 0
-      ? options.scopes
-      : scopesForKind(record.kind);
+  const scopes = options.scopes ?? scopesForKind(record.kind);
   return {
     subject: record.principalId,
     kind: record.kind,

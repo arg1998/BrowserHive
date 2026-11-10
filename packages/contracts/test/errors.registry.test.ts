@@ -144,6 +144,7 @@ const SPEC_CODES = [
   'TEMPLATE_NAME_TAKEN',
   'TEMPLATE_IN_USE',
   'TEMPLATE_HOST_FAILED',
+  'TEMPLATE_ROW_UNREADABLE',
 ] as const;
 
 describe('ERROR_REGISTRY completeness', () => {

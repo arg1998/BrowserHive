@@ -115,7 +115,8 @@ const OUT: ReadonlySet<TemplateHealthState> = new Set(['signed_out', 'challenged
 
 /**
  * The agent-facing availability of a ready or disabled template (spec 13 §5.1):
- * - `unavailable`: not `ready`, or its browser cannot run until the operator acts (`failed`);
+ * - `unavailable`: not `ready`, its browser cannot run until the operator acts (`failed`), or every
+ *   site is disabled;
  * - `needs_login`: every enabled site is `signed_out` or `challenged`;
  * - `busy`: at its session cap, or briefly unable to admit (`draining`, `crashed`);
  * - `available`: a launch would be admitted now (a stopped browser starts on launch).
@@ -125,9 +126,12 @@ export function availabilityOf(
   sites: readonly TemplateSiteRecord[],
   host: TemplateHostFacts,
 ): Availability {
-  if (template.status !== 'ready' || host.state === 'failed') return 'unavailable';
   const enabled = sites.filter((s) => s.enabled);
-  if (enabled.length > 0 && enabled.every((s) => OUT.has(s.health.state))) return 'needs_login';
+  // A template with every site disabled offers nothing to sign in to until the operator acts.
+  if (template.status !== 'ready' || host.state === 'failed' || enabled.length === 0) {
+    return 'unavailable';
+  }
+  if (enabled.every((s) => OUT.has(s.health.state))) return 'needs_login';
   if (host.state === 'draining' || host.state === 'crashed') return 'busy';
   if (host.liveAgentSessions >= effectiveCap(template)) return 'busy';
   return 'available';

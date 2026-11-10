@@ -3,7 +3,7 @@
 import { join } from 'node:path';
 import type { ServerConfig } from '@browserhive/contracts/config';
 import type { SqliteUnitOfWork } from '@browserhive/core/persistence';
-import type { Clock, IdGenerator, Logger } from '@browserhive/core/runtime';
+import type { Clock, DegradationReporter, IdGenerator, Logger } from '@browserhive/core/runtime';
 import {
   createTemplateFiles,
   createTemplateGeoResolver,
@@ -21,6 +21,8 @@ export interface TemplatesInput {
   readonly clock: Clock;
   readonly ids: IdGenerator;
   readonly logger: Logger;
+  /** Unreadable rows `list_templates` skips are recorded here. */
+  readonly degradations: DegradationReporter;
 }
 
 /** `<data-dir>/templates` (spec 13 §2.4). */
@@ -37,6 +39,7 @@ export function buildTemplates(input: TemplatesInput): TemplateService {
     runtime: new UnavailableTemplateRuntime(),
     geo: createTemplateGeoResolver(new HostGeoSeedResolver(input.host)),
     files: createTemplateFiles(templatesDirOf(config.dataDir)),
+    degradations: input.degradations,
     ids: input.ids,
     clock: input.clock,
     logger: input.logger,

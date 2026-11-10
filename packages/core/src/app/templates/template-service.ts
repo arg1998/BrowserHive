@@ -1,12 +1,10 @@
 /** @module app/templates/template-service — session templates as data: create, list, read and delete for operators; listing and the launch gate for agents (spec 13 §2, §5.1–§5.3, §6.1, §11.1; D-49, D-52). The host side (hosts, windows, admission) is behind `TemplateRuntime`. */
 
-import { ERROR_REGISTRY, renderMessage } from '@browserhive/contracts/errors';
 import type {
   DeleteTemplateResponse,
   Template,
   TemplateDetailResponse,
   TemplateInput,
-  TemplateSummary,
   TemplatesPage,
   TemplatesQuery,
 } from '@browserhive/contracts/http';
@@ -17,6 +15,7 @@ import type { SessionPrincipal } from '../../domain/session/principal.ts';
 import type { Session } from '../../domain/session/session.ts';
 import {
   buildTemplate,
+  pinnedIdentity,
   type TemplateDefaults,
   validateTemplateInput,
 } from '../../domain/templates/create.ts';
@@ -30,30 +29,30 @@ import {
   sealingFor,
   templateGate,
 } from '../../domain/templates/model.ts';
-import { AppError } from '../../kernel/errors/app-error.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { Clock } from '../../ports/clock.ts';
+import type { DegradationReporter } from '../../ports/degradation-reporter.ts';
 import type { TemplateGeoResolver } from '../../ports/geo-seed-resolver.ts';
 import type { IdGenerator } from '../../ports/id-generator.ts';
 import type { Logger } from '../../ports/logger.ts';
-import type {
-  PinnedIdentityRecord,
-  Repositories,
-  TemplateRecord,
-  TemplateSiteRecord,
-  UnitOfWork,
-} from '../../ports/persistence/index.ts';
+import type { Repositories, TemplateRecord, UnitOfWork } from '../../ports/persistence/index.ts';
 import type { TemplateFiles } from '../../ports/template-files.ts';
 import type { TemplateRuntime } from '../../ports/template-runtime.ts';
 import { launchDeclaredHarnessOf, launchHarnessOf } from '../sessions/metadata.ts';
-import { decodeListCursor, encodeListCursor } from './list-cursor.ts';
 import {
-  toAgentTemplate,
-  toHostView,
-  toSiteView,
-  toTemplateSummary,
-  toTemplateView,
-} from './views.ts';
+  deleteRunning,
+  disabled,
+  inUse,
+  invalidArguments,
+  nameTaken,
+  notFoundForAgent,
+  notFoundForOperator,
+  validationFailed,
+} from './template-errors.ts';
+import { pageTemplates } from './template-list.ts';
+import { TemplateLocks } from './template-locks.ts';
+import { readTemplates } from './template-reads.ts';
+import { toAgentTemplate, toTemplateDetail, toTemplateSummary, toTemplateView } from './views.ts';
 
 /** Server configuration the service reads. */
 export interface TemplateServiceConfig {
@@ -77,6 +76,8 @@ export interface TemplateServiceDeps {
   readonly ids: Pick<IdGenerator, 'opaque' | 'eventId'>;
   readonly clock: Clock;
   readonly logger: Logger;
+  /** Unreadable rows skipped by `list_templates` (`TEMPLATE_ROW_UNREADABLE`). */
+  readonly degradations: DegradationReporter;
   readonly config: TemplateServiceConfig;
 }
 
@@ -91,45 +92,11 @@ const SEED_LENGTH = 21;
 /** Characters after `tp-` (D-05). */
 const TEMPLATE_ID_LENGTH = 10;
 
-function notFoundForAgent(name: string): AppError<'TEMPLATE_NOT_FOUND'> {
-  const details = { template: name };
-  return new AppError('TEMPLATE_NOT_FOUND', details, {
-    publicMessage: renderMessage(ERROR_REGISTRY.TEMPLATE_NOT_FOUND.message, details),
-  });
-}
-
-function notFoundForOperator(templateId: string): AppError<'TEMPLATE_NOT_FOUND'> {
-  return new AppError(
-    'TEMPLATE_NOT_FOUND',
-    { template: templateId },
-    { publicMessage: `No session template '${templateId}'.` },
-  );
-}
-
-type SortKey = TemplatesQuery['sort'];
-
-function sortValue(summary: TemplateSummary, key: SortKey, createdAt: number): number | string {
-  switch (key) {
-    case 'name':
-      return summary.name;
-    case 'created_at':
-      return createdAt;
-    case 'last_used_at':
-      return summary.last_used_at ?? 0;
-    case 'in_use':
-      return summary.in_use;
-  }
-}
-
-function compare(a: number | string, b: number | string): number {
-  if (typeof a === 'number' && typeof b === 'number') return a - b;
-  return String(a).localeCompare(String(b));
-}
-
 /** Session templates: the operator's CRUD and the agent's list and launch gate. */
 export class TemplateService {
   readonly #deps: TemplateServiceDeps;
   readonly #log: Logger;
+  readonly #locks = new TemplateLocks();
 
   constructor(deps: TemplateServiceDeps) {
     this.#deps = deps;
@@ -156,48 +123,15 @@ export class TemplateService {
   async create(input: TemplateInput, owner: string): Promise<Template> {
     const { config, ids, clock, geo } = this.#deps;
     const validated = validateTemplateInput(input, { authMode: config.authMode });
-    if (!validated.ok) {
-      const first = validated.issues[0];
-      throw new AppError(
-        'VALIDATION_FAILED',
-        { issues: [...validated.issues] },
-        {
-          publicMessage:
-            first === undefined ? 'Invalid template.' : `${first.path}: ${first.message}`,
-        },
-      );
-    }
+    if (!validated.ok) throw validationFailed(validated.issues);
     if ((await this.#deps.repos.templates.getByName(input.name)) !== null) {
-      throw new AppError(
-        'TEMPLATE_NAME_TAKEN',
-        { name: input.name },
-        {
-          publicMessage: renderMessage(ERROR_REGISTRY.TEMPLATE_NAME_TAKEN.message, {
-            name: input.name,
-          }),
-        },
-      );
+      throw nameTaken(input.name);
     }
     const resolved = await geo.resolve({
       ...(input.locale !== undefined && { locale: input.locale }),
       ...(input.timezone_id !== undefined && { timezoneId: input.timezone_id }),
     });
-    const identity: PinnedIdentityRecord = {
-      seed: ids.opaque(SEED_LENGTH),
-      locale: resolved.locale,
-      languages: resolved.languages,
-      timezoneId: resolved.timezoneId,
-      countryCode: resolved.countryCode,
-      ...(input.geolocation !== undefined && {
-        geolocation: {
-          latitude: input.geolocation.latitude,
-          longitude: input.geolocation.longitude,
-          ...(input.geolocation.accuracy !== undefined && {
-            accuracy: input.geolocation.accuracy,
-          }),
-        },
-      }),
-    };
+    const identity = pinnedIdentity(ids.opaque(SEED_LENGTH), resolved, input.geolocation);
     const now = clock.now();
     const { template, sites } = buildTemplate(input, validated.value, {
       templateId: `tp-${ids.opaque(TEMPLATE_ID_LENGTH)}`,
@@ -205,6 +139,7 @@ export class TemplateService {
       now,
       identity,
       defaults: config.defaults,
+      authMode: config.authMode,
     });
     await this.#deps.uow.transaction(async (repos) => {
       await repos.templates.insert(template);
@@ -229,7 +164,7 @@ export class TemplateService {
 
   /** `GET /templates`: every template as a summary, filtered, sorted and paged (spec 13 §11.1). */
   async list(query: TemplatesQuery): Promise<TemplatesPage> {
-    const { templates, sites } = await this.#everything();
+    const { templates, sites } = await readTemplates(this.#deps.repos, null);
     const rows = templates.map((t) => {
       const own = sites.get(t.templateId) ?? [];
       return {
@@ -238,66 +173,7 @@ export class TemplateService {
         summary: toTemplateSummary(t, own, this.#deps.runtime.host(t.templateId)),
       };
     });
-    const facets = {
-      status: this.#facet(rows.map((r) => r.record.status)),
-      host_state: this.#facet(rows.map((r) => r.summary.host.state)),
-      health: this.#facet(rows.flatMap((r) => r.sites.map((s) => s.health.state))),
-    };
-    const q = query.q?.toLowerCase();
-    const filtered = rows.filter(
-      (r) =>
-        (query.status === undefined || query.status.includes(r.record.status)) &&
-        (query.host_state === undefined || query.host_state.includes(r.summary.host.state)) &&
-        (query.site === undefined || r.sites.some((s) => s.siteId === query.site)) &&
-        (q === undefined ||
-          r.record.name.includes(q) ||
-          r.record.displayName.toLowerCase().includes(q) ||
-          r.record.description.toLowerCase().includes(q)),
-    );
-    const direction = query.dir === 'asc' ? 1 : -1;
-    const keyed = filtered
-      .map((r) => ({ ...r, key: sortValue(r.summary, query.sort, r.record.createdAt) }))
-      .sort(
-        (a, b) =>
-          direction * compare(a.key, b.key) ||
-          direction * a.record.templateId.localeCompare(b.record.templateId),
-      );
-    const cursor = decodeListCursor(query.cursor);
-    const start =
-      cursor === null
-        ? 0
-        : keyed.findIndex(
-            (r) =>
-              direction * compare(r.key, cursor.key) > 0 ||
-              (compare(r.key, cursor.key) === 0 &&
-                direction * r.record.templateId.localeCompare(cursor.id) > 0),
-          );
-    const from = start < 0 ? keyed.length : start;
-    const pageRows = keyed.slice(from, from + query.limit);
-    const last = pageRows.at(-1);
-    const more = from + query.limit < keyed.length;
-    return {
-      data: pageRows.map((r) => r.summary),
-      page: {
-        next_cursor:
-          more && last !== undefined
-            ? encodeListCursor({ key: last.key, id: last.record.templateId })
-            : null,
-        limit: query.limit,
-        ...(query.total && { total: keyed.length }),
-      },
-      facets,
-      applied: {
-        filters: {
-          ...(query.status !== undefined && { status: query.status }),
-          ...(query.host_state !== undefined && { host_state: query.host_state }),
-          ...(query.site !== undefined && { site: query.site }),
-          ...(query.q !== undefined && { q: query.q }),
-        },
-        sort: { key: query.sort, dir: query.dir },
-      },
-      meta: { now: this.#deps.clock.now() },
-    };
+    return pageTemplates(rows, query, this.#deps.clock.now());
   }
 
   /**
@@ -309,26 +185,13 @@ export class TemplateService {
     const template = await this.#deps.repos.templates.get(templateId);
     if (template === null) throw notFoundForOperator(templateId);
     const sites = await this.#deps.repos.templateSites.list(templateId);
-    const host = this.#deps.runtime.host(templateId);
-    return {
-      template: toTemplateView(template, sites),
-      host: toHostView(host),
-      sites: sites.map(toSiteView),
-      sessions_live: this.#deps.runtime.liveSessions(templateId).length,
-      parked_pages: host.parkedPages.map((p) => ({
-        target_id: p.targetId,
-        url: p.url,
-        title: p.title,
-        opened_at: p.openedAt,
-      })),
-      shared_windows: host.sharedWindows.map((w) => ({
-        window_id: w.windowId,
-        session_ids: [...w.sessionIds],
-      })),
-      // Computed from version summaries (spec 13 §2.3), which arrive with T1b.
-      unlisted_domains: [],
-      now: this.#deps.clock.now(),
-    };
+    return toTemplateDetail(
+      template,
+      sites,
+      this.#deps.runtime.host(templateId),
+      this.#deps.runtime.liveSessions(templateId).length,
+      this.#deps.clock.now(),
+    );
   }
 
   /**
@@ -344,35 +207,40 @@ export class TemplateService {
   ): Promise<DeleteTemplateResponse> {
     const template = await this.#deps.repos.templates.get(templateId);
     if (template === null) throw notFoundForOperator(templateId);
-    const live = this.#deps.runtime.liveSessions(templateId);
-    if (live.length > 0 && !options.force) {
-      const details = { template_id: templateId, live_sessions: live.length };
-      throw new AppError('TEMPLATE_IN_USE', details, {
-        publicMessage: renderMessage(ERROR_REGISTRY.TEMPLATE_IN_USE.message, details),
+    // From here no launch of this template starts (`launch` checks synchronously before it begins).
+    const release = this.#locks.beginDelete(templateId);
+    if (release === null) throw deleteRunning(templateId);
+    try {
+      const busy =
+        this.#deps.runtime.liveSessions(templateId).length + this.#locks.inFlight(templateId);
+      if (busy > 0 && !options.force) throw inUse(templateId, busy);
+      // With force, launches already past the gate finish first; shutdown then closes them too.
+      await this.#locks.settled(templateId);
+      const closed = await this.#deps.runtime.shutdown(templateId);
+      const now = this.#deps.clock.now();
+      await this.#deps.uow.transaction(async (repos) => {
+        await repos.templates.remove(templateId);
+        await repos.operatorActions.append({
+          eventId: this.#deps.ids.eventId(),
+          principalId: options.by,
+          action: 'template.delete',
+          resourceKind: 'template',
+          resourceId: templateId,
+          details: { name: template.name, force: options.force, closed_sessions: [...closed] },
+          occurredAt: now,
+        });
       });
+      const deletedBytes = await this.#removeFiles(templateId);
+      this.#log.info('template deleted', {
+        templateId,
+        name: template.name,
+        closedSessions: closed.length,
+        deletedBytes,
+      });
+      return { ok: true, closed_sessions: [...closed], deleted_bytes: deletedBytes };
+    } finally {
+      release();
     }
-    const closed = await this.#deps.runtime.shutdown(templateId);
-    const now = this.#deps.clock.now();
-    await this.#deps.uow.transaction(async (repos) => {
-      await repos.templates.remove(templateId);
-      await repos.operatorActions.append({
-        eventId: this.#deps.ids.eventId(),
-        principalId: options.by,
-        action: 'template.delete',
-        resourceKind: 'template',
-        resourceId: templateId,
-        details: { name: template.name, force: options.force, closed_sessions: [...closed] },
-        occurredAt: now,
-      });
-    });
-    const deletedBytes = await this.#removeFiles(templateId);
-    this.#log.info('template deleted', {
-      templateId,
-      name: template.name,
-      closedSessions: closed.length,
-      deletedBytes,
-    });
-    return { ok: true, closed_sessions: [...closed], deleted_bytes: deletedBytes };
   }
 
   // --- agents (MCP, spec 13 §5) -----------------------------------------------------------------
@@ -383,7 +251,10 @@ export class TemplateService {
    */
   async listForAgent(caller: TemplateCaller): Promise<readonly AgentTemplate[]> {
     if (!this.enabled) return [];
-    const { templates, sites } = await this.#everything();
+    const { templates, sites } = await readTemplates(this.#deps.repos, {
+      log: this.#log,
+      degradations: this.#deps.degradations,
+    });
     const subject = this.#subject(caller);
     const out: AgentTemplate[] = [];
     for (const template of templates) {
@@ -430,39 +301,33 @@ export class TemplateService {
       });
       throw notFoundForAgent(name);
     }
-    if (template.status === 'disabled') {
-      const details = { template: name, reason: 'disabled' as const };
-      throw new AppError('TEMPLATE_DISABLED', details, {
-        publicMessage: renderMessage(ERROR_REGISTRY.TEMPLATE_DISABLED.message, details),
-      });
-    }
+    if (template.status === 'disabled') throw disabled(name);
     const sealing = sealingFor(template.unseal, caller.principal.subject);
     const options = applyTemplateLaunchOptions(template, input, sealing);
-    if (!options.ok) {
-      const first = options.issues[0];
-      throw new AppError(
-        'INVALID_ARGUMENTS',
-        { issues: [...options.issues] },
-        {
-          publicMessage:
-            first === undefined ? 'invalid arguments' : `${first.path}: ${first.message}`,
-        },
-      );
-    }
+    if (!options.ok) throw invalidArguments(options.issues);
     const sites = await this.#deps.repos.templateSites.list(template.templateId);
-    return this.#deps.runtime.launch(
-      {
-        template,
-        sites,
-        input,
-        principal: caller.principal,
-        client: caller.client,
-        sealing,
-        sealed: isSessionSealed(sealing),
-        settings: options.settings,
-      },
-      signal,
-    );
+    // Checked and registered with no await in between, so a delete either sees this launch in
+    // flight or has started first and this launch finds the template gone.
+    if (this.#locks.isDeleting(template.templateId)) throw notFoundForAgent(name);
+    const release = this.#locks.beginLaunch(template.templateId);
+    try {
+      return await this.#deps.runtime.launch(
+        {
+          template,
+          sites,
+          slug: input.slug,
+          connectionId: input.connectionId ?? null,
+          client: caller.client,
+          principal: caller.principal,
+          sealing,
+          sealed: isSessionSealed(sealing),
+          settings: options.settings,
+        },
+        signal,
+      );
+    } finally {
+      release();
+    }
   }
 
   // --- helpers ----------------------------------------------------------------------------------
@@ -473,31 +338,6 @@ export class TemplateService {
       harness: launchHarnessOf(caller.client),
       declared: launchDeclaredHarnessOf(caller.client),
     };
-  }
-
-  async #everything(): Promise<{
-    readonly templates: readonly TemplateRecord[];
-    readonly sites: ReadonlyMap<string, readonly TemplateSiteRecord[]>;
-  }> {
-    const [templates, all] = await Promise.all([
-      this.#deps.repos.templates.listAll(),
-      this.#deps.repos.templateSites.listAll(),
-    ]);
-    const sites = new Map<string, TemplateSiteRecord[]>();
-    for (const site of all) {
-      const list = sites.get(site.templateId);
-      if (list === undefined) sites.set(site.templateId, [site]);
-      else list.push(site);
-    }
-    return { templates, sites };
-  }
-
-  #facet(values: readonly string[]): { value: string; count: number }[] {
-    const counts = new Map<string, number>();
-    for (const v of values) counts.set(v, (counts.get(v) ?? 0) + 1);
-    return [...counts]
-      .map(([value, count]) => ({ value, count }))
-      .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
   }
 
   /** Deletes `templates/<id>/`; the rows are gone already, so a failure is logged, never thrown. */

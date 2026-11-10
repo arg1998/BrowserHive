@@ -2,6 +2,7 @@
 
 import type { TemplateInput } from '@browserhive/contracts/http';
 import { registrableDomain } from '../../kernel/url.ts';
+import type { TemplateGeo } from '../../ports/geo-seed-resolver.ts';
 import type {
   PinnedIdentityRecord,
   SessionChannel,
@@ -11,7 +12,9 @@ import type {
   TemplateStealthLevel,
 } from '../../ports/persistence/index.ts';
 import { UNKNOWN_SITE_HEALTH } from '../../ports/persistence/index.ts';
+import { isReservedSubject } from '../auth/reserved-subjects.ts';
 import { proxyLabelFor } from '../policies/proxy-request.ts';
+import { LOCAL_SUBJECT } from '../session/principal.ts';
 
 /** Default probe interval for a new template until `templateHealthInterval` arrives (T2): 6 h. */
 export const DEFAULT_TEMPLATE_HEALTH_INTERVAL_MS = 21_600_000;
@@ -172,6 +175,22 @@ export function validateTemplateInput(
       code: 'invalid_timezone',
     });
   }
+  const lists = [
+    ['policy.authorized_principals', input.policy?.authorized_principals ?? []],
+    ['policy.unseal.principals', input.policy?.unseal?.principals ?? []],
+  ] as const;
+  for (const [path, list] of lists) {
+    list.forEach((subject, index) => {
+      // `local` is the auth=off principal and a valid grant; the system subjects never call.
+      if (subject !== LOCAL_SUBJECT && isReservedSubject(subject)) {
+        issues.push({
+          path: `${path}.${index}`,
+          message: `'${subject}' is a reserved subject: no agent can be it`,
+          code: 'reserved',
+        });
+      }
+    });
+  }
   if (context.authMode === 'token' && input.policy?.authorized_principals === undefined) {
     issues.push({
       path: 'policy.authorized_principals',
@@ -181,6 +200,31 @@ export function validateTemplateInput(
     });
   }
   return issues.length > 0 ? { ok: false, issues } : { ok: true, value: { sites, proxy } };
+}
+
+/**
+ * The pinned identity of a new template (spec 13 §2.2): the seed, the resolved geo and the
+ * operator's coordinates, if any (never invented, spec 11 §2.5).
+ */
+export function pinnedIdentity(
+  seed: string,
+  geo: TemplateGeo,
+  geolocation: TemplateInput['geolocation'],
+): PinnedIdentityRecord {
+  return {
+    seed,
+    locale: geo.locale,
+    languages: geo.languages,
+    timezoneId: geo.timezoneId,
+    countryCode: geo.countryCode,
+    ...(geolocation !== undefined && {
+      geolocation: {
+        latitude: geolocation.latitude,
+        longitude: geolocation.longitude,
+        ...(geolocation.accuracy !== undefined && { accuracy: geolocation.accuracy }),
+      },
+    }),
+  };
 }
 
 /** Server defaults a new template takes when the input leaves a field out. */
@@ -200,7 +244,17 @@ export interface NewTemplateFacts {
   /** The resolved pinned identity (seed plus explicit or host geo, spec 13 §2.2). */
   readonly identity: PinnedIdentityRecord;
   readonly defaults: TemplateDefaults;
+  /** Decides the default access (spec 13 §6.1). */
+  readonly authMode: 'off' | 'token';
 }
+
+/**
+ * The access a template gets when the operator gave none, which only `auth=off` allows (spec 13
+ * §6.1, D-52): the one principal every caller is there, `local`. It behaves as "every agent" while
+ * auth is off, and after a switch to `auth=token` reaches no token (`local` is reserved, T0f) until
+ * the operator edits the access, instead of silently opening the template to every token.
+ */
+export const AUTH_OFF_DEFAULT_PRINCIPALS: readonly string[] = ['local'];
 
 /**
  * The new template (status `recording`, version 1) and its sites. `fingerprint` and `humanize` are
@@ -235,7 +289,12 @@ export function buildTemplate(
     identityObserved: null,
     proxy: validated.proxy,
     agentWindows: input.agent_windows ?? 'normal',
-    authorizedPrincipals: [...new Set(input.policy?.authorized_principals ?? [])],
+    authorizedPrincipals:
+      input.policy?.authorized_principals === undefined
+        ? facts.authMode === 'off'
+          ? AUTH_OFF_DEFAULT_PRINCIPALS
+          : []
+        : [...new Set(input.policy.authorized_principals)],
     harnesses:
       input.policy?.harnesses === undefined || input.policy.harnesses === null
         ? null

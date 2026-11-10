@@ -124,6 +124,11 @@ describe('pageCaps', () => {
 describe('availabilityOf', () => {
   const ready = templateRecord({ maxConcurrent: 2 });
 
+  it('every site disabled (or none) is unavailable', () => {
+    expect(availabilityOf(ready, [site('signed_in', false)], idle)).toBe('unavailable');
+    expect(availabilityOf(ready, [], idle)).toBe('unavailable');
+  });
+
   it('a stopped browser counts as available', () => {
     expect(availabilityOf(ready, [site('signed_in')], idle)).toBe('available');
   });
@@ -143,13 +148,21 @@ describe('availabilityOf', () => {
       'needs_login',
     );
     expect(availabilityOf(ready, [site('signed_out'), site('unknown')], idle)).toBe('available');
-    expect(availabilityOf(ready, [site('signed_out', false)], idle)).toBe('available');
+    expect(availabilityOf(ready, [site('signed_out', false)], idle)).toBe('unavailable');
   });
 
   it('is busy at the cap or while the browser is draining or recovering', () => {
-    expect(availabilityOf(ready, [], { state: 'running', liveAgentSessions: 2 })).toBe('busy');
-    expect(availabilityOf(ready, [], { state: 'running', liveAgentSessions: 1 })).toBe('available');
-    expect(availabilityOf(ready, [], { state: 'draining', liveAgentSessions: 0 })).toBe('busy');
-    expect(availabilityOf(ready, [], { state: 'crashed', liveAgentSessions: 0 })).toBe('busy');
+    expect(
+      availabilityOf(ready, [site('signed_in')], { state: 'running', liveAgentSessions: 2 }),
+    ).toBe('busy');
+    expect(
+      availabilityOf(ready, [site('signed_in')], { state: 'running', liveAgentSessions: 1 }),
+    ).toBe('available');
+    expect(
+      availabilityOf(ready, [site('signed_in')], { state: 'draining', liveAgentSessions: 0 }),
+    ).toBe('busy');
+    expect(
+      availabilityOf(ready, [site('signed_in')], { state: 'crashed', liveAgentSessions: 0 }),
+    ).toBe('busy');
   });
 });

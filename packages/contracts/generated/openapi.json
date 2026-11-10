@@ -211,6 +211,7 @@
               "RETENTION_FAILED",
               "STALE_BROWSER_PROCESSES",
               "TEMPLATE_HOST_FAILED",
+              "TEMPLATE_ROW_UNREADABLE",
               "UNAUTHORIZED",
               "INVALID_CREDENTIALS",
               "FORBIDDEN",

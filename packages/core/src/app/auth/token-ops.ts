@@ -5,7 +5,7 @@ import type { TokenOwnerKind } from '@browserhive/contracts/http';
 import { sha256Hex } from '../../domain/auth/digest.ts';
 import type { RequestPrincipal } from '../../domain/auth/principal.ts';
 import { isReservedSubject } from '../../domain/auth/reserved-subjects.ts';
-import { isSubsetOf, parseScopes, scopesForKind } from '../../domain/auth/scopes.ts';
+import { isSubsetOf, resolveStoredScopes, scopesForKind } from '../../domain/auth/scopes.ts';
 import { mintToken } from '../../domain/auth/token-format.ts';
 import { AppError } from '../../kernel/errors/app-error.ts';
 import { type Secret, secret } from '../../kernel/secret.ts';
@@ -207,14 +207,14 @@ export function createTokenOps(deps: TokenOpsDeps): TokenOps {
       const principals = new Map((await repos.principals.list()).map((p) => [p.principalId, p]));
       return credentials.map((c) => {
         const owner = principals.get(c.principalId);
-        const scopes = parseScopes(c.scopes);
+        const scopes = resolveStoredScopes(c.scopes, owner?.kind ?? 'agent');
         return {
           credentialId: c.credentialId,
           publicPrefix: c.publicPrefix ?? '',
           ownerKind: owner?.kind === 'operator' ? 'operator' : 'agent',
           subject: c.principalId,
           display: c.display,
-          scopes: scopes.length > 0 ? scopes : scopesForKind(owner?.kind ?? 'agent'),
+          scopes,
           createdAt: c.createdAt,
           lastUsedAt: c.lastUsedAt,
           expiresAt: c.expiresAt,

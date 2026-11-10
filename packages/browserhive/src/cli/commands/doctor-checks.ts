@@ -402,6 +402,54 @@ export async function checkReservedSubjects(
     : result('reserved subjects', 'ok', 'no agent token uses a reserved subject');
 }
 
+/**
+ * Templates still reachable only by the `auth=off` principal (spec 13 §6.1, D-52): a template created
+ * under `auth=off` without an explicit choice stores `["local"]`. After a switch to `auth=token` no
+ * token can be `local` (reserved, T0f), so such a template is reachable by operators only until its
+ * access is edited; this names them. No row without templates or under `auth=off`.
+ */
+export async function checkTemplateAccess(
+  deps: CliDeps,
+  dataDir: string,
+  auth: 'off' | 'token',
+): Promise<CheckResult | null> {
+  if (auth !== 'token' || (await deps.fs.stat(databasePath(dataDir))) === null) return null;
+  let templates: Awaited<ReturnType<Awaited<ReturnType<CliDeps['openStorage']>>['templateAccess']>>;
+  try {
+    const storage = await deps.openStorage({
+      dataDir,
+      readOnly: true,
+      migrate: false,
+      owner: 'doctor',
+    });
+    try {
+      templates = await storage.templateAccess();
+    } finally {
+      await storage.close();
+    }
+  } catch {
+    return null;
+  }
+  if (templates.length === 0) return null;
+  const localOnly = templates
+    .filter((t) => t.principals !== null && t.principals.length > 0)
+    .filter((t) => t.principals?.every((p) => p === 'local') === true)
+    .map((t) => t.name)
+    .sort();
+  if (localOnly.length === 0) {
+    return result(
+      'template access',
+      'ok',
+      `${templates.length} template(s); none limited to local`,
+    );
+  }
+  return result(
+    'template access',
+    'warn',
+    `${localOnly.join(', ')}: access names only 'local', which no agent token can be under auth=token; agents cannot use them until their access is edited`,
+  );
+}
+
 /** OTLP endpoint answers a HEAD within 2 s (warning only). */
 export async function checkOtel(deps: CliDeps, config: ServerConfig): Promise<CheckResult> {
   if (!config.otel) return result('otel', 'ok', 'telemetry off');

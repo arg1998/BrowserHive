@@ -3,6 +3,7 @@
 import type {
   HostView,
   Template,
+  TemplateDetailResponse,
   TemplateSiteView,
   TemplateSummary,
 } from '@browserhive/contracts/http';
@@ -144,6 +145,35 @@ export function toHostView(host: TemplateHostView): HostView {
     ...(host.recycleAt !== null && { recycle_at: host.recycleAt }),
     sandboxed: host.sandboxed,
     profile_secrets: host.profileSecrets,
+  };
+}
+
+/** `GET /templates/{template_id}` (spec 13 §11.1). */
+export function toTemplateDetail(
+  template: TemplateRecord,
+  sites: readonly TemplateSiteRecord[],
+  host: TemplateHostView,
+  sessionsLive: number,
+  now: number,
+): TemplateDetailResponse {
+  return {
+    template: toTemplateView(template, sites),
+    host: toHostView(host),
+    sites: sites.map(toSiteView),
+    sessions_live: sessionsLive,
+    parked_pages: host.parkedPages.map((p) => ({
+      target_id: p.targetId,
+      url: p.url,
+      title: p.title,
+      opened_at: p.openedAt,
+    })),
+    shared_windows: host.sharedWindows.map((w) => ({
+      window_id: w.windowId,
+      session_ids: [...w.sessionIds],
+    })),
+    // Computed from version summaries (spec 13 §2.3), which arrive with T1b.
+    unlisted_domains: [],
+    now,
   };
 }
 

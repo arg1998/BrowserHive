@@ -49,7 +49,12 @@ import { SYSTEM_INFO, seedDataset } from './http-fixtures.ts';
 import { InMemoryRepositories, InMemoryUnitOfWork } from './in-memory-repos.ts';
 import { createVaultRepos } from './in-memory-vault-repos.ts';
 import { RecordingEventBus } from './recording-event-bus.ts';
-import { FAKE_TEMPLATE_GEO, FakeTemplateFiles, FakeTemplateRuntime } from './template-kit.ts';
+import {
+  FAKE_TEMPLATE_GEO,
+  FakeTemplateFiles,
+  FakeTemplateRuntime,
+  RecordingDegradations,
+} from './template-kit.ts';
 
 /** Environment the channel service sees in the HTTP suites (names only matter). */
 export const CHANNEL_ENV: Readonly<Record<string, string>> = {
@@ -225,6 +230,7 @@ export async function createHttpKit(options: HttpKitOptions = {}) {
     runtime: templateRuntime,
     geo: FAKE_TEMPLATE_GEO,
     files: templateFiles,
+    degradations: new RecordingDegradations(),
     ids: auth.ids,
     clock,
     logger,

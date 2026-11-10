@@ -260,6 +260,7 @@ async function buildDomain(
     clock,
     ids,
     logger,
+    degradations,
   });
 
   const tools = buildTools({

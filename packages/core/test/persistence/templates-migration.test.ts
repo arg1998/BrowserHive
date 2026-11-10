@@ -217,6 +217,19 @@ describe('migration 0009-templates', () => {
         )
         .run();
       expect((await uow.repos.sessions.get('later-12345678'))?.template?.mode).toBe('maintenance');
+      // A row with a mode but no name (no writer produces one) still reads as a template session.
+      await uow.repos.sessions.insert(sessionRecord({ sessionId: 'odd-12345678' }));
+      handle.raw
+        .query(
+          "UPDATE sessions SET template_mode = 'maintenance' WHERE session_id = 'odd-12345678'",
+        )
+        .run();
+      expect((await uow.repos.sessions.get('odd-12345678'))?.template).toEqual({
+        templateId: null,
+        name: '',
+        version: null,
+        mode: 'maintenance',
+      });
     } finally {
       await handle.close();
       dir.dispose();

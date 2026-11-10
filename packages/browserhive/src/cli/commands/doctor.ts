@@ -27,6 +27,7 @@ import {
   checkReservedSubjects,
   checkSecretsFile,
   checkShorthand,
+  checkTemplateAccess,
   checkUnrecognisedDataFiles,
   checkVault,
 } from './doctor-checks.ts';
@@ -97,6 +98,10 @@ export async function runChecks(
   results.push(await checkUnrecognisedDataFiles(deps, dataDir));
   results.push(await checkDatabase(deps, dataDir));
   results.push(await checkReservedSubjects(deps, dataDir, config?.authTokens ?? []));
+  if (config !== null) {
+    const access = await checkTemplateAccess(deps, dataDir, config.auth);
+    if (access !== null) results.push(access);
+  }
   if (config !== null && resolution.ok) {
     results.push(await checkOtel(deps, config));
     results.push(checkCapacity(deps, config));

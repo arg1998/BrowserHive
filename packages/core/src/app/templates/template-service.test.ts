@@ -15,6 +15,7 @@ import { templateRecord, templateSiteRecord } from '../../../test/persistence/he
 import type { CreateSessionInput } from '../../domain/session/create-request.ts';
 import type { Session } from '../../domain/session/session.ts';
 import { isAppError } from '../../kernel/errors/app-error.ts';
+import type { ListAllOptions } from '../../ports/persistence/templates.ts';
 import type { TemplateServiceConfig } from './template-service.ts';
 
 const CALLER = {
@@ -97,7 +98,7 @@ describe('TemplateService.create', () => {
       current_version: null,
       version: 1,
       policy: {
-        authorized_principals: [],
+        authorized_principals: ['local'],
         max_concurrent: 5,
         health_interval_ms: 21_600_000,
         prelaunch_check: true,
@@ -207,6 +208,21 @@ describe('TemplateService.create', () => {
         'required_with_proxy',
       ],
       [{ timezone_id: 'Mars/Olympus' }, 'timezone_id', 'invalid_timezone'],
+      [
+        { policy: { authorized_principals: ['p-bot', 'browserhive'] } },
+        'policy.authorized_principals.1',
+        'reserved',
+      ],
+      [
+        { policy: { authorized_principals: ['template:tp-0000000001'] } },
+        'policy.authorized_principals.0',
+        'reserved',
+      ],
+      [
+        { policy: { unseal: { evaluate: true, principals: ['System'] } } },
+        'policy.unseal.principals.0',
+        'reserved',
+      ],
     ];
     for (const [overrides, path, code] of cases) {
       const error = await refusal(kit.service.create(input(overrides), 'local'));
@@ -225,6 +241,27 @@ describe('TemplateService.create', () => {
       proxy: { server: 'http://p.test:1', password_env: 'BROWSERHIVE_X' },
     });
     expect(parsed.success).toBe(false);
+  });
+
+  it('under auth=off an omitted access is local, an explicit [] stays every principal', async () => {
+    const implicit = await kit.service.create(input(), 'local');
+    expect(implicit.policy.authorized_principals).toEqual(['local']);
+    const explicit = await kit.service.create(
+      input({ name: 'open-one', policy: { authorized_principals: [] } }),
+      'local',
+    );
+    expect(explicit.policy.authorized_principals).toEqual([]);
+    // Every caller under auth=off is local, so both are listed to it.
+    await kit.repos.templates.update(implicit.template_id, { status: 'ready' });
+    const listed = await kit.service.listForAgent({
+      principal: { subject: 'local' },
+      client: null,
+    });
+    expect(listed.map((t) => t.name)).toEqual(['job-hunt']);
+    // A token principal (after a switch to auth=token) does not reach the implicit one.
+    await kit.repos.templates.update(explicit.template_id, { status: 'ready' });
+    const token = await kit.service.listForAgent({ principal: { subject: 'p-bot' }, client: null });
+    expect(token.map((t) => t.name)).toEqual(['open-one']);
   });
 
   it('under auth=token an explicit access choice is required; [] is a choice', async () => {
@@ -281,6 +318,10 @@ describe('TemplateService.list and get', () => {
     const filtered = await kit.service.list(query({ q: 'BRAV', status: 'recording' }));
     expect(filtered.data.map((t) => t.name)).toEqual(['bravo']);
     expect((await kit.service.list(query({ site: 'site-b.test' }))).data).toEqual([]);
+    // `?site=` reduces a host like creation does.
+    const byHost = await kit.service.list(query({ site: 'www.site-a.test' }));
+    expect(byHost.data).toHaveLength(3);
+    expect(byHost.applied.filters).toEqual({ site: 'site-a.test' });
     const bad = await refusal(kit.service.list(query({ cursor: 'nope' })));
     expect(isAppError(bad, 'VALIDATION_FAILED')).toBe(true);
   });
@@ -490,6 +531,126 @@ describe('TemplateService.launch', () => {
         retry_after_ms: 5000,
       });
     }
+  });
+});
+
+describe('TemplateService delete and launch exclusion', () => {
+  /** A launch that stays in flight until `finish` is called. */
+  function holdLaunches(): { finish: () => void } {
+    let finish: () => void = () => undefined;
+    runtime.onLaunch = () =>
+      new Promise<Session>((_, reject) => {
+        finish = () => {
+          reject(new Error('host gone'));
+        };
+      });
+    return { finish: () => finish() };
+  }
+
+  async function launchStarted(): Promise<void> {
+    while (runtime.launches.length === 0) await Promise.resolve();
+  }
+
+  it('a delete refuses a launch in flight with TEMPLATE_IN_USE', async () => {
+    await seedReady();
+    const held = holdLaunches();
+    const launching = kit.service.launch('job-hunt', LAUNCH, CALLER).catch((e: unknown) => e);
+    await launchStarted();
+    const busy = await refusal(kit.service.remove('tp-fixture001', { force: false, by: 'local' }));
+    expect(isAppError(busy, 'TEMPLATE_IN_USE')).toBe(true);
+    if (isAppError(busy, 'TEMPLATE_IN_USE')) expect(busy.details.live_sessions).toBe(1);
+    held.finish();
+    await launching;
+    expect(await kit.repos.templates.count()).toBe(1);
+  });
+
+  it('a forced delete waits for the launch to settle, and later launches find nothing', async () => {
+    await seedReady();
+    const held = holdLaunches();
+    const launching = kit.service.launch('job-hunt', LAUNCH, CALLER).catch((e: unknown) => e);
+    await launchStarted();
+    let deleted = false;
+    const removing = kit.service.remove('tp-fixture001', { force: true, by: 'local' }).then((r) => {
+      deleted = true;
+      return r;
+    });
+    // While the delete waits, a new launch is refused as if the template were gone.
+    const late = await refusal(kit.service.launch('job-hunt', LAUNCH, CALLER));
+    expect(isAppError(late, 'TEMPLATE_NOT_FOUND')).toBe(true);
+    await Promise.resolve();
+    expect(deleted).toBe(false);
+    expect(runtime.shutdowns).toEqual([]);
+    held.finish();
+    await launching;
+    expect((await removing).ok).toBe(true);
+    expect(runtime.shutdowns).toEqual(['tp-fixture001']);
+    expect(runtime.launches).toHaveLength(1);
+  });
+
+  it('a second delete while one runs is a CONFLICT', async () => {
+    await seedReady();
+    const held = holdLaunches();
+    const launching = kit.service.launch('job-hunt', LAUNCH, CALLER).catch((e: unknown) => e);
+    await launchStarted();
+    const first = kit.service.remove('tp-fixture001', { force: true, by: 'local' });
+    const second = await refusal(kit.service.remove('tp-fixture001', { force: true, by: 'local' }));
+    expect(isAppError(second, 'CONFLICT')).toBe(true);
+    held.finish();
+    await launching;
+    expect((await first).ok).toBe(true);
+  });
+});
+
+describe('TemplateService unreadable rows', () => {
+  it('list_templates skips an unreadable row, logs and records a degradation; a clean list recovers', async () => {
+    await seedReady({ templateId: 'tp-good000001', name: 'good' });
+    await seedReady({ templateId: 'tp-bad0000001', name: 'bad' });
+    const templates = kit.repos.templates;
+    const original = templates.listAll.bind(templates);
+    templates.listAll = async (options?: ListAllOptions) => {
+      const all = await original();
+      return all.filter((t) => {
+        if (t.templateId !== 'tp-bad0000001') return true;
+        options?.onUnreadable?.(t.templateId, new Error('templates.identity_json: invalid json'));
+        return false;
+      });
+    };
+    const listed = await kit.service.listForAgent(CALLER);
+    expect(listed.map((t) => t.name)).toEqual(['good']);
+    expect(kit.degradations.reports).toEqual([
+      {
+        code: 'TEMPLATE_ROW_UNREADABLE',
+        severity: 'warn',
+        message:
+          "A stored row of template 'tp-bad0000001' cannot be read; agents do not see the template.",
+        details: {
+          template_id: 'tp-bad0000001',
+          table: 'templates',
+          reason: 'templates.identity_json: invalid json',
+        },
+      },
+    ]);
+    expect(logger.records.some((r) => r.msg === 'template row unreadable')).toBe(true);
+    templates.listAll = original;
+    await kit.service.listForAgent(CALLER);
+    expect(kit.degradations.recoveries).toEqual(['TEMPLATE_ROW_UNREADABLE']);
+  });
+
+  it('a template with an unreadable site row is left out of the agent list', async () => {
+    await seedReady({ templateId: 'tp-good000001', name: 'good' });
+    await seedReady({ templateId: 'tp-bad0000001', name: 'bad' });
+    const sites = kit.repos.templateSites;
+    const original = sites.listAll.bind(sites);
+    sites.listAll = async (options?: ListAllOptions) => {
+      const all = await original();
+      return all.filter((s) => {
+        if (s.templateId !== 'tp-bad0000001') return true;
+        options?.onUnreadable?.(s.templateId, new Error('form_json'));
+        return false;
+      });
+    };
+    expect((await kit.service.listForAgent(CALLER)).map((t) => t.name)).toEqual(['good']);
+    expect(kit.degradations.reports[0]?.details?.['table']).toBe('template_sites');
   });
 });
 

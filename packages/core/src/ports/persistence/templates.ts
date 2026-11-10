@@ -12,9 +12,18 @@ import type {
  * route sorts and filters by host state and live sessions, which only the host supervisor knows, so
  * paging happens in the template service over this (small, operator-made) set.
  */
+/** Options of the `listAll` reads. */
+export interface ListAllOptions {
+  /**
+   * When given, a row that cannot be read (a corrupt `*_json` column, an unknown enum value) is
+   * skipped and reported here instead of failing the whole list.
+   */
+  readonly onUnreadable?: (templateId: string, error: unknown) => void;
+}
+
 export interface TemplateRepository {
-  /** Every template, ordered by name. */
-  listAll(): Promise<readonly TemplateRecord[]>;
+  /** Every template, ordered by name (binary collation). */
+  listAll(options?: ListAllOptions): Promise<readonly TemplateRecord[]>;
   get(templateId: string): Promise<TemplateRecord | null>;
   getByName(name: string): Promise<TemplateRecord | null>;
   /** Inserts a new template with `version = 1`. @throws `TEMPLATE_NAME_TAKEN` when the name exists. */
@@ -37,7 +46,7 @@ export interface TemplateSiteRepository {
   /** The sites of one template, ordered by `added_at` then `site_id`. */
   list(templateId: string): Promise<readonly TemplateSiteRecord[]>;
   /** The sites of every template, in the same order per template. */
-  listAll(): Promise<readonly TemplateSiteRecord[]>;
+  listAll(options?: ListAllOptions): Promise<readonly TemplateSiteRecord[]>;
   /** Inserts or replaces one site (keyed by template and site). */
   upsert(record: TemplateSiteRecord): Promise<void>;
   /** Removes one site; true when a row went. */

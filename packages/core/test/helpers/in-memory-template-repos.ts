@@ -8,9 +8,15 @@ import type {
   TemplateSiteRecord,
 } from '../../src/ports/persistence/records-templates.ts';
 import type {
+  ListAllOptions,
   TemplateRepository,
   TemplateSiteRepository,
 } from '../../src/ports/persistence/templates.ts';
+
+/** SQLite's default (binary) collation: code-unit order, as `ORDER BY` compares TEXT. */
+function binary(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
 
 /** `template_sites` in memory, keyed `<template_id> <site_id>`. */
 export class InMemoryTemplateSiteRepository implements TemplateSiteRepository {
@@ -19,15 +25,13 @@ export class InMemoryTemplateSiteRepository implements TemplateSiteRepository {
   async list(templateId: string): Promise<readonly TemplateSiteRecord[]> {
     return [...this.rows.values()]
       .filter((r) => r.templateId === templateId)
-      .sort((a, b) => a.addedAt - b.addedAt || a.siteId.localeCompare(b.siteId));
+      .sort((a, b) => a.addedAt - b.addedAt || binary(a.siteId, b.siteId));
   }
 
-  async listAll(): Promise<readonly TemplateSiteRecord[]> {
+  async listAll(_options?: ListAllOptions): Promise<readonly TemplateSiteRecord[]> {
     return [...this.rows.values()].sort(
       (a, b) =>
-        a.templateId.localeCompare(b.templateId) ||
-        a.addedAt - b.addedAt ||
-        a.siteId.localeCompare(b.siteId),
+        binary(a.templateId, b.templateId) || a.addedAt - b.addedAt || binary(a.siteId, b.siteId),
     );
   }
 
@@ -59,6 +63,14 @@ export class InMemoryTemplateSiteRepository implements TemplateSiteRepository {
   }
 }
 
+function nameTaken(name: string): AppError<'TEMPLATE_NAME_TAKEN'> {
+  return new AppError(
+    'TEMPLATE_NAME_TAKEN',
+    { name },
+    { publicMessage: `A session template named '${name}' already exists.` },
+  );
+}
+
 /** `templates` in memory. */
 export class InMemoryTemplateRepository implements TemplateRepository {
   readonly rows = new Map<string, TemplateRecord>();
@@ -68,8 +80,8 @@ export class InMemoryTemplateRepository implements TemplateRepository {
     this.#sites = sites;
   }
 
-  async listAll(): Promise<readonly TemplateRecord[]> {
-    return [...this.rows.values()].sort((a, b) => a.name.localeCompare(b.name));
+  async listAll(_options?: ListAllOptions): Promise<readonly TemplateRecord[]> {
+    return [...this.rows.values()].sort((a, b) => binary(a.name, b.name));
   }
 
   async get(templateId: string): Promise<TemplateRecord | null> {
@@ -82,7 +94,7 @@ export class InMemoryTemplateRepository implements TemplateRepository {
 
   async insert(record: TemplateRecord): Promise<void> {
     if ((await this.getByName(record.name)) !== null) {
-      throw new AppError('TEMPLATE_NAME_TAKEN', { name: record.name });
+      throw nameTaken(record.name);
     }
     this.rows.set(record.templateId, { ...record, version: 1 });
   }
@@ -93,13 +105,19 @@ export class InMemoryTemplateRepository implements TemplateRepository {
     ifVersion?: number,
   ): Promise<TemplateRecord> {
     const current = this.rows.get(templateId);
-    if (current === undefined) throw new AppError('TEMPLATE_NOT_FOUND', { template: templateId });
+    if (current === undefined) {
+      throw new AppError(
+        'TEMPLATE_NOT_FOUND',
+        { template: templateId },
+        { publicMessage: `No session template '${templateId}'.` },
+      );
+    }
     if (ifVersion !== undefined && ifVersion !== current.version) {
       throw new AppError('CONFLICT', { current_version: current.version });
     }
     if (patch.name !== undefined && patch.name !== current.name) {
       if ((await this.getByName(patch.name)) !== null) {
-        throw new AppError('TEMPLATE_NAME_TAKEN', { name: patch.name });
+        throw nameTaken(patch.name);
       }
     }
     const next: TemplateRecord = { ...current, ...patch, version: current.version + 1 };

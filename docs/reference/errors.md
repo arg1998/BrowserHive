@@ -2,7 +2,7 @@
 
 # Error reference
 
-Every error code BrowserHive can produce (117 codes), generated from `ERROR_REGISTRY` in `@browserhive/contracts/errors`. Each code has a stable anchor: `errors.md#<CODE>`, which is also the `type` URL of HTTP problem responses (`https://browserhive.ai/docs/errors#<CODE>`).
+Every error code BrowserHive can produce (118 codes), generated from `ERROR_REGISTRY` in `@browserhive/contracts/errors`. Each code has a stable anchor: `errors.md#<CODE>`, which is also the `type` URL of HTTP problem responses (`https://browserhive.ai/docs/errors#<CODE>`).
 
 ## How errors reach you
 
@@ -1685,6 +1685,7 @@ Stop the process before it serves anything. The CLI prints `[CODE] message` and 
 | [`RETENTION_FAILED`](#RETENTION_FAILED) | Retention sweep failed | 500 | backoff |
 | [`STALE_BROWSER_PROCESSES`](#STALE_BROWSER_PROCESSES) | Stale browser processes found | 500 | never |
 | [`TEMPLATE_HOST_FAILED`](#TEMPLATE_HOST_FAILED) | Template browser failed | 500 | never |
+| [`TEMPLATE_ROW_UNREADABLE`](#TEMPLATE_ROW_UNREADABLE) | Template row unreadable | 500 | never |
 
 <a id="ADMIN_REQUIRES_HTTP"></a>
 ### `ADMIN_REQUIRES_HTTP`
@@ -2159,6 +2160,33 @@ Details:
 | `template_id` | `string` | yes | — |
 | `reason` | one of `host_failed`, `no_display`, `proxy_unreachable`, `sandbox_unavailable` | yes | — |
 | `attempts` | `integer` | yes | ≥ 0 |
+
+<a id="TEMPLATE_ROW_UNREADABLE"></a>
+### `TEMPLATE_ROW_UNREADABLE`
+
+| Property | Value |
+|---|---|
+| Title | Template row unreadable |
+| HTTP status | 500 |
+| Category | `boot` |
+| Retryable | `never` (do not retry; the request cannot succeed as sent) |
+| Exit code | 1 |
+
+Message: `A stored row of template '{template_id}' cannot be read; agents do not see the template.`
+
+Hint: Check the template on the dashboard or with GET /api/v1/templates/{template_id}.
+
+Cause: A `templates` or `template_sites` row holds a value this binary cannot read (a hand edit, a corrupt JSON column, an enum value from another build). `list_templates` leaves that template out instead of failing for every agent (spec 13 §5.1). Recorded as a degradation; it resolves on the next clean listing.
+
+Resolution: Delete and recreate the template, or restore the database from a backup taken before the change.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `template_id` | `string` | yes | — |
+| `table` | one of `templates`, `template_sites` | yes | — |
+| `reason` | `string` | yes | — |
 
 ## Authentication errors
 

@@ -9,17 +9,13 @@ import type {
   TemplateSiteRecord,
 } from '../../../ports/persistence/records-templates.ts';
 import type {
+  ListAllOptions,
   TemplateRepository,
   TemplateSiteRepository,
 } from '../../../ports/persistence/templates.ts';
 import type { DB } from '../generated/db.d.ts';
-import {
-  templateFromRow,
-  templatePatchToRow,
-  templateSiteFromRow,
-  templateSiteToRow,
-  templateToRow,
-} from '../mappers/templates.ts';
+import { templateSiteFromRow, templateSiteToRow } from '../mappers/template-sites.ts';
+import { templateFromRow, templatePatchToRow, templateToRow } from '../mappers/templates.ts';
 import { asNumber } from './common.ts';
 
 function nameTaken(name: string): AppError<'TEMPLATE_NAME_TAKEN'> {
@@ -38,6 +34,28 @@ function notFound(templateId: string): AppError<'TEMPLATE_NOT_FOUND'> {
   );
 }
 
+/** Maps every row; with `onUnreadable`, a row that does not map is skipped and reported. */
+function readEach<R, T>(
+  rows: readonly R[],
+  map: (row: R) => T,
+  idOf: (row: R) => string,
+  options: ListAllOptions,
+): readonly T[] {
+  const out: T[] = [];
+  for (const row of rows) {
+    if (options.onUnreadable === undefined) {
+      out.push(map(row));
+      continue;
+    }
+    try {
+      out.push(map(row));
+    } catch (error) {
+      options.onUnreadable(idOf(row), error);
+    }
+  }
+  return out;
+}
+
 /** SQLite implementation of {@link TemplateRepository}. */
 export class SqliteTemplateRepository implements TemplateRepository {
   readonly #db: Kysely<DB>;
@@ -46,13 +64,13 @@ export class SqliteTemplateRepository implements TemplateRepository {
     this.#db = db;
   }
 
-  async listAll(): Promise<readonly TemplateRecord[]> {
+  async listAll(options: ListAllOptions = {}): Promise<readonly TemplateRecord[]> {
     const rows = await this.#db
       .selectFrom('templates')
       .selectAll()
       .orderBy('name', 'asc')
       .execute();
-    return rows.map(templateFromRow);
+    return readEach(rows, templateFromRow, (row) => row.template_id, options);
   }
 
   async get(templateId: string): Promise<TemplateRecord | null> {
@@ -154,7 +172,7 @@ export class SqliteTemplateSiteRepository implements TemplateSiteRepository {
     return rows.map(templateSiteFromRow);
   }
 
-  async listAll(): Promise<readonly TemplateSiteRecord[]> {
+  async listAll(options: ListAllOptions = {}): Promise<readonly TemplateSiteRecord[]> {
     const rows = await this.#db
       .selectFrom('template_sites')
       .selectAll()
@@ -162,7 +180,7 @@ export class SqliteTemplateSiteRepository implements TemplateSiteRepository {
       .orderBy('added_at', 'asc')
       .orderBy('site_id', 'asc')
       .execute();
-    return rows.map(templateSiteFromRow);
+    return readEach(rows, templateSiteFromRow, (row) => row.template_id, options);
   }
 
   async upsert(record: TemplateSiteRecord): Promise<void> {

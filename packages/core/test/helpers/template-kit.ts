@@ -5,8 +5,10 @@ import {
   type TemplateServiceConfig,
 } from '../../src/app/templates/template-service.ts';
 import { UnavailableTemplateRuntime } from '../../src/app/templates/unavailable-runtime.ts';
+import type { CreateSessionInput } from '../../src/domain/session/create-request.ts';
 import type { Session } from '../../src/domain/session/session.ts';
 import type { Clock } from '../../src/ports/clock.ts';
+import type { Degradation, DegradationReporter } from '../../src/ports/degradation-reporter.ts';
 import type { TemplateGeoResolver } from '../../src/ports/geo-seed-resolver.ts';
 import type { IdGenerator } from '../../src/ports/id-generator.ts';
 import type { Logger } from '../../src/ports/logger.ts';
@@ -19,6 +21,28 @@ import {
 } from '../../src/ports/template-runtime.ts';
 import { InMemoryRepositories, InMemoryUnitOfWork } from './in-memory-repos.ts';
 import { InMemoryOperatorActionRepository } from './in-memory-vault-repos.ts';
+
+/**
+ * The exclusive-session input a fake runtime may build for a template launch: only from the
+ * request's settings and identity, never from the agent's arguments (the request carries none).
+ */
+export function sessionInputFromRequest(request: TemplateLaunchRequest): CreateSessionInput {
+  const s = request.settings;
+  return {
+    slug: request.slug,
+    channel: s.channel,
+    headless: s.headless,
+    incognito: s.incognito,
+    persistenceMode: s.persistenceMode,
+    disableEvaluate: s.disableEvaluate,
+    vaultEnabled: s.vaultEnabled,
+    stealth: s.stealth,
+    fingerprint: s.fingerprint,
+    humanize: s.humanize,
+    connectionId: request.connectionId,
+    client: request.client,
+  };
+}
 
 /**
  * A runtime whose host facts and launch tests script. Without `onLaunch` a launch behaves like the
@@ -51,6 +75,20 @@ export class FakeTemplateRuntime implements TemplateRuntime {
     const closed = this.sessions.get(templateId) ?? [];
     this.sessions.delete(templateId);
     return Promise.resolve(closed);
+  }
+}
+
+/** Records degradation reports and recoveries. */
+export class RecordingDegradations implements DegradationReporter {
+  readonly reports: Degradation[] = [];
+  readonly recoveries: string[] = [];
+
+  report(degradation: Degradation): void {
+    this.reports.push(degradation);
+  }
+
+  recovered(code: string): void {
+    this.recoveries.push(code);
   }
 }
 
@@ -101,6 +139,7 @@ export interface TemplateKit {
   readonly actions: InMemoryOperatorActionRepository;
   readonly runtime: TemplateRuntime;
   readonly files: FakeTemplateFiles;
+  readonly degradations: RecordingDegradations;
 }
 
 /** Builds a {@link TemplateKit}. */
@@ -110,12 +149,14 @@ export function createTemplateKit(options: TemplateKitOptions): TemplateKit {
   const bundle = { ...repos, operatorActions: actions };
   const files = new FakeTemplateFiles();
   const runtime = options.runtime ?? new FakeTemplateRuntime();
+  const degradations = new RecordingDegradations();
   const service = new TemplateService({
     repos: bundle,
     uow: new InMemoryUnitOfWork(bundle),
     runtime,
     geo: FAKE_TEMPLATE_GEO,
     files,
+    degradations,
     ids: options.ids,
     clock: options.clock,
     logger: options.logger,
@@ -127,5 +168,5 @@ export function createTemplateKit(options: TemplateKitOptions): TemplateKit {
       ...options.config,
     },
   });
-  return { service, repos, actions, runtime, files };
+  return { service, repos, actions, runtime, files, degradations };
 }

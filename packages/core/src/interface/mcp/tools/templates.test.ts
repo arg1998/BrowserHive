@@ -6,7 +6,10 @@ import {
   type ToolHarness,
   textOf,
 } from '../../../../test/helpers/fake-transport.ts';
-import { FakeTemplateRuntime } from '../../../../test/helpers/template-kit.ts';
+import {
+  FakeTemplateRuntime,
+  sessionInputFromRequest,
+} from '../../../../test/helpers/template-kit.ts';
 import { executeTool } from '../../../../test/helpers/tool-run.ts';
 import { templateRecord, templateSiteRecord } from '../../../../test/persistence/helpers.ts';
 import { agentPrincipal } from '../../../domain/auth/principal.ts';
@@ -113,17 +116,47 @@ describe('launch_session with template', () => {
     expect(h.fakeDriver?.launches).toEqual([]);
   });
 
-  it('returns the session metadata the runtime launched', async () => {
+  it('launches from the template settings; no raw agent argument reaches the session', async () => {
     const runtime = new FakeTemplateRuntime();
     h = await createToolHarness({ templateRuntime: runtime });
-    runtime.onLaunch = (request) => h.services.sessions.create(request.input, request.principal);
-    await seed();
+    runtime.onLaunch = (request) =>
+      h.services.sessions.create(sessionInputFromRequest(request), request.principal);
+    await seed({ channel: 'chrome', headless: false });
     const { value } = await executeTool(h, 'launch_session', {
       slug: 'jobs',
       template: 'job-hunt',
+      channel: 'edge',
+      headless: true,
+      incognito: true,
+      vault_enabled: true,
+      disable_evaluate: false,
     });
-    expect(value).toMatchObject({ session_id: 'jobs-00000001', slug: 'jobs' });
-    expect(runtime.launches[0]?.template.name).toBe('job-hunt');
+    expect(value).toMatchObject({
+      session_id: 'jobs-00000001',
+      slug: 'jobs',
+      channel: 'chrome',
+      headless: false,
+      incognito: false,
+      vault_enabled: false,
+      persistence_mode: 'memory',
+      disable_evaluate: true,
+    });
+    const request = runtime.launches[0];
+    expect(request?.template.name).toBe('job-hunt');
+    // The port carries no copy of the agent's arguments.
+    expect(Object.keys(request ?? {}).sort()).toEqual([
+      'client',
+      'connectionId',
+      'principal',
+      'sealed',
+      'sealing',
+      'settings',
+      'sites',
+      'slug',
+      'template',
+    ]);
+    const spec = h.fakeDriver?.launches[0];
+    expect([spec?.channel, spec?.headless]).toEqual(['chrome', false]);
   });
 
   it('under templates=false every template name is TEMPLATE_NOT_FOUND', async () => {

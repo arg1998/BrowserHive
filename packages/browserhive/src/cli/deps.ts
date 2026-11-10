@@ -130,6 +130,13 @@ export interface CliStorage {
       readonly secretRefs: Readonly<Record<string, string>>;
     }[]
   >;
+  /**
+   * Every template's name and access list (spec 13 §6.1); empty for a database from before
+   * schema v9. A row whose list does not parse is reported with `null`.
+   */
+  templateAccess(): Promise<
+    readonly { readonly name: string; readonly principals: readonly string[] | null }[]
+  >;
   close(): Promise<void>;
 }
 

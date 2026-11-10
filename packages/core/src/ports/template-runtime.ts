@@ -1,10 +1,9 @@
 /** @module ports/template-runtime — the seam between the template service (data, access, contracts) and the template hosts (spec 13 §3): host facts for operator views and agent availability, the virtual-session launch, and the shutdown that precedes a delete. Implemented by the host supervisor (templates T1a-2); until then `UnavailableTemplateRuntime` answers every launch with `TEMPLATE_UNAVAILABLE`. */
 
 import type { SessionClientInfo } from '../domain/session/client-info.ts';
-import type { CreateSessionInput } from '../domain/session/create-request.ts';
 import type { SessionPrincipal } from '../domain/session/principal.ts';
 import type { Session } from '../domain/session/session.ts';
-import type { TemplateLaunchSettings } from '../domain/templates/launch-options.ts';
+import type { TemplateSessionSettings } from '../domain/templates/launch-options.ts';
 import type { SessionSealing, TemplateHostFacts } from '../domain/templates/model.ts';
 import type { TemplateRecord, TemplateSiteRecord } from './persistence/index.ts';
 
@@ -64,20 +63,27 @@ export const STOPPED_HOST: TemplateHostView = Object.freeze({
  * resolved, the caller may use it, and the launch options were applied (§5.3). The runtime runs the
  * remaining phases (`TemplateAdmission`, `reserve` with the template columns, host acquisition, the
  * window, policies, identity, register) within the 50 s launch budget.
+ *
+ * The agent's raw `launch_session` arguments never reach the runtime: it gets the slug, who asked,
+ * and {@link TemplateSessionSettings}, in which every value is the template's or fixed for template
+ * sessions except the few §5.3 lets an agent choose. Identity and proxy come from `template`.
  */
 export interface TemplateLaunchRequest {
   readonly template: TemplateRecord;
   readonly sites: readonly TemplateSiteRecord[];
-  /** The request as the tool received it (slug, connection, client); its option fields are already checked. */
-  readonly input: CreateSessionInput;
-  readonly principal: SessionPrincipal;
+  /** The session slug (`<slug>-<nanoid8>`). */
+  readonly slug: string;
+  /** The MCP connection that launched it (`sessions.connection_id`). */
+  readonly connectionId: string | null;
+  /** The launching call's client; its harness becomes the session's launch harness (D-48). */
   readonly client: SessionClientInfo | null;
+  readonly principal: SessionPrincipal;
   /** The protections in force for this principal (spec 13 §5.4). */
   readonly sealing: SessionSealing;
   /** `sessions.sealed`: any protection in force. */
   readonly sealed: boolean;
-  /** What the option rules kept: effective `disable_evaluate`, `humanize`, per-session context options. */
-  readonly settings: TemplateLaunchSettings;
+  /** The complete session settings (spec 13 §5.3, §5.5). */
+  readonly settings: TemplateSessionSettings;
 }
 
 /** The host side of session templates. */

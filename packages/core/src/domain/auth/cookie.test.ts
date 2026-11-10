@@ -12,7 +12,14 @@ import {
   sessionTokenFromCookie,
 } from './cookie.ts';
 import { assertPasswordPolicy, checkPasswordPolicy } from './password-policy.ts';
-import { AGENT_SCOPES, isSubsetOf, OPERATOR_SCOPES, parseScopes, scopesForKind } from './scopes.ts';
+import {
+  AGENT_SCOPES,
+  isSubsetOf,
+  OPERATOR_SCOPES,
+  parseScopes,
+  resolveStoredScopes,
+  scopesForKind,
+} from './scopes.ts';
 
 describe('session cookie', () => {
   it('carries the spec attributes and Secure only over https', () => {
@@ -61,6 +68,18 @@ describe('scopes', () => {
     ]);
     expect(isSubsetOf(['sessions:read'], OPERATOR_SCOPES)).toBe(true);
     expect(isSubsetOf(['sessions:read'], AGENT_SCOPES)).toBe(false);
+  });
+
+  it('resolveStoredScopes expands only a stored [] and fails closed on unknown scopes', () => {
+    // Issued without scopes: the kind's full set, including scopes later releases add.
+    expect(resolveStoredScopes([], 'operator')).toBe(OPERATOR_SCOPES);
+    expect(resolveStoredScopes([], 'agent')).toBe(AGENT_SCOPES);
+    // Every entry unknown (a newer release's scope read after a downgrade): no scope at all.
+    expect(resolveStoredScopes(['no:such-scope'], 'operator')).toEqual([]);
+    expect(resolveStoredScopes(['future:a', 'future:b'], 'operator')).toEqual([]);
+    // Mixed: only the known entries survive.
+    expect(resolveStoredScopes(['future:a', 'system:read'], 'operator')).toEqual(['system:read']);
+    expect(resolveStoredScopes(['mcp:tools'], 'agent')).toEqual(['mcp:tools']);
   });
 });
 

@@ -7,6 +7,7 @@ import type { CreateSessionInput } from '../session/create-request.ts';
 import {
   applyTemplateLaunchOptions,
   fixedOptionMessage,
+  MAX_OPTION_ISSUES,
   PER_SESSION_CONTEXT_OPTIONS,
 } from './launch-options.ts';
 import { type SessionSealing, sealingFor } from './model.ts';
@@ -25,6 +26,17 @@ const DEFAULTED: CreateSessionInput = {
   vaultEnabled: true,
 };
 
+/** The settings a template session takes from the template or fixes, whatever the agent sent. */
+const FIXED = {
+  channel: 'chromium',
+  headless: false,
+  stealth: true,
+  fingerprint: false,
+  incognito: false,
+  persistenceMode: 'memory',
+  vaultEnabled: false,
+} as const;
+
 describe('applyTemplateLaunchOptions', () => {
   it('mirrors the contracts list of per-session context options', () => {
     expect([...PER_SESSION_CONTEXT_OPTIONS]).toEqual([...PER_SESSION_TEMPLATE_CONTEXT_OPTIONS]);
@@ -38,7 +50,7 @@ describe('applyTemplateLaunchOptions', () => {
       const result = applyTemplateLaunchOptions(template, input, unsealedEvaluate);
       expect(result).toEqual({
         ok: true,
-        settings: { disableEvaluate: false, humanize: false, contextOptions: {} },
+        settings: { ...FIXED, disableEvaluate: false, humanize: false, contextOptions: {} },
       });
     }
   });
@@ -88,6 +100,7 @@ describe('applyTemplateLaunchOptions', () => {
     expect(result).toEqual({
       ok: true,
       settings: {
+        ...FIXED,
         disableEvaluate: true,
         humanize: false,
         contextOptions: { viewport, extraHTTPHeaders: { 'x-a': '1' }, colorScheme: 'dark' },
@@ -140,6 +153,44 @@ describe('applyTemplateLaunchOptions', () => {
       'persistence_mode',
       'context_options.locale',
     ]);
+  });
+
+  it('never takes channel, headless, incognito or vault_enabled from the agent', () => {
+    const result = applyTemplateLaunchOptions(
+      templateRecord({ channel: 'chrome', headless: true }),
+      { ...DEFAULTED, channel: 'edge', headless: false, incognito: true, vaultEnabled: true },
+      sealed,
+    );
+    expect(result.ok && result.settings).toMatchObject({
+      channel: 'chrome',
+      headless: true,
+      incognito: false,
+      vaultEnabled: false,
+      persistenceMode: 'memory',
+    });
+  });
+
+  it('caps the refusals and sanitizes the keys it echoes', () => {
+    const many: Record<string, number> = {};
+    for (let i = 0; i < 50; i++) many[`k${i}`] = i;
+    const capped = applyTemplateLaunchOptions(
+      template,
+      { ...DEFAULTED, contextOptions: many },
+      sealed,
+    );
+    expect(capped.ok).toBe(false);
+    if (capped.ok) return;
+    expect(capped.issues).toHaveLength(MAX_OPTION_ISSUES + 1);
+    expect(capped.issues.at(-1)).toEqual({
+      path: 'input',
+      message: 'and 30 more options the template fixes',
+    });
+    const odd = applyTemplateLaunchOptions(
+      template,
+      { ...DEFAULTED, launchOptions: { [`a\nb${'x'.repeat(100)}`]: 1 } },
+      sealed,
+    );
+    expect(odd.ok ? '' : odd.issues[0]?.path).toBe(`launch_options.a?b${'x'.repeat(61)}…`);
   });
 
   it('words the refusal as spec 13 §5.3 does', () => {
