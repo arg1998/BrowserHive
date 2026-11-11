@@ -225,13 +225,20 @@ export function checkpointVersionReason(facts: CheckpointFacts): TemplateVersion
   return null;
 }
 
-/** True when every enabled site was `signed_in` (there is at least one enabled site). */
+/**
+ * A good version (spec 13 §3.9 "Last good"): every enabled site was `signed_in`, and (until T2's
+ * probes keep health current, review #79 M-2) no enabled site missed one of its learned sign-in
+ * cookie names when the version was written. There is at least one enabled site.
+ */
 export function allSignedIn(health: readonly TemplateVersionHealthRecord[]): boolean {
   const enabled = health.filter((h) => h.enabled);
-  return enabled.length > 0 && enabled.every((h) => h.state === 'signed_in');
+  return (
+    enabled.length > 0 &&
+    enabled.every((h) => h.state === 'signed_in' && h.signInComplete !== false)
+  );
 }
 
-/** The "Last good" version: the newest with every enabled site signed in (spec 13 §3.9). */
+/** The "Last good" version: the newest good one (spec 13 §3.9). */
 export function lastGood(versions: readonly TemplateVersionRecord[]): number | null {
   let best: number | null = null;
   for (const v of versions) {
@@ -241,14 +248,33 @@ export function lastGood(versions: readonly TemplateVersionRecord[]): number | n
 }
 
 /**
+ * Whether each site had all its sign-in cookie names present in `summary` (`null`: the site has
+ * no names to check yet).
+ */
+export function signInCompleteness(
+  summary: TemplateVersionSummaryRecord,
+  site: string,
+  names: readonly string[],
+): boolean | null {
+  if (names.length === 0) return null;
+  const present = new Set(summary.domains.find((d) => d.domain === site)?.signInCookies ?? []);
+  return names.every((n) => present.has(n));
+}
+
+/**
  * Retention (spec 13 §3.9): kept are the newest `keep` versions, every pinned version and "Last
- * good"; the returned versions are deleted with their files.
+ * good"; the returned versions are deleted with their files. A version `readable` says cannot be
+ * opened with the keys held now is never deleted and does not count toward `keep`: `rekey` may
+ * still recover it (review #79 M-1).
  */
 export function prunableVersions(
   versions: readonly TemplateVersionRecord[],
   keep: number,
+  readable: (version: number) => boolean = () => true,
 ): readonly number[] {
-  const newestFirst = [...versions].sort((a, b) => b.version - a.version);
+  const newestFirst = [...versions]
+    .filter((v) => readable(v.version))
+    .sort((a, b) => b.version - a.version);
   const good = lastGood(versions);
   return newestFirst
     .slice(Math.max(0, keep))

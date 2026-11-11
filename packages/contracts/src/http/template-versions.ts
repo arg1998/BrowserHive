@@ -47,6 +47,8 @@ export const TemplateVersionHealth = z.object({
   site_id: z.string(),
   state: TemplateHealthState,
   enabled: z.boolean(),
+  /** Every learned sign-in cookie name of the site was present; `null` = nothing to check. */
+  sign_in_complete: z.boolean().nullable(),
 });
 
 /** `TemplateVersionRow` (spec 13 §11.1). */

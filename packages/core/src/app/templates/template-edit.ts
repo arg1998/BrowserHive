@@ -35,7 +35,7 @@ import type { TemplateHostOps, TemplateRuntime } from '../../ports/template-runt
 import type { DomainEvents } from '../events/catalog.ts';
 import { launchDeclaredHarnessOf, launchHarnessOf } from '../sessions/metadata.ts';
 import type { SessionService } from '../sessions/session-service.ts';
-import { notFoundForOperator, validationFailed } from './template-errors.ts';
+import { notFoundForOperator, operationRunning, validationFailed } from './template-errors.ts';
 import { toSiteView, toTemplateView } from './views.ts';
 
 /** At most this many sites per template (spec 13 §2.1). */
@@ -46,7 +46,7 @@ export interface TemplateEditDeps {
   readonly repos: Pick<Repositories, 'templates' | 'templateSites' | 'operatorActions'>;
   readonly uow: UnitOfWork;
   readonly runtime: TemplateRuntime;
-  readonly ops: Pick<TemplateHostOps, 'restartHost'>;
+  readonly ops: Pick<TemplateHostOps, 'restartHost' | 'held'>;
   readonly sessions: Pick<SessionService, 'peek' | 'close'>;
   readonly ids: Pick<IdGenerator, 'eventId'>;
   readonly clock: Clock;
@@ -89,6 +89,7 @@ export class TemplateEditService {
     const validated = validateTemplatePatch(input, current.template, this.#deps.clock.now());
     if (!validated.ok) throw validationFailed(validated.issues);
     const { patch, changed, restart } = validated.value;
+    if (restart && this.#deps.ops.held(templateId)) throw operationRunning(templateId);
     if (changed.length === 0) {
       return { template: toTemplateView(current.template, current.sites), closed_sessions: [] };
     }
@@ -122,6 +123,7 @@ export class TemplateEditService {
     by: string,
   ): Promise<TemplateChangeResponse> {
     const { template, sites } = await this.#load(templateId);
+    if (!enabled && this.#deps.ops.held(templateId)) throw operationRunning(templateId);
     const now = this.#deps.clock.now();
     const target = enabled
       ? template.status === 'disabled'

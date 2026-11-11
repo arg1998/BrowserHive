@@ -85,8 +85,13 @@ export class UnavailableTemplateHostOps implements TemplateHostOps {
     return;
   }
 
+  /** Nothing runs without hosts: a hold (a delete's) always succeeds. */
   hold(): TemplateOperationHold | null {
-    return null;
+    return { token: Symbol('hold'), release: () => undefined };
+  }
+
+  held(): boolean {
+    return false;
   }
 
   withHost<T>(): Promise<T> {

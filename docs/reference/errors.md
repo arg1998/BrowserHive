@@ -2260,7 +2260,7 @@ Message: `Encrypted template files exist but no template key resolves; checkpoin
 
 Hint: Set templateKey (BROWSERHIVE_TEMPLATE_KEY) or restore <data-dir>/admin/template.key.
 
-Cause: Checkpoint or version files exist under `templates/<id>/versions/`, `templateKey` is not set and `admin/template.key` is missing (spec 13 §2.4). The key file is never re-created while encrypted files exist, so they cannot be silently orphaned. Template browsers keep running (their live profile needs no key); checkpoints and versions are skipped and restores refused.
+Cause: Checkpoint or version files exist under `templates/<id>/versions/`, `templateKey` is not set and `admin/template.key` is missing (spec 13 §2.4). The key file is never re-created while encrypted files exist, so they cannot be silently orphaned. Template browsers keep running (their live profile needs no key); checkpoints and versions are skipped and restores refused. The same record, with `reason`, is written when `admin/template.key` exists but cannot be read, or cannot be created (a read-only `admin/`).
 
 Resolution: Restore the key file from the backup you copied with the template directories, or set `templateKey` to the key that wrote them, then restart.
 
@@ -2269,6 +2269,7 @@ Details:
 | Field | Type | Required | Constraints |
 |---|---|---|---|
 | `template_ids` | `string[]` | yes | — |
+| `reason` | `string` | no | — |
 
 <a id="TEMPLATE_KEY_MISMATCH"></a>
 ### `TEMPLATE_KEY_MISMATCH`

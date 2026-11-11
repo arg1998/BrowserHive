@@ -2,23 +2,25 @@
 /** @module test/integration/template-versions.test — versions, encryption at rest, restore and seeding on a real template host (spec 13 §2.4, §3.9, §3.12, §7.4; §17 T1b acceptance), both drivers: version 1 encrypted (no cookie name in the file, bound to key, header and slot), rolling cookies writing no version, a disappearing sign-in cookie writing `signin_change`, a localStorage sign-in surviving a restart, a checkpoint and a restore, restore as an operation that closes sessions and leaves no plaintext, seeding to `ready`, and a missing key leaving the host running. */
 
 import { afterEach, describe, expect, it } from 'bun:test';
-import { readdir, readFile, writeFile } from 'node:fs/promises';
+import { readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Page } from 'playwright';
 import { TemplateHostOperations } from '../../src/app/templates/host-operations.ts';
 import { TemplateOperations } from '../../src/app/templates/template-operations.ts';
+import { TemplateService } from '../../src/app/templates/template-service.ts';
 import { TemplateStateService } from '../../src/app/templates/template-state.ts';
 import type { Session } from '../../src/domain/session/session.ts';
 import { templateKeyOf } from '../../src/domain/templates/envelope.ts';
 import { createSystemClock } from '../../src/infra/clock/system-clock.ts';
+import { createTemplateFiles } from '../../src/infra/fs/template-files.ts';
 import { FileTemplateStateStore } from '../../src/infra/fs/template-state-store.ts';
 import { createCollectingLogger } from '../../src/infra/logging/collecting-logger.ts';
 import { isAppError } from '../../src/kernel/errors/app-error.ts';
 import type { TemplateKeyRing } from '../../src/ports/template-state.ts';
 import { FakeIdGenerator } from '../helpers/fake-id-generator.ts';
-import { InMemoryRepositories } from '../helpers/in-memory-repos.ts';
+import { InMemoryRepositories, InMemoryUnitOfWork } from '../helpers/in-memory-repos.ts';
 import { InMemoryOperatorActionRepository } from '../helpers/in-memory-vault-repos.ts';
-import { RecordingDegradations } from '../helpers/template-kit.ts';
+import { FAKE_TEMPLATE_GEO, RecordingDegradations } from '../helpers/template-kit.ts';
 import { templateSiteRecord } from '../persistence/helpers.ts';
 import {
   type DriverName,
@@ -217,6 +219,57 @@ for (const driver of DRIVERS) {
         const content = await readFile(path).catch(() => Buffer.alloc(0));
         expect(content.includes(Buffer.from(LOCAL_TOKEN))).toBe(false);
       }
+    });
+
+    it('a delete waits out a running restore, and a delete that slipped past leaves no browser and no profile (review #79 H-1)', async () => {
+      world = await templateWorld(driver);
+      const w = world;
+      const id = w.template.templateId;
+      const { state, operations, repos, ops } = await services(w);
+      const service = new TemplateService({
+        repos,
+        uow: new InMemoryUnitOfWork(repos),
+        runtime: w.supervisor,
+        ops,
+        geo: FAKE_TEMPLATE_GEO,
+        files: createTemplateFiles(join(w.dataDir, 'templates')),
+        degradations: new RecordingDegradations(),
+        ids: new FakeIdGenerator(),
+        clock: createSystemClock(),
+        logger: createCollectingLogger(),
+        config: {
+          enabled: true,
+          authMode: 'off',
+          maxPagesPerHost: 40,
+          defaults: { channel: 'chromium', stealth: 'off', fingerprint: false, humanize: false },
+        },
+      });
+      await signIn(pageOf(await w.launch('alpha')), 'restored-secret-0000000');
+      expect(await state.saveVersion(id, { reason: 'recording', by: 'operator' })).toBe(1);
+      // A restore that waits for alpha; the delete is refused meanwhile.
+      const first = await operations.restore(id, 1, { forceClose: false, by: 'operator' });
+      const refused = await service.remove(id, { force: true, by: 'operator' }).then(
+        () => 'deleted',
+        (e: unknown) => (isAppError(e) ? e.code : String(e)),
+      );
+      expect(refused).toBe('CONFLICT');
+      await until(() => operations.get(first.operation_id).state !== 'running', 60_000, 'restore');
+      // A delete that bypassed the hold (defence in depth): the supervisor forgets the id first.
+      const dir = join(w.dataDir, 'templates', id);
+      await w.launch('bravo');
+      const second = await operations.restore(id, 1, { forceClose: false, by: 'operator' });
+      await w.supervisor.shutdown(id);
+      await repos.templates.remove(id);
+      await rm(dir, { recursive: true, force: true });
+      await until(() => operations.get(second.operation_id).state !== 'running', 60_000, 'restore');
+      expect(operations.get(second.operation_id).state).toBe('failed');
+      expect(w.supervisor.runningHost(id)).toBeNull();
+      expect(
+        await stat(join(dir, 'userdata')).then(
+          () => true,
+          () => false,
+        ),
+      ).toBe(false);
     });
 
     it('seeds a template from a storage state to ready; a missing key leaves the host running', async () => {

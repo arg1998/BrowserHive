@@ -33,6 +33,7 @@ const healthJson = z.array(
     site_id: z.string(),
     state: z.enum(TEMPLATE_HEALTH_STATES),
     enabled: z.boolean(),
+    sign_in_complete: z.boolean().nullable().optional(),
   }),
 );
 
@@ -68,11 +69,19 @@ function healthFromJson(text: string, where: string): readonly TemplateVersionHe
     siteId: h.site_id,
     state: h.state,
     enabled: h.enabled,
+    signInComplete: h.sign_in_complete ?? null,
   }));
 }
 
 function healthToJson(health: readonly TemplateVersionHealthRecord[]): string {
-  return toJson(health.map((h) => ({ site_id: h.siteId, state: h.state, enabled: h.enabled })));
+  return toJson(
+    health.map((h) => ({
+      site_id: h.siteId,
+      state: h.state,
+      enabled: h.enabled,
+      sign_in_complete: h.signInComplete,
+    })),
+  );
 }
 
 /** `template_versions` row → record. */

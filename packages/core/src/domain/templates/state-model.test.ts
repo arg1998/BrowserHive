@@ -44,7 +44,7 @@ function version(n: number, over: Partial<TemplateVersionRecord> = {}): Template
     keyId: 'k',
     structureSha256: 's',
     summary: { domains: [], storageOrigins: 0 },
-    health: [{ siteId: 'linkedin.com', state: 'signed_out', enabled: true }],
+    health: [{ siteId: 'linkedin.com', state: 'signed_out', enabled: true, signInComplete: null }],
     pinned: false,
     createdBy: 'browserhive',
     createdAt: n,
@@ -186,7 +186,9 @@ describe('checkpoint version reasons (spec 13 §3.9)', () => {
 
 describe('retention and Last good (spec 13 §3.9)', () => {
   it('keeps the newest N, pinned versions and Last good', () => {
-    const good = [{ siteId: 'linkedin.com', state: 'signed_in' as const, enabled: true }];
+    const good = [
+      { siteId: 'linkedin.com', state: 'signed_in' as const, enabled: true, signInComplete: null },
+    ];
     const versions = [
       version(1, { health: good }),
       version(2, { pinned: true }),
@@ -201,8 +203,8 @@ describe('retention and Last good (spec 13 §3.9)', () => {
 
   it('a disabled site does not keep a version from being Last good', () => {
     const health = [
-      { siteId: 'a.test', state: 'signed_in' as const, enabled: true },
-      { siteId: 'b.test', state: 'signed_out' as const, enabled: false },
+      { siteId: 'a.test', state: 'signed_in' as const, enabled: true, signInComplete: null },
+      { siteId: 'b.test', state: 'signed_out' as const, enabled: false, signInComplete: null },
     ];
     expect(lastGood([version(1, { health }), version(2)])).toBe(1);
   });
@@ -228,5 +230,51 @@ describe('size cap (spec 13 §3.9)', () => {
     expect(capped.state.origins[0]?.indexedDB).toBeDefined();
     expect(capped.sizeBytes).toBeLessThan(2_000);
     expect(capState(state).dropped).toEqual([]);
+  });
+});
+
+describe('review #79 mutation gaps', () => {
+  const good = (siteId: string, complete: boolean | null = true) => ({
+    siteId,
+    state: 'signed_in' as const,
+    enabled: true,
+    signInComplete: complete,
+  });
+
+  it('signin_change when only one of two sites loses its sign-in cookie', () => {
+    const both = summarize(
+      { cookies: [cookie('sid', '.a.test'), cookie('bid', '.b.test')], origins: [] },
+      new Map([
+        ['a.test', ['sid']],
+        ['b.test', ['bid']],
+      ]),
+    );
+    const onlyA = summarize(
+      { cookies: [cookie('sid', '.a.test')], origins: [] },
+      new Map([
+        ['a.test', ['sid']],
+        ['b.test', ['bid']],
+      ]),
+    );
+    expect(signInChanged(onlyA, both, ['a.test', 'b.test'])).toBe(true);
+    expect(signInChanged(onlyA, both, ['a.test'])).toBe(false);
+  });
+
+  it('Last good is the newest good version; a missing sign-in cookie or no enabled site is not good', () => {
+    expect(
+      lastGood([version(1, { health: [good('a')] }), version(3, { health: [good('a')] })]),
+    ).toBe(3);
+    expect(
+      lastGood([version(1, { health: [good('a')] }), version(2, { health: [good('a', false)] })]),
+    ).toBe(1);
+    expect(lastGood([version(1, { health: [{ ...good('a'), enabled: false }] })])).toBeNull();
+    expect(
+      lastGood([version(1, { health: [good('a'), { ...good('b', false), enabled: false }] })]),
+    ).toBe(1);
+  });
+
+  it('retention never deletes or counts a version it cannot read', () => {
+    const versions = [version(1), version(2), version(3), version(4)];
+    expect([...prunableVersions(versions, 1, (v) => v !== 1)].sort()).toEqual([2, 3]);
   });
 });

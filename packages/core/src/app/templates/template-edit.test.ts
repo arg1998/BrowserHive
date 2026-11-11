@@ -187,6 +187,17 @@ describe('PATCH (spec 13 §3.2, D16)', () => {
   });
 });
 
+describe('during an operation (review #79 H-1)', () => {
+  it('disable and restarting edits answer CONFLICT; other edits pass', async () => {
+    ops.holds.add(TEMPLATE_ID);
+    expect(await code(edit.setEnabled(TEMPLATE_ID, false, 'a'))).toBe('CONFLICT');
+    expect(await code(edit.update(TEMPLATE_ID, { headless: true }, { by: 'a' }))).toBe('CONFLICT');
+    expect(
+      (await edit.update(TEMPLATE_ID, { description: 'x' }, { by: 'a' })).template.description,
+    ).toBe('x');
+  });
+});
+
 describe('disable and enable', () => {
   it('disabling closes every live session; enabling returns to ready', async () => {
     const off = await edit.setEnabled(TEMPLATE_ID, false, 'admin');

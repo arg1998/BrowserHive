@@ -5234,12 +5234,19 @@
                             },
                             "enabled": {
                               "type": "boolean"
+                            },
+                            "sign_in_complete": {
+                              "type": [
+                                "boolean",
+                                "null"
+                              ]
                             }
                           },
                           "required": [
                             "site_id",
                             "state",
-                            "enabled"
+                            "enabled",
+                            "sign_in_complete"
                           ],
                           "additionalProperties": false
                         }
@@ -10621,12 +10628,19 @@
                     },
                     "enabled": {
                       "type": "boolean"
+                    },
+                    "sign_in_complete": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
                     }
                   },
                   "required": [
                     "site_id",
                     "state",
-                    "enabled"
+                    "enabled",
+                    "sign_in_complete"
                   ],
                   "additionalProperties": false
                 }

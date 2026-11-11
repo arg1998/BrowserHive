@@ -1,6 +1,7 @@
 /** @module domain/templates/envelope.test — the template file envelope (spec 13 §2.4): layout, round trip, no plaintext, random nonces, tampered tag/body/nonce, AAD binding of template and slot, altered header and key id. */
 
 import { describe, expect, it } from 'bun:test';
+import { createCipheriv, randomBytes } from 'node:crypto';
 import {
   EnvelopeError,
   HEADER_BYTES,
@@ -110,5 +111,26 @@ describe('template envelope (spec 13 §2.4)', () => {
     expect(templateKeyId(KEY.key)).toHaveLength(16);
     expect(templateKeyId(KEY.key)).not.toBe(templateKeyId(OTHER.key));
     expect(() => templateKeyOf(new Uint8Array(31))).toThrow();
+  });
+
+  it('authenticates the header prefix: a file sealed without it in the AAD does not open', () => {
+    // Same key, nonce layout and header, but the AAD lacks the 13-byte prefix.
+    const nonce = randomBytes(12);
+    const prefix = Buffer.concat([
+      Buffer.from('BHTE'),
+      Buffer.from([1]),
+      Buffer.from(KEY.keyId, 'hex'),
+    ]);
+    const cipher = createCipheriv('aes-256-gcm', KEY.key, nonce, { authTagLength: 16 });
+    cipher.setAAD(Buffer.from(`${TEMPLATE}:1`, 'utf8'));
+    const body = Buffer.concat([cipher.update(PLAIN), cipher.final()]);
+    const forged = Buffer.concat([prefix, nonce, body, cipher.getAuthTag()]);
+    expect(failure(() => openEnvelope(forged, [KEY], TEMPLATE, 1))).toBe('auth_failed');
+  });
+
+  it('refuses a file whose magic is not BHTE', () => {
+    const sealed = Buffer.from(sealEnvelope(PLAIN, KEY, TEMPLATE, 1));
+    sealed[0] = 0x58;
+    expect(failure(() => openEnvelope(sealed, [KEY], TEMPLATE, 1))).toBe('malformed');
   });
 });

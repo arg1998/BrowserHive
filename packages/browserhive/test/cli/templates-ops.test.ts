@@ -21,8 +21,8 @@ function versionRow(overrides: Partial<TemplateVersionRow> = {}): TemplateVersio
     size_bytes: 2048,
     summary: { domains: [], storage_origins: 0 },
     health: [
-      { site_id: 'linkedin.com', state: 'signed_in', enabled: true },
-      { site_id: 'indeed.com', state: 'signed_out', enabled: true },
+      { site_id: 'linkedin.com', state: 'signed_in', enabled: true, sign_in_complete: null },
+      { site_id: 'indeed.com', state: 'signed_out', enabled: true, sign_in_complete: null },
     ],
     pinned: true,
     last_good: false,

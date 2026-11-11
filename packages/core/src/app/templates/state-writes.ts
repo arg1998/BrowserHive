@@ -7,10 +7,11 @@ import {
   lastGood,
   prunableVersions,
   type SignInNames,
+  signInCompleteness,
   structureHash,
   summarize,
 } from '../../domain/templates/state-model.ts';
-import { AppError } from '../../kernel/errors/app-error.ts';
+import { AppError, isAppError } from '../../kernel/errors/app-error.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { Clock } from '../../ports/clock.ts';
 import type { DegradationReporter } from '../../ports/degradation-reporter.ts';
@@ -75,6 +76,9 @@ export async function captureState(
     try {
       previous = await deps.store.read(template.templateId, 'latest');
     } catch (err) {
+      // Written with a key this process does not hold: `rekey` (or `templateKeyPrevious`) can
+      // still recover it, so it is never overwritten (review #79 M-1).
+      if (onOtherKey(deps, err)) throw keyMismatch(deps, template.templateId);
       log.warn('checkpoint unreadable', {
         templateId: template.templateId,
         err: serializeError(err),
@@ -97,6 +101,40 @@ export async function captureState(
   return capped.state;
 }
 
+/** True for `TEMPLATE_VERSION_UNREADABLE` of a file whose header names a key not held now. */
+export function onOtherKey(deps: Pick<TemplateStateDeps, 'store'>, err: unknown): boolean {
+  if (!isAppError(err) || err.code !== 'TEMPLATE_VERSION_UNREADABLE') return false;
+  const keyId = (err.details as { key_id?: unknown }).key_id;
+  const keys = deps.store.keys;
+  return (
+    typeof keyId === 'string' &&
+    keyId !== '' &&
+    keyId !== keys.current?.keyId &&
+    keyId !== keys.previous?.keyId
+  );
+}
+
+/** Records `TEMPLATE_KEY_MISMATCH` for the checkpoint and returns the error that skips the write. */
+function keyMismatch(
+  deps: TemplateStateDeps,
+  templateId: string,
+): AppError<'TEMPLATE_VERSION_UNREADABLE'> {
+  deps.degradations.report({
+    code: 'TEMPLATE_KEY_MISMATCH',
+    severity: 'warn',
+    message: `template ${templateId} checkpoint was written with another key; set templateKeyPrevious and run browserhive templates rekey`,
+    details: { template_id: templateId, versions: ['latest'] },
+  });
+  return new AppError(
+    'TEMPLATE_VERSION_UNREADABLE',
+    { template_id: templateId, version: 'latest', key_id: '' },
+    {
+      publicMessage:
+        "The template's checkpoint was written with another key; it is kept. Set templateKeyPrevious to that key and run browserhive templates rekey.",
+    },
+  );
+}
+
 /** Writes a version file and its row, then prunes and publishes `template.version`. */
 export async function writeVersion(
   deps: TemplateStateDeps,
@@ -111,6 +149,7 @@ export async function writeVersion(
   const templateId = template.templateId;
   const version = Math.max(template.currentVersion ?? 0, existing[0]?.version ?? 0) + 1;
   const file = await store.write(templateId, version, state);
+  const summary = summarize(state, signInNamesOf(sites));
   const record: TemplateVersionRecord = {
     templateId,
     version,
@@ -118,8 +157,13 @@ export async function writeVersion(
     restoredFrom: request.restoredFrom ?? null,
     ...file,
     structureSha256: structureHash(state),
-    summary: summarize(state, signInNamesOf(sites)),
-    health: sites.map((s) => ({ siteId: s.siteId, state: s.health.state, enabled: s.enabled })),
+    summary,
+    health: sites.map((s) => ({
+      siteId: s.siteId,
+      state: s.health.state,
+      enabled: s.enabled,
+      signInComplete: signInCompleteness(summary, s.siteId, s.learnedCookieNames),
+    })),
     pinned: false,
     createdBy: request.by,
     createdAt: deps.clock.now(),
@@ -168,7 +212,10 @@ export async function pruneVersions(
   templateId: string,
 ): Promise<void> {
   const versions = await deps.repos.templateVersions.list(templateId);
-  for (const version of prunableVersions(versions, deps.config.versionsKeep)) {
+  const files = await readableSlots(deps, templateId);
+  // A file on another key is kept and not counted: `rekey` may still recover it (review #79 M-1).
+  const readable = (version: number) => files.get(version) !== false;
+  for (const version of prunableVersions(versions, deps.config.versionsKeep, readable)) {
     await deps.store.remove(templateId, version);
     await deps.repos.templateVersions.remove(templateId, version);
     log.info('template version pruned', { templateId, version });

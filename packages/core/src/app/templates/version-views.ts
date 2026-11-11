@@ -25,7 +25,12 @@ export function toVersionRow(
       })),
       storage_origins: record.summary.storageOrigins,
     },
-    health: record.health.map((h) => ({ site_id: h.siteId, state: h.state, enabled: h.enabled })),
+    health: record.health.map((h) => ({
+      site_id: h.siteId,
+      state: h.state,
+      enabled: h.enabled,
+      sign_in_complete: h.signInComplete,
+    })),
     pinned: record.pinned,
     last_good: facts.lastGood === record.version,
     readable: facts.readable,

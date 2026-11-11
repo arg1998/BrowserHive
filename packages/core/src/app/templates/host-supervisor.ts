@@ -14,7 +14,7 @@ import type {
   TemplateLaunchRequest,
   TemplateRuntime,
 } from '../../ports/template-runtime.ts';
-import { type TemplateHold, TemplateHolds } from './host-holds.ts';
+import { TemplateHolds } from './host-holds.ts';
 import { HostLifecycle } from './host-lifecycle.ts';
 import {
   HostMemoryGuard,
@@ -33,6 +33,7 @@ import type {
 import { SYSTEM_MAINTENANCE_SLUG } from './host-supervisor-types.ts';
 import { hostViewOf } from './host-view.ts';
 import { admitTemplateLaunch, templateUnavailable } from './template-admission.ts';
+import { notFoundForOperator } from './template-errors.ts';
 import { toHostView } from './views.ts';
 import {
   maintenanceSessionInput,
@@ -57,7 +58,7 @@ export class TemplateHostSupervisor implements TemplateRuntime {
   private readonly pending = new Map<string, number>();
   private readonly rss = new Map<string, number>();
   /** Templates held by an operation (restore, seed, clearing saved passwords): agents wait. */
-  private readonly holds = new TemplateHolds();
+  readonly holds = new TemplateHolds();
   private readonly memory: HostMemoryGuard;
   private checkpoints: HostCheckpoints | null = null;
   /** The observed identity and its drift (spec 13 §2.2). */
@@ -88,16 +89,6 @@ export class TemplateHostSupervisor implements TemplateRuntime {
   /** The checkpoint writer (set once at composition; it reads hosts back through `runningHost`). */
   attachCheckpoints(checkpoints: HostCheckpoints): void {
     this.checkpoints = checkpoints;
-  }
-
-  /** Holds a template for an operation (restore, seed, clearing saved passwords; D17). */
-  hold(templateId: string): TemplateHold | null {
-    return this.holds.hold(templateId);
-  }
-
-  /** True while an operation holds the template. */
-  held(templateId: string): boolean {
-    return this.holds.held(templateId);
   }
 
   /** The lifecycle of a template's host (operator host operations). */
@@ -221,6 +212,8 @@ export class TemplateHostSupervisor implements TemplateRuntime {
 
   /** Before a delete: closes every session of the template and stops its host (spec 13 §2.6). */
   async shutdown(templateId: string): Promise<readonly string[]> {
+    // From now on no browser starts for this id, whatever an operation in flight still does.
+    this.holds.delete(templateId);
     const live = this.liveSessions(templateId);
     // The host goes `draining` before anything is awaited, so no launch attaches meanwhile.
     await this.hosts.get(templateId)?.stop('template deleted', 'operator', false);
@@ -329,6 +322,7 @@ export class TemplateHostSupervisor implements TemplateRuntime {
   }
 
   private lifecycleOf(template: TemplateRecord): HostLifecycle {
+    if (this.holds.deleted(template.templateId)) throw notFoundForOperator(template.templateId);
     const existing = this.hosts.get(template.templateId);
     if (existing !== undefined) {
       existing.refresh(template);

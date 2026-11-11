@@ -114,8 +114,12 @@ export class TemplateHostOperations implements TemplateHostOps {
     }
   }
 
+  held(templateId: string): boolean {
+    return this.#deps.supervisor.holds.held(templateId);
+  }
+
   hold(templateId: string): TemplateOperationHold | null {
-    return this.#deps.supervisor.hold(templateId);
+    return this.#deps.supervisor.holds.hold(templateId);
   }
 
   async startHost(template: TemplateRecord): Promise<void> {

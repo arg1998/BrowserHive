@@ -440,10 +440,10 @@ describe('T1b: holds, checkpoints and memory (spec 13 §3.2, §3.9, §3.12)', ()
   it('a held template refuses agent launches and foreign maintenance launches until released', async () => {
     const { supervisor } = setup();
     const template = templateRecord({ headless: true });
-    const hold = supervisor.hold(template.templateId);
+    const hold = supervisor.holds.hold(template.templateId);
     expect(hold).not.toBeNull();
     if (hold === null) throw new Error('no hold');
-    expect(supervisor.hold(template.templateId)).toBeNull();
+    expect(supervisor.holds.hold(template.templateId)).toBeNull();
     expect(await codeOf(supervisor.launch(request(template)))).toBe('TEMPLATE_UNAVAILABLE');
     const maintenance = {
       template,
@@ -457,6 +457,23 @@ describe('T1b: holds, checkpoints and memory (spec 13 §3.2, §3.9, §3.12)', ()
     ).toBe('ok');
     hold.release();
     expect(await codeOf(supervisor.launch(request(template)))).toBe('ok');
+  });
+
+  it('a deleted template never starts a browser again (review #79 H-1)', async () => {
+    const { supervisor, launcher } = setup();
+    const template = templateRecord({ headless: true });
+    await supervisor.launch(request(template));
+    await supervisor.shutdown(template.templateId);
+    const started = launcher.specs.length;
+    const maintenance = {
+      template,
+      sites: [],
+      slug: 'maintenance',
+      principal: { subject: 'browserhive' },
+    };
+    expect(await codeOf(supervisor.launchMaintenance(maintenance))).toBe('TEMPLATE_NOT_FOUND');
+    expect(await codeOf(supervisor.launch(request(template, 'again')))).toBe('TEMPLATE_NOT_FOUND');
+    expect(launcher.specs.length).toBe(started);
   });
 
   it('a clean stop checkpoints before the browser closes; a delete does not', async () => {

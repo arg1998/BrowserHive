@@ -22074,12 +22074,19 @@
                       },
                       "enabled": {
                         "type": "boolean"
+                      },
+                      "sign_in_complete": {
+                        "type": [
+                          "boolean",
+                          "null"
+                        ]
                       }
                     },
                     "required": [
                       "site_id",
                       "state",
-                      "enabled"
+                      "enabled",
+                      "sign_in_complete"
                     ]
                   }
                 },
@@ -22378,12 +22385,19 @@
                     },
                     "enabled": {
                       "type": "boolean"
+                    },
+                    "sign_in_complete": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
                     }
                   },
                   "required": [
                     "site_id",
                     "state",
-                    "enabled"
+                    "enabled",
+                    "sign_in_complete"
                   ]
                 }
               },
@@ -40227,7 +40241,7 @@
             }
           },
           "409": {
-            "description": "TEMPLATE_DISABLED, CONFLICT",
+            "description": "TEMPLATE_DISABLED, CONFLICT, TEMPLATE_VERSION_UNREADABLE",
             "content": {
               "application/problem+json": {
                 "schema": {

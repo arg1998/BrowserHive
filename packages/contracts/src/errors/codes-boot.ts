@@ -328,11 +328,15 @@ export const BOOT_ERRORS = {
     message:
       'Encrypted template files exist but no template key resolves; checkpoints and versions are skipped.',
     hint: 'Set templateKey (BROWSERHIVE_TEMPLATE_KEY) or restore <data-dir>/admin/template.key.',
-    details: z.object({ template_ids: z.array(z.string()) }),
+    details: z.object({
+      template_ids: z.array(z.string()),
+      /** Why no key resolves when the key file cannot be read or created. */
+      reason: z.string().optional(),
+    }),
     docs: true,
     exitCode: 1,
     cause:
-      'Checkpoint or version files exist under `templates/<id>/versions/`, `templateKey` is not set and `admin/template.key` is missing (spec 13 §2.4). The key file is never re-created while encrypted files exist, so they cannot be silently orphaned. Template browsers keep running (their live profile needs no key); checkpoints and versions are skipped and restores refused.',
+      'Checkpoint or version files exist under `templates/<id>/versions/`, `templateKey` is not set and `admin/template.key` is missing (spec 13 §2.4). The key file is never re-created while encrypted files exist, so they cannot be silently orphaned. Template browsers keep running (their live profile needs no key); checkpoints and versions are skipped and restores refused. The same record, with `reason`, is written when `admin/template.key` exists but cannot be read, or cannot be created (a read-only `admin/`).',
     resolution:
       'Restore the key file from the backup you copied with the template directories, or set `templateKey` to the key that wrote them, then restart.',
   }),

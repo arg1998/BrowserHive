@@ -201,6 +201,11 @@ export interface TemplateVersionHealthRecord {
   readonly siteId: string;
   readonly state: TemplateHealthState;
   readonly enabled: boolean;
+  /**
+   * Every learned sign-in cookie name of the site was present; `null` = no names to check (or a
+   * row written before the field existed).
+   */
+  readonly signInComplete: boolean | null;
 }
 
 /** The encrypted file of a version (spec 13 §2.4). */

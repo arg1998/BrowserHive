@@ -132,6 +132,17 @@ export class TemplateOperations {
         `Template '${template.name}' is ready: seeding replaces its sign-ins; confirm with confirm=true.`,
       );
     }
+    if (!this.#deps.state.writable) {
+      // The browser would take the state and no version could record it (review #79 L-2).
+      throw new AppError(
+        'TEMPLATE_VERSION_UNREADABLE',
+        { template_id: templateId, version: 'latest', key_id: '' },
+        {
+          publicMessage:
+            'No template key resolves, so a seed cannot be recorded; set templateKey first.',
+        },
+      );
+    }
     const state = toState(input);
     return await this.#start(template, 'seed', options.by, {
       audit: {
@@ -168,6 +179,10 @@ export class TemplateOperations {
     token: symbol,
     request: Parameters<TemplateStateService['saveVersion']>[1],
   ): Promise<number | undefined> {
+    // Re-checked after the drain, right before a browser starts (review #79 H-1).
+    if ((await this.#deps.repos.templates.get(template.templateId)) === null) {
+      throw notFoundForOperator(template.templateId);
+    }
     return await this.#deps.ops.withHost(
       template,
       async (host) => {

@@ -89,6 +89,14 @@ describe('templates rekey refusals', () => {
     const value = await cliHarness({ argv: ['templates', 'rekey', '--oldKeyEnv', OLD] });
     expect(value.code).toBe(64);
     expect(value.stderr).not.toContain(OLD);
+    // A key that also passes as a variable name is refused without being echoed (review #79 I-4).
+    const keyLike = 'A'.repeat(43);
+    const named = await cliHarness({
+      argv: ['templates', 'rekey', '--oldKeyEnv', keyLike],
+      fs: fs(),
+    });
+    expect(named.stderr).toContain('looks like a key itself');
+    expect(named.stderr).not.toContain(keyLike);
   });
 });
 

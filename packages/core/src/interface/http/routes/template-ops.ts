@@ -161,7 +161,7 @@ export const TEMPLATE_OPS_ROUTES = [
       'Seed the sign-ins from a Playwright storage state (the body, ≤ 16 MiB, never stored in plain text): the browser restarts, the state is applied and an import version is written; the template becomes ready. Over a ready template it needs confirm=true.',
     request: { params: TemplateIdParams, query: SeedTemplateQuery, body: TemplateStorageState },
     responses: { 202: TemplateOperationAccepted },
-    errors: ['TEMPLATE_NOT_FOUND', 'TEMPLATE_DISABLED', 'CONFLICT'],
+    errors: ['TEMPLATE_NOT_FOUND', 'TEMPLATE_DISABLED', 'CONFLICT', 'TEMPLATE_VERSION_UNREADABLE'],
     bodyLimitBytes: SEED_BODY_BYTES,
     rateLimit: SEED_RATE,
     async handler({ input, principal, services }) {

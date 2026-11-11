@@ -80,7 +80,11 @@ export async function rekeyTemplateFiles(input: RekeyInput): Promise<RekeyResult
           input.onFile?.({ templateId, slot, outcome: 'rewritten' });
         }
         // Reconciled every time: an interrupted run may have renamed the file before its row moved.
-        if (slot !== 'latest') await input.updateRow(templateId, slot, facts);
+        if (slot !== 'latest') {
+          await input.updateRow(templateId, slot, facts);
+          // The meta beside the file names the key too (review #79 L-4).
+          await store.patchMeta(templateId, slot, facts);
+        }
       } catch (err) {
         failed.push({ templateId, slot, reason: serializeError(err).message });
         input.onFile?.({ templateId, slot, outcome: 'failed' });

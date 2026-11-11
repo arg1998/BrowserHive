@@ -9,6 +9,18 @@ export interface TemplateHold {
 /** The holds, by template id. */
 export class TemplateHolds {
   readonly #holds = new Map<string, symbol>();
+  /** Templates deleted in this process: no browser may start for them again (review #79 H-1). */
+  readonly #deleted = new Set<string>();
+
+  /** Marks a template deleted. */
+  delete(templateId: string): void {
+    this.#deleted.add(templateId);
+  }
+
+  /** True once the template was deleted in this process. */
+  deleted(templateId: string): boolean {
+    return this.#deleted.has(templateId);
+  }
 
   /** Takes the hold, or `null` when another operation holds the template. */
   hold(templateId: string): TemplateHold | null {

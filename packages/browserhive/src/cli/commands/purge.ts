@@ -143,7 +143,7 @@ export function renderPurgeInventory(
     lines.push(
       '',
       `  ⚠  templates/ holds ${templateDirs} session template director${templateDirs === 1 ? 'y' : 'ies'}. Purging the database`,
-      '     alone orphans them: their rows go, the directories stay and are never used again.',
+      '     alone orphans them: their rows go, and their profiles (signed-in browsers) stay on disk.',
       '     Pass --all to delete them too.',
     );
   }

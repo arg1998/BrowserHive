@@ -1,7 +1,7 @@
 /** @module infra/fs/template-state-store.test — the encrypted state files on disk and `rekey` (spec 13 §2.4): modes, no clear text, swapped files, the previous key, interrupted and repeated rotation. */
 
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
-import { mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { templateKeyOf } from '../../domain/templates/envelope.ts';
@@ -126,6 +126,21 @@ describe('FileTemplateStateStore (spec 13 §2.4)', () => {
   });
 });
 
+describe('a failed write (spec 13 §3.2 disk full)', () => {
+  it('leaves no .tmp and the previous file in place', async () => {
+    const store = new FileTemplateStateStore({
+      templatesDir: dir,
+      keys: { current: NEW, previous: null },
+    });
+    await store.write(T1, 'latest', STATE);
+    // The rename target is a directory now: the rename fails after the temp file was written.
+    await rm(join(dir, T1, 'versions', 'latest.state.enc'));
+    await mkdir(join(dir, T1, 'versions', 'latest.state.enc'));
+    await expect(store.write(T1, 'latest', STATE)).rejects.toThrow();
+    expect(await readdir(join(dir, T1, 'versions'))).toEqual(['latest.state.enc']);
+  });
+});
+
 describe('templates rekey (spec 13 §2.4 rotation)', () => {
   async function seed(): Promise<Map<string, TemplateStateFileRecord>> {
     const old = new FileTemplateStateStore({
@@ -189,6 +204,22 @@ describe('templates rekey (spec 13 §2.4 rotation)', () => {
     });
     expect(again).toEqual({ rewritten: 0, skipped: 4, failed: [] });
     expect(await readdir(join(dir, T1, 'versions'))).not.toContain('v2.state.enc.tmp');
+  });
+
+  it('rewrites the meta beside each version with the new key id', async () => {
+    const old = new FileTemplateStateStore({
+      templatesDir: dir,
+      keys: { current: OLD, previous: null },
+    });
+    await old.write(T1, 1, STATE);
+    await old.writeMeta(T1, 1, { version: 1, key_id: OLD.keyId, reason: 'manual' });
+    const store = new FileTemplateStateStore({
+      templatesDir: dir,
+      keys: { current: NEW, previous: null },
+    });
+    await rekeyTemplateFiles({ store, current: NEW, old: OLD, updateRow: async () => undefined });
+    const meta = JSON.parse(await readFile(join(dir, T1, 'versions', 'v1.meta.json'), 'utf8'));
+    expect(meta).toMatchObject({ version: 1, reason: 'manual', key_id: NEW.keyId });
   });
 
   it('reports a file no key opens and keeps going', async () => {

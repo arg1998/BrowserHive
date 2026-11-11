@@ -222,6 +222,8 @@ The cookies in the live profile, per platform:
 | macOS | Chromium under automation uses a mocked keychain (`--use-mock-keychain`): effectively plain text. |
 | Windows | DPAPI, per user account: any process running as your user can decrypt them. |
 
+On Windows the modes `0600` and `0700` do not apply: `admin/template.key` and the template directories are protected by the access control list of the data directory (by default your user, SYSTEM and Administrators), so keep the data directory under your user profile.
+
 Treat the key like a password, and store it apart from any copy of the files. To change it, see [Rotating the key](templates.md#rotating-the-key).
 
 ## Takeover is full control

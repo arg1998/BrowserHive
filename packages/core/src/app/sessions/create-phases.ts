@@ -105,7 +105,7 @@ export function buildPhases(
           hooks.warn(session, {
             code: 'TEMPLATE_STATE_COPY',
             sessionId: session.id,
-            message: `This session started from a copy of template '${source}''s sign-ins; using the copy can sign the template out.`,
+            message: `This session started from a copy of the sign-ins of template '${source}'; using the copy can sign the template out.`,
             details: { source_template_id: source },
           });
         }

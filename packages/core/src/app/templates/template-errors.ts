@@ -85,3 +85,14 @@ export function deleteRunning(templateId: string): AppError<'CONFLICT'> {
     { publicMessage: `Template '${templateId}' is already being deleted.` },
   );
 }
+
+/** `CONFLICT`: a restore, seed or clearing of saved passwords holds the template. */
+export function operationRunning(templateId: string): AppError<'CONFLICT'> {
+  return new AppError(
+    'CONFLICT',
+    {},
+    {
+      publicMessage: `An operation on template '${templateId}' is running (a restore, a seed or clearing saved passwords); retry when it finishes.`,
+    },
+  );
+}

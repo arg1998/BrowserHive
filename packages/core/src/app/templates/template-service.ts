@@ -55,6 +55,7 @@ import {
   nameTaken,
   notFoundForAgent,
   notFoundForOperator,
+  operationRunning,
   validationFailed,
 } from './template-errors.ts';
 import { pageTemplates } from './template-list.ts';
@@ -80,7 +81,7 @@ export interface TemplateServiceDeps {
   readonly uow: UnitOfWork;
   readonly runtime: TemplateRuntime;
   /** The running browser's live facts for the detail view; absent = none (no hosts). */
-  readonly ops?: Pick<TemplateHostOps, 'jar' | 'sharedWindows'>;
+  readonly ops?: Pick<TemplateHostOps, 'jar' | 'sharedWindows' | 'hold'>;
   readonly geo: TemplateGeoResolver;
   readonly files: TemplateFiles;
   readonly ids: Pick<IdGenerator, 'opaque' | 'eventId'>;
@@ -240,6 +241,12 @@ export class TemplateService {
     // From here no launch of this template starts (`launch` checks synchronously before it begins).
     const release = this.#locks.beginDelete(templateId);
     if (release === null) throw deleteRunning(templateId);
+    // A restore, seed or clearing of saved passwords must finish first (review #79 H-1).
+    const hold = this.#deps.ops === undefined ? null : this.#deps.ops.hold(templateId);
+    if (this.#deps.ops !== undefined && hold === null) {
+      release();
+      throw operationRunning(templateId);
+    }
     try {
       const busy =
         this.#deps.runtime.liveSessions(templateId).length + this.#locks.inFlight(templateId);
@@ -273,6 +280,7 @@ export class TemplateService {
       });
       return { ok: true, closed_sessions: [...closed], deleted_bytes: deletedBytes };
     } finally {
+      hold?.release();
       release();
     }
   }

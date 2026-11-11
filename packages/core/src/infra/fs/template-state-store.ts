@@ -2,7 +2,7 @@
 
 import { createHash } from 'node:crypto';
 import { mkdir, open, readdir, readFile, rename, rm, stat } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import {
   EnvelopeError,
   openEnvelope,
@@ -67,6 +67,22 @@ export async function writeAtomic(path: string, bytes: Uint8Array): Promise<void
   } catch (err) {
     await rm(tmp, { force: true }).catch(() => undefined);
     throw err;
+  }
+  await syncDir(dirname(path));
+}
+
+/** `fsync` of a directory so a rename survives a power loss (POSIX; a no-op where unsupported). */
+async function syncDir(dir: string): Promise<void> {
+  if (process.platform === 'win32') return;
+  try {
+    const handle = await open(dir, 'r');
+    try {
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+  } catch {
+    // Some filesystems refuse a directory fsync; the rename itself is done.
   }
 }
 
@@ -174,6 +190,23 @@ export class FileTemplateStateStore implements TemplateStateStore {
   ): Promise<void> {
     const text = `${JSON.stringify(meta, null, 2)}\n`;
     await writeAtomic(join(this.dirOf(templateId), `v${version}.meta.json`), Buffer.from(text));
+  }
+
+  /** Updates the file facts in an existing `v<N>.meta.json` (after `rekey`); absent = nothing. */
+  async patchMeta(
+    templateId: string,
+    version: number,
+    file: TemplateStateFileRecord,
+  ): Promise<void> {
+    const path = join(this.dirOf(templateId), `v${version}.meta.json`);
+    let meta: Record<string, unknown>;
+    try {
+      meta = JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>;
+    } catch {
+      return;
+    }
+    const next = { ...meta, size_bytes: file.sizeBytes, sha256: file.sha256, key_id: file.keyId };
+    await writeAtomic(path, Buffer.from(`${JSON.stringify(next, null, 2)}\n`));
   }
 
   async files(templateId: string): Promise<readonly StateFileInfo[]> {

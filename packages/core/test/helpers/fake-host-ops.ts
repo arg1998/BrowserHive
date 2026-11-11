@@ -82,6 +82,10 @@ export class FakeTemplateHostOps implements TemplateHostOps {
     return { token: Symbol(templateId), release: () => void this.holds.delete(templateId) };
   }
 
+  held(templateId: string): boolean {
+    return this.holds.has(templateId);
+  }
+
   async withHost<T>(_template: TemplateRecord, fn: (host: TemplateHost) => Promise<T>): Promise<T> {
     if (this.host === null) throw new Error('no browser');
     return await fn(this.host);

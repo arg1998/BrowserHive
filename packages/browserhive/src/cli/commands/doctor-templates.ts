@@ -168,7 +168,7 @@ async function checkKey(
   const foreign = files.filter((f) => f.keyId !== current && f.keyId !== previous);
   if (foreign.length > 0) {
     warnings.push(
-      `${listText(templatesOf(foreign, facts))}: ${foreign.length} file(s) written with another key cannot be read; set the key that wrote them as templateKeyPrevious, or as templateKey and run 'browserhive templates rekey'`,
+      `${listText(templatesOf(foreign, facts))}: ${foreign.length} file(s) written with another key cannot be read (they are kept: checkpoints are skipped and retention does not delete them); set the key that wrote them as templateKeyPrevious, then stop the server and run 'browserhive templates rekey --oldKeyEnv <ENV>'`,
     );
   }
   if (onPrevious.length > 0) {

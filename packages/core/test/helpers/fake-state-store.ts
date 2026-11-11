@@ -84,7 +84,11 @@ export class FakeTemplateStateStore implements TemplateStateStore {
     return [...new Set([...this.files_.keys()].map((k) => k.split(' ')[0] ?? ''))].sort();
   }
 
-  async removeTemporaries(): Promise<number> {
+  /** Templates whose leftover `.tmp` files were removed, in order. */
+  readonly temporariesRemoved: string[] = [];
+
+  async removeTemporaries(templateId: string): Promise<number> {
+    this.temporariesRemoved.push(templateId);
     return 0;
   }
 

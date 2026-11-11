@@ -151,6 +151,8 @@ export interface TemplateHostOps {
    * operation holds it.
    */
   hold(templateId: string): TemplateOperationHold | null;
+  /** True while an operation (or a delete) holds the template. */
+  held(templateId: string): boolean;
   /**
    * Runs `fn` on the template's running browser, starting it through BrowserHive's own maintenance
    * session when it is stopped (`holdToken`: the operation holding the template).

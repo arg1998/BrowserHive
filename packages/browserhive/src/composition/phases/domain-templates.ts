@@ -126,23 +126,37 @@ export function templatesDirOf(dataDir: string): string {
   return join(dataDir, 'templates');
 }
 
-/** Builds the template service. */
-export async function buildTemplates(input: TemplatesInput): Promise<TemplatesParts> {
+/**
+ * The template state store with the keys resolved once (spec 13 §2.4), after the boot pass over
+ * the files. Under `templates=false` no key is resolved or created. A key file that cannot be
+ * read or created never stops the server: it is the `TEMPLATE_KEY_MISSING` degradation, with its
+ * cause, and checkpoints are skipped (review #79 M-3).
+ */
+export async function templateStateStore(
+  input: TemplatesInput,
+  templatesDir: string,
+): Promise<FileTemplateStateStore> {
   const { config } = input;
-  const templatesDir = templatesDirOf(config.dataDir);
-  const probe = new FileTemplateStateStore({
+  const none = new FileTemplateStateStore({
     templatesDir,
     keys: { current: null, previous: null },
   });
-  // Resolved once per process (spec 13 §2.4); the key file is never created over existing files.
+  if (!config.templates) return none;
   const keys = await resolveTemplateKeys({
     dataDir: config.dataDir,
     configured: config.templateKey,
     previous: config.templateKeyPrevious,
-    filesExist: async () => (await probe.templatesWithFiles()).length > 0,
+    filesExist: async () => (await none.templatesWithFiles()).length > 0,
   });
-  if (keys.problem !== null)
-    input.logger.error('template key unreadable', { detail: keys.problem });
+  if (keys.problem !== null) {
+    input.logger.error('template key unusable', { detail: keys.problem });
+    input.degradations.report({
+      code: 'TEMPLATE_KEY_MISSING',
+      severity: 'error',
+      message: `no template key: ${keys.problem}`,
+      details: { template_ids: [...(await none.templatesWithFiles())], reason: keys.problem },
+    });
+  }
   if (input.keyFromFlag === true) {
     input.logger.warn('templateKey given as flag', {
       detail: 'process arguments are readable by other users; use BROWSERHIVE_TEMPLATE_KEY',
@@ -158,6 +172,14 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
     degradations: input.degradations,
     logger: input.logger,
   });
+  return store;
+}
+
+/** Builds the template service. */
+export async function buildTemplates(input: TemplatesInput): Promise<TemplatesParts> {
+  const { config } = input;
+  const templatesDir = templatesDirOf(config.dataDir);
+  const store = await templateStateStore(input, templatesDir);
   const reader = createProcessTreeReader();
   const supervisor = config.templates
     ? new TemplateHostSupervisor({

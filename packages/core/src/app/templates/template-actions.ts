@@ -8,7 +8,7 @@ import type { Repositories, TemplateRecord } from '../../ports/persistence/index
 import type { JsonObject } from '../../ports/persistence/json.ts';
 import type { TemplateFiles } from '../../ports/template-files.ts';
 import type { TemplateHostOps, TemplateRuntime } from '../../ports/template-runtime.ts';
-import { disabled, notFoundForOperator } from './template-errors.ts';
+import { disabled, notFoundForOperator, operationRunning } from './template-errors.ts';
 import type { TemplateStateService } from './template-state.ts';
 import { toHostView } from './views.ts';
 
@@ -16,7 +16,10 @@ import { toHostView } from './views.ts';
 export interface TemplateActionsDeps {
   readonly repos: Pick<Repositories, 'templates' | 'operatorActions'>;
   readonly runtime: Pick<TemplateRuntime, 'host'>;
-  readonly ops: Pick<TemplateHostOps, 'startHost' | 'stopHost' | 'restartHost' | 'closeParkedPage'>;
+  readonly ops: Pick<
+    TemplateHostOps,
+    'startHost' | 'stopHost' | 'restartHost' | 'closeParkedPage' | 'held'
+  >;
   readonly state: Pick<TemplateStateService, 'saveVersion' | 'pin'>;
   readonly files: Pick<TemplateFiles, 'dirOf'>;
   readonly ids: Pick<IdGenerator, 'eventId'>;
@@ -46,6 +49,8 @@ export class TemplateActions {
   ): Promise<HostView> {
     const template = await this.#template(templateId);
     if (action !== 'stop' && template.status === 'disabled') throw disabled(template.name);
+    // A restore or seed restarts the browser itself (review #79 H-1).
+    if (this.#deps.ops.held(templateId)) throw operationRunning(templateId);
     let details: JsonObject = {};
     if (action === 'start') await this.#deps.ops.startHost(template);
     else if (action === 'restart') await this.#deps.ops.restartHost(template);

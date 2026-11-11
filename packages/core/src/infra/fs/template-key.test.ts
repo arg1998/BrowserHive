@@ -1,7 +1,7 @@
 /** @module infra/fs/template-key.test — resolving the template key (spec 13 §2.4): configured key, key file created exclusively with mode 0600, never over existing files, and the O_EXCL race. */
 
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { templateKeyId } from '../../domain/templates/envelope.ts';
@@ -99,5 +99,58 @@ describe('template key resolution (spec 13 §2.4)', () => {
     expect(decodeTemplateKey(KEY_A.replace(/\+/g, '-').replace(/\//g, '_'))?.length).toBe(32);
     expect(decodeTemplateKey(Buffer.alloc(31).toString('base64'))).toBeNull();
     expect(decodeTemplateKey('')).toBeNull();
+  });
+
+  it('falls back to an exclusive create where the filesystem has no hard links', async () => {
+    const noLinks = {
+      link: async () => {
+        throw Object.assign(new Error('operation not permitted'), { code: 'EPERM' });
+      },
+    };
+    const keys = await resolveTemplateKeys({ dataDir: dir, filesExist: none, fileOps: noLinks });
+    expect(keys.source).toBe('created');
+    const again = await resolveTemplateKeys({ dataDir: dir, filesExist: none });
+    expect(again.current?.keyId).toBe(keys.current?.keyId);
+    expect((await readdir(join(dir, 'admin'))).filter((n) => n.endsWith('.tmp'))).toEqual([]);
+  });
+
+  it('the fallback never overwrites a key another process created', async () => {
+    const noLinks = {
+      link: async () => {
+        throw Object.assign(new Error('operation not supported'), { code: 'ENOTSUP' });
+      },
+    };
+    const first = await createKeyFile(templateKeyPath(dir), join(dir, 'admin'), noLinks);
+    const text = await readFile(templateKeyPath(dir), 'utf8');
+    expect(first).not.toBeNull();
+    expect(await createKeyFile(templateKeyPath(dir), join(dir, 'admin'), noLinks)).toBeNull();
+    expect(await readFile(templateKeyPath(dir), 'utf8')).toBe(text);
+  });
+
+  it('never throws when the key file cannot be created: no key, with the cause', async () => {
+    const broken = {
+      link: async () => {
+        throw Object.assign(new Error('input/output error'), { code: 'EIO' });
+      },
+    };
+    const keys = await resolveTemplateKeys({ dataDir: dir, filesExist: none, fileOps: broken });
+    expect(keys.current).toBeNull();
+    expect(keys.problem).toContain('cannot create');
+  });
+
+  it('removes key temporaries a crash left behind', async () => {
+    await createKeyFile(templateKeyPath(dir), join(dir, 'admin'));
+    await writeFile(join(dir, 'admin', 'template.key.00ff00ff00ff00ff.tmp'), 'stale\n');
+    await resolveTemplateKeys({ dataDir: dir, filesExist: none });
+    expect(await readdir(join(dir, 'admin'))).toEqual(['template.key']);
+  });
+
+  it('reads a key file that is still being written once it is complete', async () => {
+    const key = Buffer.alloc(32, 7).toString('base64');
+    await createKeyFile(templateKeyPath(dir), join(dir, 'admin'));
+    await writeFile(templateKeyPath(dir), key.slice(0, 10));
+    setTimeout(() => void writeFile(templateKeyPath(dir), `${key}\n`), 30);
+    const keys = await resolveTemplateKeys({ dataDir: dir, filesExist: none });
+    expect(keys.current?.keyId).toBe(templateKeyId(Buffer.alloc(32, 7)));
   });
 });

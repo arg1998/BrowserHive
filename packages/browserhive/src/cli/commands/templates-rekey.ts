@@ -45,6 +45,12 @@ async function resolveKeys(
 ): Promise<RekeyKeys | ExitCode> {
   const { deps } = context;
   const env = invocation.oldKeyEnv;
+  if (server.decodeTemplateKey(env) !== null) {
+    // Never echo it: a key was given where the variable's name belongs (review #79 I-4).
+    return refuse(context, [
+      'browserhive templates rekey: --oldKeyEnv takes the NAME of the environment variable that holds the old key, and the value given looks like a key itself. Export it in a variable and pass that name.',
+    ]);
+  }
   const oldText = deps.env[env];
   if (oldText === undefined || oldText.trim() === '') {
     return refuse(context, [

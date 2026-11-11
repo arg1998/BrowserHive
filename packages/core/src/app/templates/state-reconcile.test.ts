@@ -45,6 +45,7 @@ describe('template state at boot (spec 13 §2.4)', () => {
       logger: new CollectingLogger(),
     });
     expect(result.orphansRemoved).toBe(1);
+    expect(store.temporariesRemoved).toEqual(['tp-aaaaaaaaaa']);
     expect((await store.files('tp-aaaaaaaaaa')).map((f) => f.slot).sort()).toEqual([1, 'latest']);
     expect(degradations.reports).toEqual([]);
   });
