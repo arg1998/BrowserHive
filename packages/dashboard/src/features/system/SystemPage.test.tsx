@@ -4,6 +4,7 @@ import { describe, expect, it } from 'bun:test';
 import type { SystemInfo } from '@browserhive/contracts/http';
 import { AppError } from '@/lib/api/errors.ts';
 import { NOW, systemConfig, systemInfo } from '../../../test/fixtures/ops.ts';
+import { templateSummary, templatesPage } from '../../../test/fixtures/templates.ts';
 import { expectNoA11yViolations } from '../../../test/helpers/axe.ts';
 import { envelope, problem, renderPage } from '../../../test/helpers/page-harness.tsx';
 import { act, fireEvent, screen, waitFor, within } from '../../../test/helpers/render.tsx';
@@ -11,6 +12,7 @@ import { configDisplay, filterConfig } from './config/ConfigTable.tsx';
 import { browserRows, readHealth, runtimeRows, settingsGroups, systemNotices } from './model.ts';
 import { SystemPage } from './SystemPage.tsx';
 import { systemSearch, systemSection } from './search.ts';
+import { runningTemplateBrowsers } from './status/TemplateBrowsersPanel.tsx';
 
 const HEALTH = {
   status: 'ready',
@@ -32,7 +34,12 @@ const degradation = (resolved: boolean) => ({
   resolved_at: resolved ? NOW : null,
 });
 
-function mount(url = '/system', system: unknown = systemInfo(), health: unknown = HEALTH) {
+function mount(
+  url = '/system',
+  system: unknown = systemInfo(),
+  health: unknown = HEALTH,
+  extra: Record<string, unknown> = {},
+) {
   return renderPage({
     path: '/system',
     component: SystemPage,
@@ -45,6 +52,7 @@ function mount(url = '/system', system: unknown = systemInfo(), health: unknown 
       'GET /auth/tokens': { data: [] },
       'GET /system/events': envelope([degradation(false), degradation(true)]),
       'GET /health': health,
+      ...extra,
     },
     url,
   });
@@ -161,7 +169,7 @@ describe('SystemPage', () => {
   it('shows KPIs, health, runtime and degradations on Status', async () => {
     const view = mount();
     const kpis = await screen.findByRole('region', { name: 'System status' });
-    expect(within(kpis).getByText('2 / 8')).toBeTruthy();
+    expect(within(kpis).getByText('2 / 8 browsers')).toBeTruthy();
     expect(within(kpis).getByRole('link', { name: /Open attention/ })).toBeTruthy();
     expect(await screen.findByText('141.0.7390.37')).toBeTruthy();
     const list = await screen.findByRole('list', { name: 'Degradations' });
@@ -170,6 +178,29 @@ describe('SystemPage', () => {
     expect(await screen.findByText('Ready')).toBeTruthy();
     expect(screen.getByRole('region', { name: 'Applied migrations' })).toBeTruthy();
     await expectNoA11yViolations(view.container);
+  });
+
+  it('lists the running template browsers as links to their templates', async () => {
+    const rows = [
+      templateSummary(1, {
+        host: { state: 'running', since: NOW, pages: 3, rss_bytes: 512_000_000 },
+      }),
+      templateSummary(2, { host: { state: 'stopped', since: null, pages: 0 } }),
+    ];
+    expect(runningTemplateBrowsers(rows).map((t) => t.name)).toEqual(['job-hunt']);
+    const view = mount('/system', systemInfo(), HEALTH, { 'GET /templates': templatesPage(rows) });
+    const list = await screen.findByRole('list', { name: 'Template browsers' });
+    const link = within(list).getByRole('link', { name: 'Open template Job hunt' });
+    expect(link.getAttribute('href')).toBe('/templates/tp-0000000001');
+    expect(within(list).getByText('Running')).toBeTruthy();
+    expect(within(list).queryByText('Template 2')).toBeNull();
+    await expectNoA11yViolations(view.container);
+  });
+
+  it('hides the template browsers card on a daemon without templates', async () => {
+    mount('/system', systemInfo(), HEALTH, { 'GET /templates': templatesPage([]) });
+    await screen.findByRole('region', { name: 'System status' });
+    expect(screen.queryByText('Template browsers')).toBeNull();
   });
 
   it('keeps the degraded health section visible from the 503 body', async () => {

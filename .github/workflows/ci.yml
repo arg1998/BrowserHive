@@ -388,7 +388,7 @@ jobs:
           echo "E2E_PASSWORD=$(tr -d '\n' < "$data/admin/credentials.txt")" >> "$GITHUB_ENV"
       - name: Seed the journey's data
         run: bun scripts/e2e-seed.ts http://127.0.0.1:9876
-      # The templates journey (spec 13 §17 T1a): a second daemon from source with the testing seam
+      # The templates journeys (spec 13 §17 T1a, T1c): a second daemon from source with the testing seam
       # pointing Chromium at the HTTPS fixture sites, on a virtual display so the template's sign-in
       # window is a real window that the test types into with xdotool.
       - name: Start the template daemon
@@ -396,6 +396,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends xvfb xdotool imagemagick
           tpl="$RUNNER_TEMP/bh-e2e-templates"
+          # The daemon runs from source, which serves packages/dashboard/dist: the built bundle (the
+          # dashboard's templates journey, spec 13 §17 T1c, drives it).
+          mkdir -p packages/dashboard/dist
+          cp -R packages/browserhive/dist/dashboard/. packages/dashboard/dist/
           # A throwaway CI display (never a bare Xvfb on a shared machine, spec 13 §3.11).
           Xvfb :99 -screen 0 1600x1000x24 -nolisten tcp > "$RUNNER_TEMP/xvfb.log" 2>&1 &
           echo "DISPLAY=:99" >> "$GITHUB_ENV"

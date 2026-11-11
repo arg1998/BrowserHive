@@ -13,6 +13,9 @@ import {
   NotificationType,
   OperatorRequestStatus,
   SessionStatus,
+  TemplateHealthState,
+  TemplateHostState,
+  TemplateStatus,
   UrlCategory,
 } from '@browserhive/contracts/enums';
 import {
@@ -36,8 +39,11 @@ import {
   PUBLIC_URL_OUTCOME,
   REQUEST_STATUS,
   SESSION_STATE,
+  SITE_HEALTH,
   sessionDisplayState,
   statusEntry,
+  TEMPLATE_HOST,
+  TEMPLATE_STATUS,
   URL_CATEGORY,
   VAULT_RESULT,
 } from './status-registry.ts';
@@ -72,6 +78,9 @@ describe('status registry', () => {
     expectCovers(PUBLIC_URL_OUTCOME, PublicUrlOutcome.options);
     expectCovers(ACTION_OUTCOME, NotificationActionOutcome.options);
     expectCovers(LISTENER_STATE, NotificationListenerState.options);
+    expectCovers(TEMPLATE_STATUS, TemplateStatus.options);
+    expectCovers(TEMPLATE_HOST, TemplateHostState.options);
+    expectCovers(SITE_HEALTH, TemplateHealthState.options);
     for (const reason of ClosedReason.options)
       expect(SESSION_STATE[CLOSED_REASON_STATE[reason]]).toBeDefined();
   });

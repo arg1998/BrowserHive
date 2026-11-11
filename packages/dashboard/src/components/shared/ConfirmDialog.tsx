@@ -22,6 +22,10 @@ export interface ConfirmOptions {
   readonly danger?: boolean;
   /** The operator must type this text exactly (e.g. the session slug). */
   readonly requireText?: string;
+  /** What the action affects, one line each (the live sessions it closes); shown as a list. */
+  readonly items?: readonly string[];
+  /** Heading of `items` ("Sessions that close"). */
+  readonly itemsLabel?: string;
 }
 
 /** Props. */
@@ -40,6 +44,8 @@ export function ConfirmDialog({
   cancelLabel = 'Cancel',
   danger = false,
   requireText,
+  items,
+  itemsLabel,
 }: ConfirmDialogProps) {
   const [typed, setTyped] = useState('');
   const inputId = useId();
@@ -66,6 +72,20 @@ export function ConfirmDialog({
               <AlertDialogDescription>{description}</AlertDialogDescription>
             ) : null}
           </AlertDialogHeader>
+          {items !== undefined && items.length > 0 ? (
+            <div className="flex flex-col gap-1.5">
+              {itemsLabel !== undefined ? (
+                <p className="text-sm font-medium text-foreground">{itemsLabel}</p>
+              ) : null}
+              <ul className="flex max-h-40 flex-col gap-1 overflow-y-auto rounded-lg bg-surface-inset px-3 py-2">
+                {items.map((item) => (
+                  <li key={item} className="truncate font-mono text-sm text-foreground">
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           {requireText !== undefined ? (
             <div className="flex flex-col gap-2">
               <Label htmlFor={inputId}>

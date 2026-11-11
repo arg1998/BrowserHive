@@ -16,6 +16,7 @@ import { sessionDisplayState, statusEntry } from '@/lib/status-registry.ts';
 import { cn } from '@/lib/utils.ts';
 import { HarnessName } from '../../harness/HarnessName.tsx';
 import { browserLabel } from '../session-format.ts';
+import { TemplateBadge } from './TemplateBadge.tsx';
 
 /** The part of a session id that tells same-slug sessions apart (`shop-9f2k1x` → `9f2k1x`). */
 export function idSuffix(session: Pick<SessionSummary, 'session_id' | 'slug'>): string {
@@ -45,6 +46,7 @@ export function SessionTitleCell({
         <span className="truncate text-base leading-5 font-medium text-foreground decoration-muted-foreground/60 underline-offset-4 group-hover/row:underline">
           {session.slug}
         </span>
+        <TemplateBadge session={session} />
         <HarnessInline session={session} />
       </span>
       <span className="flex min-w-0 items-center gap-1.5 text-sm leading-5 text-muted-foreground">

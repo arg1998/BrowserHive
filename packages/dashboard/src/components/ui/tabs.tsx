@@ -23,9 +23,10 @@ const tabsListVariants = cva(
         /**
          * Underline tabs for page sections: full-width hairline, 40px tall, active underline. The
          * scroller bleeds 8px past the content edge on both sides (hairline and text stay aligned)
-         * so the tabs' focus ring is not clipped by the horizontal scroller.
+         * so the tabs' focus ring is not clipped by the horizontal scroller. On phones the right edge
+         * fades so tabs past it read as more to scroll to.
          */
-        line: '-mx-2 h-10 w-[calc(100%+1rem)] justify-start gap-5 overflow-x-auto overflow-y-hidden bg-[linear-gradient(var(--border),var(--border))] bg-size-[calc(100%-1rem)_1px] bg-position-[0.5rem_100%] bg-no-repeat px-2 [scrollbar-width:none] group-data-vertical/tabs:mx-0 group-data-vertical/tabs:w-fit group-data-vertical/tabs:gap-0.5 group-data-vertical/tabs:overflow-visible group-data-vertical/tabs:bg-none group-data-vertical/tabs:px-0',
+        line: '-mx-2 h-10 w-[calc(100%+1rem)] scroll-px-4 justify-start gap-5 overflow-x-auto overflow-y-hidden max-md:mask-r-from-[calc(100%-2.5rem)] bg-[linear-gradient(var(--border),var(--border))] bg-size-[calc(100%-1rem)_1px] bg-position-[0.5rem_100%] bg-no-repeat px-2 [scrollbar-width:none] group-data-vertical/tabs:mx-0 group-data-vertical/tabs:w-fit group-data-vertical/tabs:gap-0.5 group-data-vertical/tabs:overflow-visible group-data-vertical/tabs:bg-none group-data-vertical/tabs:px-0',
         /** Segmented control for view switches (list/table, time range). */
         segmented: 'h-9 gap-0.5 rounded-lg bg-muted p-0.5 pointer-coarse:h-11 dark:bg-white/[0.06]',
       },
@@ -79,7 +80,7 @@ function TabsContent({ className, ...props }: TabsPrimitive.Panel.Props) {
   return (
     <TabsPrimitive.Panel
       data-slot="tabs-content"
-      className={cn('min-w-0 flex-1 outline-none', className)}
+      className={cn('min-w-0 flex-1 rounded-md focus-ring', className)}
       {...props}
     />
   );

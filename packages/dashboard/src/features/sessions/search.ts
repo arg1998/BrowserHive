@@ -54,6 +54,8 @@ export const sessionsSearch = tableSearchSchema(SESSION_SORT_KEYS).extend({
   persistence: csvParam(PersistenceMode),
   /** Launch harness slugs (an open vocabulary, D-30). */
   harness: csvParam(HarnessSlug),
+  /** Template ids (spec 13 §11.4: the Template facet). */
+  template: csvParam(z.string().min(1).max(64)),
   since: epochParam,
   until: epochParam,
   archived: z.enum(['include']).optional().catch(undefined),
@@ -71,6 +73,7 @@ export const SESSION_FILTER_KEYS = [
   'channel',
   'persistence',
   'harness',
+  'template',
   'since',
   'until',
   'archived',
@@ -101,6 +104,7 @@ export function toSessionsQuery(
     ...(search.channel !== undefined && { channel: search.channel }),
     ...(search.persistence !== undefined && { persistence_mode: search.persistence }),
     ...(search.harness !== undefined && { harness: search.harness }),
+    ...(search.template !== undefined && { template: search.template }),
     ...(search.since !== undefined && { since: search.since }),
     ...(search.until !== undefined && { until: search.until }),
   };

@@ -11,6 +11,7 @@ import { HealthPill } from './HealthPill.tsx';
 import { HelpMenu } from './HelpMenu.tsx';
 import { NotificationBell } from './NotificationBell.tsx';
 import { PrincipalMenu } from './PrincipalMenu.tsx';
+import { usePageCrumbLabel, withPageCrumb } from './page-crumb.tsx';
 import { isMacLike } from './platform.ts';
 import type { ShellBand } from './sidebar-state.ts';
 import { ThemeMenu } from './ThemeMenu.tsx';
@@ -28,7 +29,9 @@ export function Topbar({
   readonly onOpenPalette: () => void;
   readonly onOpenKeyboardMap: () => void;
 }) {
-  const { title, crumbs, objectPage } = usePageIdentity();
+  const identity = usePageIdentity();
+  const { objectPage } = identity;
+  const { title, crumbs } = withPageCrumb(identity, usePageCrumbLabel());
   useEffect(() => {
     document.title = `${title} · BrowserHive`;
   }, [title]);
