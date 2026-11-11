@@ -58,6 +58,7 @@ If the MCP client sends a W3C `traceparent` in the tool call's `_meta`, the tool
 | `browserhive.attention.wait` | histogram | `ms` | `status` | How long each attention request waited until it was answered, timed out or cancelled. |
 | `browserhive.vault.fills` | counter | `{fill}` | `result` | Vault fills. |
 | `browserhive.blocklist.hits` | counter | `{hit}` | `source` | Blocked requests. |
+| `browserhive.template.checkpoints` | counter | `{checkpoint}` | `reason` (`checkpoint`, `recording`, `relogin`, `restore`, `manual`, `import`, `signin_change`, `daily`) | Encrypted template state files written: the rolling checkpoint, and each version by why it was written. |
 | `browserhive.retention.pruned_rows` | counter | `{row}` | `table` | Rows removed by retention. |
 | `browserhive.notifications.deliveries` | counter | `{delivery}` | `channel_kind`, `status` | Notification deliveries by outcome: `sent`, `retrying`, `dead`, `suppressed`, `superseded`. |
 | `browserhive.notifications.reports` | counter | `{report}` | `kind`, `outcome` | Digest and anomaly-alert decisions: `sent`, `late`, `empty`, `skipped`, `manual`, `resolved`, `in_app`. |

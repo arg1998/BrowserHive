@@ -44,6 +44,8 @@ describe('purgeInventory', () => {
     expect(inv.directories.map((d) => [d.name, d.exists, d.sizeBytes, d.files])).toEqual([
       ['sessions', true, 8, 2],
       ['auth-states', false, 0, 0],
+      ['templates', false, 0, 0],
+      ['site-packs', false, 0, 0],
       ['uploads', true, 0, 0],
       ['backups', true, 4, 1],
       ['admin', false, 0, 0],
@@ -53,6 +55,8 @@ describe('purgeInventory', () => {
       ['database', '2 tables, 42 rows'],
       ['sessions', '2 files'],
       ['auth-states', 'missing'],
+      ['templates', 'missing'],
+      ['site-packs', 'missing'],
       ['uploads', '0 files'],
       ['backups', '1 files'],
       ['admin', 'missing'],
@@ -102,6 +106,29 @@ describe('purge', () => {
       '/data/sessions',
       '/data/uploads',
       '/data/backups',
+    ]);
+    expect(fs.files.size).toBe(0);
+  });
+
+  it('all removes the template directories and the template key with admin (spec 13 §11.10)', async () => {
+    const fs = populated();
+    fs.addFile('/data/templates/tp-abcdefghij/versions/v1.state.enc', 'sealed');
+    fs.addFile('/data/site-packs/cache/index.json', '{}');
+    fs.addFile('/data/admin/template.key', 'key');
+    const inv = await purgeInventory('/data', deps(fs));
+    const rows = inventoryRows(inv).map((r) => [r.target, r.detail]);
+    expect(rows).toContainEqual(['templates', '1 files']);
+    expect(rows).toContainEqual(['site-packs', '1 files']);
+    const removed = await purge('/data', [], deps(fs), { all: true });
+    expect(posixView(removed)).toEqual([
+      '/data/browserhive.db',
+      '/data/browserhive.db-wal',
+      '/data/sessions',
+      '/data/templates',
+      '/data/site-packs',
+      '/data/uploads',
+      '/data/backups',
+      '/data/admin',
     ]);
     expect(fs.files.size).toBe(0);
   });

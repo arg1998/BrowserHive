@@ -1,4 +1,4 @@
-/** @module app/templates/template-recording — recording a template's sign-ins through REST and the CLI (spec 13 §7.1 step 5, §7.2, §11.1): the sign-in window, **I'm signed in** (learned cookie names), unlisted sign-ins, Finish and Cancel, plus the T1a host routes (remove a sign-in, clear saved passwords). Writes no version yet (T1b). */
+/** @module app/templates/template-recording — recording a template's sign-ins through REST and the CLI (spec 13 §7.1 step 5, §7.2, §11.1): the sign-in window, **I'm signed in** (learned cookie names), unlisted sign-ins, Finish (version 1) and Cancel, plus the T1a host routes (remove a sign-in, clear saved passwords). */
 
 import type {
   FinishRecordingResponse,
@@ -8,6 +8,7 @@ import type {
 import type { SessionPrincipal } from '../../domain/session/principal.ts';
 import { jarNames, learnedCookieNames, unlistedDomains } from '../../domain/templates/sign-ins.ts';
 import { AppError } from '../../kernel/errors/app-error.ts';
+import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import { registrableDomain } from '../../kernel/url.ts';
 import type { Clock } from '../../ports/clock.ts';
 import type { IdGenerator } from '../../ports/id-generator.ts';
@@ -22,6 +23,7 @@ import type {
 import type { JsonObject } from '../../ports/persistence/json.ts';
 import type { TemplateHostOps, TemplateRuntime } from '../../ports/template-runtime.ts';
 import { disabled, notFoundForOperator, validationFailed } from './template-errors.ts';
+import type { TemplateStateService } from './template-state.ts';
 import { toHostView, toSiteView, toTemplateView } from './views.ts';
 
 /** Collaborators of {@link TemplateRecordingService}. */
@@ -33,6 +35,10 @@ export interface TemplateRecordingDeps {
   readonly ids: Pick<IdGenerator, 'eventId'>;
   readonly clock: Clock;
   readonly logger: Logger;
+  /** Versions (T1b): Finish writes version 1; a removed sign-in leaves the checkpoint too. */
+  readonly state?: Pick<TemplateStateService, 'saveVersion' | 'forgetDomain'>;
+  /** The template's summary changed (`template.changed`). */
+  readonly changed?: (templateId: string) => void;
 }
 
 /** One removed sign-in as REST reports it. */
@@ -124,8 +130,9 @@ export class TemplateRecordingService {
 
   /**
    * `POST /templates/{id}/recording/finish`: removes the chosen unlisted sign-ins, marks every
-   * site not confirmed signed out, sets the template `ready` and closes the window. No version is
-   * written before T1b (`version: null`).
+   * site not confirmed signed out, sets the template `ready`, closes the window and writes version
+   * 1 (`reason: 'recording'`) from the running browser (`version: null` when it is not running or
+   * no template key resolves).
    *
    * @throws AppError `TEMPLATE_NOT_FOUND`, `CONFLICT` (not recording), `VALIDATION_FAILED` (a
    *   removal names a site of the template).
@@ -174,8 +181,11 @@ export class TemplateRecordingService {
       return updated;
     });
     this.#baselines.delete(templateId);
-    this.#log.info('recording finished', { templateId, removed: removals.length });
-    return { template: toTemplateView(ready, finished), version: null, removed_sign_ins: removed };
+    const version = await this.#version(templateId, by);
+    this.#log.info('recording finished', { templateId, removed: removals.length, version });
+    this.#deps.changed?.(templateId);
+    const current = (await this.#deps.repos.templates.get(templateId)) ?? ready;
+    return { template: toTemplateView(current, finished), version, removed_sign_ins: removed };
   }
 
   /** `DELETE /templates/{id}/recording`: closes the window; the template is unchanged. */
@@ -196,9 +206,21 @@ export class TemplateRecordingService {
     return removed;
   }
 
+  /** Version 1 of a finished recording, from the running browser; `null` when it cannot be written. */
+  async #version(templateId: string, by: string): Promise<number | null> {
+    if (this.#deps.state === undefined) return null;
+    try {
+      return await this.#deps.state.saveVersion(templateId, { reason: 'recording', by });
+    } catch (err) {
+      this.#log.warn('recording version failed', { templateId, err: serializeError(err) });
+      return null;
+    }
+  }
+
   /** Removes one sign-in; origins left with data are a warning, never silent (spec 13 §2.3). */
   async #remove(template: TemplateRecord, domain: string): Promise<RemovedSignIn> {
     const result = await this.#deps.ops.removeSignIn(template, domain);
+    await this.#deps.state?.forgetDomain(template.templateId, domain);
     if (result.unclearedOrigins.length > 0) {
       this.#log.warn('sign-in removal incomplete', {
         templateId: template.templateId,

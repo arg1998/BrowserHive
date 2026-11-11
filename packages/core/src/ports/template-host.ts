@@ -2,6 +2,7 @@
 
 import type { Channel, StealthDriver } from '@browserhive/contracts/enums';
 import type { BrowserHost, Cookie, GeoSeed, ProxySpec, SessionView } from './browser-driver.ts';
+import type { TemplateState } from './template-state.ts';
 
 /** The pinned identity a host presents (spec 13 §2.2): the seed of its display and its geo story. */
 export interface TemplateHostIdentity {
@@ -101,6 +102,13 @@ export interface SignInRemoval {
   readonly unclearedOrigins: readonly string[];
 }
 
+/** The JavaScript heap of one agent page (spec 13 §3.2 memory: `Performance.getMetrics`). */
+export interface PageHeap {
+  readonly sessionId: string;
+  readonly targetId: string;
+  readonly jsHeapTotalBytes: number;
+}
+
 /** A window that shows pages of several sessions (spec 13 §3.4). */
 export interface SharedWindowInfo {
   readonly windowId: number;
@@ -150,6 +158,25 @@ export interface TemplateHost extends BrowserHost {
   clearSignIn(domain: string): Promise<SignInRemoval>;
   /** Windows that show pages of more than one session (spec 13 §3.4). */
   sharedWindows(): Promise<readonly SharedWindowInfo[]>;
+  /**
+   * The template's storage state in memory, IndexedDB included (spec 13 §3.9); never written to a
+   * path. Holds storage only for origins this browser process visited.
+   */
+  storageState(): Promise<TemplateState>;
+  /** Applies a state (restore, seed: spec 13 §3.12, §7.4) with Playwright's `setStorageState`. */
+  setStorageState(state: TemplateState): Promise<void>;
+  /**
+   * Origins this browser process committed, applied or cleared: their storage in the snapshot is
+   * authoritative, so the checkpoint never carries them forward (spec 13 §3.9).
+   */
+  visitedOrigins(): ReadonlySet<string>;
+  /** `JSHeapTotalSize` of every agent page (spec 13 §3.2 memory). */
+  pageHeaps(): Promise<readonly PageHeap[]>;
+  /**
+   * Closes one page by target id: a parked page (`parked`, never the sentinel) or an agent session's
+   * page (`session`, the memory trim). False when no such page is open.
+   */
+  closePage(targetId: string, scope: 'parked' | 'session'): Promise<boolean>;
 }
 
 /** Starts template hosts (the Playwright driver; spec 13 §3.1). */

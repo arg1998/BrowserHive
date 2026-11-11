@@ -1,59 +1,53 @@
 /** @module app/templates/host-supervisor — `TemplateHostSupervisor`, the only code that launches or closes a template host (spec 13 §3.2): the `TemplateRuntime` behind the template service, admission and the virtual-session launch (§3.7, §6.3), idle stop, age recycle, memory sampling, maintenance sessions and shutdown. */
 
 import type { ClosedReason } from '@browserhive/contracts/enums';
-import type { SessionPrincipal } from '../../domain/session/principal.ts';
 import type { Session } from '../../domain/session/session.ts';
 import { NO_SEALING } from '../../domain/session/session-template.ts';
 import { effectiveCap, pageCaps } from '../../domain/templates/model.ts';
-import { settlesWithin, withDeadline } from '../../kernel/deadline.ts';
+import { withDeadline } from '../../kernel/deadline.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
-import type { Clock } from '../../ports/clock.ts';
-import type { DegradationReporter } from '../../ports/degradation-reporter.ts';
 import type { Logger } from '../../ports/logger.ts';
-import type {
-  TemplateRecord,
-  TemplateRepository,
-  TemplateSiteRecord,
-} from '../../ports/persistence/index.ts';
-import type { TemplateHost, TemplateHostLauncher } from '../../ports/template-host.ts';
+import type { TemplateRecord } from '../../ports/persistence/index.ts';
+import type { TemplateHost } from '../../ports/template-host.ts';
 import type {
   TemplateHostView,
   TemplateLaunchRequest,
   TemplateRuntime,
 } from '../../ports/template-runtime.ts';
-import type { SessionService } from '../sessions/session-service.ts';
+import { TemplateHolds } from './host-holds.ts';
 import { HostLifecycle } from './host-lifecycle.ts';
-import { buildHostSpec, type HostSpecDeps, observeStart } from './host-spec.ts';
+import {
+  HostMemoryGuard,
+  PAGE_LIMIT_MESSAGE,
+  RESOURCE_LIMIT_MESSAGE,
+  warnSession,
+} from './host-memory.ts';
+import { IdentityObserver, stopHosts } from './host-shutdown.ts';
+import { buildHostSpec } from './host-spec.ts';
 import { idleExpired, nextIdleSince, recycleAt, TEMPLATE_LAUNCH_BUDGET_MS } from './host-state.ts';
+import type {
+  HostCheckpoints,
+  HostSupervisorDeps,
+  MaintenanceLaunch,
+} from './host-supervisor-types.ts';
+import { SYSTEM_MAINTENANCE_SLUG } from './host-supervisor-types.ts';
 import { hostViewOf } from './host-view.ts';
-import { admitTemplateLaunch } from './template-admission.ts';
-import { sessionTemplateOf, virtualLauncher, virtualSessionInput } from './virtual-launch.ts';
+import { admitTemplateLaunch, templateUnavailable } from './template-admission.ts';
+import { notFoundForOperator } from './template-errors.ts';
+import { toHostView } from './views.ts';
+import {
+  maintenanceSessionInput,
+  sessionTemplateOf,
+  virtualLauncher,
+  virtualSessionInput,
+} from './virtual-launch.ts';
 
-/** The slug of the per-host system maintenance session; it does not keep a host from idling. */
-export const SYSTEM_MAINTENANCE_SLUG = 'maintenance';
-
-/** Supervisor settings (08 §5.9; durations in ms, `0` = never). */
-export interface HostSupervisorConfig {
-  readonly idleTimeoutMs: number;
-  readonly recycleAfterMs: number;
-  readonly drainTimeoutMs: number;
-  readonly maxPagesPerHost: number;
-  readonly closeTimeoutMs: number;
-}
-
-/** Collaborators of {@link TemplateHostSupervisor}. */
-export interface HostSupervisorDeps {
-  readonly launcher: TemplateHostLauncher;
-  readonly sessions: SessionService;
-  readonly templates: Pick<TemplateRepository, 'update' | 'touchLastUsed'>;
-  readonly clock: Clock;
-  readonly logger: Logger;
-  readonly degradations: DegradationReporter;
-  readonly spec: HostSpecDeps;
-  readonly config: HostSupervisorConfig;
-  /** Resident memory of a browser's process tree (spec 13 §3.2 memory); absent = not sampled. */
-  readonly rssOf?: (pid: number) => Promise<number | null>;
-}
+export type {
+  HostCheckpoints,
+  HostSupervisorConfig,
+  HostSupervisorDeps,
+} from './host-supervisor-types.ts';
+export { SYSTEM_MAINTENANCE_SLUG } from './host-supervisor-types.ts';
 
 /** Owns every template host, keyed by template id. */
 export class TemplateHostSupervisor implements TemplateRuntime {
@@ -63,11 +57,43 @@ export class TemplateHostSupervisor implements TemplateRuntime {
   /** Launches admitted and not finished, per template (the cap counts them, spec 13 §6.3). */
   private readonly pending = new Map<string, number>();
   private readonly rss = new Map<string, number>();
+  /** Templates held by an operation (restore, seed, clearing saved passwords): agents wait. */
+  readonly holds = new TemplateHolds();
+  private readonly memory: HostMemoryGuard;
+  private checkpoints: HostCheckpoints | null = null;
+  /** The observed identity and its drift (spec 13 §2.2). */
+  readonly identity: IdentityObserver;
 
   constructor(deps: HostSupervisorDeps) {
     this.deps = deps;
     this.log = deps.logger.child({ module: 'templates.supervisor' });
     deps.sessions.setHostSlots(() => this.slots());
+    this.identity = new IdentityObserver({
+      templates: deps.templates,
+      clock: deps.clock,
+      log: this.log,
+      changed: (updated, id) => {
+        if (updated !== null) this.hosts.get(id)?.refresh(updated);
+        deps.onTemplateChanged?.(id);
+      },
+    });
+    this.memory = new HostMemoryGuard({
+      limitBytes: deps.config.recycleRssBytes ?? 0,
+      clock: deps.clock,
+      logger: deps.logger,
+      warn: (id, details) =>
+        warnSession(deps.sessions, id, 'SESSION_RESOURCE_LIMIT', RESOURCE_LIMIT_MESSAGE, details),
+    });
+  }
+
+  /** The checkpoint writer (set once at composition; it reads hosts back through `runningHost`). */
+  attachCheckpoints(checkpoints: HostCheckpoints): void {
+    this.checkpoints = checkpoints;
+  }
+
+  /** The lifecycle of a template's host (operator host operations). */
+  lifecycle(template: TemplateRecord): HostLifecycle {
+    return this.lifecycleOf(template);
   }
 
   /** Starting, running or draining hosts: each holds one browser slot (spec 13 §6.3). */
@@ -87,6 +113,7 @@ export class TemplateHostSupervisor implements TemplateRuntime {
       liveAgentSessions: this.liveSessions(templateId).length,
       rssBytes: this.rss.get(templateId) ?? null,
       recycleAfterMs: this.deps.config.recycleAfterMs,
+      identityDrift: this.identity.drift(templateId),
     });
   }
 
@@ -110,6 +137,8 @@ export class TemplateHostSupervisor implements TemplateRuntime {
    */
   async launch(request: TemplateLaunchRequest, signal?: AbortSignal): Promise<Session> {
     const { template } = request;
+    if (this.holds.held(template.templateId))
+      throw templateUnavailable(template.name, 'restarting');
     const lifecycle = this.lifecycleOf(template);
     const cap = effectiveCap(template);
     const caps = pageCaps(this.deps.config.maxPagesPerHost, cap);
@@ -136,15 +165,13 @@ export class TemplateHostSupervisor implements TemplateRuntime {
             template,
             session,
             caps,
-            onPageLimit: (id) => this.pageLimitWarning(id),
+            onPageLimit: (id) =>
+              warnSession(this.deps.sessions, id, 'SESSION_PAGE_LIMIT', PAGE_LIMIT_MESSAGE),
           }),
           { signal: budget, deadlineMs: TEMPLATE_LAUNCH_BUDGET_MS },
         );
-        await this.deps.templates
-          .touchLastUsed(template.templateId, this.deps.clock.now())
-          .catch((err: unknown) =>
-            this.log.warn('last use not stamped', { err: serializeError(err) }),
-          );
+        const at = this.deps.clock.now();
+        await this.deps.templates.touchLastUsed(template.templateId, at).catch(() => undefined);
         return created;
       },
       signal,
@@ -156,41 +183,19 @@ export class TemplateHostSupervisor implements TemplateRuntime {
    * `recording`/`relogin`, owned by the operator) or the host's own work (slug `maintenance`, owned
    * by `browserhive`). No cap, no admission beyond the host state; never an agent's.
    */
-  async launchMaintenance(input: {
-    readonly template: TemplateRecord;
-    readonly sites: readonly TemplateSiteRecord[];
-    readonly slug: string;
-    readonly principal: SessionPrincipal;
-    /** A recording or re-login window: agent windows are minimized while it is open (§3.3). */
-    readonly recording?: boolean;
-    readonly signal?: AbortSignal;
-  }): Promise<Session> {
+  async launchMaintenance(input: MaintenanceLaunch): Promise<Session> {
     const { template } = input;
-    const lifecycle = this.lifecycleOf(template);
-    if (
-      lifecycle.state === 'failed' ||
-      lifecycle.state === 'draining' ||
-      lifecycle.state === 'crashed'
-    ) {
-      throw lifecycle.refusal();
+    if (!this.holds.admits(template.templateId, input.holdToken)) {
+      throw templateUnavailable(template.name, 'restarting');
     }
+    const lifecycle = this.lifecycleOf(template);
+    if (['failed', 'draining', 'crashed'].includes(lifecycle.state)) throw lifecycle.refusal();
     const session = sessionTemplateOf(template, input.sites, 'maintenance', NO_SEALING);
     return this.run(
       template.templateId,
       (budget) =>
         this.deps.sessions.createVirtual(
-          {
-            slug: input.slug,
-            channel: template.channel,
-            headless: template.headless,
-            incognito: false,
-            persistenceMode: 'memory',
-            disableEvaluate: false,
-            vaultEnabled: false,
-            stealth: template.stealth !== 'off',
-            fingerprint: template.fingerprint,
-            humanize: false,
-          },
+          maintenanceSessionInput(template, input.slug),
           input.principal,
           virtualLauncher({
             lifecycle,
@@ -207,10 +212,13 @@ export class TemplateHostSupervisor implements TemplateRuntime {
 
   /** Before a delete: closes every session of the template and stops its host (spec 13 §2.6). */
   async shutdown(templateId: string): Promise<readonly string[]> {
+    // From now on no browser starts for this id, whatever an operation in flight still does.
+    this.holds.delete(templateId);
     const live = this.liveSessions(templateId);
     // The host goes `draining` before anything is awaited, so no launch attaches meanwhile.
-    await this.hosts.get(templateId)?.stop('template deleted', 'operator');
+    await this.hosts.get(templateId)?.stop('template deleted', 'operator', false);
     this.hosts.delete(templateId);
+    this.memory.forget(templateId);
     await this.closeSessions(
       this.sessionsOf(templateId, null).map((s) => s.id),
       'operator',
@@ -239,11 +247,15 @@ export class TemplateHostSupervisor implements TemplateRuntime {
           continue;
         }
         const due = recycleAt(lifecycle.startedAt, this.deps.config.recycleAfterMs);
-        if (due !== null && now >= due) {
+        const rss = await this.sample(lifecycle.templateId, host);
+        const memory =
+          rss === null ? 'ok' : await this.memory.check(lifecycle.templateId, rss, host);
+        if ((due !== null && now >= due) || memory === 'drain') {
           void this.recycle(lifecycle, 'shutdown');
           continue;
         }
-        await this.sample(lifecycle.templateId, host);
+        await this.checkpoints?.checkpointIfDue(lifecycle.templateId, lifecycle.startedAt);
+        this.publishHost(lifecycle.templateId);
       } catch (err) {
         this.log.warn('host tick failed', {
           templateId: lifecycle.templateId,
@@ -278,17 +290,13 @@ export class TemplateHostSupervisor implements TemplateRuntime {
       lifecycle,
       sessions: this.sessionsOf(id, null).map((s) => s.id),
     }));
-    const stopping = Promise.allSettled(
-      stops.map(async ({ lifecycle, sessions }) => {
-        await lifecycle.stop('shutdown');
-        await this.closeSessions(sessions, 'shutdown');
-      }),
+    await stopHosts(
+      stops,
+      (ids, r) => this.closeSessions(ids, r),
+      this.deps.clock,
+      this.log,
+      deadlineMs,
     );
-    const sleep = (ms: number, signal?: AbortSignal) => this.deps.clock.sleep(ms, signal);
-    if (deadlineMs === undefined) await stopping;
-    else if (!(await settlesWithin(stopping, sleep, deadlineMs))) {
-      this.log.warn('hosts closing past budget', { deadlineMs });
-    }
     this.hosts.clear();
   }
 
@@ -314,6 +322,7 @@ export class TemplateHostSupervisor implements TemplateRuntime {
   }
 
   private lifecycleOf(template: TemplateRecord): HostLifecycle {
+    if (this.holds.deleted(template.templateId)) throw notFoundForOperator(template.templateId);
     const existing = this.hosts.get(template.templateId);
     if (existing !== undefined) {
       existing.refresh(template);
@@ -325,13 +334,17 @@ export class TemplateHostSupervisor implements TemplateRuntime {
       logger: this.deps.logger,
       degradations: this.deps.degradations,
       buildSpec: (record) => buildHostSpec(record, this.deps.spec),
-      started: (record, host) => this.started(record, host),
+      started: (record, host) => this.identity.started(record, host),
       closeSessions: (ids, reason) => this.closeSessions(ids, reason),
       slotFree: () => {
         const cap = this.deps.sessions.capacity();
         return cap === null || this.deps.sessions.occupiedSlots() < cap;
       },
       closeTimeoutMs: this.deps.config.closeTimeoutMs,
+      beforeClose: async () => {
+        await this.checkpoints?.checkpoint(template.templateId);
+      },
+      changed: (id) => this.publishHost(id),
     });
     this.hosts.set(template.templateId, lifecycle);
     return lifecycle;
@@ -358,37 +371,22 @@ export class TemplateHostSupervisor implements TemplateRuntime {
     await Promise.allSettled(ids.map((id) => this.deps.sessions.close(id, reason)));
   }
 
-  /** First start: record the observed identity (spec 13 §2.2); later ones only compare the major. */
-  private started(template: TemplateRecord, host: TemplateHost): void {
-    const seen = observeStart(template, host, this.deps.clock.now());
-    if (seen?.kind === 'drift') {
-      this.log.warn('identity drift', { templateId: template.templateId, ...seen });
-    }
-    if (seen?.kind !== 'record') return;
-    this.deps.templates.update(template.templateId, { identityObserved: seen.record }).then(
-      (updated) => this.hosts.get(template.templateId)?.refresh(updated),
-      (err: unknown) => this.log.warn('observed identity unsaved', { err: serializeError(err) }),
-    );
-  }
-
-  /** The session's warning after a site-opened page over its cap was closed (spec 13 §6.3). */
-  private pageLimitWarning(sessionId: string): void {
-    const session = this.deps.sessions.peek(sessionId);
-    if (session === undefined) return;
-    this.deps.sessions.warn(session, {
-      code: 'SESSION_PAGE_LIMIT',
-      sessionId,
-      message:
-        'This session has reached its tab limit; a page a site opened was closed. Close a tab you no longer need.',
-    });
-  }
-
-  private async sample(templateId: string, host: TemplateHost): Promise<void> {
+  private async sample(templateId: string, host: TemplateHost): Promise<number | null> {
     const rssOf = this.deps.rssOf;
-    if (rssOf === undefined || host.browserPid === undefined) return;
+    if (rssOf === undefined || host.browserPid === undefined) return null;
     const pid = await host.browserPid();
-    if (pid === null) return;
+    if (pid === null) return null;
     const rss = await rssOf(pid);
     if (rss !== null) this.rss.set(templateId, rss);
+    return rss;
+  }
+
+  /** `template.host` on the `templates` topic. */
+  publishHost(templateId: string): void {
+    this.deps.bus?.publish('template.host', {
+      type: 'template.host',
+      template_id: templateId,
+      host: toHostView(this.host(templateId)),
+    });
   }
 }

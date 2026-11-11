@@ -7,8 +7,16 @@ import { AppError } from '@browserhive/core/runtime';
 /** Owner-only directory mode (D-24). */
 export const DATA_DIR_MODE = 0o700;
 
-/** Subdirectories created at boot (D-24). */
-export const DATA_SUBDIRS = ['backups', 'admin', 'sessions', 'auth-states', 'uploads'] as const;
+/** Subdirectories created at boot and by `init` (D-24; `templates` and `site-packs`, spec 13 §11.10). */
+export const DATA_SUBDIRS = [
+  'backups',
+  'admin',
+  'sessions',
+  'auth-states',
+  'uploads',
+  'templates',
+  'site-packs',
+] as const;
 
 /** Resolved paths of the layout. */
 export interface DataDirLayout {
@@ -19,6 +27,10 @@ export interface DataDirLayout {
   readonly sessions: string;
   readonly authStates: string;
   readonly uploads: string;
+  /** Session templates (`templates/<template_id>/`, spec 13 §2.4). */
+  readonly templates: string;
+  /** Site packs: the registry cache and local packs (spec 13 §9, §10). */
+  readonly sitePacks: string;
 }
 
 /** Paths of the D-24 layout under `root`. */
@@ -31,6 +43,8 @@ export function dataDirLayout(root: string): DataDirLayout {
     sessions: join(root, 'sessions'),
     authStates: join(root, 'auth-states'),
     uploads: join(root, 'uploads'),
+    templates: join(root, 'templates'),
+    sitePacks: join(root, 'site-packs'),
   };
 }
 

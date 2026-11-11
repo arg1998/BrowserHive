@@ -25,6 +25,12 @@ import type {
   SystemDegradedEvent,
   SystemRecoveredEvent,
   SystemTickEvent,
+  TemplateChangedEvent,
+  TemplateHealthEvent,
+  TemplateHostEvent,
+  TemplateOperationEvent,
+  TemplateRemovedEvent,
+  TemplateVersionEvent,
   ToolCalledEvent,
   VaultAccessEvent,
   VaultBindingChangedEvent,
@@ -35,6 +41,7 @@ import type {
 } from '@browserhive/contracts/ws';
 import type { z } from 'zod';
 import type { DomainEvent } from '../../ports/event-bus.ts';
+import type { TemplateVersionReason } from '../../ports/persistence/enums.ts';
 import type { JsonObject, SessionPatch, SessionRecord } from '../../ports/persistence/records.ts';
 import type { AuthEvents } from '../auth/events.ts';
 
@@ -170,6 +177,19 @@ export type DomainEvents = {
   readonly 'channel.removed': z.infer<typeof ChannelRemovedEvent>;
   readonly 'delivery.updated': z.infer<typeof DeliveryUpdatedEvent>;
   readonly 'action.recorded': z.infer<typeof ActionRecordedEvent>;
+  // templates (the `templates` topic, spec 13 §11.3)
+  readonly 'template.changed': z.infer<typeof TemplateChangedEvent>;
+  readonly 'template.removed': z.infer<typeof TemplateRemovedEvent>;
+  readonly 'template.host': z.infer<typeof TemplateHostEvent>;
+  readonly 'template.health': z.infer<typeof TemplateHealthEvent>;
+  readonly 'template.version': z.infer<typeof TemplateVersionEvent>;
+  readonly 'template.operation': z.infer<typeof TemplateOperationEvent>;
+  /** A checkpoint or version file was written (internal: `browserhive.template.checkpoints{reason}`). */
+  readonly 'template.checkpoint.written': {
+    readonly type: 'template.checkpoint.written';
+    readonly template_id: string;
+    readonly reason: 'checkpoint' | TemplateVersionReason;
+  };
   // logs
   readonly 'log.record': z.infer<typeof LogRecordEvent>;
 } & AuthEvents; // auth (audit; never on the public feed): `auth.<auth_events.type>`

@@ -2,7 +2,7 @@
 
 # REST API reference
 
-The admin REST API served under `/api/v1` on the same port as MCP and the dashboard when `--admin` is on (122 operations), generated from `HTTP_ENDPOINTS` in `@browserhive/contracts/http`. Request and response schemas are in the OpenAPI 3.1 document the server serves at `/api/v1/openapi.json`, with an interactive reference UI at `/api/v1/docs`.
+The admin REST API served under `/api/v1` on the same port as MCP and the dashboard when `--admin` is on (139 operations), generated from `HTTP_ENDPOINTS` in `@browserhive/contracts/http`. Request and response schemas are in the OpenAPI 3.1 document the server serves at `/api/v1/openapi.json`, with an interactive reference UI at `/api/v1/docs`.
 
 Summaries come from `packages/contracts/generated/openapi.json`.
 
@@ -204,6 +204,7 @@ Summaries come from `packages/contracts/generated/openapi.json`.
 
 | Method | Path | operationId | Scope | Auth | Summary |
 |---|---|---|---|---|---|
+| GET | `/api/v1/templates/operations/{operation_id}` | `getTemplateOperation` | `templates:read` | cookie, bearer | A restore or seed operation: running, done (with the version written) or failed. |
 | GET | `/api/v1/templates` | `listTemplates` | `templates:read` | cookie, bearer | Every session template with its sites, browser state, live sessions and cap; facets by status, browser state and site health. |
 | POST | `/api/v1/templates` | `createTemplate` | `templates:write` | cookie, bearer | Create a template in `recording` with its sites, pinned identity and access rule. Under auth=token `policy.authorized_principals` is required (`[]` = every agent). |
 | GET | `/api/v1/templates/{template_id}` | `getTemplate` | `templates:read` | cookie, bearer | One template with its browser, sites, live session count, other windows and the windows shared by several sessions. |
@@ -214,6 +215,22 @@ Summaries come from `packages/contracts/generated/openapi.json`.
 | POST | `/api/v1/templates/{template_id}/recording/finish` | `finishTemplateRecording` | `templates:login` | cookie, bearer | Finish: remove the chosen unlisted sign-ins, mark sites not confirmed signed out, set the template ready and close the window. |
 | DELETE | `/api/v1/templates/{template_id}/recording` | `cancelTemplateRecording` | `templates:login` | cookie, bearer | Close the sign-in window; the template stays in recording (setting up). |
 | POST | `/api/v1/templates/{template_id}/host/clear-profile-secrets` | `clearTemplateProfileSecrets` | `templates:write` | cookie, bearer | Empty the saved passwords and autofill data found in the template's browser profile; its browser stops (its sessions close) and starts again on the next use. |
+| PATCH | `/api/v1/templates/{template_id}` | `updateTemplate` | `templates:write` | cookie, bearer | Edit a template (not its pinned identity). proxy and channel restart the browser and need confirm_identity_change. Access and sealing changes apply to live sessions at once; sessions that lost access are closed and listed. |
+| POST | `/api/v1/templates/{template_id}/disable` | `disableTemplate` | `templates:write` | cookie, bearer | Disable a template: agents can no longer launch it and its live sessions close. |
+| POST | `/api/v1/templates/{template_id}/enable` | `enableTemplate` | `templates:write` | cookie, bearer | Enable a disabled template again. |
+| PUT | `/api/v1/templates/{template_id}/sites/{site_id}` | `putTemplateSite` | `templates:write` | cookie, bearer | Add a site (at most 16) or change its enabled flag and write policy. |
+| DELETE | `/api/v1/templates/{template_id}/sites/{site_id}` | `deleteTemplateSite` | `templates:write` | cookie, bearer | Remove a site (not the last one). Its sign-in stays in the template's browser. |
+| POST | `/api/v1/templates/{template_id}/state` | `seedTemplate` | `templates:write` | cookie, bearer | Seed the sign-ins from a Playwright storage state (the body, ≤ 16 MiB, never stored in plain text): the browser restarts, the state is applied and an import version is written; the template becomes ready. Over a ready template it needs confirm=true. |
+| POST | `/api/v1/templates/{template_id}/host/start` | `startTemplateHost` | `templates:write` | cookie, bearer | Start the template's browser. |
+| POST | `/api/v1/templates/{template_id}/host/stop` | `stopTemplateHost` | `templates:write` | cookie, bearer | Stop the template's browser after a final checkpoint; its sessions close. |
+| POST | `/api/v1/templates/{template_id}/host/restart` | `restartTemplateHost` | `templates:write` | cookie, bearer | Restart the template's browser (clears a failed browser): sessions get templateDrainTimeout to finish. |
+| POST | `/api/v1/templates/{template_id}/host/pages/{target_id}/close` | `closeTemplatePage` | `templates:write` | cookie, bearer | Close a page of the browser that no session owns (Other windows). |
+| GET | `/api/v1/templates/{template_id}/versions` | `listTemplateVersions` | `templates:read` | cookie, bearer | The versions (newest first, with summary, health, Last good and readability) and the rolling checkpoint. |
+| POST | `/api/v1/templates/{template_id}/versions` | `saveTemplateVersion` | `templates:write` | cookie, bearer | Save version now: a manual version from the running browser; version null when nothing changed since the newest one. |
+| POST | `/api/v1/templates/{template_id}/versions/{version}/restore` | `restoreTemplateVersion` | `templates:write` | cookie, bearer | Restore a version (or latest, the rolling checkpoint) as an operation: sessions close at once with force_close, else they get templateDrainTimeout; the browser restarts with the version applied and a restore version is written. |
+| PATCH | `/api/v1/templates/{template_id}/versions/{version}` | `updateTemplateVersion` | `templates:write` | cookie, bearer | Pin a version (kept past templateVersionsKeep) or unpin it. |
+| POST | `/api/v1/templates/{template_id}/access/resolve` | `resolveTemplateAccess` | `templates:read` | cookie, bearer | Test the template's access rule for a principal and harness (D-48); agents never see the reason. |
+| POST | `/api/v1/templates/{template_id}/data-dir/reveal` | `revealTemplateDataDir` | `templates:write` | cookie, bearer | Open the template's data directory in the host file manager (honest result). |
 
 ## Client errors
 

@@ -1,4 +1,4 @@
-/** @module cli/production/probes — real host probes for `doctor`, `init` and `version`: Bun and SQLite versions, Chromium installs per driver, port, PATH lookup (and the `bh` shorthand), disk, file modes, OTLP reachability */
+/** @module cli/production/probes — real host probes for `doctor`, `init` and `version`: Bun and SQLite versions, Chromium installs per driver, port, PATH lookup (and the `bh` shorthand), disk, file modes, OTLP reachability, template state files and profile secrets */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { stat, statfs } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -7,7 +7,7 @@ import { dirname, join } from 'node:path';
 import type { Channel } from '@browserhive/contracts/enums';
 import type { Logger } from '@browserhive/core/runtime';
 import { z } from 'zod';
-import type { BrowserInstall, HostProbes } from '../deps.ts';
+import type { BrowserInstall, HostProbes, TemplateStateFileFacts } from '../deps.ts';
 import { findShorthand, nodeShorthandFs } from './shorthand.ts';
 
 const PackageJson = z.object({ version: z.string() });
@@ -187,6 +187,26 @@ export function createHostProbes(options: {
         exists: existsSync,
         readFile: readText,
       });
+    },
+    templateStateFiles: async (templatesDir) => {
+      const server = await import('@browserhive/core/server');
+      // No key is needed to list the files and read the key id in each header.
+      const store = new server.FileTemplateStateStore({
+        templatesDir,
+        keys: { current: null, previous: null },
+      });
+      const facts: TemplateStateFileFacts[] = [];
+      for (const templateId of await store.templatesWithFiles()) {
+        for (const file of await store.files(templateId)) {
+          const name = file.slot === 'latest' ? 'latest.state.enc' : `v${file.slot}.state.enc`;
+          facts.push({ templateId, file: name, keyId: file.keyId });
+        }
+      }
+      return facts;
+    },
+    profileHasSecrets: async (userDataDir) => {
+      const server = await import('@browserhive/core/server');
+      return server.profileHasSecrets(userDataDir);
     },
     apparmorCovers: async (path) => {
       const server = await import('@browserhive/core/server');

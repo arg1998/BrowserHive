@@ -10,6 +10,7 @@ import type {
   ReportItem,
   ReportSettingsResponse,
   SystemInfo,
+  TemplateVersionsPage,
 } from '@browserhive/contracts/http';
 import type { ReportSettings } from '@browserhive/contracts/notifications';
 import type { LiveInput } from '@browserhive/contracts/ws';
@@ -21,6 +22,9 @@ import type { ChannelService } from '../../app/notifications/channel-service.ts'
 import type { PublicUrlChecker } from '../../app/notifications/public-url.ts';
 import type { SessionDirLayout } from '../../app/sessions/profile-dir.ts';
 import type { SessionService } from '../../app/sessions/session-service.ts';
+import type { TemplateActions } from '../../app/templates/template-actions.ts';
+import type { TemplateEditService } from '../../app/templates/template-edit.ts';
+import type { TemplateOperations } from '../../app/templates/template-operations.ts';
 import type { TemplateRecordingService } from '../../app/templates/template-recording.ts';
 import type { TemplateService } from '../../app/templates/template-service.ts';
 import type { VaultAdmin } from '../../app/vault/vault-admin.ts';
@@ -308,7 +312,38 @@ export interface HttpServices {
   readonly templates: TemplatesPort;
   /** Recording a template's sign-ins and the T1a host routes (spec 13 §7.1, §11.1). */
   readonly templateRecording: TemplateRecordingPort;
+  /** Template edits: `PATCH`, disable/enable, sites, the access tester (spec 13 §11.1, T1b). */
+  readonly templateEdit: TemplateEditPort;
+  /** The browser and version actions (T1b). */
+  readonly templateActions: TemplateActionsPort;
+  /** The versions list (T1b). */
+  readonly templateVersions: TemplateVersionsPort;
+  /** Restore and seed operations (T1b). */
+  readonly templateOperations: TemplateOperationsPort;
 }
+
+/** The template edit routes' service. */
+export type TemplateEditPort = Pick<
+  TemplateEditService,
+  'update' | 'setEnabled' | 'putSite' | 'removeSite' | 'resolveAccess'
+>;
+
+/** The template action routes' service. */
+export type TemplateActionsPort = Pick<
+  TemplateActions,
+  'host' | 'closePage' | 'saveVersion' | 'pin' | 'dataDir'
+>;
+
+/** The versions list. */
+export interface TemplateVersionsPort {
+  list(
+    templateId: string,
+    query: { readonly cursor?: string | undefined; readonly limit: number },
+  ): Promise<TemplateVersionsPage>;
+}
+
+/** Restore and seed. */
+export type TemplateOperationsPort = Pick<TemplateOperations, 'get' | 'restore' | 'seed'>;
 
 /** The recording routes' service (a structural slice of `TemplateRecordingService`). */
 export type TemplateRecordingPort = Pick<

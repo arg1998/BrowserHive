@@ -298,6 +298,12 @@ export class AuthStateStore implements AuthStateLocator {
     return own.files.storage;
   }
 
+  /** The template the caller's storage-state snapshot was exported from, or `null` (spec 13 §5.4). */
+  async sourceTemplateOf(name: string, principal: SessionPrincipal): Promise<string | null> {
+    const own = await this.ownSnapshot(name, principal).catch(() => null);
+    return own?.manifest.source_template_id ?? null;
+  }
+
   /**
    * Extracts the caller's profile snapshot into `userDataDir`.
    *

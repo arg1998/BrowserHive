@@ -1,10 +1,11 @@
-/** @module cli/commands/purge — `browserhive purge [--all] [--dryRun] [--yes]`: inventory first, a typed YES, a second YES for --all, refusal without a TTY; over the D-24 layout */
+/** @module cli/commands/purge — `browserhive purge [--all] [--dryRun] [--yes]`: inventory first, a typed YES, a second YES for --all, refusal without a TTY; over the D-24 layout with `templates/` and `site-packs/` (spec 13 §11.10) */
 
 /*
  * Show before you destroy: the data root is not obvious and mixes things of very different value
  * (a cheap-to-lose database, merely inconvenient browser profiles, and saved auth states that may
  * hold irreplaceable logged-in sessions). Secrets are opt-in: `--all` is confirmed on its own terms.
  */
+import { join } from 'node:path';
 import {
   type DataDirInventory,
   type PurgeTarget,
@@ -23,6 +24,8 @@ export const DEFAULT_TARGETS: readonly PurgeTarget[] = ['database', 'sessions'];
 /** Targets added by `--all`. */
 export const ALL_ONLY_TARGETS: readonly PurgeTarget[] = [
   'auth-states',
+  'templates',
+  'site-packs',
   'uploads',
   'backups',
   'admin',
@@ -33,9 +36,11 @@ const LABELS: Readonly<Record<PurgeTarget, string>> = {
     'Database (browserhive.db + WAL): events, sessions, vault bindings and policies, tokens, notification channels',
   sessions: 'Session directories (traces, screenshots, downloads, browser profiles)',
   'auth-states': 'Saved auth states (logged-in profiles + storage snapshots)',
+  templates: 'Session templates (signed-in browsers and their versions)',
+  'site-packs': 'Site packs (downloaded registry files and local packs)',
   uploads: 'Upload sandbox',
   backups: 'Database backups',
-  admin: 'Dashboard credentials (the password is re-seeded on next start)',
+  admin: 'Dashboard credentials and the template key (the password is re-seeded on next start)',
 };
 
 interface Item {
@@ -89,6 +94,8 @@ export function renderPurgeInventory(
     readonly all: boolean;
     readonly openSessions: number;
     readonly lockPid: number | null;
+    /** Directories under `templates/` (one per session template). */
+    readonly templateDirs?: number;
   },
 ): readonly string[] {
   const lines = ['', `BrowserHive data directory: ${options.dataDir}`];
@@ -131,16 +138,38 @@ export function renderPurgeInventory(
       '     under live sessions. (Open rows also persist after an unclean shutdown.)',
     );
   }
+  const templateDirs = options.templateDirs ?? 0;
+  if (!options.all && templateDirs > 0 && targets.includes('database')) {
+    lines.push(
+      '',
+      `  ⚠  templates/ holds ${templateDirs} session template director${templateDirs === 1 ? 'y' : 'ies'}. Purging the database`,
+      '     alone orphans them: their rows go, and their profiles (signed-in browsers) stay on disk.',
+      '     Pass --all to delete them too.',
+    );
+  }
   if (options.all) {
     lines.push(
       '',
       '  ⚠  --all includes saved auth states: every logged-in profile snapshot is lost,',
       '     and any account without a recovery path will need to be signed into again.',
+      '  ⚠  --all includes session templates and the template key (admin/template.key):',
+      '     their signed-in browsers and every version are lost.',
       '  ⚠  Vault bindings and group policies live in the database and are lost with it;',
       '     export them first from the dashboard (Vault → Export) if you need them.',
     );
   }
   return lines;
+}
+
+/** The directories under `<dataDir>/templates` (one per template), 0 when it is missing. */
+async function countTemplateDirs(context: CommandContext, dataDir: string): Promise<number> {
+  const { fs } = context.deps;
+  const root = join(dataDir, 'templates');
+  let count = 0;
+  for (const name of await fs.readdir(root).catch(() => [])) {
+    if ((await fs.stat(join(root, name)))?.isDirectory === true) count += 1;
+  }
+  return count;
 }
 
 /**
@@ -189,7 +218,16 @@ export async function runPurge(
   };
   const inventory = root?.isDirectory === true ? await purgeInventory(dataDir, purgeDeps) : null;
   const lockPid = deps.lock.read(dataDir)?.pid ?? null;
-  out.lines(renderPurgeInventory(inventory, { dataDir, all: options.all, openSessions, lockPid }));
+  const templateDirs = inventory === null ? 0 : await countTemplateDirs(context, dataDir);
+  out.lines(
+    renderPurgeInventory(inventory, {
+      dataDir,
+      all: options.all,
+      openSessions,
+      lockPid,
+      templateDirs,
+    }),
+  );
   if (inventory === null) return EXIT.ok;
 
   if (options.dryRun) {
@@ -216,7 +254,7 @@ export async function runPurge(
     }
     if (options.all) {
       const second = await deps.prompt(
-        'This also deletes saved logins, backups and the dashboard password. Type YES again to confirm: ',
+        'This also deletes saved logins, session templates, backups and the dashboard password. Type YES again to confirm: ',
       );
       if (second.trim() !== PURGE_CONFIRM_WORD) {
         out.line('Aborted — nothing was deleted.');

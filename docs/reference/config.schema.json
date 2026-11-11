@@ -275,6 +275,49 @@
         "string"
       ]
     },
+    "templateKey": {
+      "type": "string",
+      "description": "Key that encrypts template checkpoints and versions (base64 of 32 bytes). Prefer BROWSERHIVE_TEMPLATE_KEY; absent = <dataDir>/admin/template.key, created on first use.",
+      "x-browserhive-env": "BROWSERHIVE_TEMPLATE_KEY",
+      "x-browserhive-cli": "--templateKey",
+      "x-browserhive-secret": true
+    },
+    "templateKeyPrevious": {
+      "type": "string",
+      "description": "The previous template key, read only: lets the server read files not yet re-encrypted by browserhive templates rekey.",
+      "x-browserhive-env": "BROWSERHIVE_TEMPLATE_KEY_PREVIOUS",
+      "x-browserhive-cli": "--templateKeyPrevious",
+      "x-browserhive-secret": true
+    },
+    "templateCheckpointInterval": {
+      "description": "How often a running template browser's rolling checkpoint is rewritten; versions are written at milestones only.",
+      "default": "15m",
+      "x-browserhive-env": "BROWSERHIVE_TEMPLATE_CHECKPOINT_INTERVAL",
+      "x-browserhive-cli": "--templateCheckpointInterval",
+      "type": [
+        "number",
+        "string"
+      ]
+    },
+    "templateVersionsKeep": {
+      "description": "Versions kept per template, plus every pinned version and the newest one with every site signed in.",
+      "x-browserhive-env": "BROWSERHIVE_TEMPLATE_VERSIONS_KEEP",
+      "x-browserhive-cli": "--templateVersionsKeep",
+      "type": [
+        "number",
+        "string"
+      ]
+    },
+    "templateRecycleRss": {
+      "description": "A template browser's resident memory above which its largest session's largest page is closed, then the browser is drained and restarted.",
+      "default": "3GiB",
+      "x-browserhive-env": "BROWSERHIVE_TEMPLATE_RECYCLE_RSS",
+      "x-browserhive-cli": "--templateRecycleRss",
+      "type": [
+        "number",
+        "string"
+      ]
+    },
     "templateHostIdleTimeout": {
       "description": "How long a template's browser stays open with no session before it is stopped; 0 = never.",
       "default": "1h",

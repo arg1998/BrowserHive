@@ -1,6 +1,6 @@
 # Session templates
 
-> **In this release:** you create a template and sign it in to its sites from the command line or the REST API, agents list and launch it over MCP, and template sessions are sealed. Versions and restore, the dashboard's Templates pages, health checks with re-login, and site packs arrive in later releases.
+> **In this release:** you create a template and sign it in to its sites (or seed it from a storage state) from the command line or the REST API, BrowserHive keeps encrypted versions of its sign-ins that you can restore, agents list and launch it over MCP, and template sessions are sealed. The dashboard's Templates pages, health checks with re-login, and site packs arrive in later releases.
 
 A session template is a browser identity you sign in to sites once. Agents then launch sessions from it with `launch_session` and its `template` parameter, and every such session starts signed in. Agents never see your passwords, and by default they never see the cookie values either.
 
@@ -23,7 +23,9 @@ A template's status is `recording` ("setting up") until you finish signing in, t
 - **It counts as one browser.** `maxSessions` bounds browsers: a template's browser takes one slot however many sessions it serves. `server_status` reports that browser count; the System page's capacity shows both sessions and browsers.
 - **It is headed by default.** It needs a display on the machine running BrowserHive; see [Displays](#displays).
 - **Windows open in the background.** On a desktop a session's windows open without taking the focus, and agent windows are never raised or moved. The one exception is the browser's start: its first window appears as a normal window before BrowserHive minimizes it, so starting a template's browser (the first launch after it was stopped) can take the focus once.
-- **If it crashes,** every session of the template ends at once (agents get `SESSION_DEAD`) and the browser restarts after 5 s, 15 s, 45 s, 135 s and 405 s; after five failures in 30 minutes it stays down until you restart BrowserHive. If you quit it yourself (close its windows), its sessions end and it starts again at the next launch.
+- **If it crashes,** every session of the template ends at once (agents get `SESSION_DEAD`) and the browser restarts after 5 s, 15 s, 45 s, 135 s and 405 s; after five failures in 30 minutes it stays down until you restart it (`browserhive templates host <name> restart`) or BrowserHive. If you quit it yourself (close its windows), its sessions end and it starts again at the next launch.
+- **It has a memory limit.** BrowserHive measures the memory of each template's browser (all its processes) every 60 s. Above `templateRecycleRss` (default `3GiB`), it closes the largest page of the session whose pages hold the most JavaScript memory, and that session gets a [`SESSION_RESOURCE_LIMIT`](../reference/errors.md#SESSION_RESOURCE_LIMIT) warning. If the browser is still above the limit 5 minutes later, it is restarted: sessions get up to `templateDrainTimeout` to finish, then close.
+- **Its sign-ins are saved, encrypted.** While it runs, BrowserHive keeps an encrypted checkpoint of its cookies and storage, and writes numbered versions at milestones ([Versions](#versions-and-the-checkpoint)).
 - **Leftovers of a killed BrowserHive** (a template browser still holding its profile) are terminated when BrowserHive starts again.
 - **Saved passwords, autofill and browser sign-in are off** in it: Chromium never offers "Save password?", fills nothing in, and keeps its password store (`Login Data`) empty. Your password manager extensions and your saved passwords are not available in it either.
 
@@ -67,7 +69,7 @@ BrowserHive lists such domains as "Also signed in to: … — agents can use thi
 
 ### Finish, cancel and finish later
 
-- **Finish** (Enter, `templates finish <name>`, or `POST …/recording/finish`) closes the window and sets the template `ready`. A site you never confirmed is kept and marked signed out; agents can still launch the template.
+- **Finish** (Enter, `templates finish <name>`, or `POST …/recording/finish`) closes the window, sets the template `ready` and saves its sign-ins as version 1 ([Versions](#versions-and-the-checkpoint)). A site you never confirmed is kept and marked signed out; agents can still launch the template.
 - **Cancel** (`DELETE …/recording`) closes the window. The template stays "setting up", and sign-ins you completed stay in its browser.
 - **Finish later.** When `--timeout` runs out, or after a cancel, the template stays "setting up". Run `browserhive templates finish job-hunt` to complete it. To open the sign-in window again first, call `POST /api/v1/templates/{id}/recording`; a "Continue sign-in" action arrives with the dashboard pages in a later release.
 
@@ -105,7 +107,7 @@ curl -sH "$H" -H 'Content-Type: application/json' -X POST $B/templates/tp-…/re
 | `POST /templates` | `templates:write` | `{template}`, status `recording`. `409 TEMPLATE_NAME_TAKEN` for a used name. |
 | `POST /templates/{id}/recording` `{sites?}` | `templates:login` | `{session_id, host}`. An open recording is returned again and its window raised. |
 | `POST /templates/{id}/recording/confirm` `{site_id}` | `templates:login` | `{site}` with its learned cookie names. `409 CONFLICT` when no recording is open or no new cookie appeared on the site. |
-| `POST /templates/{id}/recording/finish` `{remove_sign_ins?}` | `templates:login` | `{template, version: null}`; the template is `ready`. `version` stays `null` until versions arrive. |
+| `POST /templates/{id}/recording/finish` `{remove_sign_ins?}` | `templates:login` | `{template, version}`; the template is `ready`. `version` is the version written (1 for a new template), or `null` when the template's browser was not running or no [key](#backups-and-the-template-key) is available. |
 | `DELETE /templates/{id}/recording` | `templates:login` | Closes the window; the template stays `recording`. |
 | `GET /templates/{id}` | `templates:read` | The template, its browser (`host`, with `state`, `last_error` and `profile_secrets`), its sites, and `unlisted_domains` (computed while the browser runs). |
 | `POST /templates/{id}/domains/{domain}/remove-sign-in` | `templates:write` | `{ok, cookies_removed, origins_cleared, uncleared_origins}`: clears that registrable domain's cookies and the site data of every origin under it. |
@@ -116,7 +118,7 @@ The [REST reference](../reference/api.md#templates) lists every route with its f
 
 ### Google and other sites that refuse automated browsers
 
-Google, and some other sites, may refuse a sign-in in a browser that is controlled through automation, and a template's browser is one whoever types in it. Whether a person can complete the Google sign-in in a template's browser is still being verified by hand. If a site refuses, there is no workaround in this release; seeding a template from a storage state you saved in another browser arrives in a later release.
+Google, and some other sites, may refuse a sign-in in a browser that is controlled through automation, and a template's browser is one whoever types in it. Whether a person can complete the Google sign-in in a template's browser is still being verified by hand. If a site refuses, sign in to it in a browser it accepts and [seed the template from that browser's storage state](#seeding-from-a-storage-state).
 
 ### Delete a template
 
@@ -172,8 +174,8 @@ A refusal is [`INVALID_ARGUMENTS`](../reference/errors.md#INVALID_ARGUMENTS) wit
 |---|---|
 | [`TEMPLATE_NOT_FOUND`](../reference/errors.md#TEMPLATE_NOT_FOUND) | No template has that name, the agent's principal or harness is not allowed, the template is still being set up, or `templates=false`. All answer identically. |
 | [`TEMPLATE_BUSY`](../reference/errors.md#TEMPLATE_BUSY) | The template is at its cap, or a page cap is reached ([Capacity](#capacity)). |
-| [`TEMPLATE_UNAVAILABLE`](../reference/errors.md#TEMPLATE_UNAVAILABLE) | The browser is starting, restarting or recovering from a crash; retry after `retry_after_ms`. |
-| [`TEMPLATE_DISABLED`](../reference/errors.md#TEMPLATE_DISABLED) | The browser cannot start until you act. The cause (`no_display`, `host_failed`, `proxy_unreachable`, `sandbox_unavailable`) is shown to you only: in `GET /templates/{id}` (`host.state`, `host.last_error`), the log, and `templates list`. See [Troubleshooting](troubleshooting.md#session-templates). |
+| [`TEMPLATE_UNAVAILABLE`](../reference/errors.md#TEMPLATE_UNAVAILABLE) | The browser is starting, restarting (also during a restore or a seed) or recovering from a crash; retry after `retry_after_ms`. |
+| [`TEMPLATE_DISABLED`](../reference/errors.md#TEMPLATE_DISABLED) | You disabled the template, or its browser cannot start until you act. The cause (`disabled`, `no_display`, `host_failed`, `proxy_unreachable`, `sandbox_unavailable`) is shown to you only: in `GET /templates/{id}` (`host.state`, `host.last_error`), the log, and `templates list`. See [Troubleshooting](troubleshooting.md#session-templates). |
 | [`SESSION_LIMIT_REACHED`](../reference/errors.md#SESSION_LIMIT_REACHED) | The template's browser is not running and every browser slot is taken. |
 
 What agents are told is limited to what they can and cannot do; no agent-visible text explains the shared browser or reveals that other sessions exist.
@@ -197,7 +199,7 @@ Template sessions are **sealed** unless you unseal the template. Sealing keeps t
 { "policy": { "unseal": { "evaluate": true, "principals": ["research-bot"] } } }
 ```
 
-Without `principals` (or with `[]`) the flags apply to every principal the template allows; with a list, every other principal's sessions stay sealed. The command line creates sealed templates, and editing a template's policy arrives with the edit route in a later release, so to change sealing today, delete and recreate the template.
+Without `principals` (or with `[]`) the flags apply to every principal the template allows; with a list, every other principal's sessions stay sealed. The command line creates sealed templates. To change sealing later, send `policy.unseal` with `PATCH /api/v1/templates/{id}` ([Manage a template](#manage-a-template)): it replaces every flag and applies to live sessions at once.
 
 Before you unseal, know what each flag gives away:
 
@@ -239,7 +241,7 @@ Operators create, record and delete templates. Agents only list and launch them;
 
 - **Who may launch.** The template's access rule lists principals (`policy.authorized_principals`; empty = any principal) and optionally harnesses (`policy.harnesses`, matched as in [vault harness lists](vault.md#harness-restrictions)). The harness list is a guard against mistakes, not a security boundary: real separation is one token per agent. A refused agent gets `TEMPLATE_NOT_FOUND`, and the log line `template launch refused` tells you why.
 - **Sessions belong to whoever launched them**, as always: another agent cannot see or drive them. The recording session belongs to no agent.
-- **Operator scopes.** `templates:read` lists and reads templates; `templates:write` creates, deletes, removes sign-ins and clears profile secrets; `templates:login` opens, confirms, finishes and cancels a recording. Operator tokens issued without `scopes` hold all three.
+- **Operator scopes.** `templates:read` lists and reads templates, their versions and running operations, and tests access; `templates:write` creates, edits, disables, enables and deletes templates, starts and stops their browsers, saves, pins and restores versions, seeds, removes sign-ins and clears profile secrets; `templates:login` opens, confirms, finishes and cancels a recording. Operator tokens issued without `scopes` hold all three.
 - **Watching sessions.** Template sessions appear in the dashboard's session list and in `GET /api/v1/sessions` like any other, with `template` and `sealed`. Filter with `template=<id>`; the recording session is left out unless you pass `maintenance=include` (or `only`). Their live view and screenshots need `templates:read` in addition to the session scopes; those of a recording session need `templates:login`, because it shows you typing.
 
 ## Capacity
@@ -302,9 +304,129 @@ ssh -L 5900:127.0.0.1:5900 server
 
 Saved passwords and autofill are off in a template's browser. If its profile still holds some (for example a profile created by an earlier build, or copied in), BrowserHive reports it at the browser's start (`host.profile_secrets` in `GET /templates/{id}`), because agents could trigger autofill. Clear them with `POST /templates/{id}/host/clear-profile-secrets`; this stops the browser, which starts again on the next use.
 
-## Backups
+## Manage a template
 
-Database backups (`db backup`, the pre-migration backups) contain the template's settings, not its sign-ins. To back up a template, stop BrowserHive (or make sure the template's browser is stopped) and copy `<data-dir>/templates/<id>/`. Treat the copy like a password: the profile in it is effectively unencrypted ([Security](security.md#session-templates)). Encrypted versions and restore arrive in a later release.
+Every change below is an operator call (scopes in [Access](#access)) and is recorded in the audit log. The dashboard's Templates pages arrive in a later release; until then use the command line or the REST API. REST paths are under `/api/v1/templates/{id}`.
+
+| Task | Command line | REST |
+|---|---|---|
+| Show a template, its browser and its sites | `templates show <name>` | `GET` |
+| Start, stop or restart its browser | `templates host <name> start\|stop\|restart` | `POST …/host/start`, `…/host/stop`, `…/host/restart` |
+| Disable or enable it | `templates disable <name>`, `templates enable <name>` | `POST …/disable`, `…/enable` |
+| Edit it | — | `PATCH` |
+| Add, change or remove a site | — | `PUT …/sites/{site}`, `DELETE …/sites/{site}` |
+| Close one of its other windows | — | `POST …/host/pages/{target_id}/close` |
+| Test whether a principal and harness may launch it | — | `POST …/access/resolve` |
+| Open its data directory in the file manager | — | `POST …/data-dir/reveal` |
+| List, save, pin and restore versions; seed | [below](#versions-and-the-checkpoint) | [below](#versions-and-the-checkpoint) |
+
+- **Stop** writes a final checkpoint, closes the browser and ends its sessions. **Restart** gives sessions up to `templateDrainTimeout` to finish, then closes them and starts the browser again. Restart also clears a browser that stopped trying after five failures (`host_failed`).
+- **Disable** ends the template's live sessions and refuses new launches (agents get `TEMPLATE_DISABLED`). Its browser cannot be started, and seeding is refused, until you **enable** it again.
+- **Edit** (`PATCH`) changes the name, display name, description, browser channel, headless mode, humanize, proxy, how agent windows open (`agent_windows`) and the policy (access, cap, sealing). Renaming changes the name agents pass as `template`. The identity stays fixed ([Identity](#identity)). Changing `proxy` or `channel` restarts the browser and needs `confirm_identity_change: true`, because a site may sign the account out when the IP address or browser changes. An access change ends the live sessions whose principal or harness lost access, and a sealing change applies to live sessions at once; the answer lists the sessions it closed (`closed_sessions`).
+- **Removing a site** leaves its sign-in in the template's browser. [Remove the sign-in](#unlisted-sign-ins) too if agents should not use it. A template keeps at least one site.
+
+## Versions and the checkpoint
+
+BrowserHive keeps encrypted copies of a template's sign-ins, so you can roll the template back.
+
+- **The checkpoint** (`latest`) is one rolling copy. It is rewritten every `templateCheckpointInterval` (default `15m`) while the template's browser runs, when the browser stops cleanly (an idle stop, `templates host <name> stop`) and when BrowserHive shuts down. It is not a version.
+- **Versions** are numbered copies, written at milestones only:
+
+| Reason | Written when |
+|---|---|
+| `recording` | You finish signing in (version 1). Only when the template's browser is running and a [key](#backups-and-the-template-key) is available; otherwise Finish answers `version: null`. |
+| `manual` | You ask: `browserhive templates save <name>`, or `POST …/versions`. The browser must be running (otherwise `409`). When nothing changed since the newest version, nothing is written (`version: null`). |
+| `restore` | A [restore](#restoring-a-version) finished. |
+| `import` | The template was [seeded](#seeding-from-a-storage-state). |
+| `signin_change` | At a checkpoint, the sign-in cookies present for a site differ from the newest version's: you signed in again, or the site signed the template out. |
+| `daily` | At the first checkpoint of a day (this machine's local time), when the state's structure differs from the newest version's: which cookies (domain and name), local storage keys and IndexedDB databases exist, never their values. |
+
+A site that refreshes its session cookie's value never causes a version. `signin_change` looks at the sign-in cookie names BrowserHive learned when you confirmed the site ([How BrowserHive knows you signed in](#how-browserhive-knows-you-signed-in)), so a site you never confirmed in a sign-in window (for example on a template you only seeded) does not trigger it. Versions after a re-login arrive with health checks in a later release.
+
+**What a copy holds.** The cookies, local storage and IndexedDB of every origin the browser holds data for. Not session storage, service workers, Cache Storage, the HTTP cache, permissions, history or saved passwords; the live profile keeps those, but a restore does not bring them back. An origin the browser has not visited since it last started is carried forward from the previous checkpoint, so a sign-in kept in local storage survives a browser restart. A sign-in you remove is removed from the next checkpoint too. A copy is at most 64 MiB: above that, the IndexedDB data of the largest origins is left out, and [`TEMPLATE_CHECKPOINT_TOO_LARGE`](../reference/errors.md#TEMPLATE_CHECKPOINT_TOO_LARGE) names them. A failed write records [`TEMPLATE_CHECKPOINT_FAILED`](../reference/errors.md#TEMPLATE_CHECKPOINT_FAILED) and keeps the previous file.
+
+**Retention.** Each template keeps its newest `templateVersionsKeep` versions (default 10, 1 to 100), every pinned version, and its **Last good** version: the newest one written while every enabled site was signed in and had all its sign-in cookies (the names learned when you confirmed the site). Versions written with a key this server does not hold are never deleted and do not count toward the limit, so `rekey` can still recover them. Older versions are deleted with their files. Pin or unpin a version with `PATCH /api/v1/templates/{id}/versions/{version}` and `{"pinned": true}` or `false`.
+
+**The list.** `browserhive templates versions <name>` (or `GET …/versions`) shows each version, newest first, with its reason, time, size, how many enabled sites were signed in when it was written, whether it is pinned or Last good, and whether it can be read with the current key; the checkpoint is under the table. Each version also records per site its cookie count and the names of the sign-in cookies present, never a value.
+
+## Restoring a version
+
+```bash
+browserhive templates versions job-hunt
+browserhive templates restore job-hunt 3        # or: latest, the rolling checkpoint
+```
+
+A restore runs on the server as an operation. Over the REST API, `POST /api/v1/templates/{id}/versions/{version}/restore` (`version` may be `latest`) answers `202 {operation_id}`; `GET /api/v1/templates/operations/{operation_id}` reports `running`, `done` (with the version written) or `failed`.
+
+1. **The template's sessions end.** By default they get up to `templateDrainTimeout` (default `15m`) to finish and are then closed; with `--forceClose` (`{"force_close": true}`) they close at once. Sessions BrowserHive closes end with the reason `operator`. Meanwhile launches answer `TEMPLATE_UNAVAILABLE` (`restarting`).
+2. **The browser restarts.** It stops (writing a final checkpoint) and starts again.
+3. **The version is applied** and saved as a new `restore` version. Old versions are never changed.
+
+A restore brings back sign-ins, not a clean profile. It clears the cookies and storage of the origins in the version and of the origins the browser visited since it started, then sets the version's; other origins keep their data. BrowserHive does not check the sites after a restore yet (health checks arrive in a later release), so open a session and look.
+
+`templates restore` asks you to type the template's name on a terminal and refuses without one unless `--yes`. It waits for the operation; Ctrl+C stops waiting, and the restore goes on. A version deleted by retention answers [`TEMPLATE_VERSION_NOT_FOUND`](../reference/errors.md#TEMPLATE_VERSION_NOT_FOUND). A version written with a key BrowserHive does not hold answers `409` [`TEMPLATE_VERSION_UNREADABLE`](../reference/errors.md#TEMPLATE_VERSION_UNREADABLE) ([Rotating the key](#rotating-the-key)).
+
+## Seeding from a storage state
+
+Instead of signing in in the template's browser, you can give BrowserHive a Playwright storage state: a JSON file with the cookies and per-origin storage of a browser that is already signed in. Use it when nobody can see the template's window (a server on Xvfb without VNC), or when a site refuses a sign-in in the template's browser because it is controlled through automation.
+
+1. Sign in to the sites in a separate browser profile the site accepts, and save its storage state:
+   - From a BrowserHive session that is not a template session: sign in in it (for example during a [takeover](attention.md)) and call `save_storage_state` with a name. The file is `<data-dir>/auth-states/<name>.storage.json` (under `auth-states/p/<id>/` for a token principal).
+   - With Playwright: `npx playwright open --save-storage=state.json https://www.linkedin.com/`, sign in, and close the browser.
+2. Seed a new template, or an existing one:
+
+   ```bash
+   browserhive templates create job-hunt --sites linkedin.com --allPrincipals --fromState state.json
+   browserhive templates seed job-hunt state.json
+   ```
+
+3. Delete the file. It is a plaintext copy of your sign-ins.
+
+Seeding follows the restore steps above, except that the template's live sessions close at once: the browser restarts, the state is applied, an `import` version is written and the template becomes `ready`. Over the REST API, `POST /api/v1/templates/{id}/state` takes the JSON as the body (at most 16 MiB) and answers `202 {operation_id}`; over a `ready` template it needs `?confirm=true`, otherwise `409 CONFLICT`.
+
+- The command checks the file (at most 16 MiB, Playwright's `{"cookies": […], "origins": […]}` shape) before it sends or creates anything. `templates seed` asks you to type the template's name, or `--yes`. It prints each site's status and exits `2` when a site is signed out or needs a check.
+- If seeding a template made with `create --fromState` fails, the template stays "setting up": seed it again, or delete it.
+- BrowserHive reads the file in memory and never stores it in plain text; it keeps only the encrypted `import` version.
+- The template keeps its own pinned identity (fingerprint, locale, timezone, proxy), not the source browser's. A site may treat the first visit as a new device and ask you to confirm it.
+- A headed template's browser still needs a display to start, even if nobody looks at it ([Displays](#displays)).
+
+## Backups and the template key
+
+```
+<data-dir>/
+  admin/template.key              the template key, when templateKey is not set (0600)
+  templates/<id>/                 0700
+    userdata/                     the live browser profile (not encrypted)
+    versions/latest.state.enc     the checkpoint (encrypted)
+    versions/v<N>.state.enc       version N (encrypted)
+    versions/v<N>.meta.json       version N's facts: reason, time, size, key id, and per site the cookie count and sign-in cookie names (never values)
+    downloads/                    the browser's downloads
+```
+
+**Encryption.** Every checkpoint and version file is encrypted with AES-256-GCM under the template key, with a new random nonce for each file. The file's header names the key that wrote it (a key id: the first 8 bytes of the key's SHA-256), and the file is bound to its template and slot, so a file moved to another template or version, or with an altered header, does not open. Files are written to a `.tmp` file (`0600`), flushed to disk and renamed. Decrypted state exists only in memory. At startup BrowserHive deletes leftover `.tmp` files and version files the database has no row for; a version whose file is missing shows as unreadable. What encryption does and does not protect is in [Security](security.md#encryption-at-rest).
+
+**The key** is `templateKey` when it is set: base64 of exactly 32 bytes, for example from `openssl rand -base64 32`. Set it with the environment variable `BROWSERHIVE_TEMPLATE_KEY` (or an `{env:…}` [reference](configuration.md#references) in the config file). `--templateKey` works but logs a warning, because other users of the machine can read process arguments. Without `templateKey`, BrowserHive uses `<data-dir>/admin/template.key` (`0600`), which it creates at startup when the file is absent and no encrypted file exists yet. With the key outside the data directory, a copy of the data directory alone cannot be decrypted.
+
+BrowserHive never creates a key file while encrypted files exist. If the key is gone (the key file deleted, `templateKey` no longer set), it records [`TEMPLATE_KEY_MISSING`](../reference/errors.md#TEMPLATE_KEY_MISSING): checkpoints and versions are skipped and restores refused, while template browsers and their sessions keep running (the live profile needs no key). Files written with a key BrowserHive does not hold record [`TEMPLATE_KEY_MISMATCH`](../reference/errors.md#TEMPLATE_KEY_MISMATCH) and show as unreadable. Agents never see either.
+
+**Backups.** `browserhive db backup` and the pre-migration backups contain the templates' settings and version rows, not their files. To back up a template, copy `<data-dir>/templates/<id>/` while its browser is stopped (`templates host <name> stop`), and back up the key: `admin/template.key`, or your `templateKey` value. Store the key apart from the files. A copy that travels with its key is as readable as plaintext, and the live profile in `userdata/` is not encrypted at all ([Security](security.md#encryption-at-rest)).
+
+When you restore an older database backup, BrowserHive deletes at the next start the version files the restored database has no row for, and versions whose files are gone show as unreadable. Encrypted export and import of a template are not available yet.
+
+## Rotating the key
+
+1. Generate a new key (`openssl rand -base64 32`) and keep it where your service keeps secrets.
+2. Set the new key as `templateKey` (`BROWSERHIVE_TEMPLATE_KEY`) and the current one as `templateKeyPrevious` (`BROWSERHIVE_TEMPLATE_KEY_PREVIOUS`). The current key is your old `templateKey` value, or the contents of `admin/template.key`. Restart BrowserHive. It now writes with the new key only, and can still read files written with the old one. If you forget `templateKeyPrevious`, nothing is lost: the checkpoint written with the old key is kept (checkpoints are skipped, `TEMPLATE_KEY_MISMATCH`) and old versions are never deleted until you run `rekey`.
+3. Stop BrowserHive and re-encrypt the files, in the same environment so the command resolves the same keys:
+
+   ```bash
+   browserhive templates rekey --oldKeyEnv BROWSERHIVE_TEMPLATE_KEY_PREVIOUS
+   ```
+
+   `--oldKeyEnv` takes the name of the variable that holds the old key, never the key. `rekey` refuses while a server uses the data directory (exit code `3`). It rewrites every file not yet on the current key and updates the version rows. It is safe to run again: a second run completes an interrupted one and skips the files already done.
+4. Remove `templateKeyPrevious` and start BrowserHive. If the old key was `admin/template.key`, delete that file; it is not used while `templateKey` is set.
+
+Rotation protects copies made from now on. Copies made before it can still be read by anyone who has the old key.
 
 ## Configuration
 
@@ -314,7 +436,12 @@ Database backups (`db backup`, the pre-migration backups) contain the template's
 | [`templateHostIdleTimeout`](../reference/configuration.md#templateHostIdleTimeout) | `1h` | Stop a template's browser after this long with no session; `0` = never. |
 | [`templateMaxPagesPerHost`](../reference/configuration.md#templateMaxPagesPerHost) | `40` | Agent pages per template browser (2 to 200). |
 | [`templateRecycleAfter`](../reference/configuration.md#templateRecycleAfter) | `24h` | Restart a template's browser after this age (at least `1h`). |
-| [`templateDrainTimeout`](../reference/configuration.md#templateDrainTimeout) | `15m` | How long a restart waits for sessions before closing them (`1m` to `2h`). |
+| [`templateDrainTimeout`](../reference/configuration.md#templateDrainTimeout) | `15m` | How long a restart or a restore waits for sessions before closing them (`1m` to `2h`). |
+| [`templateRecycleRss`](../reference/configuration.md#templateRecycleRss) | `3GiB` | A template browser's memory limit (at least `512MiB`); see [the template's browser](#the-templates-browser). |
+| [`templateCheckpointInterval`](../reference/configuration.md#templateCheckpointInterval) | `15m` | How often the checkpoint is rewritten while the browser runs (at least `1m`). |
+| [`templateVersionsKeep`](../reference/configuration.md#templateVersionsKeep) | `10` | Versions kept per template (1 to 100), besides pinned ones and Last good. |
+| [`templateKey`](../reference/configuration.md#templateKey) | unset | The key that encrypts checkpoints and versions (base64 of 32 bytes). Secret: set `BROWSERHIVE_TEMPLATE_KEY`. Unset: `<data-dir>/admin/template.key`. |
+| [`templateKeyPrevious`](../reference/configuration.md#templateKeyPrevious) | unset | The previous key, read only, while you [rotate the key](#rotating-the-key). Secret. |
 
 ## Known limits
 

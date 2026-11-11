@@ -139,6 +139,7 @@ Subscribe with `{ "type": "subscribe", "topic": "<topic>", "cursor"?: <last seq>
 | `logs` | `logs:read` | [`log.record`](#event-log-record) |
 | `notifications` | `notifications:read` | [`notification.created`](#event-notification-created), [`notification.updated`](#event-notification-updated) |
 | `channels` | `channels:read` | [`channel.changed`](#event-channel-changed), [`channel.removed`](#event-channel-removed), [`delivery.updated`](#event-delivery-updated), [`action.recorded`](#event-action-recorded) |
+| `templates` | `templates:read` | [`template.changed`](#event-template-changed), [`template.removed`](#event-template-removed), [`template.host`](#event-template-host), [`template.health`](#event-template-health), [`template.version`](#event-template-version), [`template.operation`](#event-template-operation) |
 | `session:<id>` | `sessions:read` | [`session.opened`](#event-session-opened), [`session.updated`](#event-session-updated), [`session.closed`](#event-session-closed), [`session.removed`](#event-session-removed), [`session.warning`](#event-session-warning), [`tool.called`](#event-tool-called), [`page.visited`](#event-page-visited), [`screenshot.captured`](#event-screenshot-captured), [`vault.access`](#event-vault-access), [`blocklist.hit`](#event-blocklist-hit), [`attention.created`](#event-attention-created), [`attention.resolved`](#event-attention-resolved), [`vault.confirm.created`](#event-vault-confirm-created), [`vault.confirm.resolved`](#event-vault-confirm-resolved) |
 | `screencast:<id>` | `sessions:read` | stream messages `meta`, `started`, `stopped`, `failed` and binary frames |
 
@@ -363,6 +364,56 @@ Payloads of `kind: "event"` frames, discriminated on `type`. DTO fields (`sessio
 | Field | Type | Required | Constraints |
 |---|---|---|---|
 | `action` | `object` | yes | keys `seq`, `at`, `channel_id`, `channel_name`, `channel_kind`, `notification_id`, `notification_title`, `action_id`, `action_label`, `op`, `actor`, `actor_name`, `outcome`, `detail` |
+
+<a id="event-template-changed"></a>
+### `template.changed`
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `template` | `object` | yes | keys `template_id`, `name`, `display_name`, `status`, `channel`, `headless`, `sites`, `host`, `in_use`, `cap`, `current_version`, `checkpoint_at`, `last_used_at`, `sealed`, `identity_drift` |
+
+<a id="event-template-removed"></a>
+### `template.removed`
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `template_id` | `string` | yes | — |
+
+<a id="event-template-host"></a>
+### `template.host`
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `template_id` | `string` | yes | — |
+| `host` | `object` | yes | keys `state`, `since`, `started_at`, `restarts`, `last_error`, `pages`, `parked_pages`, `rss_bytes`, `recycle_at`, `sandboxed`, `profile_secrets` |
+
+<a id="event-template-health"></a>
+### `template.health`
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `template_id` | `string` | yes | — |
+| `site` | `object` | yes | keys `site_id`, `title`, `pack_id`, `pack_version`, `enabled`, `write_policy`, `vault_handle`, `auto_relogin`, `form`, `learned_cookie_names`, `health`, `stopped_at`, `device_bound`, `added_at` |
+
+<a id="event-template-version"></a>
+### `template.version`
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `template_id` | `string` | yes | — |
+| `version` | `object` | yes | keys `version`, `reason`, `restored_from`, `size_bytes`, `summary`, `health`, `pinned`, `last_good`, `readable`, `created_by`, `created_at` |
+
+<a id="event-template-operation"></a>
+### `template.operation`
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `operation_id` | `string` | yes | — |
+| `kind` | one of `restore`, `seed` | yes | — |
+| `state` | one of `running`, `done`, `failed` | yes | — |
+| `template_id` | `string` | yes | — |
+| `version` | `integer` | no | — |
+| `error` | `object` | no | keys `code`, `message` |
 
 <a id="event-log-record"></a>
 ### `log.record`

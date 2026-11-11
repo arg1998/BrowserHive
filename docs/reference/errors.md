@@ -2,7 +2,7 @@
 
 # Error reference
 
-Every error code BrowserHive can produce (119 codes), generated from `ERROR_REGISTRY` in `@browserhive/contracts/errors`. Each code has a stable anchor: `errors.md#<CODE>`, which is also the `type` URL of HTTP problem responses (`https://browserhive.ai/docs/errors#<CODE>`).
+Every error code BrowserHive can produce (127 codes), generated from `ERROR_REGISTRY` in `@browserhive/contracts/errors`. Each code has a stable anchor: `errors.md#<CODE>`, which is also the `type` URL of HTTP problem responses (`https://browserhive.ai/docs/errors#<CODE>`).
 
 ## How errors reach you
 
@@ -91,6 +91,8 @@ Returned by tools and the REST API when a request cannot be served (unknown sess
 | [`INTERNAL_ERROR`](#INTERNAL_ERROR) | Internal error | 500 | backoff |
 | [`TEMPLATE_NAME_TAKEN`](#TEMPLATE_NAME_TAKEN) | Template name in use | 409 | different_args |
 | [`TEMPLATE_IN_USE`](#TEMPLATE_IN_USE) | Template has live sessions | 409 | different_args |
+| [`TEMPLATE_VERSION_NOT_FOUND`](#TEMPLATE_VERSION_NOT_FOUND) | Template version not found | 404 | never |
+| [`TEMPLATE_VERSION_UNREADABLE`](#TEMPLATE_VERSION_UNREADABLE) | Template version unreadable | 409 | after_operator |
 
 <a id="SESSION_NOT_FOUND"></a>
 ### `SESSION_NOT_FOUND`
@@ -1661,6 +1663,57 @@ Details:
 | `template_id` | `string` | yes | — |
 | `live_sessions` | `integer` | yes | ≥ 0 |
 
+<a id="TEMPLATE_VERSION_NOT_FOUND"></a>
+### `TEMPLATE_VERSION_NOT_FOUND`
+
+| Property | Value |
+|---|---|
+| Title | Template version not found |
+| HTTP status | 404 |
+| Category | `domain` |
+| Retryable | `never` (do not retry; the request cannot succeed as sent) |
+
+Message: `Template '{template_id}' has no version {version}.`
+
+Hint: List the versions with GET /api/v1/templates/{template_id}/versions.
+
+Cause: The version was never written, was deleted by retention (`templateVersionsKeep`), or the rolling checkpoint (`latest`) has not been written yet (spec 13 §3.9).
+
+Resolution: Pick a version from the list; pin versions you want to keep past retention.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `template_id` | `string` | yes | — |
+| `version` | `integer` or `"latest"` | yes | — |
+
+<a id="TEMPLATE_VERSION_UNREADABLE"></a>
+### `TEMPLATE_VERSION_UNREADABLE`
+
+| Property | Value |
+|---|---|
+| Title | Template version unreadable |
+| HTTP status | 409 |
+| Category | `domain` |
+| Retryable | `after_operator` (retry after an operator acts (unlock the vault, resolve a request, change policy)) |
+
+Message: `Version {version} of template '{template_id}' cannot be read with the current key (key id {key_id}).`
+
+Hint: Set the key that wrote it as templateKeyPrevious, or run browserhive templates rekey.
+
+Cause: The encrypted file was written with another key, no key resolves (`TEMPLATE_KEY_MISSING`), the file is missing, or it failed authentication (altered, truncated or moved from another template or slot; spec 13 §2.4).
+
+Resolution: Restore the key that wrote it (`templateKey`, or `templateKeyPrevious` until `browserhive templates rekey` has run); a file that fails authentication cannot be recovered.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `template_id` | `string` | yes | — |
+| `version` | `integer` or `"latest"` | yes | — |
+| `key_id` | `string` | yes | — |
+
 ## Boot errors
 
 Stop the process before it serves anything. The CLI prints `[CODE] message` and exits with the listed exit code.
@@ -1686,6 +1739,10 @@ Stop the process before it serves anything. The CLI prints `[CODE] message` and 
 | [`STALE_BROWSER_PROCESSES`](#STALE_BROWSER_PROCESSES) | Stale browser processes found | 500 | never |
 | [`TEMPLATE_HOST_FAILED`](#TEMPLATE_HOST_FAILED) | Template browser failed | 500 | never |
 | [`TEMPLATE_ROW_UNREADABLE`](#TEMPLATE_ROW_UNREADABLE) | Template row unreadable | 500 | never |
+| [`TEMPLATE_KEY_MISSING`](#TEMPLATE_KEY_MISSING) | Template key missing | 500 | never |
+| [`TEMPLATE_KEY_MISMATCH`](#TEMPLATE_KEY_MISMATCH) | Template files on another key | 500 | never |
+| [`TEMPLATE_CHECKPOINT_FAILED`](#TEMPLATE_CHECKPOINT_FAILED) | Template checkpoint failed | 500 | backoff |
+| [`TEMPLATE_CHECKPOINT_TOO_LARGE`](#TEMPLATE_CHECKPOINT_TOO_LARGE) | Template state over the size cap | 500 | never |
 
 <a id="ADMIN_REQUIRES_HTTP"></a>
 ### `ADMIN_REQUIRES_HTTP`
@@ -2187,6 +2244,111 @@ Details:
 | `template_id` | `string` | yes | — |
 | `table` | one of `templates`, `template_sites` | yes | — |
 | `reason` | `string` | yes | — |
+
+<a id="TEMPLATE_KEY_MISSING"></a>
+### `TEMPLATE_KEY_MISSING`
+
+| Property | Value |
+|---|---|
+| Title | Template key missing |
+| HTTP status | 500 |
+| Category | `boot` |
+| Retryable | `never` (do not retry; the request cannot succeed as sent) |
+| Exit code | 1 |
+
+Message: `Encrypted template files exist but no template key resolves; checkpoints and versions are skipped.`
+
+Hint: Set templateKey (BROWSERHIVE_TEMPLATE_KEY) or restore <data-dir>/admin/template.key.
+
+Cause: Checkpoint or version files exist under `templates/<id>/versions/`, `templateKey` is not set and `admin/template.key` is missing (spec 13 §2.4). The key file is never re-created while encrypted files exist, so they cannot be silently orphaned. Template browsers keep running (their live profile needs no key); checkpoints and versions are skipped and restores refused. The same record, with `reason`, is written when `admin/template.key` exists but cannot be read, or cannot be created (a read-only `admin/`).
+
+Resolution: Restore the key file from the backup you copied with the template directories, or set `templateKey` to the key that wrote them, then restart.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `template_ids` | `string[]` | yes | — |
+| `reason` | `string` | no | — |
+
+<a id="TEMPLATE_KEY_MISMATCH"></a>
+### `TEMPLATE_KEY_MISMATCH`
+
+| Property | Value |
+|---|---|
+| Title | Template files on another key |
+| HTTP status | 500 |
+| Category | `boot` |
+| Retryable | `never` (do not retry; the request cannot succeed as sent) |
+| Exit code | 1 |
+
+Message: `Versions of template '{template_id}' were written with another key.`
+
+Hint: Set the old key as templateKeyPrevious, then run browserhive templates rekey.
+
+Cause: The `key_id` in these files' headers matches neither `templateKey` (or `admin/template.key`) nor `templateKeyPrevious` (spec 13 §2.4). The version list marks them unreadable and restoring them answers `TEMPLATE_VERSION_UNREADABLE`.
+
+Resolution: Give the key that wrote them as `templateKeyPrevious` (read only) and run `browserhive templates rekey --oldKeyEnv <ENV>` with the server stopped.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `template_id` | `string` | yes | — |
+| `versions` | array of `integer` or `"latest"` | yes | — |
+
+<a id="TEMPLATE_CHECKPOINT_FAILED"></a>
+### `TEMPLATE_CHECKPOINT_FAILED`
+
+| Property | Value |
+|---|---|
+| Title | Template checkpoint failed |
+| HTTP status | 500 |
+| Category | `boot` |
+| Retryable | `backoff` (retry later with backoff) |
+| Exit code | 1 |
+
+Message: `A checkpoint or version of template '{template_id}' could not be written: {error}.`
+
+Hint: Check free disk space and the permissions of the template directory.
+
+Cause: Reading the browser state or writing the encrypted file failed (disk full, an I/O error, a closed browser; spec 13 §3.2). The temporary file was deleted; the previous file and its row are unchanged.
+
+Resolution: Free disk space or fix the permissions; the next checkpoint retries on its own and clears the record.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `template_id` | `string` | yes | — |
+| `error` | `string` | yes | — |
+
+<a id="TEMPLATE_CHECKPOINT_TOO_LARGE"></a>
+### `TEMPLATE_CHECKPOINT_TOO_LARGE`
+
+| Property | Value |
+|---|---|
+| Title | Template state over the size cap |
+| HTTP status | 500 |
+| Category | `boot` |
+| Retryable | `never` (do not retry; the request cannot succeed as sent) |
+| Exit code | 1 |
+
+Message: `The state of template '{template_id}' ({size_bytes} bytes) is over the 64 MiB cap; IndexedDB data of the largest origins was left out.`
+
+Hint: Remove sign-ins or site data the template does not need.
+
+Cause: A checkpoint or version is capped at 64 MiB (`TEMPLATE_STATE_MAX_BYTES`, spec 13 §3.9): IndexedDB data is dropped from the largest origins until it fits. The live profile keeps the data; only the encrypted copy lacks it, so a restore of that copy does not bring it back.
+
+Resolution: Remove the sign-in of the named origins if the template does not need them (**Remove sign-in**), or accept that restores omit their IndexedDB data.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `template_id` | `string` | yes | — |
+| `size_bytes` | `integer` | yes | ≥ 0 |
+| `dropped_origins` | `string[]` | yes | — |
 
 ## Authentication errors
 
@@ -2798,6 +2960,8 @@ Non-fatal degradations recorded on a session or in the system events list; the o
 | [`CDP_SESSION_LEAKED`](#CDP_SESSION_LEAKED) | CDP session leaked | 500 | never |
 | [`SESSION_PAGE_LIMIT`](#SESSION_PAGE_LIMIT) | Page limit: a site-opened page was closed | 500 | never |
 | [`SCREENSHOT_ARCHIVE_FAILED`](#SCREENSHOT_ARCHIVE_FAILED) | Screenshot archive failed | 500 | never |
+| [`SESSION_RESOURCE_LIMIT`](#SESSION_RESOURCE_LIMIT) | Memory limit: a page was closed | 500 | never |
+| [`TEMPLATE_STATE_COPY`](#TEMPLATE_STATE_COPY) | Session started from a copy of a template's sign-ins | 500 | never |
 
 <a id="EXECUTABLE_PATH_OVERRIDE"></a>
 ### `EXECUTABLE_PATH_OVERRIDE`
@@ -3102,6 +3266,58 @@ Hint: Session warning: logged and broadcast on session:<id>, never thrown.
 Cause: A tool screenshot could not be written to the session directory.
 
 Resolution: Check disk space and permissions.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `session_id` | `string` | yes | — |
+| `message` | `string` | yes | — |
+| `details` | `object` | no | additional keys allowed |
+
+<a id="SESSION_RESOURCE_LIMIT"></a>
+### `SESSION_RESOURCE_LIMIT`
+
+| Property | Value |
+|---|---|
+| Title | Memory limit: a page was closed |
+| HTTP status | 500 |
+| Category | `warning` |
+| Retryable | `never` (do not retry; the request cannot succeed as sent) |
+
+Message: `{message}`
+
+Hint: Session warning: logged and broadcast on session:<id>, never thrown.
+
+Cause: A template's browser used more memory than `templateRecycleRss` (spec 13 §3.2): the largest page of the session using the most JavaScript memory was closed. When the browser is still above the limit five minutes later it is drained and restarted.
+
+Resolution: Close pages the session no longer needs; raise templateRecycleRss on a machine with more memory.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `session_id` | `string` | yes | — |
+| `message` | `string` | yes | — |
+| `details` | `object` | no | additional keys allowed |
+
+<a id="TEMPLATE_STATE_COPY"></a>
+### `TEMPLATE_STATE_COPY`
+
+| Property | Value |
+|---|---|
+| Title | Session started from a copy of a template's sign-ins |
+| HTTP status | 500 |
+| Category | `warning` |
+| Retryable | `never` (do not retry; the request cannot succeed as sent) |
+
+Message: `{message}`
+
+Hint: Session warning: logged and broadcast on session:<id>, never thrown.
+
+Cause: The saved login restored into this session was exported from a session template (`source_template_id`, spec 13 §5.4). Using the copy at the same time as the template can make sites sign the template out (token rotation, concurrent-session limits).
+
+Resolution: Prefer launching from the template itself; delete the exported state when it is no longer needed.
 
 Details:
 

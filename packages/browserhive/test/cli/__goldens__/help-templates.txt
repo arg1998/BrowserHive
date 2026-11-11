@@ -1,22 +1,42 @@
-browserhive templates — Create, finish, list and delete session templates
+browserhive templates — Create, inspect, seed, version, restore and delete session templates
 
 USAGE
   browserhive templates list [flags]
   browserhive templates create <name> [flags]
   browserhive templates finish <name> [flags]
   browserhive templates rm <name> [flags]
+  browserhive templates show <name> [flags]
+  browserhive templates seed <name> <file> [flags]
+  browserhive templates versions <name> [flags]
+  browserhive templates save <name> [flags]
+  browserhive templates restore <name> <version> [flags]
+  browserhive templates host <name> <action> [flags]
+  browserhive templates disable <name> [flags]
+  browserhive templates enable <name> [flags]
+  browserhive templates rekey [flags]
 
 Talks to a running server over its REST API (--url, default the configured host and port) with an
 operator bearer (--token) or the dashboard cookie (--cookie). create opens a sign-in window on the
 machine running the server, wherever the CLI runs, and waits until every site is signed in, you
 press Enter, or --timeout passes. create and finish exit 0 when every site is signed in, 2 when one
-is not, 1 on an API error.
+is not, 1 on an API error. seed and restore run on the server and the CLI waits for them. rekey is
+the exception: it runs locally against the data directory with the server stopped.
 
 COMMANDS
-  list           List templates with their sites, status, browser state and sessions
-  create <name>  Create a template and sign in to its sites in a window on the server
-  finish <name>  Complete a template left in setup: check its sign-ins and set it ready
-  rm <name>      Delete a template and its browser profile (does not sign out at the sites)
+  list                      List templates with their sites, status, browser state and sessions
+  create <name>             Create a template and sign in to its sites in a window on the server
+  finish <name>             Complete a template left in setup: check its sign-ins and set it ready
+  rm <name>                 Delete a template and its browser profile (does not sign out at the
+                            sites)
+  show <name>               Show a template, its browser and its sites' sign-in state
+  seed <name> <file>        Replace the sign-ins of a template with a storage-state file
+  versions <name>           List the saved versions of a template and its rolling checkpoint
+  save <name>               Save the running browser's sign-ins as a new version
+  restore <name> <version>  Roll a template back to a saved version or its rolling checkpoint
+  host <name> <action>      Start, stop or restart a template's browser
+  disable <name>            Disable a template: close its sessions and refuse new ones
+  enable <name>             Enable a disabled template
+  rekey                     Re-encrypt every template file with the current key (server stopped)
 
 FLAGS
   --host <address>             Bind address. A non-loopback host requires auth=token or
@@ -54,6 +74,9 @@ FLAGS — create
   --principal <subject>             Let this agent principal use the template (repeatable). Under
                                     auth=token one of --allPrincipals or --principal is required.
   --noLogin                         Create the template and exit without opening a sign-in window.
+  --fromState <file>                Seed the template from a Playwright storage-state file (≤ 16
+                                    MiB) instead of opening a sign-in window. The file is read in
+                                    memory and never stored in plain text.
   --timeout <duration>              How long to wait for the sign-ins. The template then stays in
                                     setup; 'templates finish' completes it. default: 30m
   --json                            Print machine-readable JSON instead of text.
@@ -77,6 +100,73 @@ FLAGS — rm
                     (http://127.0.0.1:9876).
   --token <bearer>  Operator bearer token for --url (bh_operator_…).
   --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
+
+FLAGS — show
+  --json            Print machine-readable JSON instead of text.
+  --url <url>       Talk to a running server over its REST API instead of opening the database
+                    (http://127.0.0.1:9876).
+  --token <bearer>  Operator bearer token for --url (bh_operator_…).
+  --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
+
+FLAGS — seed
+  --json            Print machine-readable JSON instead of text.
+  --url <url>       Talk to a running server over its REST API instead of opening the database
+                    (http://127.0.0.1:9876).
+  --token <bearer>  Operator bearer token for --url (bh_operator_…).
+  --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
+  --yes             Skip the confirmation prompt.
+
+FLAGS — versions
+  --json            Print machine-readable JSON instead of text.
+  --url <url>       Talk to a running server over its REST API instead of opening the database
+                    (http://127.0.0.1:9876).
+  --token <bearer>  Operator bearer token for --url (bh_operator_…).
+  --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
+
+FLAGS — save
+  --json            Print machine-readable JSON instead of text.
+  --url <url>       Talk to a running server over its REST API instead of opening the database
+                    (http://127.0.0.1:9876).
+  --token <bearer>  Operator bearer token for --url (bh_operator_…).
+  --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
+
+FLAGS — restore
+  --json            Print machine-readable JSON instead of text.
+  --url <url>       Talk to a running server over its REST API instead of opening the database
+                    (http://127.0.0.1:9876).
+  --token <bearer>  Operator bearer token for --url (bh_operator_…).
+  --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
+  --forceClose      Close the template's sessions at once instead of waiting for them (up to
+                    templateDrainTimeout).
+  --yes             Skip the confirmation prompt.
+
+FLAGS — host
+  --json            Print machine-readable JSON instead of text.
+  --url <url>       Talk to a running server over its REST API instead of opening the database
+                    (http://127.0.0.1:9876).
+  --token <bearer>  Operator bearer token for --url (bh_operator_…).
+  --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
+
+FLAGS — disable
+  --json            Print machine-readable JSON instead of text.
+  --url <url>       Talk to a running server over its REST API instead of opening the database
+                    (http://127.0.0.1:9876).
+  --token <bearer>  Operator bearer token for --url (bh_operator_…).
+  --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
+
+FLAGS — enable
+  --json            Print machine-readable JSON instead of text.
+  --url <url>       Talk to a running server over its REST API instead of opening the database
+                    (http://127.0.0.1:9876).
+  --token <bearer>  Operator bearer token for --url (bh_operator_…).
+  --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
+
+FLAGS — rekey
+  --oldKeyEnv <ENV>  Environment variable holding the old key (base64 of 32 bytes). Required. The
+                     key itself is never passed as an argument.
+  --json             Print machine-readable JSON instead of text.
+  --dataDir <path>   Data directory (database, sessions, auth states, uploads, backups). Defaults to
+                     the OS data dir. default: OS data directory
 
 GLOBAL FLAGS
   -h, --help     Show help.

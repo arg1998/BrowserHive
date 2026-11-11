@@ -75,6 +75,11 @@ const SPEC_KEYS = [
   'templateMaxPagesPerHost',
   'templateRecycleAfter',
   'templateDrainTimeout',
+  'templateKey',
+  'templateKeyPrevious',
+  'templateCheckpointInterval',
+  'templateVersionsKeep',
+  'templateRecycleRss',
 ] as const;
 
 describe('CONFIG_KEYS', () => {
@@ -94,6 +99,20 @@ describe('CONFIG_KEYS', () => {
     expect(shape.templateRecycleAfter.parse(undefined)).toBe(86_400_000);
     expect(shape.templateRecycleAfter.safeParse('59m').success).toBe(false);
     expect(shape.templateDrainTimeout.parse(undefined)).toBe(900_000);
+    // T1b (spec 08 §5.9).
+    const key = 'A'.repeat(43);
+    expect(shape.templateKey.parse(undefined)).toBeUndefined();
+    expect(shape.templateKey.parse(`${key}=`)).toBe(`${key}=`);
+    expect(shape.templateKey.safeParse('A'.repeat(42)).success).toBe(false);
+    expect(shape.templateKey.safeParse(`${'A'.repeat(42)}B=`).success).toBe(false);
+    expect(shape.templateKeyPrevious.safeParse('not a key').success).toBe(false);
+    expect(shape.templateCheckpointInterval.parse(undefined)).toBe(900_000);
+    expect(shape.templateCheckpointInterval.safeParse('59s').success).toBe(false);
+    expect(shape.templateVersionsKeep.parse(undefined)).toBe(10);
+    expect(shape.templateVersionsKeep.safeParse(0).success).toBe(false);
+    expect(shape.templateVersionsKeep.safeParse(101).success).toBe(false);
+    expect(shape.templateRecycleRss.parse(undefined)).toBe(3 * 1024 ** 3);
+    expect(shape.templateRecycleRss.safeParse('511MiB').success).toBe(false);
     expect(shape.templateDrainTimeout.safeParse('30s').success).toBe(false);
     expect(shape.templateDrainTimeout.safeParse('3h').success).toBe(false);
   });
@@ -137,7 +156,12 @@ describe('CONFIG_KEYS', () => {
       expect(meta.group.length).toBeGreaterThan(0);
       expect(typeof meta.grammar).toBe('string');
     }
-    expect(secretKeys()).toEqual(['authTokens', 'otelHeaders']);
+    expect(secretKeys()).toEqual([
+      'authTokens',
+      'templateKey',
+      'templateKeyPrevious',
+      'otelHeaders',
+    ]);
     expect(CONFIG_KEYS.filter((k) => !keyMeta(k).restartRequired)).toEqual([
       'logLevel',
       'logFormat',

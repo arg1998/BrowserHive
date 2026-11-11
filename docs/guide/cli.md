@@ -10,7 +10,7 @@ browserhive db status|backup|restore <file>|migrate
 browserhive admin reset-password
 browserhive admin tokens list|create <name>|revoke <name>
 browserhive channels list | test <name> | preview <name> [--sample <kind>]
-browserhive templates list | create <name> --sites <site,…> | finish <name> | rm <name>
+browserhive templates list | show | create | finish | seed | versions | save | restore | host | disable | enable | rm | rekey
 browserhive version | --version | -v
 browserhive help [command] | --help | -h
 ```
@@ -95,6 +95,20 @@ One-time setup, safe to re-run:
 
 Checks Bun, that the first `bh` on `PATH` is BrowserHive's [shorthand](installation.md#the-bh-shorthand) (a warning when it is another program), browsers (the bundled Chromium, installed Chrome and Edge, that the configured `defaultChannel` is installed, version drift, managed policies that block automation), Chromium's sandbox for each installed browser (each is launched once), running as root or in a container, data directory permissions and disk space, configuration, port availability, `bw` when the vault is on, the database and pending migrations, agent tokens that act as a [reserved principal](mcp-clients.md#reserved-names) (a warning naming each token, which it never revokes), the OTLP endpoint when telemetry is on, `maxSessions` against RAM, `publicUrl` (whether it reaches this BrowserHive; see [public address](notifications.md#public-address)), notification channels (each `--notificationChannel` parses and every variable a channel names is set), and config-file permissions when it holds secrets (not when `authTokens` only [references](configuration.md#references) environment variables). It counts the values that came from references and warns about each referenced variable that was not set, so its default is in use. It also warns when the data directory contains an unrecognised data file, which BrowserHive neither reads nor migrates.
 
+When [session templates](templates.md) exist, `doctor` also checks them. It reads the database without migrating it and starts no template browser.
+
+| Check | Warns (`!`) when | Fails (`✗`) when |
+|---|---|---|
+| `templates data` | `templates/`, `admin/`, a template's directories or its version files are open to other users (it prints the `chmod` to run). Modes are not checked on Windows. | `templates/` cannot be read. |
+| `template key` | `admin/template.key` is broader than `0600` or holds no valid key; `templateKey` is given as a command-line flag; files were written with a key BrowserHive does not hold (names the templates); files are still on `templateKeyPrevious` (run `templates rekey`). | Encrypted files exist and no key resolves ([`TEMPLATE_KEY_MISSING`](../reference/errors.md#TEMPLATE_KEY_MISSING)). |
+| `template access` | Under `--auth token`, a template's access names only `local`, which no agent token can be. | — |
+| `template display` | On Linux, `DISPLAY` is set without `XAUTHORITY` outside a desktop session (an Xvfb started without `-auth`). On macOS and Windows it prints what a headed browser needs. | On Linux, a headed template that has never started on this machine, and neither `DISPLAY` nor `WAYLAND_DISPLAY` is set. |
+| `template agents` | The transport is `stdio` or `--auth` is `off`: agents that can run commands as this user can read the templates directly. | — |
+| `template browsers` | A template's browser has a different major version than at its first start. | A template's browser channel is not installed (it names the install command). |
+| `template profiles` | A template's profile holds saved passwords or autofill data. | — |
+| `template proxies` | — | A proxy password variable a template names is not set (the name only, never a value). |
+| `template memory` | `maxSessions` does not fit in RAM when each template used in the last 24 hours counts at `templateRecycleRss`. | — |
+
 `--json` prints `[{ check, status, detail }]`. Exit codes: `0` all good, `2` warnings only, `1` a check failed. When the configured browser cannot run sandboxed, the text output ends with what to do on this machine. `--printApparmorProfile` prints an AppArmor profile for the configured browser (for Ubuntu 23.10+) and exits; install it yourself with `sudo tee /etc/apparmor.d/<name>` and `sudo apparmor_parser -r`.
 
 ## `purge`
@@ -104,11 +118,11 @@ Deletes local state after showing what will go: row counts per table, directory 
 | Flag | Meaning |
 |---|---|
 | (none) | Delete the database (with its WAL files) and `sessions/`. You type `YES` to confirm. |
-| `--all` | Also delete saved logins, uploads, backups and the admin credentials. Vault bindings and policies are lost with the database. Asks for a second `YES`. |
+| `--all` | Also delete saved logins, session templates (`templates/`: their browser profiles and versions), site packs (`site-packs/`), uploads, backups and `admin/` (the dashboard credentials and the template key, `admin/template.key`). Vault bindings and policies are lost with the database. Asks for a second `YES`. |
 | `--dryRun` | Print the inventory and exit. |
 | `--yes` | Skip the prompts. Without a terminal and without `--yes`, `purge` refuses. |
 
-Stop the server first; `purge` warns if the database still lists open sessions.
+Stop the server first; `purge` warns if the database still lists open sessions. Without `--all`, it also warns when `templates/` holds template directories: purging the database alone orphans them (their rows go, the directories stay and are never used again). Pass `--all` to delete them too.
 
 ## `config`
 
@@ -152,14 +166,22 @@ They talk to the running server: `--url` defaults to the configured host and por
 
 ## `templates`
 
-Manage [session templates](templates.md) on a running server started with `--admin`. Like `channels`, these commands use the REST API: `--url` defaults to the configured host and port, and `--token` (an operator API token with the `templates:*` scopes the command needs) or `--cookie` authenticates. `--json` prints the API's answer.
+Manage [session templates](templates.md) on a running server started with `--admin`. Like `channels`, these commands use the REST API: `--url` defaults to the configured host and port, and `--token` (an operator API token with the `templates:*` scopes the command needs) or `--cookie` authenticates. `--json` prints the API's answer. The exception is `templates rekey`, which runs locally against the data directory with the server stopped.
 
 | Command | Meaning |
 |---|---|
 | `templates list [--json]` | Every template: name, status (`setting up`, `ready`, `disabled`), each site with a mark for its sign-in state (✓ signed in, ✗ signed out, · not checked), the state of its browser, sessions against the cap, and when it was last used. |
-| `templates create <name> --sites <site,…> [flags]` | Create a template, open the sign-in window and wait for you to sign in (below). |
+| `templates show <name> [--json]` | One template: its settings, access, live sessions, newest version and checkpoint; its browser (state, pages, memory, restarts, sandbox, last error); and each site's sign-in state. It warns when the profile holds saved passwords or autofill data. |
+| `templates create <name> --sites <site,…> [flags]` | Create a template, open the sign-in window and wait for you to sign in (below), or seed it with `--fromState`. |
 | `templates finish <name>` | Complete a template that is still setting up (after `--timeout`, a cancel or `--noLogin`): sites you never confirmed are kept and marked signed out, and the template becomes `ready`. |
+| `templates seed <name> <file> [--yes]` | Replace the template's sign-ins with a Playwright storage-state file ([below](#templates-seed-and-templates-restore)). |
+| `templates versions <name> [--json]` | The template's [versions](templates.md#versions-and-the-checkpoint), newest first: number, reason, time, size, sites signed in, pinned, Last good and whether the current key can read it; then the checkpoint. |
+| `templates save <name> [--json]` | Save the running browser's sign-ins as a `manual` version. When nothing changed since the newest version it writes nothing and says so. Fails (`409`) when the template's browser is not running. |
+| `templates restore <name> <version\|latest> [--forceClose] [--yes]` | Roll the template back to a version, or to `latest` (the checkpoint) ([below](#templates-seed-and-templates-restore)). |
+| `templates host <name> start\|stop\|restart [--json]` | Start, stop or restart the template's browser. `stop` writes a final checkpoint and ends its sessions; `restart` gives them up to `templateDrainTimeout`, and also clears a browser that gave up after five failures. |
+| `templates disable <name>`, `templates enable <name>` | `disable` ends the template's live sessions and refuses new launches; `enable` allows them again. Both print how many sessions were closed. |
 | `templates rm <name> [--force] [--yes]` | Delete a template: stop its browser and delete its directory. Asks you to type the name on a terminal and refuses without one unless `--yes`. With live sessions it fails (`TEMPLATE_IN_USE`) unless `--force`, which closes them. Deleting does not sign you out at the sites. |
+| `templates rekey --oldKeyEnv <ENV> [--json]` | Re-encrypt every template file with the current key, with the server stopped ([below](#templates-rekey)). |
 
 ### `templates create`
 
@@ -167,7 +189,8 @@ Manage [session templates](templates.md) on a running server started with `--adm
 browserhive templates create <name> --sites <site,…> [--displayName <text>] [--description <text>]
     [--channel <chromium|chrome|edge>] [--headless] [--stealth <off|standard|max>]
     [--proxy <url> --proxyUsername <name> --proxyPasswordEnv <ENV>] [--locale <tag> --timezone <iana>]
-    [--maxConcurrent <1-20>] [--allPrincipals | --principal <subject>…] [--noLogin] [--timeout <duration>]
+    [--maxConcurrent <1-20>] [--allPrincipals | --principal <subject>…] [--noLogin | --fromState <file>]
+    [--timeout <duration>]
 ```
 
 | Flag | Meaning |
@@ -184,6 +207,7 @@ browserhive templates create <name> --sites <site,…> [--displayName <text>] [-
 | `--allPrincipals` | Every agent may launch it. |
 | `--principal <subject>` | Only this principal (an agent token's name) may launch it; repeat for more. Under `--auth token` one of `--allPrincipals` and `--principal` is required. |
 | `--noLogin` | Create the template and exit without opening a window. |
+| `--fromState <file>` | Seed the template from a Playwright storage-state file instead of opening a window ([seeding](templates.md#seeding-from-a-storage-state)). The file is checked before anything is created. It cannot be combined with `--noLogin`, and it asks for no confirmation. |
 | `--timeout` | How long to wait for you, default `30m`. |
 
 What it does:
@@ -194,9 +218,40 @@ What it does:
    - **Enter** confirms every site you have not confirmed yet ("I'm signed in"); a site where no new cookie appeared since the window opened stays signed out. It then lists unlisted sign-ins (`Also signed in to: mail.example — agents can use this`) and removes them unless you answer no, and sets the template `ready`.
    - **`--timeout`** leaves the template setting up; `templates finish <name>` completes it later.
 
-Exit codes: `0` the template is ready with every site signed in; `1` failure (server unreachable, an API error printed as `[CODE] message`); `2` finished with a site not signed in, or timed out; `64` usage error.
+With `--fromState`, the command creates the template and seeds it like `templates seed`, without a window. If seeding fails, the template stays setting up: seed it again with `templates seed <name> <file>`, or delete it.
 
-`templates show`, `seed`, `login`, `probe`, `versions`, `restore`, `host`, `disable`, `enable` and `rekey`, and seeding with `--fromState`, arrive in later releases.
+Exit codes: `0` the template is ready with every site signed in; `1` failure (server unreachable, an API error printed as `[CODE] message`); `2` finished with a site not signed in, or timed out (with `--fromState`: a site is signed out or needs a check after seeding); `64` usage error.
+
+### `templates seed` and `templates restore`
+
+```
+browserhive templates seed <name> <file> [--yes]
+browserhive templates restore <name> <version|latest> [--forceClose] [--yes]
+```
+
+Both replace the sign-ins of a template that agents may be using, so on a terminal they print what will happen and ask you to type the template's name. Without a terminal they refuse unless `--yes`. Both run on the server as an operation; the command waits for it and checks it every second. Ctrl+C stops waiting, and the operation goes on.
+
+- **`seed`** checks the file first: at most 16 MiB, JSON, in Playwright's storage-state shape (`{"cookies": […], "origins": […]}`). It then closes the template's live sessions, restarts its browser with the file's state and writes an `import` version; a template still setting up becomes `ready`. It prints each site's sign-in state. The file is read in memory and never stored in plain text. See [Seeding from a storage state](templates.md#seeding-from-a-storage-state).
+- **`restore`** takes a version number from `templates versions`, or `latest` for the checkpoint. Live sessions get up to `templateDrainTimeout` to end, then close; `--forceClose` closes them at once. The browser restarts with that state, which is saved as a new `restore` version. See [Restoring a version](templates.md#restoring-a-version).
+
+Exit codes: `0` done; `1` failure (an API error, a refused confirmation, a file that cannot be used, or Ctrl+C); `2` (`seed` only) a site is signed out or needs a check afterwards; `64` usage error.
+
+### `templates rekey`
+
+```
+browserhive templates rekey --oldKeyEnv <ENV> [--json]
+```
+
+Re-encrypts every template checkpoint and version file with the current key and updates the version rows. Use it to finish [rotating the key](templates.md#rotating-the-key).
+
+- `--oldKeyEnv` is the **name** of an environment variable holding the old key (base64 of 32 bytes), for example `BROWSERHIVE_TEMPLATE_KEY_PREVIOUS`. The key itself is never an argument.
+- The current key is resolved like the server does: `templateKey` from the environment or the config file, else `<data-dir>/admin/template.key`. `rekey` never creates a key, and it refuses when the old and current keys are the same.
+- It refuses while a server holds the data directory ([`DATA_DIR_LOCKED`](../reference/errors.md#DATA_DIR_LOCKED), exit `3`). Stop the server first.
+- It prints, per template, how many files it re-encrypted, how many were already on the current key and how many failed. It is safe to run again: files already done are skipped, so a second run completes an interrupted one.
+
+Exit codes: `0` every file is on the current key; `1` a file could not be re-encrypted, or a key is missing or invalid; `3` the data directory is in use; `64` usage error.
+
+`templates login` and `templates probe` arrive in a later release.
 
 ## `version`
 
@@ -212,7 +267,7 @@ browserhive 0.2.0 (bun 1.4.2, sqlite 3.53.2, playwright 1.63.0, patchright 1.63.
 |---|---|
 | `0` | Success, or clean shutdown after a signal. |
 | `1` | Fatal runtime error (a boot phase failed after configuration, storage corruption, `purge` or `doctor` failure). |
-| `2` | `doctor` found warnings only; `templates create` finished with a site not signed in, or timed out. |
-| `3` | Policy refusal at startup: [`INSECURE_BIND_REFUSED`](../reference/errors.md#INSECURE_BIND_REFUSED), [`ADMIN_REQUIRES_HTTP`](../reference/errors.md#ADMIN_REQUIRES_HTTP), [`BLOCKLIST_LOAD_FAILED`](../reference/errors.md#BLOCKLIST_LOAD_FAILED), [`PORT_IN_USE`](../reference/errors.md#PORT_IN_USE), [`DB_NEWER_THAN_BINARY`](../reference/errors.md#DB_NEWER_THAN_BINARY), [`SANDBOX_UNAVAILABLE`](../reference/errors.md#SANDBOX_UNAVAILABLE) (`--sandbox on`). Printed as `[CODE] message`. |
+| `2` | `doctor` found warnings only; `templates create` finished with a site not signed in, or timed out; `templates seed` (or `create --fromState`) left a site signed out or needing a check. |
+| `3` | Policy refusal at startup: [`INSECURE_BIND_REFUSED`](../reference/errors.md#INSECURE_BIND_REFUSED), [`ADMIN_REQUIRES_HTTP`](../reference/errors.md#ADMIN_REQUIRES_HTTP), [`BLOCKLIST_LOAD_FAILED`](../reference/errors.md#BLOCKLIST_LOAD_FAILED), [`PORT_IN_USE`](../reference/errors.md#PORT_IN_USE), [`DB_NEWER_THAN_BINARY`](../reference/errors.md#DB_NEWER_THAN_BINARY), [`SANDBOX_UNAVAILABLE`](../reference/errors.md#SANDBOX_UNAVAILABLE) (`--sandbox on`). Also a command that needs the server stopped while it runs, such as `templates rekey` ([`DATA_DIR_LOCKED`](../reference/errors.md#DATA_DIR_LOCKED)). Printed as `[CODE] message`. |
 | `64` | Usage error: unknown flag or key, invalid value, conflicting settings, missing argument. |
 | `130` | A second interrupt arrived before graceful shutdown finished. |

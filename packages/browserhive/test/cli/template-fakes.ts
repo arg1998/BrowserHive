@@ -1,4 +1,4 @@
-/** @module test/cli/template-fakes — a scripted template server for the `templates create | finish` suites (routes, 409s on confirm, poll hooks) and a fake operator (clock, sleeps, Enter, Ctrl+C) */
+/** @module test/cli/template-fakes — a scripted template server for the `templates` suites (routes, 409s on confirm, poll hooks, extra T1b routes) and a fake operator (clock, sleeps, Enter, Ctrl+C) */
 import type { TemplateHealthState } from '@browserhive/contracts/enums';
 import type {
   HostView,
@@ -64,6 +64,8 @@ export interface FakeServer {
   uncleared: string[];
   /** Runs on every `GET /templates/{id}` with the number of earlier polls (0 first). */
   onPoll?: (poll: number) => void;
+  /** Extra routes (T1b operations), tried before the built-in ones; `undefined` falls through. */
+  routes?: (method: string, path: string, body: unknown) => [number, unknown] | undefined;
 }
 
 export function fakeServer(sites: Record<string, TemplateHealthState>): FakeServer {
@@ -77,7 +79,7 @@ export function fakeServer(sites: Record<string, TemplateHealthState>): FakeServ
   };
 }
 
-function template(server: FakeServer): Template {
+export function template(server: FakeServer): Template {
   return {
     template_id: ID,
     name: 'job-hunt',
@@ -166,6 +168,8 @@ export function problem(status: number, code: string, detail: string): unknown {
 }
 
 function route(server: FakeServer, method: string, path: string, body: unknown): [number, unknown] {
+  const extra = server.routes?.(method, path, body);
+  if (extra !== undefined) return extra;
   const polls = server.calls.filter((c) => c.method === 'GET' && c.path === `${BASE}/${ID}`).length;
   if (method === 'GET' && path.startsWith(`${BASE}?`)) {
     return [200, listPage([summary(server)])];

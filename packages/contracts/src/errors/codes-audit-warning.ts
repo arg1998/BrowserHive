@@ -203,4 +203,16 @@ export const WARNING_ERRORS = {
     'A tool screenshot could not be written to the session directory.',
     'Check disk space and permissions.',
   ),
+  SESSION_RESOURCE_LIMIT: warning(
+    'SESSION_RESOURCE_LIMIT',
+    'Memory limit: a page was closed',
+    "A template's browser used more memory than `templateRecycleRss` (spec 13 §3.2): the largest page of the session using the most JavaScript memory was closed. When the browser is still above the limit five minutes later it is drained and restarted.",
+    'Close pages the session no longer needs; raise templateRecycleRss on a machine with more memory.',
+  ),
+  TEMPLATE_STATE_COPY: warning(
+    'TEMPLATE_STATE_COPY',
+    "Session started from a copy of a template's sign-ins",
+    'The saved login restored into this session was exported from a session template (`source_template_id`, spec 13 §5.4). Using the copy at the same time as the template can make sites sign the template out (token rotation, concurrent-session limits).',
+    'Prefer launching from the template itself; delete the exported state when it is no longer needed.',
+  ),
 } as const;

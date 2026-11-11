@@ -61,7 +61,7 @@ Yes, up to the template's cap (`max_concurrent`, default 5). Each gets its own s
 Not by default. Template sessions are sealed: `get_cookies` returns names with empty values, `evaluate`, `set_cookies` and `save_storage_state` are refused, and cookie values are replaced with `[sealed]` in text results. You can unseal a template, for every agent or some. Sealing does not stop an agent from acting as the account, and it does not hold against an agent that can run commands as BrowserHive's OS user. See [Sealing](templates.md#sealing).
 
 **Can I sign a template in to Google?**
-Maybe not. Google may refuse sign-ins in a browser controlled through automation, which a template's browser is even while you type in it. Whether a person can complete the Google sign-in there is still being verified. Seeding a template from a storage state saved in another browser, the fallback for such sites, arrives in a later release.
+Maybe not. Google may refuse sign-ins in a browser controlled through automation, which a template's browser is even while you type in it. Whether a person can complete the Google sign-in there is still being verified. The fallback for such sites is seeding the template from a storage state saved in another browser: see [Seeding from a storage state](templates.md#seeding-from-a-storage-state).
 
 **Is it free?**
 Yes, MIT licensed.

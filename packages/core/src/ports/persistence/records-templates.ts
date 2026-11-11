@@ -7,6 +7,7 @@ import type {
   TemplateHealthState,
   TemplateStatus,
   TemplateStealthLevel,
+  TemplateVersionReason,
 } from './enums.ts';
 
 /** Operator-given coordinates (never invented, spec 11 §2.5). */
@@ -175,4 +176,60 @@ export interface SessionTemplateRecord {
   readonly version: number | null;
   /** `live` (an agent's virtual session) or `maintenance` (BrowserHive's own). */
   readonly mode: 'live' | 'maintenance';
+}
+
+/** One registrable domain of a version's jar (spec 13 §2.4 `summary`): counts and NAMES only (D-20). */
+export interface TemplateVersionDomainRecord {
+  readonly domain: string;
+  readonly cookies: number;
+  /** The site's sign-in cookie names (learned or the pack's) that are present. */
+  readonly signInCookies: readonly string[];
+  /** Earliest expiry of a persistent cookie, epoch ms; `null` when every cookie is a session cookie. */
+  readonly earliestExpiry: number | null;
+  readonly sessionCookie: boolean;
+}
+
+/** What a version holds (`summary_json`). */
+export interface TemplateVersionSummaryRecord {
+  readonly domains: readonly TemplateVersionDomainRecord[];
+  /** Origins with localStorage or IndexedDB data. */
+  readonly storageOrigins: number;
+}
+
+/** One site's health when a version was written (`health_json`). */
+export interface TemplateVersionHealthRecord {
+  readonly siteId: string;
+  readonly state: TemplateHealthState;
+  readonly enabled: boolean;
+  /**
+   * Every learned sign-in cookie name of the site was present; `null` = no names to check (or a
+   * row written before the field existed).
+   */
+  readonly signInComplete: boolean | null;
+}
+
+/** The encrypted file of a version (spec 13 §2.4). */
+export interface TemplateStateFileRecord {
+  readonly sizeBytes: number;
+  /** SHA-256 of the encrypted file, hex. */
+  readonly sha256: string;
+  /** The first 8 bytes of SHA-256 of the key, hex. */
+  readonly keyId: string;
+}
+
+/** One `template_versions` row (spec 13 §2.5, §3.9). */
+export interface TemplateVersionRecord extends TemplateStateFileRecord {
+  readonly templateId: string;
+  readonly version: number;
+  readonly reason: TemplateVersionReason;
+  /** Set for `restore`: the version restored, `0` = the rolling checkpoint. */
+  readonly restoredFrom: number | null;
+  /** SHA-256 over cookie (domain, name) pairs, localStorage keys and IndexedDB names, hex. */
+  readonly structureSha256: string;
+  readonly summary: TemplateVersionSummaryRecord;
+  readonly health: readonly TemplateVersionHealthRecord[];
+  readonly pinned: boolean;
+  /** The principal, or `browserhive` for automatic versions. */
+  readonly createdBy: string | null;
+  readonly createdAt: number;
 }

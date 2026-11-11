@@ -49,6 +49,8 @@ async function recorder(w: TemplateWorld) {
     launcher: {},
     dataDir: w.dataDir,
     logger: createCollectingLogger(),
+    clock: createSystemClock(),
+    drainTimeoutMs: 60_000,
   });
   const service = new TemplateRecordingService({
     repos: bundle,
