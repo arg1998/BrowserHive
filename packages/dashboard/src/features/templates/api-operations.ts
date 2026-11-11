@@ -1,38 +1,44 @@
-/** @module features/templates/api-operations — the template operations T1b serves (spec 13 §11.1: browser start/stop/restart, enable/disable, field and site changes, versions, restore, seed, the access tester, data-dir reveal) as queries and mutations; the calls go through `pending/client.ts` until the contracts export them */
+/** @module features/templates/api-operations — the template operations of spec 13 §11.1 beyond creation and recording (browser start/stop/restart, enable/disable, field and site changes, versions, restore, seed, the access tester, data-dir reveal) as queries and mutations over `useApi()` */
+import type {
+  PutTemplateSiteRequest,
+  ResolveTemplateAccessRequest,
+  TemplatePatchInput,
+  TemplateStorageState,
+} from '@browserhive/contracts/http';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { z } from 'zod';
+import { useApi } from '@/app/providers/AuthProvider.tsx';
 import { useToast } from '@/app/providers/ToastProvider.tsx';
 import { toAppError } from '@/lib/api/errors.ts';
 import { keys } from '@/lib/api/keys.ts';
-import {
-  type AccessProbe,
-  type HostAction,
-  isRouteMissing,
-  type TemplatePatch,
-  usePendingTemplateApi,
-} from './pending/client.ts';
-import type { PutSiteRequest } from './pending/contracts.ts';
+import { TEMPLATES_LIVE } from './live.ts';
 
-/** How often a running restore or seed is re-read while the `templates` topic is not served. */
-export const OPERATION_POLL_MS = 1_500;
+/** How often a running restore or seed is re-read (the topic's `template.operation` also refreshes it). */
+export const OPERATION_POLL_MS = TEMPLATES_LIVE ? 5_000 : 1_500;
+
+/** Browser actions (`POST /templates/{id}/host/{action}`). */
+export type HostAction = 'start' | 'stop' | 'restart';
+
+/** A template edit (`PATCH /templates/{id}`). */
+export type TemplatePatch = z.input<typeof TemplatePatchInput>;
 
 /** `GET /templates/{id}/versions` (first page) with the rolling checkpoint. */
 export function useTemplateVersions(id: string, enabled = true) {
-  const pending = usePendingTemplateApi();
+  const api = useApi();
   return useQuery({
     queryKey: keys.templates.versions(id),
-    queryFn: () => pending.listVersions(id),
+    queryFn: () => api.listTemplateVersions({ params: { template_id: id }, query: { limit: 50 } }),
     enabled,
-    retry: (count, error) =>
-      !isRouteMissing(error) && toAppError(error).status !== 404 && count < 2,
+    retry: (count, error) => toAppError(error).status !== 404 && count < 2,
   });
 }
 
-/** A restore or seed until it settles (polled; the topic's `template.operation` also invalidates it). */
+/** A restore or seed until it settles. */
 export function useTemplateOperation(operationId: string | null) {
-  const pending = usePendingTemplateApi();
+  const api = useApi();
   return useQuery({
     queryKey: keys.templates.operation(operationId ?? ''),
-    queryFn: () => pending.operation(operationId ?? ''),
+    queryFn: () => api.getTemplateOperation({ params: { operation_id: operationId ?? '' } }),
     enabled: operationId !== null,
     refetchInterval: (query) =>
       query.state.data === undefined || query.state.data.state === 'running'
@@ -41,59 +47,83 @@ export function useTemplateOperation(operationId: string | null) {
   });
 }
 
-/** The operator mutations of one template. Each one invalidates every template query when it settles. */
+/** The operator mutations of one template. Each one invalidates the template queries when it settles. */
 export function useTemplateOperations(id: string) {
-  const pending = usePendingTemplateApi();
+  const api = useApi();
   const qc = useQueryClient();
   const toast = useToast();
+  const params = { template_id: id } as const;
   const settle = () => qc.invalidateQueries({ queryKey: keys.templates.all });
   const onError = (error: unknown) => {
     toast.fromError(toAppError(error));
   };
   const common = { onError, onSettled: settle } as const;
+  const hostCall = (action: HostAction) =>
+    action === 'start'
+      ? api.startTemplateHost({ params })
+      : action === 'stop'
+        ? api.stopTemplateHost({ params })
+        : api.restartTemplateHost({ params });
   return {
-    host: useMutation({ mutationFn: (action: HostAction) => pending.host(id, action), ...common }),
+    host: useMutation({ mutationFn: hostCall, ...common }),
     setEnabled: useMutation({
-      mutationFn: (enabled: boolean) => pending.setEnabled(id, enabled),
+      mutationFn: (enabled: boolean) =>
+        enabled ? api.enableTemplate({ params }) : api.disableTemplate({ params }),
       ...common,
     }),
     patch: useMutation({
       mutationFn: (input: { readonly patch: TemplatePatch; readonly ifMatch: number }) =>
-        pending.patchTemplate(id, input.patch, input.ifMatch),
+        api.updateTemplate({ params, body: input.patch, ifMatch: input.ifMatch }),
       ...common,
     }),
     putSite: useMutation({
-      mutationFn: (input: { readonly site: string; readonly body: PutSiteRequest }) =>
-        pending.putSite(id, input.site, input.body),
+      mutationFn: (input: {
+        readonly site: string;
+        readonly body: z.input<typeof PutTemplateSiteRequest>;
+      }) =>
+        api.putTemplateSite({ params: { template_id: id, site_id: input.site }, body: input.body }),
       ...common,
     }),
     deleteSite: useMutation({
-      mutationFn: (site: string) => pending.deleteSite(id, site),
+      mutationFn: (site: string) =>
+        api.deleteTemplateSite({ params: { template_id: id, site_id: site } }),
       ...common,
     }),
     closeParkedPage: useMutation({
-      mutationFn: (targetId: string) => pending.closeParkedPage(id, targetId),
+      mutationFn: (targetId: string) =>
+        api.closeTemplatePage({ params: { template_id: id, target_id: targetId } }),
       ...common,
     }),
-    saveVersion: useMutation({ mutationFn: () => pending.saveVersion(id), ...common }),
+    saveVersion: useMutation({ mutationFn: () => api.saveTemplateVersion({ params }), ...common }),
     pinVersion: useMutation({
       mutationFn: (input: { readonly version: number; readonly pinned: boolean }) =>
-        pending.pinVersion(id, input.version, input.pinned),
+        api.updateTemplateVersion({
+          params: { template_id: id, version: input.version },
+          body: { pinned: input.pinned },
+        }),
       ...common,
     }),
+    /** Errors are the caller's (409s are explained in the dialog). */
     restore: useMutation({
       mutationFn: (input: { readonly version: number | 'latest'; readonly forceClose: boolean }) =>
-        pending.restoreVersion(id, input.version, input.forceClose),
-      ...common,
+        api.restoreTemplateVersion({
+          params: { template_id: id, version: input.version },
+          body: { force_close: input.forceClose },
+        }),
+      onSettled: settle,
     }),
+    /** Errors are the caller's. `confirm` is required over a ready template. */
     seed: useMutation({
-      mutationFn: (input: { readonly state: unknown; readonly confirm: boolean }) =>
-        pending.seed(id, input.state, input.confirm),
-      ...common,
+      mutationFn: (input: {
+        readonly state: z.input<typeof TemplateStorageState>;
+        readonly confirm: boolean;
+      }) => api.seedTemplate({ params, query: { confirm: input.confirm }, body: input.state }),
+      onSettled: settle,
     }),
     resolveAccess: useMutation({
-      mutationFn: (probe: AccessProbe) => pending.resolveAccess(id, probe),
+      mutationFn: (probe: z.input<typeof ResolveTemplateAccessRequest>) =>
+        api.resolveTemplateAccess({ params, body: probe }),
     }),
-    reveal: useMutation({ mutationFn: () => pending.revealDataDir(id), onError }),
+    reveal: useMutation({ mutationFn: () => api.revealTemplateDataDir({ params }), onError }),
   };
 }

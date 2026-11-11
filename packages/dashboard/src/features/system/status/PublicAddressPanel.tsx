@@ -101,7 +101,7 @@ export function PublicAddressPanel() {
                   href={data.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="font-mono text-base break-all text-link hover:underline"
+                  className="font-mono text-base break-all text-link underline decoration-link/40 underline-offset-2 hover:decoration-link"
                 >
                   {data.url}
                 </a>
@@ -155,7 +155,7 @@ export function PublicAddressPanel() {
               href={docsUrl('publicAddress')}
               target="_blank"
               rel="noreferrer"
-              className="text-link hover:underline"
+              className="text-link underline decoration-link/40 underline-offset-2 hover:decoration-link"
             >
               How to set it up
             </a>

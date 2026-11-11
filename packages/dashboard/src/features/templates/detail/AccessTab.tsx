@@ -18,7 +18,6 @@ import { cn } from '@/lib/utils.ts';
 import { useTemplateOperations } from '../api-operations.ts';
 import { accessChangeConfirm, unsealConfirm } from '../confirm-copy.ts';
 import { PrincipalsInput } from '../fields.tsx';
-import { isRouteMissing } from '../pending/client.ts';
 import { useAgentPrincipals } from '../use-agent-principals.ts';
 import { useLiveSessionLines } from '../use-template-actions.ts';
 import { WhoMayUse } from '../WhoMayUse.tsx';
@@ -118,8 +117,8 @@ export function AccessTab({ detail }: { readonly detail: TemplateDetailResponse 
           description: `${result.closed_sessions.length} session${result.closed_sessions.length === 1 ? '' : 's'} closed.`,
         }),
       });
-    } catch (error) {
-      if (isRouteMissing(error)) toast.error({ title: 'This server can’t change templates yet' });
+    } catch {
+      // The mutation's toast carries the code (a stale If-Match reads CONFLICT).
     }
   };
 

@@ -22,7 +22,12 @@ function DocsLink({
   readonly children: string;
 }) {
   return (
-    <a href={docsUrl(page)} target="_blank" rel="noreferrer" className="text-link hover:underline">
+    <a
+      href={docsUrl(page)}
+      target="_blank"
+      rel="noreferrer"
+      className="text-link underline decoration-link/40 underline-offset-2 hover:decoration-link"
+    >
       {children}
     </a>
   );

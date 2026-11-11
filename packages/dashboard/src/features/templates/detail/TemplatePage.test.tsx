@@ -86,11 +86,24 @@ describe('TemplatePage', () => {
     await expectNoA11yViolations(view.container, { disable: ['aria-hidden-focus'] });
   });
 
-  it('says versions are not available on a server without them', async () => {
+  it('explains a refused restore in its dialog', async () => {
     mount(`/templates/${ID}?tab=versions`, {
-      [`GET /templates/${ID}/versions`]: problem(404, 'NOT_FOUND'),
+      [`POST /templates/${ID}/versions/2/restore`]: problem(409, 'CONFLICT'),
     });
-    expect(await screen.findByText('Versions aren’t available on this server yet')).toBeDefined();
+    const list = await screen.findByRole('list', { name: 'Versions' });
+    const restore = within(list).getAllByRole('button', { name: /Restore/ })[1] as HTMLElement;
+    await act(async () => {
+      fireEvent.click(restore);
+    });
+    const dialog = await screen.findByRole('dialog');
+    const go = await within(dialog).findByRole('button', { name: 'Restore' });
+    await waitFor(() => expect(go.hasAttribute('disabled')).toBe(false));
+    await act(async () => {
+      fireEvent.click(go);
+    });
+    expect(
+      await within(dialog).findByText(/Another restore, seed or clean-up is running/),
+    ).toBeDefined();
   });
 
   it('renders Access and Settings; axe clean', async () => {

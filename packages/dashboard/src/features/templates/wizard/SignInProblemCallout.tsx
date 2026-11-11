@@ -18,7 +18,12 @@ function Command({ text }: { readonly text: string }) {
 
 function DocLink({ href, children }: { readonly href: string; readonly children: ReactNode }) {
   return (
-    <a href={href} target="_blank" rel="noreferrer" className="text-link hover:underline">
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="text-link underline decoration-link/40 underline-offset-2 hover:decoration-link"
+    >
       {children}
     </a>
   );

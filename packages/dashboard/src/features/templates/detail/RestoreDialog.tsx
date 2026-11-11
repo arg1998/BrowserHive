@@ -1,5 +1,6 @@
 /** @module features/templates/detail/RestoreDialog — Restore… (spec 13 §3.12, §11.4): what restoring does, the live sessions it affects, and whether to close them now or wait for them to finish before the browser restarts */
 import { useEffect, useRef, useState } from 'react';
+import { Callout } from '@/components/shared/Callout.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import {
   Dialog,
@@ -21,6 +22,8 @@ export interface RestoreDialogProps {
   /** `null` = closed; otherwise what to restore and how to call it. */
   readonly target: { readonly version: number | 'latest'; readonly label: string } | null;
   readonly busy: boolean;
+  /** Why the server refused the restore, shown above the buttons. */
+  readonly error?: string | null;
   readonly onCancel: () => void;
   readonly onRestore: (forceClose: boolean) => void;
 }
@@ -30,6 +33,7 @@ export function RestoreDialog({
   templateId,
   target,
   busy,
+  error = null,
   onCancel,
   onRestore,
 }: RestoreDialogProps) {
@@ -70,7 +74,7 @@ export function RestoreDialog({
                 <p className="text-sm font-medium">
                   {count} live {count === 1 ? 'session' : 'sessions'}
                 </p>
-                <ul className="flex max-h-32 flex-col gap-1 overflow-y-auto rounded-lg bg-muted px-3 py-2 dark:bg-white/[0.04]">
+                <ul className="flex max-h-32 flex-col gap-1 overflow-y-auto rounded-lg bg-muted px-3 py-2">
                   {sessions.map((line) => (
                     <li key={line} className="truncate font-mono text-sm">
                       {line}
@@ -103,6 +107,11 @@ export function RestoreDialog({
               </div>
             </>
           )}
+          {error !== null ? (
+            <Callout tone="danger" title="The restore didn’t start">
+              {error}
+            </Callout>
+          ) : null}
         </DialogBody>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onCancel}>

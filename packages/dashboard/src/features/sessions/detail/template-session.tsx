@@ -100,7 +100,7 @@ export function TemplateIdentityNote({ template }: { readonly template: SessionT
           to="/templates/$id"
           params={{ id: template.template_id }}
           search={{ tab: 'settings' }}
-          className="text-link hover:underline"
+          className="text-link underline decoration-link/40 underline-offset-2 hover:decoration-link"
         >
           See the template’s identity
         </Link>

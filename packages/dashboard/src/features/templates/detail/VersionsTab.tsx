@@ -1,11 +1,7 @@
-/** @module features/templates/detail/VersionsTab — the Versions tab (spec 13 §3.9, §3.12, §7.4, §11.4): the rolling checkpoint, then every version with why it was written, its size, per-domain cookie summary, per-site health, Last good and unreadable marks, Restore… and Pin; Save version now and Seed from file… ; a running restore or seed reports until it settles */
+/** @module features/templates/detail/VersionsTab — the Versions tab (spec 13 §3.9, §3.12, §7.4, §11.4): the rolling checkpoint, then every version (`VersionRow`), Restore… (closing or waiting for live sessions, refusals explained), Pin, Save version now and Seed from file…; a running restore or seed reports until it settles */
 import type { TemplateDetailResponse } from '@browserhive/contracts/http';
-import { useEffect, useRef, useState } from 'react';
-import { useConfirm } from '@/app/providers/ConfirmProvider.tsx';
+import { useRef, useState } from 'react';
 import { useToast } from '@/app/providers/ToastProvider.tsx';
-import { Callout } from '@/components/shared/Callout.tsx';
-import { Chip } from '@/components/shared/Chip.tsx';
-import { EmptyState } from '@/components/shared/EmptyState.tsx';
 import { ErrorState } from '@/components/shared/ErrorState.tsx';
 import { RelativeTime } from '@/components/shared/RelativeTime.tsx';
 import { Panel } from '@/components/shared/Section.tsx';
@@ -16,136 +12,31 @@ import { Hint } from '@/components/ui/tooltip.tsx';
 import { toAppError } from '@/lib/api/errors.ts';
 import { formatBytes } from '@/lib/format/bytes.ts';
 import { ICONS } from '@/lib/icons.ts';
-import {
-  useTemplateOperation,
-  useTemplateOperations,
-  useTemplateVersions,
-} from '../api-operations.ts';
-import { seedOverReadyConfirm } from '../confirm-copy.ts';
-import { isRouteMissing } from '../pending/client.ts';
-import type { TemplateVersionRow } from '../pending/contracts.ts';
-import { HealthIcon } from '../SiteChips.tsx';
+import { useTemplateOperations, useTemplateVersions } from '../api-operations.ts';
+import { OperationProgress } from './OperationProgress.tsx';
 import { RestoreDialog } from './RestoreDialog.tsx';
-import { reasonText, SEED_MAX_BYTES, summaryLines } from './version-text.ts';
+import { useSeedFromFile } from './use-seed.ts';
+import { VersionRow } from './VersionRow.tsx';
+import { operationRefusal } from './version-text.ts';
 
 type RestoreTarget = { readonly version: number | 'latest'; readonly label: string } | null;
 
-function VersionRow({
-  row,
-  onRestore,
-  onPin,
-  pinning,
+/** A disabled button with its reason in a tooltip (a disabled button cannot take focus). */
+function WithReason({
+  reason,
+  children,
 }: {
-  readonly row: TemplateVersionRow;
-  readonly onRestore: () => void;
-  readonly onPin: () => void;
-  readonly pinning: boolean;
+  readonly reason: string | null;
+  readonly children: React.ReactElement;
 }) {
-  const Pin = row.pinned ? ICONS.unpin : ICONS.pin;
-  const lines = summaryLines(row.summary);
-  const restore = (
-    <Button type="button" size="xs" variant="outline" disabled={!row.readable} onClick={onRestore}>
-      <ICONS.restore aria-hidden="true" />
-      Restore…
-    </Button>
-  );
+  if (reason === null) return children;
   return (
-    <li className="flex min-w-0 flex-col gap-2 px-5 py-4 sm:flex-row sm:items-start sm:gap-4">
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="font-semibold tabular-nums">Version {row.version}</span>
-          <span className="text-muted-foreground">{reasonText(row)}</span>
-          {row.last_good ? <Chip tone="success">Last good</Chip> : null}
-          {row.pinned ? <Chip tone="info">Pinned</Chip> : null}
-          {row.readable ? null : <Chip tone="danger">Unreadable with the current key</Chip>}
-        </div>
-        <p className="text-sm text-muted-foreground">
-          <RelativeTime at={row.created_at} className="min-w-0 text-sm" /> ·{' '}
-          {formatBytes(row.size_bytes)}
-          {row.created_by !== null && row.created_by !== 'browserhive'
-            ? ` · ${row.created_by}`
-            : ''}
-        </p>
-        {lines.length > 0 ? (
-          <ul className="flex flex-col gap-0.5 text-sm text-foreground/85">
-            {lines.map((line) => (
-              <li key={line} className="[overflow-wrap:anywhere]">
-                {line}
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        <ul aria-label="Sign-in health when written" className="flex flex-wrap gap-x-3 gap-y-1">
-          {Object.entries(row.health).map(([site, state]) => (
-            <li key={site} className="flex items-center gap-1 text-sm">
-              <HealthIcon state={state} />
-              <span>{site}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-      <div className="flex shrink-0 items-center gap-1.5">
-        {row.readable ? (
-          restore
-        ) : (
-          <Hint label="This version was written with another key">
-            {/* biome-ignore lint/a11y/noNoninteractiveTabindex: a disabled button cannot take focus, so its wrapper carries the tooltip reason */}
-            <span tabIndex={0} className="rounded-md focus-ring">
-              {restore}
-            </span>
-          </Hint>
-        )}
-        <Button
-          type="button"
-          size="xs"
-          variant="ghost"
-          disabled={pinning}
-          aria-pressed={row.pinned}
-          aria-label={row.pinned ? `Unpin version ${row.version}` : `Pin version ${row.version}`}
-          onClick={onPin}
-        >
-          <Pin aria-hidden="true" />
-          {row.pinned ? 'Unpin' : 'Pin'}
-        </Button>
-      </div>
-    </li>
-  );
-}
-
-/** Reports a restore or seed until it settles. */
-function OperationProgress({
-  operationId,
-  onSettled,
-}: {
-  readonly operationId: string;
-  readonly onSettled: () => void;
-}) {
-  const op = useTemplateOperation(operationId);
-  const toast = useToast();
-  const state = op.data?.state;
-  const settled = useRef(false);
-  useEffect(() => {
-    if (settled.current || op.data === undefined || state === 'running') return;
-    settled.current = true;
-    const what = op.data.kind === 'restore' ? 'Restore' : 'Seeding';
-    if (state === 'done') {
-      toast.success({
-        title: `${what} finished`,
-        ...(op.data.version !== undefined && {
-          description: `Version ${op.data.version} written.`,
-        }),
-      });
-    } else {
-      toast.error({ title: `${what} failed`, description: op.data.error?.message ?? '' });
-    }
-    onSettled();
-  }, [op.data, state, toast, onSettled]);
-  return (
-    <Callout tone="info" title="Restarting the browser">
-      <span className="inline-flex items-center gap-2">
-        <Spinner /> Applying the sign-ins, then checking every site. Agents wait meanwhile.
+    <Hint label={reason}>
+      {/* biome-ignore lint/a11y/noNoninteractiveTabindex: the wrapper carries the disabled button's reason */}
+      <span tabIndex={0} className="rounded-md focus-ring">
+        {children}
       </span>
-    </Callout>
+    </Hint>
   );
 }
 
@@ -155,25 +46,15 @@ export function VersionsTab({ detail }: { readonly detail: TemplateDetailRespons
   const id = template.template_id;
   const versions = useTemplateVersions(id);
   const ops = useTemplateOperations(id);
-  const confirm = useConfirm();
+  const seeding = useSeedFromFile(template);
   const toast = useToast();
   const file = useRef<HTMLInputElement>(null);
   const [target, setTarget] = useState<RestoreTarget>(null);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
   const [operationId, setOperationId] = useState<string | null>(null);
-
-  if (versions.isError && isRouteMissing(versions.error)) {
-    return (
-      <EmptyState
-        kind="zero-data"
-        variant="panel"
-        icon="versions"
-        title="Versions aren’t available on this server yet"
-        description="This BrowserHive predates template versions. The browser’s profile still keeps every sign-in."
-      />
-    );
-  }
-
   const running = host.state === 'running';
+  const busy = operationId !== null;
+
   const onSave = async () => {
     const result = await ops.saveVersion.mutateAsync().catch(() => null);
     if (result === null) return;
@@ -187,46 +68,21 @@ export function VersionsTab({ detail }: { readonly detail: TemplateDetailRespons
   const onSeedFile = async (picked: File | undefined) => {
     if (file.current !== null) file.current.value = '';
     if (picked === undefined) return;
-    if (picked.size > SEED_MAX_BYTES) {
-      toast.error({ title: 'The file is larger than 16 MiB' });
-      return;
-    }
-    let state: unknown;
-    try {
-      state = JSON.parse(await picked.text());
-    } catch {
-      toast.error({
-        title: 'That file is not a storage state',
-        description: 'Expected Playwright storage-state JSON.',
-      });
-      return;
-    }
-    const ready = template.status === 'ready';
-    if (ready && !(await confirm(seedOverReadyConfirm(template.display_name)))) return;
-    const started = await ops.seed.mutateAsync({ state, confirm: ready }).catch(() => null);
-    if (started !== null) setOperationId(started.operation_id);
+    const started = await seeding.seed(picked);
+    if (started !== null) setOperationId(started);
   };
   const onRestore = async (forceClose: boolean) => {
     if (target === null) return;
-    const started = await ops.restore
-      .mutateAsync({ version: target.version, forceClose })
-      .catch(() => null);
-    setTarget(null);
-    if (started !== null) setOperationId(started.operation_id);
+    setRestoreError(null);
+    try {
+      const started = await ops.restore.mutateAsync({ version: target.version, forceClose });
+      setTarget(null);
+      setOperationId(started.operation_id);
+    } catch (error) {
+      setRestoreError(operationRefusal(toAppError(error), 'restore'));
+    }
   };
 
-  const save = (
-    <Button
-      type="button"
-      size="sm"
-      variant="outline"
-      disabled={!running || ops.saveVersion.isPending}
-      onClick={() => void onSave()}
-    >
-      {ops.saveVersion.isPending ? <Spinner /> : <ICONS.saveVersion aria-hidden="true" />}
-      Save version now
-    </Button>
-  );
   const checkpoint = versions.data?.checkpoint ?? null;
   return (
     <div className="flex min-w-0 flex-col gap-4">
@@ -239,21 +95,23 @@ export function VersionsTab({ detail }: { readonly detail: TemplateDetailRespons
         padding="none"
         actions={
           <>
-            {running ? (
-              save
-            ) : (
-              <Hint label="Start the browser first">
-                {/* biome-ignore lint/a11y/noNoninteractiveTabindex: a disabled button cannot take focus, so its wrapper carries the tooltip reason */}
-                <span tabIndex={0} className="rounded-md focus-ring">
-                  {save}
-                </span>
-              </Hint>
-            )}
+            <WithReason reason={running ? null : 'Start the browser first'}>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={!running || busy || ops.saveVersion.isPending}
+                onClick={() => void onSave()}
+              >
+                {ops.saveVersion.isPending ? <Spinner /> : <ICONS.saveVersion aria-hidden="true" />}
+                Save version now
+              </Button>
+            </WithReason>
             <Button
               type="button"
               size="sm"
               variant="outline"
-              disabled={ops.seed.isPending}
+              disabled={busy || seeding.pending}
               onClick={() => file.current?.click()}
             >
               <ICONS.seed aria-hidden="true" />
@@ -281,8 +139,8 @@ export function VersionsTab({ detail }: { readonly detail: TemplateDetailRespons
           />
         ) : (
           <ul aria-label="Versions" className="flex flex-col divide-y">
-            <li className="flex min-w-0 flex-col gap-2 px-5 py-4 sm:flex-row sm:items-center sm:gap-4">
-              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <li className="flex min-w-0 flex-col gap-2 px-5 py-4 sm:flex-row sm:items-center sm:gap-6">
+              <div className="flex max-w-3xl min-w-0 flex-1 flex-col gap-0.5">
                 <span className="font-semibold">Rolling checkpoint</span>
                 <span className="text-sm text-muted-foreground">
                   {checkpoint === null ? (
@@ -301,7 +159,7 @@ export function VersionsTab({ detail }: { readonly detail: TemplateDetailRespons
                   type="button"
                   size="xs"
                   variant="outline"
-                  disabled={!checkpoint.readable}
+                  disabled={!checkpoint.readable || busy}
                   onClick={() => setTarget({ version: 'latest', label: 'the checkpoint' })}
                 >
                   <ICONS.restore aria-hidden="true" />
@@ -333,7 +191,11 @@ export function VersionsTab({ detail }: { readonly detail: TemplateDetailRespons
         templateId={id}
         target={target}
         busy={ops.restore.isPending}
-        onCancel={() => setTarget(null)}
+        error={restoreError}
+        onCancel={() => {
+          setTarget(null);
+          setRestoreError(null);
+        }}
         onRestore={(forceClose) => void onRestore(forceClose)}
       />
     </div>

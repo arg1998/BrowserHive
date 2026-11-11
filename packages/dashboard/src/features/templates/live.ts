@@ -1,44 +1,97 @@
-/** @module features/templates/live — keeps template queries current: the `templates` topic (spec 13 §11.3) once the server serves it, and the `sessions` topic for live counts (a template session opening or closing changes `in_use`) */
-import { WS_STATIC_TOPICS, type WsFeedEvent } from '@browserhive/contracts/ws';
-import { useQueryClient } from '@tanstack/react-query';
+/** @module features/templates/live — keeps template queries current over the `templates` topic (spec 13 §11.3): a browser's state patches the cached detail in place, a site's health patches its card, versions and operations refresh their own queries, and changes or removals refresh the lists and that template; the `sessions` topic refreshes live counts when a template session opens or closes. Each event touches only the queries of its template */
+import type { TemplateDetailResponse } from '@browserhive/contracts/http';
+import type { WsFeedEvent } from '@browserhive/contracts/ws';
+import { type QueryClient, useQueryClient } from '@tanstack/react-query';
 import { useTopic } from '@/app/providers/SocketProvider.tsx';
 import { keys } from '@/lib/api/keys.ts';
 
-/**
- * The `templates` topic when these contracts know it (T1b adds it to `WS_STATIC_TOPICS`), else
- * `null`: subscribing to a topic the server does not serve is refused, so until then pages poll
- * where they must (the sign-in step, a running restore).
- */
-export const TEMPLATES_TOPIC: string | null = (WS_STATIC_TOPICS as readonly string[]).includes(
-  'templates',
-)
-  ? 'templates'
-  : null;
+/** The topic (T1b serves it; the constant keeps the subscriptions in one place). */
+export const TEMPLATES_TOPIC = 'templates';
 
-/** `true` while template changes arrive over the socket (no polling needed). */
-export const TEMPLATES_LIVE = TEMPLATES_TOPIC !== null;
+/** `true`: template changes arrive over the socket; polling only backs it up. */
+export const TEMPLATES_LIVE = true;
 
-/** The event's type, read without assuming which events these contracts know. */
-function eventType(event: WsFeedEvent): string {
-  return (event as { readonly type: string }).type;
+/** Lists, the overview (sidebar badge, `/system`) and one template's detail. */
+function refreshTemplate(qc: QueryClient, templateId: string | null): void {
+  void qc.invalidateQueries({ queryKey: keys.templates.lists() });
+  void qc.invalidateQueries({ queryKey: keys.templates.overview() });
+  void qc.invalidateQueries({
+    queryKey: templateId === null ? keys.templates.details() : keys.templates.detail(templateId),
+  });
 }
 
-/** `true` for a session event about a template session (`in_use`, the Sessions tab). */
-export function isTemplateSessionEvent(event: WsFeedEvent): boolean {
-  if (!eventType(event).startsWith('session.')) return false;
-  const session = (event as { readonly session?: { readonly template?: unknown } }).session;
-  // `session.removed` carries only an id: refresh, it may have been a template's.
-  return session === undefined || session.template !== undefined;
+/** Apply one `templates` event to the cache (pure on the client; tested). */
+export function applyTemplateEvent(qc: QueryClient, event: WsFeedEvent): void {
+  switch (event.type) {
+    case 'template.changed':
+      refreshTemplate(qc, event.template.template_id);
+      return;
+    case 'template.removed':
+      qc.removeQueries({ queryKey: keys.templates.detail(event.template_id) });
+      void qc.invalidateQueries({ queryKey: keys.templates.lists() });
+      void qc.invalidateQueries({ queryKey: keys.templates.overview() });
+      return;
+    case 'template.host': {
+      const key = keys.templates.detail(event.template_id);
+      const cached = qc.getQueryData<TemplateDetailResponse>(key);
+      if (cached !== undefined) qc.setQueryData(key, { ...cached, host: event.host });
+      void qc.invalidateQueries({ queryKey: keys.templates.lists() });
+      void qc.invalidateQueries({ queryKey: keys.templates.overview() });
+      return;
+    }
+    case 'template.health': {
+      const key = keys.templates.detail(event.template_id);
+      const cached = qc.getQueryData<TemplateDetailResponse>(key);
+      if (cached !== undefined) {
+        const replace = <T extends { readonly site_id: string }>(sites: readonly T[]) =>
+          sites.map((s) => (s.site_id === event.site.site_id ? { ...s, ...event.site } : s));
+        qc.setQueryData(key, {
+          ...cached,
+          sites: replace(cached.sites),
+          template: { ...cached.template, sites: replace(cached.template.sites) },
+        });
+      }
+      void qc.invalidateQueries({ queryKey: keys.templates.lists() });
+      void qc.invalidateQueries({ queryKey: keys.templates.overview() });
+      return;
+    }
+    case 'template.version':
+      void qc.invalidateQueries({ queryKey: keys.templates.versions(event.template_id) });
+      return;
+    case 'template.operation':
+      void qc.invalidateQueries({ queryKey: keys.templates.operation(event.operation_id) });
+      if (event.state !== 'running') {
+        void qc.invalidateQueries({ queryKey: keys.templates.versions(event.template_id) });
+        refreshTemplate(qc, event.template_id);
+      }
+      return;
+    default:
+      return;
+  }
 }
 
-/** Subscribe the page to template changes; every relevant event refreshes the template queries. */
+/** The template a session event is about, `undefined` when it is not a template session's. */
+export function templateOfSessionEvent(event: WsFeedEvent): string | null | undefined {
+  switch (event.type) {
+    case 'session.opened':
+      return event.session.template === undefined
+        ? undefined
+        : (event.session.template.template_id ?? null);
+    case 'session.closed':
+      // The event carries no template: refresh the lists and every cached template.
+      return null;
+    default:
+      // `session.updated` (activity, lease) and `session.removed` (archive) leave live counts alone.
+      return undefined;
+  }
+}
+
+/** Subscribe the page to template changes. */
 export function useTemplatesLive(): void {
   const qc = useQueryClient();
-  const refresh = () => void qc.invalidateQueries({ queryKey: keys.templates.all });
-  useTopic(TEMPLATES_TOPIC, (event) => {
-    if (eventType(event).startsWith('template.')) refresh();
-  });
+  useTopic(TEMPLATES_TOPIC, (event) => applyTemplateEvent(qc, event));
   useTopic('sessions', (event) => {
-    if (isTemplateSessionEvent(event)) refresh();
+    const templateId = templateOfSessionEvent(event);
+    if (templateId !== undefined) refreshTemplate(qc, templateId);
   });
 }

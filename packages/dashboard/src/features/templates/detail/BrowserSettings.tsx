@@ -1,5 +1,8 @@
 /** @module features/templates/detail/BrowserSettings — the editable part of the Settings tab (spec 13 §2.1–§2.2, §11.4): the browser (channel, headless with its warning, agent windows), the network (the pinned proxy; changing it or the channel restarts the browser and may sign the accounts out, so it is confirmed) and health checks (interval, pre-launch check) */
+
+import { Channel } from '@browserhive/contracts/enums';
 import type { Template } from '@browserhive/contracts/http';
+import { AgentWindows } from '@browserhive/contracts/http';
 import { type ReactNode, useId, useState } from 'react';
 import { Callout } from '@/components/shared/Callout.tsx';
 import { Panel } from '@/components/shared/Section.tsx';
@@ -67,10 +70,11 @@ function BrowserPanel({ template }: { readonly template: Template }) {
               value: c,
               label: CHANNEL_LABEL[c],
             }))}
-            onValueChange={(channel) => {
-              if (channel === template.channel) return;
+            onValueChange={(value) => {
+              const channel = Channel.safeParse(value);
+              if (!channel.success || channel.data === template.channel) return;
               void save(
-                { channel, confirm_identity_change: true },
+                { channel: channel.data, confirm_identity_change: true },
                 'Channel changed',
                 identityChangeConfirm('channel'),
               );
@@ -112,7 +116,11 @@ function BrowserPanel({ template }: { readonly template: Template }) {
               { value: 'normal', label: 'Normal' },
               { value: 'minimized', label: 'Minimized' },
             ]}
-            onValueChange={(agent_windows) => void save({ agent_windows }, 'Agent windows changed')}
+            onValueChange={(value) => {
+              const windows = AgentWindows.safeParse(value);
+              if (windows.success)
+                void save({ agent_windows: windows.data }, 'Agent windows changed');
+            }}
           />
         </Field>
       </div>

@@ -61,8 +61,14 @@ export function useNavSignals() {
   useTopic('attention');
   useTopic(vaultEnabled === true ? 'vault.confirm' : null);
   useTopic('system');
-  useTopic(templatesEnabled === false ? null : TEMPLATES_TOPIC, () => {
-    void queryClient.invalidateQueries({ queryKey: keys.templates.lists() });
+  useTopic(templatesEnabled === false ? null : TEMPLATES_TOPIC, (event) => {
+    // Only changes that can move the sign-in count (the browser's minute ticks do not).
+    if (
+      event.type === 'template.changed' ||
+      event.type === 'template.health' ||
+      event.type === 'template.removed'
+    )
+      void queryClient.invalidateQueries({ queryKey: [...keys.templates.lists(), 'nav-badge'] });
   });
   return {
     capabilities: {

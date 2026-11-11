@@ -64,13 +64,17 @@ export function restoreConfirm(label: string, liveSessions: readonly string[]): 
 }
 
 /** Seeding over a ready template. */
-export function seedOverReadyConfirm(displayName: string): ConfirmOptions {
+export function seedOverReadyConfirm(
+  displayName: string,
+  liveSessions: readonly string[] = [],
+): ConfirmOptions {
   return {
     title: `Replace the sign-ins of ${displayName}?`,
     description:
-      'The file’s cookies and storage are applied to the template’s browser, which restarts. The current state is kept as a version you can restore.',
+      'The file’s cookies and storage are applied to the template’s browser, which restarts, so its live sessions close. The current state is kept as a version you can restore.',
     confirmLabel: 'Seed from file',
     danger: true,
+    ...(liveSessions.length > 0 && { items: liveSessions, itemsLabel: 'Sessions that close' }),
   };
 }
 

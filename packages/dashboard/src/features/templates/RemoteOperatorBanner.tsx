@@ -29,7 +29,7 @@ export function RemoteOperatorBanner({
           href={docsUrl('templatesVnc')}
           target="_blank"
           rel="noreferrer"
-          className="text-link hover:underline"
+          className="text-link underline decoration-link/40 underline-offset-2 hover:decoration-link"
         >
           Signing in on a server
         </a>

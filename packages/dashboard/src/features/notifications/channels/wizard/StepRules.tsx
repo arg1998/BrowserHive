@@ -390,7 +390,7 @@ export function StepRules({
                   href={docsUrl('notificationPrivacy')}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-link hover:underline"
+                  className="text-link underline decoration-link/40 underline-offset-2 hover:decoration-link"
                 >
                   What leaves your machine
                 </a>

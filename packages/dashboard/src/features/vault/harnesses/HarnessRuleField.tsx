@@ -344,7 +344,7 @@ export function HarnessRuleField({ value, onChange, noun, seen, disabled }: Harn
           href={docsUrl('vaultHarnesses')}
           target="_blank"
           rel="noreferrer"
-          className="text-link hover:underline"
+          className="text-link underline decoration-link/40 underline-offset-2 hover:decoration-link"
         >
           How it works
         </a>
@@ -406,7 +406,7 @@ export function HarnessRuleField({ value, onChange, noun, seen, disabled }: Harn
                   href={docsUrl('agentTokens')}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-link hover:underline"
+                  className="text-link underline decoration-link/40 underline-offset-2 hover:decoration-link"
                 >
                   Per-agent tokens
                 </a>

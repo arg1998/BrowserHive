@@ -13,7 +13,6 @@ import { ICONS } from '@/lib/icons.ts';
 import { docsUrl } from '@/lib/links.ts';
 import { useTemplateDetail, useTemplateMutations } from '../api.ts';
 import { TEMPLATES_LIVE } from '../live.ts';
-import { usePendingTemplateApi } from '../pending/client.ts';
 import { RemoteOperatorBanner, useRemoteHost } from '../RemoteOperatorBanner.tsx';
 import { FinishDialog } from './FinishDialog.tsx';
 import { SignInDone } from './SignInDone.tsx';
@@ -30,7 +29,6 @@ export function StepSignIn({ templateId }: { readonly templateId: string }) {
   const detail = useTemplateDetail(templateId, { poll: !TEMPLATES_LIVE });
   const recording = useRecordingSession(templateId);
   const m = useTemplateMutations(templateId);
-  const pending = usePendingTemplateApi();
   const [startError, setStartError] = useState<AppError | null>(null);
   const [confirmErrors, setConfirmErrors] = useState<Readonly<Record<string, string>>>({});
   const [finishOpen, setFinishOpen] = useState(false);
@@ -65,7 +63,6 @@ export function StepSignIn({ templateId }: { readonly templateId: string }) {
   const open = async () => {
     setStartError(null);
     // A failed browser needs an operator restart before it starts again (spec 13 §3.2).
-    if (host.state === 'failed') await pending.host(templateId, 'restart').catch(() => undefined);
     try {
       await m.startRecording.mutateAsync(undefined);
       await recording.refetch();
@@ -154,7 +151,7 @@ export function StepSignIn({ templateId }: { readonly templateId: string }) {
                   href={docsUrl('templatesGoogle')}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-link hover:underline"
+                  className="text-link underline decoration-link/40 underline-offset-2 hover:decoration-link"
                 >
                   see what to do
                 </a>

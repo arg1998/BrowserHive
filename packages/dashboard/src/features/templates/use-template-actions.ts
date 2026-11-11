@@ -6,9 +6,9 @@ import { useConfirm } from '@/app/providers/ConfirmProvider.tsx';
 import { useToast } from '@/app/providers/ToastProvider.tsx';
 import { toAppError } from '@/lib/api/errors.ts';
 import { useTemplateMutations } from './api.ts';
+import type { HostAction } from './api-operations.ts';
 import { useTemplateOperations } from './api-operations.ts';
 import { deleteTemplateConfirm, disableTemplateConfirm } from './confirm-copy.ts';
-import type { HostAction } from './pending/client.ts';
 
 /** What the actions need to know about a template. */
 export interface TemplateRef {

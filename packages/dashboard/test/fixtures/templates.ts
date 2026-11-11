@@ -1,4 +1,4 @@
-/** @module dashboard/test/fixtures/templates — typed builders for template DTOs (list rows, the template, its detail, sites, versions) used by the templates page tests; shaped by the contracts schemas (and `pending/contracts.ts` for the T1b shapes) */
+/** @module dashboard/test/fixtures/templates — typed builders for template DTOs (list rows, the template, its detail, sites, versions) used by the templates page tests; shaped by the contracts schemas  */
 import type {
   HostView,
   Template,
@@ -6,11 +6,9 @@ import type {
   TemplateSiteView,
   TemplateSummary,
   TemplatesPage,
-} from '@browserhive/contracts/http';
-import type {
   TemplateVersionRow,
   TemplateVersionsPage,
-} from '@/features/templates/pending/contracts.ts';
+} from '@browserhive/contracts/http';
 
 /** Server clock used by fixtures. */
 export const TT0 = 1_700_000_000_000;
@@ -196,7 +194,7 @@ export function templateDetail(
   };
 }
 
-/** A version row (T1b shape). */
+/** A version row. */
 export function versionRow(
   version: number,
   patch: Partial<TemplateVersionRow> = {},
@@ -207,14 +205,21 @@ export function versionRow(
     restored_from: null,
     size_bytes: 48_000 + version * 1000,
     summary: {
-      'linkedin.com': {
-        cookies: 14,
-        signin_cookies: ['li_at'],
-        earliest_expiry: TT0 + 86_400_000 * 300,
-        session_cookie: true,
-      },
+      domains: [
+        {
+          domain: 'linkedin.com',
+          cookies: 14,
+          sign_in_cookies: ['li_at'],
+          earliest_expiry: TT0 + 86_400_000 * 300,
+          session_cookie: true,
+        },
+      ],
+      storage_origins: 2,
     },
-    health: { 'linkedin.com': 'signed_in', 'indeed.com': 'signed_in' },
+    health: [
+      { site_id: 'linkedin.com', state: 'signed_in', enabled: true, sign_in_complete: true },
+      { site_id: 'indeed.com', state: 'signed_in', enabled: true, sign_in_complete: true },
+    ],
     pinned: false,
     last_good: version === 1,
     readable: true,
@@ -224,11 +229,13 @@ export function versionRow(
   };
 }
 
-/** `GET /templates/{id}/versions` body (T1b shape). */
+/** `GET /templates/{id}/versions` body. */
 export function versionsPage(rows: readonly TemplateVersionRow[]): TemplateVersionsPage {
   return {
     data: [...rows],
     page: { next_cursor: null, limit: 50 },
+    applied: { filters: {}, sort: { key: 'version', dir: 'desc' } },
+    meta: { now: TT0 },
     checkpoint: { at: TT0 - 300_000, size_bytes: 52_000, readable: true },
   };
 }
