@@ -46,6 +46,12 @@ export class ParkedPages {
     this.pages.delete(page);
   }
 
+  /** The open parked page with `targetId`, if any (operator **Close**, spec 13 §11.1). */
+  pageOf(targetId: string): Page | undefined {
+    for (const [page, info] of this.pages) if (info.targetId === targetId) return page;
+    return undefined;
+  }
+
   /** The open parked pages with their current URLs, oldest first. */
   list(): readonly ParkedPageInfo[] {
     return [...this.pages].map(([page, info]) => ({ ...info, url: urlOf(page) }));

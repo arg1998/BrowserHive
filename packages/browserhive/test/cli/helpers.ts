@@ -25,6 +25,9 @@ import type {
   ServeBootInput,
   ServeRunningServer,
   ShorthandLookup,
+  TemplateFileRecord,
+  TemplateRowFacts,
+  TemplateStateFileFacts,
   TokenRow,
 } from '../../src/cli/deps.ts';
 import { runCli } from '../../src/cli/run.ts';
@@ -202,6 +205,10 @@ export interface StorageState {
   tokens: TokenRow[];
   /** Template names and access lists (`templateAccess`). */
   templates: { name: string; principals: readonly string[] | null }[];
+  /** Template rows (`templateRows`, doctor and rekey). */
+  templateRows: TemplateRowFacts[];
+  /** Version rows `templates rekey` updated, in order. */
+  versionFiles: { templateId: string; version: number; file: TemplateFileRecord }[];
   backups: string[];
   quickCheckOk: boolean;
   resets: number;
@@ -226,6 +233,8 @@ export function storageState(overrides: Partial<StorageState> = {}): StorageStat
     openSessions: 0,
     tokens: [],
     templates: [],
+    templateRows: [],
+    versionFiles: [],
     backups: [],
     quickCheckOk: true,
     resets: 0,
@@ -289,6 +298,11 @@ function fakeStorage(
     },
     listTokens: async () => state.tokens,
     templateAccess: async () => state.templates,
+    templateRows: async () => state.templateRows,
+    updateTemplateVersionFile: async (templateId, version, file) => {
+      state.versionFiles.push({ templateId, version, file });
+      return true;
+    },
     createToken: async ({ principal, expiresInMs }) => {
       const row: TokenRow = {
         credentialId: `cred-${state.tokens.length + 1}`,
@@ -342,6 +356,10 @@ export interface ProbeState {
   apparmorCovered: boolean | null;
   /** Channels whose sandbox was probed, in order. */
   probed: Channel[];
+  /** Encrypted template files with their header key ids (`templateStateFiles`). */
+  templateFiles: TemplateStateFileFacts[];
+  /** Template profiles (`…/userdata`) holding saved passwords or autofill data. */
+  profileSecrets: string[];
 }
 
 const NO_POLICIES = { location: null, names: [], blocking: [] };
@@ -416,6 +434,8 @@ export function probeState(overrides: Partial<ProbeState> = {}): ProbeState {
     environment: sandboxEnvironment(),
     apparmorCovered: null,
     probed: [],
+    templateFiles: [],
+    profileSecrets: [],
     ...overrides,
   };
 }
@@ -444,6 +464,8 @@ function fakeProbes(state: ProbeState): HostProbes {
     },
     sandboxEnvironment: async () => state.environment,
     apparmorCovers: async () => state.apparmorCovered,
+    templateStateFiles: async () => state.templateFiles,
+    profileHasSecrets: async (dir) => state.profileSecrets.includes(posixPath(dir)),
   };
 }
 

@@ -379,6 +379,7 @@ This table is the single source of truth: `infra/telemetry/metrics.ts` defines e
 | `browserhive.attention.wait` | histogram | `ms` | `status` (`resolved`, `rejected`, `timeout`, `cancelled`) | once per settled attention request, its `waited_ms` |
 | `browserhive.vault.fills` | counter | `{fill}` | `result` | once per `vault.access` |
 | `browserhive.blocklist.hits` | counter | `{hit}` | `source` | once per `blocklist.hit` |
+| `browserhive.template.checkpoints` | counter | `{checkpoint}` | `reason` (`checkpoint`, `recording`, `relogin`, `restore`, `manual`, `import`, `signin_change`, `daily`) | once per checkpoint or version file written (spec 13 §11.7) |
 | `browserhive.retention.pruned_rows` | counter | `{row}` | `table` | once per retention pass and table that lost rows |
 | `browserhive.notifications.deliveries` | counter | `{delivery}` | `channel_kind`, `status` (`sent`, `retrying`, `dead`, `suppressed`, `superseded`) | one increment per finished or rescheduled outbox job (03 §9.4); `channel_kind` is `unknown` for a job of a channel removed meanwhile |
 | `browserhive.notifications.reports` | counter | `{report}` | `kind` (`digest.daily`, `digest.weekly`, `report.anomaly`), `outcome` (`sent` for a produced report, `late`, `empty`, `skipped` per skipped window, `manual` for an on-demand digest sent from the dashboard, `resolved` for an anomaly alert that cleared, `in_app` for a new in-app copy, D-45) | one increment per report decision of the scheduler (03 §9.7); a silent revision of an open anomaly alert is not a decision and is not counted |

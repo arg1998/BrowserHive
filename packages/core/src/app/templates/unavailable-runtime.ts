@@ -10,6 +10,7 @@ import {
   type TemplateHostOps,
   type TemplateHostView,
   type TemplateLaunchRequest,
+  type TemplateOperationHold,
   type TemplateRuntime,
 } from '../../ports/template-runtime.ts';
 
@@ -82,5 +83,38 @@ export class UnavailableTemplateHostOps implements TemplateHostOps {
 
   async closeRecording(): Promise<void> {
     return;
+  }
+
+  /** Nothing runs without hosts: a hold (a delete's) always succeeds. */
+  hold(): TemplateOperationHold | null {
+    return { token: Symbol('hold'), release: () => undefined };
+  }
+
+  held(): boolean {
+    return false;
+  }
+
+  withHost<T>(): Promise<T> {
+    return Promise.reject(templatesOff());
+  }
+
+  startHost(): Promise<void> {
+    return Promise.reject(templatesOff());
+  }
+
+  async stopHost(): Promise<readonly string[]> {
+    return [];
+  }
+
+  restartHost(): Promise<void> {
+    return Promise.reject(templatesOff());
+  }
+
+  async closeParkedPage(): Promise<boolean> {
+    return false;
+  }
+
+  async drainForOperation(): Promise<readonly string[]> {
+    return [];
   }
 }

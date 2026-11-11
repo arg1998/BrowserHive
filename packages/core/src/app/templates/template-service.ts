@@ -33,12 +33,19 @@ import { unlistedDomains } from '../../domain/templates/sign-ins.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { Clock } from '../../ports/clock.ts';
 import type { DegradationReporter } from '../../ports/degradation-reporter.ts';
+import type { EventPublisher } from '../../ports/event-bus.ts';
 import type { TemplateGeoResolver } from '../../ports/geo-seed-resolver.ts';
 import type { IdGenerator } from '../../ports/id-generator.ts';
 import type { Logger } from '../../ports/logger.ts';
-import type { Repositories, TemplateRecord, UnitOfWork } from '../../ports/persistence/index.ts';
+import type {
+  Repositories,
+  TemplateRecord,
+  TemplateVersionRepository,
+  UnitOfWork,
+} from '../../ports/persistence/index.ts';
 import type { TemplateFiles } from '../../ports/template-files.ts';
 import type { TemplateHostOps, TemplateRuntime } from '../../ports/template-runtime.ts';
+import type { DomainEvents } from '../events/catalog.ts';
 import { launchDeclaredHarnessOf, launchHarnessOf } from '../sessions/metadata.ts';
 import {
   deleteRunning,
@@ -48,11 +55,12 @@ import {
   nameTaken,
   notFoundForAgent,
   notFoundForOperator,
+  operationRunning,
   validationFailed,
 } from './template-errors.ts';
 import { pageTemplates } from './template-list.ts';
 import { TemplateLocks } from './template-locks.ts';
-import { readTemplates } from './template-reads.ts';
+import { publishTemplateChanged, readTemplates, storedUnlisted } from './template-reads.ts';
 import { toAgentTemplate, toTemplateDetail, toTemplateSummary, toTemplateView } from './views.ts';
 
 /** Server configuration the service reads. */
@@ -73,7 +81,7 @@ export interface TemplateServiceDeps {
   readonly uow: UnitOfWork;
   readonly runtime: TemplateRuntime;
   /** The running browser's live facts for the detail view; absent = none (no hosts). */
-  readonly ops?: Pick<TemplateHostOps, 'jar' | 'sharedWindows'>;
+  readonly ops?: Pick<TemplateHostOps, 'jar' | 'sharedWindows' | 'hold'>;
   readonly geo: TemplateGeoResolver;
   readonly files: TemplateFiles;
   readonly ids: Pick<IdGenerator, 'opaque' | 'eventId'>;
@@ -82,6 +90,10 @@ export interface TemplateServiceDeps {
   /** Unreadable rows skipped by `list_templates` (`TEMPLATE_ROW_UNREADABLE`). */
   readonly degradations: DegradationReporter;
   readonly config: TemplateServiceConfig;
+  /** The `templates` topic (`template.changed`, `template.removed`). */
+  readonly bus?: EventPublisher<DomainEvents>;
+  /** The newest version's summary (unlisted sign-ins of a stopped browser, spec 13 §2.3). */
+  readonly versions?: Pick<TemplateVersionRepository, 'list'>;
 }
 
 /** The caller of an agent-facing operation: the principal and the call's resolved client (harness). */
@@ -162,6 +174,7 @@ export class TemplateService {
       name: template.name,
       sites: sites.length,
     });
+    this.publishChanged(template.templateId);
     return toTemplateView(template, sites);
   }
 
@@ -192,6 +205,8 @@ export class TemplateService {
     const host = this.#deps.runtime.host(templateId);
     const jar = (await ops?.jar(templateId)) ?? null;
     const shared = (await ops?.sharedWindows(templateId)) ?? [];
+    const own = new Set(sites.map((s) => s.siteId));
+    const stored = jar === null ? await storedUnlisted(this.#deps.versions, templateId, own) : [];
     return toTemplateDetail(
       template,
       sites,
@@ -201,7 +216,7 @@ export class TemplateService {
       {
         unlistedDomains:
           jar === null
-            ? []
+            ? stored
             : unlistedDomains(
                 jar,
                 sites.map((s) => s.siteId),
@@ -226,6 +241,12 @@ export class TemplateService {
     // From here no launch of this template starts (`launch` checks synchronously before it begins).
     const release = this.#locks.beginDelete(templateId);
     if (release === null) throw deleteRunning(templateId);
+    // A restore, seed or clearing of saved passwords must finish first (review #79 H-1).
+    const hold = this.#deps.ops === undefined ? null : this.#deps.ops.hold(templateId);
+    if (this.#deps.ops !== undefined && hold === null) {
+      release();
+      throw operationRunning(templateId);
+    }
     try {
       const busy =
         this.#deps.runtime.liveSessions(templateId).length + this.#locks.inFlight(templateId);
@@ -247,6 +268,10 @@ export class TemplateService {
         });
       });
       const deletedBytes = await this.#removeFiles(templateId);
+      this.#deps.bus?.publish('template.removed', {
+        type: 'template.removed',
+        template_id: templateId,
+      });
       this.#log.info('template deleted', {
         templateId,
         name: template.name,
@@ -255,6 +280,7 @@ export class TemplateService {
       });
       return { ok: true, closed_sessions: [...closed], deleted_bytes: deletedBytes };
     } finally {
+      hold?.release();
       release();
     }
   }
@@ -344,6 +370,16 @@ export class TemplateService {
     } finally {
       release();
     }
+  }
+
+  /** `<data-dir>/templates/<id>` (the data-directory reveal). */
+  dirOf(templateId: string): string {
+    return this.#deps.files.dirOf(templateId);
+  }
+
+  /** Publishes `template.changed` with the template's summary now (never throws). */
+  publishChanged(templateId: string): void {
+    publishTemplateChanged(this.#deps, templateId, this.#log);
   }
 
   // --- helpers ----------------------------------------------------------------------------------

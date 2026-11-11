@@ -1,4 +1,4 @@
-/** @module cli/commands/templates-create — `browserhive templates create <name> …` (create, open the sign-in window on the server's machine, wait, finish) and `templates finish <name>` (spec 13 §7.2, §11.5) */
+/** @module cli/commands/templates-create — `browserhive templates create <name> …` (create, open the sign-in window on the server's machine, wait, finish; or seed `--fromState`) and `templates finish <name>` (spec 13 §7.2, §7.4, §11.5) */
 import { StartRecordingResponse, TemplateResponse } from '@browserhive/contracts/http';
 import type { CommandContext } from '../deps.ts';
 import { EXIT, type ExitCode, type Invocation, type RemoteTarget } from '../invocation.ts';
@@ -10,6 +10,7 @@ import {
   type RecordingTarget,
   waitForSignIns,
 } from './templates-recording.ts';
+import { readStateFile, seedTemplate } from './templates-state.ts';
 
 type CreateInvocation = Extract<Invocation, { readonly command: 'templates-create' }>;
 type FinishInvocation = Extract<Invocation, { readonly command: 'templates-finish' }>;
@@ -83,7 +84,8 @@ function printGuidance(context: CommandContext, timeoutMs: number): void {
 /**
  * `templates create <name> --sites …`: creates the template, opens the sign-in window on the
  * server's machine, waits for the sign-ins (every site signed in, Enter, `--timeout` or Ctrl+C)
- * and finishes it. `--noLogin` stops after creating.
+ * and finishes it. `--noLogin` stops after creating; `--fromState <file>` seeds the template from a
+ * storage state instead of opening a window (spec 13 §7.4) and exits like `templates seed`.
  *
  * @returns 0 when every site is signed in, 2 when one is not or on timeout, 1 on an API failure
  * or Ctrl+C.
@@ -94,11 +96,29 @@ export async function runTemplatesCreate(
 ): Promise<ExitCode> {
   const { out } = context;
   const { name, json } = invocation;
+  // A file that cannot be seeded is refused before anything is created.
+  const state =
+    invocation.fromState === null ? null : await readStateFile(context, invocation.fromState);
+  if (typeof state === 'number') return state;
   const created = await createTemplate(context, invocation);
   if (typeof created === 'number') return created;
   if (json && invocation.noLogin) out.json(created.json);
   if (!json) out.status('ok', `created template ${name} (${created.id})`);
   if (invocation.noLogin) return EXIT.ok;
+  if (state !== null) {
+    const seeded = await seedTemplate(
+      context,
+      { remote: invocation.remote, templateId: created.id, name },
+      state,
+      json,
+    );
+    if (seeded === EXIT.fatal) {
+      out.diagnostic(
+        `Template ${name} was created and stays in setup: seed it again with 'browserhive templates seed ${name} <file>', or delete it with 'browserhive templates rm ${name}'.`,
+      );
+    }
+    return seeded;
+  }
   const target: RecordingTarget = { remote: invocation.remote, templateId: created.id, name, json };
   const started = await startRecording(context, target);
   if (started !== EXIT.ok) return started;

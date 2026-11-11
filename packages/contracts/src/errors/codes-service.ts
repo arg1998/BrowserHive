@@ -376,32 +376,4 @@ export const SERVICE_ERRORS = {
     cause: 'An unexpected failure that no typed code describes.',
     resolution: 'Search the logs for the ref (request id) and file a bug if it repeats.',
   }),
-  TEMPLATE_NAME_TAKEN: defineError({
-    code: 'TEMPLATE_NAME_TAKEN',
-    httpStatus: 409,
-    category: 'domain',
-    retryable: 'different_args',
-    title: 'Template name in use',
-    message: "A session template named '{name}' already exists.",
-    hint: 'Pick another name.',
-    details: z.object({ name: z.string() }),
-    docs: true,
-    cause: 'Template names are unique: agents address a template by its name (spec 13 §2.1).',
-    resolution: 'Choose a different name, or delete the existing template first.',
-  }),
-  TEMPLATE_IN_USE: defineError({
-    code: 'TEMPLATE_IN_USE',
-    httpStatus: 409,
-    category: 'domain',
-    retryable: 'different_args',
-    title: 'Template has live sessions',
-    message:
-      "Template '{template_id}' has {live_sessions} live session(s). Close them, or delete with force=true.",
-    hint: 'Retry with ?force=true to close the sessions and delete the template.',
-    details: z.object({ template_id: z.string(), live_sessions: z.number().int().nonnegative() }),
-    docs: true,
-    cause: 'Deleting a template stops its browser, which would end the sessions launched from it.',
-    resolution:
-      'Close the sessions first, or pass `force=true` (they close with `closed_reason: operator`).',
-  }),
 } as const;

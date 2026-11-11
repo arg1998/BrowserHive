@@ -3,6 +3,7 @@
 import {
   TemplateService,
   type TemplateServiceConfig,
+  type TemplateServiceDeps,
 } from '../../src/app/templates/template-service.ts';
 import { UnavailableTemplateRuntime } from '../../src/app/templates/unavailable-runtime.ts';
 import type { CreateSessionInput } from '../../src/domain/session/create-request.ts';
@@ -130,6 +131,8 @@ export interface TemplateKitOptions {
   readonly logger: Logger;
   readonly runtime?: TemplateRuntime;
   readonly config?: Partial<TemplateServiceConfig>;
+  /** Host operations (the delete's operation hold, the detail view's live facts). */
+  readonly ops?: TemplateServiceDeps['ops'];
 }
 
 /** The kit. */
@@ -154,6 +157,7 @@ export function createTemplateKit(options: TemplateKitOptions): TemplateKit {
     repos: bundle,
     uow: new InMemoryUnitOfWork(bundle),
     runtime,
+    ...(options.ops !== undefined && { ops: options.ops }),
     geo: FAKE_TEMPLATE_GEO,
     files,
     degradations,

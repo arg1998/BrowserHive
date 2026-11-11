@@ -5,6 +5,8 @@ import type {
   TemplateRecord,
   TemplateSiteHealthRecord,
   TemplateSiteRecord,
+  TemplateStateFileRecord,
+  TemplateVersionRecord,
 } from './records-templates.ts';
 
 /**
@@ -38,7 +40,19 @@ export interface TemplateRepository {
   remove(templateId: string): Promise<boolean>;
   /** Stamps `last_used_at` (a virtual-session launch) without bumping `version`. */
   touchLastUsed(templateId: string, at: number): Promise<void>;
+  /**
+   * Records BrowserHive's own state facts (the checkpoint's time and size, the newest version)
+   * without bumping `version`, so a checkpoint never makes an operator's `If-Match` stale.
+   */
+  setStateFacts(templateId: string, facts: TemplateStateFacts): Promise<void>;
   count(): Promise<number>;
+}
+
+/** Columns {@link TemplateRepository.setStateFacts} writes; absent keys are unchanged. */
+export interface TemplateStateFacts {
+  readonly checkpointAt?: number | null;
+  readonly checkpointSizeBytes?: number | null;
+  readonly currentVersion?: number | null;
 }
 
 /** Repository over `template_sites`. */
@@ -53,4 +67,25 @@ export interface TemplateSiteRepository {
   remove(templateId: string, siteId: string): Promise<boolean>;
   /** Replaces one site's health; false when the site does not exist. */
   setHealth(templateId: string, siteId: string, health: TemplateSiteHealthRecord): Promise<boolean>;
+}
+
+/** Repository over `template_versions` (spec 13 §2.6, §3.9); retention is decided in the domain. */
+export interface TemplateVersionRepository {
+  /** The versions of one template, newest first. */
+  list(templateId: string): Promise<readonly TemplateVersionRecord[]>;
+  /** Every version of every template (boot reconciliation, `rekey`), by template then version. */
+  listAll(): Promise<readonly TemplateVersionRecord[]>;
+  get(templateId: string, version: number): Promise<TemplateVersionRecord | null>;
+  /** Inserts a version; a taken `(template_id, version)` throws `CONFLICT`. */
+  insert(record: TemplateVersionRecord): Promise<void>;
+  /** Pins or unpins; `null` when the version does not exist. */
+  setPinned(
+    templateId: string,
+    version: number,
+    pinned: boolean,
+  ): Promise<TemplateVersionRecord | null>;
+  /** The file was re-encrypted (`rekey`); false when the version does not exist. */
+  updateFile(templateId: string, version: number, file: TemplateStateFileRecord): Promise<boolean>;
+  /** Deletes one version row; true when a row went. */
+  remove(templateId: string, version: number): Promise<boolean>;
 }

@@ -156,7 +156,8 @@ export const evaluateAllowed: ToolPolicy = {
     const session = ctx.session;
     const sessionId = session?.id ?? '';
     const scope =
-      session?.request.disableEvaluate === true
+      session?.request.disableEvaluate === true ||
+      session?.template?.sealing.forceDisableEvaluate === true
         ? 'session'
         : ctx.services.runtime.allowEvaluate
           ? null

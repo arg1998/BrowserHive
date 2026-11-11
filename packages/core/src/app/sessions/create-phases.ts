@@ -98,6 +98,17 @@ export function buildPhases(
           request.storageStateName,
           deps.principal,
         );
+        const source = await locator
+          .sourceTemplateOf?.(request.storageStateName, deps.principal)
+          .catch(() => null);
+        if (source !== undefined && source !== null) {
+          hooks.warn(session, {
+            code: 'TEMPLATE_STATE_COPY',
+            sessionId: session.id,
+            message: `This session started from a copy of the sign-ins of template '${source}'; using the copy can sign the template out.`,
+            details: { source_template_id: source },
+          });
+        }
       }
     },
     resolveIdentity: async (ctx) => {

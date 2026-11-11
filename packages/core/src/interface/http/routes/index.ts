@@ -16,6 +16,7 @@ import { SESSION_FACT_ROUTES } from './session-facts.ts';
 import { SESSION_LIVE_ROUTES } from './session-live.ts';
 import { SESSION_ROUTES } from './sessions.ts';
 import { SYSTEM_ROUTES } from './system.ts';
+import { TEMPLATE_OPS_ROUTES } from './template-ops.ts';
 import { TEMPLATE_RECORDING_ROUTES } from './template-recording.ts';
 import { TEMPLATE_ROUTES } from './templates.ts';
 import { VAULT_ROUTES } from './vault.ts';
@@ -40,6 +41,8 @@ export function apiRoutes(deps: MetaRouteDeps & { readonly logger: Logger }): re
     ...NOTIFICATION_ROUTES,
     ...CHANNEL_ROUTES,
     ...searchRoutes(deps.logger),
+    // Before `TEMPLATE_ROUTES`: `/templates/operations/{id}` must win over `/templates/{id}`.
+    ...TEMPLATE_OPS_ROUTES,
     ...TEMPLATE_ROUTES,
     ...TEMPLATE_RECORDING_ROUTES,
   ];

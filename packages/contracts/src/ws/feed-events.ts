@@ -11,6 +11,12 @@ import { Notification } from '../http/notifications.ts';
 import { PageRow } from '../http/pages.ts';
 import { SessionSummary } from '../http/sessions.ts';
 import { SystemEvent } from '../http/system.ts';
+import {
+  TemplateOperationKind,
+  TemplateOperationState,
+  TemplateVersionRow,
+} from '../http/template-versions.ts';
+import { HostView, TemplateSiteView, TemplateSummary } from '../http/templates.ts';
 import { ToolCallRow } from '../http/tool-calls.ts';
 import { VaultAccessRow, VaultHandle } from '../http/vault-bindings.ts';
 import { SessionId } from '../ids/index.ts';
@@ -158,6 +164,46 @@ export const DeliveryUpdatedEvent = z.object({ ...ev('delivery.updated'), delive
 /** An act-button press was audited (the live Actions view, D-41). */
 export const ActionRecordedEvent = z.object({ ...ev('action.recorded'), action: ActionRow });
 
+// templates (spec 13 §11.3, PR T1b) --------------------------------------------------------------
+/** A template was created or changed (edit, status, sites, versions, identity drift). */
+export const TemplateChangedEvent = z.object({
+  ...ev('template.changed'),
+  template: TemplateSummary,
+});
+/** A template was deleted. */
+export const TemplateRemovedEvent = z.object({
+  ...ev('template.removed'),
+  template_id: z.string(),
+});
+/** A template's browser changed state, pages or memory. */
+export const TemplateHostEvent = z.object({
+  ...ev('template.host'),
+  template_id: z.string(),
+  host: HostView,
+});
+/** A site of a template changed (health, enabled, write policy). */
+export const TemplateHealthEvent = z.object({
+  ...ev('template.health'),
+  template_id: z.string(),
+  site: TemplateSiteView,
+});
+/** A version was written, pinned or unpinned. */
+export const TemplateVersionEvent = z.object({
+  ...ev('template.version'),
+  template_id: z.string(),
+  version: TemplateVersionRow,
+});
+/** A restore or seed operation started or finished. */
+export const TemplateOperationEvent = z.object({
+  ...ev('template.operation'),
+  operation_id: z.string(),
+  kind: TemplateOperationKind,
+  state: TemplateOperationState,
+  template_id: z.string(),
+  version: z.number().int().positive().optional(),
+  error: z.object({ code: z.string(), message: z.string() }).optional(),
+});
+
 // logs -------------------------------------------------------------------------------------------
 /** One log record from the ring buffer (droppable under backpressure). */
 export const LogRecordEvent = z.object({ ...ev('log.record'), record: LogRecord });
@@ -193,6 +239,12 @@ export const WsFeedEvent = z.discriminatedUnion('type', [
   ChannelRemovedEvent,
   DeliveryUpdatedEvent,
   ActionRecordedEvent,
+  TemplateChangedEvent,
+  TemplateRemovedEvent,
+  TemplateHostEvent,
+  TemplateHealthEvent,
+  TemplateVersionEvent,
+  TemplateOperationEvent,
   LogRecordEvent,
 ]);
 /** Every feed event payload. */
@@ -219,6 +271,14 @@ export const WS_TOPIC_EVENTS: { readonly [T in WsStaticTopic]: readonly WsFeedEv
   logs: ['log.record'],
   notifications: ['notification.created', 'notification.updated'],
   channels: ['channel.changed', 'channel.removed', 'delivery.updated', 'action.recorded'],
+  templates: [
+    'template.changed',
+    'template.removed',
+    'template.host',
+    'template.health',
+    'template.version',
+    'template.operation',
+  ],
 };
 
 /** Event types published on `session:<id>` topics. */

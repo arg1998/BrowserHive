@@ -6,11 +6,15 @@ import type {
   TemplateRecord,
   TemplateSiteHealthRecord,
   TemplateSiteRecord,
+  TemplateStateFileRecord,
+  TemplateVersionRecord,
 } from '../../src/ports/persistence/records-templates.ts';
 import type {
   ListAllOptions,
   TemplateRepository,
   TemplateSiteRepository,
+  TemplateStateFacts,
+  TemplateVersionRepository,
 } from '../../src/ports/persistence/templates.ts';
 
 /** SQLite's default (binary) collation: code-unit order, as `ORDER BY` compares TEXT. */
@@ -75,9 +79,14 @@ function nameTaken(name: string): AppError<'TEMPLATE_NAME_TAKEN'> {
 export class InMemoryTemplateRepository implements TemplateRepository {
   readonly rows = new Map<string, TemplateRecord>();
   readonly #sites: InMemoryTemplateSiteRepository;
+  readonly #versions: InMemoryTemplateVersionRepository | null;
 
-  constructor(sites: InMemoryTemplateSiteRepository) {
+  constructor(
+    sites: InMemoryTemplateSiteRepository,
+    versions: InMemoryTemplateVersionRepository | null = null,
+  ) {
     this.#sites = sites;
+    this.#versions = versions;
   }
 
   async listAll(_options?: ListAllOptions): Promise<readonly TemplateRecord[]> {
@@ -127,7 +136,10 @@ export class InMemoryTemplateRepository implements TemplateRepository {
 
   async remove(templateId: string): Promise<boolean> {
     const removed = this.rows.delete(templateId);
-    if (removed) this.#sites.dropTemplate(templateId);
+    if (removed) {
+      this.#sites.dropTemplate(templateId);
+      this.#versions?.dropTemplate(templateId);
+    }
     return removed;
   }
 
@@ -136,7 +148,81 @@ export class InMemoryTemplateRepository implements TemplateRepository {
     if (row !== undefined) this.rows.set(templateId, { ...row, lastUsedAt: at });
   }
 
+  async setStateFacts(templateId: string, facts: TemplateStateFacts): Promise<void> {
+    const row = this.rows.get(templateId);
+    if (row === undefined) return;
+    this.rows.set(templateId, {
+      ...row,
+      ...(facts.checkpointAt !== undefined && { checkpointAt: facts.checkpointAt }),
+      ...(facts.checkpointSizeBytes !== undefined && {
+        checkpointSizeBytes: facts.checkpointSizeBytes,
+      }),
+      ...(facts.currentVersion !== undefined && { currentVersion: facts.currentVersion }),
+    });
+  }
+
   async count(): Promise<number> {
     return this.rows.size;
+  }
+}
+
+/** `template_versions` in memory, keyed `<template_id> <version>`. */
+export class InMemoryTemplateVersionRepository implements TemplateVersionRepository {
+  readonly rows = new Map<string, TemplateVersionRecord>();
+
+  async list(templateId: string): Promise<readonly TemplateVersionRecord[]> {
+    return [...this.rows.values()]
+      .filter((r) => r.templateId === templateId)
+      .sort((a, b) => b.version - a.version);
+  }
+
+  async listAll(): Promise<readonly TemplateVersionRecord[]> {
+    return [...this.rows.values()].sort(
+      (a, b) => binary(a.templateId, b.templateId) || a.version - b.version,
+    );
+  }
+
+  async get(templateId: string, version: number): Promise<TemplateVersionRecord | null> {
+    return this.rows.get(`${templateId} ${version}`) ?? null;
+  }
+
+  async insert(record: TemplateVersionRecord): Promise<void> {
+    const key = `${record.templateId} ${record.version}`;
+    if (this.rows.has(key)) throw new AppError('CONFLICT', { current_version: record.version });
+    this.rows.set(key, record);
+  }
+
+  async setPinned(
+    templateId: string,
+    version: number,
+    pinned: boolean,
+  ): Promise<TemplateVersionRecord | null> {
+    const key = `${templateId} ${version}`;
+    const row = this.rows.get(key);
+    if (row === undefined) return null;
+    const next = { ...row, pinned };
+    this.rows.set(key, next);
+    return next;
+  }
+
+  async updateFile(
+    templateId: string,
+    version: number,
+    file: TemplateStateFileRecord,
+  ): Promise<boolean> {
+    const key = `${templateId} ${version}`;
+    const row = this.rows.get(key);
+    if (row === undefined) return false;
+    this.rows.set(key, { ...row, ...file });
+    return true;
+  }
+
+  async remove(templateId: string, version: number): Promise<boolean> {
+    return this.rows.delete(`${templateId} ${version}`);
+  }
+
+  /** `ON DELETE CASCADE` from `templates`. */
+  dropTemplate(templateId: string): void {
+    for (const [key, row] of this.rows) if (row.templateId === templateId) this.rows.delete(key);
   }
 }

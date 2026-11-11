@@ -7,7 +7,8 @@ Talks to a running server over its REST API (--url, default the configured host 
 operator bearer (--token) or the dashboard cookie (--cookie). create opens a sign-in window on the
 machine running the server, wherever the CLI runs, and waits until every site is signed in, you
 press Enter, or --timeout passes. create and finish exit 0 when every site is signed in, 2 when one
-is not, 1 on an API error.
+is not, 1 on an API error. seed and restore run on the server and the CLI waits for them. rekey is
+the exception: it runs locally against the data directory with the server stopped.
 
 ARGUMENTS
   <name>  Template name agents use: 2–32 characters, a–z first, then a–z, 0–9 or -.
@@ -32,6 +33,9 @@ FLAGS
   --principal <subject>             Let this agent principal use the template (repeatable). Under
                                     auth=token one of --allPrincipals or --principal is required.
   --noLogin                         Create the template and exit without opening a sign-in window.
+  --fromState <file>                Seed the template from a Playwright storage-state file (≤ 16
+                                    MiB) instead of opening a sign-in window. The file is read in
+                                    memory and never stored in plain text.
   --timeout <duration>              How long to wait for the sign-ins. The template then stays in
                                     setup; 'templates finish' completes it. default: 30m
   --json                            Print machine-readable JSON instead of text.

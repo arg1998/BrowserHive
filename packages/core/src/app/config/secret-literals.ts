@@ -9,7 +9,7 @@ type Extractor<K extends ConfigKey> = (value: ServerConfig[K]) => readonly strin
  * Keys flagged `secret: true` in the config registry. Adding a secret key without an extractor fails
  * `secret-literals.test.ts`, so a new secret can never silently skip registration.
  */
-export type SecretConfigKey = 'authTokens' | 'otelHeaders';
+export type SecretConfigKey = 'authTokens' | 'otelHeaders' | 'templateKey' | 'templateKeyPrevious';
 
 /**
  * `name:token` items → the token only. The name is a principal label that legitimately appears in
@@ -37,6 +37,8 @@ function headerValuesOf(headers: Readonly<Record<string, string>>): readonly str
 export const SECRET_LITERAL_EXTRACTORS: { readonly [K in SecretConfigKey]: Extractor<K> } = {
   authTokens: tokensOf,
   otelHeaders: headerValuesOf,
+  templateKey: (value) => (value === undefined ? [] : [value]),
+  templateKeyPrevious: (value) => (value === undefined ? [] : [value]),
 };
 
 /**
@@ -47,5 +49,7 @@ export function secretConfigLiterals(config: ServerConfig): readonly string[] {
   return [
     ...SECRET_LITERAL_EXTRACTORS.authTokens(config.authTokens),
     ...SECRET_LITERAL_EXTRACTORS.otelHeaders(config.otelHeaders),
+    ...SECRET_LITERAL_EXTRACTORS.templateKey(config.templateKey),
+    ...SECRET_LITERAL_EXTRACTORS.templateKeyPrevious(config.templateKeyPrevious),
   ];
 }

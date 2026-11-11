@@ -94,6 +94,36 @@ export interface IssuedToken {
   readonly expiresAt: number | null;
 }
 
+/** One template row as `doctor` and `templates rekey` read it (spec 13 §11.9). */
+export interface TemplateRowFacts {
+  readonly templateId: string;
+  readonly name: string;
+  readonly channel: Channel;
+  readonly headless: boolean;
+  /** The Chrome major the first browser start observed; `null` until the browser has started. */
+  readonly chromeMajor: string | null;
+  /** The proxy's password variable NAME (never a value), `null` without one. */
+  readonly proxyPasswordEnv: string | null;
+  readonly lastUsedAt: number | null;
+}
+
+/** An encrypted file's facts as `templates rekey` records them in its version row. */
+export interface TemplateFileRecord {
+  readonly sizeBytes: number;
+  /** SHA-256 of the encrypted file, hex. */
+  readonly sha256: string;
+  readonly keyId: string;
+}
+
+/** One encrypted checkpoint or version file of a template (`doctor`). */
+export interface TemplateStateFileFacts {
+  readonly templateId: string;
+  /** `latest.state.enc` or `v<N>.state.enc`. */
+  readonly file: string;
+  /** The key id in the file's header; `null` when the header cannot be read. */
+  readonly keyId: string | null;
+}
+
 /** Database access for `db`, `admin` and `purge` (built on `openStorageForCli`). */
 export interface CliStorage {
   status(): Promise<DatabaseStatus>;
@@ -137,6 +167,18 @@ export interface CliStorage {
   templateAccess(): Promise<
     readonly { readonly name: string; readonly principals: readonly string[] | null }[]
   >;
+  /** Every template's row facts (spec 13 §11.9); empty for a database from before schema v9. */
+  templateRows(): Promise<readonly TemplateRowFacts[]>;
+  /**
+   * Records a re-encrypted version file in its `template_versions` row (`templates rekey`).
+   *
+   * @returns `false` when no row matched.
+   */
+  updateTemplateVersionFile(
+    templateId: string,
+    version: number,
+    file: TemplateFileRecord,
+  ): Promise<boolean>;
   close(): Promise<void>;
 }
 
@@ -212,6 +254,13 @@ export interface HostProbes {
   sandbox(channel: Channel): Promise<SandboxProbeResult>;
   /** Host conditions that decide the sandbox (AppArmor, user namespaces, root, container). */
   sandboxEnvironment(): Promise<SandboxEnvironment>;
+  /**
+   * The encrypted checkpoint and version files under `<templatesDir>/<id>/versions/`, with the key
+   * id read from each file's header (spec 13 §2.4). Nothing is decrypted.
+   */
+  templateStateFiles(templatesDir: string): Promise<readonly TemplateStateFileFacts[]>;
+  /** Whether a template profile holds saved passwords or autofill data (spec 13 §3.1). */
+  profileHasSecrets(userDataDir: string): Promise<boolean>;
   /** Whether an installed AppArmor profile names `path` (`null` off Linux or when unreadable). */
   apparmorCovers(path: string): Promise<boolean | null>;
   /**

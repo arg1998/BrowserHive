@@ -2,7 +2,7 @@
 
 # Configuration reference
 
-Every configuration key of BrowserHive (58 keys), generated from the zod schema in `@browserhive/contracts/config`. For a guided introduction see [the configuration guide](../guide/configuration.md).
+Every configuration key of BrowserHive (63 keys), generated from the zod schema in `@browserhive/contracts/config`. For a guided introduction see [the configuration guide](../guide/configuration.md).
 
 ## Precedence
 
@@ -324,6 +324,11 @@ Per-session close and trace-finalize cap.
 | [`blocklistWatch`](#blocklistWatch) | `--blocklistWatch` | `BROWSERHIVE_BLOCKLIST_WATCH` | `false` |
 | [`vault`](#vault) | `--vault` | `BROWSERHIVE_VAULT` | `off` |
 | [`templates`](#templates) | `--templates` | `BROWSERHIVE_TEMPLATES` | `true` |
+| [`templateKey`](#templateKey) | `--templateKey` | `BROWSERHIVE_TEMPLATE_KEY` | unset |
+| [`templateKeyPrevious`](#templateKeyPrevious) | `--templateKeyPrevious` | `BROWSERHIVE_TEMPLATE_KEY_PREVIOUS` | unset |
+| [`templateCheckpointInterval`](#templateCheckpointInterval) | `--templateCheckpointInterval` | `BROWSERHIVE_TEMPLATE_CHECKPOINT_INTERVAL` | `15m` |
+| [`templateVersionsKeep`](#templateVersionsKeep) | `--templateVersionsKeep` | `BROWSERHIVE_TEMPLATE_VERSIONS_KEEP` | `10` |
+| [`templateRecycleRss`](#templateRecycleRss) | `--templateRecycleRss` | `BROWSERHIVE_TEMPLATE_RECYCLE_RSS` | `3GiB` |
 | [`templateHostIdleTimeout`](#templateHostIdleTimeout) | `--templateHostIdleTimeout` | `BROWSERHIVE_TEMPLATE_HOST_IDLE_TIMEOUT` | `1h` |
 | [`templateMaxPagesPerHost`](#templateMaxPagesPerHost) | `--templateMaxPagesPerHost` | `BROWSERHIVE_TEMPLATE_MAX_PAGES_PER_HOST` | `40` |
 | [`templateRecycleAfter`](#templateRecycleAfter) | `--templateRecycleAfter` | `BROWSERHIVE_TEMPLATE_RECYCLE_AFTER` | `24h` |
@@ -509,6 +514,76 @@ Session templates. false: list_templates answers TOOL_NOT_AVAILABLE, launch_sess
 | Config file | `"templates"` |
 | Type | a boolean: 'true', 'false', '1', '0', 'yes' or 'no' |
 | Default | `true` |
+| Notes | restart required |
+
+<a id="templateKey"></a>
+### `templateKey`
+
+Key that encrypts template checkpoints and versions (base64 of 32 bytes). Prefer BROWSERHIVE_TEMPLATE_KEY; absent = <dataDir>/admin/template.key, created on first use.
+
+| Property | Value |
+|---|---|
+| CLI flag | `--templateKey` |
+| Environment | `BROWSERHIVE_TEMPLATE_KEY` |
+| Config file | `"templateKey"` |
+| Type | base64 of exactly 32 bytes (openssl rand -base64 32) |
+| Default | unset |
+| Notes | restart required · secret (rendered `<redacted>`) |
+
+<a id="templateKeyPrevious"></a>
+### `templateKeyPrevious`
+
+The previous template key, read only: lets the server read files not yet re-encrypted by browserhive templates rekey.
+
+| Property | Value |
+|---|---|
+| CLI flag | `--templateKeyPrevious` |
+| Environment | `BROWSERHIVE_TEMPLATE_KEY_PREVIOUS` |
+| Config file | `"templateKeyPrevious"` |
+| Type | base64 of exactly 32 bytes (openssl rand -base64 32) |
+| Default | unset |
+| Notes | restart required · secret (rendered `<redacted>`) |
+
+<a id="templateCheckpointInterval"></a>
+### `templateCheckpointInterval`
+
+How often a running template browser's rolling checkpoint is rewritten; versions are written at milestones only.
+
+| Property | Value |
+|---|---|
+| CLI flag | `--templateCheckpointInterval` |
+| Environment | `BROWSERHIVE_TEMPLATE_CHECKPOINT_INTERVAL` |
+| Config file | `"templateCheckpointInterval"` |
+| Type | a duration of at least '1m' |
+| Default | `15m` |
+| Notes | restart required |
+
+<a id="templateVersionsKeep"></a>
+### `templateVersionsKeep`
+
+Versions kept per template, plus every pinned version and the newest one with every site signed in.
+
+| Property | Value |
+|---|---|
+| CLI flag | `--templateVersionsKeep` |
+| Environment | `BROWSERHIVE_TEMPLATE_VERSIONS_KEEP` |
+| Config file | `"templateVersionsKeep"` |
+| Type | an integer between 1 and 100 |
+| Default | `10` |
+| Notes | restart required |
+
+<a id="templateRecycleRss"></a>
+### `templateRecycleRss`
+
+A template browser's resident memory above which its largest session's largest page is closed, then the browser is drained and restarted.
+
+| Property | Value |
+|---|---|
+| CLI flag | `--templateRecycleRss` |
+| Environment | `BROWSERHIVE_TEMPLATE_RECYCLE_RSS` |
+| Config file | `"templateRecycleRss"` |
+| Type | a size of at least '512MiB' |
+| Default | `3GiB` |
 | Notes | restart required |
 
 <a id="templateHostIdleTimeout"></a>

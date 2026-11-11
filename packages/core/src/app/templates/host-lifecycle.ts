@@ -37,6 +37,13 @@ export interface HostLifecycleDeps {
   readonly closeSessions: (ids: readonly string[], reason: ClosedReason) => Promise<void>;
   /** A slot is free for a restart that was not reserved under the registry lock. */
   readonly slotFree: () => boolean;
+  /**
+   * Runs on a clean stop after the sessions closed and before the browser closes: the final
+   * checkpoint (spec 13 §3.2 idle stop, §3.9). Never throws.
+   */
+  readonly beforeClose?: (host: TemplateHost) => Promise<void>;
+  /** The host changed state (the `template.host` event). */
+  readonly changed?: (templateId: string) => void;
   readonly closeTimeoutMs: number;
 }
 
@@ -137,13 +144,18 @@ export class HostLifecycle {
    * can race the old one for the profile lock. Every session still on the host is closed with
    * `closeReason` first, and again after the close for a view that opened in between.
    */
-  async stop(reason: string, closeReason: ClosedReason = 'shutdown'): Promise<void> {
+  async stop(
+    reason: string,
+    closeReason: ClosedReason = 'shutdown',
+    checkpoint = true,
+  ): Promise<void> {
     this.cancelRestart();
     const host = this.instance;
     const starting = this.starting;
     this.enter(host !== null || starting !== null ? 'draining' : 'stopped');
     if (host !== null) {
       await this.deps.closeSessions(host.viewIds(), closeReason);
+      if (checkpoint) await this.deps.beforeClose?.(host).catch(() => undefined);
       this.log.info('template host stopped', { reason });
       this.detach();
       await host.close(this.deps.closeTimeoutMs);
@@ -303,8 +315,10 @@ export class HostLifecycle {
   }
 
   private enter(state: HostState): void {
+    const changed = this.state !== state;
     this.state = state;
     this.since = this.deps.clock.now();
+    if (changed) this.deps.changed?.(this.templateId);
   }
 }
 

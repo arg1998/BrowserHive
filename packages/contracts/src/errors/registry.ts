@@ -7,12 +7,14 @@ import { BOOT_ERRORS } from './codes-boot.ts';
 import { PAGE_ERRORS } from './codes-page.ts';
 import { SERVICE_ERRORS } from './codes-service.ts';
 import { SESSION_ERRORS } from './codes-session.ts';
+import { TEMPLATE_SERVICE_ERRORS } from './codes-template-service.ts';
 import type { ErrorSpecShape } from './spec.ts';
 
 const REGISTRY = {
   ...SESSION_ERRORS,
   ...PAGE_ERRORS,
   ...SERVICE_ERRORS,
+  ...TEMPLATE_SERVICE_ERRORS,
   ...BOOT_ERRORS,
   ...AUTH_ERRORS,
   ...TRANSPORT_ERRORS,

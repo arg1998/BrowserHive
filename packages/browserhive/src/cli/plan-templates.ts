@@ -1,4 +1,5 @@
-/** @module cli/plan-templates — the `templates` subcommands' flags → their invocations, with the cheap local checks of `templates create` as usage errors (spec 13 §7.2, §11.5) */
+/** @module cli/plan-templates — the `templates` subcommands' flags → their invocations, with the cheap local checks (`create`'s flags, `restore`'s version, `host`'s action) as usage errors (spec 13 §7.2, §11.5) */
+import { isAbsolute, resolve as resolvePath } from 'node:path';
 import { Channel, StealthLevel } from '@browserhive/contracts/enums';
 import {
   TEMPLATE_MAX_CONCURRENT,
@@ -10,7 +11,13 @@ import {
   TemplateSiteHost,
 } from '@browserhive/contracts/http';
 import type { TokenizedArgs } from '@browserhive/core/config';
-import type { Invocation, RemoteTarget } from './invocation.ts';
+import {
+  type Invocation,
+  type RemoteTarget,
+  TEMPLATE_HOST_ACTIONS,
+  type TemplateHostAction,
+  type TemplateTarget,
+} from './invocation.ts';
 import type { FlagReader } from './plan-args.ts';
 
 /** `--timeout` default of `templates create`: 30 minutes. */
@@ -24,6 +31,8 @@ export interface TemplatesPlanInput {
   readonly reader: FlagReader;
   readonly tokens: TokenizedArgs;
   readonly args: readonly string[];
+  /** The working directory (relative file arguments). */
+  readonly cwd: string;
 }
 
 /**
@@ -36,6 +45,7 @@ export function templatesInvocation(name: string, input: TemplatesPlanInput): Re
   const { reader, args } = input;
   const json = reader.bool('json');
   const templateName = args[0] ?? '';
+  const target = (remote: RemoteTarget): TemplateTarget => ({ name: templateName, json, remote });
   switch (name) {
     case 'templates list':
       return (remote) => ({ command: 'templates-list', json, remote });
@@ -43,6 +53,37 @@ export function templatesInvocation(name: string, input: TemplatesPlanInput): Re
       return (remote) => ({ command: 'templates-finish', name: templateName, json, remote });
     case 'templates create':
       return createInvocation(input, templateName, json);
+    case 'templates show':
+      return (remote) => ({ command: 'templates-show', ...target(remote) });
+    case 'templates versions':
+      return (remote) => ({ command: 'templates-versions', ...target(remote) });
+    case 'templates save':
+      return (remote) => ({ command: 'templates-save', ...target(remote) });
+    case 'templates disable':
+      return (remote) => ({ command: 'templates-disable', ...target(remote) });
+    case 'templates enable':
+      return (remote) => ({ command: 'templates-enable', ...target(remote) });
+    case 'templates seed': {
+      const file = absolutePath(input, args[1] ?? '');
+      const yes = reader.bool('yes');
+      return (remote) => ({ command: 'templates-seed', file, yes, ...target(remote) });
+    }
+    case 'templates restore': {
+      const version = versionArgument(reader, args[1] ?? '');
+      const forceClose = reader.bool('forceClose');
+      const yes = reader.bool('yes');
+      return (remote) => ({
+        command: 'templates-restore',
+        version,
+        forceClose,
+        yes,
+        ...target(remote),
+      });
+    }
+    case 'templates host': {
+      const action = hostAction(reader, args[1] ?? '');
+      return (remote) => ({ command: 'templates-host', action, ...target(remote) });
+    }
     default: {
       const force = reader.bool('force');
       const yes = reader.bool('yes');
@@ -56,6 +97,32 @@ export function templatesInvocation(name: string, input: TemplatesPlanInput): Re
       });
     }
   }
+}
+
+/** A path argument or flag, resolved against the working directory. */
+function absolutePath(input: TemplatesPlanInput, raw: string): string {
+  return isAbsolute(raw) ? raw : resolvePath(input.cwd, raw);
+}
+
+/** `<version|latest>` of `templates restore`: a positive whole number or `latest`. */
+function versionArgument(reader: FlagReader, raw: string): number | 'latest' {
+  if (raw === 'latest') return 'latest';
+  if (/^[1-9][0-9]{0,8}$/.test(raw)) return Number(raw);
+  reader.problems.push(
+    `invalid version '${raw}'. Expected a version number (as listed by browserhive templates versions), or latest (the rolling checkpoint).`,
+  );
+  return 'latest';
+}
+
+function hostAction(reader: FlagReader, raw: string): TemplateHostAction {
+  const found = TEMPLATE_HOST_ACTIONS.find((action) => action === raw);
+  if (found !== undefined) return found;
+  reader.problems.push(
+    raw === ''
+      ? "'templates host' requires an action: start, stop or restart."
+      : `unknown action '${raw}' for 'templates host'. Expected one of: start, stop, restart.`,
+  );
+  return 'start';
 }
 
 function createInvocation(
@@ -81,6 +148,11 @@ function createInvocation(
   const timezone = reader.text('timezone');
   const proxy = proxyInput(reader);
   const policy = policyInput(input);
+  const fromStateRaw = reader.text('fromState');
+  const fromState = fromStateRaw === undefined ? null : absolutePath(input, fromStateRaw);
+  if (fromState !== null && reader.bool('noLogin')) {
+    reader.problems.push('--fromState and --noLogin are mutually exclusive: pass one.');
+  }
   const body: TemplateInput = {
     name,
     sites: sites.map((site) => ({ site_id: site })),
@@ -100,6 +172,7 @@ function createInvocation(
     input: body,
     noLogin,
     timeoutMs,
+    fromState,
     json,
     remote,
   });

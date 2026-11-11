@@ -8,10 +8,12 @@ import type { PurgeInventory } from '../../ports/persistence/maintenance.ts';
 export const DATABASE_FILE = 'browserhive.db';
 /** SQLite side files removed with the database. */
 export const DATABASE_SIDE_FILES: readonly string[] = ['-wal', '-shm'];
-/** Purgeable directories, in display order. */
+/** Purgeable directories, in display order (`templates` and `site-packs`: spec 13 §11.10). */
 export const PURGE_DIRECTORIES = [
   'sessions',
   'auth-states',
+  'templates',
+  'site-packs',
   'uploads',
   'backups',
   'admin',

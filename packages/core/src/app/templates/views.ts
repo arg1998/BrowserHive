@@ -172,7 +172,7 @@ export function toTemplateDetail(
       window_id: w.windowId,
       session_ids: [...w.sessionIds],
     })),
-    // From the running browser's jar (spec 13 §2.3); version summaries add more from T1b.
+    // From the running browser's jar and the newest version's summary (spec 13 §2.3).
     unlisted_domains: [...live.unlistedDomains],
     now,
   };
@@ -209,6 +209,7 @@ export function toTemplateSummary(
     checkpoint_at: template.checkpointAt,
     last_used_at: template.lastUsedAt,
     sealed: isTemplateSealed(template.unseal),
+    ...(host.identityDrift !== undefined && { identity_drift: { ...host.identityDrift } }),
   };
 }
 

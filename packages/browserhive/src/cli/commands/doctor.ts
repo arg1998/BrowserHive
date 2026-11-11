@@ -31,6 +31,7 @@ import {
   checkUnrecognisedDataFiles,
   checkVault,
 } from './doctor-checks.ts';
+import { checkTemplates } from './doctor-templates.ts';
 
 type DoctorInvocation = Extract<Invocation, { readonly command: 'doctor' }>;
 
@@ -55,6 +56,14 @@ function sandboxSetting(invocation: DoctorInvocation, mode: SandboxMode): string
     default:
       return `sandbox=${mode}`;
   }
+}
+
+/** Whether `templateKey` came from a command-line flag (doctor warns: argv is readable by others). */
+function keyFromFlag(invocation: DoctorInvocation): boolean {
+  if (!invocation.resolution.ok) return false;
+  const provenance: Readonly<Record<string, { readonly source: string } | undefined>> =
+    invocation.resolution.value.provenance;
+  return provenance['templateKey']?.source === 'cli';
 }
 
 /**
@@ -102,6 +111,9 @@ export async function runChecks(
     const access = await checkTemplateAccess(deps, dataDir, config.auth);
     if (access !== null) results.push(access);
   }
+  results.push(
+    ...(await checkTemplates(deps, { dataDir, config, keyFromFlag: keyFromFlag(invocation) })),
+  );
   if (config !== null && resolution.ok) {
     results.push(await checkOtel(deps, config));
     results.push(checkCapacity(deps, config));

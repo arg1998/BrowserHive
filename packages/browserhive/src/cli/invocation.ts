@@ -144,6 +144,8 @@ export type Invocation =
       readonly noLogin: boolean;
       /** `--timeout` in milliseconds (default 30 min). */
       readonly timeoutMs: number;
+      /** `--fromState <file>` (absolute): seed from a storage state instead of a sign-in window. */
+      readonly fromState: string | null;
       readonly json: boolean;
       readonly remote: RemoteTarget;
     }
@@ -161,7 +163,51 @@ export type Invocation =
       readonly json: boolean;
       readonly remote: RemoteTarget;
     }
+  | ({ readonly command: 'templates-show' } & TemplateTarget)
+  | ({
+      readonly command: 'templates-seed';
+      /** The storage-state file, absolute. */
+      readonly file: string;
+      readonly yes: boolean;
+    } & TemplateTarget)
+  | ({ readonly command: 'templates-versions' } & TemplateTarget)
+  | ({ readonly command: 'templates-save' } & TemplateTarget)
+  | ({
+      readonly command: 'templates-restore';
+      /** A version number, or `latest` (the rolling checkpoint). */
+      readonly version: number | 'latest';
+      readonly forceClose: boolean;
+      readonly yes: boolean;
+    } & TemplateTarget)
+  | ({
+      readonly command: 'templates-host';
+      readonly action: TemplateHostAction;
+    } & TemplateTarget)
+  | ({ readonly command: 'templates-disable' } & TemplateTarget)
+  | ({ readonly command: 'templates-enable' } & TemplateTarget)
+  | ({
+      readonly command: 'templates-rekey';
+      /** The variable that holds the old key (never the key itself). */
+      readonly oldKeyEnv: string;
+      /** `templateKey` as resolved (environment, reference, file or flag), else `null`. */
+      readonly templateKey: string | null;
+      /** `templateKeyPrevious` as resolved, else `null`. */
+      readonly templateKeyPrevious: string | null;
+      readonly json: boolean;
+    } & DataDirTarget)
   | { readonly command: 'version'; readonly json: boolean };
+
+/** The template a `templates` subcommand acts on, by name, over the REST API. */
+export interface TemplateTarget {
+  readonly name: string;
+  readonly json: boolean;
+  readonly remote: RemoteTarget;
+}
+
+/** `templates host <name> start|stop|restart`. */
+export const TEMPLATE_HOST_ACTIONS = ['start', 'stop', 'restart'] as const;
+/** One of {@link TEMPLATE_HOST_ACTIONS}. */
+export type TemplateHostAction = (typeof TEMPLATE_HOST_ACTIONS)[number];
 
 /** Help topic: the whole CLI, one command, or one subcommand. */
 export interface HelpTopic {

@@ -337,6 +337,17 @@ const SOURCES: readonly Source[] = [
     },
   },
   {
+    name: 'template checkpoints (template.checkpoint.written)',
+    drives: ['browserhive.template.checkpoints'],
+    async run(w) {
+      publish(w, 'template.checkpoint.written', {
+        type: 'template.checkpoint.written',
+        template_id: 'tp-aaaaaaaaaa',
+        reason: 'checkpoint',
+      });
+    },
+  },
+  {
     name: 'retention scheduler (retention.completed)',
     drives: ['browserhive.retention.pruned_rows'],
     async run(w) {

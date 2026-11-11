@@ -319,4 +319,81 @@ export const BOOT_ERRORS = {
     resolution:
       'Delete and recreate the template, or restore the database from a backup taken before the change.',
   }),
+  TEMPLATE_KEY_MISSING: defineError({
+    code: 'TEMPLATE_KEY_MISSING',
+    httpStatus: 500,
+    category: 'boot',
+    retryable: 'never',
+    title: 'Template key missing',
+    message:
+      'Encrypted template files exist but no template key resolves; checkpoints and versions are skipped.',
+    hint: 'Set templateKey (BROWSERHIVE_TEMPLATE_KEY) or restore <data-dir>/admin/template.key.',
+    details: z.object({
+      template_ids: z.array(z.string()),
+      /** Why no key resolves when the key file cannot be read or created. */
+      reason: z.string().optional(),
+    }),
+    docs: true,
+    exitCode: 1,
+    cause:
+      'Checkpoint or version files exist under `templates/<id>/versions/`, `templateKey` is not set and `admin/template.key` is missing (spec 13 §2.4). The key file is never re-created while encrypted files exist, so they cannot be silently orphaned. Template browsers keep running (their live profile needs no key); checkpoints and versions are skipped and restores refused. The same record, with `reason`, is written when `admin/template.key` exists but cannot be read, or cannot be created (a read-only `admin/`).',
+    resolution:
+      'Restore the key file from the backup you copied with the template directories, or set `templateKey` to the key that wrote them, then restart.',
+  }),
+  TEMPLATE_KEY_MISMATCH: defineError({
+    code: 'TEMPLATE_KEY_MISMATCH',
+    httpStatus: 500,
+    category: 'boot',
+    retryable: 'never',
+    title: 'Template files on another key',
+    message: "Versions of template '{template_id}' were written with another key.",
+    hint: 'Set the old key as templateKeyPrevious, then run browserhive templates rekey.',
+    details: z.object({
+      template_id: z.string(),
+      versions: z.array(z.union([z.number().int(), z.literal('latest')])),
+    }),
+    docs: true,
+    exitCode: 1,
+    cause:
+      "The `key_id` in these files' headers matches neither `templateKey` (or `admin/template.key`) nor `templateKeyPrevious` (spec 13 §2.4). The version list marks them unreadable and restoring them answers `TEMPLATE_VERSION_UNREADABLE`.",
+    resolution:
+      'Give the key that wrote them as `templateKeyPrevious` (read only) and run `browserhive templates rekey --oldKeyEnv <ENV>` with the server stopped.',
+  }),
+  TEMPLATE_CHECKPOINT_FAILED: defineError({
+    code: 'TEMPLATE_CHECKPOINT_FAILED',
+    httpStatus: 500,
+    category: 'boot',
+    retryable: 'backoff',
+    title: 'Template checkpoint failed',
+    message: "A checkpoint or version of template '{template_id}' could not be written: {error}.",
+    hint: 'Check free disk space and the permissions of the template directory.',
+    details: z.object({ template_id: z.string(), error: z.string() }),
+    docs: true,
+    exitCode: 1,
+    cause:
+      'Reading the browser state or writing the encrypted file failed (disk full, an I/O error, a closed browser; spec 13 §3.2). The temporary file was deleted; the previous file and its row are unchanged.',
+    resolution:
+      'Free disk space or fix the permissions; the next checkpoint retries on its own and clears the record.',
+  }),
+  TEMPLATE_CHECKPOINT_TOO_LARGE: defineError({
+    code: 'TEMPLATE_CHECKPOINT_TOO_LARGE',
+    httpStatus: 500,
+    category: 'boot',
+    retryable: 'never',
+    title: 'Template state over the size cap',
+    message:
+      "The state of template '{template_id}' ({size_bytes} bytes) is over the 64 MiB cap; IndexedDB data of the largest origins was left out.",
+    hint: 'Remove sign-ins or site data the template does not need.',
+    details: z.object({
+      template_id: z.string(),
+      size_bytes: z.number().int().nonnegative(),
+      dropped_origins: z.array(z.string()),
+    }),
+    docs: true,
+    exitCode: 1,
+    cause:
+      'A checkpoint or version is capped at 64 MiB (`TEMPLATE_STATE_MAX_BYTES`, spec 13 §3.9): IndexedDB data is dropped from the largest origins until it fits. The live profile keeps the data; only the encrypted copy lacks it, so a restore of that copy does not bring it back.',
+    resolution:
+      'Remove the sign-in of the named origins if the template does not need them (**Remove sign-in**), or accept that restores omit their IndexedDB data.',
+  }),
 } as const;

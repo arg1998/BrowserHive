@@ -5,6 +5,7 @@ import { ERROR_REGISTRY, renderMessage } from '@browserhive/contracts/errors';
 import { TemplateInput, TemplatesQuery } from '@browserhive/contracts/http';
 import { CollectingLogger } from '../../../test/helpers/collecting-logger.ts';
 import { FakeClock } from '../../../test/helpers/fake-clock.ts';
+import { FakeTemplateHostOps } from '../../../test/helpers/fake-host-ops.ts';
 import { FakeIdGenerator } from '../../../test/helpers/fake-id-generator.ts';
 import {
   createTemplateKit,
@@ -381,6 +382,27 @@ describe('TemplateService.remove', () => {
         'TEMPLATE_NOT_FOUND',
       ),
     ).toBe(true);
+  });
+});
+
+describe('TemplateService.remove during an operation (review #79 H-1)', () => {
+  it('answers CONFLICT while a restore, seed or clearing of saved passwords holds the template', async () => {
+    const ops = new FakeTemplateHostOps();
+    kit = createTemplateKit({ clock, ids: new FakeIdGenerator(), logger, runtime, ops });
+    const created = await kit.service.create(input(), 'local');
+    ops.holds.add(created.template_id);
+    const busy = await refusal(
+      kit.service.remove(created.template_id, { force: true, by: 'local' }),
+    );
+    expect(isAppError(busy, 'CONFLICT')).toBe(true);
+    expect(runtime.shutdowns).toEqual([]);
+    expect(await kit.repos.templates.count()).toBe(1);
+    ops.holds.delete(created.template_id);
+    expect((await kit.service.remove(created.template_id, { force: true, by: 'local' })).ok).toBe(
+      true,
+    );
+    // The delete held the template while it ran, and released it.
+    expect(ops.holds.size).toBe(0);
   });
 });
 

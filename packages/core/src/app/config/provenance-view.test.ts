@@ -79,7 +79,10 @@ describe('configView', () => {
     expect(view.blocklist).toMatchObject({ value: undefined, source: 'default' });
     expect(Object.keys(view)).toEqual([...CONFIG_KEYS]);
     for (const key of CONFIG_KEYS) {
-      if (keyMeta(key).secret) expect(view[key].value).toEqual({ redacted: true });
+      // An unset optional secret (templateKey) has no value to redact.
+      if (keyMeta(key).secret && config[key] !== undefined) {
+        expect(view[key].value).toEqual({ redacted: true });
+      }
     }
     expect(JSON.stringify(view)).not.toContain(TOKEN_A.slice(8));
   });

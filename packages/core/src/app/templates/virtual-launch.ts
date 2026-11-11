@@ -108,3 +108,22 @@ export function virtualLauncher(input: {
     },
   };
 }
+
+/** The input of a maintenance session: the template's settings, nothing an agent chose (spec 13 §1.1). */
+export function maintenanceSessionInput(
+  template: TemplateRecord,
+  slug: string,
+): CreateSessionInput {
+  return {
+    slug,
+    channel: template.channel,
+    headless: template.headless,
+    incognito: false,
+    persistenceMode: 'memory',
+    disableEvaluate: false,
+    vaultEnabled: false,
+    stealth: template.stealth !== 'off',
+    fingerprint: template.fingerprint,
+    humanize: false,
+  };
+}

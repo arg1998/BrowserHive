@@ -117,7 +117,7 @@ Records are pruned after `--retentionDays` (default 7) or when the database and 
 
 ## Files on disk
 
-The data directory is `0700` and secret files are `0600`. Saved logins (`auth-states/`) contain real cookies and storage; protect them like passwords. They are protected by your OS user account, not encrypted by BrowserHive.
+The data directory is `0700` and secret files are `0600`. Saved logins (`auth-states/`) contain real cookies and storage; protect them like passwords. They are protected by your OS user account, not encrypted by BrowserHive. Of a [session template](templates.md), only the checkpoint and versions are encrypted ([Encryption at rest](#encryption-at-rest)).
 
 ### Saved logins are per principal
 
@@ -191,11 +191,40 @@ A [session template](templates.md) is a browser you signed in to sites once, whi
 - **A template is a bearer credential.** Whoever may launch it acts as you on its sites, past their passwords and two-factor checks. Decide who may launch it (its access rule: principals, optionally harnesses), give each agent its own token under `--auth token`, and keep the list short. Deleting a template does not sign you out at the sites.
 - **Sealing is narrow.** By default agents get no cookie values (`get_cookies` returns names only), no `evaluate`, no cookie writes and no storage export, and every cookie value, and every stored value of the template's sites on the session's pages, of 12 or more characters is replaced with `[sealed]` in text results, also in its JSON-escaped, URL-encoded and HTML-escaped forms. That keeps the raw sign-in material from being copied out through tool results. It does not stop an agent from acting as the account: it can click, type and read pages like you, including creating new credentials (an API token, an app password, a recovery address), and tokens a page displays that are not cookie values are not redacted. Screenshots and the live view are not redacted. Unsealing `evaluate` gives an agent code execution in origins every session of the template shares; treat it as unsealing everything. See [Sealing](templates.md#sealing).
 - **Agents that can run commands as BrowserHive's OS user are out of scope.** A local harness with a shell (typical for stdio agents) can copy the template's profile from the data directory, or drive its windows through the display, and sealing cannot stop that. When agents have shell access, run BrowserHive as a separate OS user or in a container, serve it over HTTP, and give each agent its own token.
-- **The live profile is effectively plaintext at rest.** A template's profile (`<data-dir>/templates/<id>/userdata`: cookies, local storage, IndexedDB, history) is protected by file modes only (`0700` directories, `0600` files). On Linux the automated Chromium encrypts cookies with a published constant key, on macOS with a mocked keychain; on Windows any process of your user can decrypt them. Copies of `templates/<id>/` need the same care as passwords. Encrypted versions arrive in a later release; they will not cover the live profile either.
+- **The live profile is effectively plaintext at rest.** A template's profile (`<data-dir>/templates/<id>/userdata`: cookies, local storage, IndexedDB, history) is protected by file modes only (`0700` directories, `0600` files). Only the checkpoint and versions are encrypted; see [Encryption at rest](#encryption-at-rest). Copies of `templates/<id>/` need the same care as passwords.
 - **Never run a bare `Xvfb`.** On a server, a template's browser needs a display. `Xvfb :99` without `-auth` lets every local user watch and drive the signed-in windows. Use `xvfb-run -a` or `Xvfb -nolisten tcp -auth <file>`, and reach a VNC server bound to loopback over SSH ([Displays](templates.md#displays)).
 - **BrowserHive is out of the template's reach.** A template's browser refuses every request to BrowserHive's own addresses, and carries a marker cookie that makes BrowserHive answer any request from it, including a redirect, with 403. The dashboard therefore never loads in a template's window, and its sign-in cookie never enters a template. Agents get `URL_BLOCKED` for those addresses, and `data:` and every non-web URL are refused in template sessions.
 - **Headed windows on your desktop.** A headed template's windows open on the machine running BrowserHive, in the background: BrowserHive never raises or focuses an agent's window, except that starting the template's browser can take the focus once. While you sign in, every agent window of that template is minimized, new ones open minimized, and a window an agent's site opens is minimized as it appears (or closed if it lands in your sign-in window). Such a popup can still hold the focus for a moment before it is minimized, so check the window title before you type a password, or sign in while no agent uses the template. `press_key` refuses clipboard shortcuts and `click` the middle button in template sessions, because a paste would read your clipboard or primary selection. A page an agent clicks in can still write to your clipboard (`navigator.clipboard.writeText`): do not paste into a sign-in form what you did not copy yourself. When signing in, type rather than paste, and check the address bar. A tab you open by hand in a template's browser belongs to no session, so no agent can reach it.
 - **No saved passwords or vault fills.** Chromium's password manager, autofill and browser sign-in are off in a template's browser, and `vault_fill` is refused in template sessions: a fill would sign every session of the template in, past the binding's own rules.
+
+### Encryption at rest
+
+BrowserHive encrypts a template's [checkpoint and versions](templates.md#versions-and-the-checkpoint) (`templates/<id>/versions/*.state.enc`) with AES-256-GCM under the template key. A file opens only with that key, only under its own template and version, and only with its header unchanged. Decrypted state is never written to disk.
+
+**What it protects:** copies of the checkpoint and version files (a backup, a synced folder, a disk image) when the key is not copied with them.
+
+**What it does not protect:**
+
+| Not protected | Why |
+|---|---|
+| The live profile, `templates/<id>/userdata/` | The browser keeps its cookies, storage and history there, and BrowserHive cannot encrypt them. Its protection is the file modes (`0700` directories, `0600` files); the browser's own cookie encryption adds little (below). |
+| `templates/<id>/downloads/` | Plain files. |
+| `versions/v<N>.meta.json` | Plain JSON: per site the cookie count and the names of the sign-in cookies present (never values). |
+| Storage states an unsealed agent saved (`state_export`), and every saved login in `auth-states/` | Not encrypted ([Files on disk](#files-on-disk)). |
+| A machine where an attacker can read the data directory | The default key file, `admin/template.key`, lives in the data directory. Set `templateKey` from the environment (`BROWSERHIVE_TEMPLATE_KEY`) to keep the key out of it. |
+| A running BrowserHive, or an agent that runs code as BrowserHive's OS user | The key and the decrypted state are in memory, and the live profile is readable. See the agents bullet above. |
+
+The cookies in the live profile, per platform:
+
+| Platform | Cookie encryption in the live profile |
+|---|---|
+| Linux | Chromium under automation runs with `--password-store=basic`, which encrypts cookies with a published constant key: effectively plain text. |
+| macOS | Chromium under automation uses a mocked keychain (`--use-mock-keychain`): effectively plain text. |
+| Windows | DPAPI, per user account: any process running as your user can decrypt them. |
+
+On Windows the modes `0600` and `0700` do not apply: `admin/template.key` and the template directories are protected by the access control list of the data directory (by default your user, SYSTEM and Administrators), so keep the data directory under your user profile.
+
+Treat the key like a password, and store it apart from any copy of the files. To change it, see [Rotating the key](templates.md#rotating-the-key).
 
 ## Takeover is full control
 

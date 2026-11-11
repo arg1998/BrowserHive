@@ -28,6 +28,7 @@ export const METRIC = {
   ATTENTION_WAIT: 'browserhive.attention.wait',
   VAULT_FILLS: 'browserhive.vault.fills',
   BLOCKLIST_HITS: 'browserhive.blocklist.hits',
+  TEMPLATE_CHECKPOINTS: 'browserhive.template.checkpoints',
   RETENTION_PRUNED_ROWS: 'browserhive.retention.pruned_rows',
   NOTIFICATION_DELIVERIES: 'browserhive.notifications.deliveries',
   NOTIFICATION_ACTIONS: 'browserhive.notifications.actions',
@@ -150,6 +151,13 @@ export const METRIC_DEFINITIONS: readonly MetricDefinition[] = [
   def(METRIC.ATTENTION_WAIT, 'histogram', 'ms', ['status'], 'Attention wait by status'),
   def(METRIC.VAULT_FILLS, 'counter', '{fill}', ['result'], 'Vault fills by result'),
   def(METRIC.BLOCKLIST_HITS, 'counter', '{hit}', ['source'], 'Blocked URLs by source'),
+  def(
+    METRIC.TEMPLATE_CHECKPOINTS,
+    'counter',
+    '{checkpoint}',
+    ['reason'],
+    'Template checkpoints and versions written, by reason',
+  ),
   def(METRIC.RETENTION_PRUNED_ROWS, 'counter', '{row}', ['table'], 'Rows pruned by table'),
   def(
     METRIC.NOTIFICATION_DELIVERIES,
@@ -202,6 +210,7 @@ export interface Instruments {
   readonly attentionWait: Histogram;
   readonly vaultFills: Counter;
   readonly blocklistHits: Counter;
+  readonly templateCheckpoints: Counter;
   readonly retentionPrunedRows: Counter;
   /** Outbox jobs by `channel_kind` and `status` (D-34). */
   readonly notificationDeliveries: Counter;
@@ -292,6 +301,9 @@ export function createInstruments(meter: Meter): Instruments {
     },
     get blocklistHits() {
       return counter(METRIC.BLOCKLIST_HITS);
+    },
+    get templateCheckpoints() {
+      return counter(METRIC.TEMPLATE_CHECKPOINTS);
     },
     get retentionPrunedRows() {
       return counter(METRIC.RETENTION_PRUNED_ROWS);
