@@ -1,6 +1,6 @@
 /** @module features/templates/detail/SettingsTab — the Settings tab (spec 13 §2.2, §11.4): the pinned identity (read-only: a different identity is a different template), what the first browser start recorded, the editable browser, network and check settings, and the data directory */
 import type { TemplateDetailResponse } from '@browserhive/contracts/http';
-import { KeyValue } from '@/components/shared/KeyValue.tsx';
+import { KeyValue, type KeyValueItem } from '@/components/shared/KeyValue.tsx';
 import { Panel } from '@/components/shared/Section.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { Spinner } from '@/components/ui/spinner.tsx';
@@ -8,6 +8,18 @@ import { formatAbsolute } from '@/lib/format/time.ts';
 import { ICONS } from '@/lib/icons.ts';
 import { useTemplateOperations } from '../api-operations.ts';
 import { BrowserSettings } from './BrowserSettings.tsx';
+
+/** Technical values most operators never need, behind a disclosure. */
+function MoreDetails({ items }: { readonly items: readonly KeyValueItem[] }) {
+  return (
+    <details className="group mt-3 border-t pt-3">
+      <summary className="w-fit cursor-pointer rounded-sm text-sm font-medium text-muted-foreground focus-ring hover:text-foreground">
+        Details
+      </summary>
+      <KeyValue className="mt-3" items={items} />
+    </details>
+  );
+}
 
 /** Settings tab. */
 export function SettingsTab({ detail }: { readonly detail: TemplateDetailResponse }) {
@@ -26,7 +38,6 @@ export function SettingsTab({ detail }: { readonly detail: TemplateDetailRespons
           <KeyValue
             items={[
               { key: 'Language', value: identity.locale },
-              { key: 'Languages', value: identity.languages.join(', ') },
               { key: 'Time zone', value: identity.timezone_id },
               { key: 'Country', value: identity.country_code ?? 'Not set' },
               {
@@ -36,6 +47,11 @@ export function SettingsTab({ detail }: { readonly detail: TemplateDetailRespons
                     ? 'Not set'
                     : `${geo.latitude.toFixed(4)}, ${geo.longitude.toFixed(4)}`,
               },
+            ]}
+          />
+          <MoreDetails
+            items={[
+              { key: 'Languages sent', value: identity.languages.join(', ') },
               { key: 'Fingerprint seed', value: identity.seed, mono: true },
             ]}
           />
@@ -50,7 +66,6 @@ export function SettingsTab({ detail }: { readonly detail: TemplateDetailRespons
             <KeyValue
               items={[
                 { key: 'Chrome', value: observed.chrome_major },
-                { key: 'User agent', value: observed.user_agent, mono: true },
                 {
                   key: 'Platform',
                   value: `${observed.ua_ch.platform} ${observed.ua_ch.platform_version}`,
@@ -64,6 +79,21 @@ export function SettingsTab({ detail }: { readonly detail: TemplateDetailRespons
               ]}
             />
           )}
+          {observed !== null ? (
+            <MoreDetails
+              items={[
+                { key: 'User agent', value: observed.user_agent, mono: true },
+                {
+                  key: 'Brands',
+                  value: observed.ua_ch.brands.map((b) => `${b.brand} ${b.version}`).join(', '),
+                },
+                {
+                  key: 'Architecture',
+                  value: `${observed.ua_ch.architecture} · ${observed.ua_ch.bitness}-bit`,
+                },
+              ]}
+            />
+          ) : null}
         </Panel>
         <Panel
           title="Data directory"

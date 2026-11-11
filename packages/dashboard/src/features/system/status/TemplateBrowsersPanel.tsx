@@ -46,7 +46,7 @@ export function TemplateBrowsersPanel() {
               label={`Open template ${t.display_name}`}
             >
               <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3">
-                <span className="flex min-w-0 flex-1 flex-col">
+                <span className="flex min-w-0 flex-1 basis-full flex-col sm:basis-auto">
                   <span className="truncate font-medium decoration-muted-foreground/60 underline-offset-4 group-hover/row:underline">
                     {t.display_name}
                   </span>

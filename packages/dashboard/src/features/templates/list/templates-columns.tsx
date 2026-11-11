@@ -6,7 +6,7 @@ import { RelativeTime } from '@/components/shared/RelativeTime.tsx';
 import { StatusBadge } from '@/components/shared/StatusBadge.tsx';
 import type { DataTableColumn } from '@/components/shared/use-data-table.ts';
 import { cn } from '@/lib/utils.ts';
-import { capText, pagesText } from '../model.ts';
+import { capText, pagesText, signInsNeeded } from '../model.ts';
 import { SiteChips } from '../SiteChips.tsx';
 
 /** Template cell: display name (the row link's text) over the agent-facing name and what needs care. */
@@ -40,6 +40,11 @@ export function TemplateTitleCell({
           <span className="truncate @min-[38rem]:hidden">
             · {capText(template.in_use, template.cap)} sessions
           </span>
+        ) : null}
+        {template.status === 'ready' && signInsNeeded(template) > 0 ? (
+          <Chip tone="warn" className="shrink-0">
+            {signInsNeeded(template)} {signInsNeeded(template) === 1 ? 'site' : 'sites'} signed out
+          </Chip>
         ) : null}
         {template.identity_drift !== undefined ? (
           <Chip tone="warn" className="shrink-0">
@@ -106,7 +111,7 @@ export function templateColumns(
       header: 'Sites',
       priority: 1,
       grow: true,
-      className: 'min-w-[9rem] py-2',
+      className: 'min-w-[9rem] py-2 [&>*]:max-w-[44rem]',
       cell: (t) => <SiteChips sites={t.sites} wideMax={8} />,
     },
     {

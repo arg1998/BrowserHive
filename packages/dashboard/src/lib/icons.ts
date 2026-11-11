@@ -26,6 +26,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   ChevronUp,
+  Circle,
   CircleAlert,
   CircleCheck,
   CircleQuestionMark,
@@ -343,6 +344,7 @@ export const ICONS = {
   stopSquare: Square,
   proxy: Network,
   cookie: Cookie,
+  notChecked: Circle,
 } as const satisfies Record<string, LucideIcon>;
 
 /** Icon name. */

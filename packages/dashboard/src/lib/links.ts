@@ -53,6 +53,8 @@ export const DOCS_PAGES = {
   templatesVnc: { page: 'guide/templates', anchor: 'signing-in-on-xvfb-vnc' },
   templatesSavedPasswords: { page: 'guide/templates', anchor: 'saved-passwords-and-autofill' },
   templatesBrowser: { page: 'guide/templates', anchor: 'the-templates-browser' },
+  templatesBackups: { page: 'guide/templates', anchor: 'backups-and-the-template-key' },
+  templatesVersions: { page: 'guide/templates', anchor: 'versions-and-the-checkpoint' },
   attention: { page: 'guide/attention' },
   notifications: { page: 'guide/notifications' },
   notificationChannels: { page: 'guide/notifications', anchor: 'channels' },

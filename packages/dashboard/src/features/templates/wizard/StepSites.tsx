@@ -64,7 +64,7 @@ export function StepSites({
           </div>
         </Field>
       </form>
-      <section aria-labelledby={`${inputId}-chosen`} className="flex flex-col gap-2">
+      <section aria-labelledby={`${inputId}-chosen`} className="@container flex flex-col gap-2">
         <h3 id={`${inputId}-chosen`} className="section-label">
           {draft.sites.length === 0
             ? 'No sites yet'
@@ -76,13 +76,13 @@ export function StepSites({
             sign-ins, like a job board and the email account its messages go to.
           </p>
         ) : (
-          <ul className="grid grid-cols-1 gap-2 md:grid-cols-2 2xl:grid-cols-3">
+          <ul className="grid grid-cols-1 gap-2 @3xl:grid-cols-2">
             {draft.sites.map((site) => (
               <li
                 key={site}
-                className="flex min-w-0 items-start gap-3 rounded-lg border bg-background/60 p-3 dark:bg-white/[0.02]"
+                className="flex min-w-0 items-start gap-3 rounded-lg border bg-surface-inset p-3"
               >
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground dark:bg-white/[0.06]">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
                   <Globe aria-hidden="true" className="size-4" />
                 </span>
                 <span className="flex min-w-0 flex-1 flex-col">

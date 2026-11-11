@@ -4,11 +4,15 @@ import { useNavigate } from '@tanstack/react-router';
 import { useApi } from '@/app/providers/AuthProvider.tsx';
 import { useConfirm } from '@/app/providers/ConfirmProvider.tsx';
 import { useToast } from '@/app/providers/ToastProvider.tsx';
-import { toAppError } from '@/lib/api/errors.ts';
 import { useTemplateMutations } from './api.ts';
 import type { HostAction } from './api-operations.ts';
 import { useTemplateOperations } from './api-operations.ts';
-import { deleteTemplateConfirm, disableTemplateConfirm } from './confirm-copy.ts';
+import {
+  browserStopConfirm,
+  clearSecretsConfirm,
+  deleteTemplateConfirm,
+  disableTemplateConfirm,
+} from './confirm-copy.ts';
 
 /** What the actions need to know about a template. */
 export interface TemplateRef {
@@ -75,6 +79,15 @@ export function useTemplateActions(template: TemplateRef) {
     if (result !== null) toast.success({ title: `Enabled ${template.display_name}` });
   };
   const host = async (action: HostAction) => {
+    // Stop and restart close the browser's live sessions: list them first (spec 04 §11).
+    if (action !== 'start') {
+      const lines = await liveLines(id);
+      if (
+        lines.length > 0 &&
+        !(await confirm(browserStopConfirm(action, template.display_name, lines)))
+      )
+        return;
+    }
     const result = await operations.host.mutateAsync(action).catch(() => null);
     if (result === null) return;
     const verb = action === 'start' ? 'Started' : action === 'stop' ? 'Stopped' : 'Restarted';
@@ -83,12 +96,11 @@ export function useTemplateActions(template: TemplateRef) {
   const continueSignIn = () =>
     void navigate({ to: '/templates/new', search: { step: 5, template: id } });
   const clearProfileSecrets = async () => {
-    try {
-      await mutations.clearProfileSecrets.mutateAsync();
-      toast.success({ title: 'Saved passwords and autofill cleared' });
-    } catch (error) {
-      toAppError(error);
-    }
+    const lines = await liveLines(id);
+    if (lines.length > 0 && !(await confirm(clearSecretsConfirm(lines)))) return;
+    // A failure is toasted by the mutation (with its code); nothing else to do here.
+    const result = await mutations.clearProfileSecrets.mutateAsync().catch(() => null);
+    if (result !== null) toast.success({ title: 'Saved passwords and autofill cleared' });
   };
   return { busy, remove, disable, enable, host, continueSignIn, clearProfileSecrets };
 }

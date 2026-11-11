@@ -32,7 +32,7 @@ export const HEALTH_ICON: { readonly [K in TemplateHealthState]: IconName } = {
   signed_out: 'failure',
   challenged: 'warn',
   inconclusive: 'help',
-  unknown: 'minus',
+  unknown: 'notChecked',
 };
 
 /** Sites of a list row that need a sign-in. */

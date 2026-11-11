@@ -47,10 +47,10 @@ export function TemplatesIntro() {
           </p>
         </div>
       </div>
-      <ol aria-label="How it works" className="grid gap-4 md:grid-cols-3 sm:pl-14">
+      <ol aria-label="How it works" className="grid max-w-5xl gap-4 md:grid-cols-3 sm:pl-14">
         {STEPS.map((step, index) => (
           <li key={step.title} className="flex gap-3 md:flex-col md:gap-2">
-            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium tabular-nums dark:bg-white/[0.07]">
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium tabular-nums">
               {index + 1}
             </span>
             <div className="flex min-w-0 flex-col gap-0.5">

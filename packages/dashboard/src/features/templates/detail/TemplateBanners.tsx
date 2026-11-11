@@ -1,17 +1,19 @@
-/** @module features/templates/detail/TemplateBanners — the template page's notices (spec 13 §11.4): the browser failed (with its error and Restart), identity drift, unsandboxed, saved passwords or autofill in the profile (Clear), and unlisted sign-ins (Remove sign-in each) */
+/** @module features/templates/detail/TemplateBanners — the template page's notices (spec 13 §11.4): the browser failed (with its error and Restart), sites not signed in on a ready template (Sign in again), a missing or mismatched key, identity drift, unsandboxed, saved passwords or autofill in the profile (Clear), and unlisted sign-ins (Remove sign-in each) */
 import type { TemplateDetailResponse } from '@browserhive/contracts/http';
+import { Link } from '@tanstack/react-router';
 import { Callout } from '@/components/shared/Callout.tsx';
-import { Button } from '@/components/ui/button.tsx';
+import { Button, buttonVariants } from '@/components/ui/button.tsx';
 import { Spinner } from '@/components/ui/spinner.tsx';
+import { useSystem } from '@/features/system/api.ts';
 import { docsUrl } from '@/lib/links.ts';
-import { useTemplateMutations } from '../api.ts';
+import { useTemplateMutations, useTemplatesOverview } from '../api.ts';
+import { keyProblemOf, templateDegradationText } from '../degradations.ts';
+import { needsSignIn } from '../model.ts';
 import { useTemplateActions } from '../use-template-actions.ts';
 
 /** Props. */
 export interface TemplateBannersProps {
   readonly detail: TemplateDetailResponse;
-  /** The browser reported a different Chrome major than the one recorded (`TemplateSummary.identity_drift`). */
-  readonly identityDrift?: { readonly from: string; readonly to: string } | undefined;
 }
 
 function DocsLink({
@@ -34,15 +36,47 @@ function DocsLink({
 }
 
 /** Notices, most urgent first; nothing when all is well. */
-export function TemplateBanners({ detail, identityDrift }: TemplateBannersProps) {
+export function TemplateBanners({ detail }: TemplateBannersProps) {
   const { template, host } = detail;
   const mutations = useTemplateMutations(template.template_id);
   const actions = useTemplateActions(template);
   const removing = mutations.removeSignIn.isPending ? mutations.removeSignIn.variables : undefined;
-  // Key missing or mismatched (TEMPLATE_KEY_MISSING / TEMPLATE_KEY_MISMATCH) joins here once the
-  // detail carries the template's key state.
+  // Identity drift is on the list rows; key problems are `/system` degradations naming the template.
+  const overview = useTemplatesOverview();
+  const identityDrift = overview.data?.data.find(
+    (row) => row.template_id === template.template_id,
+  )?.identity_drift;
+  const system = useSystem();
+  const keyProblem = keyProblemOf(system.data?.degradations, template.template_id);
+  const signedOut =
+    template.status === 'ready'
+      ? detail.sites.filter((s) => s.enabled && needsSignIn(s.health.state))
+      : [];
   return (
     <>
+      {signedOut.length > 0 ? (
+        <Callout
+          tone="warn"
+          title={`${signedOut.length} ${signedOut.length === 1 ? 'site isn’t' : 'sites aren’t'} signed in`}
+          action={
+            <Link
+              to="/templates/new"
+              search={{ step: 5, template: template.template_id, again: 1 }}
+              className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            >
+              Sign in again
+            </Link>
+          }
+        >
+          Agents get signed-out pages on {signedOut.map((s) => s.site_id).join(', ')}.
+        </Callout>
+      ) : null}
+      {keyProblem !== null ? (
+        <Callout tone="danger" title="Versions can’t be read or written">
+          {templateDegradationText(keyProblem, template.display_name)} The browser keeps running.{' '}
+          <DocsLink page="templatesBackups">Backups and keys</DocsLink>
+        </Callout>
+      ) : null}
       {host.state === 'failed' ? (
         <Callout
           tone="danger"

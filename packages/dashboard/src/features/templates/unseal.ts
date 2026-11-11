@@ -5,7 +5,7 @@ export const UNSEAL_FLAGS = ['cookie_values', 'evaluate', 'cookie_writes', 'stat
 /** An unseal flag. */
 export type UnsealFlag = (typeof UNSEAL_FLAGS)[number];
 
-/** Each flag's switch label and the editor text of spec 13 §5.4. */
+/** Each flag's switch label (the plain words first, the tool term second) and the editor text of spec 13 §5.4. */
 export const UNSEAL_TEXT: {
   readonly [K in UnsealFlag]: {
     readonly label: string;
@@ -19,18 +19,18 @@ export const UNSEAL_TEXT: {
     text: 'Agents can copy these sign-ins out of BrowserHive.',
   },
   evaluate: {
-    label: 'Allow evaluate',
-    short: 'evaluate',
-    text: 'The agent can read storage and non-HttpOnly cookies and can run code that other sessions of this template will load (storage, caches, service workers). Treat it as unsealing everything for every agent this applies to.',
+    label: 'Allow running page scripts (evaluate)',
+    short: 'running page scripts',
+    text: 'The agent can read the site’s stored data and the cookies pages can see, and can leave code that other sessions of this template will load. Treat it as turning off sign-in protection for every agent this applies to.',
   },
   cookie_writes: {
-    label: 'Allow setting cookies',
-    short: 'setting cookies',
+    label: 'Allow changing cookies',
+    short: 'changing cookies',
     text: 'Changes the sign-ins of every session of this template.',
   },
   state_export: {
-    label: 'Allow saving the storage state',
-    short: 'saving the storage state',
-    text: 'Equivalent to showing cookie values. Sessions started from an exported state are copies of this sign-in and can sign the template out.',
+    label: 'Allow saving a copy of the sign-in (storage state)',
+    short: 'saving a copy of the sign-in',
+    text: 'Like showing cookie values: sessions started from a saved copy are copies of this sign-in and can sign the template out.',
   },
 };

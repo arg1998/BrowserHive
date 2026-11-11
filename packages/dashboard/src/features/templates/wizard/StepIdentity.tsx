@@ -1,6 +1,5 @@
 /** @module features/templates/wizard/StepIdentity — step 3 (spec 13 §7.1, §2.2): the browser channel (an uninstalled one says how to install it), stealth level, fingerprint, headless (warned), the agents' window state, an optional pinned proxy (server, user name, the NAME of the variable holding its password) and the language and time zone sites see, required with a proxy and pre-filled from the BrowserHive machine. Everything here is fixed for the template's life except the proxy and channel */
 import type { Channel, StealthLevel } from '@browserhive/contracts/enums';
-import type { SystemInfo } from '@browserhive/contracts/http';
 import { useId } from 'react';
 import { Callout } from '@/components/shared/Callout.tsx';
 import { Button } from '@/components/ui/button.tsx';
@@ -9,51 +8,8 @@ import { SimpleSelect } from '@/components/ui/select.tsx';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group.tsx';
 import { Field, SwitchRow } from '../fields.tsx';
 import type { TemplateDraft } from './draft.ts';
-
-const CHANNEL_LABEL: { readonly [C in Channel]: string } = {
-  chromium: 'Chromium',
-  chrome: 'Google Chrome',
-  edge: 'Microsoft Edge',
-};
-
-const STEALTH: readonly { readonly value: StealthLevel; readonly label: string }[] = [
-  { value: 'off', label: 'Off' },
-  { value: 'standard', label: 'Standard' },
-  { value: 'max', label: 'Max' },
-];
-
-/** What the server would pick, for "default" labels. */
-export interface IdentityDefaults {
-  readonly channel: Channel;
-  readonly stealth: StealthLevel;
-  readonly fingerprint: boolean;
-  /** Installed channels; `null` while unknown (nothing is marked missing then). */
-  readonly installed: ReadonlySet<Channel> | null;
-  /** The time zone of the BrowserHive machine. */
-  readonly timeZone: string | null;
-  /** The language of this browser (the closest the dashboard knows). */
-  readonly locale: string;
-}
-
-/** Server defaults from `GET /system`. */
-export function identityDefaults(
-  system: SystemInfo | undefined,
-  timeZone: string | null,
-  locale: string,
-): IdentityDefaults {
-  const profile = system?.stealth.profile;
-  return {
-    channel: system?.browser?.default_channel ?? 'chromium',
-    stealth: profile === 'off' || profile === 'max' ? profile : 'standard',
-    fingerprint: system?.stealth.fingerprint ?? true,
-    installed:
-      system?.browser === undefined
-        ? null
-        : new Set(system.browser.channels.filter((c) => c.installed).map((c) => c.channel)),
-    timeZone,
-    locale,
-  };
-}
+import { CHANNEL_LABEL, type IdentityDefaults, STEALTH } from './identity-defaults.ts';
+import { ProxyFields } from './ProxyFields.tsx';
 
 /** Step 3. */
 export function StepIdentity({
@@ -70,10 +26,6 @@ export function StepIdentity({
   const ids = {
     channel: useId(),
     windows: useId(),
-    server: useId(),
-    user: useId(),
-    env: useId(),
-    label: useId(),
     locale: useId(),
     tz: useId(),
   };
@@ -148,7 +100,7 @@ export function StepIdentity({
       ) : null}
       <div className="flex max-w-3xl flex-col gap-2">
         <span className="text-base font-medium" id={`${ids.channel}-stealth`}>
-          Stealth
+          Hide automation
         </span>
         <ToggleGroup
           aria-labelledby={`${ids.channel}-stealth`}
@@ -201,58 +153,7 @@ export function StepIdentity({
         />
       </div>
       {draft.useProxy ? (
-        <div className="grid max-w-3xl grid-cols-1 gap-5 rounded-lg border bg-background/60 p-4 md:grid-cols-2 dark:bg-white/[0.02]">
-          <Field
-            label="Proxy address"
-            htmlFor={ids.server}
-            error={errors['proxy.server']}
-            help="scheme://host:port"
-          >
-            <Input
-              id={ids.server}
-              value={draft.proxy.server}
-              placeholder="http://10.0.0.5:3128"
-              spellCheck={false}
-              autoComplete="off"
-              className="font-mono"
-              onChange={(event) => setProxy({ server: event.target.value })}
-            />
-          </Field>
-          <Field label="Label" htmlFor={ids.label} optional help="How the dashboard names it.">
-            <Input
-              id={ids.label}
-              value={draft.proxy.label}
-              placeholder="Toronto residential"
-              onChange={(event) => setProxy({ label: event.target.value })}
-            />
-          </Field>
-          <Field label="User name" htmlFor={ids.user} optional>
-            <Input
-              id={ids.user}
-              value={draft.proxy.username}
-              autoComplete="off"
-              spellCheck={false}
-              onChange={(event) => setProxy({ username: event.target.value })}
-            />
-          </Field>
-          <Field
-            label="Password variable"
-            htmlFor={ids.env}
-            optional
-            error={errors['proxy.passwordEnv']}
-            help="The name of an environment variable on the BrowserHive machine. The password itself is never stored."
-          >
-            <Input
-              id={ids.env}
-              value={draft.proxy.passwordEnv}
-              placeholder="BH_PROXY_PASSWORD"
-              autoComplete="off"
-              spellCheck={false}
-              className="font-mono"
-              onChange={(event) => setProxy({ passwordEnv: event.target.value.trim() })}
-            />
-          </Field>
-        </div>
+        <ProxyFields proxy={draft.proxy} errors={errors} onProxy={setProxy} />
       ) : null}
       <div className="grid max-w-3xl grid-cols-1 gap-5 md:grid-cols-2">
         <Field

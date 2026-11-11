@@ -1,6 +1,7 @@
 /** @module features/templates/SiteChips — a site with its sign-in health: an icon whose shape and colour carry the state (signed in, signed out, check needed, couldn't tell, not checked) beside the domain; `SiteChips` shows a row's sites and folds the rest into "+N" */
 import type { TemplateHealthState } from '@browserhive/contracts/enums';
 import { TONE_CLASSES } from '@/components/shared/tones.ts';
+import { Hint } from '@/components/ui/tooltip.tsx';
 import { ICONS } from '@/lib/icons.ts';
 import { SITE_HEALTH } from '@/lib/status-registry.ts';
 import { cn } from '@/lib/utils.ts';
@@ -37,7 +38,7 @@ export function SiteChip({
   return (
     <span
       className={cn(
-        'inline-flex h-6 max-w-full min-w-0 items-center gap-1.5 rounded-md border border-border bg-background/60 px-2 text-sm text-foreground dark:bg-white/[0.03]',
+        'inline-flex h-6 max-w-full min-w-0 items-center gap-1.5 rounded-md border border-border bg-surface-inset px-2 text-sm text-foreground',
         className,
       )}
     >
@@ -45,6 +46,26 @@ export function SiteChip({
       <span className="truncate">{site}</span>
       <span className="sr-only">: {SITE_HEALTH[state].label}</span>
     </span>
+  );
+}
+
+/** "+N more", naming the hidden sites in a tooltip and to screen readers (lifted above a row link). */
+function MoreSites({
+  names,
+  className,
+}: {
+  readonly names: readonly string[];
+  readonly className?: string | undefined;
+}) {
+  return (
+    <Hint label={names.join(', ')}>
+      <span
+        data-interactive=""
+        className={cn('cursor-help text-sm text-muted-foreground', className)}
+      >
+        +{names.length} more<span className="sr-only">: {names.join(', ')}</span>
+      </span>
+    </Hint>
   );
 }
 
@@ -81,14 +102,16 @@ export function SiteChips({
         />
       ))}
       {rest > 0 ? (
-        <span className={cn('text-sm text-muted-foreground', wide > max && '@min-[80rem]:hidden')}>
-          +{rest} more
-        </span>
+        <MoreSites
+          names={sites.slice(max).map((x) => x.site_id)}
+          className={wide > max ? '@min-[80rem]:hidden' : undefined}
+        />
       ) : null}
       {wide > max && restWide > 0 ? (
-        <span className="hidden text-sm text-muted-foreground @min-[80rem]:inline">
-          +{restWide} more
-        </span>
+        <MoreSites
+          names={sites.slice(wide).map((x) => x.site_id)}
+          className="hidden @min-[80rem]:inline"
+        />
       ) : null}
     </span>
   );

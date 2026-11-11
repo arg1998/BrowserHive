@@ -47,6 +47,7 @@ import {
   runtimeRows,
   systemNotices,
 } from '../model.ts';
+import { DegradationMessage } from './DegradationMessage.tsx';
 import { PublicAddressPanel } from './PublicAddressPanel.tsx';
 import { TemplateBrowsersPanel } from './TemplateBrowsersPanel.tsx';
 
@@ -295,7 +296,7 @@ function DegradationsPanel({ events }: { readonly events: readonly SystemEvent[]
                     </span>
                   ) : null}
                 </div>
-                <p className="text-base [overflow-wrap:anywhere]">{e.message}</p>
+                <DegradationMessage event={e} />
               </div>
               <span className="shrink-0 text-sm text-muted-foreground">
                 last seen <RelativeTime at={e.last_seen_at} />

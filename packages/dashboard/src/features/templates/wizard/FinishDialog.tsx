@@ -1,6 +1,7 @@
-/** @module features/templates/wizard/FinishDialog — Finish (spec 13 §7.1): lists the sites not signed in (kept, marked signed out) and the **unlisted sign-ins** of the window ("Also signed in to: google.com — agents can use this"), each with Remove sign-in preselected, then finishes */
+/** @module features/templates/wizard/FinishDialog — Finish (spec 13 §7.1): warns when a site is not signed in (agents would get signed-out pages there; **Keep signing in** is then the primary action), lists the **unlisted sign-ins** of the window ("Also signed in to: google.com — agents can use this") with Remove sign-in preselected, then finishes */
 import type { TemplateSiteView } from '@browserhive/contracts/http';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Callout } from '@/components/shared/Callout.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { Checkbox } from '@/components/ui/checkbox.tsx';
 import {
@@ -31,30 +32,49 @@ export function FinishDialog({
   readonly onFinish: (removeSignIns: readonly string[]) => void;
 }) {
   const [remove, setRemove] = useState<ReadonlySet<string>>(new Set(unlisted));
+  const offered = useRef<ReadonlySet<string>>(new Set(unlisted));
+  // A domain that appears while the dialog is open is added checked; the operator's choices stay.
   useEffect(() => {
-    if (open) setRemove(new Set(unlisted));
+    if (!open) {
+      offered.current = new Set();
+      return;
+    }
+    const fresh = unlisted.filter((d) => !offered.current.has(d));
+    if (fresh.length === 0) return;
+    offered.current = new Set([...offered.current, ...fresh]);
+    setRemove((prev) => new Set([...prev, ...fresh]));
   }, [open, unlisted]);
   const notSignedIn = sites.filter((s) => s.health.state !== 'signed_in');
+  const warn = notSignedIn.length > 0;
+  const names = notSignedIn.map((s) => s.site_id).join(', ');
+  const chosen = unlisted.filter((d) => remove.has(d));
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Finish signing in?</DialogTitle>
+          <DialogTitle>
+            {warn ? 'Finish without every site signed in?' : 'Finish signing in?'}
+          </DialogTitle>
           <DialogDescription>
             The window closes and agents can launch sessions from this template.
           </DialogDescription>
         </DialogHeader>
         <DialogBody className="flex flex-col gap-5">
-          {notSignedIn.length > 0 ? (
-            <section className="flex flex-col gap-1.5">
-              <h3 className="text-base font-medium">Not signed in</h3>
-              <p className="text-sm text-muted-foreground">
-                {notSignedIn.map((s) => s.site_id).join(', ')}{' '}
-                {notSignedIn.length === 1 ? 'stays' : 'stay'} in the template, marked signed out.
-                Sign in later from the template’s page.
-              </p>
-            </section>
-          ) : null}
+          {warn ? (
+            <Callout
+              tone="warn"
+              title={
+                notSignedIn.length === sites.length
+                  ? 'No site is signed in'
+                  : `${notSignedIn.length} of ${sites.length} sites aren’t signed in`
+              }
+            >
+              Agents will get signed-out pages on {names}. Sign in there and press I’m signed in, or
+              finish now and sign in again later from the template’s page.
+            </Callout>
+          ) : (
+            <p className="text-sm text-muted-foreground">Every site is signed in.</p>
+          )}
           {unlisted.length > 0 ? (
             <section className="flex flex-col gap-2">
               <h3 className="text-base font-medium">Also signed in to</h3>
@@ -91,17 +111,23 @@ export function FinishDialog({
               </ul>
             </section>
           ) : null}
-          {notSignedIn.length === 0 && unlisted.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Every site is signed in.</p>
-          ) : null}
         </DialogBody>
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <Button
+            type="button"
+            variant={warn ? 'default' : 'outline'}
+            onClick={() => onOpenChange(false)}
+          >
             Keep signing in
           </Button>
-          <Button type="button" disabled={finishing} onClick={() => onFinish([...remove])}>
+          <Button
+            type="button"
+            variant={warn ? 'outline' : 'default'}
+            disabled={finishing}
+            onClick={() => onFinish(chosen)}
+          >
             {finishing ? <Spinner /> : null}
-            Finish
+            {warn ? 'Finish anyway' : 'Finish'}
           </Button>
         </DialogFooter>
       </DialogContent>

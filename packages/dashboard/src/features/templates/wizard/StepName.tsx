@@ -49,9 +49,8 @@ export function StepName({
         htmlFor={nameId}
         help={
           <>
-            What agents pass as <code className="font-mono text-sm">template</code> to{' '}
-            <code className="font-mono text-sm">launch_session</code>. Lowercase letters, digits and
-            dashes, 2–32 characters.
+            Agents ask for the template by this name. Lowercase letters, digits and dashes,{' '}
+            <span className="whitespace-nowrap">2–32 characters</span>.
           </>
         }
         error={errors['name']}

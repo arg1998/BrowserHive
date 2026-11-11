@@ -70,6 +70,8 @@ describe('TemplatesPage', () => {
     const links = within(table).getAllByRole('link', { name: 'Job hunt' });
     expect(links.every((l) => l.getAttribute('href') === '/templates/tp-0000000001')).toBe(true);
     expect(screen.getByText('2 templates · 1 site needs a sign-in')).toBeDefined();
+    // A ready template with a signed-out site says so on its row, not only in the header.
+    expect(within(table).getAllByText('1 site signed out').length).toBeGreaterThan(0);
     const query = lastList(view.requests)?.query;
     expect(query?.get('sort')).toBe('name');
     expect(query?.get('dir')).toBe('asc');

@@ -37,7 +37,7 @@ export function SitePacksPage() {
         className="flex flex-col gap-6 rounded-xl border bg-card p-6 shadow-xs sm:p-8 dark:shadow-none"
       >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground dark:bg-white/[0.06]">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
             <Package aria-hidden="true" className="size-5" />
           </span>
           <div className="flex min-w-0 flex-col gap-1">
@@ -50,7 +50,7 @@ export function SitePacksPage() {
             </p>
           </div>
         </div>
-        <ul className="grid gap-4 md:grid-cols-3 sm:pl-14">
+        <ul className="grid max-w-5xl gap-4 md:grid-cols-3 sm:pl-14">
           {POINTS.map((point) => (
             <li key={point.title} className="flex min-w-0 flex-col gap-0.5">
               <h3 className="text-base font-medium">{point.title}</h3>
@@ -59,7 +59,7 @@ export function SitePacksPage() {
           ))}
         </ul>
         <div className="flex flex-wrap gap-2 sm:pl-14">
-          <Link to="/templates" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+          <Link to="/templates" className={buttonVariants({ size: 'sm' })}>
             Go to Templates
           </Link>
           <a

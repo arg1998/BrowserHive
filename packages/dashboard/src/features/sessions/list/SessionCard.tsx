@@ -6,6 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox.tsx';
 import { HarnessName } from '../../harness/HarnessName.tsx';
 import { browserLabel } from '../session-format.ts';
 import { ActivityCell, idSuffix, StateCell } from './sessions-columns.tsx';
+import { TemplateBadge } from './TemplateBadge.tsx';
 
 /** Props. */
 export interface SessionCardProps {
@@ -33,13 +34,15 @@ export function SessionCard({ session, now, selected, onSelect, actions }: Sessi
           onCheckedChange={(checked) => onSelect(checked)}
         />
         <div className="flex min-w-0 flex-1 flex-col">
-          <span className="text-base leading-5 font-medium [overflow-wrap:anywhere]">
-            {session.slug}
+          <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="text-base leading-5 font-medium [overflow-wrap:anywhere]">
+              {session.slug}
+            </span>
+            <TemplateBadge session={session} />
           </span>
           <span className="truncate text-sm text-muted-foreground">
             <span className="font-mono">{idSuffix(session)}</span>
             {browser !== null ? ` · ${browser}` : ''}
-            {session.template !== undefined ? ` · ${session.template.name}` : ''}
           </span>
           <HarnessName harness={session.harness} className="mt-1 self-start text-sm" />
         </div>

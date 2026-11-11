@@ -1,6 +1,7 @@
 /** @module features/templates/detail/TemplatePage — `/templates/$id` (spec 13 §11.4): header with the browser's state and actions, banners, and six tabs in `?tab=` (Sites, Sessions, Versions, Access, Settings, Activity); live through the `templates` and `sessions` topics */
 import type { TemplateDetailResponse } from '@browserhive/contracts/http';
 import { useParams } from '@tanstack/react-router';
+import { usePageCrumb } from '@/app/shell/page-crumb.tsx';
 import { ErrorState } from '@/components/shared/ErrorState.tsx';
 import { Skeleton } from '@/components/ui/skeleton.tsx';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs.tsx';
@@ -89,6 +90,7 @@ export function TemplatePage() {
   const { search, set } = useSearchState<TemplatePageSearch>();
   const query = useTemplateDetail(id);
   useTemplatesLive();
+  usePageCrumb(query.data?.template.display_name ?? null);
 
   if (query.isPending) return <TemplateSkeleton />;
   if (query.isError) {

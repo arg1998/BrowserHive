@@ -11,7 +11,7 @@ const buttonVariants = cva(
         default:
           'bg-primary text-primary-foreground shadow-xs hover:bg-primary-hover aria-pressed:bg-primary-hover',
         outline:
-          'border-input bg-card text-foreground shadow-xs hover:border-border-strong hover:bg-accent aria-expanded:bg-accent aria-pressed:border-accent-border aria-pressed:bg-accent-bg aria-pressed:text-accent-text dark:bg-transparent dark:hover:bg-accent',
+          'border-input bg-card text-foreground shadow-xs hover:border-border-strong hover:bg-accent aria-expanded:bg-accent aria-pressed:border-accent-border aria-pressed:bg-accent-bg aria-pressed:text-accent-text dark:border-border-strong dark:bg-transparent dark:hover:bg-accent',
         secondary:
           'bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_6%)] aria-expanded:bg-accent aria-pressed:bg-accent-bg aria-pressed:text-accent-text',
         ghost:

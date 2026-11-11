@@ -62,12 +62,12 @@ export function WhoMayUse({
       ) : null}
       <p className="text-sm text-pretty text-muted-foreground">
         {token
-          ? 'Agents are told apart by their API token. With All agents, every token can launch sessions from this sign-in. Agents not allowed don’t see the template at all.'
-          : 'Every agent of this hive. Authentication is off, so all agents connect as the same local principal; run with auth=token to tell them apart.'}
+          ? 'Each agent connects with its own token. With All agents, every token can launch sessions from this sign-in; agents that aren’t allowed don’t see the template at all.'
+          : 'Every agent can use it. BrowserHive can’t tell agents apart while it runs without tokens (start it with --auth token to give each agent its own).'}
       </p>
       {editable && choice === 'listed' ? (
         <PrincipalsInput
-          label="Allowed agents"
+          label="Allowed agents (token subjects)"
           value={token ? principals : named}
           suggestions={suggestions}
           error={error}

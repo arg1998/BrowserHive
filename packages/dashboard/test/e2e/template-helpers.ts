@@ -95,6 +95,21 @@ function snap(path: string): void {
   }
 }
 
+/** Polls a window's name until it contains `text` (10 s); returns the last name seen. */
+function waitForWindowName(id: string, text: string, xdo: (...args: string[]) => string): string {
+  let name = '';
+  for (let i = 0; i < 40; i += 1) {
+    try {
+      name = xdo('getwindowname', id);
+    } catch {
+      name = '';
+    }
+    if (name.includes(text)) return name;
+    execFileSync('sleep', ['0.25']);
+  }
+  return `${name} (never showed "${text}")`;
+}
+
 /**
  * Types into the template's sign-in window as the operator would: the site's tab (the second tab of
  * the window whose first tab carries the `[BrowserHive] Sign in to …` marker), user name, Tab,
@@ -112,15 +127,15 @@ export function signInByKeyboard(shots: (name: string) => string, site = SITE): 
   if (marked === undefined) return `${log.join('\n')}\nno marked window`;
   xdo('windowfocus', '--sync', marked.id);
   xdo('key', '--clearmodifiers', 'ctrl+2');
-  xdo('sleep', '1');
-  log.push(`after ctrl+2 focus: ${xdo('getwindowfocus', 'getwindowname')}`);
+  // The window's title follows its active tab: wait for the site's sign-in form, not a fixed time.
+  const titled = waitForWindowName(marked.id, `Sign in to ${site}`, xdo);
+  log.push(`after ctrl+2: ${titled}`);
   snap(shots('before-typing.png'));
   xdo('type', '--delay', '60', 'operator');
   xdo('key', 'Tab');
   xdo('type', '--delay', '60', 'correct horse battery staple');
   xdo('key', 'Return');
-  xdo('sleep', '3');
-  log.push(`after submit: ${JSON.stringify(windows())}`);
+  log.push(`after submit: ${waitForWindowName(marked.id, 'Signed in', xdo)}`);
   snap(shots('after-submit.png'));
   return log.join('\n');
 }

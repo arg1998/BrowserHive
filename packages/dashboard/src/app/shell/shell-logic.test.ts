@@ -5,6 +5,7 @@ import type { Shortcut } from '@/lib/keyboard.ts';
 import { visibleCommands } from './CommandPalette.tsx';
 import { healthState } from './HealthPill.tsx';
 import { shortcutSections, TABLE_SHORTCUTS } from './KeyboardMap.tsx';
+import { withPageCrumb } from './page-crumb.tsx';
 import { groupNavItems, sitesNeedingSignIn } from './SidebarNav.tsx';
 import { parseSidebarPreference, resolveSidebar } from './sidebar-state.ts';
 import type { PaletteCommand } from './use-palette-commands.ts';
@@ -191,5 +192,27 @@ describe('command palette', () => {
     const idle = visibleCommands(commands, '', ['action:logout']);
     expect(idle[0]?.id).toBe('recent:action:logout');
     expect(idle[0]?.group).toBe('Recent');
+  });
+});
+
+describe('page crumb', () => {
+  const identity = {
+    title: 'Template',
+    crumbs: [
+      { label: 'Templates', to: '/templates' },
+      { label: 'Template', to: '/templates/tp-0000000001' },
+    ],
+  };
+
+  it('names the leaf crumb and the title after the page’s own object', () => {
+    const named = withPageCrumb(identity, 'Job hunt');
+    expect(named.title).toBe('Job hunt');
+    expect(named.crumbs.map((c) => c.label)).toEqual(['Templates', 'Job hunt']);
+    expect(named.crumbs[1]?.to).toBe('/templates/tp-0000000001');
+  });
+
+  it('keeps the route’s crumb while the page has not named it', () => {
+    expect(withPageCrumb(identity, null)).toBe(identity);
+    expect(withPageCrumb({ title: 'Sessions', crumbs: [] }, 'x').title).toBe('Sessions');
   });
 });

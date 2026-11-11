@@ -37,8 +37,8 @@ function BrowserControls({
   const Restart = ICONS.refresh;
   return (
     <>
-      {/* The browser's state takes its own line on phones; its buttons share the next with the menu. */}
-      <span className="flex min-w-0 basis-full items-center gap-1.5 rounded-md border bg-card px-2.5 py-1.5 text-sm shadow-xs sm:basis-auto dark:shadow-none">
+      {/* The browser's state takes its own line on phones; its buttons share the next with the menu. Below 1280 px the actions sit under the title so the description never truncates. */}
+      <span className="mr-1 flex min-w-0 basis-full items-center gap-1.5 text-sm sm:basis-auto">
         <span className="text-muted-foreground">Browser</span>
         <StatusBadge domain="templateHost" value={host.state} />
         {pages !== null ? <span className="text-muted-foreground">· {pages}</span> : null}
@@ -110,12 +110,13 @@ export function TemplateHeader({ detail }: { readonly detail: TemplateDetailResp
   );
   return (
     <PageHeader
+      actionsBelowXl
       title={template.display_name}
       badge={<StatusBadge domain="templateStatus" value={template.status} variant="pill" />}
       {...(template.description !== '' && { description: template.description })}
       meta={meta}
       actions={
-        <>
+        <div className="flex flex-wrap items-center gap-2">
           {template.status === 'recording' ? (
             <Button type="button" size="sm" onClick={actions.continueSignIn}>
               <SignIn aria-hidden="true" />
@@ -167,7 +168,7 @@ export function TemplateHeader({ detail }: { readonly detail: TemplateDetailResp
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-        </>
+        </div>
       }
     />
   );

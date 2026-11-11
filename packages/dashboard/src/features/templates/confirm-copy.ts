@@ -93,7 +93,7 @@ export function removeSiteConfirm(site: string): ConfirmOptions {
 export function unsealConfirm(flag: string, consequence: string): ConfirmOptions {
   return {
     title: `Allow ${flag}?`,
-    description: `${consequence} Agents can then take the account's session material out of BrowserHive.`,
+    description: `${consequence} This turns off part of the sign-in protection for the agents it applies to.`,
     confirmLabel: `Allow ${flag}`,
     danger: true,
   };
@@ -107,5 +107,40 @@ export function identityChangeConfirm(what: 'proxy' | 'channel'): ConfirmOptions
       'The browser restarts. Sites see a new network or browser for the same account and may sign you out or ask you to confirm it is you.',
     confirmLabel: 'Change and restart',
     danger: true,
+  };
+}
+
+/** Stop or restart the browser while sessions use it (they close). */
+export function browserStopConfirm(
+  action: 'stop' | 'restart',
+  displayName: string,
+  liveSessions: readonly string[],
+): ConfirmOptions {
+  return {
+    title:
+      action === 'stop'
+        ? `Stop the browser of ${displayName}?`
+        : `Restart the browser of ${displayName}?`,
+    description:
+      action === 'stop'
+        ? 'Its live sessions close now and their agents lose their pages. Sign-ins are kept; the browser starts again on the next launch.'
+        : 'Its live sessions close now and their agents lose their pages. Sign-ins are kept; new launches wait until it is back.',
+    confirmLabel: action === 'stop' ? 'Stop browser' : 'Restart browser',
+    danger: true,
+    items: liveSessions,
+    itemsLabel: 'Sessions that close',
+  };
+}
+
+/** Clearing saved passwords and autofill stops the browser (its sessions close). */
+export function clearSecretsConfirm(liveSessions: readonly string[]): ConfirmOptions {
+  return {
+    title: 'Clear saved passwords and autofill?',
+    description:
+      'The browser stops to empty them, so its live sessions close. Sign-ins are kept; the browser starts again on the next use.',
+    confirmLabel: 'Clear and close sessions',
+    danger: true,
+    items: liveSessions,
+    itemsLabel: 'Sessions that close',
   };
 }

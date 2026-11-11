@@ -109,8 +109,10 @@ describe('TemplatePage', () => {
   it('renders Access and Settings; axe clean', async () => {
     const access = mount(`/templates/${ID}?tab=access`);
     await screen.findByRole('heading', { name: 'Who may use it' });
-    expect(screen.getByText(/Every agent of this hive/)).toBeDefined();
-    expect(screen.getByRole('switch', { name: 'Allow evaluate' })).toBeDefined();
+    expect(screen.getByText(/Every agent can use it/)).toBeDefined();
+    expect(
+      screen.getByRole('switch', { name: 'Allow running page scripts (evaluate)' }),
+    ).toBeDefined();
     expect(screen.getByRole('button', { name: 'Save access' }).hasAttribute('disabled')).toBe(true);
     await expectNoA11yViolations(access.container, { disable: ['aria-hidden-focus'] });
     access.unmount();

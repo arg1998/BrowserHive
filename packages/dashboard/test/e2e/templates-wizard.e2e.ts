@@ -9,25 +9,17 @@ import {
   signInByKeyboard,
 } from './template-helpers.ts';
 
-/** Press **I'm signed in** until the site reads signed in (the cookie can land a moment late). */
+/** Press **I'm signed in** once and check the site's state reads exactly "Signed in". */
 async function confirmSignedIn(page: Page, site: string): Promise<void> {
-  const button = page.getByRole('button', { name: `I'm signed in to ${site}` });
-  for (let attempt = 0; attempt < 6; attempt += 1) {
-    await button.click();
-    const row = page
-      .getByRole('list', { name: 'Sites' })
-      .getByRole('listitem')
-      .filter({ hasText: site });
-    try {
-      await expect(row.getByText('Signed in', { exact: false }).first()).toBeVisible({
-        timeout: 3_000,
-      });
-      return;
-    } catch {
-      await page.waitForTimeout(1_000);
-    }
-  }
-  throw new Error(`${site} never read signed in`);
+  await page.getByRole('button', { name: `I’m signed in: ${site}` }).click();
+  const row = page
+    .getByRole('list', { name: 'Sites' })
+    .getByRole('listitem')
+    .filter({ hasText: site });
+  await expect(row.locator('[data-state]')).toHaveAttribute('data-state', 'signed_in', {
+    timeout: 10_000,
+  });
+  await expect(row.getByRole('alert')).toHaveCount(0);
 }
 
 test.describe('session templates in the dashboard', () => {
@@ -72,13 +64,19 @@ test.describe('session templates in the dashboard', () => {
     await page.getByRole('button', { name: 'Finish', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Finish signing in?' });
     await dialog.getByRole('button', { name: 'Finish', exact: true }).click();
-    await expect(page.getByText(/is ready/)).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText(`Shop wizard ${info.retry} is ready`, { exact: true })).toBeVisible(
+      {
+        timeout: 30_000,
+      },
+    );
 
     // The template page shows the site signed in.
     await page.getByRole('link', { name: 'Open the template' }).click();
     await expect(
       page.getByRole('heading', { level: 1, name: `Shop wizard ${info.retry}` }),
     ).toBeVisible();
+    const card = page.locator(`[data-site="${SITE}"]`);
+    await expect(card.getByText('Signed in', { exact: true })).toBeVisible();
 
     // The agent's side: list, launch, and the site knows who is signed in.
     const { call, close } = await agent('e2e-templates-wizard');

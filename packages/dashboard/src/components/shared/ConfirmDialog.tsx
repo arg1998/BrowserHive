@@ -77,7 +77,7 @@ export function ConfirmDialog({
               {itemsLabel !== undefined ? (
                 <p className="text-sm font-medium text-foreground">{itemsLabel}</p>
               ) : null}
-              <ul className="flex max-h-40 flex-col gap-1 overflow-y-auto rounded-lg bg-muted px-3 py-2 dark:bg-white/[0.04]">
+              <ul className="flex max-h-40 flex-col gap-1 overflow-y-auto rounded-lg bg-surface-inset px-3 py-2">
                 {items.map((item) => (
                   <li key={item} className="truncate font-mono text-sm text-foreground">
                     {item}

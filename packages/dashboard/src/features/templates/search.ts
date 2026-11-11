@@ -57,7 +57,7 @@ export const WIZARD_STEPS = [1, 2, 3, 4, 5] as const;
 /** A wizard step. */
 export type WizardStep = (typeof WIZARD_STEPS)[number];
 
-/** `/templates/new` search: the step and, from step 5 on, the template being signed in. */
+/** `/templates/new` search: the step, from step 5 on the template being signed in, and `again`. */
 export const wizardSearch = z.object({
   step: z.coerce
     .number()
@@ -70,6 +70,8 @@ export const wizardSearch = z.object({
     .regex(/^tp-[A-Za-z0-9_-]{10}$/)
     .optional()
     .catch(undefined),
+  /** Sign in again to a template that is already ready (a signed-out site; re-login proper is T2). */
+  again: z.coerce.number().pipe(z.literal(1)).optional().catch(undefined),
 });
 /** `/templates/new` search. */
 export type WizardSearch = z.infer<typeof wizardSearch>;

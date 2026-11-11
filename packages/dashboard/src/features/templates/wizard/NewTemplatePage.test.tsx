@@ -12,6 +12,7 @@ import {
 } from '../../../../test/fixtures/templates.ts';
 import { expectNoA11yViolations } from '../../../../test/helpers/axe.ts';
 import {
+  type FakeRoute,
   problem,
   type RecordedRequest,
   renderPage,
@@ -100,7 +101,7 @@ function server(
   };
 }
 
-function mount(url: string, fake = server()) {
+function mount(url: string, fake: { readonly routes: Record<string, FakeRoute> } = server()) {
   return renderPage({
     path: '/templates/new',
     component: NewTemplatePage,
@@ -182,19 +183,30 @@ describe('NewTemplatePage', () => {
     const open = await screen.findByRole('button', { name: 'Open the sign-in window' });
     await expectNoA11yViolations(view.container);
     await click(open);
-    await screen.findByText(/The sign-in window is open on this computer/, undefined, {
-      timeout: 3000,
-    });
-    const confirm = screen.getAllByRole('button', { name: /I'm signed in to/ })[0] as HTMLElement;
+    await screen.findByText(
+      /The sign-in window is open on the machine running BrowserHive/,
+      undefined,
+      {
+        timeout: 3000,
+      },
+    );
+    const confirm = screen.getByRole('button', { name: 'I’m signed in: linkedin.com' });
     await click(confirm);
     await waitFor(() =>
       expect(view.requests.some((r) => r.path.endsWith('/recording/confirm'))).toBe(true),
     );
+    await waitFor(() =>
+      expect(screen.getByText(/1 of 2 sites signed in\. linkedin\.com signed in\./)).toBeDefined(),
+    );
     await click(screen.getByRole('button', { name: 'Finish' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Finish signing in?' });
+    // indeed.com is not signed in: the dialog warns and keeps signing in as the primary action.
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Finish without every site signed in?',
+    });
+    expect(within(dialog).getByText('1 of 2 sites aren’t signed in')).toBeDefined();
     expect(within(dialog).getByText('google.com')).toBeDefined();
     await expectNoA11yViolations(dialog, { disable: ['aria-hidden-focus'] });
-    await click(within(dialog).getByRole('button', { name: 'Finish' }));
+    await click(within(dialog).getByRole('button', { name: 'Finish anyway' }));
     const finish = view.requests.find((r) => r.path.endsWith('/recording/finish'));
     expect(finish?.body).toEqual({ remove_sign_ins: ['google.com'] });
   }, 20_000);
@@ -208,6 +220,38 @@ describe('NewTemplatePage', () => {
     await click(await screen.findByRole('button', { name: 'Open the sign-in window' }));
     expect(await screen.findByText('No browser slot is free')).toBeDefined();
     await expectNoA11yViolations(view.container);
+  });
+});
+
+describe('NewTemplatePage edges', () => {
+  it('sends step 5 without a template back to the last step', async () => {
+    localStorage.setItem(
+      DRAFT_KEY,
+      JSON.stringify({ name: 'job-hunt', sites: ['linkedin.com'], access: 'all' }),
+    );
+    const view = mount('/templates/new?step=5');
+    await waitFor(() => expect(view.router.state.location.search).toMatchObject({ step: 4 }));
+  });
+
+  it('warns on the ready screen when a site is signed out and offers Sign in again', async () => {
+    const fake = server({ existing: true });
+    const view = mount(`/templates/new?step=5&template=${ID}`, {
+      routes: {
+        ...fake.routes,
+        [`GET /templates/${ID}`]: templateDetail({
+          template_id: ID,
+          status: 'ready',
+          sites: [signedInSite('linkedin.com'), templateSite('indeed.com')],
+        }),
+      },
+    });
+    expect(await screen.findByText(/is ready, but 1 site isn’t signed in/)).toBeDefined();
+    await expectNoA11yViolations(view.container);
+    await click(screen.getByRole('button', { name: 'Sign in again' }));
+    await waitFor(() => expect(view.router.state.location.search).toMatchObject({ again: 1 }));
+    expect(view.requests.some((r) => r.method === 'POST' && r.path.endsWith('/recording'))).toBe(
+      true,
+    );
   });
 });
 

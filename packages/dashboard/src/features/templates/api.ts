@@ -7,8 +7,11 @@ import { toAppError } from '@/lib/api/errors.ts';
 import { keys } from '@/lib/api/keys.ts';
 import { type TemplatesSearch, toTemplatesQuery } from './search.ts';
 
-/** How often an open sign-in step re-reads the template while the `templates` topic is not served. */
-export const SIGN_IN_POLL_MS = 5_000;
+/**
+ * How often the sign-in step re-reads the template and its window. The `templates` topic carries
+ * health and browser changes; this backs it up (a missed event, the recording session's own state).
+ */
+export const SIGN_IN_POLL_MS = 10_000;
 
 /** One page of `GET /templates`. */
 export function useTemplatesList(

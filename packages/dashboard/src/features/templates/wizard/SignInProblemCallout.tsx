@@ -9,7 +9,7 @@ import type { SignInProblem } from './sign-in-model.ts';
 
 function Command({ text }: { readonly text: string }) {
   return (
-    <span className="mt-1.5 flex max-w-full items-center gap-1 rounded-md bg-background/70 py-1 pr-1 pl-2.5 dark:bg-black/20">
+    <span className="mt-1.5 flex max-w-full items-center gap-1 rounded-md bg-background/70 py-1 pr-1 pl-2.5 ">
       <code className="min-w-0 flex-1 truncate font-mono text-sm">{text}</code>
       <CopyButton value={text} label="Copy command" visibility="always" />
     </span>
@@ -33,11 +33,14 @@ function DocLink({ href, children }: { readonly href: string; readonly children:
 export function SignInProblemCallout({
   problem,
   templateId,
+  templateName,
   onRetry,
   retrying,
 }: {
   readonly problem: SignInProblem;
   readonly templateId: string;
+  /** For the seed command of a machine without a screen. */
+  readonly templateName: string;
   readonly onRetry: () => void;
   readonly retrying: boolean;
 }) {
@@ -49,13 +52,23 @@ export function SignInProblemCallout({
   switch (problem.kind) {
     case 'no_display':
       return (
-        <Callout tone="danger" title="There’s no screen on the BrowserHive machine" action={retry}>
+        <Callout
+          tone="danger"
+          title="There’s no screen on the machine running BrowserHive"
+          action={retry}
+        >
           <p>
-            The sign-in window needs a desktop session where BrowserHive runs. On a server, run it
-            under a virtual display and connect a VNC viewer to sign in.{' '}
+            The sign-in window needs a screen there. On a server, run BrowserHive under a virtual
+            display (keep your usual flags, e.g.{' '}
+            <code className="font-mono text-sm">xvfb-run -a</code> in front of the command), connect
+            a VNC viewer to it, then try again.{' '}
             <DocLink href={docsUrl('templatesVnc')}>Signing in on a server</DocLink>
           </p>
-          <Command text="xvfb-run -a browserhive serve --admin" />
+          <p className="mt-2">
+            Or sign in in a browser elsewhere, save its storage state, and seed the template from
+            that file:
+          </p>
+          <Command text={`browserhive templates seed ${templateName} state.json`} />
         </Callout>
       );
     case 'proxy_unreachable':

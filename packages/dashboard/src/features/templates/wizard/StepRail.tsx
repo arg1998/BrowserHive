@@ -51,44 +51,56 @@ export function StepRail({
       <ol className="hidden flex-col gap-1 lg:flex">
         {WIZARD_STEPS.map((s) => {
           const current = s === step;
-          const complete = done(s) && s < step;
+          const complete = done(s) && (s < step || (s === step && s === 5));
           const enabled = reachable(s) && !current;
           return (
             <li key={s}>
-              <button
-                type="button"
-                disabled={!enabled}
-                aria-current={current ? 'step' : undefined}
-                onClick={() => onStep(s)}
-                className={cn(
-                  'flex w-full cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors focus-ring disabled:cursor-default',
-                  current ? 'bg-accent-bg/70 dark:bg-accent-bg' : enabled && 'hover:bg-accent',
-                )}
-              >
-                <span
+              {current ? (
+                <div
+                  aria-current="step"
+                  className="flex w-full items-center gap-3 rounded-lg bg-accent-bg/70 px-2.5 py-2 dark:bg-accent-bg"
+                >
+                  <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-primary bg-primary text-xs font-semibold text-primary-foreground tabular-nums">
+                    {complete ? <Check aria-hidden="true" className="size-3.5" /> : s}
+                  </span>
+                  <span className="flex min-w-0 flex-col">
+                    <span className="text-sm font-medium">{STEP_LABEL[s]}</span>
+                    <span className="text-xs text-pretty text-muted-foreground">
+                      {STEP_HINT[s]}
+                    </span>
+                  </span>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  disabled={!enabled}
+                  onClick={() => onStep(s)}
                   className={cn(
-                    'flex size-6 shrink-0 items-center justify-center rounded-full border text-xs font-semibold tabular-nums',
-                    current && 'border-primary bg-primary text-primary-foreground',
-                    complete && 'border-success-border bg-success-bg text-success-text',
-                    !current && !complete && 'text-muted-foreground',
+                    'flex w-full cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors focus-ring disabled:cursor-default',
+                    enabled && 'hover:bg-accent',
                   )}
                 >
-                  {complete ? <Check aria-hidden="true" className="size-3.5" /> : s}
-                </span>
-                <span className="flex min-w-0 flex-col">
+                  <span
+                    className={cn(
+                      'flex size-6 shrink-0 items-center justify-center rounded-full border text-xs font-semibold tabular-nums',
+                      complete
+                        ? 'border-success-border bg-success-bg text-success-text'
+                        : 'text-muted-foreground',
+                    )}
+                  >
+                    {complete ? <Check aria-hidden="true" className="size-3.5" /> : s}
+                    {complete ? <span className="sr-only">done: </span> : null}
+                  </span>
                   <span
                     className={cn(
                       'text-sm font-medium',
-                      !enabled && !current && !complete && 'text-muted-foreground',
+                      !enabled && !complete && 'text-muted-foreground',
                     )}
                   >
                     {STEP_LABEL[s]}
                   </span>
-                  {current ? (
-                    <span className="text-xs text-muted-foreground">{STEP_HINT[s]}</span>
-                  ) : null}
-                </span>
-              </button>
+                </button>
+              )}
             </li>
           );
         })}

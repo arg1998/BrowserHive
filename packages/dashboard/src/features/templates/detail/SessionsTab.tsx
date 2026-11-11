@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button.tsx';
 import { Spinner } from '@/components/ui/spinner.tsx';
 import { keys } from '@/lib/api/keys.ts';
 import { harnessLabel } from '@/lib/harness.ts';
+import { ICONS } from '@/lib/icons.ts';
 import { sessionDisplayState } from '@/lib/status-registry.ts';
 import { LinkList, LinkRow } from '../../overview/components/LinkList.tsx';
 import { useTemplateOperations } from '../api-operations.ts';
@@ -26,33 +27,34 @@ export function isSystemSession(session: SessionSummary): boolean {
 
 function SessionRow({ session }: { readonly session: SessionSummary }) {
   const system = isSystemSession(session);
+  const Chevron = ICONS.chevronRight;
   return (
     <LinkRow
       href={`/sessions/${encodeURIComponent(session.session_id)}`}
-      label={system ? `BrowserHive (system) session ${session.slug}` : `Session ${session.slug}`}
+      label={system ? `${session.slug}, BrowserHive (system) session` : `${session.slug}, session`}
       className="px-5 py-3"
     >
-      <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
-        <div className="flex min-w-0 flex-[1_1_14rem] flex-col">
+      <div className="flex min-w-0 items-center gap-x-4">
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="flex min-w-0 items-center gap-2">
             <span className="truncate font-medium decoration-muted-foreground/60 underline-offset-4 group-hover/row:underline">
               {session.slug}
             </span>
             {system ? <Chip tone="info">BrowserHive (system)</Chip> : null}
           </span>
-          <span className="truncate font-mono text-sm text-muted-foreground">
-            {session.session_id}
+          <span className="flex min-w-0 gap-1.5 text-sm text-muted-foreground">
+            <span className="shrink-0">
+              {system ? 'Sign-in and upkeep' : harnessLabel(session.harness)}
+            </span>
+            <span aria-hidden="true">·</span>
+            <span className="truncate font-mono">{session.session_id}</span>
           </span>
         </div>
-        <span className="w-28 shrink-0">
+        <div className="flex shrink-0 flex-col items-end gap-0.5 sm:flex-row sm:items-center sm:gap-4">
           <StatusBadge domain="session" value={sessionDisplayState(session)} />
-        </span>
-        <span className="w-32 shrink-0 truncate text-sm text-muted-foreground">
-          {system ? 'Sign-in and upkeep' : harnessLabel(session.harness)}
-        </span>
-        <span className="w-20 shrink-0 text-right text-sm text-muted-foreground">
-          <RelativeTime at={session.created_at} className="text-sm" />
-        </span>
+          <RelativeTime at={session.created_at} className="text-sm text-muted-foreground" />
+        </div>
+        <Chevron aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
       </div>
     </LinkRow>
   );
