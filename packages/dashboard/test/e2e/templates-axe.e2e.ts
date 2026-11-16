@@ -1,4 +1,4 @@
-/** @module dashboard/test/e2e/templates-axe.e2e — axe-core in a real Chrome (spec 04 §1 principle 5, spec 13 §17 T1c): the templates list, every wizard step, the sign-in step and every tab of the template page, in light and dark, against the template daemon; no serious or critical violation (colour contrast and link-in-text-block included, which happy-dom cannot compute). Skips without that daemon */
+/** @module dashboard/test/e2e/templates-axe.e2e — axe-core in a real Chrome (spec 04 §1 principle 5, spec 13 §17 T1c): the templates list, every wizard step, the sign-in step and every tab of the template page, the Finish dialog and a destructive confirm, in light and dark, against the template daemon; no serious or critical violation (colour contrast and link-in-text-block included, which happy-dom cannot compute). Skips without that daemon */
 import { createRequire } from 'node:module';
 import { expect, type Page, test } from '@playwright/test';
 import { baseUrl, operatorCookie, SITE, seedPassword } from './template-helpers.ts';
@@ -75,6 +75,20 @@ test.describe('templates pages pass axe in Chrome', () => {
         await page.waitForLoadState('networkidle');
         for (const line of await violations(page)) found.push(`${url} ${line}`);
       }
+      // Dialogs: the Finish warning and a destructive confirm (delete, typed name).
+      await page.goto(`${baseUrl}/templates/new?step=5&template=${id}`);
+      await page.getByRole('button', { name: 'Finish', exact: true }).click();
+      await page.getByRole('dialog').waitFor();
+      for (const line of await violations(page)) found.push(`finish dialog ${line}`);
+      await page.keyboard.press('Escape');
+      await page.goto(`${baseUrl}/templates/${id}`);
+      await page.getByRole('button', { name: /More actions for/ }).click();
+      await page.getByRole('menuitem', { name: /Delete/ }).click();
+      const confirm = page.getByRole('alertdialog');
+      await confirm.waitFor();
+      // Typing the name enables the red button, so its contrast is checked too.
+      await confirm.getByRole('textbox').fill(name);
+      for (const line of await violations(page)) found.push(`delete confirm ${line}`);
       expect(found).toEqual([]);
     });
   }

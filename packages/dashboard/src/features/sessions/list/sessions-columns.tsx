@@ -41,9 +41,10 @@ export function SessionTitleCell({
   const browser = browserLabel(session);
   return (
     <span className="flex min-w-0 flex-col">
-      <span className="flex min-w-0 items-center gap-2">
+      {/* The template badge wraps under the slug rather than squeezing it. */}
+      <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
         <StateDot session={session} />
-        <span className="truncate text-base leading-5 font-medium text-foreground decoration-muted-foreground/60 underline-offset-4 group-hover/row:underline">
+        <span className="max-w-full min-w-0 truncate text-base leading-5 font-medium text-foreground decoration-muted-foreground/60 underline-offset-4 group-hover/row:underline">
           {session.slug}
         </span>
         <TemplateBadge session={session} />

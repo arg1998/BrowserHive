@@ -61,6 +61,8 @@ export function useSignIn(templateId: string) {
   const finish = async (removeSignIns: readonly string[]): Promise<boolean> => {
     try {
       const result = await m.finish.mutateAsync(removeSignIns);
+      // Finish closed the window: read both before the step decides what to show.
+      await Promise.all([recording.refetch(), detail.refetch()]);
       const uncleared = result.removed_sign_ins.flatMap((r) => r.uncleared_origins);
       if (uncleared.length > 0)
         toast.warning({

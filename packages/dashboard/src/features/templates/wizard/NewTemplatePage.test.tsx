@@ -209,6 +209,9 @@ describe('NewTemplatePage', () => {
     await click(within(dialog).getByRole('button', { name: 'Finish anyway' }));
     const finish = view.requests.find((r) => r.path.endsWith('/recording/finish'));
     expect(finish?.body).toEqual({ remove_sign_ins: ['google.com'] });
+    // The ready summary follows at once (no stale "window open" view until the next poll).
+    expect(await screen.findByText(/is ready, but 1 site isn’t signed in/)).toBeDefined();
+    expect(screen.queryByRole('button', { name: /Done, close the window/ })).toBeNull();
   }, 20_000);
 
   it('shows the error state of a refused start', async () => {

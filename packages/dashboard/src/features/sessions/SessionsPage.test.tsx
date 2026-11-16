@@ -63,7 +63,9 @@ describe('SessionsPage with template sessions', () => {
   it('offers a Template chip labelled by display name and sends the template filter', async () => {
     const view = mount('/sessions', rows, [{ value: 'tp-0000000001', count: 1 }]);
     const table = await screen.findByRole('region', { name: 'Sessions' });
-    expect(within(table).getAllByText('job-hunt').length).toBeGreaterThan(0);
+    // The badge names the template by its display name (operators), not the agent-facing name.
+    await waitFor(() => expect(within(table).getAllByText('Job hunt').length).toBeGreaterThan(0));
+    expect(within(table).queryAllByText('job-hunt')).toHaveLength(0);
     const chip = await screen.findByRole('button', { name: /Job hunt/ });
     await act(async () => {
       fireEvent.click(chip);

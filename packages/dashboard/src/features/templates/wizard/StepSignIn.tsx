@@ -44,7 +44,8 @@ export function StepSignIn({
   const { template, host, sites, unlisted_domains: unlisted } = s.detail.data;
   const windowOpen = s.session !== null;
   const ready = template.status === 'ready';
-  if (ready && !again && !windowOpen)
+  // A ready template shows its summary unless the operator asked to sign in again.
+  if (ready && !again)
     return (
       <SignInDone
         template={template}
