@@ -34,8 +34,8 @@ export function TraceSection({ detail }: { readonly detail: SessionDetail }) {
         <>
           <p>
             The trace is written when the session closes. <b>Open trace viewer</b> replays it here
-            with DOM snapshots, network and console; <code>trace.zip</code> also opens in a local
-            Playwright install.
+            with DOM snapshots and network; <code>trace.zip</code> also opens in a local Playwright
+            install.
           </p>
           <p>Vault keystrokes are excluded from traces.</p>
         </>

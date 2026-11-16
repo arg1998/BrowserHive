@@ -53,7 +53,7 @@ function setup() {
         count: 2,
         liveSessions: 3,
         limit: 8,
-        driver: 'playwright',
+        driver: 'patchright',
         persistenceMode: 'memory',
       }),
     },
@@ -129,7 +129,7 @@ describe('SystemStatusService', () => {
       capacity: { live: 3, browsers: 2, max: 8, max_source: 'derived' },
       open_attention: 1,
       storage: { db_bytes: 4096 },
-      stealth: { driver: 'playwright' },
+      stealth: { driver: 'patchright' },
       blocklist: { patterns: 12 },
     });
     expect(info.degradations[0]?.count).toBe(2);

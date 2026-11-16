@@ -24,7 +24,7 @@
     },
     {
       "groupName": "playwright+patchright",
-      "matchPackageNames": ["playwright", "playwright-core", "patchright", "@playwright/test"]
+      "matchPackageNames": ["patchright", "patchright-core", "@playwright/test"]
     }
   ]
 }

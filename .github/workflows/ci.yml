@@ -232,7 +232,7 @@ jobs:
       - if: env.RUN == 'true'
         id: pw
         shell: bash
-        run: echo "version=$(bun -e "console.log(require('playwright-core/package.json').version)")" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(bun -e "console.log(require('patchright-core/package.json').version)")" >> "$GITHUB_OUTPUT"
       - if: env.RUN == 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         id: pw-cache
@@ -241,9 +241,10 @@ jobs:
             ~/.cache/ms-playwright
             ~/Library/Caches/ms-playwright
             ~\AppData\Local\ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+          key: patchright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+      # Patchright is the only browser driver (D-65): its Chromium is the one sessions launch.
       - if: env.RUN == 'true' && steps.pw-cache.outputs.cache-hit != 'true'
-        run: bunx playwright install chromium --with-deps
+        run: bunx patchright install chromium --with-deps
       - if: env.RUN == 'true'
         shell: bash
         run: |
@@ -335,7 +336,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - id: pw
         shell: bash
-        run: echo "version=$(bun -e "console.log(require('playwright-core/package.json').version)")" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(bun -e "console.log(require('patchright-core/package.json').version)")" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         id: pw-cache
         with:
@@ -343,9 +344,9 @@ jobs:
             ~/.cache/ms-playwright
             ~/Library/Caches/ms-playwright
             ~\AppData\Local\ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+          key: patchright-${{ runner.os }}-${{ steps.pw.outputs.version }}
       - if: steps.pw-cache.outputs.cache-hit != 'true'
-        run: bunx playwright install chromium --with-deps
+        run: bunx patchright install chromium --with-deps
       - name: Measure
         shell: bash
         run: bun packages/browserhive/scripts/stealth-matrix.ts --sandbox config:off,config:auto,config:on,session --strict --out "matrix-${{ matrix.os }}.json" --summary "$GITHUB_STEP_SUMMARY"
@@ -373,7 +374,10 @@ jobs:
         with:
           name: browserhive-dist
           path: packages/browserhive/dist
-      - run: bunx playwright install chromium --with-deps
+      # The daemon launches Patchright's Chromium (D-65); the e2e runner (`@playwright/test`, a
+      # devDependency of the dashboard) launches its own browser for the test pages.
+      - run: bunx patchright install chromium --with-deps
+      - run: bunx playwright install chromium
       # A real daemon from the built package, on a throwaway data dir. The E2E variables are set only
       # for Playwright: the CLI rejects unknown BROWSERHIVE_* variables in its own environment.
       - name: Start daemon

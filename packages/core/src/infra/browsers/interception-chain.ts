@@ -1,6 +1,6 @@
 /** @module infra/browsers/interception-chain — one `context.route('**\/*')` per context running ordered in-process handlers: the self-origin guard (T1a), the blocklist, the request guard (spec 13 §3.8, D-22 as amended by D-54). */
 
-import type { BrowserContext, Request, Route } from 'playwright';
+import type { BrowserContext, Request, Route } from 'patchright';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import { err, ok, type Result } from '../../kernel/result.ts';
 import type { Logger } from '../../ports/logger.ts';

@@ -279,6 +279,17 @@ export function startFixtureServer(): FixtureServer {
             `<p id="unload">unload</p><script>addEventListener('pagehide', () => navigator.sendBeacon('/api/pagehide', 'bye'));</script>`,
           );
         default:
+          if (url.pathname.startsWith('/cors-allowed/')) {
+            // A cross-origin endpoint whose preflight allows the write (D-65 measurements).
+            const allow = {
+              'access-control-allow-origin': '*',
+              'access-control-allow-methods': 'POST',
+              'access-control-allow-headers': 'content-type, x-custom',
+            };
+            if (req.method === 'OPTIONS')
+              return new Response(null, { status: 204, headers: allow });
+            return new Response('cors write allowed', { headers: allow });
+          }
           if (url.pathname.startsWith('/cors/')) {
             // A cross-origin endpoint whose preflight refuses: an unrouted browser never sends
             // the write itself.

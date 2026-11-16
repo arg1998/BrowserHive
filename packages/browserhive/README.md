@@ -47,7 +47,7 @@ Or run it over stdio:
 
 - One Chromium process and context per session; persistent profiles and saved logins
 - The bundled Chromium or your installed Google Chrome or Microsoft Edge, inside Chromium's sandbox wherever the machine allows it
-- Stealth: full Chromium, Patchright, host-coherent identity, optional fingerprint and human-like input
+- Stealth: full Chromium on Patchright, host-coherent identity, optional fingerprint and human-like input
 - `vault_fill`: Bitwarden credentials typed into the page after origin and policy checks, never returned to the model
 - `request_attention`: block the agent and take over its browser from the dashboard
 - SQLite audit trail and Playwright trace replay

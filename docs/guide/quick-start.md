@@ -81,7 +81,7 @@ Every session of the template shares one browser, each in its own window. On a s
 | Sessions that survive restarts | `browserhive --persistence persistent` | profiles under `<data-dir>/sessions/<id>/userdata` |
 | Watch the agents | `browserhive --admin` | dashboard, live view, traces |
 | Log in without the model seeing the password | `bw login`, then `browserhive --admin --vault bitwarden`; paste a token from `bw unlock --raw` on the Vault page | see [Vault](vault.md) |
-| Replay a run | dashboard → Sessions → a session → Files → Open trace viewer | Playwright Trace Viewer with DOM snapshots, network and console |
+| Replay a run | dashboard → Sessions → a session → Files → Open trace viewer | Playwright Trace Viewer with actions, DOM snapshots and network |
 | Keep agents off some sites | `browserhive --admin --blocklist ./blocklist.txt --blocklistWatch` | refused navigations, visible on the Blocklist page |
 | Agents signed in to your sites | `browserhive --admin`, then `browserhive templates create <name> --sites <site,…> --allPrincipals` | see [Session templates](templates.md) |
 | Human in the loop | `browserhive --admin` and the agent calls `request_attention` | see [Human takeover](attention.md) |

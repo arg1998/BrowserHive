@@ -1,6 +1,6 @@
 /** @module infra/browsers/template-view — the `SessionView` of a virtual session: its own pages of a shared template host, new tabs placed in its own windows, per-page headers and display options, and a close that touches nothing else (spec 13 §3.3, §3.5, §4). */
 
-import type { BrowserContext, CDPSession, Page } from 'playwright';
+import type { BrowserContext, CDPSession, Page } from 'patchright';
 import { AppError } from '../../kernel/errors/app-error.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type {

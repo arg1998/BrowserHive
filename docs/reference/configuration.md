@@ -2,7 +2,7 @@
 
 # Configuration reference
 
-Every configuration key of BrowserHive (63 keys), generated from the zod schema in `@browserhive/contracts/config`. For a guided introduction see [the configuration guide](../guide/configuration.md).
+Every configuration key of BrowserHive (62 keys), generated from the zod schema in `@browserhive/contracts/config`. For a guided introduction see [the configuration guide](../guide/configuration.md).
 
 ## Precedence
 
@@ -647,7 +647,6 @@ How long a draining template browser waits for its sessions before closing them.
 | Key | CLI | Environment | Default |
 |---|---|---|---|
 | [`stealth`](#stealth) | `--stealth` | `BROWSERHIVE_STEALTH` | `standard` |
-| [`stealthDriver`](#stealthDriver) | `--stealthDriver` | `BROWSERHIVE_STEALTH_DRIVER` | `auto` |
 | [`fingerprint`](#fingerprint) | `--fingerprint` | `BROWSERHIVE_FINGERPRINT` | derived (stealth) |
 | [`humanize`](#humanize) | `--humanize` | `BROWSERHIVE_HUMANIZE` | `false` |
 | [`captcha`](#captcha) | `--captcha` | `BROWSERHIVE_CAPTCHA` | `attention` |
@@ -664,20 +663,6 @@ Stealth level. max also defaults fingerprint to true.
 | Config file | `"stealth"` |
 | Type | one of: off, standard, max |
 | Default | `standard` |
-| Notes | restart required |
-
-<a id="stealthDriver"></a>
-### `stealthDriver`
-
-Chromium driver for stealth sessions. auto uses Patchright when installed, else Playwright.
-
-| Property | Value |
-|---|---|
-| CLI flag | `--stealthDriver` |
-| Environment | `BROWSERHIVE_STEALTH_DRIVER` |
-| Config file | `"stealthDriver"` |
-| Type | one of: auto, patchright, playwright |
-| Default | `auto` |
 | Notes | restart required |
 
 <a id="fingerprint"></a>

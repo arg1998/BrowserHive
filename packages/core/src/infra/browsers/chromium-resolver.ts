@@ -1,44 +1,32 @@
 /** @module infra/browsers/chromium-resolver — Chromium executable discovery and the typed `BROWSER_NOT_INSTALLED` error naming `browserhive init` (spec 11 §8, D-18). */
 
 import { existsSync } from 'node:fs';
-import { createRequire } from 'node:module';
-import type { BrowserType } from 'playwright';
-import { z } from 'zod';
+import type { BrowserType } from 'patchright';
 import { AppError } from '../../kernel/errors/app-error.ts';
+import { driverVersion } from './driver.ts';
 import type { HostFacts } from './host-facts.ts';
 
-/** Dependencies of the resolver; `exists` and `playwrightVersion` default to production values. */
+/** Dependencies of the resolver; `exists` and `driverVersion` default to production values. */
 export interface ChromiumResolverDeps {
-  /** Injected env: `PLAYWRIGHT_BROWSERS_PATH` is reported in the error details when set. */
+  /** Injected env: `PLAYWRIGHT_BROWSERS_PATH` (Patchright reads the same variable) is reported in the error details when set. */
   readonly env: HostFacts['env'];
   readonly exists?: (path: string) => boolean;
-  readonly playwrightVersion?: string;
-}
-
-const PackageVersion = z.object({ version: z.string() });
-
-/** The pinned Playwright version, read from its `package.json` (guarded; `unknown` on failure). */
-export function pinnedPlaywrightVersion(): string {
-  try {
-    const require = createRequire(import.meta.url);
-    return PackageVersion.parse(require('playwright/package.json')).version;
-  } catch {
-    return 'unknown';
-  }
+  /** The Patchright version named in the install command. */
+  readonly driverVersion?: string;
 }
 
 /**
  * The exact command the operator must run. `browserhive init` is the documented entry point
- * (D-18: never a `postinstall` download); the underlying `playwright install chromium@<ver>` is
+ * (D-18: never a `postinstall` download); the underlying `patchright install chromium@<ver>` is
  * named so a host without the CLI can still act on the message.
  */
-export function installCommandFor(channel: string, playwrightVersion: string): string {
+export function installCommandFor(channel: string, patchrightVersion: string): string {
   if (channel === 'chromium') {
-    return `browserhive init  (runs: npx playwright install chromium@${playwrightVersion})`;
+    return `browserhive init  (runs: npx patchright@${patchrightVersion} install chromium)`;
   }
   if (channel === 'chrome') {
-    // Google's own installer, run through Playwright; `init` asks before it does anything.
-    return 'browserhive init --installChrome  (runs: npx playwright install chrome, needs administrator rights)';
+    // Google's own installer, run through Patchright's CLI; `init` asks before it does anything.
+    return 'browserhive init --installChrome  (runs: npx patchright install chrome, needs administrator rights)';
   }
   return 'install the Microsoft Edge browser on this host';
 }
@@ -51,7 +39,7 @@ export function browserNotInstalled(
 ): AppError<'BROWSER_NOT_INSTALLED'> {
   const installCommand = installCommandFor(
     channel,
-    deps.playwrightVersion ?? pinnedPlaywrightVersion(),
+    deps.driverVersion ?? driverVersion() ?? 'unknown',
   );
   const browsersPath = deps.env['PLAYWRIGHT_BROWSERS_PATH'];
   const details = { channel, install_command: installCommand };
@@ -65,7 +53,7 @@ export function browserNotInstalled(
 }
 
 /**
- * Pre-flight check for the bundled `chromium` channel: Playwright computes the expected binary
+ * Pre-flight check for the bundled `chromium` channel: the driver computes the expected binary
  * location (honouring `PLAYWRIGHT_BROWSERS_PATH`) without touching the disk, so a missing binary is
  * caught here with a precise message instead of surfacing as a raw launch failure. Branded channels
  * (`chrome`/`edge`) and an explicit `executablePath` are not pre-checked; their launch failure is
@@ -89,11 +77,11 @@ export function assertChromiumInstalled(
   if (path.length === 0 || !exists(path)) throw browserNotInstalled(channel, deps);
 }
 
-/** Playwright's launch-time prose for a missing binary or branded distribution. */
+/** The driver's launch-time prose for a missing binary or branded distribution (Patchright keeps Playwright's texts). */
 const MISSING_BINARY_RE =
-  /Executable doesn't exist at|Chromium distribution '[\w-]+' is not found|Looks like Playwright Test or Playwright was just installed or updated|Failed to launch: .*ENOENT/;
+  /Executable doesn't exist at|Chromium distribution '[\w-]+' is not found|Looks like Playwright( Test or Playwright)? was just installed or updated|Failed to launch: .*ENOENT/;
 
-/** Map a raw launch failure onto `BROWSER_NOT_INSTALLED` when Playwright reports a missing binary. */
+/** Map a raw launch failure onto `BROWSER_NOT_INSTALLED` when the driver reports a missing binary. */
 export function browserNotInstalledFromLaunchError(
   err: unknown,
   channel: string,

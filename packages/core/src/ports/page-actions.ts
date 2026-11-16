@@ -1,6 +1,6 @@
 /** @module ports/page-actions — driver-side page helpers the tool layer needs but may not import from `infra/browsers`: main-world evaluate, humanize decorators, driver error classification. */
 
-import type { Page } from 'playwright';
+import type { Page } from 'patchright';
 import type { AppError } from '../kernel/errors/app-error.ts';
 
 /** Shared inputs of every humanized pointer action. */

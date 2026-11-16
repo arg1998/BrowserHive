@@ -191,7 +191,6 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
         degradations: input.degradations,
         spec: {
           dataDir: config.dataDir,
-          stealthDriver: config.stealthDriver,
           proxyResolver: new PassThroughProxyResolver(),
           env: input.host.env,
           selfOrigins: () => selfOriginsOf(config),

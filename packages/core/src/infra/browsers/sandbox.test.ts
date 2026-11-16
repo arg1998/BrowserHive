@@ -1,7 +1,7 @@
 /** @module infra/browsers/sandbox.test — sandbox failure recognition and Chrome's reason, host conditions per OS, profile coverage, the AppArmor profile text, and the two-launch probe. */
 
 import { describe, expect, it } from 'bun:test';
-import type { Browser, LaunchOptions } from 'playwright';
+import type { Browser, LaunchOptions } from 'patchright';
 import {
   apparmorProfile,
   apparmorProfileCovers,

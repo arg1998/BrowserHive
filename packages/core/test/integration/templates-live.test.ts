@@ -7,15 +7,13 @@ import type { Session } from '../../src/domain/session/session.ts';
 import { isAppError } from '../../src/kernel/errors/app-error.ts';
 import {
   clickClosing,
-  type DriverName,
   HEADED,
+  STEALTH_LEGS,
   type TemplateWorld,
   tabUrls,
   templateWorld,
   until,
 } from './template-fixture.ts';
-
-const DRIVERS: readonly DriverName[] = ['playwright', 'patchright'];
 
 /** The X window with the input focus (`xdotool`), or `null` where it cannot be read. */
 function focusedWindow(): string | null {
@@ -56,10 +54,10 @@ afterEach(async () => {
   world = null;
 });
 
-for (const driver of DRIVERS) {
-  describe(`template host (${driver}${HEADED ? ', headed' : ''})`, () => {
+for (const stealth of STEALTH_LEGS) {
+  describe(`template host (stealth ${stealth}${HEADED ? ', headed' : ''})`, () => {
     it('three sessions get their own background windows and see only their own pages', async () => {
-      world = await templateWorld(driver);
+      world = await templateWorld(stealth);
       // The operator works in another window: no session window may take the focus from it
       // (no-op headless).
       const operator = operatorWindow();
@@ -114,7 +112,7 @@ for (const driver of DRIVERS) {
     });
 
     it('every site-opened page lands in its opener session, wherever its window is', async () => {
-      world = await templateWorld(driver);
+      world = await templateWorld(stealth);
       const a = await world.launch('alpha');
       const b = await world.launch('bravo');
       const page = pageOf(a);
@@ -162,7 +160,7 @@ for (const driver of DRIVERS) {
     });
 
     it('pages no session opened are parked: test-code newPage, and a refused service-worker window', async () => {
-      world = await templateWorld(driver);
+      world = await templateWorld(stealth);
       const a = await world.launch('alpha');
       const host = world.host();
       // Stands in for the operator's Ctrl+T (spec 13 §17 T1a acceptance).
@@ -191,7 +189,7 @@ for (const driver of DRIVERS) {
     });
 
     it('close_session closes only its own windows; the host and the other sessions live on', async () => {
-      world = await templateWorld(driver);
+      world = await templateWorld(stealth);
       const a = await world.launch('alpha');
       const b = await world.launch('bravo');
       await pageOf(a).goto(world.sites.url('site-a.test'));
@@ -212,7 +210,7 @@ for (const driver of DRIVERS) {
     });
 
     it('new_tab opens a tab in the session window and stops at the per-session page cap', async () => {
-      world = await templateWorld(driver, { maxPagesPerHost: 10 });
+      world = await templateWorld(stealth, { maxPagesPerHost: 10 });
       const a = await world.launch('alpha');
       await pageOf(a).goto(world.sites.url('site-a.test'));
       const { page } = await world.sessions.newTab(a);
@@ -229,7 +227,7 @@ for (const driver of DRIVERS) {
     });
 
     it('the self-origin guard aborts every request to BrowserHive origins', async () => {
-      world = await templateWorld(driver, { selfOrigins: ['https://cdn-a.test'] });
+      world = await templateWorld(stealth, { selfOrigins: ['https://cdn-a.test'] });
       const a = await world.launch('alpha');
       const error = await pageOf(a)
         .goto('https://cdn-a.test/landing')
@@ -242,7 +240,7 @@ for (const driver of DRIVERS) {
     });
 
     it('closing the sentinel by hand recreates it; the host survives', async () => {
-      world = await templateWorld(driver);
+      world = await templateWorld(stealth);
       const a = await world.launch('alpha');
       const host = world.host();
       const own = new Set(a.view?.pages() ?? []);
@@ -260,7 +258,7 @@ for (const driver of DRIVERS) {
     });
 
     it('killing the browser fails all three sessions and the host restarts', async () => {
-      world = await templateWorld(driver);
+      world = await templateWorld(stealth);
       const sessions = [
         await world.launch('alpha'),
         await world.launch('bravo'),

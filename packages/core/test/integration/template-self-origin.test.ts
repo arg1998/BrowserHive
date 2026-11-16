@@ -1,10 +1,8 @@
-/** @module test/integration/template-self-origin.test — a template browser never reaches BrowserHive (spec 13 §3.8, PR #76 F1): every loopback spelling of the daemon is aborted by the host's route, and a redirect hop (which the route never sees) carries the marker cookie the real HTTP app refuses with 403. Both drivers. */
+/** @module test/integration/template-self-origin.test — a template browser never reaches BrowserHive (spec 13 §3.8, PR #76 F1): every loopback spelling of the daemon is aborted by the host's route, and a redirect hop (which the route never sees) carries the marker cookie the real HTTP app refuses with 403. Stealth off and standard on Patchright (D-65). */
 
 import { afterEach, describe, expect, it } from 'bun:test';
 import { createHttpKit } from '../helpers/http-kit.ts';
-import { type DriverName, type TemplateWorld, templateWorld } from './template-fixture.ts';
-
-const DRIVERS: readonly DriverName[] = ['playwright', 'patchright'];
+import { STEALTH_LEGS, type TemplateWorld, templateWorld } from './template-fixture.ts';
 
 let world: TemplateWorld | null = null;
 let stopDaemon: (() => void) | null = null;
@@ -40,11 +38,11 @@ async function startDaemon() {
   return { port, hits, origins };
 }
 
-for (const driver of DRIVERS) {
-  describe(`template self-origin guard (${driver})`, () => {
+for (const stealth of STEALTH_LEGS) {
+  describe(`template self-origin guard (stealth ${stealth})`, () => {
     it('aborts every loopback spelling of the daemon in the route', async () => {
       const daemon = await startDaemon();
-      world = await templateWorld(driver, { selfOrigins: daemon.origins });
+      world = await templateWorld(stealth, { selfOrigins: daemon.origins });
       const session = await world.launch('alpha');
       const page = session.view?.page;
       if (page === undefined) throw new Error('no page');
@@ -68,7 +66,7 @@ for (const driver of DRIVERS) {
 
     it('a redirect hop the route cannot see reaches the daemon marked, and is refused with 403', async () => {
       const daemon = await startDaemon();
-      world = await templateWorld(driver, { selfOrigins: daemon.origins });
+      world = await templateWorld(stealth, { selfOrigins: daemon.origins });
       const session = await world.launch('alpha');
       const page = session.view?.page;
       if (page === undefined) throw new Error('no page');

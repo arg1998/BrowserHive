@@ -1,7 +1,6 @@
-/** @module infra/browsers/playwright-browser-driver — the BrowserDriver adapter: launch pipeline for memory/storage-state/persistent, identity, tracing, capabilities (spec 11 §2). */
+/** @module infra/browsers/playwright-browser-driver — the BrowserDriver adapter over the Playwright API, driven by Patchright (D-65): launch pipeline for memory/storage-state/persistent, identity, tracing, capabilities (spec 11 §2). */
 
-import type { StealthDriver } from '@browserhive/contracts/enums';
-import type { Browser, BrowserContext, BrowserContextOptions, BrowserType, Page } from 'playwright';
+import type { Browser, BrowserContext, BrowserContextOptions, BrowserType, Page } from 'patchright';
 import { AppError, isAppError } from '../../kernel/errors/app-error.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type {
@@ -28,7 +27,7 @@ import {
   browserNotInstalledFromLaunchError,
   type ChromiumResolverDeps,
 } from './chromium-resolver.ts';
-import { DriverResolver } from './driver-resolver.ts';
+import { DRIVER_NAME, driverChromium } from './driver.ts';
 import { capabilitiesFor, defaultSandboxPolicy, displayFor } from './driver-support.ts';
 import { contextOptionsFor, scriptPayloadFor } from './fingerprint.ts';
 import type { HostFacts } from './host-facts.ts';
@@ -46,10 +45,8 @@ export interface PlaywrightBrowserDriverDeps {
   readonly logger: Logger;
   readonly clock: Clock;
   readonly host: HostFacts;
-  /** The configured `stealthDriver` mode, reported by {@link PlaywrightBrowserDriver.stealthDriverName}. */
-  readonly stealthDriver: StealthDriver;
-  /** Test seam; defaults to a fresh {@link DriverResolver} over the real packages. */
-  readonly driverResolver?: DriverResolver;
+  /** Test seam; defaults to Patchright's Chromium (the only driver, D-65). */
+  readonly browserType?: BrowserType;
   /** Test seam for the binary pre-check. */
   readonly chromium?: Omit<ChromiumResolverDeps, 'env'>;
   /** The `sandbox` setting; defaults to `off` (today's launches, byte for byte). */
@@ -63,8 +60,8 @@ export interface PlaywrightBrowserDriverDeps {
 }
 
 /**
- * Production driver: spawns a real Playwright (or Patchright) Chromium driver per session via
- * `browserType.launch(...)`. One browser subprocess + one context per session is the isolation
+ * Production driver: spawns a real Patchright Chromium per session via `browserType.launch(...)`
+ * (every session, whatever its stealth level; D-65). One browser subprocess + one context per session is the isolation
  * primitive; nothing here is shared between launches.
  */
 export class PlaywrightBrowserDriver implements BrowserDriver, TemplateHostLauncher {
@@ -72,8 +69,7 @@ export class PlaywrightBrowserDriver implements BrowserDriver, TemplateHostLaunc
   private readonly clock: Clock;
   private readonly testingArgs: readonly string[];
   private readonly host: HostFacts;
-  private readonly mode: StealthDriver;
-  private readonly resolver: DriverResolver;
+  private readonly browserType: BrowserType;
   private readonly chromiumDeps: ChromiumResolverDeps;
   private readonly sandbox: SandboxPolicy;
   private readonly locateChannel: (playwrightChannel: 'chrome' | 'msedge') => string | null;
@@ -83,8 +79,7 @@ export class PlaywrightBrowserDriver implements BrowserDriver, TemplateHostLaunc
     this.logger = deps.logger.child({ module: 'browsers.launcher' });
     this.clock = deps.clock;
     this.host = deps.host;
-    this.mode = deps.stealthDriver;
-    this.resolver = deps.driverResolver ?? new DriverResolver({ logger: deps.logger });
+    this.browserType = deps.browserType ?? driverChromium();
     this.chromiumDeps = { env: deps.host.env, ...deps.chromium };
     this.sandbox = deps.sandbox ?? defaultSandboxPolicy(deps);
     this.locateChannel = deps.locateChannel ?? playwrightChannelExecutable;
@@ -94,18 +89,15 @@ export class PlaywrightBrowserDriver implements BrowserDriver, TemplateHostLaunc
 
   /** Starts a template host (spec 13 §3.1); the start is not abortable once Chromium is spawning. */
   launchTemplateHost(spec: TemplateHostSpec): Promise<TemplateHost> {
-    const resolved = spec.stealth
-      ? this.resolver.resolveStealth(spec.stealthDriver)
-      : { browserType: this.resolver.stock(), driver: 'playwright' as const };
-    assertChromiumInstalled(resolved.browserType, spec.channel, this.chromiumDeps);
+    assertChromiumInstalled(this.browserType, spec.channel, this.chromiumDeps);
     return launchTemplateHostWith(
       {
-        browserType: resolved.browserType,
-        driver: resolved.driver,
+        browserType: this.browserType,
+        driver: DRIVER_NAME,
         sandbox: this.sandbox,
         sandboxTarget: {
           channel: spec.channel,
-          executablePath: this.executableFor(resolved.browserType, spec.channel),
+          executablePath: this.executableFor(this.browserType, spec.channel),
         },
         chromium: this.chromiumDeps,
         host: this.host,
@@ -136,14 +128,11 @@ export class PlaywrightBrowserDriver implements BrowserDriver, TemplateHostLaunc
     );
   }
 
-  stealthDriverName(): 'patchright' | 'playwright' {
-    return this.resolver.stealthDriverName(this.mode);
+  stealthDriverName(): 'patchright' {
+    return DRIVER_NAME;
   }
 
   launch(spec: LaunchSpec, signal?: AbortSignal): Promise<LaunchedSession> {
-    const resolved = spec.stealth
-      ? this.resolver.resolveStealth(spec.stealthDriver)
-      : { browserType: this.resolver.stock(), driver: 'playwright' as const };
     return withSpan(
       SPAN.BROWSER_LAUNCH,
       {
@@ -152,15 +141,15 @@ export class PlaywrightBrowserDriver implements BrowserDriver, TemplateHostLaunc
         [ATTR.STEALTH]: spec.stealth,
         [ATTR.PERSISTENCE_MODE]: spec.persistenceMode,
         [ATTR.HEADLESS]: spec.headless,
-        [ATTR.DRIVER]: resolved.driver,
+        [ATTR.DRIVER]: DRIVER_NAME,
       },
-      () => this.launchWith(resolved.browserType, resolved.driver, spec, signal),
+      () => this.launchWith(this.browserType, DRIVER_NAME, spec, signal),
     );
   }
 
   private async launchWith(
     browserType: BrowserType,
-    driver: 'patchright' | 'playwright',
+    driver: 'patchright',
     spec: LaunchSpec,
     signal: AbortSignal | undefined,
   ): Promise<LaunchedSession> {
@@ -380,7 +369,7 @@ export class PlaywrightBrowserDriver implements BrowserDriver, TemplateHostLaunc
       sessionId: spec.sessionId,
       browser,
       context,
-      capabilities: capabilitiesFor(driver, spec),
+      capabilities: capabilitiesFor(spec),
       driver,
       identity,
       warnings,

@@ -1,6 +1,6 @@
 /** @module app/sessions/scheme-guard — the non-web scheme backstop: closes a session page whose main frame commits a URL outside the web schemes (spec 13 T0d, D-57). */
 
-import type { CDPSession, Frame, Page } from 'playwright';
+import type { CDPSession, Frame, Page } from 'patchright';
 import { refusedCommittedScheme, type SchemeOptions } from '../../domain/policies/url-scheme.ts';
 import type { TabRegistry } from '../../domain/session/tabs.ts';
 import type { Logger } from '../../ports/logger.ts';

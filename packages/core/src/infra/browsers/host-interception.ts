@@ -1,6 +1,6 @@
 /** @module infra/browsers/host-interception — a template host's own interception pieces (spec 13 §3.8): the self-origin guard (handler 1) and the per-request owner resolver over the host's page attribution. */
 
-import type { Page, Request } from 'playwright';
+import type { Page, Request } from 'patchright';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import { isSelfAddress, selfAddressesOf, TEMPLATE_HOST_COOKIE } from '../../kernel/self-address.ts';
 import type { CookieInput } from '../../ports/browser-driver.ts';

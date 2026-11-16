@@ -10,17 +10,16 @@ const missing = {
 };
 
 describe('init', () => {
-  it('fresh host: creates the data dir, downloads both browsers, migrates, prints next steps', async () => {
-    const probes = probeState({ playwright: { ...missing }, patchright: { ...missing } });
+  it("fresh host: creates the data dir, downloads Patchright's Chromium, migrates, prints next steps", async () => {
+    const probes = probeState({ patchright: { ...missing } });
     const fs = new MemoryFs();
     const run = await cliHarness({
       argv: ['init'],
       fs,
       probes,
       storage: storageState({ userVersion: 0, pending: [{ version: 1, name: 'initial' }] }),
-      run: (_command, args) => {
-        const target = args[0]?.includes('patchright') ? probes.patchright : probes.playwright;
-        target.installed = true;
+      run: () => {
+        probes.patchright.installed = true;
         return { code: 0, stdout: '', stderr: '', timedOut: false };
       },
     });
@@ -37,11 +36,11 @@ describe('init', () => {
     ]) {
       expect(await fs.stat(`${DATA_DIR}/${sub}`)).not.toBeNull();
     }
+    // Patchright is the only driver (D-65): nothing is downloaded for stock Playwright.
     expect(run.runs).toEqual([
-      { command: '/usr/bin/bun', args: ['/pkg/playwright/cli.js', 'install', 'chromium'] },
       { command: '/usr/bin/bun', args: ['/pkg/patchright/cli.js', 'install', 'chromium'] },
     ]);
-    expect(run.stdout).toContain('✓ Chromium for Playwright 1.63.0  installed');
+    expect(run.stdout).not.toContain('Playwright');
     expect(run.stdout).toContain('✓ Chromium for Patchright 1.63.0  installed');
     expect(run.stdout).toContain('✓ database schema v1  applied 1 migration');
     expect(run.storage.opened).toEqual([{ readOnly: false, migrate: true, owner: 'init' }]);
@@ -56,20 +55,33 @@ describe('init', () => {
     expect(run.code).toBe(0);
     expect(run.runs).toEqual([]);
     expect(run.stdout).toContain('already exists');
-    expect(run.stdout).toContain('✓ Chromium for Playwright 1.63.0  already installed');
     expect(run.stdout).toContain('✓ Chromium for Patchright 1.63.0  already installed');
     expect(run.stdout).toContain('✓ database schema v1  up to date');
   });
 
   it('--force re-downloads', async () => {
-    const run = await cliHarness({ argv: ['init', '--force', '--stealthDriver', 'playwright'] });
+    const run = await cliHarness({ argv: ['init', '--force'] });
     expect(run.runs).toHaveLength(1);
+  });
+
+  it('the removed --stealthDriver: patchright warns and runs, playwright is a usage error (D-65)', async () => {
+    const kept = await cliHarness({ argv: ['init', '--stealthDriver', 'patchright'] });
+    expect(kept.code).toBe(0);
+    expect(`${kept.stdout}${kept.stderr}`).toContain(
+      '--stealthDriver is deprecated and ignored: Patchright is the only browser driver since 0.3.0. Remove it; from 0.4.0 it is an unknown key.',
+    );
+    const removed = await cliHarness({ argv: ['init', '--stealthDriver', 'playwright'] });
+    expect(removed.code).toBe(64);
+    expect(removed.stderr).toContain(
+      "browserhive: --stealthDriver: the Playwright driver was removed in 0.3.0; every session runs on Patchright. Remove 'stealthDriver'. For a browser without BrowserHive's stealth patches, set stealth to off.",
+    );
+    expect(removed.runs).toEqual([]);
   });
 
   it('a failed download exits 1 with the exact retry command', async () => {
     const run = await cliHarness({
       argv: ['init'],
-      probes: probeState({ playwright: { ...missing } }),
+      probes: probeState({ patchright: { ...missing } }),
       run: () => ({
         code: 1,
         stdout: '',
@@ -79,23 +91,25 @@ describe('init', () => {
     });
     expect(run.code).toBe(1);
     expect(run.stdout).toContain(
-      '✗ Chromium for Playwright  download failed (exit 1): Error: getaddrinfo ENOTFOUND cdn.playwright.dev',
+      '✗ Chromium for Patchright  download failed (exit 1): Error: getaddrinfo ENOTFOUND cdn.playwright.dev',
     );
-    expect(run.stdout).toContain('Retry with: bunx playwright@1.63.0 install chromium');
+    expect(run.stdout).toContain('Retry with: bunx patchright@1.63.0 install chromium');
     expect(run.stdout).toContain(
       "Setup is incomplete. Fix the ✗ steps above and run 'browserhive init' again.",
     );
   });
 
-  it('a failed Patchright download under stealthDriver=auto only warns (fail-open)', async () => {
+  it('a missing patchright package is a failure: there is no other driver', async () => {
     const run = await cliHarness({
       argv: ['init'],
-      probes: probeState({ patchright: { ...missing } }),
-      run: () => ({ code: 1, stdout: '', stderr: 'boom', timedOut: false }),
+      probes: probeState({
+        patchright: { packageVersion: null, executablePath: null, installed: false },
+      }),
     });
-    expect(run.code).toBe(0);
-    expect(run.stdout).toContain('! Chromium for Patchright  download failed (exit 1): boom');
-    expect(run.stdout).toContain('Retry with: bunx patchright@1.63.0 install chromium');
+    expect(run.code).toBe(1);
+    expect(run.stdout).toContain(
+      '✗ Chromium for Patchright  patchright package not installed; reinstall browserhive',
+    );
   });
 
   it('--skipBrowsers skips downloads; a running server skips the database step', async () => {

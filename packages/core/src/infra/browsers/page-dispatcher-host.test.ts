@@ -1,7 +1,7 @@
 /** @module infra/browsers/page-dispatcher-host.test — the template-host additions to the dispatcher: targets that close before any page of them is read (browser-level discovery), pages of released sessions, and the commit hook. */
 
 import { describe, expect, it } from 'bun:test';
-import type { Page } from 'playwright';
+import type { Page } from 'patchright';
 import { FakeClock } from '../../../test/helpers/fake-clock.ts';
 import { asPage, FakePage } from '../../../test/helpers/fake-page.ts';
 import { createCollectingLogger } from '../logging/collecting-logger.ts';

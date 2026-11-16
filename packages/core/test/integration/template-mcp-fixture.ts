@@ -1,4 +1,4 @@
-/** @module test/integration/template-mcp-fixture — the real MCP stack over a real template host: the tool harness (dispatcher, policies, sealing) with a `TemplateHostSupervisor` on the Playwright or Patchright driver and the HTTPS fixture sites. */
+/** @module test/integration/template-mcp-fixture — the real MCP stack over a real template host: the tool harness (dispatcher, policies, sealing) with a `TemplateHostSupervisor` on the driver (Patchright) and the HTTPS fixture sites. */
 
 import { TemplateHostSupervisor } from '../../src/app/templates/host-supervisor.ts';
 import { PlaywrightBrowserDriver } from '../../src/infra/browsers/playwright-browser-driver.ts';
@@ -15,7 +15,7 @@ import { RecordingDegradations } from '../helpers/template-kit.ts';
 import { templateRecord, templateSiteRecord } from '../persistence/helpers.ts';
 import { HOST } from './driver-fixture.ts';
 import { createRealHarness } from './mcp-fixture.ts';
-import { type DriverName, HEADED } from './template-fixture.ts';
+import { HEADED, type StealthLeg } from './template-fixture.ts';
 
 /** A BrowserHive origin the `#browserhive` refusal knows (nothing listens there). */
 export const SELF_ORIGIN = 'http://127.0.0.1:9';
@@ -37,7 +37,7 @@ export interface TemplateMcpOptions {
 
 /** A ready template `job-hunt` on site-a.test (and the given sites) behind the real tool stack. */
 export async function templateMcp(
-  driver: DriverName,
+  stealth: StealthLeg,
   options: TemplateMcpOptions = {},
 ): Promise<TemplateMcp> {
   const sites = startHttpsSites();
@@ -46,7 +46,6 @@ export async function templateMcp(
     logger: createCollectingLogger(),
     clock,
     host: HOST,
-    stealthDriver: driver,
     testingArgs: sites.chromiumArgs,
   });
   let harness: ToolHarness | null = null;
@@ -57,7 +56,6 @@ export async function templateMcp(
   const built: { supervisor: TemplateHostSupervisor | null } = { supervisor: null };
   harness = await createRealHarness({
     driver: real,
-    stealthDriver: driver,
     vault: true,
     selfOrigins: [SELF_ORIGIN],
     templateRuntime: (sessions, dataDir) => {
@@ -73,7 +71,6 @@ export async function templateMcp(
         degradations: new RecordingDegradations(),
         spec: {
           dataDir,
-          stealthDriver: driver,
           proxyResolver: { resolve: async (r) => r.requested },
           env: {},
           selfOrigins: () => [SELF_ORIGIN],
@@ -93,7 +90,7 @@ export async function templateMcp(
   });
   const template = templateRecord({
     headless: !HEADED,
-    stealth: driver === 'patchright' ? 'standard' : 'off',
+    stealth,
     unseal: {
       cookieValues: false,
       evaluate: false,

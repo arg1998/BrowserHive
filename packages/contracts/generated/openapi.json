@@ -7683,7 +7683,9 @@
                 "type": "string"
               },
               "playwright": {
-                "type": "string"
+                "type": "string",
+                "deprecated": true,
+                "description": "Deprecated: the Playwright release the Patchright driver is built on (equal to `patchright`). Kept for compatibility; read `patchright`."
               },
               "patchright": {
                 "type": [

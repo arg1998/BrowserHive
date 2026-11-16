@@ -11,6 +11,8 @@ import {
   lookupKey,
   namesFor,
   type ProvenanceSource,
+  REMOVED_CONFIG_KEYS,
+  type RemovedConfigKey,
   reservedMessage,
   type ValueRef,
 } from '@browserhive/contracts/config';
@@ -46,6 +48,37 @@ export interface RawEntry {
 export interface CollectedLayer {
   readonly entries: ReadonlyMap<ConfigKey, RawEntry>;
   readonly problems: readonly ConfigProblem[];
+  /** Non-fatal findings (a removed key set to what is now the only behaviour, spec 08 §5.10). */
+  readonly warnings?: readonly string[];
+}
+
+/**
+ * A removed key (spec 08 §5.10) set in some source: a value that asked for what is now the only
+ * behaviour is a deprecation warning and is ignored; any other value is a usage error.
+ *
+ * @param display How the location reads in a message (`--stealthDriver`, `'stealthDriver' in /path`).
+ * @returns The problem, or the warning.
+ */
+export function removedKeyFinding(
+  found: { readonly key: string; readonly removed: RemovedConfigKey },
+  raw: unknown,
+  where: { readonly source: ProvenanceSource; readonly location: string; readonly display: string },
+): { readonly problem: ConfigProblem } | { readonly warning: string } {
+  const value = typeof raw === 'string' ? raw.trim() : raw;
+  if (typeof value === 'string' && found.removed.accepted.includes(value)) {
+    return {
+      warning: `${where.display} is deprecated and ignored: ${found.removed.reason}. Remove it; from ${found.removed.unknownFrom} it is an unknown key.`,
+    };
+  }
+  return {
+    problem: {
+      code: 'CONFIG_INVALID',
+      key: found.key,
+      source: where.source,
+      location: where.location,
+      message: `${where.display}: ${found.removed.instead}`,
+    },
+  };
 }
 
 const EMPTY_HINT = 'Unset it or provide a value.';
@@ -59,6 +92,7 @@ const EMPTY_HINT = 'Unset it or provide a value.';
 export function collectEnvLayer(env: Readonly<Record<string, string | undefined>>): CollectedLayer {
   const entries = new Map<ConfigKey, RawEntry>();
   const problems: ConfigProblem[] = [];
+  const warnings: string[] = [];
   for (const name of Object.keys(env).sort()) {
     if (!name.startsWith(ENV_PREFIX)) continue;
     const value = env[name];
@@ -97,6 +131,16 @@ export function collectEnvLayer(env: Readonly<Record<string, string | undefined>
       });
       continue;
     }
+    if (found.kind === 'removed') {
+      const finding = removedKeyFinding(found, value, {
+        source: 'env',
+        location: name,
+        display: name,
+      });
+      if ('problem' in finding) problems.push(finding.problem);
+      else warnings.push(finding.warning);
+      continue;
+    }
     if (value === '') {
       problems.push({
         code: 'CONFIG_EMPTY_VALUE',
@@ -115,7 +159,7 @@ export function collectEnvLayer(env: Readonly<Record<string, string | undefined>
       display: name,
     });
   }
-  return { entries, problems };
+  return { entries, problems, warnings };
 }
 
 /** Hint for the unsupported `--admin-bind`, `--admin-port` and their env spellings (D-02). */
@@ -172,6 +216,7 @@ export function collectOtelLayer(
 export function collectCliLayer(tokens: TokenizedArgs): CollectedLayer {
   const entries = new Map<ConfigKey, RawEntry>();
   const problems: ConfigProblem[] = [];
+  const warnings: string[] = [];
   for (const flag of [...tokens.unknown, ...tokens.shortFlags]) {
     const { suggestions, removed } = suggestKey(flag, 'cli', CONFIG_KEYS);
     const base = `unknown flag '${flag}'.`;
@@ -214,6 +259,16 @@ export function collectCliLayer(tokens: TokenizedArgs): CollectedLayer {
       });
       continue;
     }
+    if (found.kind === 'removed') {
+      const finding = removedKeyFinding(found, values.at(-1) ?? '', {
+        source: 'cli',
+        location: flag,
+        display: flag,
+      });
+      if ('problem' in finding) problems.push(finding.problem);
+      else warnings.push(finding.warning);
+      continue;
+    }
     const kind = keyKind(found.key);
     const raw = kind === 'list' || kind === 'map' ? values.join(',') : (values.at(-1) ?? '');
     if (raw === '') {
@@ -228,7 +283,7 @@ export function collectCliLayer(tokens: TokenizedArgs): CollectedLayer {
     }
     entries.set(found.key, { key: found.key, raw, source: 'cli', location: flag, display: flag });
   }
-  return { entries, problems };
+  return { entries, problems, warnings };
 }
 
 /** What a value was written as: the string itself, or compact JSON for arrays and objects. */
@@ -252,6 +307,7 @@ export function collectFileLayer(
 ): CollectedLayer {
   const entries = new Map<ConfigKey, RawEntry>();
   const problems: ConfigProblem[] = [];
+  const warnings: string[] = [];
   const baseDir = dirname(filePath);
   for (const [name, raw] of Object.entries(json)) {
     if (name === '$schema') continue;
@@ -281,6 +337,18 @@ export function collectFileLayer(
         location,
         message: reservedMessage(found.key),
       });
+      continue;
+    }
+    if (found.kind === 'removed') {
+      // A reference resolves first, so `{env:X}` holding `patchright` reads as `patchright`.
+      const expanded = interpolateJson(raw, lookup);
+      const finding = removedKeyFinding(
+        found,
+        expanded.problems.length === 0 ? expanded.value : raw,
+        { source: 'file', location, display: `'${name}' in ${filePath}` },
+      );
+      if ('problem' in finding) problems.push(finding.problem);
+      else warnings.push(finding.warning);
       continue;
     }
     const key = found.key;
@@ -339,7 +407,7 @@ export function collectFileLayer(
       ...(refs.length > 0 && { refs, template: templateOf(raw), refValues: expanded.values }),
     });
   }
-  return { entries, problems };
+  return { entries, problems, warnings };
 }
 
 /**
@@ -356,11 +424,24 @@ export type ConfigOverrides = { readonly [K in ConfigKey]?: unknown };
  */
 export function collectOverridesLayer(overrides: ConfigOverrides): CollectedLayer {
   const entries = new Map<ConfigKey, RawEntry>();
+  const problems: ConfigProblem[] = [];
+  const warnings: string[] = [];
   for (const key of CONFIG_KEYS) {
     const raw: unknown = overrides[key];
     if (raw === undefined) continue;
     const location = `options.${key}`;
     entries.set(key, { key, raw, source: 'cli', location, display: location });
   }
-  return { entries, problems: [] };
+  // Removed keys a JavaScript caller may still pass (spec 08 §5.10).
+  const extra: Readonly<Record<string, unknown>> = overrides;
+  for (const key of Object.keys(REMOVED_CONFIG_KEYS)) {
+    const raw = extra[key];
+    const found = lookupKey('json', key);
+    if (raw === undefined || found.kind !== 'removed') continue;
+    const location = `options.${key}`;
+    const finding = removedKeyFinding(found, raw, { source: 'cli', location, display: location });
+    if ('problem' in finding) problems.push(finding.problem);
+    else warnings.push(finding.warning);
+  }
+  return { entries, problems, warnings };
 }

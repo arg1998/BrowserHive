@@ -1,6 +1,6 @@
 /** @module infra/browsers/host-process — the browser process behind a host: its pid (for the memory metric and the supervisor's sampler) and a last-resort kill when a close overruns its deadline. */
 
-import type { Browser, BrowserContext } from 'playwright';
+import type { Browser, BrowserContext } from 'patchright';
 import { withDeadline } from '../../kernel/deadline.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { Logger } from '../../ports/logger.ts';

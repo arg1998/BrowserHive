@@ -31,10 +31,10 @@ jobs:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
       # The bundled Chromium is still needed: some suites test the chromium channel on purpose.
-      - run: bunx playwright install chromium --with-deps
+      - run: bunx patchright install chromium --with-deps
       # The runner image ships Chrome, but not always the newest stable: update it first.
       - name: Update Google Chrome to current stable
-        run: bunx playwright install chrome
+        run: bunx patchright install chrome
       - name: Chrome version
         id: chrome
         run: echo "version=$(google-chrome --version)" >> "$GITHUB_OUTPUT"

@@ -67,10 +67,10 @@ function member(value: unknown, key: string): unknown {
 }
 
 /**
- * Playwright's own lookup for `chrome` / `msedge` (`registry.findExecutable(name).executablePath()`
- * in the pinned `playwright-core`), so detection and launch can never disagree about which binary a
- * channel means. A unit test pins that this internal entry point still exists, so a Playwright bump
- * that moves it fails loudly instead of silently falling back.
+ * The driver's own lookup for `chrome` / `msedge` (`registry.findExecutable(name).executablePath()`
+ * in the pinned `patchright-core`, Playwright's registry), so detection and launch can never
+ * disagree about which binary a channel means. A unit test pins that this internal entry point still
+ * exists, so a driver bump that moves it fails loudly instead of silently falling back.
  *
  * @returns The executable path, or null when the browser is not installed (or the lookup is unavailable).
  */
@@ -79,7 +79,7 @@ export function playwrightChannelExecutable(playwrightChannel: 'chrome' | 'msedg
 }
 
 /**
- * `registry.findExecutable(name).executablePath()` of the pinned `playwright-core`, for any
+ * `registry.findExecutable(name).executablePath()` of the pinned `patchright-core`, for any
  * Playwright browser name (`chromium`, `chrome`, `msedge`, …). Never throws.
  *
  * @returns The path, or null when that browser is absent or the registry cannot be read.
@@ -90,7 +90,7 @@ export function playwrightExecutable(name: string): string | null {
     // Class instances with prototype methods: checked by hand, since a schema parse would copy
     // them into plain objects and drop the methods.
     const registry = member(
-      member(require('playwright-core/lib/coreBundle'), 'registry'),
+      member(require('patchright-core/lib/coreBundle'), 'registry'),
       'registry',
     );
     const find = member(registry, 'findExecutable');

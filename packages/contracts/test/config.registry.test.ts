@@ -8,6 +8,7 @@ import {
   keysInGroup,
   lookupKey,
   namesFor,
+  REMOVED_CONFIG_KEYS,
   RESERVED_CONFIG_KEYS,
   RESERVED_ENUM_MEMBERS,
   secretKeys,
@@ -40,7 +41,6 @@ const SPEC_KEYS = [
   'minAttentionWait',
   'allowEvaluate',
   'stealth',
-  'stealthDriver',
   'fingerprint',
   'humanize',
   'captcha',
@@ -189,6 +189,19 @@ describe('CONFIG_KEYS', () => {
     expect(RESERVED_ENUM_MEMBERS.vault).toEqual(['local', 'onepassword', 'http']);
     expect(RESERVED_ENUM_MEMBERS.captcha).toEqual(['solver']);
     expect(KEY_ALIASES['--pretty-logs']).toBe('logFormat');
-    expect(KEY_ALIASES['BROWSERHIVE_DISABLE_PATCHRIGHT']).toBe('stealthDriver');
+    expect(KEY_ALIASES['BROWSERHIVE_DISABLE_PATCHRIGHT']).toBe('stealth');
+  });
+
+  it('recognises the removed stealthDriver in every source, outside CONFIG_KEYS (D-65)', () => {
+    const removed = REMOVED_CONFIG_KEYS['stealthDriver'];
+    expect(removed?.accepted).toEqual(['auto', 'patchright']);
+    expect(CONFIG_KEYS).not.toContain('stealthDriver');
+    for (const [source, name] of [
+      ['env', 'BROWSERHIVE_STEALTH_DRIVER'],
+      ['cli', '--stealthDriver'],
+      ['json', 'stealthDriver'],
+    ] as const) {
+      expect(lookupKey(source, name)).toMatchObject({ kind: 'removed', key: 'stealthDriver' });
+    }
   });
 });

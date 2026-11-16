@@ -95,8 +95,18 @@ export type StorageStatus = z.infer<typeof StorageStatus>;
 export const RuntimeVersions = z.object({
   bun: z.string(),
   sqlite: z.string(),
-  playwright: z.string(),
+  /**
+   * Deprecated (D-65): the Playwright release the Patchright driver is built on (Patchright's
+   * version numbers follow Playwright's). Kept for `/api/v1` clients; read `patchright`.
+   */
+  playwright: z.string().meta({
+    deprecated: true,
+    description:
+      'Deprecated: the Playwright release the Patchright driver is built on (equal to `patchright`). Kept for compatibility; read `patchright`.',
+  }),
+  /** The browser driver's version (Patchright, the only driver, D-65); `null` when its package cannot be read. */
   patchright: z.string().nullable(),
+  /** The Chromium build `patchright-core` pins, when its executable is installed. */
   chromium: z.string().nullable(),
 });
 /** Runtime versions. */
@@ -154,6 +164,7 @@ export const SystemInfo = z.object({
   persistence_mode: z.string(),
   stealth: z.object({
     profile: z.string(),
+    /** The browser driver; always `patchright` (D-65). */
     driver: z.string(),
     fingerprint: z.boolean(),
     humanize: z.boolean(),

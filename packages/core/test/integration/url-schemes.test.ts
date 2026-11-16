@@ -5,7 +5,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { Page } from 'playwright';
+import type { Page } from 'patchright';
 import type { ToolHarness } from '../helpers/fake-transport.ts';
 import { textOf } from '../helpers/fake-transport.ts';
 import { useMcpStack } from './mcp-fixture.ts';

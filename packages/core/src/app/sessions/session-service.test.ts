@@ -124,7 +124,7 @@ describe('SessionService ownership and lookup', () => {
       count: 1,
       liveSessions: 1,
       limit: 1,
-      driver: 'playwright',
+      driver: 'patchright',
       persistenceMode: 'memory',
     });
   });

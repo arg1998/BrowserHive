@@ -7,7 +7,6 @@ import type { SystemBrowser } from '@browserhive/contracts/http';
 import type { AppError, Clock, Logger } from '@browserhive/core/runtime';
 import type {
   DetectedBrowser,
-  DriverResolver,
   GuidanceAlternative,
   GuidanceTarget,
   SandboxEnvironment,
@@ -21,6 +20,7 @@ import {
   CHANNEL_LABEL,
   channelExecutable,
   detectBrowsers,
+  driverChromium,
   inspectSandboxEnvironment,
   playwrightChannelExecutable,
   probeSandbox,
@@ -45,7 +45,6 @@ export interface SandboxInput {
   readonly config: Readonly<ServerConfig>;
   readonly provenance: Provenance;
   readonly configFilePath: string | undefined;
-  readonly resolver: DriverResolver;
   readonly logger: Logger;
   readonly clock: Clock;
   /** Test seam; defaults to {@link realSandboxHost}. */
@@ -97,25 +96,9 @@ async function runHelper(
   }
 }
 
-/** The BrowserType the configured sessions launch `chromium` through (Patchright's when stealth uses it). */
-function sessionBrowserType(
-  resolver: DriverResolver,
-  config: Pick<ServerConfig, 'stealth' | 'stealthDriver'>,
-): ReturnType<DriverResolver['stock']> {
-  if (config.stealth === 'off') return resolver.stock();
+function bundledPath(): string | null {
   try {
-    return resolver.resolveStealth(config.stealthDriver).browserType;
-  } catch {
-    return resolver.stock();
-  }
-}
-
-function bundledPath(
-  resolver: DriverResolver,
-  config: Pick<ServerConfig, 'stealth' | 'stealthDriver'>,
-): string | null {
-  try {
-    const path = sessionBrowserType(resolver, config).executablePath();
+    const path = driverChromium().executablePath();
     return path !== '' && existsSync(path) ? path : null;
   } catch {
     return null;
@@ -123,13 +106,10 @@ function bundledPath(
 }
 
 /**
- * The real host: files, `--version`, and headless probe launches through the driver sessions use,
- * so the verdict is recorded for the same executable sessions launch.
+ * The real host: files, `--version`, and headless probe launches through the driver sessions use
+ * (Patchright, D-65), so the verdict is recorded for the same executable sessions launch.
  */
-export function realSandboxHost(
-  resolver: DriverResolver,
-  config: Pick<ServerConfig, 'stealth' | 'stealthDriver'>,
-): SandboxHost {
+export function realSandboxHost(): SandboxHost {
   return {
     environment: () =>
       inspectSandboxEnvironment({
@@ -139,7 +119,7 @@ export function realSandboxHost(
         readFile: readText,
       }),
     probe: (channel) =>
-      probeSandbox(sessionBrowserType(resolver, config), {
+      probeSandbox(driverChromium(), {
         playwrightChannel: PLAYWRIGHT_CHANNEL[channel],
       }),
     detect: () =>
@@ -150,13 +130,10 @@ export function realSandboxHost(
         readFile: readText,
         listDir,
         run: runHelper,
-        bundled: {
-          executablePath: bundledPath(resolver, config),
-          version: bundledChromiumVersion('playwright'),
-        },
+        bundled: { executablePath: bundledPath(), version: bundledChromiumVersion() },
       }),
     executable: (channel) =>
-      channelExecutable(channel, () => bundledPath(resolver, config), playwrightChannelExecutable),
+      channelExecutable(channel, () => bundledPath(), playwrightChannelExecutable),
     apparmorCovers: (path) =>
       apparmorProfileCovers(path, { platform: process.platform, listDir, readFile: readText }),
   };
@@ -209,7 +186,7 @@ function targetOf(
  */
 export async function buildSandbox(input: SandboxInput): Promise<SandboxWiring> {
   const { config, logger } = input;
-  const host = input.host ?? realSandboxHost(input.resolver, config);
+  const host = input.host ?? realSandboxHost();
   const environment = host.environment();
   const log = logger.child({ module: 'browsers.sandbox' });
   const setting = sandboxSetting(input.provenance, input.configFilePath, config.sandbox);

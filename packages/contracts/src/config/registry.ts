@@ -1,4 +1,4 @@
-/** @module contracts/config/registry — key registry: names in the three sources, metadata lookup, reserved keys (spec 08 §2, §5.4) */
+/** @module contracts/config/registry — key registry: names in the three sources, metadata lookup, reserved and removed keys (spec 08 §2, §5.4, §5.10) */
 import { type KeyMeta, readKeyMeta } from './key.ts';
 import { CONFIG_SHAPE, type ConfigKey } from './shape.ts';
 
@@ -60,6 +60,38 @@ export function isIdentityEnvVar(name: string): name is IdentityEnvVar {
   return (IDENTITY_ENV_VARS as readonly string[]).includes(name);
 }
 
+/** A key that existed in an earlier release and was removed (spec 08 §5.10). */
+export interface RemovedConfigKey {
+  /** The release that removed it. */
+  readonly removedIn: string;
+  /** The release from which the name is an ordinary unknown key (the entry leaves this table). */
+  readonly unknownFrom: string;
+  /**
+   * Values that asked for what is now the only behaviour: accepted with a deprecation warning and
+   * ignored. Any other value is a usage error with {@link RemovedConfigKey.instead}.
+   */
+  readonly accepted: readonly string[];
+  /** Why it is gone, one sentence. */
+  readonly reason: string;
+  /** What to do instead when the value asked for the removed behaviour, one sentence. */
+  readonly instead: string;
+}
+
+/**
+ * Removed keys (spec 08 §5.10): still recognised for one release so a config that sets one gets an
+ * actionable answer instead of "unknown key". Not in `--help`, `config show` or the schema.
+ */
+export const REMOVED_CONFIG_KEYS: Readonly<Record<string, RemovedConfigKey>> = {
+  stealthDriver: {
+    removedIn: '0.3.0',
+    unknownFrom: '0.4.0',
+    accepted: ['auto', 'patchright'],
+    reason: 'Patchright is the only browser driver since 0.3.0',
+    instead:
+      "the Playwright driver was removed in 0.3.0; every session runs on Patchright. Remove 'stealthDriver'. For a browser without BrowserHive's stealth patches, set stealth to off.",
+  },
+};
+
 /** Unsupported spellings recognised by the config resolver and answered with an unknown-key hint, mapped to the canonical key (`null`: no equivalent) (spec 08 §5.5). */
 export const KEY_ALIASES: Readonly<Record<string, ConfigKey | null>> = {
   '--admin-bind': null,
@@ -67,7 +99,8 @@ export const KEY_ALIASES: Readonly<Record<string, ConfigKey | null>> = {
   '--pretty-logs': 'logFormat',
   '--log-pretty': 'logFormat',
   BROWSERHIVE_LOG_PRETTY: 'logFormat',
-  BROWSERHIVE_DISABLE_PATCHRIGHT: 'stealthDriver',
+  // Patchright is the only driver (D-65); BrowserHive's own stealth is what can be turned off.
+  BROWSERHIVE_DISABLE_PATCHRIGHT: 'stealth',
   // Chrome's own flag; BrowserHive's equivalent is `--sandbox off`.
   '--no-sandbox': 'sandbox',
   BROWSERHIVE_NO_SANDBOX: 'sandbox',
@@ -110,11 +143,23 @@ const RESERVED_BY_ENV: ReadonlyMap<string, ReservedConfigKey> = new Map(
   RESERVED_CONFIG_KEYS.map((key) => [envNameOf(key), key]),
 );
 
+const REMOVED_BY_ENV: ReadonlyMap<string, string> = new Map(
+  Object.keys(REMOVED_CONFIG_KEYS).map((key) => [envNameOf(key), key]),
+);
+
 /** Result of resolving an external spelling back to a key. */
 export type KeyLookup =
   | { readonly kind: 'key'; readonly key: ConfigKey }
   | { readonly kind: 'reserved'; readonly key: ReservedConfigKey }
+  | { readonly kind: 'removed'; readonly key: string; readonly removed: RemovedConfigKey }
   | { readonly kind: 'unknown' };
+
+function removedLookup(key: string | undefined): KeyLookup {
+  const removed = key === undefined ? undefined : REMOVED_CONFIG_KEYS[key];
+  return key === undefined || removed === undefined
+    ? { kind: 'unknown' }
+    : { kind: 'removed', key, removed };
+}
 
 function isReservedKey(value: string): value is ReservedConfigKey {
   return (RESERVED_CONFIG_KEYS as readonly string[]).includes(value);
@@ -131,12 +176,13 @@ export function lookupKey(source: 'env' | 'cli' | 'json', name: string): KeyLook
     const key = KEY_BY_ENV.get(name);
     if (key !== undefined) return { kind: 'key', key };
     const reserved = RESERVED_BY_ENV.get(name);
-    return reserved === undefined ? { kind: 'unknown' } : { kind: 'reserved', key: reserved };
+    if (reserved !== undefined) return { kind: 'reserved', key: reserved };
+    return removedLookup(REMOVED_BY_ENV.get(name));
   }
   const bare = source === 'cli' ? (name.startsWith('--') ? name.slice(2) : '') : name;
   if (isConfigKey(bare)) return { kind: 'key', key: bare };
   if (isReservedKey(bare)) return { kind: 'reserved', key: bare };
-  return { kind: 'unknown' };
+  return removedLookup(Object.hasOwn(REMOVED_CONFIG_KEYS, bare) ? bare : undefined);
 }
 
 const META_CACHE = new Map<ConfigKey, KeyMeta>();

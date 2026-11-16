@@ -1,4 +1,4 @@
-/** @module cli/commands/init — `browserhive init`: data dir (0700) and subdirectories, Chromium for Playwright (and Patchright), the default-browser report and choice, database creation and migration, optional schema file, next steps; idempotent, each step ✓/✗ (spec 08 §7.1, D-18) */
+/** @module cli/commands/init — `browserhive init`: data dir (0700) and subdirectories, Chromium for Patchright (the only driver, D-65), the default-browser report and choice, database creation and migration, optional schema file, next steps; idempotent, each step ✓/✗ (spec 08 §7.1, D-18) */
 import { dirname, join } from 'node:path';
 import { configFileJsonSchema } from '@browserhive/contracts/config';
 import type { Channel } from '@browserhive/contracts/enums';
@@ -41,10 +41,10 @@ export interface InitOptions {
 /**
  * The command an operator runs by hand to retry a failed download.
  *
- * @returns `bunx playwright@1.63.0 install chromium`.
+ * @returns `bunx patchright@1.63.0 install chromium`.
  */
-export function retryCommand(driver: 'playwright' | 'patchright', version: string | null): string {
-  return `bunx ${driver}${version === null ? '' : `@${version}`} install chromium`;
+export function retryCommand(version: string | null): string {
+  return `bunx patchright${version === null ? '' : `@${version}`} install chromium`;
 }
 
 function childEnv(env: Readonly<Record<string, string | undefined>>): Record<string, string> {
@@ -80,27 +80,20 @@ async function stepDataDir(context: CommandContext, dataDir: string): Promise<bo
   }
 }
 
+/** Downloads Patchright's Chromium, the browser every `chromium` session launches (D-65). */
 async function stepBrowser(
   context: CommandContext,
-  driver: 'playwright' | 'patchright',
-  options: { readonly force: boolean; readonly optional: boolean },
+  options: { readonly force: boolean },
 ): Promise<boolean> {
   const { deps, out } = context;
-  const label = `Chromium for ${driver === 'playwright' ? 'Playwright' : 'Patchright'}`;
-  const probe = driver === 'playwright' ? deps.probes.playwright : deps.probes.patchright;
-  const before = await probe.call(deps.probes);
-  const soft = options.optional ? 'warn' : 'fail';
+  const label = 'Chromium for Patchright';
+  const probe = () => deps.probes.patchright();
+  const before = await probe();
   if (before.packageVersion === null) {
-    out.status(
-      soft,
-      label,
-      options.optional
-        ? `${driver} package not installed (optional); stealth sessions use Playwright`
-        : `${driver} package not installed; reinstall browserhive`,
-    );
-    return options.optional;
+    out.status('fail', label, 'patchright package not installed; reinstall browserhive');
+    return false;
   }
-  const retry = retryCommand(driver, before.packageVersion);
+  const retry = retryCommand(before.packageVersion);
   if (before.installed && !options.force) {
     out.status(
       'ok',
@@ -109,12 +102,12 @@ async function stepBrowser(
     );
     return true;
   }
-  const command = deps.probes.installCommand(driver);
+  const command = deps.probes.installCommand();
   if (command === null) {
-    out.status(soft, label, `cannot locate the ${driver} CLI; retry with: ${retry}`);
-    return options.optional;
+    out.status('fail', label, `cannot locate the patchright CLI; retry with: ${retry}`);
+    return false;
   }
-  out.line(out.style.dim(`  downloading ${label} (${driver} install chromium)…`));
+  out.line(out.style.dim(`  downloading ${label} (patchright install chromium)…`));
   const outcome = await deps.runner
     .run(command.command, [...command.args, 'install', 'chromium'], {
       env: childEnv(deps.env),
@@ -128,7 +121,7 @@ async function stepBrowser(
         timedOut: false,
       }),
     );
-  const after = outcome.code === 0 ? await probe.call(deps.probes) : before;
+  const after = outcome.code === 0 ? await probe() : before;
   if (outcome.code === 0 && after.installed) {
     out.status(
       'ok',
@@ -143,9 +136,9 @@ async function stepBrowser(
       ? 'installer finished but the browser is still missing'
       : `download failed (exit ${outcome.code ?? 'signal'})`;
   const lastLine = outcome.stderr.trim().split('\n').at(-1) ?? '';
-  out.status(soft, label, `${why}${lastLine === '' ? '' : `: ${lastLine}`}`);
+  out.status('fail', label, `${why}${lastLine === '' ? '' : `: ${lastLine}`}`);
   out.line(`  Retry with: ${out.style.bold(retry)}`);
-  return options.optional;
+  return false;
 }
 
 async function stepDatabase(context: CommandContext, dataDir: string): Promise<boolean> {
@@ -218,22 +211,16 @@ async function stepSchema(
 export async function runInit(context: CommandContext, options: InitOptions): Promise<ExitCode> {
   const { out } = context;
   const config = options.resolved.config;
+  // Resolver warnings (a removed key such as `stealthDriver`, spec 08 §5.10) are diagnostics.
+  for (const warning of options.resolved.diagnostics.warnings) {
+    out.diagnostic(`browserhive: warning: ${warning}`);
+  }
   const results: boolean[] = [];
   results.push(await stepDataDir(context, config.dataDir));
   if (options.skipBrowsers) {
     out.status('ok', 'browsers', 'skipped (--skipBrowsers)');
   } else {
-    results.push(
-      await stepBrowser(context, 'playwright', { force: options.force, optional: false }),
-    );
-    if (config.stealthDriver !== 'playwright') {
-      results.push(
-        await stepBrowser(context, 'patchright', {
-          force: options.force,
-          optional: config.stealthDriver === 'auto',
-        }),
-      );
-    }
+    results.push(await stepBrowser(context, { force: options.force }));
   }
   results.push(
     await stepBrowserChoice(context, {

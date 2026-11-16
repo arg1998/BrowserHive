@@ -1,6 +1,6 @@
 /** @module infra/browsers/session-view — the `SessionView` of an exclusive host: its one session sees every page of the context, and closing the view closes the host. */
 
-import type { CDPSession, Page } from 'playwright';
+import type { CDPSession, Page } from 'patchright';
 import { AppError } from '../../kernel/errors/app-error.ts';
 import type {
   BrowserHost,

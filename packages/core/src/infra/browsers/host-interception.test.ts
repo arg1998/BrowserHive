@@ -4,7 +4,7 @@ import { describe, expect, it } from 'bun:test';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Page, Request } from 'playwright';
+import type { Page, Request } from 'patchright';
 import { FakeClock } from '../../../test/helpers/fake-clock.ts';
 import { createCollectingLogger } from '../logging/collecting-logger.ts';
 import {

@@ -1,12 +1,10 @@
 /// <reference lib="dom" />
-/** @module test/integration/template-known-limits.test — what a template host's always-on routing changes, pinned under both drivers (spec 13 §3.8 "Known limits", `docs/guide/templates.md`; PR #76 F2): no HTTP cache and CORS preflights answered by Playwright (a refused write is sent) but not by Patchright, on every OS headless (routing does not depend on the display); a close-time beacon is never routed (whether it reaches the site depends on timing). */
+/** @module test/integration/template-known-limits.test — what a template host's always-on routing changes, pinned under stealth off and standard on Patchright, the only driver (spec 13 §3.8 "Known limits", `docs/guide/templates.md`; PR #76 F2, D-65): no HTTP cache, on every OS headless (routing does not depend on the display); a cross-origin write that needs a CORS preflight: on a stealth-off host the driver answers the preflight itself and a write the site refuses is sent, on a stealth host (init scripts) it fails before reaching the site (Patchright's init-script interception; D-65 re-measurement); a close-time beacon is never routed (whether it reaches the site depends on timing). */
 
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { Session } from '../../src/domain/session/session.ts';
 import { PASS } from '../../src/infra/browsers/interception-chain.ts';
-import { type DriverName, HEADED, type TemplateWorld, templateWorld } from './template-fixture.ts';
-
-const DRIVERS: readonly DriverName[] = ['playwright', 'patchright'];
+import { HEADED, STEALTH_LEGS, type TemplateWorld, templateWorld } from './template-fixture.ts';
 
 function pageOf(session: Session) {
   const page = session.view?.page;
@@ -20,13 +18,13 @@ afterEach(async () => {
   world = null;
 });
 
-for (const driver of DRIVERS) {
-  describe(`template host known limits (${driver}${HEADED ? ', headed' : ''})`, () => {
+for (const stealth of STEALTH_LEGS) {
+  describe(`template host known limits (stealth ${stealth}${HEADED ? ', headed' : ''})`, () => {
     // Routing semantics do not depend on the display: pinned on the headless legs.
     it.skipIf(HEADED)(
       'serves nothing from the HTTP cache: a reload refetches every cacheable script',
       async () => {
-        world = await templateWorld(driver);
+        world = await templateWorld(stealth);
         const page = pageOf(await world.launch('alpha'));
         const sites = world.sites;
         const cached = () => sites.requests.filter((r) => r.path.startsWith('/cached.js')).length;
@@ -39,11 +37,11 @@ for (const driver of DRIVERS) {
     );
 
     it.skipIf(HEADED)(
-      driver === 'playwright'
-        ? 'a cross-origin write whose preflight the site refuses is sent (Playwright answers the preflight)'
-        : 'a cross-origin write whose preflight the site refuses is not sent',
+      stealth === 'off'
+        ? 'a cross-origin write whose preflight the site refuses is sent (the driver answers the preflight)'
+        : 'a cross-origin write that needs a preflight never reaches the site (init-script interception)',
       async () => {
-        world = await templateWorld(driver);
+        world = await templateWorld(stealth);
         const page = pageOf(await world.launch('alpha'));
         const sites = world.sites;
         await page.goto(sites.url('site-a.test', '/cors-page'));
@@ -63,12 +61,12 @@ for (const driver of DRIVERS) {
           .map((r) => r.method);
         // The page never reads the answer either way (no CORS headers).
         expect(result).toBe('blocked');
-        expect(seen).toEqual(driver === 'playwright' ? ['POST'] : []);
+        expect(seen).toEqual(stealth === 'off' ? ['POST'] : []);
       },
     );
 
     it('a beacon sent from pagehide while the page closes is never routed', async () => {
-      world = await templateWorld(driver);
+      world = await templateWorld(stealth);
       const session = await world.launch('alpha');
       const sites = world.sites;
       // What the host's chain sees (the request-guard slot is free until site packs).

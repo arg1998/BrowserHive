@@ -6,7 +6,7 @@ import type {
   ServerConfig,
   ServerConfigInput,
 } from '@browserhive/contracts/config';
-import { CONFIG_KEYS } from '@browserhive/contracts/config';
+import { CONFIG_KEYS, REMOVED_CONFIG_KEYS } from '@browserhive/contracts/config';
 import { VERSION } from '@browserhive/core';
 import {
   type ConfigFailure,
@@ -145,7 +145,8 @@ function splitOptions(options: CreateServerOptions): ConfigOverrides {
   const problems: Parameters<typeof configFailure>[0][number][] = [];
   for (const [name, value] of Object.entries(options)) {
     if (EXTRA_OPTIONS.has(name) || value === undefined) continue;
-    if (isConfigKey(name)) {
+    // A removed key (spec 08 §5.10) goes to the resolver, which answers it with a warning or a hint.
+    if (isConfigKey(name) || Object.hasOwn(REMOVED_CONFIG_KEYS, name)) {
       overrides[name] = value;
       continue;
     }

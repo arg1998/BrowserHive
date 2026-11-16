@@ -1,7 +1,7 @@
 /**
  * @module test/integration/driver-messages — the driver message contract (#55, #56): every failure the classifier maps is
- * provoked on real Chromium through both drivers (Playwright and Patchright), and the code the agent gets is asserted. A
- * driver upgrade that rewords a message fails here instead of turning into `INTERNAL_ERROR` in production.
+ * provoked on real Chromium through the driver (Patchright, D-65) with stealth off and on, and the code the agent gets is
+ * asserted. A driver upgrade that rewords a message fails here instead of turning into `INTERNAL_ERROR` in production.
  */
 
 import { describe, expect, it } from 'bun:test';
@@ -9,12 +9,13 @@ import { existsSync, readFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { Page } from 'playwright';
+import type { Page } from 'patchright';
 import { classifyDriverError } from '../../src/infra/browsers/classify-error.ts';
 import { textOf } from '../helpers/fake-transport.ts';
 import { useMcpStack } from './mcp-fixture.ts';
 
-const DRIVERS = ['playwright', 'patchright'] as const;
+/** Stealth off and on: both on Patchright, the only driver (D-65). */
+const STEALTH = [false, true] as const;
 
 /** The typed error a failed call carries in `_meta` (code and details). */
 function errorOf(result: CallToolResult): { code?: string; details?: Record<string, unknown> } {
@@ -29,15 +30,14 @@ interface Download {
   readonly size: number;
 }
 
-for (const driver of DRIVERS) {
-  describe(`driver message contract (${driver}, real Chromium)`, () => {
-    const { state } = useMcpStack({ stealthDriver: driver });
+for (const stealth of STEALTH) {
+  describe(`driver message contract (stealth ${stealth ? 'on' : 'off'}, real Chromium)`, () => {
+    const { state } = useMcpStack();
 
-    /** A session on `driver`: stealth sessions use the configured stealth driver, plain ones stock Playwright. */
+    /** A session with `stealth`; every session runs on Patchright. */
     async function launch(): Promise<string> {
-      const id = await state.harness.launch({ stealth: driver === 'patchright' });
-      // The contract must really run on both drivers; a silent fallback would hide a rewording.
-      expect(state.harness.services.sessions.peek(id)?.driver).toBe(driver);
+      const id = await state.harness.launch({ stealth });
+      expect(state.harness.services.sessions.peek(id)?.driver).toBe('patchright');
       return id;
     }
 
@@ -233,14 +233,10 @@ for (const driver of DRIVERS) {
         session_id: id,
         url: state.fixture.url('/download-broken'),
       });
-      if (driver === 'playwright') {
-        expect(errorOf(nav)).toMatchObject({ code: 'DOWNLOAD_FAILED' });
-      } else {
-        // Patchright fetches a document response itself (to inject its init scripts) and hands the
-        // browser what arrived, so a transfer that breaks mid-way is saved truncated, not failed.
-        expect(errorOf(nav).code ?? 'ok').toBeOneOf(['ok', 'DOWNLOAD_FAILED']);
-      }
-      // An `<a download>` click is not a document load, so both drivers see the real failure.
+      // Patchright can fetch a document response itself (to inject init scripts) and hand the
+      // browser what arrived, so a transfer that breaks mid-way may be saved truncated, not failed.
+      expect(errorOf(nav).code ?? 'ok').toBeOneOf(['ok', 'DOWNLOAD_FAILED']);
+      // An `<a download>` click is not a document load, so it sees the real failure.
       const clicked = await h.call('download_file', {
         session_id: id,
         trigger_selector: '#download-broken',
@@ -270,16 +266,9 @@ for (const driver of DRIVERS) {
         url: state.fixture.url('/download-stall?ms=8000'),
         timeout: 1500,
       });
-      if (driver === 'playwright') {
-        expect(errorOf(result)).toMatchObject({
-          code: 'DOWNLOAD_FAILED',
-          details: { reason: 'the download did not finish within 1500 ms' },
-        });
-      } else {
-        // Patchright buffers the document response (see above): no download starts before the
-        // body is complete, so the call times out as a navigation.
-        expect(errorOf(result).code).toBeOneOf(['NAVIGATION_TIMEOUT', 'DOWNLOAD_FAILED']);
-      }
+      // Patchright may buffer the document response (see above): no download starts before the
+      // body is complete, so the call can time out as a navigation.
+      expect(errorOf(result).code).toBeOneOf(['NAVIGATION_TIMEOUT', 'DOWNLOAD_FAILED']);
     });
 
     it('an upload to a non-file input is UPLOAD_FAILED', async () => {

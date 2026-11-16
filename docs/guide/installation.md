@@ -41,13 +41,12 @@ browserhive init
 `init` is the one-time setup. Each step is idempotent and reported with ✓ or ✗:
 
 1. Creates the data directory (mode `0700`) and its subdirectories.
-2. Downloads Chromium for the pinned Playwright version. `PLAYWRIGHT_BROWSERS_PATH` is honoured.
-3. Downloads the Patchright build of Chromium, used by stealth sessions, unless `--stealthDriver playwright` is set.
-4. Reports the browsers on this machine and whether each can run inside Chromium's sandbox, then lets you pick the default browser (next section).
-5. Creates the database and applies migrations.
-6. Prints next steps.
+2. Downloads Chromium for the pinned Patchright version. Patchright is BrowserHive's browser driver for every session. `PLAYWRIGHT_BROWSERS_PATH` is honoured (Patchright reads it under that name).
+3. Reports the browsers on this machine and whether each can run inside Chromium's sandbox, then lets you pick the default browser (next section).
+4. Creates the database and applies migrations.
+5. Prints next steps.
 
-Useful flags: `--force` re-downloads the browsers, `--dataDir <path>` and `--config <path>` choose where state lives. Network access is only needed for the downloads. Re-run `init` after upgrading BrowserHive; it only downloads what changed.
+Useful flags: `--force` re-downloads the browser, `--dataDir <path>` and `--config <path>` choose where state lives. Network access is only needed for the downloads. Re-run `init` after upgrading BrowserHive; it only downloads what changed.
 
 If you skip `init`, the first `launch_session` fails with [`BROWSER_NOT_INSTALLED`](../reference/errors.md#BROWSER_NOT_INSTALLED) and the message names the command to run.
 
@@ -89,7 +88,7 @@ Choice [1]:
 
 The pros and cons are worked out for your machine: which browsers can sandbox, which versions you have, managed policies, how far an installed browser is ahead of the tested build. Pressing **Enter keeps the current browser and changes nothing**. Picking another one asks before it saves `defaultChannel` to your config file (the one in use, or `<data-dir>/browserhive.config.json`); other settings in the file are kept.
 
-When Google Chrome is not installed, the menu offers **Install Google Chrome**. That runs Google's official installer through Playwright (`playwright install chrome`) and needs administrator rights; nothing is installed unless you pick it.
+When Google Chrome is not installed, the menu offers **Install Google Chrome**. That runs Google's official installer through Patchright (`patchright install chrome`) and needs administrator rights; nothing is installed unless you pick it.
 
 In scripts, CI and containers `init` never asks anything:
 
@@ -112,7 +111,7 @@ browserhive doctor
 
 - Bun version is at least 1.4.
 - The first `bh` on `PATH` is BrowserHive's [shorthand](#the-bh-shorthand) (a warning when it is another program; fine when there is none).
-- Chromium is installed for the resolved stealth driver (Playwright and Patchright), with exact versions.
+- Patchright and its Chromium are installed, with exact versions (row `chromium (patchright)`; a failure when either is missing).
 - Google Chrome and Microsoft Edge: version and path, or "not installed" (fine).
 - The configured `defaultChannel` is installed (a failure otherwise, with the install command).
 - The browser in use is not more than one major version ahead of the tested build (a warning).

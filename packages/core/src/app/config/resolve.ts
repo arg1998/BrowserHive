@@ -239,6 +239,9 @@ export function resolveConfig(
   const collectedOtel = collectOtelLayer(input.env);
   warnings.push(
     ...unexpandedRefWarnings([collectedEnv, collectedOtel, collectedCli, collectedOverrides]),
+    ...(collectedEnv.warnings ?? []),
+    ...(collectedCli.warnings ?? []),
+    ...(collectedOverrides.warnings ?? []),
   );
   const env = parseLayer(collectedEnv, parseOptions);
   const cli = parseLayer(collectedCli, parseOptions);
@@ -267,7 +270,9 @@ export function resolveConfig(
   }
   if (file !== undefined) {
     const lookup = envLookup(input.env, input.host.platform);
-    const parsedFile = parseLayer(collectFileLayer(file.json, file.path, lookup), parseOptions);
+    const collectedFile = collectFileLayer(file.json, file.path, lookup);
+    warnings.push(...(collectedFile.warnings ?? []));
+    const parsedFile = parseLayer(collectedFile, parseOptions);
     problems.push(...parsedFile.problems);
     fileLayer = parsedFile.layer;
     if (file.origin === 'dataDir' && fileLayer.has('dataDir')) {

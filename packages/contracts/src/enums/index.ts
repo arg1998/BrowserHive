@@ -45,7 +45,6 @@ export { SavedAuthKind } from './saved-auth-kind.ts';
 export { Scope } from './scope.ts';
 export { SessionStatus } from './session-status.ts';
 export { SiteWritePolicy } from './site-write-policy.ts';
-export { StealthDriver } from './stealth-driver.ts';
 export { StealthDriverName } from './stealth-driver-name.ts';
 export { StealthLevel } from './stealth-level.ts';
 export { TemplateAvailability } from './template-availability.ts';

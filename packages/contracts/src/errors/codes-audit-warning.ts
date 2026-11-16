@@ -153,7 +153,7 @@ export const WARNING_ERRORS = {
     'STEALTH_INIT_FAILED',
     'Stealth init failed',
     'The CDP identity override could not be applied; the session runs with reduced stealth.',
-    'Check the driver (Patchright/Playwright) version compatibility.',
+    'Check the driver (Patchright) version compatibility.',
   ),
   BLOCKLIST_ROUTE_FAILED: warning(
     'BLOCKLIST_ROUTE_FAILED',

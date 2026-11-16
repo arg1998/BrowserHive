@@ -8,10 +8,8 @@ import { createCollectingLogger } from '../../src/infra/logging/collecting-logge
 import { playwrightBridgeFactory } from '../../src/interface/ws/cdp-bridge.ts';
 import { type LiveFrame, LiveView } from '../../src/interface/ws/live-view.ts';
 import { textOf } from '../helpers/fake-transport.ts';
-import { type DriverName, HEADED } from './template-fixture.ts';
+import { HEADED, STEALTH_LEGS } from './template-fixture.ts';
 import { type TemplateMcp, templateMcp } from './template-mcp-fixture.ts';
-
-const DRIVERS: readonly DriverName[] = ['playwright', 'patchright'];
 
 let world: TemplateMcp | null = null;
 afterEach(async () => {
@@ -43,10 +41,10 @@ function image(result: CallToolResult): boolean {
   return result.content.some((c) => c.type === 'image' && c.data.length > 100);
 }
 
-for (const driver of DRIVERS) {
-  describe(`template tools (${driver}${HEADED ? ', headed' : ''})`, () => {
+for (const stealth of STEALTH_LEGS) {
+  describe(`template tools (stealth ${stealth}${HEADED ? ', headed' : ''})`, () => {
     it('background tabs stay visible, take screenshots and switch without raising a window', async () => {
-      world = await templateMcp(driver);
+      world = await templateMcp(stealth);
       const w = world;
       const id = await launch(w);
       const call = (name: string, args: Record<string, unknown> = {}) =>
@@ -67,7 +65,7 @@ for (const driver of DRIVERS) {
     });
 
     it('a minimized window after a popup, a dialog and a download still yields a screenshot within 15 s', async () => {
-      world = await templateMcp(driver);
+      world = await templateMcp(stealth);
       const w = world;
       await w.harness.templates.repos.templates.update(w.template.templateId, {
         agentWindows: 'minimized',
@@ -89,7 +87,7 @@ for (const driver of DRIVERS) {
     }, 60_000);
 
     it('set_viewport resizes the page, and a headed window with it', async () => {
-      world = await templateMcp(driver);
+      world = await templateMcp(stealth);
       const w = world;
       const id = await launch(w);
       ok(await w.harness.call('navigate', { session_id: id, url: w.sites.url('site-a.test') }));
@@ -114,7 +112,7 @@ for (const driver of DRIVERS) {
     });
 
     it('the live view streams a template session', async () => {
-      world = await templateMcp(driver);
+      world = await templateMcp(stealth);
       const w = world;
       const id = await launch(w);
       ok(await w.harness.call('navigate', { session_id: id, url: w.sites.url('site-a.test') }));

@@ -100,7 +100,7 @@ export interface DomainPart {
   readonly ids: IdGenerator;
   readonly bus: EventBus<DomainEvents>;
   readonly degradations: DegradationService;
-  readonly driverName: () => 'patchright' | 'playwright';
+  readonly driverName: () => 'patchright';
   readonly browserInstalled: boolean;
   /** Version of the Chromium build `chromium` sessions launch; `null` when it is not installed. */
   readonly chromiumVersion: string | null;

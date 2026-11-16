@@ -1,6 +1,6 @@
 /** @module infra/browsers/identity-resolver — coherence and downgrade rules 1–5 producing the LaunchIdentity before launch (spec 11 §2.6). */
 
-import type { BrowserContextOptions, LaunchOptions } from 'playwright';
+import type { BrowserContextOptions, LaunchOptions } from 'patchright';
 import type {
   GeoSeed,
   LaunchIdentity,

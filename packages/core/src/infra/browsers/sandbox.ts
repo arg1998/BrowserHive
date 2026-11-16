@@ -1,6 +1,6 @@
 /** @module infra/browsers/sandbox — Chromium sandbox facts: recognising a sandbox launch failure and Chrome's own reason, the host conditions that decide it (AppArmor, user namespaces, root, containers), the one-launch probe, and the AppArmor profile text (plan §3.4). */
 
-import type { BrowserType, LaunchOptions } from 'playwright';
+import type { BrowserType, LaunchOptions } from 'patchright';
 
 /**
  * Chrome's and Playwright's markers of a sandbox that could not start. Playwright rewrites the first

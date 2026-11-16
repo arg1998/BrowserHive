@@ -87,8 +87,10 @@ export {
   keysInGroup,
   lookupKey,
   namesFor,
+  REMOVED_CONFIG_KEYS,
   RESERVED_CONFIG_KEYS,
   RESERVED_ENUM_MEMBERS,
+  type RemovedConfigKey,
   type ReservedConfigKey,
   secretKeys,
 } from './registry.ts';

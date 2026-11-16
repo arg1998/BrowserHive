@@ -1,7 +1,6 @@
 /** @module app/templates/host-spec — a template host's start specification, from the template record only (spec 13 §2.2, §3.1): the pinned identity, the pinned proxy (credentials from a named variable, resolved at each start) and the host's directories. */
 
 import { join } from 'node:path';
-import type { StealthDriver } from '@browserhive/contracts/enums';
 import type { AppliedIdentity, ProxySpec } from '../../ports/browser-driver.ts';
 import type { ObservedIdentityRecord, TemplateRecord } from '../../ports/persistence/index.ts';
 import type { ProxyResolver } from '../../ports/proxy-resolver.ts';
@@ -13,7 +12,6 @@ export const DEFAULT_TEMPLATE_WINDOW = Object.freeze({ width: 1280, height: 800 
 /** What the spec builder needs from the server. */
 export interface HostSpecDeps {
   readonly dataDir: string;
-  readonly stealthDriver: StealthDriver;
   readonly proxyResolver: ProxyResolver;
   /** The process environment (a proxy's `password_env` is read at each start, D-33). */
   readonly env: Readonly<Record<string, string | undefined>>;
@@ -41,7 +39,6 @@ export async function buildHostSpec(
     headless: template.headless,
     stealth: template.stealth !== 'off',
     fingerprint: template.fingerprint,
-    stealthDriver: deps.stealthDriver,
     userDataDir: join(dir, 'userdata'),
     downloadsDir: join(dir, 'downloads'),
     identity: {

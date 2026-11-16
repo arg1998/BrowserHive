@@ -229,7 +229,7 @@ export interface HostProbes {
   bunVersion(): string;
   /** `select sqlite_version()` (needs a connection, hence async). */
   sqliteVersion(): Promise<string>;
-  playwright(): Promise<BrowserInstall>;
+  /** The driver's (Patchright's, D-65) package and Chromium. */
   patchright(): Promise<BrowserInstall>;
   /** Whether `host:port` can be bound right now. */
   portFree(host: string, port: number): Promise<boolean>;
@@ -242,12 +242,10 @@ export interface HostProbes {
   /** Permission bits of `path` (`0o700`), or `null` when missing. */
   pathMode(path: string): Promise<number | null>;
   /**
-   * How to run `<driver> install chromium` with the driver's own CLI (`bun <pkg>/cli.js`), or
-   * `null` when the package cannot be resolved.
+   * How to run `patchright install …` with the driver's own CLI (`bun <pkg>/cli.js`), or `null`
+   * when the package cannot be resolved.
    */
-  installCommand(
-    driver: 'playwright' | 'patchright',
-  ): { readonly command: string; readonly args: readonly string[] } | null;
+  installCommand(): { readonly command: string; readonly args: readonly string[] } | null;
   /** Every channel on this host: the bundled Chromium, then the installed Google Chrome and Microsoft Edge. */
   browsers(): Promise<readonly DetectedBrowser[]>;
   /** Launches `channel` once with the sandbox forced on (and once without when that fails). */

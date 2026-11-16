@@ -1,12 +1,12 @@
-/** @module infra/browsers/evaluate — main-world `page.evaluate` across Patchright (isolated by default) and stock Playwright (spec 11 §2.1). */
+/** @module infra/browsers/evaluate — main-world `page.evaluate` on Patchright, which isolates `evaluate` by default (spec 11 §2.1, D-65). */
 
-import type { Frame, Page } from 'playwright';
+import type { Frame, Page } from 'patchright';
 
 /**
  * Patchright's `evaluate` takes a **fourth** positional `isolatedContext` (after Playwright 1.63's
- * `options` bag); `false` keeps main-world semantics. Stock Playwright 1.63 asserts at most three
- * arguments and rejects a non-object third one, so the extra argument cannot be passed
- * blindly — the caller must know which driver launched the session (`capabilities.isolatedEvaluate`).
+ * `options` bag); `false` keeps main-world semantics. Every Chromium host reports
+ * `capabilities.isolatedEvaluate: true` (Patchright is the only driver, D-65); the plain form is for
+ * an engine without isolated evaluation (stock Playwright asserts at most three arguments).
  */
 type DriverEvaluate = <R, Arg>(
   pageFunction: (arg: Arg) => R | Promise<R>,
@@ -19,9 +19,8 @@ type DriverEvaluate = <R, Arg>(
 export type Evaluable = Page | Frame;
 
 /**
- * Evaluate `pageFunction` in the page's **main world** regardless of driver: under Patchright the
- * fourth positional `isolatedContext: false` is passed; under stock Playwright (which already runs
- * in the main world) the plain two-argument form is used.
+ * Evaluate `pageFunction` in the page's **main world**: with `isolatedEvaluate` (Patchright) the
+ * fourth positional `isolatedContext: false` is passed; otherwise the plain two-argument form.
  *
  * @param isolatedEvaluate `BrowserHost.capabilities.isolatedEvaluate` of the host serving the session that owns `target`.
  */

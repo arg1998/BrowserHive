@@ -1,10 +1,10 @@
 /// <reference lib="dom" />
-/** @module test/integration/template-versions.test — versions, encryption at rest, restore and seeding on a real template host (spec 13 §2.4, §3.9, §3.12, §7.4; §17 T1b acceptance), both drivers: version 1 encrypted (no cookie name in the file, bound to key, header and slot), rolling cookies writing no version, a disappearing sign-in cookie writing `signin_change`, a localStorage sign-in surviving a restart, a checkpoint and a restore, restore as an operation that closes sessions and leaves no plaintext, seeding to `ready`, and a missing key leaving the host running. */
+/** @module test/integration/template-versions.test — versions, encryption at rest, restore and seeding on a real template host (spec 13 §2.4, §3.9, §3.12, §7.4; §17 T1b acceptance), stealth off and standard on Patchright (D-65): version 1 encrypted (no cookie name in the file, bound to key, header and slot), rolling cookies writing no version, a disappearing sign-in cookie writing `signin_change`, a localStorage sign-in surviving a restart, a checkpoint and a restore, restore as an operation that closes sessions and leaves no plaintext, seeding to `ready`, and a missing key leaving the host running. */
 
 import { afterEach, describe, expect, it } from 'bun:test';
 import { readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { Page } from 'playwright';
+import type { Page } from 'patchright';
 import { TemplateHostOperations } from '../../src/app/templates/host-operations.ts';
 import { TemplateOperations } from '../../src/app/templates/template-operations.ts';
 import { TemplateService } from '../../src/app/templates/template-service.ts';
@@ -23,14 +23,13 @@ import { InMemoryOperatorActionRepository } from '../helpers/in-memory-vault-rep
 import { FAKE_TEMPLATE_GEO, RecordingDegradations } from '../helpers/template-kit.ts';
 import { templateSiteRecord } from '../persistence/helpers.ts';
 import {
-  type DriverName,
   HEADED,
+  STEALTH_LEGS,
   type TemplateWorld,
   templateWorld,
   until,
 } from './template-fixture.ts';
 
-const DRIVERS: readonly DriverName[] = ['playwright', 'patchright'];
 const KEY = templateKeyOf(new Uint8Array(32).fill(42));
 /** A localStorage-held sign-in (the token value is long enough to be recognisable). */
 const LOCAL_TOKEN = 'local-sign-in-token-0123456789';
@@ -124,10 +123,10 @@ async function files(dir: string): Promise<string[]> {
   return out;
 }
 
-for (const driver of DRIVERS) {
-  describe(`template versions (${driver}${HEADED ? ', headed' : ''})`, () => {
+for (const stealth of STEALTH_LEGS) {
+  describe(`template versions (stealth ${stealth}${HEADED ? ', headed' : ''})`, () => {
     it('writes version 1 encrypted, bound to the key, the header and the slot', async () => {
-      world = await templateWorld(driver);
+      world = await templateWorld(stealth);
       const w = world;
       const { state, store } = await services(w);
       await signIn(pageOf(await w.launch('alpha')), 'first-session-value-000');
@@ -168,7 +167,7 @@ for (const driver of DRIVERS) {
     });
 
     it('rolling cookies write no version; a disappearing sign-in cookie writes signin_change; a localStorage sign-in survives a restart, a checkpoint and a restore', async () => {
-      world = await templateWorld(driver);
+      world = await templateWorld(stealth);
       const w = world;
       const id = w.template.templateId;
       const { state, store, operations, repos } = await services(w);
@@ -222,7 +221,7 @@ for (const driver of DRIVERS) {
     });
 
     it('a delete waits out a running restore, and a delete that slipped past leaves no browser and no profile (review #79 H-1)', async () => {
-      world = await templateWorld(driver);
+      world = await templateWorld(stealth);
       const w = world;
       const id = w.template.templateId;
       const { state, operations, repos, ops } = await services(w);
@@ -273,7 +272,7 @@ for (const driver of DRIVERS) {
     });
 
     it('seeds a template from a storage state to ready; a missing key leaves the host running', async () => {
-      world = await templateWorld(driver);
+      world = await templateWorld(stealth);
       const w = world;
       const id = w.template.templateId;
       const { operations, repos } = await services(w);

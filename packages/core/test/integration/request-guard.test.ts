@@ -2,7 +2,7 @@
 /** @module test/integration/request-guard — the interception chain and the method-aware request guard on real Chromium: form, fetch and beacon posts, documents, the blocklist in the same chain, held confirmations, the HTTP cache and the documented redirect limit (spec 13 §3.8, §9.3, T0b; issue #59). */
 
 import { describe, expect, it } from 'bun:test';
-import type { Page } from 'playwright';
+import type { Page } from 'patchright';
 import { Blocklist, parseBlocklist } from '../../src/domain/policies/blocklist.ts';
 import {
   compileRequestGuardRules,
@@ -113,7 +113,8 @@ describe('request guard (real Chromium)', () => {
   const { state } = useDriverFixtures();
 
   for (const stealth of [false, true]) {
-    const driver = stealth ? 'patchright' : 'playwright';
+    // Both legs run on Patchright, the only driver (D-65); they differ in BrowserHive's stealth.
+    const driver = stealth ? 'stealth' : 'plain';
 
     it(`[${driver}] a POST form logout is aborted while the GET confirm page loads`, async () => {
       const session = await state.launch({ slug: `form-${driver}`, stealth });
@@ -394,7 +395,8 @@ describe('documented blind spots (real Chromium)', () => {
     });
 
   for (const stealth of [false, true]) {
-    const driver = stealth ? 'patchright' : 'playwright';
+    // Both legs run on Patchright, the only driver (D-65); they differ in BrowserHive's stealth.
+    const driver = stealth ? 'stealth' : 'plain';
 
     it(`[${driver}] a SharedWorker's requests are not routed; a dedicated worker's are`, async () => {
       const session = await state.launch({ slug: `workers-${driver}`, stealth });
@@ -430,32 +432,55 @@ describe('documented blind spots (real Chromium)', () => {
     });
   }
 
-  it('[playwright] CORS preflights are answered by Playwright, so a refused write is sent', async () => {
+  /** A preflighted cross-origin write (JSON body, a custom header) from `page` to `url`. */
+  const write = (page: Page, url: string) =>
+    page.evaluate(
+      (target) =>
+        fetch(target, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-custom': '1' },
+          body: '{}',
+        }).then(
+          (r) => `ok:${r.status}`,
+          (e: Error) => `err:${e.name}`,
+        ),
+      url,
+    );
+
+  it('under routing the driver answers CORS preflights itself, so a refused write is sent', async () => {
+    // Patchright keeps Playwright's behaviour here (D-65, re-measured): an intercepted preflight
+    // is answered with permissive headers and never reaches the site.
     const other = startFixtureServer();
     try {
-      const target = other.url('/cors/write');
-      const write = (page: Page) =>
-        page.evaluate(
-          (url) =>
-            fetch(url, {
-              method: 'POST',
-              headers: { 'content-type': 'application/json', 'x-custom': '1' },
-              body: '{}',
-            }).then(
-              (r) => `ok:${r.status}`,
-              (e: Error) => `err:${e.name}`,
-            ),
-          target,
-        );
       const plain = await state.launch({ slug: 'cors-plain' });
       await plain.page.goto(state.fixture.url('/'));
-      expect(await write(plain.page)).toBe('err:TypeError');
+      expect(await write(plain.page, other.url('/cors/write'))).toBe('err:TypeError');
       expect(other.requests.map((r) => r.method)).toEqual(['OPTIONS']);
 
       const routed = await state.launch({ slug: 'cors-routed' });
       await guard(routed, ruleSet());
       await routed.page.goto(state.fixture.url('/'));
-      await write(routed.page);
+      await write(routed.page, other.url('/cors/write'));
+      expect(other.requests.map((r) => r.method)).toEqual(['OPTIONS', 'POST']);
+    } finally {
+      other.stop();
+    }
+  });
+
+  it('a stealth session cannot send a preflighted cross-origin request, even one the site allows', async () => {
+    // Patchright injects init scripts through request interception; with any init script in the
+    // context (every stealth session adds one) a request that needs a preflight fails before
+    // anything reaches the network, routed or not (D-65, measured on Patchright 1.63).
+    const other = startFixtureServer();
+    try {
+      const plain = await state.launch({ slug: 'cors-allowed-plain' });
+      await plain.page.goto(state.fixture.url('/'));
+      expect(await write(plain.page, other.url('/cors-allowed/write'))).toBe('ok:200');
+      expect(other.requests.map((r) => r.method)).toEqual(['OPTIONS', 'POST']);
+
+      const stealth = await state.launch({ slug: 'cors-allowed-stealth', stealth: true });
+      await stealth.page.goto(state.fixture.url('/'));
+      expect(await write(stealth.page, other.url('/cors-allowed/write'))).toBe('err:TypeError');
       expect(other.requests.map((r) => r.method)).toEqual(['OPTIONS', 'POST']);
     } finally {
       other.stop();

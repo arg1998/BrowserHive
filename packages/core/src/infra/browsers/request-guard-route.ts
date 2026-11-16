@@ -1,6 +1,6 @@
 /** @module infra/browsers/request-guard-route — the method- and resource-type-aware request guard as the interception chain's last handler (spec 13 §3.8 handler 3, §9.3, D-54). */
 
-import type { Request } from 'playwright';
+import type { Request } from 'patchright';
 import {
   matchRequestGuard,
   type RequestGuardMatch,

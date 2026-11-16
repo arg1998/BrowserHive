@@ -17,7 +17,7 @@ export class FakeBrowserDriver implements BrowserDriver {
   readonly handles: FakeSessionView[] = [];
   readonly pending: PendingLaunch[] = [];
   /** What `stealthDriverName()` reports. */
-  stealthName: 'patchright' | 'playwright' = 'playwright';
+  stealthName: 'patchright' = 'patchright';
   /** Per-launch view (and host) customisation. */
   handleOptions: (spec: LaunchSpec) => FakeSessionViewOptions = () => ({});
   private nextFailure: unknown = undefined;
@@ -25,7 +25,7 @@ export class FakeBrowserDriver implements BrowserDriver {
   private hanging = false;
   private readonly launchHooks: Array<(view: FakeSessionView, spec: LaunchSpec) => void> = [];
 
-  stealthDriverName(): 'patchright' | 'playwright' {
+  stealthDriverName(): 'patchright' {
     return this.stealthName;
   }
 

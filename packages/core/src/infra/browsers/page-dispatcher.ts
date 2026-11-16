@@ -1,6 +1,6 @@
 /** @module infra/browsers/page-dispatcher — one per host: feeds every page of the context through `PageAttribution` and delivers it to its session's view before any `TabRegistry` sees it (spec 13 §3.4). */
 
-import type { Page } from 'playwright';
+import type { Page } from 'patchright';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { Clock } from '../../ports/clock.ts';
 import type { Logger } from '../../ports/logger.ts';

@@ -84,7 +84,7 @@ export async function runChecks(
     ...checkReferenceDefaults(resolution),
   ];
   const config = resolution.ok ? resolution.value.config : null;
-  results.push(...(await checkBrowsers(deps, config?.stealthDriver ?? 'auto')));
+  results.push(...(await checkBrowsers(deps)));
   const defaultChannel: Channel = config?.defaultChannel ?? 'chromium';
   const mode = sandboxModeOf(config);
   const browsers = await collectBrowserFindings(

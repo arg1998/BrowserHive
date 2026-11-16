@@ -1,7 +1,7 @@
 /** @module infra/browsers/blocklist-route — network-layer blocklist enforcement: the interception chain's handler aborting matching document loads, fail-closed (spec 11 §5, D-22). */
 
 import type { BlockedSource } from '@browserhive/contracts/enums';
-import type { BrowserContext, Request } from 'playwright';
+import type { BrowserContext, Request } from 'patchright';
 import type { Blocklist } from '../../domain/policies/blocklist.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { LaunchWarning } from '../../ports/browser-driver.ts';

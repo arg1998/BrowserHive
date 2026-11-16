@@ -1,7 +1,7 @@
-/** @module test/fixtures/depcruise/interface — breaks `interface-no-playwright` twice (both drivers). */
+/** @module test/fixtures/depcruise/interface — breaks `interface-no-playwright` twice (the driver and its core package). */
 
+import type { BrowserContext } from 'patchright';
 import type { BrowserContext as PatchrightContext } from 'patchright-core';
-import type { BrowserContext } from 'playwright';
 
 /** Uses the imports so the fixture type-checks. */
 export type Contexts = [BrowserContext, PatchrightContext];

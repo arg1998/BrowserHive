@@ -1,6 +1,6 @@
 /** @module app/sessions/session-tabs — tab operations over a live session (new/close/switch/list) with identity replay and audit-safe titles. */
 
-import type { Page } from 'playwright';
+import type { Page } from 'patchright';
 import type { Session } from '../../domain/session/session.ts';
 import { AppError } from '../../kernel/errors/app-error.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';

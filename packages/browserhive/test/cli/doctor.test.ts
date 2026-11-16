@@ -40,7 +40,6 @@ describe('doctor', () => {
       'bun',
       'bh',
       'config',
-      'chromium (playwright)',
       'chromium (patchright)',
       'chrome',
       'edge',
@@ -73,30 +72,30 @@ describe('doctor', () => {
     expect(run.stdout).toMatch(/^\s+CHECK\s+DETAIL/m);
     expect(run.stdout).toContain('✓  bun');
     expect(run.stdout).toContain('config: maxSessions=4 (cli) shadows env=2');
-    expect(run.stdout).toContain('22 passed, 0 warnings, 0 failed');
+    expect(run.stdout).toContain('21 passed, 0 warnings, 0 failed');
   });
 
   it.each([
     ['bun too old', { probes: probeState({ bun: '1.3.9' }) }, 'bun', 'fail'],
     [
-      'playwright chromium missing',
+      'patchright chromium missing',
       {
         probes: probeState({
-          playwright: { packageVersion: '1.63.0', executablePath: '/c/chrome', installed: false },
+          patchright: { packageVersion: '1.63.0', executablePath: '/c/chrome', installed: false },
         }),
       },
-      'chromium (playwright)',
+      'chromium (patchright)',
       'fail',
     ],
     [
-      'patchright missing under auto is a warning',
+      'patchright package missing (it is the only driver, D-65)',
       {
         probes: probeState({
           patchright: { packageVersion: null, executablePath: null, installed: false },
         }),
       },
       'chromium (patchright)',
-      'warn',
+      'fail',
     ],
     ['port busy', { probes: probeState({ portFree: false }) }, 'port', 'fail'],
     [
@@ -160,7 +159,7 @@ describe('doctor', () => {
       });
       expect(run.code).toBe(2);
       expect(run.stdout).toMatch(/!\s+bh\s+\/home\/me\/bin\/bh is not BrowserHive's/);
-      expect(run.stdout).toContain('21 passed, 1 warnings, 0 failed');
+      expect(run.stdout).toContain('20 passed, 1 warnings, 0 failed');
     });
 
     it.each([
@@ -186,24 +185,19 @@ describe('doctor', () => {
     });
   });
 
-  it('patchright required but missing is a failure', async () => {
-    const { byName, run } = await doctorJson({
-      argv: ['--stealthDriver', 'patchright'],
-      fs: healthyFs(),
-      probes: probeState({
-        patchright: { packageVersion: null, executablePath: null, installed: false },
-      }),
-    });
-    expect(byName.get('chromium (patchright)')?.status).toBe('fail');
-    expect(run.code).toBe(1);
-  });
-
-  it('stealthDriver=playwright skips patchright', async () => {
-    const { byName } = await doctorJson({
-      argv: ['--stealthDriver', 'playwright'],
-      fs: healthyFs(),
-    });
-    expect(byName.has('chromium (patchright)')).toBe(false);
+  it('the removed stealthDriver: patchright warns in the config row, playwright fails it (D-65)', async () => {
+    const kept = await doctorJson({ argv: ['--stealthDriver', 'patchright'], fs: healthyFs() });
+    expect(kept.byName.get('config')).toMatchObject({ status: 'warn' });
+    expect(kept.byName.get('config')?.detail).toContain(
+      '--stealthDriver is deprecated and ignored: Patchright is the only browser driver since 0.3.0.',
+    );
+    expect(kept.byName.get('chromium (patchright)')?.status).toBe('ok');
+    const removed = await doctorJson({ argv: ['--stealthDriver', 'playwright'], fs: healthyFs() });
+    expect(removed.byName.get('config')).toMatchObject({ status: 'fail' });
+    expect(removed.byName.get('config')?.detail).toContain(
+      '--stealthDriver: the Playwright driver was removed in 0.3.0',
+    );
+    expect(removed.run.code).toBe(1);
   });
 
   it('port in use by our own running server is a warning', async () => {

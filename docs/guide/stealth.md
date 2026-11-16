@@ -4,19 +4,20 @@ Stealth makes a BrowserHive session report what a real Chrome on your machine wo
 
 The principle: **assert nothing rather than assert something wrong.** BrowserHive never invents an operating system, GPU, timezone or location. Everything it presents is derived from the real host.
 
+Every session runs on [Patchright](https://github.com/Kaliiiiiiiiii-Vinyzu/patchright), a patched build of Playwright that hides the automation control plane. It is BrowserHive's only browser driver since 0.3.0; there is no setting to choose another one.
+
 ## Levels
 
 | `--stealth` | What you get |
 |---|---|
-| `off` | Stock Playwright Chromium. `navigator.webdriver` is `true`. No identity override. |
-| `standard` (default) | The full Chromium binary in new-headless mode, the Patchright driver when installed, automation flags removed, and a coherent identity applied through the DevTools protocol. |
+| `off` | No BrowserHive stealth: no identity override, no fingerprint, no human-like input. The session still runs on Patchright ([what that leaves](#what-off-still-includes)). |
+| `standard` (default) | The full Chromium binary in new-headless mode, automation flags removed, and a coherent identity applied through the DevTools protocol. |
 | `max` | `standard` plus a display fingerprint (`fingerprint` defaults to `true`). |
 
 Related keys:
 
 | Key | Default | Effect |
 |---|---|---|
-| `--stealthDriver` | `auto` | `auto` uses Patchright when installed, else Playwright. `patchright` requires it (startup fails with [`BROWSER_NOT_INSTALLED`](../reference/errors.md#BROWSER_NOT_INSTALLED) if missing). `playwright` never uses it. |
 | `--fingerprint` | `true` only with `max` | Coherent screen and window geometry per session. Requires `standard` or `max`. |
 | `--humanize` | `false` | Human-like pointer paths and typing rhythm. Requires `standard` or `max`. |
 | `--defaultHeadless` | `true` | Default for `launch_session` `headless`. |
@@ -28,7 +29,7 @@ An agent can override `stealth`, `fingerprint`, `humanize`, `headless` and `chan
 
 - **Real browser binary.** `chromium` runs the full Chromium build, never the stripped headless shell. That restores `window.chrome`, plugins, MIME types, the PDF viewer flag and hardware WebGL.
 - **Automation signals removed.** `navigator.webdriver` is `false`; the `--enable-automation` switch is not passed.
-- **Patchright** (when installed by `browserhive init`) patches the remaining automation leaks at launch. `evaluate` still runs in the page's main world.
+- **Patchright** patches the remaining automation leaks at launch. `evaluate` still runs in the page's main world.
 - **One coherent identity**, set through the DevTools protocol on every page, including new tabs and popups before their first request:
   - User agent: the real one, with `HeadlessChrome` rewritten to `Chrome`.
   - Client hints: brands `Chromium` and `Google Chrome` with the real version, platform and architecture from the host, platform version from the OS release.
@@ -36,12 +37,24 @@ An agent can override `stealth`, `fingerprint`, `humanize`, `headless` and `chan
 - **Locale and timezone** from the host (`LC_ALL`, `LANG`, the system timezone). No coordinates are ever set.
 - `set_extra_http_headers` refuses to change `user-agent`, `accept-language` and `sec-ch-ua*` on stealth sessions, so the identity stays consistent.
 
+## What `off` still includes
+
+`--stealth off` turns off everything BrowserHive adds: the identity override, the display fingerprint, the `deviceMemory` fix, human-like input and BrowserHive's own launch flags. It does not switch to another driver, because there is none. What Patchright itself does stays on:
+
+- `navigator.webdriver` is `false` (Patchright passes `--disable-blink-features=AutomationControlled` and drops `--enable-automation` by default).
+- Page scripts run without the DevTools `Runtime.enable` call that detectors look for.
+- Pages' `console` messages are not reported: Patchright never enables the console domain. This holds at every stealth level.
+- Closed shadow roots are reachable by selectors.
+- Chromium's popup blocker stays on (Patchright does not pass `--disable-popup-blocking`): a page opens a popup only from a user gesture such as a click, like a normal browser.
+
+A headless session with `off` still reports `HeadlessChrome` in its user agent; rewriting it is part of the identity override. Use `off` when you want a browser without BrowserHive's patches, for example to compare what a site sees.
+
 ## Which browser
 
 The browser a session runs in matters as much as the patches applied to it. Three channels are available ([Installation: choosing the browser](installation.md#choosing-the-browser)):
 
 - **`chromium`** (default): the Chrome for Testing build BrowserHive downloads and pins. It is identical everywhere and needs nothing installed, but it reports its pinned full version (for example `153.0.8010.12`), a build real users may not be running.
-- **`chrome`**: the Google Chrome installed on the machine, at the version real users run. **This is the recommended setup for stealth, together with Patchright** (Patchright recommends the same). On Ubuntu 23.10+ it is also the browser that can use Chromium's sandbox.
+- **`chrome`**: the Google Chrome installed on the machine, at the version real users run. **This is the recommended setup for stealth** (Patchright recommends the same). On Ubuntu 23.10+ it is also the browser that can use Chromium's sandbox.
 - **`edge`**: the installed Microsoft Edge. Under stealth it presents itself as Microsoft Edge, with the client hints real Edge sends.
 
 BrowserHive **never fakes the browser version**: the client-hint version list is the real engine's. With real Chrome the brands read `Not_A Brand, Chromium, Google Chrome` exactly as Chrome's own do (`Google Chrome` appears once).
@@ -90,7 +103,7 @@ Loopback and private network ranges are always bypassed so local tooling never g
 
 These are known and documented, not bugs:
 
-- **TLS fingerprints** (JA3/JA4) cannot be changed through Playwright. They are already close to Chrome's.
+- **TLS fingerprints** (JA3/JA4) cannot be changed through the browser driver. They are already close to Chrome's.
 - **Out-of-process iframes** are not covered by the user-agent override; cross-origin frames may report the raw user agent.
 - **The hardest bot checks** (for example Cloudflare Turnstile in strict mode) can still detect DevTools-protocol automation and synthetic input. Use [human takeover](attention.md) for them.
 - **Canvas, audio and font entropy** are the host's own: a stable identity tied to your machine, not a rotating one.
