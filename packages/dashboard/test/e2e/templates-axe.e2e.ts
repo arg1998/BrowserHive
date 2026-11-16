@@ -8,12 +8,18 @@ const TABS = ['sites', 'sessions', 'versions', 'access', 'settings', 'activity']
 
 /** Serious and critical violations on the page, as readable lines. */
 async function violations(page: Page): Promise<string[]> {
-  // Colour contrast is computed from the current styles: let transitions (a dialog fading in, a
-  // focus ring, a button turning red once enabled) finish, or a slow runner measures them halfway.
+  // Colour contrast is computed from the current styles: let finite transitions (a dialog fading
+  // in, a focus ring, a button turning red once enabled) finish, or a slow runner measures them
+  // halfway. Infinite ones (the live dot's pulse) never finish and are left alone.
   await page
-    .waitForFunction(() => document.getAnimations().every((a) => a.playState !== 'running'), null, {
-      timeout: 5_000,
-    })
+    .waitForFunction(
+      () =>
+        document
+          .getAnimations()
+          .every((a) => a.playState !== 'running' || a.effect?.getTiming().iterations === Infinity),
+      null,
+      { timeout: 5_000 },
+    )
     .catch(() => undefined);
   await page.addScriptTag({ path: AXE });
   return page.evaluate(async () => {
