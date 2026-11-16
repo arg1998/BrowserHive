@@ -5,6 +5,7 @@ import { CopyValue } from '@/components/shared/CopyButton.tsx';
 import { KeyValue, type KeyValueItem } from '@/components/shared/KeyValue.tsx';
 import { TonePill } from '@/components/shared/StatusBadge.tsx';
 import { identityChip, identityFallback, identityProvenance, parseIdentity } from './identity.ts';
+import { TemplateIdentityNote } from './template-session.tsx';
 
 /** Identity body (the surrounding panel owns the title). */
 export function IdentityCard({ session }: { readonly session: SessionSummary }) {
@@ -21,6 +22,9 @@ export function IdentityCard({ session }: { readonly session: SessionSummary }) 
       <div className="flex flex-col items-start gap-3">
         {head}
         <p className="text-sm text-muted-foreground">{identityFallback(session)}</p>
+        {session.template !== undefined ? (
+          <TemplateIdentityNote template={session.template} />
+        ) : null}
       </div>
     );
   }
@@ -84,6 +88,7 @@ export function IdentityCard({ session }: { readonly session: SessionSummary }) 
       </div>
       <KeyValue items={items} className="w-full" />
       <p className="text-sm text-muted-foreground">{identityProvenance(session, identity)}</p>
+      {session.template !== undefined ? <TemplateIdentityNote template={session.template} /> : null}
     </div>
   );
 }

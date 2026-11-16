@@ -122,7 +122,7 @@ export function PlatformPreview({
         <div className="flex flex-col gap-2">
           <button
             type="button"
-            className="inline-flex w-fit cursor-pointer items-center gap-1.5 rounded-sm text-sm text-link hover:underline focus-ring"
+            className="inline-flex w-fit cursor-pointer items-center gap-1.5 rounded-sm text-sm text-link underline decoration-link/40 underline-offset-2 hover:decoration-link focus-ring"
             aria-expanded={showRequest}
             aria-controls={id}
             onClick={() => setShowRequest((v) => !v)}

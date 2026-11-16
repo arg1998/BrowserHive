@@ -9,6 +9,7 @@ import { ICONS } from '@/lib/icons.ts';
 import { DataDirSection } from './DataDirSection.tsx';
 import { downloadExport, EXPORT_FORMAT_IDS, EXPORT_FORMATS } from './export.ts';
 import { TraceSection } from './TraceSection.tsx';
+import { TemplateTraceNote } from './template-session.tsx';
 
 /** Files & trace tab. */
 export function FilesPanel({ detail }: { readonly detail: SessionDetail }) {
@@ -17,7 +18,11 @@ export function FilesPanel({ detail }: { readonly detail: SessionDetail }) {
   const Download = ICONS.download;
   return (
     <div className="flex min-w-0 flex-col gap-5">
-      <TraceSection detail={detail} />
+      {detail.session.template !== undefined ? (
+        <TemplateTraceNote />
+      ) : (
+        <TraceSection detail={detail} />
+      )}
       <DataDirSection detail={detail} />
       <Panel
         title="Export activity"

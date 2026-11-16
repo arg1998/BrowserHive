@@ -30,6 +30,7 @@ import type { SessionTab } from '../detail-search.ts';
 import { ArchiveLabel } from '../list/SessionRowActions.tsx';
 import { browserLabel, coarseDuration } from '../session-format.ts';
 import { downloadExport, EXPORT_FORMAT_IDS, EXPORT_FORMATS, type ExportFormat } from './export.ts';
+import { TemplateSessionBadges } from './template-session.tsx';
 import { traceViewerHint, useTraceViewer } from './use-trace-viewer.ts';
 
 /** Props. */
@@ -220,7 +221,12 @@ export function SessionHeader({ detail, live, tab, onToggleLive }: SessionHeader
   return (
     <PageHeader
       title={session.slug}
-      badge={<StatusBadge domain="session" value={sessionDisplayState(session)} />}
+      badge={
+        <span className="flex min-w-0 flex-wrap items-center gap-2">
+          <StatusBadge domain="session" value={sessionDisplayState(session)} />
+          <TemplateSessionBadges session={session} />
+        </span>
+      }
       meta={meta}
       actions={actions}
     />

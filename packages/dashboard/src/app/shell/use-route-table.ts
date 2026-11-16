@@ -18,6 +18,8 @@ export interface NavItem {
   readonly requires: RouteStaticData['requires'] | undefined;
   readonly keywords: readonly string[];
   readonly key: string | undefined;
+  /** The item this one is indented under. */
+  readonly parent: string | undefined;
 }
 
 function hasNav(
@@ -53,6 +55,7 @@ export function useNavItems(): readonly NavItem[] {
         requires: data.requires,
         keywords: data.palette?.keywords ?? [],
         key: data.nav.key,
+        parent: data.nav.parent,
       });
     }
     return items.sort((a, b) =>

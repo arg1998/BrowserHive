@@ -32,6 +32,8 @@ export interface PageHeaderProps {
    * instead of the actions wrapping under it.
    */
   readonly actionsInline?: boolean;
+  /** Put `actions` on their own line below the `xl` breakpoint (many actions beside a long description). */
+  readonly actionsBelowXl?: boolean;
   /** Secondary facts line (owner · channel · started). */
   readonly meta?: ReactNode;
   /** `Tabs` list rendered under the header, sharing its bottom edge. */
@@ -50,6 +52,7 @@ export function PageHeader({
   learnMoreDocs,
   actions,
   actionsInline = false,
+  actionsBelowXl = false,
   meta,
   tabs,
   className,
@@ -100,7 +103,12 @@ export function PageHeader({
           ) : null}
         </div>
         {actions !== undefined ? (
-          <div className="flex max-w-full min-w-0 shrink-0 flex-wrap items-center gap-2">
+          <div
+            className={cn(
+              'flex max-w-full min-w-0 shrink-0 flex-wrap items-center gap-2',
+              actionsBelowXl && 'basis-full xl:basis-auto',
+            )}
+          >
             {actions}
           </div>
         ) : null}

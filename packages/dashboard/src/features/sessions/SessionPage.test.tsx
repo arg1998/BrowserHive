@@ -11,6 +11,7 @@ import {
   toolCallDetail,
   toolItem,
 } from '../../../test/fixtures/sessions.ts';
+import { templateSummary, templatesPage } from '../../../test/fixtures/templates.ts';
 import { expectNoA11yViolations } from '../../../test/helpers/axe.ts';
 import { envelope, problem, renderPage } from '../../../test/helpers/page-harness.tsx';
 import { act, fireEvent, screen, waitFor, within } from '../../../test/helpers/render.tsx';
@@ -38,10 +39,50 @@ function mount(url: string, options: { detail?: unknown; pending?: unknown[] } =
       [`GET /sessions/${ID}/tool-calls/${ITEMS[0]?.kind === 'tool' ? ITEMS[0].row.event_id : ''}`]:
         toolCallDetail(1, { ok: false, error_code: 'TIMEOUT', error_message: 'took too long' }),
       'GET /system': { vault: { enabled: false, backend: null } },
+      'GET /templates': templatesPage([templateSummary(1)]),
     },
     url,
   });
 }
+
+describe('SessionPage of a template session', () => {
+  const templated = (mode: 'live' | 'maintenance', templateId: string | null = 'tp-0000000001') =>
+    sessionDetail({
+      template: { template_id: templateId, name: 'job-hunt', version: 1, mode },
+      sealed: true,
+    });
+
+  it('links the template by display name and says the sign-ins are protected; axe clean', async () => {
+    const view = mount(`/sessions/${ID}`, { detail: templated('live') });
+    await screen.findByRole('heading', { level: 1, name: 'shop' });
+    const badge = await screen.findByRole('link', { name: 'Template: Job hunt' });
+    expect(badge.getAttribute('href')).toBe('/templates/tp-0000000001');
+    expect(screen.getByText('Sign-ins protected')).toBeDefined();
+    expect(screen.queryByText('BrowserHive (system)')).toBeNull();
+    await expectNoA11yViolations(view.container, { disable: ['aria-hidden-focus'] });
+  });
+
+  it('marks BrowserHive’s own sessions and keeps a deleted template as text', async () => {
+    mount(`/sessions/${ID}`, { detail: templated('maintenance', null) });
+    expect(await screen.findByText('BrowserHive (system)')).toBeDefined();
+    expect(screen.getByText('Template: job-hunt')).toBeDefined();
+    expect(screen.queryByRole('link', { name: /Template:/ })).toBeNull();
+  });
+
+  it('explains on Files & trace that template sessions are not traced', async () => {
+    mount(`/sessions/${ID}?tab=files`, { detail: templated('live') });
+    expect(
+      await screen.findByText('Tracing is off for sessions launched from a template.'),
+    ).toBeDefined();
+    expect(screen.queryByRole('button', { name: /Open trace viewer/ })).toBeNull();
+  });
+
+  it('points the identity at the template’s settings', async () => {
+    mount(`/sessions/${ID}?tab=details`, { detail: templated('live') });
+    const link = await screen.findByRole('link', { name: 'See the template’s identity' });
+    expect(link.getAttribute('href')).toBe('/templates/tp-0000000001?tab=settings');
+  });
+});
 
 describe('SessionPage', () => {
   it('renders the header, the four tabs and one Activity stream with folded navigations; axe clean', async () => {

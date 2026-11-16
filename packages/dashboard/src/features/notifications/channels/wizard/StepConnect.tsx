@@ -212,7 +212,7 @@ function TelegramConnect({ draft, onTarget, envState, readOnly, onConnectedUser 
       <div className="flex flex-col gap-3">
         <button
           type="button"
-          className="w-fit cursor-pointer rounded-sm text-sm text-link hover:underline focus-ring"
+          className="w-fit cursor-pointer rounded-sm text-sm text-link underline decoration-link/40 underline-offset-2 hover:decoration-link focus-ring"
           aria-expanded={manual}
           onClick={() => setManual((v) => !v)}
         >
@@ -370,7 +370,7 @@ function NtfyConnect({
               href={links.web}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex w-fit items-center gap-1 font-mono text-sm break-all text-link hover:underline"
+              className="inline-flex w-fit items-center gap-1 font-mono text-sm break-all text-link underline decoration-link/40 underline-offset-2 hover:decoration-link"
             >
               {links.web}
               <External aria-hidden="true" className="size-3.5 shrink-0" />
@@ -883,7 +883,7 @@ function DiscordBotConnect({ draft, onTarget, envState, readOnly, onConnectedUse
                 server list.
               </p>
               <details className="group text-sm">
-                <summary className="w-fit cursor-pointer rounded-sm text-link hover:underline focus-ring">
+                <summary className="w-fit cursor-pointer rounded-sm text-link underline decoration-link/40 underline-offset-2 hover:decoration-link focus-ring">
                   Invite it by hand instead
                 </summary>
                 <p className="mt-2 text-muted-foreground">
@@ -978,7 +978,7 @@ function DiscordBotConnect({ draft, onTarget, envState, readOnly, onConnectedUse
           <div className="flex flex-col gap-3">
             <button
               type="button"
-              className="w-fit cursor-pointer rounded-sm text-sm text-link hover:underline focus-ring"
+              className="w-fit cursor-pointer rounded-sm text-sm text-link underline decoration-link/40 underline-offset-2 hover:decoration-link focus-ring"
               aria-expanded={manual}
               onClick={() => setManual((v) => !v)}
             >

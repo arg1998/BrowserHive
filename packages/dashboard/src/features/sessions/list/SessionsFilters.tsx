@@ -7,6 +7,7 @@ import {
   type FilterToken,
 } from '@/components/shared/FilterBar.tsx';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group.tsx';
+import { useTemplatesOverview } from '@/features/templates/api.ts';
 import { formatAbsoluteShort } from '@/lib/format/time.ts';
 import { harnessLabel } from '@/lib/harness.ts';
 import type { SessionsSearch } from '../search.ts';
@@ -36,6 +37,10 @@ export function SessionsFilters({
   onChange,
   onClear,
 }: SessionsFiltersProps) {
+  const templateFacet = facets?.templates ?? [];
+  const templates = useTemplatesOverview(templateFacet.length > 0 || search.template !== undefined);
+  const templateLabel = (id: string) =>
+    templates.data?.data.find((t) => t.template_id === id)?.display_name ?? id;
   const chips: FacetChip[] = [
     {
       param: 'channel',
@@ -56,7 +61,17 @@ export function SessionsFilters({
       selected: search.harness ?? [],
       format: harnessLabel,
     },
-  ].filter((chip) => chip.options.length > 1 || chip.selected.length > 0);
+    {
+      param: 'template',
+      label: 'Template',
+      options: templateFacet,
+      selected: search.template ?? [],
+      format: templateLabel,
+    },
+    // One template already splits template sessions from the rest, so its chip shows on its own.
+  ].filter(
+    (chip) => chip.options.length > (chip.param === 'template' ? 0 : 1) || chip.selected.length > 0,
+  );
   const tokens: FilterToken[] = [];
   if (search.owner !== undefined) {
     tokens.push({

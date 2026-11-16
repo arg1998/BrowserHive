@@ -13,7 +13,7 @@ const DISCORD_BOT_WHERE: ReactNode = (
       <li>
         Open{' '}
         <a
-          className="text-link hover:underline"
+          className="text-link underline decoration-link/40 underline-offset-2 hover:decoration-link"
           href="https://discord.com/developers/applications"
           target="_blank"
           rel="noreferrer"
@@ -45,7 +45,7 @@ const DISCORD_BOT_WHERE: ReactNode = (
         <span className="font-medium">Installation</span> tab, set the Install Link to{' '}
         <span className="font-medium">None</span>, Save, then turn Public Bot off again.{' '}
         <a
-          className="text-link hover:underline"
+          className="text-link underline decoration-link/40 underline-offset-2 hover:decoration-link"
           href={docsUrl('discordBotTroubleshooting')}
           target="_blank"
           rel="noreferrer"
@@ -66,7 +66,7 @@ const WHERE: Readonly<Record<string, ReactNode>> = {
       <li>
         In Telegram, open{' '}
         <a
-          className="text-link hover:underline"
+          className="text-link underline decoration-link/40 underline-offset-2 hover:decoration-link"
           href="https://t.me/BotFather"
           target="_blank"
           rel="noreferrer"

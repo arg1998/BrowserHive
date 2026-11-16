@@ -92,7 +92,7 @@ export function settingsGroups(s: SystemInfo): readonly SettingGroup[] {
         {
           label: 'Max sessions',
           value: s.capacity.max === null ? 'Unbounded' : formatNumber(s.capacity.max),
-          hint: `Sessions requested past the cap are refused. Source: ${s.capacity.max_source}. Set with --maxSessions.`,
+          hint: `Bounds browsers: each exclusive session and each template's shared browser counts once. Launches past the cap are refused. Source: ${s.capacity.max_source}. Set with --maxSessions.`,
           configKey: 'maxSessions',
         },
         {
@@ -231,9 +231,14 @@ export function runtimeRows(
 export function kpis(s: SystemInfo) {
   const ratio = dbRatio(s);
   return {
+    // The cap bounds browsers (exclusive sessions plus template browsers), not sessions: a
+    // template's browser holds many sessions (spec 13 §6.3, D-56).
     sessions: {
-      value: `${formatNumber(s.capacity.live)}${s.capacity.max === null ? '' : ` / ${formatNumber(s.capacity.max)}`}`,
-      sub: s.capacity.max === null ? 'live · no cap' : 'live of max',
+      value: formatNumber(s.capacity.live),
+      sub:
+        s.capacity.max === null
+          ? `${formatNumber(s.capacity.browsers)} browsers · no cap`
+          : `${formatNumber(s.capacity.browsers)} / ${formatNumber(s.capacity.max)} browsers`,
     },
     attention: {
       value: formatNumber(s.open_attention),

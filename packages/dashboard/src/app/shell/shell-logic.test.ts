@@ -5,12 +5,13 @@ import type { Shortcut } from '@/lib/keyboard.ts';
 import { visibleCommands } from './CommandPalette.tsx';
 import { healthState } from './HealthPill.tsx';
 import { shortcutSections, TABLE_SHORTCUTS } from './KeyboardMap.tsx';
-import { groupNavItems } from './SidebarNav.tsx';
+import { withPageCrumb } from './page-crumb.tsx';
+import { groupNavItems, sitesNeedingSignIn } from './SidebarNav.tsx';
 import { parseSidebarPreference, resolveSidebar } from './sidebar-state.ts';
 import type { PaletteCommand } from './use-palette-commands.ts';
 import type { NavItem } from './use-route-table.ts';
 
-const nav = (to: string, requires?: 'vault'): NavItem => ({
+const nav = (to: string, requires?: NavItem['requires'], parent?: string): NavItem => ({
   id: to,
   to,
   label: to.slice(1),
@@ -20,6 +21,12 @@ const nav = (to: string, requires?: 'vault'): NavItem => ({
   requires,
   keywords: [],
   key: undefined,
+  parent,
+});
+const caps = (vault: boolean | null, templates: boolean | null = null) => ({
+  vault,
+  templates,
+  sitePacks: false,
 });
 
 describe('sidebar', () => {
@@ -34,10 +41,50 @@ describe('sidebar', () => {
 
   it('keeps vault items out of every group until /system answered', () => {
     const items = [nav('/overview'), nav('/vault', 'vault'), nav('/vault/log', 'vault')];
-    expect(groupNavItems(items, null).enabled.map((i) => i.to)).toEqual(['/overview']);
-    expect(groupNavItems(items, null).disabled).toEqual([]);
-    expect(groupNavItems(items, false).disabled.map((i) => i.to)).toEqual(['/vault', '/vault/log']);
-    expect(groupNavItems(items, true).enabled).toHaveLength(3);
+    expect(groupNavItems(items, caps(null)).enabled.map((i) => i.to)).toEqual(['/overview']);
+    expect(groupNavItems(items, caps(null)).disabled).toEqual([]);
+    expect(groupNavItems(items, caps(false)).disabled.map((i) => i.to)).toEqual([
+      '/vault',
+      '/vault/log',
+    ]);
+    expect(groupNavItems(items, caps(true)).enabled).toHaveLength(3);
+  });
+});
+
+describe('templates in the nav', () => {
+  const items = [
+    nav('/templates', 'templates'),
+    nav('/site-packs', 'sitePacks', '/templates'),
+    nav('/vault', 'vault'),
+  ];
+
+  it('shows Templates while the config loads and moves it to Not enabled with templates=false', () => {
+    expect(groupNavItems(items, caps(true, null)).enabled.map((i) => i.to)).toEqual([
+      '/templates',
+      '/vault',
+    ]);
+    expect(groupNavItems(items, caps(true, false)).disabled.map((i) => i.to)).toEqual([
+      '/templates',
+      '/site-packs',
+    ]);
+  });
+
+  it('keeps Site packs in Not enabled until site packs ship', () => {
+    expect(groupNavItems(items, caps(true, true)).disabled.map((i) => i.to)).toEqual([
+      '/site-packs',
+    ]);
+  });
+
+  it('counts the sites that need a sign-in from the health facet', () => {
+    expect(
+      sitesNeedingSignIn([
+        { value: 'signed_in', count: 4 },
+        { value: 'signed_out', count: 2 },
+        { value: 'challenged', count: 1 },
+        { value: 'unknown', count: 3 },
+      ]),
+    ).toBe(3);
+    expect(sitesNeedingSignIn(undefined)).toBe(0);
   });
 });
 
@@ -145,5 +192,27 @@ describe('command palette', () => {
     const idle = visibleCommands(commands, '', ['action:logout']);
     expect(idle[0]?.id).toBe('recent:action:logout');
     expect(idle[0]?.group).toBe('Recent');
+  });
+});
+
+describe('page crumb', () => {
+  const identity = {
+    title: 'Template',
+    crumbs: [
+      { label: 'Templates', to: '/templates' },
+      { label: 'Template', to: '/templates/tp-0000000001' },
+    ],
+  };
+
+  it('names the leaf crumb and the title after the page’s own object', () => {
+    const named = withPageCrumb(identity, 'Job hunt');
+    expect(named.title).toBe('Job hunt');
+    expect(named.crumbs.map((c) => c.label)).toEqual(['Templates', 'Job hunt']);
+    expect(named.crumbs[1]?.to).toBe('/templates/tp-0000000001');
+  });
+
+  it('keeps the route’s crumb while the page has not named it', () => {
+    expect(withPageCrumb(identity, null)).toBe(identity);
+    expect(withPageCrumb({ title: 'Sessions', crumbs: [] }, 'x').title).toBe('Sessions');
   });
 });

@@ -27,8 +27,8 @@ export interface HarnessRuleFieldProps {
   /** `null` = every harness, `[]` = none. */
   readonly value: HarnessList;
   readonly onChange: (next: string[] | null) => void;
-  /** What the rule guards, for the copy: `binding` or `folder`. */
-  readonly noun: 'binding' | 'folder';
+  /** What the rule guards, for the copy: `binding`, `folder` or `template`. */
+  readonly noun: 'binding' | 'folder' | 'template';
   /** `GET /vault/harnesses`; `undefined` while loading (no suggestions, no recent-session warnings). */
   readonly seen?: VaultHarnessesResponse | undefined;
   readonly disabled?: boolean;
@@ -338,13 +338,13 @@ export function HarnessRuleField({ value, onChange, noun, seen, disabled }: Harn
       ) : null}
 
       <p id={noteId} className="text-sm text-muted-foreground">
-        Harness names are reported by the client: this restricts which agents can fill, but does not
-        verify them.{' '}
+        Harness names are reported by the client: this restricts which agents can{' '}
+        {noun === 'template' ? 'use it' : 'fill'}, but does not verify them.{' '}
         <a
           href={docsUrl('vaultHarnesses')}
           target="_blank"
           rel="noreferrer"
-          className="text-link hover:underline"
+          className="text-link underline decoration-link/40 underline-offset-2 hover:decoration-link"
         >
           How it works
         </a>
@@ -354,7 +354,11 @@ export function HarnessRuleField({ value, onChange, noun, seen, disabled }: Harn
         switch (warning.kind) {
           case 'empty':
             return (
-              <Callout key="empty" tone="warn" title={`No harness can fill this ${noun}`}>
+              <Callout
+                key="empty"
+                tone="warn"
+                title={`No harness can ${noun === 'template' ? 'use' : 'fill'} this ${noun}`}
+              >
                 An empty list refuses every session. Pick a harness, or choose All harnesses.
               </Callout>
             );
@@ -402,7 +406,7 @@ export function HarnessRuleField({ value, onChange, noun, seen, disabled }: Harn
                   href={docsUrl('agentTokens')}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-link hover:underline"
+                  className="text-link underline decoration-link/40 underline-offset-2 hover:decoration-link"
                 >
                   Per-agent tokens
                 </a>

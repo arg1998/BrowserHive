@@ -132,6 +132,20 @@ export const keys = {
     deliveries: (params?: KeyParams) => ['channels', 'deliveries', stableParams(params)] as const,
     delivery: (seq: number) => ['channels', 'delivery', seq] as const,
   },
+  templates: {
+    all: ['templates'] as const,
+    lists: () => ['templates', 'list'] as const,
+    list: (params?: KeyParams) => ['templates', 'list', stableParams(params)] as const,
+    /** The sidebar badge and the `/system` browsers card (every template, unfiltered). */
+    overview: () => ['templates', 'overview'] as const,
+    details: () => ['templates', 'detail'] as const,
+    detail: (id: string) => ['templates', 'detail', id] as const,
+    versions: (id: string, params?: KeyParams) =>
+      ['templates', 'versions', id, stableParams(params)] as const,
+    operation: (operationId: string) => ['templates', 'operation', operationId] as const,
+    access: (id: string, params?: KeyParams) =>
+      ['templates', 'access', id, stableParams(params)] as const,
+  },
   publicUrl: () => ['system', 'public-url'] as const,
   preferences: () => ['preferences'] as const,
   search: (q: string) => ['search', q] as const,

@@ -23,11 +23,17 @@ export interface RouteStaticData {
     readonly order: number;
     /** Single-key shortcut in the palette / `g` sequences (informational). */
     readonly key?: string;
+    /** The nav item this one sits under, indented (`/site-packs` under `/templates`). */
+    readonly parent?: string;
   };
   /** Object pages show a breadcrumb instead of the title. */
   readonly crumb?: (params: Record<string, string>) => string;
-  /** Capability the page needs; when off in `/system`, the item is greyed with a lock glyph. */
-  readonly requires?: 'vault' | 'admin';
+  /**
+   * Capability the page needs; when off, the item moves to the "Not enabled" group with a lock
+   * glyph (`vault` from `/system`, `templates` from the `templates` config key, `sitePacks` until
+   * site packs ship).
+   */
+  readonly requires?: 'vault' | 'admin' | 'templates' | 'sitePacks';
   readonly palette?: { readonly keywords: readonly string[] };
 }
 

@@ -7,6 +7,7 @@ import { AuthRetryBanner } from './AuthRetryNotice.tsx';
 import { CommandPalette } from './CommandPalette.tsx';
 import { KeyboardMap } from './KeyboardMap.tsx';
 import { PageActionsProvider } from './page-actions.tsx';
+import { PageCrumbProvider } from './page-crumb.tsx';
 import { WidgetBoundary } from './RouteError.tsx';
 import { Sidebar } from './Sidebar.tsx';
 import { ShellLayoutProvider, usePageLayout } from './shell-layout.tsx';
@@ -19,7 +20,9 @@ export function AppShell({ children }: { readonly children: ReactNode }) {
   return (
     <ShellLayoutProvider>
       <PageActionsProvider>
-        <Frame>{children}</Frame>
+        <PageCrumbProvider>
+          <Frame>{children}</Frame>
+        </PageCrumbProvider>
       </PageActionsProvider>
     </ShellLayoutProvider>
   );
