@@ -33,6 +33,7 @@ describe('init', () => {
       'admin',
       'templates',
       'site-packs',
+      'site-packs/local',
     ]) {
       expect(await fs.stat(`${DATA_DIR}/${sub}`)).not.toBeNull();
     }

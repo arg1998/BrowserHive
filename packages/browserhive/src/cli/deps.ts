@@ -170,6 +170,13 @@ export interface CliStorage {
   /** Every template's row facts (spec 13 §11.9); empty for a database from before schema v9. */
   templateRows(): Promise<readonly TemplateRowFacts[]>;
   /**
+   * The SHA-256 each pack's local file was approved at (`site_pack_state.local_approved_sha256`,
+   * spec 13 §10.5); empty for a database from before schema v10.
+   */
+  sitePackLocalApprovals(): Promise<
+    readonly { readonly packId: string; readonly sha256: string | null }[]
+  >;
+  /**
    * Records a re-encrypted version file in its `template_versions` row (`templates rekey`).
    *
    * @returns `false` when no row matched.

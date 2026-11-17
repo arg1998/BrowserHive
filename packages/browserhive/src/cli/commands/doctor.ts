@@ -1,5 +1,6 @@
 /** @module cli/commands/doctor — `browserhive doctor [--json]`: runs every host check, prints a table, exits 0 (all ✓), 1 (any ✗) or 2 (warnings only) (spec 08 §7.1) */
 import type { Channel } from '@browserhive/contracts/enums';
+import { resolveBundledPacksDir } from '../../composition/site-packs.ts';
 import type { CommandContext } from '../deps.ts';
 import { EXIT, type ExitCode, type Invocation } from '../invocation.ts';
 import type { StatusKind } from '../output/output.ts';
@@ -31,6 +32,7 @@ import {
   checkUnrecognisedDataFiles,
   checkVault,
 } from './doctor-checks.ts';
+import { checkSitePacks } from './doctor-site-packs.ts';
 import { checkTemplates } from './doctor-templates.ts';
 
 type DoctorInvocation = Extract<Invocation, { readonly command: 'doctor' }>;
@@ -113,6 +115,14 @@ export async function runChecks(
   }
   results.push(
     ...(await checkTemplates(deps, { dataDir, config, keyFromFlag: keyFromFlag(invocation) })),
+  );
+  results.push(
+    await checkSitePacks(deps, {
+      dataDir,
+      config,
+      bundledDir: resolveBundledPacksDir(),
+      binaryVersion: deps.appVersion,
+    }),
   );
   if (config !== null && resolution.ok) {
     results.push(await checkOtel(deps, config));

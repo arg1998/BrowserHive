@@ -211,6 +211,13 @@ export type Invocation =
       readonly templateKeyPrevious: string | null;
       readonly json: boolean;
     } & DataDirTarget)
+  | {
+      /** `sitepacks verify <path>`: offline, no server (spec 13 §11.5). */
+      readonly command: 'sitepacks-verify';
+      /** Absolute path of the pack file. */
+      readonly path: string;
+      readonly json: boolean;
+    }
   | { readonly command: 'version'; readonly json: boolean };
 
 /** The template a `templates` subcommand acts on, by name, over the REST API. */

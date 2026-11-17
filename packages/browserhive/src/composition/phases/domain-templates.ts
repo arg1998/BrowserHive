@@ -25,6 +25,7 @@ import {
   reconcileTemplateState,
   resolveTemplateKeys,
   type SessionService,
+  type SitePackRegistry,
   TemplateActions,
   TemplateEditService,
   type TemplateHealthParts,
@@ -66,6 +67,8 @@ export interface TemplatesInput {
   readonly machine?: string;
   /** `templateKey` came from a command-line flag (warned: argv is readable by other users). */
   readonly keyFromFlag?: boolean;
+  /** Site packs (T3a): approval on first use, the sites' packs, providers and `human_only`. */
+  readonly sitePacks?: SitePackRegistry;
 }
 
 /** How often template hosts are checked for idleness, age and memory (spec 13 §3.2). */
@@ -191,11 +194,31 @@ export async function templateStateStore(
   return store;
 }
 
+/**
+ * Keeps the registry's `used_by` (automatic Follow) current: template and site changes re-read it;
+ * a pack decision publishes `template.changed` for the templates using the pack.
+ */
+function wireSitePackUsage(input: TemplatesInput, changed: (templateId: string) => void): void {
+  const registry = input.sitePacks;
+  if (registry === undefined) return;
+  registry.attachTemplateChanged(changed);
+  const refresh = () => {
+    registry
+      .refreshUsage()
+      .catch((err: unknown) =>
+        input.logger.warn('pack usage failed', { err: serializeError(err) }),
+      );
+  };
+  input.bus.subscribe('template.changed', refresh);
+  input.bus.subscribe('template.removed', refresh);
+}
+
 /** Builds the template service. */
 export async function buildTemplates(input: TemplatesInput): Promise<TemplatesParts> {
   const { config } = input;
   const templatesDir = templatesDirOf(config.dataDir);
   const store = await templateStateStore(input, templatesDir);
+  const packs = input.sitePacks === undefined ? {} : { packs: input.sitePacks };
   const reader = createProcessTreeReader();
   const supervisor = config.templates
     ? new TemplateHostSupervisor({
@@ -266,6 +289,7 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
     logger: input.logger,
     state,
     changed: (id) => changed(id),
+    ...packs,
   });
   const files = createTemplateFiles(templatesDir);
   const service = new TemplateService({
@@ -277,6 +301,7 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
     files,
     bus: input.bus,
     versions: input.uow.repos.templateVersions,
+    ...packs,
     degradations: input.degradations,
     ids: input.ids,
     clock: input.clock,
@@ -294,6 +319,7 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
     },
   });
   changed = (id) => service.publishChanged(id);
+  wireSitePackUsage(input, changed);
   const common = { ids: input.ids, clock: input.clock, logger: input.logger, changed };
   const edit = new TemplateEditService({
     repos: input.uow.repos,
@@ -302,6 +328,7 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
     ops,
     sessions: input.sessions,
     bus: input.bus,
+    ...packs,
     ...common,
   });
   const actions = new TemplateActions({
@@ -340,6 +367,7 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
           machine: input.machine ?? hostname(),
           displayAvailable: () => !displayMissing(input.host.platform, input.host.env),
           changed,
+          ...packs,
         });
   if (health !== null) restored = (id) => health.scheduler.restored(id);
   // Idle stop, age recycle, memory and checkpoints of template hosts (spec 13 §3.2, §3.9).

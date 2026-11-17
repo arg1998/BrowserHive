@@ -198,6 +198,15 @@ export async function openCliStorage(
         });
     },
     templateRows: async () => readTemplateRows(storage),
+    sitePackLocalApprovals: async () => {
+      try {
+        const rows = await storage.repos.sitePackState.list();
+        return rows.map((r) => ({ packId: r.packId, sha256: r.localApprovedSha256 }));
+      } catch {
+        // A database from before schema v10 has no site_pack_state table.
+        return [];
+      }
+    },
     updateTemplateVersionFile: (templateId, version, file) =>
       storage.repos.templateVersions.updateFile(templateId, version, file),
     createToken: async ({ principal, expiresInMs }) => {

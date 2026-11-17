@@ -1,0 +1,18 @@
+browserhive sitepacks — Check and manage site packs
+
+USAGE
+  browserhive sitepacks verify <path> [flags]
+
+Site packs describe how a template site signs in, how BrowserHive tells it is signed in, and which
+requests and controls are blocked or need confirmation. verify checks a pack file offline against
+the schema and its rules; it needs no server.
+
+COMMANDS
+  verify <path>  Check a site pack file offline (schema, refinements, size)
+
+FLAGS — verify
+  --json  Print machine-readable JSON instead of text.
+
+GLOBAL FLAGS
+  -h, --help     Show help.
+  -v, --version  Print the version.

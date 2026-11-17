@@ -58,7 +58,7 @@
     "model-context-protocol"
   ],
   "scripts": {
-    "build": "tsdown && bun scripts/bundle-dashboard.ts",
+    "build": "tsdown && bun scripts/bundle-dashboard.ts && bun scripts/bundle-site-packs.ts",
     "typecheck": "tsc -b --pretty",
     "test": "bun test"
   },
