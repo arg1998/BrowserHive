@@ -7,6 +7,7 @@ import {
   matchRequestGuard,
   type RequestGuardRuleInput,
 } from '../policies/request-guard.ts';
+import { isAnchoredChallenge } from './challenges.ts';
 import { checkPackSelector } from './css-selector.ts';
 import { scopedUrl, scopeOfGlob } from './glob-scope.ts';
 
@@ -166,6 +167,11 @@ export function refinePack(pack: SitePackV1): RefineResult {
     }
     if (m.url !== undefined) glob(`${at}.match.url`, m.url);
     if (m.landmark !== undefined) selector(`${at}.match.landmark`, m.landmark);
+    if (!isAnchoredChallenge(challenge)) {
+      warnings.push(
+        `${at} (${challenge.id}) matches page text or a landmark without url or title_contains: inert (posted content could match it)`,
+      );
+    }
   }
 
   // Pacing.

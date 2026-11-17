@@ -9,11 +9,13 @@ import {
   challengeRulesFor,
   DEFAULT_CHALLENGES,
   firstChallenge,
+  isAnchoredChallenge,
   isBadgeFrame,
   isChallengePath,
   isVisibleSurface,
   providerOfFrameUrl,
 } from './challenges.ts';
+import { refinePack } from './refine.ts';
 import { basePack } from './test-fixtures.ts';
 
 const pack = SitePackV1.parse({
@@ -31,7 +33,20 @@ const pack = SitePackV1.parse({
       match: { title_contains: 'restricted', text: 'appeal' },
       action: 'stop',
     },
-    { id: 'reauth', kind: 'reauth', match: { landmark: '#reauth' }, action: 'attention' },
+    {
+      id: 'reauth',
+      kind: 'reauth',
+      match: { title_contains: 'Sign in', landmark: '#reauth' },
+      action: 'attention',
+    },
+    // Text anyone can post (review #83 C-L1): inert without url or title_contains.
+    {
+      id: 'posted',
+      kind: 'rejected',
+      match: { text: 'blocked by network security' },
+      action: 'attention',
+    },
+    { id: 'posted-ui', kind: 'rejected', match: { landmark: '.blocked' }, action: 'attention' },
   ],
 });
 
@@ -163,7 +178,9 @@ describe('firstChallenge', () => {
     expect(
       await firstChallenge(rules, facts({ pageTitle: 'Account RESTRICTED', texts: ['appeal'] })),
     ).toMatchObject({ id: 'locked', action: 'stop' });
-    expect(await firstChallenge(rules, facts({ landmarks: ['#reauth'] }))).toMatchObject({
+    expect(
+      await firstChallenge(rules, facts({ pageTitle: 'Sign in again', landmarks: ['#reauth'] })),
+    ).toMatchObject({
       id: 'reauth',
     });
     expect(await firstChallenge(rules, facts({ surfaces: new Set(['arkose']) }))).toMatchObject({
@@ -177,7 +194,10 @@ describe('firstChallenge', () => {
     const url = 'https://www.linkedin.com/checkpoint/lg';
     expect(await firstChallenge(rules, facts({ url, urlExempt: true }))).toBeNull();
     expect(
-      await firstChallenge(rules, facts({ url, urlExempt: true, landmarks: ['#reauth'] })),
+      await firstChallenge(
+        rules,
+        facts({ url, urlExempt: true, pageTitle: 'Sign in', landmarks: ['#reauth'] }),
+      ),
     ).toMatchObject({ id: 'reauth' });
   });
 
@@ -190,5 +210,24 @@ describe('firstChallenge', () => {
     };
     expect(await firstChallenge(challengeRulesFor(pack), broken)).toBeNull();
     expect(challengeReason('captcha')).toBe('challenge:captcha');
+  });
+});
+
+describe('anchoring (review #83 C-L1)', () => {
+  it('a text-only or landmark-only challenge is inert: posted content never holds a session', async () => {
+    expect(challengeRulesFor(pack).map((r) => r.id)).not.toContain('posted');
+    expect(challengeRulesFor(pack).map((r) => r.id)).not.toContain('posted-ui');
+    const posted = facts({ texts: ['blocked by network security'], landmarks: ['.blocked'] });
+    expect(await firstChallenge(challengeRulesFor(pack), posted)).toBeNull();
+    expect(isAnchoredChallenge({ match: { text: 'x y' } })).toBe(false);
+    expect(isAnchoredChallenge({ match: { text: 'x y', url: 'a.test/b' } })).toBe(true);
+    expect(isAnchoredChallenge({ match: { landmark: '#a', title_contains: 'ab' } })).toBe(true);
+    expect(isAnchoredChallenge({ match: { frame: 'cloudflare' } })).toBe(true);
+  });
+
+  it('refinePack warns about an unanchored challenge', () => {
+    const { issues, warnings } = refinePack(pack);
+    expect(issues).toEqual([]);
+    expect(warnings.filter((w) => w.includes('inert'))).toHaveLength(2);
   });
 });

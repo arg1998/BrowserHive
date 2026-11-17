@@ -34,7 +34,12 @@ const pack = SitePackV1.parse({
       match: { title_contains: 'Suspended', text: 'appeal' },
       action: 'stop',
     },
-    { id: 'reauth', kind: 'reauth', match: { landmark: 'form#reauth' }, action: 'attention' },
+    {
+      id: 'reauth',
+      kind: 'reauth',
+      match: { url: `${SITE}/home*`, landmark: 'form#reauth' },
+      action: 'attention',
+    },
   ],
 });
 const effective: EffectivePack = {

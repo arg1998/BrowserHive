@@ -55,9 +55,21 @@ export const DEFAULT_CHALLENGES: readonly ChallengeRule[] = Object.freeze([
   },
 ]);
 
-/** A pack's challenges as rules, in pack order. */
+/**
+ * A challenge whose page members cannot be produced by what users post on the site: a `text` or
+ * `landmark` member counts only when ANDed with the page's `url` or its `title_contains` (review
+ * #83 C-L1: a comment quoting "You've been blocked" would otherwise hold every agent that reads
+ * it). `refinePack` warns about the others, which are inert.
+ */
+export function isAnchoredChallenge(challenge: Pick<PackChallenge, 'match'>): boolean {
+  const m = challenge.match;
+  const pageContent = m.text !== undefined || m.landmark !== undefined;
+  return !pageContent || m.url !== undefined || m.title_contains !== undefined;
+}
+
+/** A pack's anchored challenges as rules, in pack order (unanchored ones are inert). */
 export function packChallengeRules(pack: SitePackV1): readonly ChallengeRule[] {
-  return pack.challenges.map((c) => ({
+  return pack.challenges.filter(isAnchoredChallenge).map((c) => ({
     packId: pack.id,
     id: c.id,
     kind: c.kind,

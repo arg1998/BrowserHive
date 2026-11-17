@@ -89,8 +89,8 @@ function samePlace(pack: SitePackV1, url: string): boolean {
  * Step 2, in order (spec 13 §8.1): a challenge → `challenged`; the final URL (inside the pack's
  * domains) matches a `signed_out_redirects` glob → `signed_out` `redirect`; the signed-out marker →
  * `signed_out` `marker`; the landmark → `signed_in` `landmark`; a `redirect` (or `either`) pack
- * still on the probe host and path (and not a 5xx) → `signed_in` `no_redirect`; otherwise
- * `inconclusive` (`timeout`, `network`, `http_<status>` ≥ 500, `no_signal`). A challenge is never
+ * still on the probe host and path (and not a 4xx/5xx) → `signed_in` `no_redirect`; otherwise
+ * `inconclusive` (`timeout`, `network`, `http_<status>` ≥ 400, `no_signal`). A challenge is never
  * `signed_out`.
  */
 export async function classifyPackProbe(
@@ -121,8 +121,9 @@ export async function classifyPackProbe(
   if (signals.landmark !== undefined && (await present(facts, signals.landmark))) {
     return verdict('signed_in', PACK_PROBE_REASONS.landmark);
   }
-  // A server error page on the probe path is no sign of a session (checked before `no_redirect`).
-  if (facts.status !== null && facts.status >= 500) {
+  // An error page on the probe path (a 401/403 bot wall, a 5xx) is no sign of a session: it is
+  // checked before `no_redirect` (review #83 C-L5).
+  if (facts.status !== null && facts.status >= 400) {
     return verdict('inconclusive', `http_${facts.status}`);
   }
   if (signals.kind !== 'landmark' && samePlace(pack, facts.finalUrl)) {

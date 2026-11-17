@@ -273,6 +273,10 @@ describe('element guards', () => {
       'role=button[Delete]',
     );
     await call('type_text', { selector: '#field', text: 'abc' });
+    // Review #83 C-L2: a newline anywhere submits the form.
+    expect((await refusal(call('type_text', { selector: '#field', text: 'a\nb' }))).code).toBe(
+      'SITE_ACTION_BLOCKED',
+    );
     expect((await refusal(call('type_text', { selector: '#field', text: 'abc\n' }))).code).toBe(
       'SITE_ACTION_BLOCKED',
     );

@@ -30,7 +30,7 @@ function submitControlsOf(field: Locator): Locator {
 
 /**
  * The elements `tool` would act on in `page`: the selector(s) it names; `drag_and_drop` both ends;
- * `type_text` with a trailing newline (and `press_key` of `Enter`) also its form's submit
+ * `type_text` with a newline anywhere in the text (and `press_key` of `Enter`) also its form's submit
  * controls; `press_key` without a selector the focused element (`:focus`, read by the driver's
  * isolated query, never the page's script).
  */
@@ -53,7 +53,8 @@ export function elementTargets(
       return [...at('source_selector'), ...at('target_selector')];
     case 'type_text': {
       const field = at('selector');
-      const submits = /[\r\n]$/.test(text(args, 'text') ?? '');
+      // Any newline submits, not only a trailing one (review #83 C-L2: `a\nb` submits too).
+      const submits = /[\r\n]/.test(text(args, 'text') ?? '');
       return submits ? [...field, ...field.map(submitControlsOf)] : field;
     }
     case 'press_key': {

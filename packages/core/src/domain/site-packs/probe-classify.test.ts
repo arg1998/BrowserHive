@@ -79,6 +79,15 @@ describe('classifyPackProbe', () => {
     ['a timeout', facts({ failure: 'timeout' }), 'inconclusive', 'timeout'],
     ['a network failure', facts({ failure: 'network' }), 'inconclusive', 'network'],
     ['a server error on the probe path', facts({ status: 503 }), 'inconclusive', 'http_503'],
+    // Review #83 C-L5: a bot wall on the probe path is not a session.
+    ['a 403 bot wall on the probe path', facts({ status: 403 }), 'inconclusive', 'http_403'],
+    ['a 401 on the probe path', facts({ status: 401 }), 'inconclusive', 'http_401'],
+    [
+      'a 403 with the landmark still counts the landmark',
+      facts({ status: 403, selectors: ['#global-nav'] }),
+      'signed_in',
+      'landmark',
+    ],
     [
       'elsewhere with no signal',
       facts({ finalUrl: 'https://www.linkedin.com/somewhere' }),
