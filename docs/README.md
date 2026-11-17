@@ -18,10 +18,11 @@ BrowserHive is a local MCP server that gives AI agents isolated, stealthy Chromi
 - [Notifications](guide/notifications.md): notifications on your phone through Telegram, Discord, ntfy or a webhook, answering from the chat, daily digests and anomaly alerts, reports in the dashboard, screenshots, self-destruct and a public address for links
 - [Stealth](guide/stealth.md): what it does, what it does not, ceilings, proxies
 - [Session templates](guide/templates.md): sign agents in to your sites once: creating and signing in, `list_templates` and `launch_session` with `template`, sealing, access, displays and known limits
+- [Site packs](guide/site-packs.md): what BrowserHive knows about a site, approving pack versions and local files, guards, write policies, security checks, and what guards cannot see
 - [Telemetry](guide/telemetry.md): OpenTelemetry export and a local Grafana stack
 - [Command line](guide/cli.md): every command and exit code
 - [Programmatic API](guide/programmatic-api.md): `createServer`
-- [Upgrading and downgrading](guide/upgrading.md): migrations, backups, `db restore`
+- [Upgrading and downgrading](guide/upgrading.md): migrations, backups, `db restore`; schema v10 (site packs) cannot be downgraded without the pre-upgrade backup
 - [Troubleshooting](guide/troubleshooting.md)
 - [FAQ](guide/faq.md)
 

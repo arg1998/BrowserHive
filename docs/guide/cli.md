@@ -11,6 +11,7 @@ browserhive admin reset-password
 browserhive admin tokens list|create <name>|revoke <name>
 browserhive channels list | test <name> | preview <name> [--sample <kind>]
 browserhive templates list | show | create | finish | login | probe | seed | versions | save | restore | host | disable | enable | rm | rekey
+browserhive sitepacks list | show | diff | apply | reject | revert | pin | unpin | follow | approve-local | enable | disable | reload | import | verify
 browserhive version | --version | -v
 browserhive help [command] | --help | -h
 ```
@@ -297,6 +298,30 @@ The server waits at most 2 minutes for the checks. `--json` prints `{results: [{
 
 Exit codes: `0` every checked site is signed in; `1` failure; `2` a site is signed out or BrowserHive couldn't tell; `64` usage error.
 
+## `sitepacks`
+
+Review, approve and manage [site packs](site-packs.md) on a running server started with `--admin`. Like `templates`, these commands use the REST API: `--url` defaults to the configured host and port, and `--token` (an operator API token with `sitepacks:read`, and `sitepacks:write` for changes) or `--cookie` authenticates. `--json` prints the API's answer. The exception is `sitepacks verify`, which works offline. `<pack>` is a pack id: the registrable domain the pack is for, such as `linkedin.com`.
+
+| Command | Meaning |
+|---|---|
+| `sitepacks list [--source <local,registry,bundled,import>] [--pending] [--json]` | Every pack: the approved version (or "not approved (v3 offered)"), its source, the local file's state (approved, changed since approval — review, not yet approved), pending versions (or "pinned at v3, v4 available"), the follow setting, how many templates use it and whether it is enabled. Under the table: packs that were skipped and why, and the local folder. `--source` takes one or more sources, comma-separated. `--pending` lists only packs with something waiting for you. |
+| `sitepacks show <pack> [--json]` | One pack: its domains, the approved version with its provenance ("bundled with BrowserHive 0.3.1", a local file's path), who approved it and when, its SHA-256, the version on offer, the previous version, the local file, pending versions, the follow setting, the templates using it, the write policy and the site's terms, its rule counts, what was verified and when, and every version it knows. |
+| `sitepacks diff <pack> [--to <version\|local>] [--json]` | The field-by-field difference from the approved version to a pending version, or to the local file (`--to local`): one line per changed field with its old and new value, and any domain the candidate adds. Without `--to`, the only candidate; an error when there are several or none. |
+| `sitepacks apply <pack> [version] [--yes]` | Approve a pending version (below). Without `version`, the only pending version. |
+| `sitepacks reject <pack> [version]` | Dismiss a pending version; a newer one is offered again. Without `version`, the only pending version. |
+| `sitepacks revert <pack> [--yes]` | Go back to the previous approved version (below). |
+| `sitepacks pin <pack> <version>`, `sitepacks unpin <pack>` | Keep the approved version; newer ones are listed but not offered. |
+| `sitepacks follow <pack> on\|off\|auto` | Whether the pack lists pending updates and notifies about them. `auto`: while a template uses it. |
+| `sitepacks approve-local <pack> [--yes]` | Approve the current content of the pack's local file (below). |
+| `sitepacks enable <pack>`, `sitepacks disable <pack>` | A disabled pack applies nowhere; its sites are generic sites. |
+| `sitepacks reload` | Read the bundled packs and the local folder (`sitePacksDir`) again, and print per source how many loaded and which were skipped and why. |
+| `sitepacks import <file>` | Send one pack file (at most 1 MiB) to the server, which stores it in the local folder as `<pack id>.json`. It applies only after `approve-local`. A signed layout (a folder with `keys.json`, `index.json` and `packs/`) is refused: signed layouts arrive with a later release. |
+| `sitepacks verify <file>` | Check a pack file offline, without a server: the schema and every rule of [Why a bad pack can do little harm](site-packs.md#why-a-bad-pack-can-do-little-harm), each problem with its field. |
+
+**Confirmations.** `apply`, `revert` and `approve-local` change what every template using the pack does, so on a terminal they say what will happen and ask you to type the pack id. Without a terminal they refuse unless `--yes`. `apply` and `approve-local` print the difference first; `approve-local` then prints the file's path and the SHA-256 it approves, and approves exactly that content: when the file changed in between, the server refuses (`409 CONFLICT`) and you run it again to review the new content.
+
+Exit codes: `0` done; `1` failure (server unreachable, an API error printed as `[CODE] message`, no pending version or several, a refused confirmation, a file that cannot be used); `2` `list --pending` found a pending update of a followed pack or a local file waiting for approval; `64` usage error.
+
 ## `version`
 
 ```
@@ -311,7 +336,7 @@ browserhive 0.3.0 (bun 1.4.2, sqlite 3.53.2, patchright 1.63.0)
 |---|---|
 | `0` | Success, or clean shutdown after a signal. |
 | `1` | Fatal runtime error (a boot phase failed after configuration, storage corruption, `purge` or `doctor` failure). |
-| `2` | `doctor` found warnings only; `templates create` finished with a site not signed in, or timed out; `templates seed` (or `create --fromState`) left a site signed out or needing a check; `templates login` did not sign the site in (failed, timed out or cancelled); `templates probe` found a site not signed in. |
+| `2` | `doctor` found warnings only; `templates create` finished with a site not signed in, or timed out; `templates seed` (or `create --fromState`) left a site signed out or needing a check; `templates login` did not sign the site in (failed, timed out or cancelled); `templates probe` found a site not signed in; `sitepacks list --pending` found something waiting for your approval. |
 | `3` | Policy refusal at startup: [`INSECURE_BIND_REFUSED`](../reference/errors.md#INSECURE_BIND_REFUSED), [`ADMIN_REQUIRES_HTTP`](../reference/errors.md#ADMIN_REQUIRES_HTTP), [`BLOCKLIST_LOAD_FAILED`](../reference/errors.md#BLOCKLIST_LOAD_FAILED), [`PORT_IN_USE`](../reference/errors.md#PORT_IN_USE), [`DB_NEWER_THAN_BINARY`](../reference/errors.md#DB_NEWER_THAN_BINARY), [`SANDBOX_UNAVAILABLE`](../reference/errors.md#SANDBOX_UNAVAILABLE) (`--sandbox on`). Also a command that needs the server stopped while it runs, such as `templates rekey` ([`DATA_DIR_LOCKED`](../reference/errors.md#DATA_DIR_LOCKED)). Printed as `[CODE] message`. |
 | `64` | Usage error: unknown flag or key, invalid value, conflicting settings, missing argument. |
 | `130` | A second interrupt arrived before graceful shutdown finished. |

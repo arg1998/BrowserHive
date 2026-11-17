@@ -2,6 +2,7 @@
 import { CONFIG_KEYS, type ConfigKey } from '@browserhive/contracts/config';
 import { ADMIN_COMMAND, CHANNELS_COMMAND } from './registry-admin.ts';
 import { jsonFlag, sub } from './registry-parts.ts';
+import { SITEPACKS_COMMAND } from './registry-sitepacks.ts';
 import { TEMPLATES_COMMAND } from './registry-templates.ts';
 import type {
   CommandDescriptor,
@@ -201,6 +202,7 @@ export const COMMANDS: readonly CommandDescriptor[] = [
   ADMIN_COMMAND,
   CHANNELS_COMMAND,
   TEMPLATES_COMMAND,
+  SITEPACKS_COMMAND,
   {
     name: 'version',
     summary: 'Print version information',

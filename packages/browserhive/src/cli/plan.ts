@@ -29,6 +29,7 @@ import {
   run,
   usage,
 } from './plan-resolve.ts';
+import { planSitePacks } from './plan-sitepacks.ts';
 import { acceptedFlags, type CommandName, commandDescriptor, isCommandName } from './registry.ts';
 
 export type { PlanContext } from './plan-resolve.ts';
@@ -249,6 +250,21 @@ function planInvocation(name: string, input: PlanInput): CliPlan {
     case 'templates enable':
     case 'templates rekey':
       return planTemplates(name, input);
+    case 'sitepacks list':
+    case 'sitepacks show':
+    case 'sitepacks diff':
+    case 'sitepacks apply':
+    case 'sitepacks reject':
+    case 'sitepacks revert':
+    case 'sitepacks pin':
+    case 'sitepacks unpin':
+    case 'sitepacks follow':
+    case 'sitepacks approve-local':
+    case 'sitepacks enable':
+    case 'sitepacks disable':
+    case 'sitepacks reload':
+    case 'sitepacks import':
+      return planSitePacks(name, input);
     case 'version': {
       const json = reader.bool('json');
       if (reader.problems.length > 0) return usage(reader.problems);

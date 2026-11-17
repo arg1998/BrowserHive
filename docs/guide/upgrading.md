@@ -2,6 +2,8 @@
 
 BrowserHive follows semantic versioning from `0.1.0`. While the major version is `0`, breaking changes bump the minor version. Release notes are in the changelog and on GitHub Releases.
 
+> **Upgrading to the release with site packs is one-way.** Its database (schema v10) cannot be opened by an older BrowserHive. To go back to an older release afterwards, you must restore the backup written before the upgrade, and you lose what was recorded since. See [Site packs: schema v10 cannot be downgraded](#site-packs-schema-v10-cannot-be-downgraded).
+
 ## Upgrade
 
 ```bash
@@ -67,12 +69,31 @@ What you may need to change:
 - **CORS preflights** (measured on Patchright 1.63): without request interception the site's preflight answer is honoured at every stealth level, so a write the site refuses is not sent. With interception (a configured blocklist, every template browser) the driver answers the preflight itself, so such a write is sent, as it was before 0.3.0. See the templates guide's [known limits](templates.md#known-limits).
 - `browserhive version` lists Patchright only, and `browserhive doctor` has one browser row, `chromium (patchright)`.
 
+### Site packs: schema v10 cannot be downgraded
+
+The release that adds [site packs](site-packs.md) migrates the database to **schema v10**. This is BrowserHive's first migration that an older release cannot read:
+
+- It rebuilds the table of operator requests so it can hold site checks and write confirmations, and adds three tables: the state of each site pack (the approved version, the local file's approval, pin and follow settings), every pack version offered and decided, and every guard decision.
+- It raises the database's oldest readable schema to 10. **Any older BrowserHive refuses to start** on the upgraded database with [`DB_NEWER_THAN_BINARY`](../reference/errors.md#DB_NEWER_THAN_BINARY) (exit code 3), naming the backup written before the upgrade.
+- As with every upgrade, the backup is written first, to `<data-dir>/backups/browserhive-v9-<timestamp>.db`. Keep it until you are sure you will not go back: `--backupsKeep` (default 5) deletes the oldest backups as new ones are written.
+
+To go back to a release without site packs, install it and restore that backup:
+
+```bash
+bun add -g browserhive@<older-version>
+browserhive db restore ~/.local/share/browserhive/backups/browserhive-v9-<timestamp>.db
+```
+
+Everything recorded since the upgrade is lost with the restore: sessions, audit rows, notifications, template versions written since, and every site pack approval. If you upgrade again later, you approve the packs again when you add their sites.
+
+Nothing else changes for existing templates: their sites stay generic sites until you approve a pack for them ([Sites with a site pack](templates.md#sites-with-a-site-pack)).
+
 ## Downgrade
 
 Nothing is ever migrated downward in place. Instead, each database records two numbers: its schema version, and the **oldest schema version whose code can still read it**. Purely additive migrations (new tables or columns) do not raise the second number.
 
 - **Within the compatibility window:** an older release opens a newer database normally.
-- **Outside the window:** the older release refuses to start with [`DB_NEWER_THAN_BINARY`](../reference/errors.md#DB_NEWER_THAN_BINARY) (exit code 3). The message names the backup that was written before the upgrade.
+- **Outside the window:** the older release refuses to start with [`DB_NEWER_THAN_BINARY`](../reference/errors.md#DB_NEWER_THAN_BINARY) (exit code 3). The message names the backup that was written before the upgrade. Schema v10, the release with site packs, is the first such migration: [any release before it cannot open the database](#site-packs-schema-v10-cannot-be-downgraded).
 
 To go back:
 
