@@ -453,9 +453,10 @@ describe('documented blind spots (real Chromium)', () => {
 
   // CORS preflights, measured on Patchright 1.63 after D40 (no driver document route): page and
   // target are both on loopback, the same IP address space, so Local Network Access does not
-  // restrict them and the outcome is CORS alone. Pinned per stealth level, without and with a
-  // BrowserHive route (the blocklist route, the guard's chain). Enforcing preflights inside the
-  // chain is deferred item D41.
+  // restrict them and the outcome is CORS alone. With or without a BrowserHive route (the
+  // blocklist route, the guard's chain), Chromium sends the preflight and honours the site's
+  // answer (D-66; before it, the driver answered under a route and the refused write was sent,
+  // deferred D41). `cors-preflights.test.ts` covers the rest.
   for (const stealth of [false, true]) {
     const label = stealth ? 'stealth' : 'plain';
 
@@ -476,7 +477,7 @@ describe('documented blind spots (real Chromium)', () => {
       }
     });
 
-    it(`[${label}] with a BrowserHive route the driver answers the preflight, so a refused write is sent`, async () => {
+    it(`[${label}] with a BrowserHive route a write the site refuses at preflight is not sent either`, async () => {
       const other = startFixtureServer();
       try {
         // The blocklist route alone (a configured blocklist, even an empty one).
@@ -490,16 +491,15 @@ describe('documented blind spots (real Chromium)', () => {
         });
         expect(warning).toBeNull();
         await blocked.page.goto(state.fixture.url('/'));
-        // The page cannot read the answer (no CORS headers), but the write reached the site.
         expect(await write(blocked.page, other.url('/cors/write'))).toBe('err:TypeError');
-        expect(other.requests.map((r) => r.method)).toEqual(['POST']);
+        expect(other.requests.map((r) => r.method)).toEqual(['OPTIONS']);
 
         // The interception chain with the request guard.
         const guarded = await state.launch({ slug: `cors-guard-${label}`, stealth });
         await guard(guarded, ruleSet());
         await guarded.page.goto(state.fixture.url('/'));
-        await write(guarded.page, other.url('/cors/write'));
-        expect(other.requests.map((r) => r.method)).toEqual(['POST', 'POST']);
+        expect(await write(guarded.page, other.url('/cors/write'))).toBe('err:TypeError');
+        expect(other.requests.map((r) => r.method)).toEqual(['OPTIONS', 'OPTIONS']);
       } finally {
         other.stop();
       }

@@ -1,5 +1,5 @@
 /// <reference lib="dom" />
-/** @module test/integration/template-known-limits.test — what a template host's always-on routing changes, pinned under template stealth off and standard on Patchright, the only driver (spec 13 §3.8 "Known limits", `docs/guide/templates.md`; PR #76 F2, D-65, deferred D41): no HTTP cache, and the driver answers CORS preflights itself, so a cross-origin write the site refuses at preflight is sent (the chain's route is the only route on the host: Patchright's document route is off, D40), on every OS headless (routing does not depend on the display); a close-time beacon is never routed (whether it reaches the site depends on timing). The fixture sites resolve to loopback like the page, so Local Network Access does not restrict them. */
+/** @module test/integration/template-known-limits.test — what a template host's always-on routing changes, pinned under template stealth off and standard on Patchright, the only driver (spec 13 §3.8 "Known limits", `docs/guide/templates.md`; PR #76 F2, D-65, D-66): no HTTP cache; CORS preflights stay real (D-66: Chromium sends them and honours the site's answer, so a write the site refuses at preflight is not sent; the chain's route is the only route on the host: Patchright's document route is off, D40), on every OS headless (routing does not depend on the display); a close-time beacon is never routed (whether it reaches the site depends on timing). The fixture sites resolve to loopback like the page, so Local Network Access does not restrict them. */
 
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { Session } from '../../src/domain/session/session.ts';
@@ -37,35 +37,43 @@ for (const stealth of STEALTH_LEGS) {
     );
 
     it.skipIf(HEADED)(
-      'a cross-origin write whose preflight the site refuses is sent: the driver answers the preflight (D41)',
+      "a cross-origin write is sent only when the site's own preflight answer allows it (D-66)",
       async () => {
         world = await templateWorld(stealth);
         const page = pageOf(await world.launch('alpha'));
-        // The host's chain is the only route on its context: Patchright's own is off (D40).
+        // The host's chain is the only route on its context (Patchright's own is off, D40), and
+        // it hands preflights to Chromium.
         const raw = world.host().context as unknown as {
           routeInjecting?: unknown;
           _routes?: unknown[];
         };
         expect([raw.routeInjecting, raw._routes?.length]).toEqual([true, 1]);
+        expect(world.host().chain.preflightsEnforced).toBe(true);
         const sites = world.sites;
         await page.goto(sites.url('site-a.test', '/cors-page'));
-        const result = await page.evaluate(() =>
-          fetch('https://site-b.test/api/write', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json', 'x-test': '1' },
-            body: '{}',
-          }).then(
-            (r) => `status ${r.status}`,
-            () => 'blocked',
-          ),
-        );
-        await new Promise((resolve) => setTimeout(resolve, 300));
-        const seen = sites.requests
-          .filter((r) => r.host.startsWith('site-b.test') && r.path === '/api/write')
-          .map((r) => r.method);
-        // The page never reads the answer either way (no CORS headers).
-        expect(result).toBe('blocked');
-        expect(seen).toEqual(['POST']);
+        const write = (path: string) =>
+          page.evaluate(
+            (url) =>
+              fetch(url, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json', 'x-test': '1' },
+                body: '{}',
+              }).then(
+                (r) => `status ${r.status}`,
+                () => 'blocked',
+              ),
+            `https://site-b.test${path}`,
+          );
+        const seen = (path: string) =>
+          sites.requests
+            .filter((r) => r.host.startsWith('site-b.test') && r.path === path)
+            .map((r) => r.method);
+        // Refused at preflight: the write is never sent.
+        expect(await write('/api/write')).toBe('blocked');
+        expect(seen('/api/write')).toEqual(['OPTIONS']);
+        // Allowed at preflight: sent once, and readable.
+        expect(await write('/api/write-allowed')).toBe('status 200');
+        expect(seen('/api/write-allowed')).toEqual(['OPTIONS', 'POST']);
       },
     );
 

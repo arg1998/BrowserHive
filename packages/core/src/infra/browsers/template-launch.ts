@@ -196,6 +196,7 @@ function buildHost(
       attribution: { attributionOf: (page) => attribution?.dispatcher.attributionOf(page) },
       clock: ctx.clock,
     }),
+    clock: ctx.clock,
     logger: ctx.logger,
   });
   const host = new PlaywrightTemplateHost({

@@ -1,4 +1,4 @@
-/** @module test/integration/template-self-origin.test — a template browser never reaches BrowserHive (spec 13 §3.8, PR #76 F1): every loopback spelling of the daemon is aborted by the host's route, and a redirect hop (which the route never sees) carries the marker cookie the real HTTP app refuses with 403. Stealth off and standard on Patchright (D-65). */
+/** @module test/integration/template-self-origin.test — a template browser never reaches BrowserHive (spec 13 §3.8, PR #76 F1): every loopback spelling of the daemon is aborted by the host's route (a CORS preflight to it too, D-66), and a redirect hop (which the route never sees) carries the marker cookie the real HTTP app refuses with 403. Stealth off and standard on Patchright (D-65). */
 
 import { afterEach, describe, expect, it } from 'bun:test';
 import { createHttpKit } from '../helpers/http-kit.ts';
@@ -61,6 +61,31 @@ for (const stealth of STEALTH_LEGS) {
         );
         expect([url, outcome.includes('ERR_BLOCKED_BY_CLIENT')]).toEqual([url, true]);
       }
+      expect(daemon.hits).toEqual([]);
+    });
+
+    it("a page's preflighted request to the daemon sends not even the preflight (D-66)", async () => {
+      const daemon = await startDaemon();
+      world = await templateWorld(stealth, { selfOrigins: daemon.origins });
+      const session = await world.launch('alpha');
+      const page = session.view?.page;
+      if (page === undefined) throw new Error('no page');
+      await page.goto(world.sites.url('site-a.test', '/cors-page'));
+      // Chromium sends preflights itself under the host's route (D-66): the self-origin guard
+      // fails the `OPTIONS` before it leaves, so the write never follows.
+      const outcome = await page.evaluate(
+        (url) =>
+          fetch(url, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', 'x-custom': '1' },
+            body: '{}',
+          }).then(
+            (r) => `ok:${r.status}`,
+            (e: Error) => `err:${e.name}`,
+          ),
+        `http://127.0.0.1:${daemon.port}/api/v1/sessions`,
+      );
+      expect(outcome).toBe('err:TypeError');
       expect(daemon.hits).toEqual([]);
     });
 
