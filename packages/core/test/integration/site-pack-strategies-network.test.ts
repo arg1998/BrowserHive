@@ -1,5 +1,5 @@
 /// <reference lib="dom" />
-/** @module test/integration/site-pack-strategies-network.test — spec 13 §17 T3b acceptance for the network and host strategies on real headless Chromium (WP-N): `pace-writes` holds then aborts (rows `held` and `paced`, the `SITE_PACED` warning), `ramp-up` lowers a budget, `device-bound-session` marks the site from a response header, `webrtc-policy` restarts the host with the switch on its command line (and the ICE candidates follow it), `keep-alive` visits the keeper path and skips after an agent load, a Reddit-shaped client-side redirect after `load` probes `signed_out` (D48), and `sitePacks=false` leaves every one of them inert. */
+/** @module test/integration/site-pack-strategies-network.test — spec 13 §17 T3b acceptance for the network and host strategies on real headless Chromium (WP-N): `pace-writes` holds then aborts (rows `held` and `paced`, the `SITE_PACED` warning), `ramp-up` lowers a budget, `device-bound-session` marks the site from a response header, `webrtc-policy` restarts the host with the switch on its command line (and the ICE candidates follow it: UDP host candidates before, none after), `keep-alive` visits the keeper path and skips after an agent load, a Reddit-shaped client-side redirect after `load` probes `signed_out` (D48), and `sitePacks=false` leaves every one of them inert. */
 
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { Page } from 'patchright';
@@ -98,6 +98,12 @@ describe.each([...STEALTH_LEGS])('network strategies (template stealth %s)', (st
     if (before !== null) {
       expect(before.some((a) => a.startsWith('--force-webrtc-ip-handling-policy'))).toBe(false);
     }
+    // The negative control: before the policy, the same page gathers UDP host candidates, so
+    // their absence below is the policy's doing (review PR #84 test gap).
+    const control = await agentPage(n, '/strategies/plain');
+    const gathered = await iceCandidates(control.page);
+    expect(gathered.some((c) => / udp /i.test(c) && / typ host/.test(c))).toBe(true);
+    await n.w.harness.callJson('close_session', { session_id: control.id });
     n.lookup.swap(
       strategyPack({
         strategies: [{ id: 'webrtc-policy', params: { policy: 'disable_non_proxied_udp' } }],
