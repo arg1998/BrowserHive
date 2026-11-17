@@ -2,7 +2,7 @@
 
 # Configuration reference
 
-Every configuration key of BrowserHive (64 keys), generated from the zod schema in `@browserhive/contracts/config`. For a guided introduction see [the configuration guide](../guide/configuration.md).
+Every configuration key of BrowserHive (65 keys), generated from the zod schema in `@browserhive/contracts/config`. For a guided introduction see [the configuration guide](../guide/configuration.md).
 
 ## Precedence
 
@@ -313,6 +313,7 @@ Per-session close and trace-finalize cap.
 |---|---|---|---|
 | [`persistence`](#persistence) | `--persistence` | `BROWSERHIVE_PERSISTENCE` | `memory` |
 | [`defaultHeadless`](#defaultHeadless) | `--defaultHeadless` | `BROWSERHIVE_DEFAULT_HEADLESS` | `true` |
+| [`headedWindows`](#headedWindows) | `--headedWindows` | `BROWSERHIVE_HEADED_WINDOWS` | `minimized` |
 | [`defaultChannel`](#defaultChannel) | `--defaultChannel` | `BROWSERHIVE_DEFAULT_CHANNEL` | `chromium` |
 | [`sandbox`](#sandbox) | `--sandbox` | `BROWSERHIVE_SANDBOX` | `auto` |
 | [`maxSessions`](#maxSessions) | `--maxSessions` | `BROWSERHIVE_MAX_SESSIONS` | derived (hostMemory) |
@@ -362,6 +363,20 @@ Default headless mode; launch_session headless overrides per session.
 | Config file | `"defaultHeadless"` |
 | Type | a boolean: 'true', 'false', '1', '0', 'yes' or 'no' |
 | Default | `true` |
+| Notes | restart required |
+
+<a id="headedWindows"></a>
+### `headedWindows`
+
+How a headed browser's windows open on this machine's screen. minimized: every window of a headed session opens minimized in the background, and an agent's click, which restores it for a moment, is followed by minimizing it again; a window you restore yourself stays open. normal: ordinary background windows (an agent's click still raises one). On Linux a page sees no difference; Windows and macOS were not measured, so choose normal if a site behaves differently (stealth guide). Also the default Agent windows of new templates.
+
+| Property | Value |
+|---|---|
+| CLI flag | `--headedWindows` |
+| Environment | `BROWSERHIVE_HEADED_WINDOWS` |
+| Config file | `"headedWindows"` |
+| Type | one of: minimized, normal |
+| Default | `minimized` |
 | Notes | restart required |
 
 <a id="defaultChannel"></a>

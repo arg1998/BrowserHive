@@ -267,7 +267,13 @@ export async function createHttpKit(options: HttpKitOptions = {}) {
       enabled: true,
       authMode: 'token',
       maxPagesPerHost: 40,
-      defaults: { channel: 'chromium', stealth: 'standard', fingerprint: false, humanize: false },
+      defaults: {
+        channel: 'chromium',
+        stealth: 'standard',
+        fingerprint: false,
+        humanize: false,
+        agentWindows: 'normal',
+      },
     },
   });
   let opSeq = 0;

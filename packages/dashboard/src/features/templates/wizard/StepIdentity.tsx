@@ -1,5 +1,5 @@
 /** @module features/templates/wizard/StepIdentity — step 3 (spec 13 §7.1, §2.2): the browser channel (an uninstalled one says how to install it), stealth level, fingerprint, headless (warned), the agents' window state, an optional pinned proxy (server, user name, the NAME of the variable holding its password) and the language and time zone sites see, required with a proxy and pre-filled from the BrowserHive machine. Everything here is fixed for the template's life except the proxy and channel. When a chosen site's pack needs other settings (a stealth floor, fingerprint noise on or off, a visible browser), a checklist with one-click fixes leads the step and each unmet need shows under its control */
-import type { Channel, StealthLevel } from '@browserhive/contracts/enums';
+import { type Channel, HeadedWindows, type StealthLevel } from '@browserhive/contracts/enums';
 import { useId } from 'react';
 import { Callout } from '@/components/shared/Callout.tsx';
 import { Button } from '@/components/ui/button.tsx';
@@ -8,7 +8,12 @@ import { SimpleSelect } from '@/components/ui/select.tsx';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group.tsx';
 import { Field, SwitchRow } from '../fields.tsx';
 import type { TemplateDraft } from './draft.ts';
-import { CHANNEL_LABEL, type IdentityDefaults, STEALTH } from './identity-defaults.ts';
+import {
+  agentWindowsOptions,
+  CHANNEL_LABEL,
+  type IdentityDefaults,
+  STEALTH,
+} from './identity-defaults.ts';
 import { ProxyFields } from './ProxyFields.tsx';
 import { SiteNeedsPanel } from './SiteNeedsPanel.tsx';
 import type { NeedsSettings, SiteNeeds, UnmetNeed } from './site-needs.ts';
@@ -93,21 +98,20 @@ export function StepIdentity({
         <Field
           label="Agent windows"
           htmlFor={ids.windows}
-          help="How agents’ windows open on this machine’s screen. They never take focus either way."
+          help="How agents’ windows open on this machine’s screen. Minimized keeps them out of your way; Normal opens them behind your windows, and an agent’s click brings one to the front."
         >
           <SimpleSelect
             id={ids.windows}
-            value={draft.agentWindows}
-            onValueChange={(value) =>
+            value={draft.agentWindows ?? defaults.agentWindows}
+            onValueChange={(value) => {
+              const next = HeadedWindows.safeParse(value);
+              if (!next.success) return;
               onDraft((d) => ({
                 ...d,
-                agentWindows: value === 'minimized' ? 'minimized' : 'normal',
-              }))
-            }
-            options={[
-              { value: 'normal', label: 'Normal, in the background' },
-              { value: 'minimized', label: 'Minimized' },
-            ]}
+                agentWindows: next.data === defaults.agentWindows ? null : next.data,
+              }));
+            }}
+            options={agentWindowsOptions(defaults.agentWindows)}
           />
         </Field>
       </div>

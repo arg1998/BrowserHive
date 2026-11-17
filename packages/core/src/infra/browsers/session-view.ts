@@ -10,11 +10,14 @@ import type {
   SessionView,
   StorageStateSource,
 } from '../../ports/browser-driver.ts';
+import type { ExclusiveWindows } from './headed-windows.ts';
 import type { HostPageDispatcher } from './page-dispatcher.ts';
 
 /** What the exclusive view needs from its host: the full host plus its attribution dispatcher. */
 export interface ExclusiveViewHost extends BrowserHost {
   readonly dispatcher: HostPageDispatcher;
+  /** The session's windows kept minimized (`headedWindows=minimized`, D-77). */
+  readonly windows?: ExclusiveWindows | null;
 }
 
 /**
@@ -58,8 +61,18 @@ export class ExclusiveSessionView<H extends ExclusiveViewHost = ExclusiveViewHos
   }
 
   newPage(): Promise<Page> {
+    // Minimized windows (D-77): a background tab; `context.newPage()` opens a foreground tab, which
+    // restores a minimized window and takes the focus (measured, Chromium 153).
+    const windows = this.host.windows;
+    if (windows != null) return windows.newTab(this.host.context);
     // The context's `page` event attributes it (to this session) before `newPage()` resolves.
     return this.host.context.newPage();
+  }
+
+  /** A tool call; windows kept minimized are minimized again after it (D-77). */
+  aroundAction<T>(run: () => Promise<T>): Promise<T> {
+    const windows = this.host.windows;
+    return windows != null ? windows.around(this.host.context, run) : run();
   }
 
   cookies(urls?: readonly string[]): Promise<Cookie[]> {

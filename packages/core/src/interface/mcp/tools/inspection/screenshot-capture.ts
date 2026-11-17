@@ -30,8 +30,8 @@ function isTimeout(err: unknown): boolean {
 }
 
 /**
- * A PNG of `page`. Exclusive sessions: Playwright as before. Template sessions: Playwright with a
- * 10 s timeout; when it stalls or fails, once more with `Page.captureScreenshot {fromSurface: true}`
+ * A PNG of `page`. Headless exclusive sessions: Playwright as before. Template and headed sessions
+ * (whose window may be minimized): Playwright with a 10 s timeout; when it stalls or fails, once more with `Page.captureScreenshot {fromSurface: true}`
  * on the page's own DevTools session (a closed page answers with Playwright's own failure).
  */
 export async function captureScreenshot(
@@ -48,7 +48,8 @@ export async function captureScreenshot(
   };
   const context = { sessionId: session.id, what: 'screenshot' };
   const view = session.view;
-  if (session.template === null || view === null) {
+  // Headed exclusive sessions too: their windows may be minimized (`headedWindows`, D-77).
+  if ((session.template === null && session.request.headless) || view === null) {
     return new Uint8Array(await drive(ctx, context, () => page.screenshot(options)));
   }
   let failure: unknown;

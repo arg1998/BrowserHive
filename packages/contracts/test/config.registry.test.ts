@@ -33,6 +33,7 @@ const SPEC_KEYS = [
   'sessionCloseTimeout',
   'persistence',
   'defaultHeadless',
+  'headedWindows',
   'defaultChannel',
   'sandbox',
   'maxSessions',

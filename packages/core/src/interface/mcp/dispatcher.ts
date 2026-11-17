@@ -263,7 +263,10 @@ export class ToolDispatcher {
         c: ToolCallContext,
         a: unknown,
       ) => Promise<ToolResult<unknown>>;
-      const invoke = () => handler(handlerCtx, args);
+      // Headed windows kept minimized (D-77): a window the call restored is minimized again.
+      const around = site?.view?.aroundAction?.bind(site.view);
+      const invoke = () =>
+        around !== undefined ? around(() => handler(handlerCtx, args)) : handler(handlerCtx, args);
       // Before-action strategies of site packs wrap the handler (a turn is released when it
       // settles); a call that waited for one passes the gate again before it acts.
       const actions = services.siteActions;

@@ -44,6 +44,7 @@ NAMES
   --sessionCloseTimeout         BROWSERHIVE_SESSION_CLOSE_TIMEOUT
   --persistence                 BROWSERHIVE_PERSISTENCE
   --defaultHeadless             BROWSERHIVE_DEFAULT_HEADLESS
+  --headedWindows               BROWSERHIVE_HEADED_WINDOWS
   --defaultChannel              BROWSERHIVE_DEFAULT_CHANNEL
   --sandbox                     BROWSERHIVE_SANDBOX
   --maxSessions                 BROWSERHIVE_MAX_SESSIONS

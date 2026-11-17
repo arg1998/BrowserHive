@@ -1,5 +1,6 @@
 /** @module infra/browsers/playwright-browser-driver — the BrowserDriver adapter over the Playwright API, driven by Patchright (D-65): launch pipeline for memory/storage-state/persistent, identity, tracing, capabilities (spec 11 §2). */
 
+import type { HeadedWindows } from '@browserhive/contracts/enums';
 import type { Browser, BrowserContext, BrowserContextOptions, BrowserType, Page } from 'patchright';
 import { AppError, isAppError } from '../../kernel/errors/app-error.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
@@ -36,6 +37,7 @@ import {
   executableOf,
 } from './driver-support.ts';
 import { contextOptionsFor, scriptPayloadFor } from './fingerprint.ts';
+import { ExclusiveWindows } from './headed-windows.ts';
 import type { HostFacts } from './host-facts.ts';
 import { IdentityApplier } from './identity-applier.ts';
 import { buildLaunchOptions, executablePathWarning } from './launch-args.ts';
@@ -67,6 +69,12 @@ export interface PlaywrightBrowserDriverDeps {
   readonly templateBlocklist?: TemplateLaunchContext['blocklist'];
   /** Switches of the internal testing seam for exclusive sessions (spec 13 §14); never agent input. */
   readonly testingArgs?: readonly string[];
+  /**
+   * The `headedWindows` setting (D-77): `minimized` keeps every window of a headed exclusive session
+   * minimized from its first one on. Defaults to `normal` (tests); the composition passes the
+   * setting, whose own default is `minimized`.
+   */
+  readonly headedWindows?: HeadedWindows;
 }
 
 /**
@@ -77,6 +85,7 @@ export class PlaywrightBrowserDriver implements BrowserDriver, TemplateHostLaunc
   private readonly logger: Logger;
   private readonly clock: Clock;
   private readonly testingArgs: readonly string[];
+  private readonly headedWindows: HeadedWindows;
   private readonly host: HostFacts;
   private readonly browserType: BrowserType;
   private readonly chromiumDeps: ChromiumResolverDeps;
@@ -96,6 +105,7 @@ export class PlaywrightBrowserDriver implements BrowserDriver, TemplateHostLaunc
     this.locateChannel = deps.locateChannel ?? playwrightChannelExecutable;
     this.templateBlocklist = deps.templateBlocklist ?? null;
     this.testingArgs = deps.testingArgs ?? [];
+    this.headedWindows = deps.headedWindows ?? 'normal';
   }
 
   /** Attaches the watcher of template hosts' pages (site pack challenges, spec 13 §9.5). */
@@ -220,11 +230,22 @@ export class PlaywrightBrowserDriver implements BrowserDriver, TemplateHostLaunc
       );
     }
     const userDataDir = spec.userDataDir;
+    // Headed windows kept minimized (D-77): the first window is created minimized where Chromium
+    // allows it (a fresh browser), else minimized right after the launch (a persistent profile's
+    // first window, which Chromium shows before BrowserHive can act).
+    const minimized = !spec.headless && this.headedWindows === 'minimized';
+    // Playwright sizes each window to an emulated viewport (any `viewport` but `null`).
+    const emulatedViewport = contextOptions.viewport !== null;
     // One launch of this session's browser with or without Chromium's sandbox; the policy decides
     // which (spec 11 §4.1): `off` never, `on` always, `auto` where this executable can.
     const open = async (
       sandboxed: boolean,
-    ): Promise<{ browser: Browser | null; context: BrowserContext; page: Page }> => {
+    ): Promise<{
+      browser: Browser | null;
+      context: BrowserContext;
+      page: Page;
+      windows: ExclusiveWindows | null;
+    }> => {
       const { chromiumSandbox: _requested, ...rest } = launch.options;
       const options = sandboxed ? { ...rest, chromiumSandbox: true } : rest;
       if (spec.persistenceMode === 'persistent' && userDataDir !== undefined) {
@@ -244,7 +265,14 @@ export class PlaywrightBrowserDriver implements BrowserDriver, TemplateHostLaunc
           if (scriptPayload !== null)
             await context.addInitScript(installNativeGetters, scriptPayload);
           const page = context.pages()[0] ?? (await context.newPage());
-          return { browser: context.browser(), context, page };
+          const browser = context.browser();
+          const windows =
+            minimized && browser !== null
+              ? await ExclusiveWindows.open(browser, log, emulatedViewport)
+              : null;
+          windows?.watch(context);
+          await windows?.minimizePage(context, page);
+          return { browser, context, page, windows };
         } catch (err) {
           // Never leave a half-opened browser behind (it would also hold the profile lock).
           await context.close().catch(() => undefined);
@@ -261,8 +289,12 @@ export class PlaywrightBrowserDriver implements BrowserDriver, TemplateHostLaunc
         // Before `newPage()`, so the first tab is covered like every later one.
         if (scriptPayload !== null)
           await context.addInitScript(installNativeGetters, scriptPayload);
-        const page = await context.newPage();
-        return { browser, context, page };
+        const windows = minimized
+          ? await ExclusiveWindows.open(browser, log, emulatedViewport)
+          : null;
+        windows?.watch(context);
+        const page = windows !== null ? await windows.firstPage(context) : await context.newPage();
+        return { browser, context, page, windows };
       } catch (err) {
         await browser.close().catch(() => undefined);
         throw err;
@@ -272,6 +304,7 @@ export class PlaywrightBrowserDriver implements BrowserDriver, TemplateHostLaunc
     let browser: Browser | null = null;
     let context: BrowserContext;
     let page: Page;
+    let windows: ExclusiveWindows | null;
     let sandboxed = false;
     try {
       const target = {
@@ -285,11 +318,12 @@ export class PlaywrightBrowserDriver implements BrowserDriver, TemplateHostLaunc
         open,
         // A launch made only to prove the sandbox was the cause is closed again at once.
         async (proof) => {
+          await proof.windows?.dispose();
           await proof.context.close().catch(() => undefined);
           await proof.browser?.close().catch(() => undefined);
         },
       );
-      ({ browser, context, page } = opened.value);
+      ({ browser, context, page, windows } = opened.value);
       sandboxed = opened.sandboxed;
     } catch (err) {
       if (isAppError(err)) throw err;
@@ -305,6 +339,7 @@ export class PlaywrightBrowserDriver implements BrowserDriver, TemplateHostLaunc
     }
 
     const closeQuietly = async (): Promise<void> => {
+      await windows?.dispose();
       try {
         await context.close();
       } catch {
@@ -387,6 +422,7 @@ export class PlaywrightBrowserDriver implements BrowserDriver, TemplateHostLaunc
       warnings,
       tracing,
       applier,
+      windows,
       clock: this.clock,
       logger: this.logger,
       browserInfo: { version: browser?.version() ?? null, sandboxed },

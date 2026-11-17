@@ -285,6 +285,11 @@ export interface SessionView {
    */
   fitWindow?(page: Page, width: number, height: number): Promise<void>;
   /**
+   * Runs one tool call of this session: where its headed windows are kept minimized (D-77), a window
+   * the call restored (a click does) is minimized again afterwards. Absent where nothing is kept.
+   */
+  aroundAction?<T>(run: () => Promise<T>): Promise<T>;
+  /**
    * What `save_storage_state` reads: the session's context, or for a virtual session the template's
    * (one jar), which only an unsealed `state_export` reaches (spec 13 §5.4); `null` when none exists.
    */

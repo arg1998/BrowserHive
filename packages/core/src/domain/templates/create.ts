@@ -234,6 +234,8 @@ export interface TemplateDefaults {
   /** The server's `fingerprint` (derived from its stealth level). */
   readonly fingerprint: boolean;
   readonly humanize: boolean;
+  /** The `headedWindows` setting: Agent windows when the input leaves them out (D-77). */
+  readonly agentWindows: 'normal' | 'minimized';
 }
 
 /** Everything a new template is built from besides the input. */
@@ -288,7 +290,7 @@ export function buildTemplate(
     identity: facts.identity,
     identityObserved: null,
     proxy: validated.proxy,
-    agentWindows: input.agent_windows ?? 'normal',
+    agentWindows: input.agent_windows ?? facts.defaults.agentWindows,
     denyClipboardWrites: input.deny_clipboard_writes ?? false,
     authorizedPrincipals:
       input.policy?.authorized_principals === undefined

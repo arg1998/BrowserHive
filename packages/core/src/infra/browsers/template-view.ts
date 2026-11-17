@@ -47,6 +47,14 @@ export interface TemplateViewHost extends SessionHost {
    * page closed when it landed in the sign-in window) and the sign-in window raised again.
    */
   stepAside(page: Page): Promise<void>;
+  /**
+   * Keeps the window of `page` minimized (a session with `agent_windows: minimized`, D-77): a tab a
+   * site opens restores its window and a popup opens normal; a window the operator restored by hand
+   * is left alone.
+   */
+  keepMinimized(page: Page): Promise<void>;
+  /** Runs a tool call on `pages`; their windows it restored are minimized again (D-77). */
+  keepMinimizedAround<T>(pages: readonly Page[], run: () => Promise<T>): Promise<T>;
   /** Resizes the window of `page` on a headed host (never moves it). */
   resizeWindow(page: Page, width: number, height: number): Promise<void>;
   /** The end of the browser (crash or operator stop); not called for a supervisor close. */
@@ -140,8 +148,12 @@ export class TemplateSessionView implements SessionView {
   async newPage(beside?: Page | null): Promise<Page> {
     if (this.closing !== undefined) throw closedView(this.sessionId);
     this.options.beforeNewPage?.();
+    // A minimized window: `window.open` would restore it and take the focus (measured, D-77), so
+    // the tab is a new minimized window instead.
     const tab =
-      beside != null && (await this.inOwnWindow(beside)) ? await this.openTab(beside) : null;
+      beside != null && !this.minimized() && (await this.inOwnWindow(beside))
+        ? await this.openTab(beside)
+        : null;
     let page = tab;
     if (page === null) {
       page = await this.owner.openWindow(this.sessionId, this.minimized());
@@ -149,6 +161,12 @@ export class TemplateSessionView implements SessionView {
     }
     await this.prepare(page);
     return page;
+  }
+
+  /** A tool call: with `agent_windows: minimized`, a window it restored is minimized again (D-77). */
+  aroundAction<T>(run: () => Promise<T>): Promise<T> {
+    if (!this.keptMinimized() || this.owner.recording) return run();
+    return this.owner.keepMinimizedAround(this.pages(), run);
   }
 
   /** Never while a sign-in window is open: a resize must not restore a minimized agent window. */
@@ -263,8 +281,15 @@ export class TemplateSessionView implements SessionView {
   }
 
   private minimized(): boolean {
+    return (
+      this.keptMinimized() || (!this.owner.headless && !this.maintenance && this.owner.recording)
+    );
+  }
+
+  /** The session's windows stay minimized (`agent_windows: minimized` on a headed host, D-77). */
+  private keptMinimized(): boolean {
     if (this.owner.headless || this.maintenance) return false;
-    return this.options.windowState === 'minimized' || this.owner.recording;
+    return this.options.windowState === 'minimized';
   }
 
   /** True when `page` is this session's and sits in one of the session's own windows. */
@@ -322,6 +347,9 @@ export class TemplateSessionView implements SessionView {
   /** Applies the per-session page options; a failure is logged (the page may be gone). */
   private async prepare(page: Page): Promise<void> {
     const options: TemplatePageOptions = this.options.pageOptions ?? {};
+    // First, so a popup or a tab that restored its window is minimized at once (while a sign-in
+    // window is open, `stepAside` handles the session's site-opened pages instead).
+    if (this.keptMinimized() && !this.owner.recording) await this.owner.keepMinimized(page);
     try {
       if (this.headers !== undefined) await page.setExtraHTTPHeaders({ ...this.headers });
       if (options.colorScheme !== undefined) {

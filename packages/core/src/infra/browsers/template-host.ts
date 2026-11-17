@@ -24,6 +24,7 @@ import type {
 } from '../../ports/template-host.ts';
 import type { TemplateState } from '../../ports/template-state.ts';
 import { clipboardNeedsRestart } from './clipboard-policy.ts';
+import { MinimizedWindows } from './headed-windows.ts';
 import { closeContextWithin, readBrowserPid } from './host-process.ts';
 import { observeHostResponses } from './host-responses.ts';
 import { SentinelKeeper } from './host-sentinel.ts';
@@ -80,6 +81,8 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
   private readonly exitListeners = new Set<(exit: TemplateHostExit) => void>();
   private applied: { identity: AppliedIdentity; applier: IdentityApplier } | null = null;
   private readonly keeper: SentinelKeeper;
+  /** Agent windows of sessions whose windows stay minimized (`agent_windows`, D-77). */
+  private readonly minimizedWindows: MinimizedWindows;
   private closing = false;
   private closed: Promise<readonly LaunchWarning[]> | undefined;
   private pid: Promise<number | null> | undefined;
@@ -125,6 +128,10 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
       openParkedWindow: () => this.openWindow(null, !this.headless),
       adopted: (page) => this.parked.delete(page),
     });
+    this.minimizedWindows = new MinimizedWindows(this.targets, this.log, {
+      now: () => input.clock.now(),
+    });
+    this.targets.onCreated(() => this.minimizedWindows.targetCreated());
     this.targets.onLostTarget((facts) => this.dispatcher.adoptClosedTarget(facts));
     this.targets.onDestroyed((targetId) => this.keeper.targetDestroyed(targetId));
     this.browser?.on('disconnected', () => this.exited('browser disconnected'));
@@ -338,6 +345,27 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
     return ops.sharedWindows(this, this.views.values());
   }
 
+  /**
+   * A page of a session whose windows stay minimized: its window is minimized unless the operator
+   * restored that window by hand (a tab a site opened restores it, a popup opens normal, D-77).
+   */
+  async keepMinimized(page: Page): Promise<void> {
+    if (this.headless) return;
+    const targetId = this.dispatcher.targetIdOf(page);
+    if (targetId !== undefined) await this.minimizedWindows.pageOpened(targetId);
+  }
+
+  /** Runs a tool call on `pages`; their windows it restored are minimized again (D-77). */
+  keepMinimizedAround<T>(pages: readonly Page[], run: () => Promise<T>): Promise<T> {
+    if (this.headless) return run();
+    const targets = async () =>
+      pages.flatMap((page) => {
+        const targetId = this.dispatcher.targetIdOf(page);
+        return targetId === undefined ? [] : [targetId];
+      });
+    return this.minimizedWindows.around(targets, run);
+  }
+
   /** The window that holds `page`, or `null` when it cannot be read. */
   async windowOf(page: Page): Promise<number | null> {
     const targetId = this.dispatcher.targetIdOf(page);
@@ -406,6 +434,7 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
   }
 
   private dispose(): void {
+    this.minimizedWindows.dispose();
     this.dispatcher.dispose();
     this.waiters.cancelAll();
     void this.targets.dispose();

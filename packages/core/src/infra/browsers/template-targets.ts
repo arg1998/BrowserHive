@@ -4,6 +4,7 @@ import type { BrowserContext, CDPSession, Page } from 'patchright';
 import { AppError } from '../../kernel/errors/app-error.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { Logger } from '../../ports/logger.ts';
+import type { WindowControl, WindowState } from './headed-windows.ts';
 import { NewTabRequests } from './new-tab-requests.ts';
 import type { TargetFacts } from './page-attribution.ts';
 
@@ -33,7 +34,7 @@ export interface WindowRequest {
  * its own facts are read still leaves its real target id (and therefore a tombstone its children
  * follow) through {@link onLostTarget}.
  */
-export class HostTargets {
+export class HostTargets implements WindowControl {
   readonly browserContextId: string;
   private readonly cdp: CDPSession;
   private readonly context: BrowserContext;
@@ -45,6 +46,7 @@ export class HostTargets {
   readonly newTabs = new NewTabRequests(() => Date.now());
   private lost: ((facts: TargetFacts) => void) | null = null;
   private destroyedListener: ((targetId: string) => void) | null = null;
+  private createdListener: (() => void) | null = null;
   private disposed = false;
 
   private constructor(
@@ -99,6 +101,7 @@ export class HostTargets {
       info.type === 'page' && info.browserContextId === browserContextId;
     cdp.on('Target.targetCreated', ({ targetInfo }) => {
       if (!ours(targetInfo)) return;
+      targets.createdListener?.();
       targets.remember(targetInfo.targetId, targetInfo.openerId ?? null);
       targets.newTabs.urlOf(targetInfo.targetId, targetInfo.url);
     });
@@ -116,6 +119,11 @@ export class HostTargets {
    */
   onDestroyed(listener: (targetId: string) => void): void {
     this.destroyedListener = listener;
+  }
+
+  /** Called when Chromium reports a new page target of the host (it may have restored a window). */
+  onCreated(listener: () => void): void {
+    this.createdListener = listener;
   }
 
   /** Called with the facts of a page target that closed before any page of it was read. */
@@ -187,12 +195,32 @@ export class HostTargets {
     await this.setBounds(windowId, { windowState: 'minimized' });
   }
 
-  /** Resizes a window without moving it (spec 13 §3.3 `set_viewport` on a headed host). */
+  /**
+   * Resizes a normal window without moving it (spec 13 §3.3 `set_viewport` on a headed host). A
+   * minimized, maximized or fullscreen window keeps its size: Chromium restores a minimized window
+   * given a size (measured, Chromium 153), which would raise it.
+   */
   async resize(targetId: string, width: number, height: number): Promise<void> {
     const windowId = await this.windowOf(targetId);
-    if (windowId === null) return;
+    if (windowId === null || (await this.stateOf(windowId)) !== 'normal') return;
     // Size only: never a position, never a state change (restoring would raise the window).
     await this.setBounds(windowId, { width, height });
+  }
+
+  /** The window's state, or `null` when the window is gone. */
+  async stateOf(windowId: number): Promise<WindowState | null> {
+    try {
+      const { bounds } = await this.cdp.send('Browser.getWindowBounds', { windowId });
+      return bounds.windowState ?? 'normal';
+    } catch (err) {
+      this.log.debug('window state unreadable', { err: serializeError(err) });
+      return null;
+    }
+  }
+
+  /** Minimizes a window by id (best effort). */
+  async minimizeWindow(windowId: number): Promise<void> {
+    await this.setBounds(windowId, { windowState: 'minimized' });
   }
 
   /** Closes a target that was never handed to anyone (an adoption that failed). */
@@ -210,6 +238,7 @@ export class HostTargets {
     this.disposed = true;
     this.lost = null;
     this.destroyedListener = null;
+    this.createdListener = null;
     await this.cdp.detach().catch(() => undefined);
   }
 

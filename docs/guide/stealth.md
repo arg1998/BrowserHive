@@ -120,6 +120,19 @@ A site's [pack](site-packs.md#strategies) can select three stealth strategies. T
 
 Canvas and audio noise cannot be switched per page inside one shared browser, so a pack expresses that need only through the floor.
 
+## Minimized windows
+
+[`headedWindows`](../reference/configuration.md#headedWindows) (default `minimized`) keeps the windows of headed sessions minimized, and a template's **Agent windows** does the same for its sessions. Measured on Linux (X11 with a window manager, Chromium 153), a page in a minimized window sees exactly what it sees in a normal background window:
+
+- `document.visibilityState` is `visible` and `document.hasFocus()` is `true` (BrowserHive's focus emulation, as in every session);
+- `window.screenX` / `screenY` keep the window's last normal position, and `outerWidth` / `outerHeight`, `innerWidth` / `innerHeight` and `screen.*` are unchanged;
+- animation frames run at the display rate (about 60 per second) and timers are not throttled;
+- minimizing and restoring fire no `visibilitychange`, `blur`, `focus` or `resize` event.
+
+What differs is outside the page: a click restores the window for about 15 to 25 ms before BrowserHive minimizes it again, and a popup is visible for up to about 0.1 s. Chromium gives the window the keyboard focus during that moment; keys you type then can reach the agent's page.
+
+Not measured: Windows, where the system places minimized windows at -32000, -32000 and a page may read that as `screenX` / `screenY`; macOS; and Wayland compositors. If a site behaves differently with minimized windows there, set `headedWindows` to `normal` (and a template's Agent windows to Normal); ordinary background windows are what BrowserHive used before.
+
 ## Ceilings
 
 These are known and documented, not bugs:

@@ -257,7 +257,7 @@ jobs:
       - if: env.RUN == 'true' && runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends xvfb xdotool x11-utils
+          sudo apt-get install -y --no-install-recommends xvfb xdotool x11-utils openbox
       - if: env.RUN == 'true' && runner.os == 'Linux'
         timeout-minutes: 20
         env:
@@ -271,6 +271,16 @@ jobs:
           packages/core/test/integration/template-sealing.test.ts
           packages/core/test/integration/template-recording.test.ts
           packages/core/test/integration/template-tools.test.ts
+      # Headed windows kept minimized (D-77): minimizing is the window manager's job on X11, so this
+      # suite runs on a virtual display with openbox (the other suites keep a bare display).
+      - if: env.RUN == 'true' && runner.os == 'Linux'
+        timeout-minutes: 10
+        env:
+          BROWSERHIVE_HEADED_WM: '1'
+          BROWSERHIVE_TEMPLATES_HEADED: '1'
+        run: >-
+          xvfb-run -a sh -c 'openbox & sleep 1;
+          bun run test:integration packages/core/test/integration/headed-windows.test.ts'
 
   ntfy:
     # The ntfy adapter against a real ntfy server (binwiederhier/ntfy): publish, read back, upload

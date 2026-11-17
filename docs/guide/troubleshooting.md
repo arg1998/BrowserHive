@@ -137,6 +137,9 @@ A [scheduled check](templates.md#when-sites-are-checked) needs the browser: Brow
 **"I'm signed in" answers `409 CONFLICT`, or a site stays signed out after Enter**
 No new cookie appeared on that site's registrable domain since the sign-in window opened (analytics cookies do not count), or no recording is open. Finish the sign-in in the site's own tab and confirm again. A site that signs you in on another domain only (a separate single sign-on domain) cannot be confirmed this way yet.
 
+**A browser window pops up while agents work**
+Headed sessions' windows open minimized ([`headedWindows`](../reference/configuration.md#headedWindows), default `minimized`; a template uses its own **Agent windows** setting). An agent's click restores its window for a moment, because Chromium raises a window on every pointer press, and BrowserHive minimizes it again right after the call; a site's popup is minimized as soon as it appears. On Linux without a window manager (a bare Xvfb), windows cannot be minimized at all and stay where they are. If you set `headedWindows` to `normal`, or a template's Agent windows to Normal, windows open in the background but an agent's click raises one and takes the focus. A window you restore yourself stays restored; to watch a session without that, use its live view in the dashboard.
+
 **A window took the focus when an agent launched, or out of nowhere**
 Starting a template's browser shows its first window for a moment before BrowserHive minimizes it, so the first launch after the browser was stopped, or a scheduled check of an idle template, can take the focus once. Sessions' own windows never do. Raise `templateHostIdleTimeout` (or set it to `0`) to restart the browser less often.
 

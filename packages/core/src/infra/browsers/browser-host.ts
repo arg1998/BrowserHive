@@ -12,6 +12,7 @@ import type {
 } from '../../ports/browser-driver.ts';
 import type { Clock } from '../../ports/clock.ts';
 import type { Logger } from '../../ports/logger.ts';
+import type { ExclusiveWindows } from './headed-windows.ts';
 import { killBrowserProcess, readBrowserPid, rejectOnAbort } from './host-process.ts';
 import type { IdentityApplier } from './identity-applier.ts';
 import { sessionOwner } from './page-attribution.ts';
@@ -31,6 +32,8 @@ export interface BrowserHostInput {
   readonly warnings: readonly LaunchWarning[];
   readonly tracing: PlaywrightTracingHandle | null;
   readonly applier: IdentityApplier | null;
+  /** The session's windows kept minimized (`headedWindows=minimized`, headed only), else `null`. */
+  readonly windows?: ExclusiveWindows | null;
   readonly clock: Clock;
   readonly logger: Logger;
 }
@@ -55,6 +58,8 @@ export class PlaywrightBrowserHost implements BrowserHost {
   readonly tracing: PlaywrightTracingHandle | null;
   /** Attributes the context's pages; read by the host's view. */
   readonly dispatcher: HostPageDispatcher;
+  /** The session's windows kept minimized (D-77), else `null`. */
+  readonly windows: ExclusiveWindows | null;
 
   private readonly applier: IdentityApplier | null;
   private readonly logger: Logger;
@@ -74,6 +79,7 @@ export class PlaywrightBrowserHost implements BrowserHost {
     this.warnings = input.warnings;
     this.tracing = input.tracing;
     this.applier = input.applier;
+    this.windows = input.windows ?? null;
     this.logger = input.logger.child({ module: 'browsers.session', sessionId: input.sessionId });
     this.dispatcher = new HostPageDispatcher({
       fallback: sessionOwner(input.sessionId),
@@ -146,6 +152,8 @@ export class PlaywrightBrowserHost implements BrowserHost {
     };
     this.dispatcher.dispose();
     try {
+      if (this.windows !== null)
+        await step('windows', () => this.windows?.dispose() ?? Promise.resolve());
       // Detach the stealth CDP sessions first (harmless if the context is already tearing down).
       if (this.applier !== null)
         await step('identity', () => this.applier?.dispose() ?? Promise.resolve());

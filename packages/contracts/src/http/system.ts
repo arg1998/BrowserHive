@@ -5,6 +5,7 @@ import {
   AuthMode,
   Channel,
   DegradationSeverity,
+  HeadedWindows,
   ProvenanceSource,
   SandboxMode,
   Transport,
@@ -134,6 +135,8 @@ export type SystemBrowserChannel = z.infer<typeof SystemBrowserChannel>;
 /** Browser choice and sandbox state (`GET /system`). */
 export const SystemBrowser = z.object({
   default_channel: Channel,
+  /** The `headedWindows` setting: how headed windows open, and new templates' Agent windows (D-77). */
+  headed_windows: HeadedWindows,
   /** The `sandbox` setting. */
   sandbox_mode: SandboxMode,
   /** Chrome refuses the sandbox as root; under `auto` it is not attempted. */

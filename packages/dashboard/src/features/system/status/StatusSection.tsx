@@ -197,7 +197,7 @@ function BrowsersPanel({ system }: { readonly system: SystemInfo }) {
         </>
       }
       infoDocs="security"
-      description={`Default ${browser.default_channel} · ${SANDBOX_MODE_NOTE[browser.sandbox_mode] ?? browser.sandbox_mode}${root}`}
+      description={`Default ${browser.default_channel} · ${SANDBOX_MODE_NOTE[browser.sandbox_mode] ?? browser.sandbox_mode} · headed windows ${browser.headed_windows}${root}`}
       padding="none"
     >
       <ul aria-label="Browsers" className="flex flex-col border-t">
