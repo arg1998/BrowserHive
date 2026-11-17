@@ -28,6 +28,7 @@ import type { Clock } from '../../ports/clock.ts';
 import type { EventBus } from '../../ports/event-bus.ts';
 import type { IdGenerator } from '../../ports/id-generator.ts';
 import type { PageActions } from '../../ports/page-actions.ts';
+import type { Page } from '../../ports/page-types.ts';
 import type { RuntimeFacts } from './runtime.ts';
 import type { SiteHolds } from './site-hold.ts';
 
@@ -112,6 +113,35 @@ export interface SiteGuardsLike {
   }): Promise<void>;
 }
 
+/**
+ * The before-action strategies of site packs on an agent's template session (spec 13 §9.4, §9.6):
+ * `serialize-site`, `human-dwell`, `entry-warmup`, `humanize-input`, `single-focus`
+ * (`SiteActionStrategies` satisfies it).
+ */
+export interface SiteActionsLike {
+  /** Runs a tool's handler inside the strategies. @throws `TEMPLATE_BUSY` (`pace`) */
+  around<T>(
+    call: {
+      readonly tool: string;
+      readonly args: Readonly<Record<string, unknown>>;
+      readonly session: Session;
+      readonly signal: AbortSignal;
+    },
+    run: () => Promise<T>,
+  ): Promise<T>;
+  /** The warm-up before a navigation of `page` to `url`; resolves with the milliseconds it used. */
+  beforeGoto(call: {
+    readonly tool: string;
+    readonly session: Session;
+    readonly page: Page;
+    readonly url: string;
+    readonly timeoutMs: number;
+    readonly signal: AbortSignal;
+  }): Promise<number>;
+  /** True when the site of `url` forces humanized input for the session. */
+  forcesHumanize(session: Session, url: string): boolean;
+}
+
 /** The template surface `list_templates` and `launch_session.template` use (`TemplateService` satisfies it). */
 export type TemplatesLike = Pick<TemplateService, 'enabled' | 'listForAgent' | 'launch'>;
 
@@ -137,6 +167,8 @@ export interface ToolServices {
   };
   /** Site pack enforcement (spec 13 §9.3, §9.5); absent when templates or site packs are off. */
   readonly siteGuards?: SiteGuardsLike;
+  /** Before-action strategies (spec 13 §9.4); absent when templates or site packs are off. */
+  readonly siteActions?: SiteActionsLike;
   /**
    * The security intercepts holding template sessions (spec 13 §9.3, §9.5): a held session's tools
    * answer `SITE_OPERATOR_PENDING`. Absent when templates or site packs are off.

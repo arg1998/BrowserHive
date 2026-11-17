@@ -46,6 +46,7 @@ export type { PendingUpdate, SitePackRegistryDeps } from '../app/site-packs/regi
 // Site-pack enforcement (spec 13 §9.3, §9.5; PR T3a, WP-E1).
 export { SecurityInterceptService } from '../app/site-packs/security-intercepts.ts';
 export { TemplateSiteStops } from '../app/site-packs/site-stops.ts';
+export { SiteActionStrategies } from '../app/site-packs/strategies/site-actions.ts';
 export { SiteToolGate } from '../app/site-packs/tool-gate.ts';
 export { ToolGuardHits } from '../app/site-packs/tool-guard-hits.ts';
 export { TemplateWritePolicies } from '../app/site-packs/write-policies.ts';
@@ -104,6 +105,7 @@ export {
 export { bundledChromiumVersion } from '../infra/browsers/bundled-chromium.ts';
 export { assertChromiumInstalled } from '../infra/browsers/chromium-resolver.ts';
 export { DRIVER_NAME, driverChromium, driverVersion } from '../infra/browsers/driver.ts';
+export { CdpPageFocus } from '../infra/browsers/focus-emulation.ts';
 export { HostGeoSeedResolver } from '../infra/browsers/geo-seed.ts';
 export type { HostFacts } from '../infra/browsers/host-facts.ts';
 export { createVaultHumanTyper } from '../infra/browsers/humanize/vault-typer.ts';

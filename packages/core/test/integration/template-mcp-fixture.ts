@@ -41,6 +41,8 @@ export interface TemplateMcpOptions {
   readonly siteGuards?: ToolHarnessOptions['siteGuards'];
   /** Passed to the tool harness (the security intercepts' tool hold). */
   readonly siteHolds?: ToolHarnessOptions['siteHolds'];
+  /** Before-action strategies of site packs (spec 13 §9.4). */
+  readonly siteActions?: ToolHarnessOptions['siteActions'];
   readonly transport?: ToolHarnessOptions['transport'];
 }
 
@@ -70,6 +72,7 @@ export async function templateMcp(
     ...(options.transport !== undefined && { transport: options.transport }),
     selfOrigins: [SELF_ORIGIN],
     ...(options.siteGuards !== undefined && { siteGuards: options.siteGuards }),
+    ...(options.siteActions !== undefined && { siteActions: options.siteActions }),
     templateRuntime: (sessions, dataDir) => {
       const supervisor = new TemplateHostSupervisor({
         launcher: real,

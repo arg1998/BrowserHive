@@ -1,5 +1,7 @@
 /** @module test/helpers/https-sites-packs — the site pack pages of the HTTPS fixture sites (spec 13 §9.3, §9.5, §8.1, §14): a page with guarded controls, a logout, challenge pages (a pack checkpoint, a redirect into it, a terminal stop page, a Cloudflare-style interstitial), pages with an invisible reCAPTCHA v3 anchor and an invisible Turnstile-style frame, the probe pages, and the fake provider frames served for `challenges.cloudflare.com` and `www.google.com` (mapped to the fixture by the resolver rule of `startHttpsSites({ providers: true })`; no real provider script is ever loaded). */
 
+import { strategyRoute } from './https-sites-strategies.ts';
+
 /** Provider hosts the fixture answers when started with `providers: true`. */
 export const FIXTURE_PROVIDER_HOSTS = ['challenges.cloudflare.com', 'www.google.com'] as const;
 
@@ -101,6 +103,6 @@ export function packRoute(path: string): Response | null {
     case '/recaptcha/api2/anchor':
       return html('anchor', '<p>protected by reCAPTCHA</p>');
     default:
-      return null;
+      return strategyRoute(path);
   }
 }

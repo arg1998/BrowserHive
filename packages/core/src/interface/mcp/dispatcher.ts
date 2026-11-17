@@ -283,7 +283,16 @@ export class ToolDispatcher {
         c: ToolCallContext,
         a: unknown,
       ) => Promise<ToolResult<unknown>>;
-      const result = await handler(handlerCtx, args);
+      const invoke = () => handler(handlerCtx, args);
+      // Before-action strategies of site packs wrap the handler (a turn is released when it settles).
+      const actions = services.siteActions;
+      const result =
+        actions !== undefined && site !== null
+          ? await actions.around(
+              { tool: name, args: argRecord, session: site, signal: call.signal },
+              invoke,
+            )
+          : await invoke();
       facts = result.facts;
       const value = result.kind === 'json' ? result.value : result.structured;
       // Only ids of sessions that exist are recorded (tool_calls.session_id references sessions).

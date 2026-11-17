@@ -38,7 +38,7 @@ export const click = defineTool('click', {
         timeout: args.timeout,
       });
     await act(ctx, session, args.selector, args.timeout, () =>
-      humanized(session)
+      humanized(ctx, session, page)
         ? ctx.services.pageActions.humanClick(session.id, {
             page,
             timeout: args.timeout,
@@ -64,7 +64,7 @@ export const typeText = defineTool('type_text', {
     const native = async (): Promise<void> =>
       page.type(args.selector, args.text, { delay: args.delay, timeout: args.timeout });
     const actions = ctx.services.pageActions;
-    if (!humanized(session)) {
+    if (!humanized(ctx, session, page)) {
       await act(ctx, session, args.selector, args.timeout, native);
     } else {
       // Human cadence can outlast the caller's timeout on a long string; a self-inflicted overrun
@@ -143,7 +143,7 @@ export const hover = defineTool('hover', {
     const page = pageOf(ctx, session, args.tab_id);
     const native = async (): Promise<void> => page.hover(args.selector, { timeout: args.timeout });
     await act(ctx, session, args.selector, args.timeout, () =>
-      humanized(session)
+      humanized(ctx, session, page)
         ? ctx.services.pageActions.humanHover(session.id, {
             page,
             timeout: args.timeout,
