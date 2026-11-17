@@ -61,6 +61,20 @@ export const TemplateSiteForm = z.object({
   path: z.string().optional(),
 });
 
+/**
+ * A strategy of a site's pack that this template or this machine cannot apply in full (spec 13
+ * §9.4): `humanize_needs_stealth` (the pack forces humanized input, `humanize-input` or
+ * `stealth-profile.humanize`, and the template's stealth is `off`: input stays native) and
+ * `single_focus_limited` (`single-focus` on a headless template on a macOS or Windows machine: a
+ * page that once got a click keeps real focus). `message` says it in plain words.
+ */
+export const TemplateStrategyNote = z.object({
+  code: z.enum(['humanize_needs_stealth', 'single_focus_limited']),
+  message: z.string(),
+});
+/** A strategy of a site's pack this template or machine cannot apply in full. */
+export type TemplateStrategyNote = z.infer<typeof TemplateStrategyNote>;
+
 /** A site of a template as operators see it. */
 export const TemplateSiteView = z.object({
   site_id: z.string(),
@@ -82,6 +96,8 @@ export const TemplateSiteView = z.object({
   added_at: EpochMs,
   /** The approved site pack in force for this site (spec 13 §9.6); `null` for a generic site. */
   pack: TemplateSitePack.nullable(),
+  /** What the pack in force selects that this template or machine cannot apply in full; empty for a generic site. */
+  strategy_notes: z.array(TemplateStrategyNote),
 });
 /** A site of a template. */
 export type TemplateSiteView = z.infer<typeof TemplateSiteView>;

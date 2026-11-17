@@ -2,6 +2,7 @@
 
 import type { CDPSession, Page } from 'patchright';
 import { z } from 'zod';
+import { headlessFocusReleases } from '../../domain/site-packs/strategy-notes.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type { PageFocusControl } from '../../ports/page-focus.ts';
@@ -34,9 +35,10 @@ export const FOCUS_CALL_MS = 2_000;
 
 /**
  * Minimizing to release a headless window's real focus was measured on Linux only; on macOS the
- * call stalled and on Windows it did not release the focus (T3b CI), so it is skipped there.
+ * call stalled and on Windows it did not release the focus (T3b CI), so it is skipped there; the
+ * template page notes it on sites selecting `single-focus` (`strategy-notes.ts`).
  */
-export const MINIMIZE_RELEASES_FOCUS = process.platform === 'linux';
+export const MINIMIZE_RELEASES_FOCUS = headlessFocusReleases(process.platform);
 
 /** `promise`, or a rejection after {@link FOCUS_CALL_MS}. */
 function bounded<T>(promise: Promise<T>): Promise<T> {

@@ -1,14 +1,19 @@
 /** @module app/templates/template-packs — what the template services need from the site-pack registry (spec 13 §9.6, T3a): approval on first use when a site is added, the pack in force for a site's view, its identity provider (notification threads) and `human_only` (no vault re-login). `NO_PACKS` is the answer when packs are off or not wired. */
 
-import type { TemplateSitePack } from '@browserhive/contracts/http';
+import type { TemplateSitePack, TemplateStrategyNote } from '@browserhive/contracts/http';
 import type { SitePackV1 } from '@browserhive/contracts/site-packs';
 import {
   packFloorIssues,
   type StealthFloorIssue,
   type StealthSettings,
 } from '../../domain/site-packs/stealth-floor.ts';
+import {
+  type StrategyNoteSettings,
+  strategyNotesOf,
+} from '../../domain/site-packs/strategy-notes.ts';
 import { registrableDomain } from '../../kernel/url.ts';
 import type { TemplateSiteRecord } from '../../ports/persistence/index.ts';
+import type { SitePackLookup } from '../../ports/site-packs.ts';
 import type { PreparedApproval } from '../site-packs/registry-types.ts';
 
 /** The registry as the template services see it (`SitePackRegistry` fits). */
@@ -35,6 +40,11 @@ export interface TemplatePacks {
   packIdFor?(siteId: string): string | null;
   /** The content in force, else the offered one. */
   detail?(packId: string): { readonly pack: SitePackV1 | null };
+  /**
+   * What the pack in force for a site's `pack_id` selects that a template with `settings` cannot
+   * apply in full on this machine (spec 13 §9.4; D49, D50); absent or `[]` without one.
+   */
+  strategyNotes?(packId: string | null, settings: StrategyNoteSettings): TemplateStrategyNote[];
 }
 
 /** A refusal a site's pack causes (spec 13 §11.1 `POST /templates` 400 cases, §9.4 `stealth-profile`). */
@@ -102,6 +112,32 @@ export const NO_PACKS: TemplatePacks = {
   providerOf: () => null,
   humanOnly: () => false,
 };
+
+/**
+ * The registry as the template services see it on a machine running `platform` (`process.platform`):
+ * every {@link TemplatePacks} answer from `registry`, plus the sites' strategy notes from the pack in
+ * force (the composition root builds it once).
+ */
+export function hostTemplatePacks(
+  registry: TemplatePacks & Pick<SitePackLookup, 'effectiveById'>,
+  platform: string,
+): TemplatePacks {
+  return {
+    prepareSite: (siteId, sha256, by) => registry.prepareSite(siteId, sha256, by),
+    approvalsCommitted: () => registry.approvalsCommitted(),
+    sitePackOf: (packId) => registry.sitePackOf(packId),
+    providerOf: (packId) => registry.providerOf(packId),
+    humanOnly: (packId) => registry.humanOnly(packId),
+    packIdFor: (siteId) => registry.packIdFor?.(siteId) ?? null,
+    ...(registry.detail !== undefined && {
+      detail: (packId: string) => registry.detail?.(packId) ?? { pack: null },
+    }),
+    strategyNotes: (packId, settings) => {
+      const effective = packId === null ? null : registry.effectiveById(packId);
+      return effective === null ? [] : strategyNotesOf(effective.pack, settings, platform);
+    },
+  };
+}
 
 /** The reviewed hashes of `POST /templates` sites, by registrable domain. */
 export function reviewedHashes(
