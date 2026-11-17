@@ -409,3 +409,53 @@ describe('compareSemver', () => {
     expect(compareSemver('1.0.0', '0.99.99')).toBe(1);
   });
 });
+
+describe('plain text only (review #83 S-H4, C-L4)', () => {
+  const cases: readonly (readonly [string, (p: SitePackV1Input) => SitePackV1Input, string])[] = [
+    ['RLO in the title', (p) => ({ ...p, title: 'GitHub ‮moc.buhtig' }), 'title'],
+    [
+      'ANSI colour and an OSC 8 link in the description',
+      (p) => ({
+        ...p,
+        description: 'Esc\u001b[31mRED\u001b]8;;https://evil.example\u0007click\u001b]8;;\u0007',
+      }),
+      'description',
+    ],
+    [
+      'a zero-width joiner in a clause quote',
+      (p) => ({
+        ...p,
+        write_policy: {
+          ...p.write_policy,
+          clause: { quote: 'no‍bots', url: 'https://example.org/t', checked: '2026-11-01' },
+        },
+      }),
+      'write_policy.clause.quote',
+    ],
+    ['a newline in the title', (p) => ({ ...p, title: 'Linked\nIn' }), 'title'],
+  ];
+  for (const [name, mutate, path] of cases) {
+    it(`refuses ${name}`, () => {
+      const parsed = SitePackV1.safeParse(mutate(basePack()));
+      expect(parsed.success).toBe(true);
+      if (!parsed.success) return;
+      const issues = refinePack(parsed.data).issues;
+      expect(issues.some((i) => i.path.startsWith(path) && i.message.includes('plain'))).toBe(true);
+    });
+  }
+
+  it('loading (and so `sitepacks verify`) refuses the file with the issue', () => {
+    const bytes = new TextEncoder().encode(
+      JSON.stringify({ ...basePack(), min_client: '0.1.0', title: 'GitHub \u202emoc.buhtig' }),
+    );
+    const loaded = loadPackBytes(bytes, { origin: 'f', binaryVersion: null, expectedId: null });
+    expect(loaded.ok).toBe(false);
+    if (loaded.ok) return;
+    expect(loaded.error.reason).toBe('invalid');
+    expect(loaded.error.issues.map((i) => i.path)).toContain('title');
+  });
+
+  it('the bundled-style plain strings pass', () => {
+    expect(refinePack(SitePackV1.parse(basePack())).issues).toEqual([]);
+  });
+});
