@@ -385,6 +385,31 @@ describe('TemplateService.remove', () => {
   });
 });
 
+describe('TemplateService.remove with if_status (the wizard’s Cancel setup, review #85 M2)', () => {
+  it('deletes only while the template is still being set up', async () => {
+    const created = await kit.service.create(input(), 'local');
+    const id = created.template_id;
+    expect(created.status).toBe('recording');
+    await kit.repos.templates.update(id, { status: 'ready' });
+    const changed = await refusal(
+      kit.service.remove(id, { force: false, by: 'local', ifStatus: 'recording' }),
+    );
+    expect(isAppError(changed, 'CONFLICT')).toBe(true);
+    expect(await kit.repos.templates.count()).toBe(1);
+    await kit.repos.templates.update(id, { status: 'recording' });
+    // Never closes a session: live ones still refuse without force.
+    runtime.sessions.set(id, ['jobs-11111111']);
+    const busy = await refusal(
+      kit.service.remove(id, { force: false, by: 'local', ifStatus: 'recording' }),
+    );
+    expect(isAppError(busy, 'TEMPLATE_IN_USE')).toBe(true);
+    runtime.sessions.set(id, []);
+    expect(
+      (await kit.service.remove(id, { force: false, by: 'local', ifStatus: 'recording' })).ok,
+    ).toBe(true);
+  });
+});
+
 describe('TemplateService.remove during an operation (review #79 H-1)', () => {
   it('answers CONFLICT while a restore, seed or clearing of saved passwords holds the template', async () => {
     const ops = new FakeTemplateHostOps();

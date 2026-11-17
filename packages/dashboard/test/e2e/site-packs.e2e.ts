@@ -54,7 +54,10 @@ test.describe('site packs in the dashboard', () => {
       await operatorCookie(page);
       await page.addInitScript((t) => {
         localStorage.setItem('bh.theme', t);
-        localStorage.setItem('bh.templateDraft', JSON.stringify({ name: 'packs-e2e', sites: [] }));
+        sessionStorage.setItem(
+          'bh.templateDraft',
+          JSON.stringify({ name: 'packs-e2e', sites: [] }),
+        );
       }, theme);
 
       await page.goto(`${baseUrl}/site-packs`);
@@ -74,14 +77,19 @@ test.describe('site packs in the dashboard', () => {
       await expect(page.getByRole('heading', { name: 'Sites BrowserHive knows' })).toBeVisible();
       // Pack strings are wrapped in Unicode isolates (U+2068 … U+2069, review S-H4).
       await page.getByRole('button', { name: /^Add \u2068?GitHub\u2069?$/ }).click();
-      await expect(
-        page.getByRole('button', { name: /^\u2068?GitHub\u2069?: added$/ }),
-      ).toBeVisible();
+      const added = page.getByRole('button', { name: /^Remove \u2068?GitHub\u2069?$/ });
+      await expect(added).toHaveAttribute('aria-pressed', 'true');
       await expect(
         page.getByText(/Adding this site approves \u2068?GitHub\u2069? v\d+/),
       ).toBeVisible();
       await expect(page.getByLabel('Add a site')).toBeVisible();
       expect(await violations(page)).toEqual([]);
+      // The card is a toggle: pressing it again takes the site out.
+      await added.click();
+      await expect(
+        page.getByRole('button', { name: /^Add \u2068?GitHub\u2069?$/ }),
+      ).toHaveAttribute('aria-pressed', 'false');
+      await expect(page.getByText(/Adding this site approves \u2068?GitHub\u2069?/)).toHaveCount(0);
     });
   }
 

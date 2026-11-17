@@ -1,4 +1,4 @@
-/** @module features/templates/wizard/SiteCatalog.test — wizard step 2 with site packs (spec 13 §7.1, §9.6, T3a): the catalog of pack cards (title, domains, Sign in by hand only, the write policy, what the terms say, the version adding it approves with its provenance and short SHA-256), search, a whole card adds the site and says what it approves, a typed domain that has a pack says the same, and `POST /templates` carries each site's `pack_sha256` (the offer's or the approved version's); generic sites stay as before; axe clean */
+/** @module features/templates/wizard/SiteCatalog.test — wizard step 2 with site packs (spec 13 §7.1, §9.6, T3a): the catalog of pack cards (title, domains, Sign in by hand only, the write policy, what the terms say, the version adding it approves with its provenance and short SHA-256), search, a whole card adds the site and says what it approves, and pressed again removes it with its pack choice (also when the template is full), a typed domain that has a pack says the same, and `POST /templates` carries each site's `pack_sha256` (the offer's or the approved version's); generic sites stay as before; axe clean */
 import { beforeEach, describe, expect, it } from 'bun:test';
 import { iso } from '@/features/site-packs/model.ts';
 import { systemInfo } from '../../../../test/fixtures/ops.ts';
@@ -15,7 +15,7 @@ import { expectNoA11yViolations } from '../../../../test/helpers/axe.ts';
 import { type RecordedRequest, renderPage } from '../../../../test/helpers/page-harness.tsx';
 import { act, fireEvent, screen, waitFor, within } from '../../../../test/helpers/render.tsx';
 import { wizardSearch } from '../search.ts';
-import { DRAFT_KEY, EMPTY_DRAFT, removeSite, toTemplateInput } from './draft.ts';
+import { DRAFT_KEY, EMPTY_DRAFT, removeSite, SITES_MAX, toTemplateInput } from './draft.ts';
 import { NewTemplatePage } from './NewTemplatePage.tsx';
 
 const ID = tid(8);
@@ -24,7 +24,7 @@ function mount(
   packs: unknown = packsResponse([packView({ human_only: true }), offeredPack()]),
   options: { readonly sites?: readonly string[]; readonly step?: number } = {},
 ) {
-  localStorage.setItem(
+  sessionStorage.setItem(
     DRAFT_KEY,
     JSON.stringify({ ...EMPTY_DRAFT, name: 'job-hunt', sites: options.sites ?? [] }),
   );
@@ -63,7 +63,14 @@ async function click(element: HTMLElement) {
   });
 }
 
-beforeEach(() => localStorage.removeItem(DRAFT_KEY));
+/** Let the page's remaining queries answer inside `act`. */
+async function settle() {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
+}
+
+beforeEach(() => sessionStorage.removeItem(DRAFT_KEY));
 
 describe('wizard site catalog', () => {
   it('shows a card per pack, adds a site from its card and says what it approves; axe clean', async () => {
@@ -90,8 +97,13 @@ describe('wizard site catalog', () => {
     fireEvent.change(within(catalog).getByLabelText('Search sites'), { target: { value: '' } });
 
     // The whole card adds the site; the chosen card says what creating the template approves.
-    await click(within(catalog).getByRole('button', { name: 'Add GitHub' }));
-    expect(within(catalog).getByRole('button', { name: 'GitHub: added' })).toBeDefined();
+    const githubOff = within(catalog).getByRole('button', { name: 'Add GitHub' });
+    expect(githubOff.getAttribute('aria-pressed')).toBe('false');
+    await click(githubOff);
+    const githubOn = within(catalog).getByRole('button', { name: 'Remove GitHub' });
+    expect(githubOn.getAttribute('aria-pressed')).toBe('true');
+    expect(githubOn.hasAttribute('disabled')).toBe(false);
+    expect(within(githubOn).getByText('Added')).toBeDefined();
     expect(
       screen.getByText(
         (_, el) => el?.textContent === 'GitHub · github.com' && el.tagName === 'SPAN',
@@ -182,6 +194,85 @@ describe('wizard site catalog', () => {
     mount(packsResponse([packView()], { status: registryStatus({ enabled: false }) }));
     expect(await screen.findByLabelText('Add a site')).toBeDefined();
     expect(screen.queryByRole('heading', { name: 'Sites BrowserHive knows' })).toBeNull();
+  });
+
+  it('pressing an added card removes the site and its pack choice; axe clean', async () => {
+    const view = mount();
+    const catalog = (
+      await screen.findByRole('heading', { name: 'Sites BrowserHive knows' })
+    ).closest('section') as HTMLElement;
+    await click(await within(catalog).findByRole('button', { name: 'Add GitHub' }));
+    const chosen = screen
+      .getByRole('button', { name: 'Remove github.com' })
+      .closest('li') as HTMLElement;
+    // The chosen card reads the pack's terms clause; let it load before going on.
+    expect(await within(chosen).findByText(/^Checked /)).toBeDefined();
+    expect(JSON.parse(sessionStorage.getItem(DRAFT_KEY) ?? '{}')).toMatchObject({
+      sites: ['github.com'],
+      packs: { 'github.com': sha('b') },
+    });
+    await expectNoA11yViolations(view.container);
+
+    await click(within(catalog).getByRole('button', { name: 'Remove GitHub' }));
+    const off = within(catalog).getByRole('button', { name: 'Add GitHub' });
+    expect(off.getAttribute('aria-pressed')).toBe('false');
+    expect(screen.queryByRole('button', { name: 'Remove github.com' })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'No sites yet' })).toBeDefined();
+    expect(JSON.parse(sessionStorage.getItem(DRAFT_KEY) ?? '{}')).toMatchObject({
+      sites: [],
+      packs: {},
+    });
+    await settle();
+  });
+
+  it('a full template still removes from a card, but adds nothing more', async () => {
+    const sites = [
+      'github.com',
+      ...Array.from({ length: SITES_MAX - 1 }, (_, i) => `site${i}.example`),
+    ];
+    mount(undefined, { sites });
+    const catalog = (
+      await screen.findByRole('heading', { name: 'Sites BrowserHive knows' })
+    ).closest('section') as HTMLElement;
+    expect(
+      screen.getByRole('heading', { name: `${SITES_MAX} of ${SITES_MAX} sites` }),
+    ).toBeDefined();
+    await click(within(catalog).getByRole('button', { name: 'Add LinkedIn' }));
+    expect(within(catalog).getByRole('button', { name: 'Add LinkedIn' })).toBeDefined();
+    await click(within(catalog).getByRole('button', { name: 'Remove GitHub' }));
+    expect(within(catalog).getByRole('button', { name: 'Add GitHub' })).toBeDefined();
+    expect(
+      screen.getByRole('heading', { name: `${SITES_MAX - 1} of ${SITES_MAX} sites` }),
+    ).toBeDefined();
+    await settle();
+  });
+
+  it('a card with no version on offer cannot add, but removes a site already chosen', async () => {
+    const noOffer = offeredPack({
+      offer: null,
+      local: {
+        path: '/data/site-packs/local/github.com.json',
+        sha256: sha('d'),
+        state: 'not_approved',
+        approved_sha256: null,
+        problem: null,
+      },
+    });
+    const first = mount(packsResponse([noOffer]));
+    const catalog = async () =>
+      (await screen.findByRole('heading', { name: 'Sites BrowserHive knows' })).closest(
+        'section',
+      ) as HTMLElement;
+    const off = within(await catalog()).getByRole('button', { name: 'Add GitHub' });
+    expect(off.hasAttribute('disabled')).toBe(true);
+    expect(within(off).getByText('Approve its local file on Site packs first.')).toBeDefined();
+    first.unmount();
+
+    mount(packsResponse([noOffer]), { sites: ['github.com'] });
+    const on = within(await catalog()).getByRole('button', { name: 'Remove GitHub' });
+    expect(on.hasAttribute('disabled')).toBe(false);
+    await click(on);
+    expect(screen.getByRole('heading', { name: 'No sites yet' })).toBeDefined();
   });
 
   it('a removed site drops its pack choice', () => {

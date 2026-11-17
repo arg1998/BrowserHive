@@ -46110,7 +46110,7 @@
         "tags": [
           "templates"
         ],
-        "summary": "Delete a template: stops its browser and deletes its directory. With live sessions it needs force=true, which closes them. Deleting does not sign out at the sites.",
+        "summary": "Delete a template: stops its browser and deletes its directory. With live sessions it needs force=true, which closes them; if_status deletes only a template still in that status (409 otherwise). Deleting does not sign out at the sites.",
         "security": [
           {
             "cookieAuth": []
@@ -46138,11 +46138,24 @@
             "required": false,
             "name": "force",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "recording",
+                "ready",
+                "disabled"
+              ]
+            },
+            "required": false,
+            "name": "if_status",
+            "in": "query"
           }
         ],
         "responses": {
           "200": {
-            "description": "Delete a template: stops its browser and deletes its directory. With live sessions it needs force=true, which closes them. Deleting does not sign out at the sites.",
+            "description": "Delete a template: stops its browser and deletes its directory. With live sessions it needs force=true, which closes them; if_status deletes only a template still in that status (409 otherwise). Deleting does not sign out at the sites.",
             "content": {
               "application/json": {
                 "schema": {
@@ -46192,7 +46205,7 @@
             }
           },
           "409": {
-            "description": "TEMPLATE_IN_USE",
+            "description": "TEMPLATE_IN_USE, CONFLICT",
             "content": {
               "application/problem+json": {
                 "schema": {

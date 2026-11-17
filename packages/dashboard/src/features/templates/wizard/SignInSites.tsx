@@ -1,4 +1,4 @@
-/** @module features/templates/wizard/SignInSites — the sign-in step's site list (spec 13 §7.1): each site with its state as text and icon (`data-state` for tests), **I'm signed in** for a site without a pack (it learns the cookies that appeared since the window opened), a refusal on the site's row, and a polite live summary when a site's state changes ("2 of 3 sites signed in. site-a.test signed in.") */
+/** @module features/templates/wizard/SignInSites — the sign-in step's site list (spec 13 §7.1): each site with its state as text and icon (`data-state` for tests) and what happens next: a pack site reads signed in by itself once its sign-in cookies appear (BrowserHive checks every few seconds), a site without a pack waits for **I'm signed in** (it learns the cookies that appeared since the window opened; until then it reads "Not confirmed yet"), a refusal on the site's row, and a polite live summary when a site's state changes ("2 of 3 sites signed in. site-a.test signed in.") */
 import type { TemplateHealthState } from '@browserhive/contracts/enums';
 import type { TemplateSiteView } from '@browserhive/contracts/http';
 import { useEffect, useRef, useState } from 'react';
@@ -23,6 +23,34 @@ export function signInAnnouncement(
     (s) => `${s.site_id} ${SITE_HEALTH[s.health.state].label.toLowerCase()}.`,
   );
   return `${signedIn} of ${sites.length} sites signed in. ${parts.join(' ')}`;
+}
+
+/** A site's state on the sign-in step: before Finish, a site that is not signed in is still to do. */
+export function signInStateText(
+  site: Pick<TemplateSiteView, 'pack_id' | 'health'>,
+  windowOpen: boolean,
+): { readonly text: string; readonly tone: 'success' | 'todo' | 'warn' } {
+  const state = site.health.state;
+  if (state === 'signed_in')
+    return {
+      text:
+        site.health.reason === 'detected_by_pack_cookies'
+          ? 'Signed in: BrowserHive found its sign-in'
+          : 'Signed in',
+      tone: 'success',
+    };
+  if (state === 'challenged') return { text: SITE_HEALTH.challenged.label, tone: 'warn' };
+  if (site.pack_id !== null)
+    return {
+      text: windowOpen
+        ? 'Not signed in yet: BrowserHive notices when you are'
+        : 'Not signed in yet',
+      tone: 'todo',
+    };
+  return {
+    text: windowOpen ? 'Not confirmed yet: sign in, then press I’m signed in' : 'Not confirmed yet',
+    tone: 'todo',
+  };
 }
 
 /** Site rows. */
@@ -58,6 +86,7 @@ export function SignInSites({
           const signedIn = state === 'signed_in';
           const error = errors[site.site_id];
           const label = signedIn ? 'Confirm again' : 'I’m signed in';
+          const shown = signInStateText(site, windowOpen);
           return (
             <li key={site.site_id} className="flex flex-col gap-2 px-4 py-3">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -68,10 +97,14 @@ export function SignInSites({
                     data-state={state}
                     className={cn(
                       'text-sm',
-                      signedIn ? 'text-success-text' : 'text-muted-foreground',
+                      shown.tone === 'success'
+                        ? 'text-success-text'
+                        : shown.tone === 'warn'
+                          ? 'text-warn-text'
+                          : 'text-muted-foreground',
                     )}
                   >
-                    {state === 'unknown' ? 'Not signed in yet' : SITE_HEALTH[state].label}
+                    {shown.text}
                     {signedIn && site.health.changed_at !== null ? (
                       <>
                         {' · '}
@@ -84,7 +117,7 @@ export function SignInSites({
                   <Button
                     type="button"
                     size="sm"
-                    variant={signedIn ? 'ghost' : 'outline'}
+                    variant={signedIn ? 'ghost' : 'default'}
                     disabled={pending !== null}
                     aria-label={`${label}: ${site.site_id}`}
                     onClick={() => onConfirm(site.site_id)}

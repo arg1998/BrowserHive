@@ -119,7 +119,7 @@ export class TemplateStateService {
         const reason = checkpointVersionReason({
           now: this.#deps.clock.now(),
           previousCheckpointAt: loaded.template.checkpointAt,
-          summary: summarize(state, signInNamesOf(loaded.sites)),
+          summary: summarize(state, signInNamesOf(loaded.sites, this.#deps.packs)),
           structure: structureHash(state),
           newest,
           sites: loaded.sites.filter((s) => s.enabled).map((s) => s.siteId),

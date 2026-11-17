@@ -1,6 +1,7 @@
-/** @module app/templates/template-recording.test — the recording workflow over fake host operations (spec 13 §7.1 step 5, §11.1): the window opens once with the jar snapshot, **I'm signed in** learns the new cookie names, Finish removes unlisted sign-ins, marks unconfirmed sites signed out and sets the template ready; Cancel and the host routes. */
+/** @module app/templates/template-recording.test — the recording workflow over fake host operations (spec 13 §7.1 step 5, §11.1): the window opens once with the jar snapshot, **I'm signed in** learns the new cookie names, a pack site reads signed in from its pack's cookies while the window is open and at Finish (the owner's LinkedIn jar: signed in, nothing unlisted), Finish removes unlisted sign-ins, marks unconfirmed sites signed out and sets the template ready; Cancel and the host routes. */
 
 import { beforeEach, describe, expect, it } from 'bun:test';
+import type { SitePackV1 } from '@browserhive/contracts/site-packs';
 import { CollectingLogger } from '../../../test/helpers/collecting-logger.ts';
 import { FakeClock } from '../../../test/helpers/fake-clock.ts';
 import { FakeTemplateHostOps } from '../../../test/helpers/fake-host-ops.ts';
@@ -10,8 +11,11 @@ import { InMemoryRepositories, InMemoryUnitOfWork } from '../../../test/helpers/
 import { InMemoryOperatorActionRepository } from '../../../test/helpers/in-memory-vault-repos.ts';
 import { FakeTemplateRuntime } from '../../../test/helpers/template-kit.ts';
 import { templateRecord, templateSiteRecord } from '../../../test/persistence/helpers.ts';
+import type { ProbeVerdict } from '../../domain/templates/probe.ts';
 import { isAppError } from '../../kernel/errors/app-error.ts';
-import { TemplateRecordingService } from './template-recording.ts';
+import type { TemplateRecord } from '../../ports/persistence/index.ts';
+import { NO_PACKS, type TemplatePacks } from './template-packs.ts';
+import { DETECTED_BY_PACK_COOKIES, TemplateRecordingService } from './template-recording.ts';
 
 const ID = templateRecord().templateId;
 const OPERATOR = { subject: 'operator' };
@@ -116,6 +120,9 @@ describe('recording a template', () => {
     await service.start(ID, {}, OPERATOR);
     ops.jarCookies?.push(fakeCookie('.site-a.test', 'sid'), fakeCookie('.idp.test', 'idp'));
     await service.confirm(ID, 'site-a.test', 'operator');
+    // A domain without a pack counts once a window opened it as a page.
+    expect(await service.unlisted(ID, await repos.templateSites.list(ID))).toEqual([]);
+    ops.visitedSites.add('idp.test');
     expect(await service.unlisted(ID, await repos.templateSites.list(ID))).toEqual(['idp.test']);
     const done = await service.finish(ID, { removeSignIns: ['www.idp.test'] }, 'operator');
     expect(done.version).toBeNull();
@@ -159,5 +166,207 @@ describe('recording a template', () => {
       'template.signin.remove',
       'template.profile_secrets.clear',
     ]);
+  });
+});
+
+/** Packs for LinkedIn and Google with the bundled packs' sign-in cookie names. */
+const PACKS: TemplatePacks = {
+  ...NO_PACKS,
+  packIdFor: (domain) =>
+    ['linkedin.com', 'licdn.com'].includes(domain)
+      ? 'linkedin.com'
+      : domain === 'google.com'
+        ? 'google.com'
+        : null,
+  detail: (packId) => ({
+    pack: {
+      domains: packId === 'linkedin.com' ? ['linkedin.com', 'licdn.com'] : [packId],
+      signed_in: { cookie_names: packId === 'linkedin.com' ? ['li_at', 'liap'] : ['SID', 'HSID'] },
+    } as unknown as SitePackV1,
+  }),
+};
+
+/** The owner's jar after signing in to LinkedIn in the window (2026-11-17, names only). */
+const OWNER_JAR = () => [
+  fakeCookie('.www.linkedin.com', 'li_at'),
+  fakeCookie('.linkedin.com', 'liap'),
+  { ...fakeCookie('.www.linkedin.com', 'JSESSIONID'), httpOnly: false },
+  fakeCookie('.doubleclick.net', 'IDE'),
+  fakeCookie('www.google.com', '_GRECAPTCHA'),
+  fakeCookie('.facebook.com', 'fr'),
+];
+
+describe('a pack site signed in without I’m signed in (owner report 2026-11-17)', () => {
+  const LI = 'tp-linkedin01';
+  let recorded: { siteId: string; verdict: ProbeVerdict; trigger: string }[];
+  let probed: { siteIds: readonly string[] | undefined; trigger: string }[];
+  /** What the fake navigation probe answers for a probed site. */
+  let probeAnswer: ProbeVerdict;
+
+  /** A health service that records verdicts and answers probes with `probeAnswer`. */
+  function attachFakeHealth(): void {
+    const apply = async (templateId: string, siteId: string, verdict: ProbeVerdict) => {
+      const [row] = (await repos.templateSites.list(templateId)).filter((s) => s.siteId === siteId);
+      if (row !== undefined)
+        await repos.templateSites.upsert({
+          ...row,
+          health: { ...row.health, state: verdict.outcome, reason: verdict.reason },
+        });
+    };
+    service.attachHealth({
+      record: async (template: TemplateRecord, siteId: string, verdict: ProbeVerdict, trigger) => {
+        recorded.push({ siteId, verdict, trigger });
+        await apply(template.templateId, siteId, verdict);
+      },
+      probe: async (templateId, options) => {
+        probed.push({ siteIds: options.siteIds, trigger: options.trigger });
+        for (const siteId of options.siteIds ?? []) await apply(templateId, siteId, probeAnswer);
+        return [];
+      },
+    });
+  }
+
+  beforeEach(async () => {
+    recorded = [];
+    probed = [];
+    probeAnswer = { outcome: 'signed_out', reason: 'redirect', finalUrl: null };
+    const bundle = { ...repos, operatorActions: actions };
+    service = new TemplateRecordingService({
+      repos: bundle,
+      uow: new InMemoryUnitOfWork(bundle),
+      runtime: new FakeTemplateRuntime(),
+      ops,
+      ids: new FakeIdGenerator(),
+      clock: new FakeClock(),
+      logger: new CollectingLogger(),
+      packs: PACKS,
+    });
+    await repos.templates.insert(
+      templateRecord({ templateId: LI, name: 'job-hunting', status: 'recording' }),
+    );
+    // The browser's first start probed before anyone signed in.
+    await repos.templateSites.upsert(
+      templateSiteRecord({
+        templateId: LI,
+        siteId: 'linkedin.com',
+        packId: 'linkedin.com',
+        health: {
+          ...templateSiteRecord().health,
+          state: 'signed_out',
+          reason: 'cookies_absent',
+        },
+      }),
+    );
+  });
+
+  it('Finish reads the pack’s cookies: LinkedIn is signed in and nothing is unlisted', async () => {
+    ops.jarCookies = [];
+    await service.start(LI, {}, OPERATOR);
+    ops.jarCookies = OWNER_JAR();
+    // Even pages the window opened on those domains would not make ad cookies sign-ins.
+    for (const site of ['linkedin.com', 'google.com', 'facebook.com']) ops.visitedSites.add(site);
+    expect(await service.unlisted(LI, await repos.templateSites.list(LI))).toEqual([]);
+    const done = await service.finish(LI, {}, 'operator');
+    const site = done.template.sites[0];
+    expect(site?.health.state).toBe('signed_in');
+    expect(site?.health.reason).toBe(DETECTED_BY_PACK_COOKIES);
+    expect(done.template.status).toBe('ready');
+  });
+
+  it('while the window is open, the tick records the detection as a probe row (trigger recording)', async () => {
+    attachFakeHealth();
+    ops.jarCookies = [];
+    await service.start(LI, {}, OPERATOR);
+    ops.recording = { id: 'recording-0000aaaa' } as never;
+    await service.tick();
+    expect(recorded).toEqual([]);
+    // Only one of the two names: not yet.
+    ops.jarCookies = [fakeCookie('.linkedin.com', 'liap')];
+    await service.tick();
+    expect(recorded).toEqual([]);
+    ops.jarCookies = OWNER_JAR();
+    await service.tick();
+    expect(recorded).toEqual([
+      {
+        siteId: 'linkedin.com',
+        verdict: { outcome: 'signed_in', reason: DETECTED_BY_PACK_COOKIES, finalUrl: null },
+        trigger: 'recording',
+      },
+    ]);
+    // Signed in now: the next tick records nothing more.
+    await service.tick();
+    expect(recorded).toHaveLength(1);
+  });
+
+  it('lists a domain the operator really signed in to (Google, by its pack’s cookies)', async () => {
+    ops.jarCookies = [
+      ...OWNER_JAR(),
+      fakeCookie('.google.com', 'SID'),
+      fakeCookie('.google.com', 'HSID'),
+    ];
+    expect(await service.unlisted(LI, await repos.templateSites.list(LI))).toEqual(['google.com']);
+  });
+
+  it('cookies already there when the window opened prove nothing: no tick flips the site (review #85 H2)', async () => {
+    attachFakeHealth();
+    // Signing in again to a site whose server invalidated the session: the cookies are still there.
+    ops.jarCookies = OWNER_JAR();
+    await service.start(LI, {}, OPERATOR);
+    ops.recording = { id: 'recording-0000aaaa' } as never;
+    await service.tick();
+    await service.tick();
+    expect(recorded).toEqual([]);
+    const [site] = await repos.templateSites.list(LI);
+    expect(site?.health.state).toBe('signed_out');
+  });
+
+  it('at Finish, stale cookies get the navigation probe instead (here: signed out)', async () => {
+    attachFakeHealth();
+    ops.jarCookies = OWNER_JAR();
+    await service.start(LI, {}, OPERATOR);
+    const done = await service.finish(LI, {}, 'operator');
+    expect(recorded).toEqual([]);
+    expect(probed).toEqual([{ siteIds: ['linkedin.com'], trigger: 'recording' }]);
+    expect(done.template.sites[0]?.health.state).toBe('signed_out');
+  });
+
+  it('at Finish, a probe that finds the site signed in keeps it signed in', async () => {
+    attachFakeHealth();
+    probeAnswer = { outcome: 'signed_in', reason: 'no_redirect', finalUrl: null };
+    ops.jarCookies = OWNER_JAR();
+    await service.start(LI, {}, OPERATOR);
+    const done = await service.finish(LI, {}, 'operator');
+    expect(done.template.sites[0]?.health).toMatchObject({
+      state: 'signed_in',
+      reason: 'no_redirect',
+    });
+  });
+
+  it('a sign-in cookie set again in the window (a new expiry) counts as a sign-in', async () => {
+    attachFakeHealth();
+    ops.jarCookies = OWNER_JAR();
+    await service.start(LI, {}, OPERATOR);
+    ops.recording = { id: 'recording-0000aaaa' } as never;
+    ops.jarCookies = OWNER_JAR().map((c) =>
+      c.name === 'li_at' ? { ...c, expires: c.expires + 600 } : c,
+    );
+    await service.tick();
+    expect(recorded.map((r) => r.verdict.reason)).toEqual([DETECTED_BY_PACK_COOKIES]);
+  });
+
+  it('signing in again on a ready template: stale cookies stay signed out until a real sign-in', async () => {
+    attachFakeHealth();
+    await repos.templates.update(LI, { status: 'ready' });
+    ops.jarCookies = OWNER_JAR();
+    await service.start(LI, {}, OPERATOR);
+    ops.recording = { id: 'recording-0000aaaa' } as never;
+    await service.tick();
+    expect(recorded).toEqual([]);
+    // The operator signs in: LinkedIn replaces li_at.
+    ops.jarCookies = OWNER_JAR().map((c) =>
+      c.name === 'li_at' ? { ...c, expires: c.expires + 86_400 } : c,
+    );
+    await service.tick();
+    expect(recorded).toHaveLength(1);
   });
 });

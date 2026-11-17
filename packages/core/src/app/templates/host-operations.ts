@@ -59,6 +59,10 @@ export class TemplateHostOperations implements TemplateHostOps {
     return host === null ? null : await host.jar();
   }
 
+  pageSites(templateId: string): ReadonlySet<string> {
+    return this.#deps.supervisor.runningHost(templateId)?.pageSites?.() ?? new Set();
+  }
+
   async sharedWindows(templateId: string): Promise<readonly SharedWindowView[]> {
     const host = this.#deps.supervisor.runningHost(templateId);
     if (host === null) return [];

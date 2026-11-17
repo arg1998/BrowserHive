@@ -1,4 +1,4 @@
-/** @module features/templates/wizard/draft — the new-template wizard's draft (spec 13 §7.1 steps 1–4): its shape, per-step problems, the `POST /templates` body, server field issues mapped back to their step, and the per-device copy in `localStorage` that survives a reload */
+/** @module features/templates/wizard/draft — the new-template wizard's draft (spec 13 §7.1 steps 1–4): its shape, per-step problems, the `POST /templates` body, server field issues mapped back to their step, and the copy kept in this tab's `sessionStorage` (it survives a reload; closing the tab, Cancel, signing out or a 401 forgets it, and an older build's `localStorage` copy is dropped on read) */
 import type { Channel, StealthLevel } from '@browserhive/contracts/enums';
 import type { TemplateInput } from '@browserhive/contracts/http';
 import { readStorageJson, removeStorage, writeStorageJson } from '@/lib/storage.ts';
@@ -77,7 +77,7 @@ export interface DraftProblem {
   readonly message: string;
 }
 
-/** Where the draft lives on this device (`bh.templateDraft`). */
+/** Where the draft lives in this tab's `sessionStorage` (`bh.templateDraft`; earlier builds used `localStorage`). */
 export const DRAFT_KEY = 'bh.templateDraft';
 
 /** At most this many sites (spec 13 §2.1). */
@@ -289,17 +289,62 @@ function validDraft(raw: unknown): TemplateDraft | null {
     : null;
 }
 
-/** The draft saved on this device, if any. */
+/** `true` when the operator entered anything (Cancel then asks before discarding it). */
+export function draftHasContent(draft: TemplateDraft): boolean {
+  const { nameTouched: _a, ...rest } = draft;
+  const { nameTouched: _b, ...empty } = EMPTY_DRAFT;
+  return JSON.stringify(rest) !== JSON.stringify(empty);
+}
+
+/** The draft kept in this tab, if any. An older build's copy in `localStorage` is dropped, never read. */
 export function readDraft(): TemplateDraft | null {
-  return readStorageJson(DRAFT_KEY, validDraft);
-}
-
-/** Keep the draft on this device. */
-export function writeDraft(draft: TemplateDraft): void {
-  writeStorageJson(DRAFT_KEY, draft);
-}
-
-/** Forget the draft (after the template is created, or on Start over). */
-export function clearDraft(): void {
   removeStorage(DRAFT_KEY);
+  return readStorageJson(DRAFT_KEY, validDraft, 'session');
+}
+
+/** Keep the draft in this tab (a reload keeps it; closing the tab does not). */
+export function writeDraft(draft: TemplateDraft): void {
+  writeStorageJson(DRAFT_KEY, draft, 'session');
+}
+
+/** Forget the draft (after the template is created, or on Cancel), wherever a build kept it. */
+export function clearDraft(): void {
+  removeStorage(DRAFT_KEY, 'session');
+  removeStorage(DRAFT_KEY);
+}
+
+/** The templates this tab's wizard created (`bh.templatesCreated`, this tab only; sign-out clears it). */
+export const CREATED_KEY = 'bh.templatesCreated';
+
+function createdIds(): string[] {
+  return (
+    readStorageJson(
+      CREATED_KEY,
+      (raw) => (Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : null),
+      'session',
+    ) ?? []
+  );
+}
+
+/** Remember that this tab's wizard created `templateId` (only such a template offers Cancel setup). */
+export function markCreatedHere(templateId: string): void {
+  writeStorageJson(
+    CREATED_KEY,
+    [...createdIds().filter((id) => id !== templateId), templateId].slice(-20),
+    'session',
+  );
+}
+
+/** True when this tab's wizard created `templateId`. */
+export function createdHere(templateId: string): boolean {
+  return createdIds().includes(templateId);
+}
+
+/** Forget a template this tab created (it was finished or deleted). */
+export function forgetCreated(templateId: string): void {
+  writeStorageJson(
+    CREATED_KEY,
+    createdIds().filter((id) => id !== templateId),
+    'session',
+  );
 }

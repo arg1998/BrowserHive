@@ -1,4 +1,4 @@
-/** @module features/templates/detail/SitesTab — the Sites tab (spec 13 §11.4): **Check all** sites now, then one card per sign-in (sites that share a login sit together, `SiteCard`); while the template is still being set up, one notice with **Continue sign-in** instead of per-card hints; `?site=` brings a card into view */
+/** @module features/templates/detail/SitesTab — the Sites tab (spec 13 §11.4): **Check all** sites now (the toast counts sites not signed in apart from those it couldn't tell about), then one card per sign-in (sites that share a login sit together, `SiteCard`); while the template is still being set up, one notice with **Continue sign-in** instead of per-card hints; `?site=` brings a card into view */
 import type { TemplateDetailResponse } from '@browserhive/contracts/http';
 import { Link } from '@tanstack/react-router';
 import { useToast } from '@/app/providers/ToastProvider.tsx';
@@ -7,7 +7,7 @@ import { Button, buttonVariants } from '@/components/ui/button.tsx';
 import { Spinner } from '@/components/ui/spinner.tsx';
 import { ICONS } from '@/lib/icons.ts';
 import { useProbePending, useTemplateHealth } from '../api-health.ts';
-import { signInGroups } from '../model.ts';
+import { needsSignIn, signInGroups } from '../model.ts';
 import { SiteCard } from './SiteCard.tsx';
 
 /** `6 hours`, `30 minutes`, `day` (after "every"). */
@@ -41,13 +41,18 @@ export function SitesTab({
     health.probe.mutate(undefined, {
       onSuccess: (result) => {
         const n = result.results.length;
-        const out = result.results.filter((r) => r.outcome !== 'signed_in').length;
-        if (out === 0)
-          toast.success({ title: `Checked ${n} ${n === 1 ? 'site' : 'sites'}: all signed in` });
-        else
-          toast.warning({
-            title: `Checked ${n} ${n === 1 ? 'site' : 'sites'}: ${out} not signed in`,
-          });
+        const out = result.results.filter((r) => needsSignIn(r.outcome)).length;
+        // "Couldn't tell" is not "not signed in" (owner 2026-11-17): it is counted apart.
+        const unsure = result.results.filter((r) => r.outcome === 'inconclusive').length;
+        const checked = `Checked ${n} ${n === 1 ? 'site' : 'sites'}`;
+        if (out === 0 && unsure === 0) toast.success({ title: `${checked}: all signed in` });
+        else {
+          const parts = [
+            ...(out > 0 ? [`${out} not signed in`] : []),
+            ...(unsure > 0 ? [`${unsure} couldn’t tell`] : []),
+          ];
+          toast[out > 0 ? 'warning' : 'info']({ title: `${checked}: ${parts.join(', ')}` });
+        }
       },
     });
   const groups = signInGroups(detail.sites);

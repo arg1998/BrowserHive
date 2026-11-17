@@ -131,6 +131,7 @@ export function healthReasonText(reason: string | null): string | null {
   if (http !== null) return `The site answered with an error (HTTP ${http[1]}).`;
   const known: Readonly<Record<string, string>> = {
     confirmed_by_operator: 'You confirmed the sign-in.',
+    detected_by_pack_cookies: 'Its sign-in cookies appeared while you signed in.',
     not_confirmed: 'Not confirmed when the sign-in finished.',
     relogin: 'Signed in again with Re-login.',
     cookies_absent: 'Its sign-in cookies are gone.',

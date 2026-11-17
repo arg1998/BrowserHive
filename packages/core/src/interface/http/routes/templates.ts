@@ -62,15 +62,16 @@ export const TEMPLATE_ROUTES = [
     operationId: 'deleteTemplate',
     tags,
     summary:
-      'Delete a template: stops its browser and deletes its directory. With live sessions it needs force=true, which closes them. Deleting does not sign out at the sites.',
+      'Delete a template: stops its browser and deletes its directory. With live sessions it needs force=true, which closes them; if_status deletes only a template still in that status (409 otherwise). Deleting does not sign out at the sites.',
     request: { params: TemplateIdParams, query: DeleteTemplateQuery },
     responses: { 200: DeleteTemplateResponse },
-    errors: ['TEMPLATE_NOT_FOUND', 'TEMPLATE_IN_USE'],
+    errors: ['TEMPLATE_NOT_FOUND', 'TEMPLATE_IN_USE', 'CONFLICT'],
     async handler({ input, principal, services }) {
       return reply(
         200,
         await services.templates.remove(input.params.template_id, {
           force: input.query.force,
+          ifStatus: input.query.if_status,
           by: requirePrincipal(principal).subject,
         }),
       );

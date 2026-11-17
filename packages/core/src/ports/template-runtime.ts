@@ -141,6 +141,11 @@ export interface RecordingRequest {
 export interface TemplateHostOps {
   /** Every cookie of the template's jar, or `null` when its browser is not running. */
   jar(templateId: string): Promise<readonly Cookie[] | null>;
+  /**
+   * Registrable domains a window of the running browser opened as a page (main frame) since it
+   * started; empty when it is not running (spec 13 §2.3 unlisted sign-ins).
+   */
+  pageSites(templateId: string): ReadonlySet<string>;
   /** Windows that show pages of several sessions (`[]` when not running). */
   sharedWindows(templateId: string): Promise<readonly SharedWindowView[]>;
   /** Removes a registrable domain's cookies and site data, starting the browser when it is stopped. */

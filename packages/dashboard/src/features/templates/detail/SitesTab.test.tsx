@@ -173,6 +173,50 @@ describe('Sites tab: health', () => {
     expect(screen.getByText('Only some of its sign-in cookies are there.')).toBeDefined();
   });
 
+  it('a check that couldn’t tell reads “Couldn’t tell” with its reason and Check now, never signed out', async () => {
+    const view = mount({
+      [`GET /templates/${ID}`]: templateDetail({
+        sites: [
+          signedInSite('indeed.com'),
+          templateSite('linkedin.com', {
+            health: {
+              state: 'inconclusive',
+              checked_at: TT0 - 1000,
+              changed_at: TT0 - 1000,
+              reason: 'no_signal',
+              consecutive_inconclusive: 1,
+            },
+          }),
+        ],
+      }),
+      [`POST /templates/${ID}/probe`]: {
+        results: [
+          {
+            site_id: 'indeed.com',
+            outcome: 'signed_in',
+            reason: 'learned_cookies',
+            duration_ms: 9,
+          },
+          { site_id: 'linkedin.com', outcome: 'inconclusive', reason: 'no_signal', duration_ms: 9 },
+        ],
+      },
+    });
+    const card = (await screen.findByRole('heading', { level: 2, name: 'linkedin.com' })).closest(
+      'section, article, li',
+    ) as HTMLElement;
+    expect(within(card).getAllByText(/^Couldn.t tell$/).length).toBeGreaterThan(0);
+    expect(within(card).getByText('Nothing showed whether you are signed in.')).toBeDefined();
+    expect(within(card).queryByText(/Signed out|Not signed in/)).toBeNull();
+    expect(screen.queryByText(/isn’t signed in/)).toBeNull();
+    expect(within(card).getByRole('button', { name: 'Check now: linkedin.com' })).toBeDefined();
+    await expectNoA11yViolations(view.container, AXE);
+    await click(screen.getByRole('button', { name: 'Check all now' }));
+    expect((await screen.findAllByText('Checked 2 sites: 1 couldn’t tell')).length).toBeGreaterThan(
+      0,
+    );
+    expect(screen.queryByText(/not signed in/)).toBeNull();
+  });
+
   it('says why a check couldn’t run (browser not running)', async () => {
     mount({
       [`GET /templates/${ID}`]: templateDetail({

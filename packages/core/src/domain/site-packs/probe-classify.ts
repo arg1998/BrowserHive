@@ -1,4 +1,4 @@
-/** @module domain/site-packs/probe-classify — the pack probe's decision (spec 13 §8.1 steps 1–2): the cookie pre-check over the pack's `cookie_names` (names and expiry only), then the navigation's signals in their fixed order. Pure; the page is read through {@link PackProbeFacts}. */
+/** @module domain/site-packs/probe-classify — the pack probe's decision (spec 13 §8.1 steps 1–2): the cookie pre-check over the pack's `cookie_names` (names and expiry only), then the navigation's signals in their fixed order (the probe path or below it counts as staying). Pure; the page is read through {@link PackProbeFacts}. */
 
 import type { PackChallengeKind, SitePackV1 } from '@browserhive/contracts/site-packs';
 import { registrableDomain, sanitizeUrl } from '../../kernel/url.ts';
@@ -93,14 +93,20 @@ export interface PackProbeFacts {
   hasSelector(selector: string): Promise<boolean>;
 }
 
-function samePlace(pack: SitePackV1, url: string, path: string): boolean {
+/**
+ * True when `url` is on the probe host at `path` or below it at a segment boundary (`/feed/` covers
+ * `/feed/foryou/`, `/feed` covers `/feed/x` but not `/feedback`): a signed-in site that moves its
+ * home page one level down (LinkedIn's `/feed/` → `/feed/foryou/`) has still stayed put. A root
+ * probe path (`/`) covers only itself, so the rule never widens to the whole host.
+ */
+export function samePlace(pack: SitePackV1, url: string, path: string): boolean {
   try {
     const parsed = new URL(url);
     const probe = pack.signed_in.probe;
-    return (
-      parsed.hostname.toLowerCase() === probe.host.toLowerCase() &&
-      parsed.pathname.replace(/\/+$/, '') === path.replace(/\/+$/, '')
-    );
+    if (parsed.hostname.toLowerCase() !== probe.host.toLowerCase()) return false;
+    const base = path.replace(/\/+$/, '');
+    const final = parsed.pathname.replace(/\/+$/, '');
+    return final === base || (base !== '' && final.startsWith(`${base}/`));
   } catch {
     return false;
   }
@@ -110,12 +116,14 @@ function samePlace(pack: SitePackV1, url: string, path: string): boolean {
  * Step 2, in order (spec 13 §8.1): a challenge → `challenged`; the final URL (inside the pack's
  * domains) matches a `signed_out_redirects` glob → `signed_out` `redirect`; the signed-out marker →
  * `signed_out` `marker`; the landmark → `signed_in` `landmark`; a `redirect` pack still on the
- * probe host and path (and not a 4xx/5xx) → `signed_in` `no_redirect`, and an `either` pack only
- * once the page `settled` (loaded, then no signed-out redirect within the post-load window, D48),
- * as `no_redirect_settled` (lower confidence: a later redirect or a sign-in modal reads the same);
- * otherwise `inconclusive` (`timeout`, `network`, `http_<status>` ≥ 400, `no_signal`). A challenge
- * is never `signed_out`. A visit of another path (the keeper's) never answers `no_redirect`: only
- * the probe path's staying put means signed in.
+ * probe host at the probe path or below it ({@link samePlace}; not a 4xx/5xx) → `signed_in`
+ * `no_redirect`, and an `either` pack only once the page `settled` (loaded, then no signed-out
+ * redirect within the post-load window, D48), as `no_redirect_settled` (lower confidence: a later
+ * redirect or a sign-in modal reads the same); otherwise `inconclusive` (`timeout`, `network`,
+ * `http_<status>` ≥ 400, `no_signal`): sign-in cookies alone never make a site signed in, since a
+ * server that invalidated the session keeps them. A challenge is never `signed_out`. A visit of
+ * another path (the keeper's) never answers `no_redirect`: only the probe path's staying put means
+ * signed in.
  */
 export async function classifyPackProbe(
   pack: SitePackV1,

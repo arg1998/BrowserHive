@@ -340,8 +340,15 @@ export const TemplateDetailResponse = z.object({
 /** `GET /templates/{template_id}` body. */
 export type TemplateDetailResponse = z.infer<typeof TemplateDetailResponse>;
 
-/** `DELETE /templates/{template_id}` query: `force=true` closes live sessions first. */
-export const DeleteTemplateQuery = z.strictObject({ force: QueryBool.default(false) });
+/**
+ * `DELETE /templates/{template_id}` query: `force=true` closes live sessions first; `if_status`
+ * deletes only a template still in that status (409 `CONFLICT` otherwise), so the wizard's
+ * **Cancel setup** never deletes a template another tab finished meanwhile.
+ */
+export const DeleteTemplateQuery = z.strictObject({
+  force: QueryBool.default(false),
+  if_status: TemplateStatus.optional(),
+});
 /** `DELETE /templates/{template_id}` query. */
 export type DeleteTemplateQuery = z.infer<typeof DeleteTemplateQuery>;
 

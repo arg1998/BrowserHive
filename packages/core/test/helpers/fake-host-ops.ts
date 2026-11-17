@@ -1,4 +1,4 @@
-/** @module test/helpers/fake-host-ops — a scriptable `TemplateHostOps` for the recording service and route suites: a jar the test edits, a recording session that is open or not, and the calls made. */
+/** @module test/helpers/fake-host-ops — a scriptable `TemplateHostOps` for the recording service and route suites: a jar the test edits, the domains windows opened as pages, a recording session that is open or not, and the calls made. */
 
 import type { Session } from '../../src/domain/session/session.ts';
 import type { Cookie } from '../../src/ports/browser-driver.ts';
@@ -24,6 +24,13 @@ export class FakeTemplateHostOps implements TemplateHostOps {
 
   async jar(): Promise<readonly Cookie[] | null> {
     return this.jarCookies === null ? null : [...this.jarCookies];
+  }
+
+  /** Registrable domains a window opened as a page (main frame). */
+  visitedSites = new Set<string>();
+
+  pageSites(): ReadonlySet<string> {
+    return this.visitedSites;
   }
 
   async sharedWindows(): Promise<readonly SharedWindowView[]> {

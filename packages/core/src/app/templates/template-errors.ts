@@ -96,3 +96,14 @@ export function operationRunning(templateId: string): AppError<'CONFLICT'> {
     },
   );
 }
+
+/** `CONFLICT`: a delete conditioned on a status (the wizard's Cancel setup) found another one. */
+export function statusChanged(name: string, status: string): AppError<'CONFLICT'> {
+  return new AppError(
+    'CONFLICT',
+    {},
+    {
+      publicMessage: `Template '${name}' is no longer being set up (it is ${status}); delete it from its page if you meant to.`,
+    },
+  );
+}

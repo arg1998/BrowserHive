@@ -1,4 +1,4 @@
-/** @module domain/site-packs/probe-classify.test — the pack probe's decision table (spec 13 §8.1): the cookie pre-check, then challenge → `challenged`, a `signed_out_redirects` final URL inside the pack's domains → `signed_out` `redirect`, the marker, the landmark, `no_redirect` (`no_redirect_settled` for an `either` probe), and every `inconclusive` reason; a challenge is never `signed_out`. */
+/** @module domain/site-packs/probe-classify.test — the pack probe's decision table (spec 13 §8.1): the cookie pre-check, then challenge → `challenged`, a `signed_out_redirects` final URL inside the pack's domains → `signed_out` `redirect`, the marker, the landmark, `no_redirect` (`no_redirect_settled` for an `either` probe) on the probe path or below it at a segment boundary (LinkedIn's `/feed/` → `/feed/foryou/`), a landing elsewhere on the site never signed in (review #85 M1), and every `inconclusive` reason; a challenge is never `signed_out`. */
 
 import { describe, expect, it } from 'bun:test';
 import { SitePackV1 } from '@browserhive/contracts/site-packs';
@@ -8,6 +8,7 @@ import {
   type PackProbeFacts,
   packCookiePrecheck,
   probeUrlOf,
+  samePlace,
 } from './probe-classify.ts';
 import { basePack } from './test-fixtures.ts';
 
@@ -155,6 +156,92 @@ describe('classifyPackProbe', () => {
     });
     const out = keeper({ finalUrl: 'https://www.linkedin.com/uas/login?next=/keep' });
     expect(await classifyPackProbe(pack, out)).toMatchObject({ outcome: 'signed_out' });
+  });
+
+  const redirectPack = SitePackV1.parse({
+    ...base,
+    signed_in: { ...base.signed_in, kind: 'redirect', cookie_names: ['li_at', 'liap'] },
+  });
+
+  it('the probe path or below it at a segment boundary has stayed put (LinkedIn /feed/ → /feed/foryou/, owner 2026-11-17)', async () => {
+    expect(
+      await classifyPackProbe(
+        redirectPack,
+        facts({ finalUrl: 'https://www.linkedin.com/feed/foryou/' }),
+      ),
+    ).toMatchObject({
+      outcome: 'signed_in',
+      reason: 'no_redirect',
+      finalUrl: 'https://www.linkedin.com/feed/foryou/',
+    });
+    expect(
+      await classifyPackProbe(pack, facts({ finalUrl: 'https://www.linkedin.com/feed/foryou/' })),
+    ).toMatchObject({ outcome: 'signed_in', reason: 'no_redirect_settled' });
+    // `/feedback` is not below `/feed/`; neither is another host.
+    expect(
+      await classifyPackProbe(
+        redirectPack,
+        facts({ finalUrl: 'https://www.linkedin.com/feedback' }),
+      ),
+    ).toMatchObject({ outcome: 'inconclusive', reason: 'no_signal' });
+    expect(
+      await classifyPackProbe(
+        redirectPack,
+        facts({ finalUrl: 'https://linkedin.com/feed/foryou/' }),
+      ),
+    ).toMatchObject({ outcome: 'inconclusive', reason: 'no_signal' });
+    // Below the probe path but an error page or a signed-out redirect is never signed in.
+    expect(
+      await classifyPackProbe(
+        redirectPack,
+        facts({ finalUrl: 'https://www.linkedin.com/feed/foryou/', status: 500 }),
+      ),
+    ).toMatchObject({ outcome: 'inconclusive', reason: 'http_500' });
+    const loginBelow = SitePackV1.parse({
+      ...base,
+      signed_in: {
+        ...base.signed_in,
+        kind: 'redirect',
+        signed_out_redirects: ['www.linkedin.com/feed/login*'],
+      },
+    });
+    expect(
+      await classifyPackProbe(
+        loginBelow,
+        facts({ finalUrl: 'https://www.linkedin.com/feed/login?x=1' }),
+      ),
+    ).toMatchObject({ outcome: 'signed_out', reason: 'redirect' });
+  });
+
+  it('samePlace: segment boundaries, trailing slashes, and a root probe path covers only itself', () => {
+    const at = (path: string) =>
+      SitePackV1.parse({
+        ...base,
+        signed_in: { ...base.signed_in, probe: { host: 'h.test', path } },
+      });
+    expect(samePlace(at('/feed/'), 'https://h.test/feed', '/feed/')).toBe(true);
+    expect(samePlace(at('/feed/'), 'https://h.test/feed/foryou/', '/feed/')).toBe(true);
+    expect(samePlace(at('/feed'), 'https://h.test/feed/x', '/feed')).toBe(true);
+    expect(samePlace(at('/feed'), 'https://h.test/feedback', '/feed')).toBe(false);
+    expect(samePlace(at('/feed/'), 'https://H.TEST/feed/a/b?x=1', '/feed/')).toBe(true);
+    expect(samePlace(at('/'), 'https://h.test/', '/')).toBe(true);
+    expect(samePlace(at('/'), 'https://h.test/anything', '/')).toBe(false);
+    expect(samePlace(at('/feed/'), 'not a url', '/feed/')).toBe(false);
+  });
+
+  it('a landing elsewhere on the site stays “couldn’t tell”, never signed in (review #85 M1)', async () => {
+    // A server that invalidated the session keeps the cookies and may land anywhere not listed as
+    // signed out (LinkedIn's /, Google's re-auth page): only the probe path staying put counts.
+    for (const finalUrl of [
+      'https://www.linkedin.com/',
+      'https://www.linkedin.com/jobs/',
+      'https://www.linkedin.com/somewhere',
+    ]) {
+      expect(await classifyPackProbe(redirectPack, facts({ finalUrl }))).toMatchObject({
+        outcome: 'inconclusive',
+        reason: 'no_signal',
+      });
+    }
   });
 
   it('a selector read that throws counts as absent', async () => {

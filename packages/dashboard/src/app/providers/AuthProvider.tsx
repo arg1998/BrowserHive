@@ -1,4 +1,4 @@
-/** @module app/providers/AuthProvider — owns the API client (interceptors) and the auth machine, caches the last known principal so transient probe failures keep the shell; `useAuth()`, `useApi()` (spec 04 §4.1) */
+/** @module app/providers/AuthProvider — owns the API client (interceptors) and the auth machine, caches the last known principal so transient probe failures keep the shell, forgets the tab's work in progress (`sessionStorage`) on sign-out or a 401; `useAuth()`, `useApi()` (spec 04 §4.1) */
 import { AuthPrincipal } from '@browserhive/contracts/http';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -18,7 +18,12 @@ import type { FetchLike } from '@/lib/api/http.ts';
 import { buildId, type ClientErrorSink, createClientErrorSink } from '@/lib/client-errors.ts';
 import { browserClock } from '@/lib/clock.ts';
 import { useServerClock } from '@/lib/server-now.ts';
-import { readStorageJson, removeStorage, writeStorageJson } from '@/lib/storage.ts';
+import {
+  clearTabStorage,
+  readStorageJson,
+  removeStorage,
+  writeStorageJson,
+} from '@/lib/storage.ts';
 import {
   AUTH_PROBE_TIMEOUT_MS,
   type AuthEvent,
@@ -161,6 +166,11 @@ export function AuthProvider({ children, fetch: fetchImpl, probeTimeoutMs }: Aut
     if (state.principal === null) removeStorage(PRINCIPAL_CACHE_KEY);
     else writeStorageJson(PRINCIPAL_CACHE_KEY, state.principal);
   }, [state.principal]);
+
+  // Signed out (Log out, or a 401 that ended the session): the tab's work in progress goes too.
+  useEffect(() => {
+    if (state.status === 'login') clearTabStorage();
+  }, [state.status]);
 
   const value = useMemo<AuthApi>(
     () => ({

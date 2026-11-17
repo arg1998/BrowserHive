@@ -18,7 +18,7 @@ import type { SessionService } from '../sessions/session-service.ts';
 import type { TemplateHostOperations } from './host-operations.ts';
 import type { TemplateHostSupervisor } from './host-supervisor.ts';
 import type { TemplateHealthService } from './template-health.ts';
-import { NO_PACKS, providerLookup, type TemplatePacks } from './template-packs.ts';
+import { NO_PACKS, packSignInOf, providerLookup, type TemplatePacks } from './template-packs.ts';
 import type { TemplateStateService } from './template-state.ts';
 
 /** The states a re-login is still running in. */
@@ -52,7 +52,8 @@ export interface Running {
 export interface ReloginRunsDeps {
   readonly repos: Pick<Repositories, 'templateSites'>;
   readonly supervisor: Pick<TemplateHostSupervisor, 'pause'>;
-  readonly ops: Pick<TemplateHostOperations, 'jar'>;
+  readonly ops: Pick<TemplateHostOperations, 'jar'> &
+    Partial<Pick<TemplateHostOperations, 'pageSites'>>;
   readonly sessions: Pick<SessionService, 'close' | 'peek'>;
   readonly health: Pick<TemplateHealthService, 'record'>;
   readonly state?: Pick<TemplateStateService, 'saveVersion'>;
@@ -193,6 +194,11 @@ export class ReloginRuns {
     const unlisted = unlistedDomains(
       jar,
       sites.map((s) => s.siteId),
+      {
+        packOf: (domain) => packSignInOf(deps.packs, domain),
+        visited: deps.ops.pageSites?.(template.templateId) ?? new Set(),
+        now: deps.clock.now(),
+      },
     );
     run.view = { ...run.view, version, unlisted_domains: unlisted };
     await this.end(run, 'signed_in', null);

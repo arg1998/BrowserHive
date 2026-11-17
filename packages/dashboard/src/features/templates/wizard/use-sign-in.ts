@@ -1,4 +1,4 @@
-/** @module features/templates/wizard/use-sign-in — the sign-in step's state and actions (spec 13 §7.1): the template and its recording window kept current (the `templates` topic plus a slow poll), opening the window (restarting a failed browser first), **I'm signed in** per site, Finish, closing the window, and the error state the step is in */
+/** @module features/templates/wizard/use-sign-in — the sign-in step's state and actions (spec 13 §7.1): the template and its recording window kept current (the `templates` topic plus a slow poll), opening the window (restarting a failed browser first), **I'm signed in** per site, Finish, closing the window, **Cancel setup** (deletes the template still being set up, closing its window), and the error state the step is in */
 import { useEffect, useState } from 'react';
 import { useApi } from '@/app/providers/AuthProvider.tsx';
 import { useToast } from '@/app/providers/ToastProvider.tsx';
@@ -87,6 +87,29 @@ export function useSignIn(templateId: string) {
       return false;
     }
   };
+  /**
+   * Delete the template still being set up; `true` once deleted. It reads the template again first
+   * (another tab may have finished it), closes the sign-in window, then deletes only while the
+   * server still has it being set up (`if_status`), never closing anyone's session.
+   */
+  const cancelSetup = async (): Promise<boolean> => {
+    const fresh = await detail.refetch();
+    if (fresh.data?.template.status !== 'recording') {
+      toast.warning({
+        title: 'This template is no longer being set up',
+        description: 'Nothing was deleted. Delete it from its page if you meant to.',
+      });
+      return false;
+    }
+    if (!(await closeWindow())) return false;
+    try {
+      await m.cancelSetup.mutateAsync();
+      return true;
+    } catch {
+      // The mutation's toast says why (`CONFLICT`, `TEMPLATE_IN_USE`); the step stays.
+      return false;
+    }
+  };
   const confirmingSite = m.confirm.isPending ? (m.confirm.variables ?? null) : null;
   return {
     detail,
@@ -98,9 +121,11 @@ export function useSignIn(templateId: string) {
     opening: m.startRecording.isPending,
     finishing: m.finish.isPending,
     closing: m.cancel.isPending,
+    cancelling: m.cancelSetup.isPending,
     open,
     confirmSite,
     finish,
     closeWindow,
+    cancelSetup,
   };
 }

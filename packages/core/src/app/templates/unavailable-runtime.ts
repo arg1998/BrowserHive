@@ -61,6 +61,10 @@ export class UnavailableTemplateHostOps implements TemplateHostOps {
     return null;
   }
 
+  pageSites(): ReadonlySet<string> {
+    return new Set();
+  }
+
   async sharedWindows(): Promise<readonly SharedWindowView[]> {
     return [];
   }

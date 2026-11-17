@@ -1,4 +1,4 @@
-/** @module app/templates/template-packs — what the template services need from the site-pack registry (spec 13 §9.6, T3a): approval on first use when a site is added, the pack in force for a site's view, its identity provider (notification threads) and `human_only` (no vault re-login). `NO_PACKS` is the answer when packs are off or not wired. */
+/** @module app/templates/template-packs — what the template services need from the site-pack registry (spec 13 §9.6, T3a): approval on first use when a site is added, the pack in force for a site's view, a pack's sign-in cookies (detection and unlisted sign-ins), its identity provider (notification threads) and `human_only` (no vault re-login). `NO_PACKS` is the answer when packs are off or not wired. */
 
 import type { TemplateSitePack, TemplateStrategyNote } from '@browserhive/contracts/http';
 import type { SitePackV1 } from '@browserhive/contracts/site-packs';
@@ -45,6 +45,33 @@ export interface TemplatePacks {
    * apply in full on this machine (spec 13 §9.4; D49, D50); absent or `[]` without one.
    */
   strategyNotes?(packId: string | null, settings: StrategyNoteSettings): TemplateStrategyNote[];
+}
+
+/** A pack's sign-in cookies as the jar rules read them (`domains`, `cookie_names`). */
+export interface PackSignIn {
+  readonly domains: readonly string[];
+  readonly cookieNames: readonly string[];
+}
+
+/**
+ * The sign-in cookies of the pack that covers a registrable domain (in force, else on offer), or
+ * `null` when no pack covers it or the pack names none (spec 13 §2.3, §7.1).
+ */
+export function packSignInOf(packs: TemplatePacks | undefined, domain: string): PackSignIn | null {
+  const packId = packs?.packIdFor?.(domain) ?? null;
+  if (packId === null) return null;
+  return packSignInById(packs, packId);
+}
+
+/** {@link packSignInOf} for a known pack id (a template site's `pack_id`). */
+export function packSignInById(
+  packs: TemplatePacks | undefined,
+  packId: string | null,
+): PackSignIn | null {
+  if (packId === null) return null;
+  const pack = packs?.detail?.(packId).pack ?? null;
+  if (pack === null || pack.signed_in.cookie_names.length === 0) return null;
+  return { domains: pack.domains, cookieNames: pack.signed_in.cookie_names };
 }
 
 /** A refusal a site's pack causes (spec 13 §11.1 `POST /templates` 400 cases, §9.4 `stealth-profile`). */

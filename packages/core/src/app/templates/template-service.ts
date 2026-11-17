@@ -1,5 +1,6 @@
 /** @module app/templates/template-service — session templates as data: create, list, read and delete for operators; listing and the launch gate for agents (spec 13 §2, §5.1–§5.3, §6.1, §11.1; D-49, D-52). The host side (hosts, windows, admission) is behind `TemplateRuntime`. */
 
+import type { TemplateStatus } from '@browserhive/contracts/enums';
 import type {
   DeleteTemplateResponse,
   Template,
@@ -51,6 +52,7 @@ import {
   notFoundForAgent,
   notFoundForOperator,
   operationRunning,
+  statusChanged,
 } from './template-errors.ts';
 import { pageTemplates } from './template-list.ts';
 import { TemplateLocks } from './template-locks.ts';
@@ -182,10 +184,18 @@ export class TemplateService {
    */
   async remove(
     templateId: string,
-    options: { readonly force: boolean; readonly by: string },
+    options: {
+      readonly force: boolean;
+      readonly by: string;
+      /** Delete only while the template is in this status (the wizard's Cancel setup). */
+      readonly ifStatus?: TemplateStatus | undefined;
+    },
   ): Promise<DeleteTemplateResponse> {
     const template = await this.#deps.repos.templates.get(templateId);
     if (template === null) throw notFoundForOperator(templateId);
+    if (options.ifStatus !== undefined && template.status !== options.ifStatus) {
+      throw statusChanged(template.name, template.status);
+    }
     // From here no launch of this template starts (`launch` checks synchronously before it begins).
     const release = this.#locks.beginDelete(templateId);
     if (release === null) throw deleteRunning(templateId);

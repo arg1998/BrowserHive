@@ -1,5 +1,5 @@
 /// <reference lib="dom" />
-/** @module test/integration/template-recording.test — recording a template on a real host (spec 13 §7.1 step 5, §3.1, §3.3, §2.2; §17 T1a acceptance): the marked sign-in window with one tab per site, agent windows stepping aside, a pack-less site confirmed by **I'm signed in** with learned cookie names, an unlisted sign-in listed and removed at Finish, no saved password after a password form, and the pinned identity surviving restarts and a changed `TZ`. */
+/** @module test/integration/template-recording.test — recording a template on a real host (spec 13 §7.1 step 5, §3.1, §3.3, §2.2; §17 T1a acceptance): the marked sign-in window with one tab per site, agent windows stepping aside, a pack-less site confirmed by **I'm signed in** with learned cookie names, an unlisted sign-in listed and removed at Finish, sign-ins on redirect hops and in popups listed but never an embedded frame's (kept across a restart), no saved password after a password form, and the pinned identity surviving restarts and a changed `TZ`. */
 
 import { afterEach, describe, expect, it } from 'bun:test';
 import { spawnSync } from 'node:child_process';
@@ -168,6 +168,46 @@ for (const stealth of STEALTH_LEGS) {
       expect(prefs.profile?.password_manager_enabled).toBe(false);
       await w.supervisor.stopAll();
       expect(profileHasSecrets(userdata)).toBe(false);
+    });
+
+    it('lists sign-ins made on redirect hops and in popups, never an embedded frame’s; across a restart (review #85 H1, M3, M4)', async () => {
+      world = await templateWorld(stealth);
+      const w = world;
+      const { service, repos } = await recorder(w);
+      const id = w.template.templateId;
+      const started = await service.start(id, {}, { subject: 'operator' });
+      const recording = w.sessions.peek(started.session_id);
+      if (recording === undefined) throw new Error('no recording');
+      const tab = (await w.sessions.newTab(recording)).page;
+      // An SSO bounce: idp.test sets its cookie on a 302 hop, the window lands back on site-a.
+      await tab.goto(
+        `https://site-a.test/redir?to=${encodeURIComponent('https://idp.test/bounce-set?to=https://site-a.test/landing')}`,
+      );
+      expect(tab.url()).toBe('https://site-a.test/landing');
+      // An embedded frame sets a sign-in-shaped cookie on cdn-a.test: not a page of the window.
+      await tab.goto('https://site-a.test/embed-set');
+      await until(
+        () => tab.frames().some((f) => f.url().startsWith('https://cdn-a.test/')),
+        10_000,
+      );
+      // A popup's first request is the hop that sets site-b's cookie.
+      const popup = tab.waitForEvent('popup');
+      await tab.click('#popup-set');
+      await (await popup).waitForLoadState('load');
+      const jar = await w.host().jar();
+      expect(jar.some((c) => c.name === 'frame_sid' && c.domain.endsWith('cdn-a.test'))).toBe(true);
+      const sites = async () => await repos.templateSites.list(id);
+      let unlisted: string[] = [];
+      for (let i = 0; i < 50 && unlisted.length < 2; i += 1) {
+        unlisted = await service.unlisted(id, await sites());
+        if (unlisted.length < 2) await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      expect(unlisted).toEqual(['idp.test', 'site-b.test']);
+      // A new browser process still knows which domains its windows opened.
+      await service.cancel(id, 'operator');
+      await w.supervisor.stopAll();
+      await w.launch('after-restart');
+      expect(await service.unlisted(id, await sites())).toEqual(['idp.test', 'site-b.test']);
     });
 
     it('keeps the pinned locale, timezone and identity across restarts and a changed TZ', async () => {

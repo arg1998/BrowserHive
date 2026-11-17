@@ -4,9 +4,10 @@ import type { ReloginView, TemplateDetailResponse } from '@browserhive/contracts
 import { unlistedDomains } from '../../domain/templates/sign-ins.ts';
 import type { Clock } from '../../ports/clock.ts';
 import type { Repositories, TemplateVersionRepository } from '../../ports/persistence/index.ts';
+import type { TemplateFiles } from '../../ports/template-files.ts';
 import type { TemplateHostOps, TemplateRuntime } from '../../ports/template-runtime.ts';
 import { notFoundForOperator } from './template-errors.ts';
-import type { TemplatePacks } from './template-packs.ts';
+import { packSignInOf, type TemplatePacks } from './template-packs.ts';
 import { storedUnlisted } from './template-reads.ts';
 import { toTemplateDetail } from './views.ts';
 
@@ -14,8 +15,11 @@ import { toTemplateDetail } from './views.ts';
 export interface TemplateDetailDeps {
   readonly repos: Pick<Repositories, 'templates' | 'templateSites'>;
   readonly runtime: Pick<TemplateRuntime, 'host' | 'liveSessions'>;
-  readonly ops?: Pick<TemplateHostOps, 'jar' | 'sharedWindows'>;
+  readonly ops?: Pick<TemplateHostOps, 'jar' | 'sharedWindows'> &
+    Partial<Pick<TemplateHostOps, 'pageSites'>>;
   readonly versions?: Pick<TemplateVersionRepository, 'list'>;
+  /** The domains windows opened as pages, kept across restarts (unlisted sign-ins, §2.3). */
+  readonly files?: Pick<TemplateFiles, 'pageSites'>;
   readonly clock: Clock;
   /** The packs in force for the sites' views (T3a). */
   readonly packs?: TemplatePacks;
@@ -46,8 +50,18 @@ export async function readTemplateDetail(
   const own = sites.map((s) => s.siteId);
   const unlisted =
     jar === null
-      ? await storedUnlisted(deps.versions, templateId, new Set(own))
-      : unlistedDomains(jar, own);
+      ? await storedUnlisted(
+          deps.versions,
+          templateId,
+          new Set(own),
+          deps.packs,
+          new Set((await deps.files?.pageSites?.(templateId)) ?? []),
+        )
+      : unlistedDomains(jar, own, {
+          packOf: (domain) => packSignInOf(deps.packs, domain),
+          visited: deps.ops?.pageSites?.(templateId) ?? new Set(),
+          now: deps.clock.now(),
+        });
   return toTemplateDetail(
     template,
     sites,
