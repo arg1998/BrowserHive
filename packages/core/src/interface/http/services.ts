@@ -53,7 +53,7 @@ export type SessionsPort = Pick<SessionService, 'peek' | 'listAll' | 'close' | '
 /** The operator side of attention (a structural slice of `AttentionService`). */
 export type AttentionPort = Pick<
   AttentionService,
-  'openCount' | 'history' | 'facets' | 'resolve' | 'reject' | 'isInputPermitted'
+  'openCount' | 'history' | 'facets' | 'resolve' | 'reject' | 'decideInBulk' | 'isInputPermitted'
 >;
 
 /** Bindings/policies administration (a structural slice of `VaultAdmin`). */

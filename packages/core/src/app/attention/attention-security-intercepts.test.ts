@@ -111,4 +111,19 @@ describe('/attention and security intercepts', () => {
       template_id: 'tp-aaaaaaaaaa',
     });
   });
+  it('bulk resolve refuses security intercepts and decides attention requests (review S-H2)', async () => {
+    const h = harness();
+    const attention = await h.broker.open({
+      kind: 'attention',
+      sessionId: SESSION,
+      owner: 'agent-1',
+      reason: 'r',
+    });
+    const write = await h.intercept();
+    await expect(h.service.decideInBulk(write.id, 'resolve', 'admin')).rejects.toMatchObject({
+      code: 'VALIDATION_FAILED',
+    });
+    expect(await h.service.decideInBulk(attention.id, 'resolve', 'admin')).toBe('resolved');
+    expect(h.broker.listOpen('security_intercept')).toHaveLength(1);
+  });
 });

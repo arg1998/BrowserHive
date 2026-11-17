@@ -23,7 +23,7 @@ import {
   sitePackStateFromRow,
   sitePackStateToRow,
 } from '../mappers/site-packs.ts';
-import { asNumber, clampLimit, decodeCursor, toPage } from './common.ts';
+import { asNumber, clampLimit, decodeCursor, like, toPage } from './common.ts';
 
 /** Decisions that leave a candidate open (`idx_site_pack_changes_pending`). */
 const PENDING: readonly SitePackDecisionValue[] = ['available', 'downloaded'];
@@ -191,7 +191,21 @@ export class SqliteSiteGuardHitRepository implements SiteGuardHitRepository {
       qb = qb.where('action', 'in', [...query.actions]);
     }
     if (query.window?.since !== undefined) qb = qb.where('ts', '>=', query.window.since);
-    if (query.window?.until !== undefined) qb = qb.where('ts', '<', query.window.until);
+    // Inclusive: the timeline pages on `(ts, event_id)` and passes the cursor's `ts` as `until`.
+    if (query.window?.until !== undefined) qb = qb.where('ts', '<=', query.window.until);
+    if (query.excludeApproved === true) {
+      qb = qb.where((eb) => eb.or([eb('outcome', 'is', null), eb('outcome', '!=', 'approved')]));
+    }
+    const term = query.q;
+    if (term !== undefined && term !== '') {
+      qb = qb.where((eb) =>
+        eb.or([
+          like(sql.ref('url'), term),
+          like(sql.ref('pack_id'), term),
+          like(sql.ref('guard_id'), term),
+        ]),
+      );
+    }
     if (cursor !== null) {
       const ts = Number(cursor.key);
       qb = qb.where(sql<boolean>`(ts < ${ts} OR (ts = ${ts} AND event_id < ${cursor.id}))`);

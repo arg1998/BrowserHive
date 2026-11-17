@@ -23,7 +23,6 @@ import type {
 } from '../../ports/persistence/analytics.ts';
 import type { DomainCount } from '../../ports/persistence/pages.ts';
 import type { Page, TopDomainsQuery } from '../../ports/persistence/queries.ts';
-import type { SiteGuardHitRecord } from '../../ports/persistence/site-packs.ts';
 import type { Repositories } from '../../ports/persistence/unit-of-work.ts';
 import type { WriteQueue } from '../../ports/persistence/write-queue.ts';
 import type { DB } from './generated/db.d.ts';
@@ -325,10 +324,16 @@ export class SqliteAnalyticsQueries implements AnalyticsQueries {
         items.push({ kind: 'blocked', ts: item.ts, id: timelineId('blocked', item.eventId), item });
     }
     if (kinds.has('guard')) {
+      // Filters run in SQL before the `limit + 1` cut, and `until` is inclusive like the other
+      // sources, so paging never drops a row (review PR #83 M7).
       const page = await this.#repos.siteGuardHits.list({
         limit: limit + 1,
         sessionId,
-        ...(errorsOnly && { actions: ['block', 'confirm', 'held'] as const }),
+        ...(errorsOnly && {
+          actions: ['block', 'confirm', 'held'] as const,
+          excludeApproved: true,
+        }),
+        ...(query.q !== undefined && query.q !== '' && { q: query.q }),
         ...((query.since !== undefined || until !== undefined) && {
           window: {
             ...(query.since !== undefined && { since: query.since }),
@@ -336,10 +341,7 @@ export class SqliteAnalyticsQueries implements AnalyticsQueries {
           },
         }),
       });
-      const q = query.q?.toLowerCase();
       for (const item of page.items) {
-        if (errorsOnly && item.outcome === 'approved') continue;
-        if (q !== undefined && q !== '' && !guardMatches(item, q)) continue;
         items.push({ kind: 'guard', ts: item.ts, id: timelineId('guard', item.eventId), item });
       }
     }
@@ -635,9 +637,4 @@ export class SqliteAnalyticsQueries implements AnalyticsQueries {
       sessions: asNumber(r.sessions),
     }));
   }
-}
-
-/** The timeline's free text over a guard hit: its URL, pack and guard id. */
-function guardMatches(item: SiteGuardHitRecord, q: string): boolean {
-  return [item.url, item.packId, item.guardId].some((v) => v.toLowerCase().includes(q));
 }

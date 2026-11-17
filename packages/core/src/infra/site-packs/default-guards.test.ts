@@ -32,7 +32,11 @@ describe('DEFAULT_GUARDS', () => {
       'GET',
       'google-oauth-consent',
     ],
-    ['https://accounts.google.com/signin/oauth/consent/approve', 'POST', 'google-oauth-consent'],
+    [
+      'https://accounts.google.com/signin/oauth/consent/approve',
+      'POST',
+      'google-oauth-consent-unversioned',
+    ],
     ['https://github.com/login/oauth/authorize', 'POST', 'github-oauth-approve'],
     ['https://github.com/login/oauth/authorize?client_id=x', 'POST', 'github-oauth-approve'],
     ['https://github.com/login/device/authorize', 'POST', 'github-device-approve'],
@@ -69,15 +73,23 @@ describe('DEFAULT_GUARDS', () => {
     }
   });
 
-  it('the consent globs span the query string, failing closed (review S-L8, pinned)', () => {
-    // `*consent*` also matches a consent page reached with `prompt=consent` in the query, and an
-    // `adminconsent` anywhere after the host; the sign-in identifier step is never matched.
-    expect(ruleFor('https://accounts.google.com/signin/oauth/v2/x?prompt=consent', 'GET')).toBe(
-      defaultGuardRuleId('google-oauth-consent'),
+  it('the consent globs match the consent paths, not a query value (review S-L8)', () => {
+    const google = defaultGuardRuleId('google-oauth-consent');
+    const entra = defaultGuardRuleId('entra-admin-consent');
+    expect(ruleFor('https://accounts.google.com/signin/oauth/v3/consent?authuser=0', 'GET')).toBe(
+      google,
+    );
+    expect(ruleFor('https://accounts.google.com/signin/oauth/consent?x=1', 'GET')).toBe(
+      defaultGuardRuleId('google-oauth-consent-unversioned'),
     );
     expect(
+      ruleFor('https://login.microsoftonline.com/contoso/v2.0/adminconsent?client_id=x', 'GET'),
+    ).toBe(entra);
+    expect(ruleFor('https://login.microsoftonline.com/common/adminconsent', 'GET')).toBe(entra);
+    expect(ruleFor('https://accounts.google.com/signin/oauth/id?prompt=consent', 'GET')).toBeNull();
+    expect(
       ruleFor('https://login.microsoftonline.com/common/oauth2/authorize?adminconsent=1', 'GET'),
-    ).toBe(defaultGuardRuleId('entra-admin-consent'));
+    ).toBeNull();
     expect(
       ruleFor('https://accounts.google.com/v3/signin/identifier?prompt=consent', 'GET'),
     ).toBeNull();

@@ -33,12 +33,19 @@ export const DEFAULT_GUARDS: readonly DefaultGuard[] = Object.freeze([
   {
     // Observed: OAuth consent redirects to /signin/oauth/v3/consent. Approval request not
     // observable signed out (owner checklist item): every method on the consent pages is blocked.
-    // The glob spans the query string too (`?prompt=consent` on another oauth path): it fails
-    // closed, and the sign-in identifier step never matches (review S-L8, pinned by a test).
+    // The versioned path only, so `prompt=consent` in another path's query no longer matches (S-L8).
     id: 'google-oauth-consent',
     kind: 'credential',
     title: 'Google',
-    url: 'accounts.google.com/signin/oauth/*consent*',
+    url: 'accounts.google.com/signin/oauth/v?/consent*',
+    action: 'block',
+  },
+  {
+    // The same consent screen without a version segment (review round, VERIFICATION.md).
+    id: 'google-oauth-consent-unversioned',
+    kind: 'credential',
+    title: 'Google',
+    url: 'accounts.google.com/signin/oauth/consent*',
     action: 'block',
   },
   {
@@ -63,12 +70,12 @@ export const DEFAULT_GUARDS: readonly DefaultGuard[] = Object.freeze([
     action: 'block',
   },
   {
-    // learn.microsoft.com v2-admin-consent: /{tenant}/v2.0/adminconsent (and the v1 form).
-    // Spans the query string like the Google glob (`?adminconsent=`): fails closed (S-L8).
+    // learn.microsoft.com v2-admin-consent: /{tenant}/v2.0/adminconsent and /{tenant}/adminconsent;
+    // the path segment only, never a query value (S-L8).
     id: 'entra-admin-consent',
     kind: 'credential',
     title: 'Microsoft',
-    url: 'login.microsoftonline.com/*adminconsent*',
+    url: 'login.microsoftonline.com/*/adminconsent',
     action: 'block',
   },
   {

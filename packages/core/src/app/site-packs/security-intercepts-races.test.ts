@@ -55,7 +55,11 @@ describe('bounds under concurrency with slow storage (M3)', () => {
     await w.broker.resolve(open[0]?.requestId ?? '', { status: 'rejected' }, 'admin');
     const [first, other] = await second;
     expect(first.outcome).toBe('denied');
-    expect(other).toEqual({ outcome: 'cancelled', decidedBy: null, requestId: open[0]?.requestId ?? '' });
+    expect(other).toEqual({
+      outcome: 'cancelled',
+      decidedBy: null,
+      requestId: open[0]?.requestId ?? '',
+    });
   });
 
   it('20 concurrent writes on one session never pass the per-session bound', async () => {
