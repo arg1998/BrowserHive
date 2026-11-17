@@ -9,6 +9,7 @@ import {
 } from '@browserhive/contracts/http';
 import type { CommandContext } from '../deps.ts';
 import { EXIT, type ExitCode, type RemoteTarget } from '../invocation.ts';
+import { printableJson } from '../output/printable.ts';
 import { remoteCall } from './admin-remote.ts';
 
 /** The server and output mode of one `sitepacks` run. */
@@ -67,6 +68,25 @@ export function provenanceText(
 }
 
 /**
+ * One REST call for a `sitepacks` command. Its answer quotes pack data, so every string in it is
+ * made {@link printableJson printable} before it is parsed, printed or written as `--json`.
+ *
+ * @returns The printable JSON, or the exit code after printing the failure.
+ */
+export async function sitePackCall(
+  context: CommandContext,
+  remote: RemoteTarget,
+  method: string,
+  path: string,
+  body?: unknown,
+): Promise<
+  { readonly ok: true; readonly json: unknown } | { readonly ok: false; readonly code: ExitCode }
+> {
+  const result = await remoteCall(context, remote, method, path, body);
+  return result.ok ? { ok: true, json: printableJson(result.json) } : result;
+}
+
+/**
  * `GET /site-packs/{id}`.
  *
  * @returns The detail, or an exit code after printing the failure.
@@ -76,7 +96,7 @@ export async function fetchDetail(
   remote: RemoteTarget,
   packId: string,
 ): Promise<SitePackDetailResponse | ExitCode> {
-  const result = await remoteCall(context, remote, 'GET', packPath(packId));
+  const result = await sitePackCall(context, remote, 'GET', packPath(packId));
   if (!result.ok) return result.code;
   const parsed = SitePackDetailResponse.safeParse(result.json);
   return parsed.success ? parsed.data : unexpected(context, 'site pack');
@@ -93,7 +113,7 @@ export async function fetchDiff(
   packId: string,
   to: number | 'local',
 ): Promise<SitePackDiffResponse | ExitCode> {
-  const result = await remoteCall(context, remote, 'GET', packPath(packId, `/diff?to=${to}`));
+  const result = await sitePackCall(context, remote, 'GET', packPath(packId, `/diff?to=${to}`));
   if (!result.ok) return result.code;
   const parsed = SitePackDiffResponse.safeParse(result.json);
   return parsed.success ? parsed.data : unexpected(context, 'diff');

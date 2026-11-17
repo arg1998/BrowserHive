@@ -1,7 +1,7 @@
 /** @module app/site-packs/registry-local.test — unsigned local files (spec 13 §10.5, §17 T3a): inactive until approved per SHA-256, an edited file "changed since approval" while BrowserHive's copy keeps applying, `approve-local` with a stale hash refused, the override's precedence and audit, signed layouts skipped, invalid files reported, imports. */
 
 import { afterEach, describe, expect, it } from 'bun:test';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   createSitePackKit,
@@ -12,6 +12,7 @@ import {
   sitePack,
   writePack,
 } from '../../../test/helpers/site-pack-kit.ts';
+import { sha256Hex } from '../../domain/site-packs/load.ts';
 import { isAppError } from '../../kernel/errors/app-error.ts';
 
 let dirs: SitePackDirs;
@@ -170,5 +171,20 @@ describe('local files', () => {
     const bad = await errorOf(registry.importPack({ schema: 1 }, 'p-op'));
     expect(bad.code).toBe('SITE_PACK_INVALID');
     expect(bad.details).toMatchObject({ source: 'import' });
+  });
+
+  it('imports a file text byte for byte, so its SHA-256 is the file own one (review S-L2)', async () => {
+    dirs = makeDirs();
+    const { registry } = createSitePackKit({ dirs });
+    await registry.reload();
+    // Compact JSON without a trailing newline: re-serializing would change its hash.
+    const text = JSON.stringify(sitePack('site-c.test', 1));
+    const bytes = new TextEncoder().encode(text);
+    const result = await registry.importPackText(text, 'p-op');
+    expect(result.imported[0]?.sha256).toBe(sha256Hex(bytes));
+    expect(readFileSync(join(dirs.local, 'site-c.test.json'), 'utf8')).toBe(text);
+    expect(registry.get('site-c.test')?.local?.sha256).toBe(sha256Hex(bytes));
+    const bad = await errorOf(registry.importPackText('{"schema":1}', 'p-op'));
+    expect(bad.code).toBe('SITE_PACK_INVALID');
   });
 });

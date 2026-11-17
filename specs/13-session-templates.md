@@ -1480,8 +1480,8 @@ browserhive templates disable|enable <name>
 browserhive templates rm <name> [--force] [--yes]
 browserhive templates rekey --oldKeyEnv <ENV>
 browserhive sitepacks list [--source local|registry|bundled|import] [--pending] | show <id> | check
-browserhive sitepacks download <id> [--version <n>] | download --all | diff <id> [--to <version|local>]
-browserhive sitepacks apply <id> [--version <n>] | reject <id> [--version <n>] | revert <id> | pin <id> <version> | unpin <id>
+browserhive sitepacks download <id> [<version>] | download --all | diff <id> [--to <version|local>]
+browserhive sitepacks apply <id> [<version>] | reject <id> [<version>] | revert <id> | pin <id> <version> | unpin <id>
 browserhive sitepacks follow <id> on|off|auto | approve-local <id> [--yes] | enable <id> | disable <id>
 browserhive sitepacks import <dir|file> | export <dir> | reload | verify <path>
 ```

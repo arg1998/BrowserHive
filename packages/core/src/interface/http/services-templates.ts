@@ -24,6 +24,7 @@ export type SitePacksPort = Pick<
   | 'setEnabled'
   | 'reload'
   | 'importPack'
+  | 'importPackText'
   | 'changes'
   | 'guardHits'
 >;

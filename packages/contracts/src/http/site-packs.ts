@@ -335,9 +335,12 @@ export const SITE_PACK_IMPORT_MAX_BYTES = 1024 * 1024;
 
 /**
  * `POST /site-packs/import` body: one unsigned pack (stored in `sitePacksDir` as `<id>.json`, then
- * approved like any local file). Signed layouts (`{files}`) arrive with T4b and are refused (400).
+ * approved like any local file). `{text}` is the file's exact text: it is validated, hashed and
+ * stored byte for byte, so its SHA-256 is the file's own (what `sitepacks verify` prints); `{pack}`
+ * is a parsed pack, stored re-serialized. Signed layouts (`{files}`) arrive with T4b and are refused (400).
  */
 export const SitePackImportRequest = z.union([
+  z.strictObject({ text: z.string().min(1).max(SITE_PACK_IMPORT_MAX_BYTES) }),
   z.strictObject({ pack: z.unknown() }),
   z.strictObject({ files: z.record(z.string(), z.string()) }),
 ]);

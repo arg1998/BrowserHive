@@ -5,6 +5,7 @@ import type { TemplateSiteView } from '@browserhive/contracts/http';
 import { cliHarness } from './helpers.ts';
 import {
   BASE,
+  created,
   fakeServer,
   http,
   ID,
@@ -54,7 +55,7 @@ describe('templates create: flags', () => {
     ]);
     expect(result.code).toBe(0);
     expect(paths(server)).toEqual([`POST ${BASE}`]);
-    expect(server.calls[0]?.body).toEqual({
+    expect(created(server)?.body).toEqual({
       name: 'job-hunt',
       sites: [{ site_id: 'linkedin.com' }, { site_id: 'indeed.com' }],
       display_name: 'Job hunt',
@@ -77,7 +78,7 @@ describe('templates create: flags', () => {
   it('sends only the sites without optional flags, and [] for --allPrincipals', async () => {
     const plain = fakeServer({ 'a.test': 'unknown' });
     await run(plain, ['create', 'job-hunt', '--sites', 'a.test', '--noLogin', ...URL_FLAGS]);
-    expect(plain.calls[0]?.body).toEqual({ name: 'job-hunt', sites: [{ site_id: 'a.test' }] });
+    expect(created(plain)?.body).toEqual({ name: 'job-hunt', sites: [{ site_id: 'a.test' }] });
     const all = fakeServer({ 'a.test': 'unknown' });
     await run(all, [
       'create',
@@ -88,7 +89,7 @@ describe('templates create: flags', () => {
       '--noLogin',
       ...URL_FLAGS,
     ]);
-    expect(all.calls[0]?.body).toEqual({
+    expect(created(all)?.body).toEqual({
       name: 'job-hunt',
       sites: [{ site_id: 'a.test' }],
       headless: false,

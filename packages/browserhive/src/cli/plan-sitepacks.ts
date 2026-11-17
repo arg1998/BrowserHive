@@ -74,7 +74,7 @@ function sitePacksAction(name: string, input: PlanInput): SitePacksAction {
     case 'enable':
       return { kind: 'enable', packId };
     case 'disable':
-      return { kind: 'disable', packId };
+      return { kind: 'disable', packId, yes: reader.bool('yes') };
     default:
       reader.problems.push(`unsupported invocation '${name}'.`);
       return { kind: 'show', packId };

@@ -144,6 +144,24 @@ describe('sitepacks approve-local', () => {
     });
   });
 
+  it('approves the SHA-256 of the diff it printed; a file that changed in between is refused (review S-M3)', async () => {
+    const moved = packView({
+      pending: [],
+      local: {
+        path: '/data/site-packs/local/linkedin.com.json',
+        sha256: SHA_B,
+        state: 'changed',
+        approved_sha256: SHA_A,
+        problem: null,
+      },
+    });
+    const server = fakePackServer(moved);
+    const result = await run(server, ['approve-local', 'linkedin.com', '--yes', ...URL_FLAGS]);
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('changed while it was read');
+    expect(writes(server)).toEqual([]);
+  });
+
   it('refuses without a terminal unless --yes', async () => {
     const server = fakePackServer(changed());
     const refused = await run(server, ['approve-local', 'linkedin.com', ...URL_FLAGS]);
@@ -232,13 +250,48 @@ describe('sitepacks pin, unpin, follow, enable, disable', () => {
       'follow updates of linkedin.com: auto',
     ],
     [['enable', 'linkedin.com'], 'POST', '/enable', {}, 'enabled linkedin.com'],
-    [['disable', 'linkedin.com'], 'POST', '/disable', {}, 'disabled linkedin.com'],
   ])('%p', async (argv, method, tail, body, text) => {
     const server = fakePackServer();
     const result = await run(server, [...argv, ...URL_FLAGS]);
     expect(result.code).toBe(0);
     expect(result.stdout).toContain(text);
     expect(server.calls).toEqual([{ method, path: `${PACK}${tail}`, body }]);
+  });
+});
+
+describe('sitepacks disable (review S-M2)', () => {
+  it('refuses without a terminal unless --yes, and sends nothing', async () => {
+    const server = fakePackServer();
+    const result = await run(server, ['disable', 'linkedin.com', ...URL_FLAGS]);
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('refusing without confirmation, and stdin is not a terminal');
+    expect(writes(server)).toEqual([]);
+  });
+
+  it('says what stops applying, asks for the pack id, then disables', async () => {
+    const server = fakePackServer();
+    const result = await run(server, ['disable', 'linkedin.com', ...URL_FLAGS], {
+      answers: ['linkedin.com'],
+    });
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain(
+      'This turns off LinkedIn (linkedin.com) for every template (1 use it)',
+    );
+    expect(result.stdout).toContain('sign-out, account and credential guards');
+    expect(result.prompts).toEqual(['Type the pack id (linkedin.com) to confirm: ']);
+    expect(writes(server)).toEqual([`POST ${PACK}/disable`]);
+  });
+
+  it('--yes disables without asking; an already disabled pack needs nothing', async () => {
+    const server = fakePackServer();
+    const yes = await run(server, ['disable', 'linkedin.com', '--yes', ...URL_FLAGS]);
+    expect(yes.code).toBe(0);
+    expect(yes.stdout).toContain('disabled linkedin.com');
+    const off = fakePackServer(packView({ enabled: false }));
+    const again = await run(off, ['disable', 'linkedin.com', ...URL_FLAGS]);
+    expect(again.code).toBe(0);
+    expect(again.stdout).toContain('already disabled');
+    expect(writes(off)).toEqual([]);
   });
 });
 
@@ -308,7 +361,36 @@ describe('sitepacks import', () => {
     expect(result.code).toBe(0);
     expect(result.stdout).toContain('imported example.com v1 into the local folder');
     expect(result.stdout).toContain('browserhive sitepacks approve-local example.com');
-    expect(server.calls[0]?.body).toEqual({ pack: { schema: 1, id: 'example.com' } });
+    // The file's text, byte for byte (review S-L2): no re-serialization.
+    expect(server.calls[0]?.body).toEqual({
+      text: JSON.stringify({ schema: 1, id: 'example.com' }),
+    });
+    expect(result.stdout).toContain(`SHA-256 ${SHA_B}`);
+    expect(result.stdout).toContain('the stored content differs from /work/example.com.json');
+  });
+
+  it('prints no warning when the stored SHA-256 is the file own one', async () => {
+    const text = '{ "schema": 1, "id": "example.com" }\n';
+    const sha = new Bun.CryptoHasher('sha256').update(text).digest('hex');
+    const server = fakePackServer();
+    server.routes = (method, path) =>
+      method === 'POST' && path === '/api/v1/site-packs/import'
+        ? [
+            200,
+            {
+              imported: [
+                { pack_id: 'example.com', version: 1, state: 'not_approved', sha256: sha },
+              ],
+            },
+          ]
+        : undefined;
+    const memory = new MemoryFs({ '/work/example.com.json': text });
+    const result = await run(server, ['import', '/work/example.com.json', ...URL_FLAGS], {
+      fs: memory,
+    });
+    expect(result.code).toBe(0);
+    expect(server.calls[0]?.body).toEqual({ text });
+    expect(result.stdout).not.toContain('differs');
   });
 
   it('a signed layout folder or file is explained and not sent', async () => {

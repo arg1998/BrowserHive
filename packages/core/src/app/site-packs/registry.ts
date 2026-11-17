@@ -288,8 +288,23 @@ export class SitePackRegistry implements SitePackLookup {
    * `POST /site-packs/import` with one unsigned pack: stored in `sitePacksDir` as `<id>.json`, then
    * approved like any local file. @throws `SITE_PACK_INVALID`.
    */
-  async importPack(raw: unknown, by: string): Promise<SitePackImportResponse> {
-    const written = await this.#serial(() => actions.importPack(this.#core(), raw, by));
+  importPack(raw: unknown, by: string): Promise<SitePackImportResponse> {
+    return this.#imported(() => actions.importPack(this.#core(), raw, by));
+  }
+
+  /**
+   * `POST /site-packs/import` with one file's exact text: validated, hashed and stored byte for
+   * byte, so the SHA-256 to approve is the file's own. @throws `SITE_PACK_INVALID`.
+   */
+  importPackText(text: string, by: string): Promise<SitePackImportResponse> {
+    const bytes = new TextEncoder().encode(text);
+    return this.#imported(() => actions.importPackBytes(this.#core(), bytes, by));
+  }
+
+  async #imported(
+    write: () => Promise<{ packId: string; version: number; sha256: string }>,
+  ): Promise<SitePackImportResponse> {
+    const written = await this.#serial(write);
     await this.reload();
     const view = this.get(written.packId);
     return {

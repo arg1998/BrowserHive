@@ -2,14 +2,11 @@
 import { SitePacksResponse, type SitePackView } from '@browserhive/contracts/http';
 import type { CommandContext } from '../deps.ts';
 import { EXIT, type ExitCode, type Invocation, type SitePacksAction } from '../invocation.ts';
-import { remoteCall } from './admin-remote.ts';
 import { formatTimestamp } from './common.ts';
 import {
   runSitePacksApply,
   runSitePacksApproveLocal,
-  runSitePacksImport,
   runSitePacksReject,
-  runSitePacksReload,
   runSitePacksRevert,
   runSitePacksSetting,
 } from './sitepacks-actions.ts';
@@ -21,8 +18,10 @@ import {
   printPairs,
   provenanceText,
   type SitePacksTarget,
+  sitePackCall,
   unexpected,
 } from './sitepacks-common.ts';
+import { runSitePacksImport, runSitePacksReload } from './sitepacks-local.ts';
 
 type Of<K extends SitePacksAction['kind']> = Extract<SitePacksAction, { readonly kind: K }>;
 
@@ -108,7 +107,7 @@ async function runSitePacksList(
   if (action.sources.length > 0) query.set('source', action.sources.join(','));
   if (action.pending) query.set('pending', 'true');
   const suffix = query.size === 0 ? '' : `?${query.toString()}`;
-  const result = await remoteCall(context, target.remote, 'GET', `/site-packs${suffix}`);
+  const result = await sitePackCall(context, target.remote, 'GET', `/site-packs${suffix}`);
   if (!result.ok) return result.code;
   const parsed = SitePacksResponse.safeParse(result.json);
   if (!parsed.success) return unexpected(context, 'site pack list');

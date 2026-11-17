@@ -61,7 +61,7 @@ export const SITE_PACK_CASES: readonly RouteCase[] = [
     success: {
       method: 'POST',
       path: api('/site-packs/import'),
-      body: { pack: sitePack('site-b.test', 1) },
+      body: { text: JSON.stringify(sitePack('site-b.test', 1)) },
       status: 200,
     },
     invalid: { method: 'POST', path: api('/site-packs/import'), body: { other: true } },

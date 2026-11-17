@@ -43,7 +43,13 @@ With [`sitePacks`](../reference/configuration.md#sitePacks) set to `false`, Brow
 
 **No pack version applies until you have approved it**, whatever its source. Until then the site is a generic site.
 
-**First use.** When you add a site to a template (the dashboard's new-template wizard, adding a site on the template page, `browserhive templates create --sites`, or the REST API), BrowserHive shows the pack that would apply: its version, its SHA-256 and where it comes from ("bundled with BrowserHive 0.3.1", or a local file's path). Adding the site **approves that version**, in your name, with that provenance. The dashboard and the REST API approve exactly the version you were shown: if another version is on offer by the time you confirm, adding the site fails with `409 CONFLICT`, and you review the pack again. `templates create --sites` approves the version on offer when the command runs; check it first with `browserhive sitepacks show <pack>`.
+**First use.** When you add a site to a template (the dashboard's new-template wizard, adding a site on the template page, `browserhive templates create --sites`, or the REST API), BrowserHive shows the pack that would apply: its version, its SHA-256 and where it comes from ("bundled with BrowserHive 0.3.1", or a local file's path). Adding the site **approves that version**, in your name, with that provenance. Every way of adding a site sends the SHA-256 of the version you were shown, and BrowserHive approves exactly that one:
+
+- **The dashboard** waits until the catalog of packs has loaded before it lets you create the template, and sends the hash of each pack it showed you.
+- **`browserhive templates create --sites`** prints each site's pack (version, provenance, SHA-256, the site's terms, whether writes need confirmation) before it creates anything, asks you to type `yes` on a terminal, and refuses without one unless `--yes`. A pack that is already approved is listed and needs no answer.
+- **The REST API** takes the hash as `pack_sha256` on each site (`POST /templates`, `PUT /templates/{id}/sites/{site}`). A site whose pack still needs approval is refused without it, so nothing is approved that you were not shown.
+
+If another version is on offer by the time you confirm, adding the site fails with `409 CONFLICT`, and you review the pack again.
 
 **Packs are global.** One approval covers every template. A pack another template already uses keeps its approved version when you add its site to a second template. An approved, enabled pack applies to every template browser's pages on its domains, whether or not the template lists the site. What is per template is the site's [write policy](#write-policies-and-the-stance-rule).
 
@@ -57,13 +63,17 @@ With [`sitePacks`](../reference/configuration.md#sitePacks) set to `false`, Brow
 | **Revert** | **Revert** | `sitepacks revert <pack>` | Goes back to the previous approved version in one step. |
 | **Pin** | **Pin** | `sitepacks pin <pack> <version>`, `sitepacks unpin <pack>` | Keeps the approved version. Newer versions are listed as "pinned at v7, v9 available". |
 | **Follow updates** | **Follow updates** | `sitepacks follow <pack> on\|off\|auto` | Whether the pack lists pending updates, counts in the badge and sends [`site_pack.update_pending`](notifications.md#site-packs). `auto` (the default) follows a pack while a template uses it. |
-| Disable | **Disable** | `sitepacks disable <pack>`, `sitepacks enable <pack>` | A disabled pack applies nowhere: its sites are generic sites until you enable it again. |
+| Turn off | the **Enabled** switch | `sitepacks disable <pack>`, `sitepacks enable <pack>` | A disabled pack applies nowhere: its guards (sign-out, account and credential ones included) stop applying for every template, and its sites are generic sites until you enable it again. Turning a pack off asks for confirmation (the command line asks you to type the pack id, or takes `--yes`). |
 
 Every decision is recorded with who made it and when (`GET /api/v1/site-packs/changes`, and the audit log).
 
 **BrowserHive keeps a copy of what you approved.** At every approval it copies the version's exact bytes to `<data-dir>/site-packs/cache/<source>/<pack id>/<sha256>.json`. When a later release drops or changes a bundled version, or a local file is edited or deleted, the approved copy keeps applying. If that copy is missing or unreadable, the pack is not applied (its sites are generic) and the pack is listed as skipped (`not_found`).
 
 **Precedence.** For one pack id, approved local content wins over every other source; otherwise the approved version applies. A pack whose content comes from a local file says "Local file overrides v9" wherever it is shown.
+
+**A domain belongs to one pack.** Content that claims a domain another pack already covers is refused: approving or importing a local file that lists `github.com` while the GitHub pack covers it answers `409 CONFLICT` naming that pack, and nothing of the other pack changes. A version skipped for this reason names the pack that owns the domain.
+
+**One broken pack stays alone.** If BrowserHive cannot read one pack's stored approval, only that pack is left out (its sites are generic), and the Site packs page and `browserhive doctor` say so; every other pack keeps applying.
 
 ## Local packs
 
@@ -72,6 +82,8 @@ Put one file per pack in the local folder, named after the pack: `<sitePacksDir>
 ```bash
 browserhive sitepacks import ./example.com.json
 ```
+
+The command sends the file's text byte for byte, so the SHA-256 you approve is the file's own: the one `browserhive sitepacks verify` prints. It prints that SHA-256 after the import.
 
 A local file needs no signature, but it applies only once you have approved its content, **once per SHA-256**:
 
@@ -87,7 +99,7 @@ Approve on the pack page, or:
 browserhive sitepacks approve-local example.com
 ```
 
-The command prints the difference between what applies now and the file, then the SHA-256 it approves, and asks you to type the pack id (`--yes` skips the question; without a terminal it refuses unless `--yes`). BrowserHive then copies that content to `site-packs/cache/local/example.com/<sha256>.json`, so later edits to the file change nothing until you approve them again. If the file changed between the review and the approval, the approval is refused (`409 CONFLICT`): run it again to review the new content.
+The command prints the difference between what applies now and the file, then the SHA-256 it approves (the one of the content whose difference it printed), and asks you to type the pack id (`--yes` skips the question; without a terminal it refuses unless `--yes`). BrowserHive then copies that content to `site-packs/cache/local/example.com/<sha256>.json`, so later edits to the file change nothing until you approve them again. If the file changed between the review and the approval, the approval is refused (`409 CONFLICT`, or the command stops before sending anything): run it again to review the new content. The dashboard's **Approve** likewise approves the hash of the difference it shows, and waits while that difference reloads.
 
 ## Write policies and the stance rule
 
@@ -100,16 +112,16 @@ A pack records the site's terms on automation as a **stance**, quotes the clause
 | `restricted` | The site's terms restrict automated access | `warn`: writes go through and are recorded with a warning |
 | `allowed` | The site's terms allow automated access | `allow` |
 
-A pack that departs from the rule says why (`exception`), and the reason is shown to you. The clause is shown as text, with its address as plain text; it has no other effect. **You choose** a template's write policy per site: in the wizard, on the template's Sites tab, or with `PUT /api/v1/templates/{id}/sites/{site}` and `{"write_policy": "allow" | "warn" | "confirm" | null}` (`null` uses the pack's default). Packs with no `write` guards are not affected by it.
+A pack that departs from the rule says why (`exception`), and the reason is shown to you. The clause is shown as text, with its address as plain text; it has no other effect. **You choose** a template's write policy per site: in the wizard, on the template's Sites tab, or with `PUT /api/v1/templates/{id}/sites/{site}` and `{"write_policy": "allow" | "warn" | "confirm" | null}` (`null` uses the pack's default). **A pack with no `write` guards has nothing for the write policy to act on**: whatever you choose, no write waits for confirmation on that site. The wizard, the template's Sites tab, the pack page and `browserhive templates create` say so for such a pack.
 
 ## Guards
 
 Guards are checked in two places, both pure matching over the pack's data:
 
-- **In the browser, on every request** of a template's browser: by method, address and type (page loads, `fetch`, XHR, beacons, event streams). This is the enforcement point.
+- **In the browser, on every request** of a template's browser: by method, address and type. This is the enforcement point. Sign-out, account, credential and destructive guards match **every** type of request (page loads, `fetch`, XHR, beacons, images, scripts, stylesheets, prefetches, event streams, WebSocket handshakes and the rest), so an `<img src="/logout">` is stopped too, unless the guard names the types it covers (`resource_types`). Write guards match page loads, `fetch`, XHR and beacons unless they name others.
 - **In the tools, before the browser is touched**: `navigate` and `new_tab` check page-load guards, and `click`, `hover`, `select_option`, `drag_and_drop`, `fill`, `type_text` and `press_key` check element guards. An action is refused when its target **is** the guarded element **or is inside it** (a `<span>` in a guarded button). This is an earlier, friendlier refusal, not the boundary.
 
-A request belongs to the pack of its own address's registrable domain, not of the page that sent it. The first matching guard of that pack decides. A guard address without a trailing `*` also matches the same path with any query string and the paths beneath it: `www.example.com/logout` matches `/logout`, `/logout/x` and `/logout?next=/`, but not `/logout-help`. Percent-encoded letters and digits are decoded first, so `/log%6Fut` is `/logout`.
+A request belongs to the pack of its own address's registrable domain, not of the page that sent it. The first matching guard of that pack decides. A guard address without a trailing `*` also matches the same path with any query string and the paths beneath it: `www.example.com/logout` matches `/logout`, `/logout/x` and `/logout?next=/`, but not `/logout-help`. Before matching, the address is read the way a server reads it: percent-encoded letters and digits are decoded (`/log%6Fut` is `/logout`), encoded slashes and dots are decoded, repeated slashes collapse (`//logout` is `/logout`), `;parameters` in a path segment are dropped (`/logout;x=1` is `/logout`), and host names are compared without case or a trailing dot. Pattern matching takes time proportional to the address, whatever the pattern, and a pattern may hold only a few `*`.
 
 BrowserHive also applies built-in guards on every template page, with or without a pack: they block the OAuth consent approval of `accounts.google.com`, `github.com`, `login.microsoftonline.com` and `login.live.com`, so an agent cannot grant a third-party app access to the account.
 
@@ -120,9 +132,9 @@ BrowserHive also applies built-in guards on every template page, with or without
 | `warn` | The request goes on, with a [`SITE_GUARD_WARNED`](../reference/errors.md#SITE_GUARD_WARNED) warning on the session. | The action goes on. |
 | `write_policy` | The site's write policy decides: `allow`, `warn` or `confirm` as above. | The same. |
 
-**Write confirmations.** A held write shows on `/attention` with the method, the address (sanitized), the guard and its kind, the site and the tool call that triggered it. Its deadline is `attentionTimeout`, at least `minAttentionWait`. While it waits, the session gets a [`SITE_WRITE_HELD`](../reference/errors.md#SITE_WRITE_HELD) warning and its next tool call answers `SITE_OPERATOR_PENDING`; the agent can wait with `get_attention_result`. Bounds: one open write confirmation per session (a further matching write of that session is aborted), and at most 10 open site checks and write confirmations per template (beyond that, matching writes are aborted). Writes of kind `write` can also be approved from a [notification](notifications.md#site-packs); sign-out, account, credential and destructive guards only on `/attention`.
+**Write confirmations.** A held write shows on `/attention` with the method, the address (sanitized), the guard and its kind, the site and the tool call that triggered it. Its deadline is `attentionTimeout`, at least `minAttentionWait`. While it waits, the session gets a [`SITE_WRITE_HELD`](../reference/errors.md#SITE_WRITE_HELD) warning and its next tool call answers `SITE_OPERATOR_PENDING`; the agent can wait with `get_attention_result`. Bounds: one open write confirmation per session (a further matching write of that session is aborted), and at most 10 open site checks and write confirmations per template (beyond that, matching writes are aborted); the limits are checked before anything is opened, so requests arriving together cannot pass them, and one session cannot fill the template's limit alone. **Resolve all** on `/attention` never decides site checks or write confirmations: decide each one. Writes of kind `write` can also be approved from a [notification](notifications.md#site-packs); sign-out, account, credential and destructive guards only on `/attention`.
 
-**Requests with no session.** A request of the template's browser that belongs to no session (a service worker, a page you opened by hand) under a `confirm` guard is aborted, as under `block`.
+**Requests with no session.** A request of the template's browser that belongs to no agent session (a service worker, a page you opened by hand, a page BrowserHive opened for a health check) under a `confirm` guard is aborted, as under `block`.
 
 **Without the dashboard** (`transport=stdio`), nobody can answer: `confirm` acts as `block`, and challenges only mark the site's health.
 
@@ -136,7 +148,7 @@ A **challenge** is a page that needs a person: a security check, a CAPTCHA, a re
 - after the page loads, its title containing a pack's text, a pack's selector on the page, or a pack's text on the page;
 - a CAPTCHA provider's challenge (Cloudflare, reCAPTCHA, hCaptcha, Arkose, DataDome), but **only a visible one**: a provider's challenge frame, or a provider frame at least 100 × 60 pixels inside the viewport. Invisible checks and badges (reCAPTCHA v3, Turnstile in invisible mode) are ignored.
 
-Built-in challenges apply on every template page: the Cloudflare interstitial ("Just a moment", "Verify you are human") needs a person; any other visible provider challenge only marks the site's health.
+Site checks are raised only on a template's own sites and on the domains of approved packs; a challenge on any other site changes nothing. Built-in challenges apply on those pages: the Cloudflare interstitial ("Just a moment", "Verify you are human") needs a person; any other visible provider challenge only marks the site's health.
 
 What happens:
 
@@ -182,14 +194,14 @@ Packs come from a source you trust less than yourself (a release, later a regist
 | Field | Bound |
 |---|---|
 | `sign_in.url` | `https` only, a host inside the pack's domains, a path with no query. Shown in full before a sign-in window opens. |
-| `domains` | Overlapping domains are refused. A new domain is shown in the difference and needs your approval. |
+| `domains` | A domain another pack covers is refused, also for a local file you approve. A new domain is shown in the difference and needs your approval. |
 | Pages BrowserHive loads by itself (the probe page) | A path inside the domains, no query, and never one of the pack's own sign-out, account, credential or destructive guards. During a check, page loads that leave the domains are aborted. |
-| `guards` | The glob grammar only (`*` and `?`), hosts inside the pack's domains, at most 64. |
+| `guards` | The glob grammar only (`*` and `?`, a few `*` per pattern, matched in linear time), hosts inside the pack's domains, at most 64. |
 | `challenges` | Per-session and per-template bounds on Site checks; an agent's own navigation never triggers one. |
 | `signed_in` | Cookie **names** only, never values. A re-login never starts on `challenged` or "couldn't tell". |
 | Numbers (sessions, pacing, intervals) | Floors and ceilings built into BrowserHive; sessions never above the template's own cap. |
 | Selectors | Standard CSS only, at most 200 characters and 4 selectors per list, one `:has(`, a short list of allowed pseudo-classes, no Playwright extensions; only ever counted, never run. |
-| Any text | Shown as text, never as HTML or a one-click link; escaped in notifications; length limits on every field; 64 KiB per pack. |
+| Any text | Control characters (terminal escape sequences) and Unicode bidi and format characters (which reverse or hide text) are refused in every field, and `verify` reports them. Text is shown as text, never as HTML or a one-click link, isolated from the text around it in the dashboard, with any such character replaced by `�` on the command line, and escaped in notifications; length limits on every field; 64 KiB per pack. |
 | `strategies` | Only names built into this BrowserHive; an unknown name skips the version. |
 
 No pack field is ever sent anywhere, and every address a pack can make the browser load is inside its approved domains.
@@ -314,9 +326,9 @@ Packs without write guards (all of these for now) leave the write policy with no
 | Apply, reject, revert | `sitepacks apply\|reject\|revert <pack>` | `POST /site-packs/{pack}/apply`, `/reject`, `/revert` |
 | Pin, follow | `sitepacks pin\|unpin\|follow <pack> …` | `PUT /site-packs/{pack}/pin`, `/follow` |
 | Approve a local file | `sitepacks approve-local <pack>` | `POST /site-packs/{pack}/approve-local` `{sha256}` |
-| Enable, disable | `sitepacks enable\|disable <pack>` | `POST /site-packs/{pack}/enable`, `/disable` |
+| Enable, disable | `sitepacks enable\|disable <pack>` (disable asks first, or `--yes`) | `POST /site-packs/{pack}/enable`, `/disable` |
 | Read the folder again | `sitepacks reload` | `POST /site-packs/reload` |
-| Import one pack file | `sitepacks import <file>` | `POST /site-packs/import` `{pack}` |
+| Import one pack file | `sitepacks import <file>` | `POST /site-packs/import` `{text}` (the file's exact text) or `{pack}` (a parsed pack, stored re-serialized) |
 | Check a file offline | `sitepacks verify <file>` | — |
 | Decisions and guard hits | — | `GET /site-packs/changes`, `GET /site-packs/guard-hits` |
 

@@ -193,6 +193,7 @@ function createInvocation(
   const timezone = reader.text('timezone');
   const proxy = proxyInput(reader);
   const policy = policyInput(input);
+  const yes = reader.bool('yes');
   const fromStateRaw = reader.text('fromState');
   const fromState = fromStateRaw === undefined ? null : absolutePath(input, fromStateRaw);
   if (fromState !== null && reader.bool('noLogin')) {
@@ -218,6 +219,7 @@ function createInvocation(
     noLogin,
     timeoutMs,
     fromState,
+    yes,
     json,
     remote,
   });

@@ -124,8 +124,9 @@ export async function auditReload(
 }
 
 /**
- * Stores one unsigned pack in `sitePacksDir` as `<id>.json` (`POST /site-packs/import`); it then
- * needs approval like any local file. @throws `SITE_PACK_INVALID`.
+ * Stores one unsigned pack in `sitePacksDir` as `<id>.json` (`POST /site-packs/import` with
+ * `{pack}`): the parsed pack is re-serialized; it then needs approval like any local file.
+ * @throws `SITE_PACK_INVALID`.
  */
 export async function importPack(
   core: RegistryCore,
@@ -134,7 +135,19 @@ export async function importPack(
 ): Promise<{ packId: string; version: number; sha256: string }> {
   const text = raw === undefined ? undefined : JSON.stringify(raw, null, 2);
   if (text === undefined) throw packInvalid('import', [{ path: 'pack', message: 'missing' }]);
-  const bytes = new TextEncoder().encode(`${text}\n`);
+  return importPackBytes(core, new TextEncoder().encode(`${text}\n`), by);
+}
+
+/**
+ * Stores one unsigned pack file's exact bytes in `sitePacksDir` (`POST /site-packs/import` with
+ * `{text}`): what is validated, hashed and stored is byte for byte what the operator verified.
+ * @throws `SITE_PACK_INVALID`.
+ */
+export async function importPackBytes(
+  core: RegistryCore,
+  bytes: Uint8Array,
+  by: string,
+): Promise<{ packId: string; version: number; sha256: string }> {
   const loaded = loadPackBytes(bytes, {
     origin: 'import',
     binaryVersion: core.deps.binaryVersion,

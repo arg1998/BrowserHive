@@ -4,6 +4,7 @@ import type { CommandContext } from '../deps.ts';
 import { EXIT, type ExitCode, type Invocation, type RemoteTarget } from '../invocation.ts';
 import { remoteCall } from './admin-remote.ts';
 import { findTemplate } from './templates.ts';
+import { withSitePacks } from './templates-create-packs.ts';
 import {
   durationText,
   finishRecording,
@@ -100,7 +101,10 @@ export async function runTemplatesCreate(
   const state =
     invocation.fromState === null ? null : await readStateFile(context, invocation.fromState);
   if (typeof state === 'number') return state;
-  const created = await createTemplate(context, invocation);
+  // The site packs it approves are shown (and confirmed) before anything is created.
+  const input = await withSitePacks(context, invocation);
+  if (typeof input === 'number') return input;
+  const created = await createTemplate(context, { ...invocation, input });
   if (typeof created === 'number') return created;
   if (json && invocation.noLogin) out.json(created.json);
   if (!json) out.status('ok', `created template ${name} (${created.id})`);
