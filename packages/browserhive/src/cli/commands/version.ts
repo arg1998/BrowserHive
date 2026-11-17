@@ -7,10 +7,7 @@ export interface VersionReport {
   readonly browserhive: string;
   readonly bun: string;
   readonly sqlite: string;
-  /**
-   * Deprecated (D-65): the Playwright release the Patchright driver is built on (equal to
-   * `patchright`); kept so scripts reading it keep working.
-   */
+  /** Deprecated alias of `patchright` (D-65): the same value; kept so scripts reading it keep working. */
   readonly playwright: string | null;
   /** The browser driver's version, or `null` when its package cannot be read. */
   readonly patchright: string | null;

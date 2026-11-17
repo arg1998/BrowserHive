@@ -70,7 +70,7 @@ export async function wireObserversPhase(ctx: BootContext): Promise<PhaseHandle>
       runtime: {
         bun: Bun.version,
         sqlite: storage.sqliteVersion,
-        // Deprecated field (D-65): the Playwright release Patchright is built on, the same number.
+        // Deprecated alias of `patchright` (D-65); the field is not nullable, hence 'unknown'.
         playwright: patchrightVersion() ?? 'unknown',
         patchright: patchrightVersion(),
         chromium: domain.chromiumVersion,

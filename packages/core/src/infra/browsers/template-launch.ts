@@ -16,6 +16,7 @@ import {
   browserNotInstalledFromLaunchError,
   type ChromiumResolverDeps,
 } from './chromium-resolver.ts';
+import { suppressInjectRoute } from './driver.ts';
 import { contextOptionsFor, deriveFingerprint, scriptPayloadFor } from './fingerprint.ts';
 import type { HostFacts } from './host-facts.ts';
 import { hostOwnerResolver, selfOriginHandler, templateHostCookies } from './host-interception.ts';
@@ -127,6 +128,9 @@ export async function launchTemplateHostWith(
   }
 
   try {
+    // Before the init script: no Patchright document route (D40); the host's own chain is the
+    // only route on its context.
+    suppressInjectRoute(context);
     if (spec.stealth) {
       const payload = mergeNativeGetterPayloads(
         assertDisplay ? scriptPayloadFor(fingerprint) : undefined,

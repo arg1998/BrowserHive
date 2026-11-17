@@ -233,10 +233,11 @@ for (const stealth of STEALTH) {
         session_id: id,
         url: state.fixture.url('/download-broken'),
       });
-      // Patchright can fetch a document response itself (to inject init scripts) and hand the
-      // browser what arrived, so a transfer that breaks mid-way may be saved truncated, not failed.
-      expect(errorOf(nav).code ?? 'ok').toBeOneOf(['ok', 'DOWNLOAD_FAILED']);
-      // An `<a download>` click is not a document load, so it sees the real failure.
+      // Strict on both legs: with Patchright's document route off (D40) no document response is
+      // buffered by the driver, so a transfer that breaks mid-way fails instead of being saved
+      // truncated.
+      expect(errorOf(nav)).toMatchObject({ code: 'DOWNLOAD_FAILED' });
+      // An `<a download>` click is not a document load either; it sees the real failure too.
       const clicked = await h.call('download_file', {
         session_id: id,
         trigger_selector: '#download-broken',
@@ -266,9 +267,10 @@ for (const stealth of STEALTH) {
         url: state.fixture.url('/download-stall?ms=8000'),
         timeout: 1500,
       });
-      // Patchright may buffer the document response (see above): no download starts before the
-      // body is complete, so the call can time out as a navigation.
-      expect(errorOf(result).code).toBeOneOf(['NAVIGATION_TIMEOUT', 'DOWNLOAD_FAILED']);
+      expect(errorOf(result)).toMatchObject({
+        code: 'DOWNLOAD_FAILED',
+        details: { reason: 'the download did not finish within 1500 ms' },
+      });
     });
 
     it('an upload to a non-file input is UPLOAD_FAILED', async () => {

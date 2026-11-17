@@ -44,7 +44,7 @@ export {
   isActionabilityError,
   isTargetClosedError,
 } from './classify-error.ts';
-export { DRIVER_NAME, driverChromium, driverVersion } from './driver.ts';
+export { DRIVER_NAME, driverChromium, driverVersion, suppressInjectRoute } from './driver.ts';
 export { type Evaluable, evaluateMainWorld } from './evaluate.ts';
 export {
   contextOptionsFor,

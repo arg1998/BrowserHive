@@ -24,7 +24,7 @@ import type { RequestOwner } from '../../ports/request-guard.ts';
  *   1.63; Patchright differs and did not send it). The guard never sees an `OPTIONS` preflight.
  *   This already holds for sessions with a blocklist; T1a makes every template host routed.
  *
- * What a route cannot see (spec 13 §3.8), measured on Chromium under both drivers:
+ * What a route cannot see (spec 13 §3.8), measured on Chromium (Playwright 1.63 and Patchright 1.63):
  * - the hops of a redirect after its first URL (Playwright routes only the first URL of a
  *   redirect chain; 307/308 keep the method, so this covers `POST` too);
  * - requests from a `SharedWorker` (dedicated and service workers are routed);
@@ -32,7 +32,7 @@ import type { RequestOwner } from '../../ports/request-guard.ts';
  *   (`pagehide`/`unload` during `page.close()`, which `close_tab` and `close_session` do);
  * - WebSocket frames, and requests made from a `javascript:` URL (refused for agents, D-57).
  *
- * A popup's first navigation has no frame and, under Playwright, a service worker's requests
+ * A popup's first navigation has no frame and, under the driver, a service worker's requests
  * have none either; that matters to {@link OwnerResolver}, not to matching.
  */
 

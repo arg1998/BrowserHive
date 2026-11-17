@@ -90,11 +90,11 @@ const ROWS: readonly ErrorRow[] = [
       "browserhive: --stealthDriver: the Playwright driver was removed in 0.3.0; every session runs on Patchright. Remove 'stealthDriver'. For a browser without BrowserHive's stealth patches, set stealth to off.",
   },
   {
-    name: 'removed stealthDriver with a value it never had, in the environment',
-    env: { BROWSERHIVE_STEALTH_DRIVER: 'banana' },
+    name: 'removed stealthDriver with a value it never had (a typo), in the environment',
+    env: { BROWSERHIVE_STEALTH_DRIVER: 'PATCHRIGHT' },
     exitCode: 64,
     rendered:
-      "browserhive: BROWSERHIVE_STEALTH_DRIVER: the Playwright driver was removed in 0.3.0; every session runs on Patchright. Remove 'stealthDriver'. For a browser without BrowserHive's stealth patches, set stealth to off.",
+      "browserhive: BROWSERHIVE_STEALTH_DRIVER: 'PATCHRIGHT' is not a value 'stealthDriver' ever had, and 'stealthDriver' itself is gone: Patchright is the only browser driver since 0.3.0. Remove 'stealthDriver'.",
   },
   {
     name: 'misspelt identity variable suggests the identity name (08 §2.2)',

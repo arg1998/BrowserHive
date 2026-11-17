@@ -11,8 +11,6 @@ import {
   lookupKey,
   namesFor,
   type ProvenanceSource,
-  REMOVED_CONFIG_KEYS,
-  type RemovedConfigKey,
   reservedMessage,
   type ValueRef,
 } from '@browserhive/contracts/config';
@@ -22,6 +20,7 @@ import { interpolateJson } from './interpolate.ts';
 import type { JsonValue } from './json-parse.ts';
 import { keyKind } from './kinds.ts';
 import { emptyAfterMessage, refProblemMessage } from './ref-messages.ts';
+import { addRemovedKey, collectRemovedOverrides } from './removed-keys.ts';
 import { suggest, suggestKey } from './suggest.ts';
 
 /** One raw value for one key from one source, before parsing. */
@@ -52,35 +51,6 @@ export interface CollectedLayer {
   readonly warnings?: readonly string[];
 }
 
-/**
- * A removed key (spec 08 §5.10) set in some source: a value that asked for what is now the only
- * behaviour is a deprecation warning and is ignored; any other value is a usage error.
- *
- * @param display How the location reads in a message (`--stealthDriver`, `'stealthDriver' in /path`).
- * @returns The problem, or the warning.
- */
-export function removedKeyFinding(
-  found: { readonly key: string; readonly removed: RemovedConfigKey },
-  raw: unknown,
-  where: { readonly source: ProvenanceSource; readonly location: string; readonly display: string },
-): { readonly problem: ConfigProblem } | { readonly warning: string } {
-  const value = typeof raw === 'string' ? raw.trim() : raw;
-  if (typeof value === 'string' && found.removed.accepted.includes(value)) {
-    return {
-      warning: `${where.display} is deprecated and ignored: ${found.removed.reason}. Remove it; from ${found.removed.unknownFrom} it is an unknown key.`,
-    };
-  }
-  return {
-    problem: {
-      code: 'CONFIG_INVALID',
-      key: found.key,
-      source: where.source,
-      location: where.location,
-      message: `${where.display}: ${found.removed.instead}`,
-    },
-  };
-}
-
 const EMPTY_HINT = 'Unset it or provide a value.';
 
 /**
@@ -93,6 +63,7 @@ export function collectEnvLayer(env: Readonly<Record<string, string | undefined>
   const entries = new Map<ConfigKey, RawEntry>();
   const problems: ConfigProblem[] = [];
   const warnings: string[] = [];
+  const sink = { problems, warnings };
   for (const name of Object.keys(env).sort()) {
     if (!name.startsWith(ENV_PREFIX)) continue;
     const value = env[name];
@@ -132,13 +103,7 @@ export function collectEnvLayer(env: Readonly<Record<string, string | undefined>
       continue;
     }
     if (found.kind === 'removed') {
-      const finding = removedKeyFinding(found, value, {
-        source: 'env',
-        location: name,
-        display: name,
-      });
-      if ('problem' in finding) problems.push(finding.problem);
-      else warnings.push(finding.warning);
+      addRemovedKey(found, value, { source: 'env', location: name, display: name }, sink);
       continue;
     }
     if (value === '') {
@@ -217,6 +182,7 @@ export function collectCliLayer(tokens: TokenizedArgs): CollectedLayer {
   const entries = new Map<ConfigKey, RawEntry>();
   const problems: ConfigProblem[] = [];
   const warnings: string[] = [];
+  const sink = { problems, warnings };
   for (const flag of [...tokens.unknown, ...tokens.shortFlags]) {
     const { suggestions, removed } = suggestKey(flag, 'cli', CONFIG_KEYS);
     const base = `unknown flag '${flag}'.`;
@@ -260,13 +226,8 @@ export function collectCliLayer(tokens: TokenizedArgs): CollectedLayer {
       continue;
     }
     if (found.kind === 'removed') {
-      const finding = removedKeyFinding(found, values.at(-1) ?? '', {
-        source: 'cli',
-        location: flag,
-        display: flag,
-      });
-      if ('problem' in finding) problems.push(finding.problem);
-      else warnings.push(finding.warning);
+      const where = { source: 'cli', location: flag, display: flag } as const;
+      addRemovedKey(found, values.at(-1) ?? '', where, sink);
       continue;
     }
     const kind = keyKind(found.key);
@@ -308,6 +269,7 @@ export function collectFileLayer(
   const entries = new Map<ConfigKey, RawEntry>();
   const problems: ConfigProblem[] = [];
   const warnings: string[] = [];
+  const sink = { problems, warnings };
   const baseDir = dirname(filePath);
   for (const [name, raw] of Object.entries(json)) {
     if (name === '$schema') continue;
@@ -342,13 +304,13 @@ export function collectFileLayer(
     if (found.kind === 'removed') {
       // A reference resolves first, so `{env:X}` holding `patchright` reads as `patchright`.
       const expanded = interpolateJson(raw, lookup);
-      const finding = removedKeyFinding(
+      const value = expanded.problems.length === 0 ? expanded.value : raw;
+      addRemovedKey(
         found,
-        expanded.problems.length === 0 ? expanded.value : raw,
+        value,
         { source: 'file', location, display: `'${name}' in ${filePath}` },
+        sink,
       );
-      if ('problem' in finding) problems.push(finding.problem);
-      else warnings.push(finding.warning);
       continue;
     }
     const key = found.key;
@@ -424,24 +386,12 @@ export type ConfigOverrides = { readonly [K in ConfigKey]?: unknown };
  */
 export function collectOverridesLayer(overrides: ConfigOverrides): CollectedLayer {
   const entries = new Map<ConfigKey, RawEntry>();
-  const problems: ConfigProblem[] = [];
-  const warnings: string[] = [];
   for (const key of CONFIG_KEYS) {
     const raw: unknown = overrides[key];
     if (raw === undefined) continue;
     const location = `options.${key}`;
     entries.set(key, { key, raw, source: 'cli', location, display: location });
   }
-  // Removed keys a JavaScript caller may still pass (spec 08 §5.10).
-  const extra: Readonly<Record<string, unknown>> = overrides;
-  for (const key of Object.keys(REMOVED_CONFIG_KEYS)) {
-    const raw = extra[key];
-    const found = lookupKey('json', key);
-    if (raw === undefined || found.kind !== 'removed') continue;
-    const location = `options.${key}`;
-    const finding = removedKeyFinding(found, raw, { source: 'cli', location, display: location });
-    if ('problem' in finding) problems.push(finding.problem);
-    else warnings.push(finding.warning);
-  }
-  return { entries, problems, warnings };
+  const removed = collectRemovedOverrides(overrides);
+  return { entries, problems: removed.problems, warnings: removed.warnings };
 }

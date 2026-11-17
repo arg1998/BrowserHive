@@ -5,6 +5,7 @@ import type { BrowserType } from 'patchright';
 import { AppError } from '../../kernel/errors/app-error.ts';
 import { driverVersion } from './driver.ts';
 import type { HostFacts } from './host-facts.ts';
+import { MISSING_BINARY_RE } from './missing-binary.ts';
 
 /** Dependencies of the resolver; `exists` and `driverVersion` default to production values. */
 export interface ChromiumResolverDeps {
@@ -76,10 +77,6 @@ export function assertChromiumInstalled(
   const exists = deps.exists ?? existsSync;
   if (path.length === 0 || !exists(path)) throw browserNotInstalled(channel, deps);
 }
-
-/** The driver's launch-time prose for a missing binary or branded distribution (Patchright keeps Playwright's texts). */
-const MISSING_BINARY_RE =
-  /Executable doesn't exist at|Chromium distribution '[\w-]+' is not found|Looks like Playwright( Test or Playwright)? was just installed or updated|Failed to launch: .*ENOENT/;
 
 /** Map a raw launch failure onto `BROWSER_NOT_INSTALLED` when the driver reports a missing binary. */
 export function browserNotInstalledFromLaunchError(

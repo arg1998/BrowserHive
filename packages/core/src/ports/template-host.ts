@@ -178,7 +178,7 @@ export interface TemplateHost extends BrowserHost {
   closePage(targetId: string, scope: 'parked' | 'session'): Promise<boolean>;
 }
 
-/** Starts template hosts (the Playwright driver; spec 13 §3.1). */
+/** Starts template hosts (the browser driver, Patchright; spec 13 §3.1). */
 export interface TemplateHostLauncher {
   /**
    * Launches the persistent context of a template, prepares its profile preferences, installs the

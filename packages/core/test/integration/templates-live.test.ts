@@ -1,5 +1,5 @@
 /// <reference lib="dom" />
-/** @module test/integration/templates-live.test — three virtual sessions on one real template host, under Playwright and Patchright, on the HTTPS fixture sites (spec 13 §3.3–§3.8, §17 T1a acceptance): background windows, isolation of `list_tabs`, every site-opened page in its opener's session, parked pages, close, crash fan-out and restart, the sentinel, page caps and the self-origin guard. */
+/** @module test/integration/templates-live.test — three virtual sessions on one real template host, with template stealth off and standard on Patchright (D-65), on the HTTPS fixture sites (spec 13 §3.3–§3.8, §17 T1a acceptance): background windows, isolation of `list_tabs`, every site-opened page in its opener's session, parked pages, close, crash fan-out and restart, the sentinel, page caps and the self-origin guard. */
 
 import { afterEach, describe, expect, it } from 'bun:test';
 import { spawnSync } from 'node:child_process';

@@ -57,6 +57,24 @@ describe('config show', () => {
     expect(run.stdout).toContain('Config file: /work/browserhive.config.json');
   });
 
+  it('warns on stderr about the removed stealthDriver; --json stays parseable (spec 08 §5.10)', async () => {
+    const fs = new MemoryFs({
+      '/work/browserhive.config.json': JSON.stringify({ stealthDriver: 'patchright' }),
+    });
+    const warning =
+      "browserhive: warning: 'stealthDriver' in /work/browserhive.config.json is deprecated and ignored: Patchright is the only browser driver since 0.3.0. Remove it; from 0.4.0 it is an unknown key.";
+    const text = await cliHarness({ argv: ['config', 'show'], fs });
+    expect(text.code).toBe(0);
+    expect(text.stderr).toContain(warning);
+    expect(text.stdout).not.toContain('stealthDriver');
+    const json = await cliHarness({
+      argv: ['config', 'show', '--json'],
+      env: { BROWSERHIVE_STEALTH_DRIVER: 'auto' },
+    });
+    expect(json.stderr).toContain('browserhive: warning: BROWSERHIVE_STEALTH_DRIVER is deprecated');
+    expect(Object.keys(JSON.parse(json.stdout))).not.toContain('stealthDriver');
+  });
+
   it('bare `config` is `config show`', async () => {
     const run = await cliHarness({ argv: ['config'] });
     expect(run.stdout).toMatch(/^KEY\s+VALUE/m);

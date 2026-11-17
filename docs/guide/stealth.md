@@ -43,7 +43,7 @@ An agent can override `stealth`, `fingerprint`, `humanize`, `headless` and `chan
 
 - `navigator.webdriver` is `false` (Patchright passes `--disable-blink-features=AutomationControlled` and drops `--enable-automation` by default).
 - Page scripts run without the DevTools `Runtime.enable` call that detectors look for.
-- Pages' `console` messages are not reported: Patchright never enables the console domain. This holds at every stealth level.
+- Pages' `console` messages and uncaught page errors are not reported: Patchright never enables the console and runtime domains. This holds at every stealth level.
 - Closed shadow roots are reachable by selectors.
 - Chromium's popup blocker stays on (Patchright does not pass `--disable-popup-blocking`): a page opens a popup only from a user gesture such as a click, like a normal browser.
 

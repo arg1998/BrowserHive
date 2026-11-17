@@ -447,45 +447,60 @@ describe('documented blind spots (real Chromium)', () => {
       url,
     );
 
-  it('under routing the driver answers CORS preflights itself, so a refused write is sent', async () => {
-    // Patchright keeps Playwright's behaviour here (D-65, re-measured): an intercepted preflight
-    // is answered with permissive headers and never reaches the site.
-    const other = startFixtureServer();
-    try {
-      const plain = await state.launch({ slug: 'cors-plain' });
-      await plain.page.goto(state.fixture.url('/'));
-      expect(await write(plain.page, other.url('/cors/write'))).toBe('err:TypeError');
-      expect(other.requests.map((r) => r.method)).toEqual(['OPTIONS']);
+  // CORS preflights, measured on Patchright 1.63 after D40 (no driver document route): page and
+  // target are both on loopback, the same IP address space, so Local Network Access does not
+  // restrict them and the outcome is CORS alone. Pinned per stealth level, without and with a
+  // BrowserHive route (the blocklist route, the guard's chain). Enforcing preflights inside the
+  // chain is deferred item D41.
+  for (const stealth of [false, true]) {
+    const label = stealth ? 'stealth' : 'plain';
 
-      const routed = await state.launch({ slug: 'cors-routed' });
-      await guard(routed, ruleSet());
-      await routed.page.goto(state.fixture.url('/'));
-      await write(routed.page, other.url('/cors/write'));
-      expect(other.requests.map((r) => r.method)).toEqual(['OPTIONS', 'POST']);
-    } finally {
-      other.stop();
-    }
-  });
+    it(`[${label}] without a BrowserHive route a write the site refuses at preflight is not sent`, async () => {
+      const other = startFixtureServer();
+      try {
+        const session = await state.launch({ slug: `cors-free-${label}`, stealth });
+        await session.page.goto(state.fixture.url('/'));
+        expect(await write(session.page, other.url('/cors-allowed/write'))).toBe('ok:200');
+        expect(await write(session.page, other.url('/cors/write'))).toBe('err:TypeError');
+        expect(other.requests.map((r) => `${r.method} ${r.path}`)).toEqual([
+          'OPTIONS /cors-allowed/write',
+          'POST /cors-allowed/write',
+          'OPTIONS /cors/write',
+        ]);
+      } finally {
+        other.stop();
+      }
+    });
 
-  it('a stealth session cannot send a preflighted cross-origin request, even one the site allows', async () => {
-    // Patchright injects init scripts through request interception; with any init script in the
-    // context (every stealth session adds one) a request that needs a preflight fails before
-    // anything reaches the network, routed or not (D-65, measured on Patchright 1.63).
-    const other = startFixtureServer();
-    try {
-      const plain = await state.launch({ slug: 'cors-allowed-plain' });
-      await plain.page.goto(state.fixture.url('/'));
-      expect(await write(plain.page, other.url('/cors-allowed/write'))).toBe('ok:200');
-      expect(other.requests.map((r) => r.method)).toEqual(['OPTIONS', 'POST']);
+    it(`[${label}] with a BrowserHive route the driver answers the preflight, so a refused write is sent`, async () => {
+      const other = startFixtureServer();
+      try {
+        // The blocklist route alone (a configured blocklist, even an empty one).
+        const blocked = await state.launch({ slug: `cors-bl-${label}`, stealth });
+        const warning = await installBlocklistRoute(blocked.handle.context, {
+          blocklist: new Blocklist(),
+          observer: { blocked: () => undefined },
+          sessionId: blocked.view.sessionId,
+          clock,
+          logger: createCollectingLogger(),
+        });
+        expect(warning).toBeNull();
+        await blocked.page.goto(state.fixture.url('/'));
+        // The page cannot read the answer (no CORS headers), but the write reached the site.
+        expect(await write(blocked.page, other.url('/cors/write'))).toBe('err:TypeError');
+        expect(other.requests.map((r) => r.method)).toEqual(['POST']);
 
-      const stealth = await state.launch({ slug: 'cors-allowed-stealth', stealth: true });
-      await stealth.page.goto(state.fixture.url('/'));
-      expect(await write(stealth.page, other.url('/cors-allowed/write'))).toBe('err:TypeError');
-      expect(other.requests.map((r) => r.method)).toEqual(['OPTIONS', 'POST']);
-    } finally {
-      other.stop();
-    }
-  });
+        // The interception chain with the request guard.
+        const guarded = await state.launch({ slug: `cors-guard-${label}`, stealth });
+        await guard(guarded, ruleSet());
+        await guarded.page.goto(state.fixture.url('/'));
+        await write(guarded.page, other.url('/cors/write'));
+        expect(other.requests.map((r) => r.method)).toEqual(['POST', 'POST']);
+      } finally {
+        other.stop();
+      }
+    });
+  }
 });
 
 describe('interception and the HTTP cache (real Chromium)', () => {

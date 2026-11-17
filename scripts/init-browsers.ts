@@ -1,4 +1,4 @@
-/** @module scripts/init-browsers — installs Patchright's Chromium (the only driver, D-65) for local development; the dashboard e2e runner (`@playwright/test`, same pinned version) launches the same build from the same cache. */
+/** @module scripts/init-browsers — installs Patchright's Chromium (the only driver, D-65) for local development; the dashboard e2e runner (`@playwright/test`, same pinned version) launches the same build from the same cache (pinned by test/lint/e2e-browser-pin.test.ts). */
 import { spawnSync } from 'node:child_process';
 
 function run(cmd: string, args: string[]): number {

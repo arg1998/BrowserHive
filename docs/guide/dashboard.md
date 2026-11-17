@@ -47,7 +47,7 @@ A session launched from a template carries a **Template** badge that opens the t
 - **Timeline.** Every tool call with parameters, result, duration, error code and screenshot, plus navigations, vault access, blocked URLs and attention requests. Filter by kind, follow live, expand rows. Arguments larger than 64 KiB were shortened when recorded: the row gives their full size and shows their start as text. When [telemetry](telemetry.md) is on, each call shows its `trace_id` and, with `--otelTraceUrlTemplate`, a link into your tracing backend.
 - **Vault.** This session's vault access log and pending confirmations.
 - **Identity.** What the browser presents to websites: user agent, client-hint brands, platform, Chrome version, locale, timezone, screen and viewport, and whether fingerprinting and humanized input are on. See [Stealth](stealth.md).
-- **Files.** Data directory path, `trace.zip` with size, download, and **Open trace viewer** (Playwright Trace Viewer with actions, DOM snapshots and network, served by BrowserHive; pages' console messages are not recorded, because the browser driver never enables the console), screenshots, downloads, and the command to open the trace locally.
+- **Files.** Data directory path, `trace.zip` with size, download, and **Open trace viewer** (Playwright Trace Viewer with actions, DOM snapshots and network, served by BrowserHive; pages' console messages and uncaught errors are not recorded, because the browser driver never enables the console and runtime domains), screenshots, downloads, and the command to open the trace locally.
 
 ## Templates
 

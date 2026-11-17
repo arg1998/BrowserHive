@@ -58,7 +58,7 @@ export function processEnv(): Readonly<Record<string, string | undefined>> {
   return process.env;
 }
 
-/** Maps the host record onto the `HostFacts` the Playwright driver and the geo seed resolver read. */
+/** Maps the host record onto the `HostFacts` the browser driver and the geo seed resolver read. */
 export function hostFactsOf(host: HostEnvironment): HostFacts {
   return { platform: host.platform, arch: host.arch, release: host.release, env: host.env };
 }

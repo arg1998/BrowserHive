@@ -255,6 +255,18 @@ export function startFixtureServer(): FixtureServer {
                 `<form id="logout" method="post" action="/logout"><button id="sign-out" type="submit">Sign out</button></form>
                 <form id="search" method="get" action="/logout"><button id="search-go" type="submit">Search</button></form>`,
               );
+        case '/d40/page':
+        case '/d40/popup':
+        case '/d40/frame': {
+          // Records, at parse time, whether a context init script had already run (D40 contract).
+          const frame = url.searchParams.get('frame');
+          return html(
+            `<p id="where">${url.pathname}</p><a id="popup" href="/d40/popup" target="_blank">popup</a>${
+              frame === null ? '' : `<iframe id="frame" src="${frame.replace(/"/g, '')}"></iframe>`
+            }`,
+            '<script>window.__seenAtParse = typeof window.__bhMarker;</script>',
+          );
+        }
         case '/cached':
           // Fresh for an hour: a second `force-cache` fetch is served from the HTTP cache when
           // the context has one (routing disables it).

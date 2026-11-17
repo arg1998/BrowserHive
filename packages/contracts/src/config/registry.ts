@@ -71,6 +71,8 @@ export interface RemovedConfigKey {
    * ignored. Any other value is a usage error with {@link RemovedConfigKey.instead}.
    */
   readonly accepted: readonly string[];
+  /** Every value the key ever accepted; any other value is reported as a typo, not as the removal. */
+  readonly values: readonly string[];
   /** Why it is gone, one sentence. */
   readonly reason: string;
   /** What to do instead when the value asked for the removed behaviour, one sentence. */
@@ -86,6 +88,7 @@ export const REMOVED_CONFIG_KEYS: Readonly<Record<string, RemovedConfigKey>> = {
     removedIn: '0.3.0',
     unknownFrom: '0.4.0',
     accepted: ['auto', 'patchright'],
+    values: ['auto', 'patchright', 'playwright'],
     reason: 'Patchright is the only browser driver since 0.3.0',
     instead:
       "the Playwright driver was removed in 0.3.0; every session runs on Patchright. Remove 'stealthDriver'. For a browser without BrowserHive's stealth patches, set stealth to off.",

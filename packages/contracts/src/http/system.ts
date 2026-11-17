@@ -96,13 +96,14 @@ export const RuntimeVersions = z.object({
   bun: z.string(),
   sqlite: z.string(),
   /**
-   * Deprecated (D-65): the Playwright release the Patchright driver is built on (Patchright's
-   * version numbers follow Playwright's). Kept for `/api/v1` clients; read `patchright`.
+   * Deprecated alias of `patchright` (D-65), kept for `/api/v1` clients: the same version string
+   * (Patchright's major.minor tracks Playwright's; its patch number is its own), or `'unknown'`
+   * when `patchright` is `null`, because this field is not nullable.
    */
   playwright: z.string().meta({
     deprecated: true,
     description:
-      'Deprecated: the Playwright release the Patchright driver is built on (equal to `patchright`). Kept for compatibility; read `patchright`.',
+      "Deprecated alias of `patchright`: the same version, or 'unknown' when `patchright` is null. Patchright's major.minor tracks Playwright's; its patch number is its own. Read `patchright`.",
   }),
   /** The browser driver's version (Patchright, the only driver, D-65); `null` when its package cannot be read. */
   patchright: z.string().nullable(),

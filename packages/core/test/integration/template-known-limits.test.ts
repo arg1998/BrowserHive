@@ -1,5 +1,5 @@
 /// <reference lib="dom" />
-/** @module test/integration/template-known-limits.test — what a template host's always-on routing changes, pinned under stealth off and standard on Patchright, the only driver (spec 13 §3.8 "Known limits", `docs/guide/templates.md`; PR #76 F2, D-65): no HTTP cache, on every OS headless (routing does not depend on the display); a cross-origin write that needs a CORS preflight: on a stealth-off host the driver answers the preflight itself and a write the site refuses is sent, on a stealth host (init scripts) it fails before reaching the site (Patchright's init-script interception; D-65 re-measurement); a close-time beacon is never routed (whether it reaches the site depends on timing). */
+/** @module test/integration/template-known-limits.test — what a template host's always-on routing changes, pinned under template stealth off and standard on Patchright, the only driver (spec 13 §3.8 "Known limits", `docs/guide/templates.md`; PR #76 F2, D-65, deferred D41): no HTTP cache, and the driver answers CORS preflights itself, so a cross-origin write the site refuses at preflight is sent (the chain's route is the only route on the host: Patchright's document route is off, D40), on every OS headless (routing does not depend on the display); a close-time beacon is never routed (whether it reaches the site depends on timing). The fixture sites resolve to loopback like the page, so Local Network Access does not restrict them. */
 
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { Session } from '../../src/domain/session/session.ts';
@@ -37,12 +37,16 @@ for (const stealth of STEALTH_LEGS) {
     );
 
     it.skipIf(HEADED)(
-      stealth === 'off'
-        ? 'a cross-origin write whose preflight the site refuses is sent (the driver answers the preflight)'
-        : 'a cross-origin write that needs a preflight never reaches the site (init-script interception)',
+      'a cross-origin write whose preflight the site refuses is sent: the driver answers the preflight (D41)',
       async () => {
         world = await templateWorld(stealth);
         const page = pageOf(await world.launch('alpha'));
+        // The host's chain is the only route on its context: Patchright's own is off (D40).
+        const raw = world.host().context as unknown as {
+          routeInjecting?: unknown;
+          _routes?: unknown[];
+        };
+        expect([raw.routeInjecting, raw._routes?.length]).toEqual([true, 1]);
         const sites = world.sites;
         await page.goto(sites.url('site-a.test', '/cors-page'));
         const result = await page.evaluate(() =>
@@ -61,7 +65,7 @@ for (const stealth of STEALTH_LEGS) {
           .map((r) => r.method);
         // The page never reads the answer either way (no CORS headers).
         expect(result).toBe('blocked');
-        expect(seen).toEqual(stealth === 'off' ? ['POST'] : []);
+        expect(seen).toEqual(['POST']);
       },
     );
 

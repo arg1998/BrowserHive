@@ -27,7 +27,7 @@ import {
   browserNotInstalledFromLaunchError,
   type ChromiumResolverDeps,
 } from './chromium-resolver.ts';
-import { DRIVER_NAME, driverChromium } from './driver.ts';
+import { DRIVER_NAME, driverChromium, suppressInjectRoute } from './driver.ts';
 import { capabilitiesFor, defaultSandboxPolicy, displayFor } from './driver-support.ts';
 import { contextOptionsFor, scriptPayloadFor } from './fingerprint.ts';
 import type { HostFacts } from './host-facts.ts';
@@ -229,6 +229,8 @@ export class PlaywrightBrowserDriver implements BrowserDriver, TemplateHostLaunc
           ...contextOptions,
         });
         try {
+          // Before the init script and tracing: no Patchright document route (D40).
+          suppressInjectRoute(context);
           // Chromium has already opened `pages()[0]` here, but it sits at `about:blank` — no
           // navigation has happened, so a context-level init script still lands before any page
           // script runs.
@@ -247,6 +249,8 @@ export class PlaywrightBrowserDriver implements BrowserDriver, TemplateHostLaunc
       const browser = await browserType.launch(options);
       try {
         const context = await browser.newContext(contextOptions);
+        // Before the init script and tracing: no Patchright document route (D40).
+        suppressInjectRoute(context);
         // Before `newPage()`, so the first tab is covered like every later one.
         if (scriptPayload !== null)
           await context.addInitScript(installNativeGetters, scriptPayload);

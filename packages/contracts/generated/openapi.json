@@ -7685,7 +7685,7 @@
               "playwright": {
                 "type": "string",
                 "deprecated": true,
-                "description": "Deprecated: the Playwright release the Patchright driver is built on (equal to `patchright`). Kept for compatibility; read `patchright`."
+                "description": "Deprecated alias of `patchright`: the same version, or 'unknown' when `patchright` is null. Patchright's major.minor tracks Playwright's; its patch number is its own. Read `patchright`."
               },
               "patchright": {
                 "type": [
