@@ -1,9 +1,10 @@
-/** @module infra/browsers/clipboard-frames — runs a script in the main world of every document already open in a browser context (spec 13 §2.1, D18 "applies live"): each page's main frame, every frame in its process (same-origin, `about:blank`, `srcdoc`, sandboxed and same-site cross-origin frames, nested ones too) and every out-of-process (cross-site) frame through its own DevTools session, never with a user gesture. */
+/** @module infra/browsers/clipboard-frames — runs a script in the main world of every document already open in a browser context (spec 13 §2.1, D18 "applies live"): each page's main frame, every frame in its process (same-origin, `about:blank`, `srcdoc`, sandboxed and same-site cross-origin frames, nested ones too) and every out-of-process frame (cross-site, out-of-process sandboxed, and those nested in them) through DevTools links from the page's own session (`frame-links.ts`), never with a user gesture; and again in a page whose document comes back from the back/forward cache. */
 
-import type { BrowserContext, CDPSession, Frame, Page } from 'patchright';
+import type { BrowserContext, CDPSession, Page } from 'patchright';
 import { raceSignal, withDeadline } from '../../kernel/deadline.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { Logger } from '../../ports/logger.ts';
+import { childFrames, type FrameTarget, rootTarget } from './frame-links.ts';
 
 /**
  * One page (its own frames and out-of-process ones) gets this long: a document stuck in a dialog
@@ -45,7 +46,7 @@ function childFrameIds(tree: FrameTree): string[] {
  * world). A frame without a `contentDocument` here runs in another process: its own target covers
  * it. `userGesture: false` everywhere: patching never gives a page user activation.
  */
-async function patchTarget(cdp: CDPSession, source: string): Promise<FramePatchCount> {
+async function patchTarget(cdp: FrameTarget, source: string): Promise<FramePatchCount> {
   let patched = 0;
   let missed = 0;
   const own = await cdp.send('Runtime.evaluate', {
@@ -83,36 +84,68 @@ async function patchTarget(cdp: CDPSession, source: string): Promise<FramePatchC
   return { patched, missed };
 }
 
-/** The page and its out-of-process frames: only those have a DevTools session of their own. */
-async function sessionsOf(context: BrowserContext, page: Page): Promise<CDPSession[]> {
-  const sessions = [await context.newCDPSession(page)];
-  const children: Frame[] = page.frames().filter((frame) => frame !== page.mainFrame());
-  for (const frame of children) {
-    // Throws for a frame in its parent's process ("part of the parent frame's session").
-    const own = await context.newCDPSession(frame).catch(() => null);
-    if (own !== null) sessions.push(own);
+/** Nesting of out-of-process frames followed below a page (deeper ones are counted as missed). */
+const MAX_DEPTH = 8;
+
+/**
+ * Patches `target` and every out-of-process frame below it: each target's own documents, then the
+ * frames it attaches to (cross-site and out-of-process sandboxed frames), depth first.
+ */
+async function patchTree(
+  target: FrameTarget,
+  source: string,
+  depth: number,
+): Promise<FramePatchCount> {
+  const own = await patchTarget(target, source);
+  let { patched, missed } = own;
+  const children = await childFrames(target).catch(() => []);
+  for (const child of children) {
+    if (depth >= MAX_DEPTH) {
+      missed++;
+      continue;
+    }
+    const count = await patchTree(child, source, depth + 1).catch(() => ({
+      patched: 0,
+      missed: 1,
+    }));
+    patched += count.patched;
+    missed += count.missed;
   }
-  return sessions;
+  return { patched, missed };
 }
 
+/**
+ * One page: its own session, the frames in its process, and its out-of-process frames reached
+ * through that session ({@link childFrames}), not through Patchright's frame list, which misses
+ * some (frames nested in an out-of-process sandboxed frame; a page restored from the
+ * back/forward cache). Detaching the page's session detaches everything below it.
+ */
 async function patchPage(
   context: BrowserContext,
   page: Page,
   source: string,
 ): Promise<FramePatchCount> {
-  const sessions = await sessionsOf(context, page);
-  let patched = 0;
-  let missed = 0;
+  const cdp = await context.newCDPSession(page);
   try {
-    for (const cdp of sessions) {
-      const count = await patchTarget(cdp, source);
-      patched += count.patched;
-      missed += count.missed;
-    }
+    return await patchTree(rootTarget(cdp), source, 0);
   } finally {
-    await Promise.allSettled(sessions.map((cdp) => cdp.detach()));
+    await cdp.detach().catch(() => undefined);
   }
-  return { patched, missed };
+}
+
+/** {@link patchPage} bounded by {@link PATCH_PAGE_MS}. */
+function patchPageBounded(
+  context: BrowserContext,
+  page: Page,
+  source: string,
+): Promise<FramePatchCount> {
+  using deadline = withDeadline(undefined, PATCH_PAGE_MS);
+  return raceSignal(
+    patchPage(context, page, source),
+    deadline.signal,
+    'clipboard patch',
+    PATCH_PAGE_MS,
+  );
 }
 
 /**
@@ -126,15 +159,7 @@ export async function patchOpenDocuments(
 ): Promise<FramePatchCount> {
   const pages = context.pages().filter((page) => !page.isClosed());
   const results = await Promise.allSettled(
-    pages.map(async (page) => {
-      using deadline = withDeadline(undefined, PATCH_PAGE_MS);
-      return raceSignal(
-        patchPage(context, page, source),
-        deadline.signal,
-        'clipboard patch',
-        PATCH_PAGE_MS,
-      );
-    }),
+    pages.map((page) => patchPageBounded(context, page, source)),
   );
   let patched = 0;
   let missed = 0;
@@ -148,4 +173,67 @@ export async function patchOpenDocuments(
     }
   }
   return { patched, missed };
+}
+
+/**
+ * Pages open at a live change keep documents from before it in the back/forward cache, which no
+ * patch run reached (verify #84 N3): going Back restores one as it was. Each watched page has its
+ * own DevTools session with the `Page` domain on, and a main-frame `Page.frameNavigated` of type
+ * `BackForwardCacheRestore` runs `source` in every document of the page again. Restored documents
+ * keep whatever they took before (as any document open at the change). Pages opened afterwards
+ * need none: their documents all got the init script.
+ */
+export class RestoredDocumentsWatch {
+  readonly #context: BrowserContext;
+  readonly #source: string;
+  readonly #log: Logger;
+  readonly #sessions = new Map<Page, CDPSession>();
+  #stopped = false;
+
+  constructor(context: BrowserContext, source: string, log: Logger) {
+    this.#context = context;
+    this.#source = source;
+    this.#log = log;
+  }
+
+  /** Watches every open page; a page that cannot be watched is logged and skipped. */
+  async watchOpenPages(): Promise<void> {
+    const pages = this.#context.pages().filter((page) => !page.isClosed());
+    await Promise.allSettled(pages.map((page) => this.#watch(page)));
+  }
+
+  async #watch(page: Page): Promise<void> {
+    if (this.#sessions.has(page)) return;
+    try {
+      const cdp = await this.#context.newCDPSession(page);
+      if (this.#stopped) {
+        await cdp.detach().catch(() => undefined);
+        return;
+      }
+      this.#sessions.set(page, cdp);
+      page.once('close', () => this.#sessions.delete(page));
+      cdp.on('Page.frameNavigated', ({ frame, type }) => {
+        if (type !== 'BackForwardCacheRestore' || frame.parentId !== undefined) return;
+        void patchPageBounded(this.#context, page, this.#source).then(
+          (count) => {
+            if (count.missed > 0) this.#log.warn('clipboard restore partial', { ...count });
+            else this.#log.debug('clipboard restore patched', { ...count });
+          },
+          (err: unknown) =>
+            this.#log.debug('clipboard restore missed', { err: serializeError(err) }),
+        );
+      });
+      await cdp.send('Page.enable');
+    } catch (err) {
+      this.#log.debug('clipboard watch missed', { err: serializeError(err) });
+    }
+  }
+
+  /** Detaches every watch session. */
+  async stop(): Promise<void> {
+    this.#stopped = true;
+    const sessions = [...this.#sessions.values()];
+    this.#sessions.clear();
+    await Promise.allSettled(sessions.map((cdp) => cdp.detach()));
+  }
 }
