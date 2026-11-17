@@ -333,7 +333,12 @@ export interface CliDeps {
   readonly runner: ProcessRunner;
   bootServer(input: ServeBootInput): Promise<ServeRunningServer>;
   openStorage(input: OpenStorageInput): Promise<CliStorage>;
-  inspectDatabase(path: string): Promise<DatabaseFileInfo | null>;
+  /**
+   * Header facts of a SQLite file. `'header'` never opens it (`minReaderVersion` is then the file's
+   * own `user_version`, the conservative floor); otherwise a file newer than this binary is opened
+   * read-only to read `meta.min_reader_version`.
+   */
+  inspectDatabase(path: string, mode?: 'header'): Promise<DatabaseFileInfo | null>;
   /** Copies a file byte-for-byte (restore). */
   copyFile(from: string, to: string): Promise<void>;
   readonly lock: {
