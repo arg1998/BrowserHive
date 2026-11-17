@@ -2,6 +2,11 @@
 
 import type { TemplateSitePack } from '@browserhive/contracts/http';
 import type { SitePackV1 } from '@browserhive/contracts/site-packs';
+import {
+  packFloorIssues,
+  type StealthFloorIssue,
+  type StealthSettings,
+} from '../../domain/site-packs/stealth-floor.ts';
 import { registrableDomain } from '../../kernel/url.ts';
 import type { TemplateSiteRecord } from '../../ports/persistence/index.ts';
 import type { PreparedApproval } from '../site-packs/registry-types.ts';
@@ -32,21 +37,26 @@ export interface TemplatePacks {
   detail?(packId: string): { readonly pack: SitePackV1 | null };
 }
 
-/** A creation refusal a site's pack causes (spec 13 §11.1 `POST /templates` 400 cases). */
+/** A refusal a site's pack causes (spec 13 §11.1 `POST /templates` 400 cases, §9.4 `stealth-profile`). */
 export interface PackRequirementIssue {
   readonly path: string;
   readonly message: string;
-  readonly code: 'headed_required' | 'human_only_stealth_off';
+  readonly code: 'headed_required' | 'human_only_stealth_off' | StealthFloorIssue['code'];
 }
+
+/** The template settings the pack requirements read. */
+export type PackRequirementSettings = StealthSettings & { readonly headless: boolean };
 
 /**
  * The refusals of spec 13 §11.1 that depend on a site's pack: a headless template with a pack whose
- * `browser.headed` is `required`, and stealth `off` with a `human_only` pack.
+ * `browser.headed` is `required`, stealth `off` with a `human_only` pack, and a template below the
+ * pack's `stealth-profile` floor (stealth level, fingerprint noise required or forbidden). Each
+ * issue's path is `sites[i]`; none under `sitePacks=false` (no pack owns a site).
  */
 export function packRequirementIssues(
   packs: TemplatePacks,
   siteIds: readonly string[],
-  template: { readonly headless: boolean; readonly stealth: string },
+  template: PackRequirementSettings,
 ): PackRequirementIssue[] {
   const issues: PackRequirementIssue[] = [];
   for (const [i, siteId] of siteIds.entries()) {
@@ -71,6 +81,13 @@ export function packRequirementIssues(
         path: `sites[${i}]`,
         code: 'human_only_stealth_off',
         message: `${pack.title} is signed in by hand only and needs stealth; choose standard or max.`,
+      });
+    }
+    for (const floor of packFloorIssues(template, pack)) {
+      issues.push({
+        path: `sites[${i}]`,
+        code: floor.code,
+        message: `${pack.title} ${floor.message}.`,
       });
     }
   }

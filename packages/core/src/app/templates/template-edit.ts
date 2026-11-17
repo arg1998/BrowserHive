@@ -37,6 +37,7 @@ import { launchDeclaredHarnessOf, launchHarnessOf } from '../sessions/metadata.t
 import type { SessionService } from '../sessions/session-service.ts';
 import { notFoundForOperator, operationRunning, validationFailed } from './template-errors.ts';
 import { NO_PACKS, type TemplatePacks } from './template-packs.ts';
+import { assertEditMeetsPacks, assertSiteMeetsPack } from './template-requirements.ts';
 import { toSiteView, toTemplateView } from './views.ts';
 
 /** At most this many sites per template (spec 13 §2.1). */
@@ -92,6 +93,8 @@ export class TemplateEditService {
     const validated = validateTemplatePatch(input, current.template, this.#deps.clock.now());
     if (!validated.ok) throw validationFailed(validated.issues);
     const { patch, changed, restart } = validated.value;
+    const after = { ...current.template, ...patch };
+    assertEditMeetsPacks(this.#deps.packs ?? NO_PACKS, current.sites, current.template, after);
     if (restart && this.#deps.ops.held(templateId)) throw operationRunning(templateId);
     if (changed.length === 0) {
       return {
@@ -202,6 +205,7 @@ export class TemplateEditService {
     }
     const now = this.#deps.clock.now();
     const packs = this.#deps.packs ?? NO_PACKS;
+    assertSiteMeetsPack(packs, siteId, template, existing, body);
     // First use (spec 13 §9.6): a new site, or a reviewed pack attached to an existing one.
     const approval =
       existing === undefined || body.pack_sha256 !== undefined
