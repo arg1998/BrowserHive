@@ -21,6 +21,7 @@ import { ICONS } from '@/lib/icons.ts';
 import { useSearchState } from '@/lib/search/use-search-state.ts';
 import { cn } from '@/lib/utils.ts';
 import { useAttentionHistory } from './api.ts';
+import { interceptBadge, interceptOf } from './SecurityIntercept.tsx';
 import {
   ATTENTION_SORT_KEYS,
   type AttentionSearch,
@@ -28,6 +29,12 @@ import {
   SETTLED_STATUSES,
 } from './search.ts';
 import { sessionHref } from './session-link.ts';
+
+/** "Site check" / "Write approval" for a site pack's request, else `null`. */
+function interceptLabel(row: OperatorRequestRow): string | null {
+  const options = interceptOf(row);
+  return options === null ? null : interceptBadge(options).label;
+}
 
 const MODE_LABEL: Record<string, string> = { takeover: 'Take over', notify: 'Notify' };
 const STATUS_LABEL: Record<string, string> = {
@@ -209,7 +216,12 @@ export function HistoryTable() {
       grow: true,
       cell: (r) => (
         <div className="flex min-w-0 flex-col py-0.5">
-          <span className="line-clamp-2 break-words">{r.reason}</span>
+          <span className="line-clamp-2 break-words">
+            {interceptLabel(r) !== null ? (
+              <span className="mr-1.5 font-medium">{interceptLabel(r)}:</span>
+            ) : null}
+            {r.reason}
+          </span>
           {r.message !== null && r.message !== '' ? (
             <span className="truncate text-sm text-muted-foreground">“{r.message}”</span>
           ) : null}
