@@ -1,9 +1,11 @@
-/** @module features/templates/wizard/SiteNeedsPanel — what the chosen sites' packs need from step 3's settings (spec 13 §9.4 `stealth-profile`, §11.1): one row per need with whether the settings meet it and a one-click fix when they do not (the server refuses a template below a site's floor); and the short chips the chosen-site card shows */
+/** @module features/templates/wizard/SiteNeedsPanel — what the chosen sites' packs need from step 3's settings (spec 13 §9.4 `stealth-profile`, `humanize-input`, §11.1): one row per need with whether the settings meet it and a one-click fix when they do not (the server refuses a template below a site's floor; forced humanized input with stealth off is advisory: it says what is not applied, and the template is still created); and the short chips the chosen-site card shows */
 import { Chip } from '@/components/shared/Chip.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { ICONS } from '@/lib/icons.ts';
 import { cn } from '@/lib/utils.ts';
 import {
+  humanizeAdvisory,
+  humanizeUnmet,
   type NeedsSettings,
   needChips,
   type SiteNeeds,
@@ -18,6 +20,8 @@ interface NeedRow {
   readonly label: string;
   readonly fix: UnmetNeed | null;
   readonly fixLabel: string;
+  /** Not met, but the template can still be created (what happens instead, in words). */
+  readonly advisory?: string;
 }
 
 function rowsOf(needs: SiteNeeds, s: NeedsSettings): NeedRow[] {
@@ -55,6 +59,17 @@ function rowsOf(needs: SiteNeeds, s: NeedsSettings): NeedRow[] {
       fixLabel: 'Turn headless off',
     });
   }
+  if (humanizeAdvisory(needs)) {
+    rows.push({
+      key: 'humanize',
+      title: needs.title,
+      label: 'Humanized input needs stealth on (Hide automation Standard or Max)',
+      fix: humanizeUnmet(needs, s),
+      fixLabel: 'Turn stealth on',
+      advisory:
+        'With stealth off it is not applied: clicks and typing on the site stay native and instant. You can still create the template.',
+    });
+  }
   return rows;
 }
 
@@ -70,13 +85,14 @@ export function SiteNeedsPanel({
 }) {
   if (needs.length === 0) return null;
   const rows = needs.flatMap((n) => rowsOf(n, settings).map((r) => ({ ...r, site: n.site })));
-  const open = rows.filter((r) => r.fix !== null).length;
+  const open = rows.filter((r) => r.fix !== null && r.advisory === undefined).length;
+  const advised = rows.filter((r) => r.fix !== null && r.advisory !== undefined).length;
   return (
     <section
       aria-labelledby="site-needs-title"
       className={cn(
         'flex max-w-3xl flex-col gap-3 rounded-lg border p-4',
-        open > 0 ? 'border-warn-border bg-warn-bg/40' : 'bg-surface-inset',
+        open + advised > 0 ? 'border-warn-border bg-warn-bg/40' : 'bg-surface-inset',
       )}
     >
       <div className="flex flex-col gap-0.5">
@@ -86,7 +102,9 @@ export function SiteNeedsPanel({
         <p className="text-sm text-pretty text-muted-foreground">
           {open > 0
             ? 'Some site packs need other settings here; the template can’t be created until they’re met.'
-            : 'These settings meet every site pack’s needs.'}
+            : advised > 0
+              ? 'A site pack asks for a setting that’s off here. The template can still be created, without it.'
+              : 'These settings meet every site pack’s needs.'}
         </p>
       </div>
       <ul className="flex flex-col divide-y rounded-md border bg-card">
@@ -110,6 +128,9 @@ export function SiteNeedsPanel({
                   {row.label}
                   <span className="sr-only">{row.fix === null ? ': met' : ': not met'}</span>
                 </span>
+                {row.fix !== null && row.advisory !== undefined ? (
+                  <span className="mt-0.5 text-sm text-pretty text-warn-text">{row.advisory}</span>
+                ) : null}
               </span>
               {row.fix !== null ? (
                 <Button
