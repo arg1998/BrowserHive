@@ -1,6 +1,6 @@
 /** @module app/sessions/pipeline-deps — the dependency record and hook set the creation pipeline runs on. */
 
-import type { ClosedReason, StealthDriver } from '@browserhive/contracts/enums';
+import type { ClosedReason } from '@browserhive/contracts/enums';
 import type { Tracer } from '@opentelemetry/api';
 import type { AdmissionPolicy } from '../../domain/session/admission.ts';
 import type { CreateSessionInput, SessionDefaults } from '../../domain/session/create-request.ts';
@@ -41,7 +41,6 @@ export interface PipelineDeps {
   readonly trace: boolean;
   readonly screenshotTrace: boolean;
   readonly closeTimeoutMs: number;
-  readonly stealthDriver: StealthDriver;
   /**
    * Browser slots in use: exclusive sessions plus starting or running template hosts (spec 13
    * §6.3, D-56). The admission input; a virtual session occupies no slot of its own.

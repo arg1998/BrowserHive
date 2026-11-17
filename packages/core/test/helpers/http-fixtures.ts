@@ -300,7 +300,7 @@ export const SYSTEM_INFO: z.input<typeof SystemInfo> = {
   persistence_mode: 'memory',
   stealth: {
     profile: 'standard',
-    driver: 'playwright',
+    driver: 'patchright',
     fingerprint: true,
     humanize: false,
     captcha: 'attention',

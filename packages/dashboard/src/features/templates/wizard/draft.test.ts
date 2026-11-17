@@ -1,6 +1,5 @@
 /** @module features/templates/wizard/draft.test — the wizard's draft rules: per-step problems (name grammar, sites, proxy and its explicit language and time zone, access under auth=token), adding sites as typed, the `POST /templates` body, server issues mapped to steps; and the sign-in step's error states */
 import { describe, expect, it } from 'bun:test';
-import type { SystemInfo } from '@browserhive/contracts/http';
 import { AppError } from '@/lib/api/errors.ts';
 import { hostView, template } from '../../../../test/fixtures/templates.ts';
 import { hostOf, nameProblem, remoteHost, suggestName } from '../model.ts';
@@ -14,7 +13,6 @@ import {
   type TemplateDraft,
   toTemplateInput,
 } from './draft.ts';
-import { identityDefaults, STEALTH } from './identity-defaults.ts';
 import { recordingSessionOf, signInProblem } from './sign-in-model.ts';
 
 const READY: TemplateDraft = { ...EMPTY_DRAFT, name: 'job-hunt', sites: ['linkedin.com'] };
@@ -216,19 +214,5 @@ describe('sign-in error states', () => {
     expect(recordingSessionOf([base as never])).not.toBeNull();
     expect(recordingSessionOf([{ ...base, slug: 'maintenance' } as never])).toBeNull();
     expect(recordingSessionOf([{ ...base, live: false } as never])).toBeNull();
-  });
-});
-
-describe('stealth (D6)', () => {
-  it('never sends stealth off and defaults to standard when the server runs without stealth', () => {
-    expect(toTemplateInput({ ...READY, stealth: 'off' })).not.toHaveProperty('stealth');
-    expect(toTemplateInput({ ...READY, stealth: 'max' })).toMatchObject({ stealth: 'max' });
-    const off = identityDefaults(
-      { stealth: { profile: 'off', fingerprint: true } } as unknown as SystemInfo,
-      null,
-      'en',
-    );
-    expect(off.stealth).toBe('standard');
-    expect(STEALTH.map((s) => s.value)).toEqual(['standard', 'max']);
   });
 });

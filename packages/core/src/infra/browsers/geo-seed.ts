@@ -25,7 +25,7 @@
  * came from.
  */
 
-import type { BrowserContextOptions } from 'playwright';
+import type { BrowserContextOptions } from 'patchright';
 import type { GeoSeed } from '../../ports/browser-driver.ts';
 import type { GeoSeedResolver } from '../../ports/geo-seed-resolver.ts';
 import type { HostFacts } from './host-facts.ts';

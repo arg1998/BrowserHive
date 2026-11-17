@@ -3,7 +3,7 @@
 
 import { afterEach, beforeEach } from 'bun:test';
 import { existsSync } from 'node:fs';
-import { chromium } from 'playwright';
+import { driverChromium } from '../../src/infra/browsers/driver.ts';
 import { createPlaywrightPageActions } from '../../src/infra/browsers/page-actions.ts';
 import { PlaywrightBrowserDriver } from '../../src/infra/browsers/playwright-browser-driver.ts';
 import { createSystemClock } from '../../src/infra/clock/system-clock.ts';
@@ -26,15 +26,15 @@ export interface McpStackState {
 
 /** Throws with the install command when Chromium is missing. */
 export function assertChromiumInstalled(): void {
-  const path = chromium.executablePath();
+  const path = driverChromium().executablePath();
   if (!existsSync(path)) {
     throw new Error(
-      `integration suite cannot run: Chromium is not installed at ${path}. Run 'bunx playwright install chromium'.`,
+      `integration suite cannot run: Chromium is not installed at ${path}. Run 'bunx patchright install chromium'.`,
     );
   }
 }
 
-/** Builds a real-Chromium tool harness (system clock, nanoid ids, Playwright page actions). */
+/** Builds a real-Chromium tool harness (system clock, nanoid ids, page actions over the driver). */
 export async function createRealHarness(options: ToolHarnessOptions = {}): Promise<ToolHarness> {
   assertChromiumInstalled();
   const clock = createSystemClock();
@@ -43,7 +43,6 @@ export async function createRealHarness(options: ToolHarnessOptions = {}): Promi
       logger: createCollectingLogger(),
       clock,
       host: HOST,
-      stealthDriver: options.stealthDriver ?? 'playwright',
     }),
     pageActions: createPlaywrightPageActions({ clock }),
     clock,

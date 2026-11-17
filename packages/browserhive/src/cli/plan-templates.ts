@@ -26,9 +26,6 @@ export const TEMPLATE_CREATE_TIMEOUT_MS = 30 * 60_000;
 /** `--timeout` default of `templates login`: 30 minutes, the window's own limit (spec 13 §8.4). */
 export const TEMPLATE_LOGIN_TIMEOUT_MS = 30 * 60_000;
 
-/** `--stealth` of `templates create`: every level but `off`. */
-const TEMPLATE_STEALTH = StealthLevel.options.filter((level) => level !== 'off');
-
 /** An invocation waiting for its REST target (resolved after the flags are known to be valid). */
 export type RemoteInvocation = (remote: RemoteTarget) => Invocation;
 
@@ -190,8 +187,7 @@ function createInvocation(
   const displayName = reader.text('displayName');
   const description = reader.text('description');
   const channel = Channel.safeParse(reader.oneOf('channel', Channel.options)).data;
-  // Templates never run without stealth (D6); the server refuses `off` too.
-  const stealth = StealthLevel.safeParse(reader.oneOf('stealth', TEMPLATE_STEALTH)).data;
+  const stealth = StealthLevel.safeParse(reader.oneOf('stealth', StealthLevel.options)).data;
   const headless = input.tokens.flags.has('headless') ? reader.bool('headless') : undefined;
   const locale = reader.text('locale');
   const timezone = reader.text('timezone');

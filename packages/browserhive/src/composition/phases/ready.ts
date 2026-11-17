@@ -3,7 +3,6 @@
 import { configSourceSummary, hostRamGib } from '@browserhive/core/config';
 import { listBackups } from '@browserhive/core/persistence';
 import { resolveColor } from '@browserhive/core/runtime';
-import { pinnedPlaywrightVersion } from '@browserhive/core/server';
 import { type BannerFacts, renderBanner } from '../banner.ts';
 import { type BootContext, part } from '../context.ts';
 import type { PhaseHandle } from '../unwind.ts';
@@ -21,10 +20,7 @@ export async function bannerFacts(ctx: BootContext): Promise<BannerFacts> {
   return {
     version: input.appVersion,
     bunVersion: Bun.version,
-    driver: {
-      name: driverName,
-      version: driverName === 'patchright' ? patchrightVersion() : pinnedPlaywrightVersion(),
-    },
+    driver: { name: driverName, version: patchrightVersion() },
     transport: ctx.transport,
     url: ctx.listeners?.url ?? null,
     auth: config.auth,

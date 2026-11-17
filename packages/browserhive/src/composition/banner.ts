@@ -7,7 +7,7 @@ export interface BannerFacts {
   readonly version: string;
   readonly bunVersion: string;
   /** Resolved driver and its package version. */
-  readonly driver: { readonly name: 'patchright' | 'playwright'; readonly version: string | null };
+  readonly driver: { readonly name: 'patchright'; readonly version: string | null };
   readonly transport: 'http' | 'stdio';
   /** `http://host:port` (http only). */
   readonly url: string | null;

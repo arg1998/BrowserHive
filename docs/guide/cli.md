@@ -71,22 +71,20 @@ Rules, all optional: `categories` (`needs-you+problems+wrap-ups+reports+system`)
 One-time setup, safe to re-run:
 
 1. Create the data directory (`0700`) and subdirectories.
-2. Install Chromium for Playwright (honours `PLAYWRIGHT_BROWSERS_PATH`).
-3. Install Patchright's Chromium when `stealthDriver` is `auto` or `patchright`.
-4. Report the browsers on this machine (bundled Chromium, installed Google Chrome and Microsoft Edge) and whether each can run inside Chromium's sandbox; on a terminal, offer the default-browser menu (Enter keeps the current one). See [Installation: choosing the browser](installation.md#choosing-the-browser).
-5. Create or migrate the database.
-6. Print next steps.
+2. Install Chromium for Patchright, BrowserHive's browser driver (honours `PLAYWRIGHT_BROWSERS_PATH`).
+3. Report the browsers on this machine (bundled Chromium, installed Google Chrome and Microsoft Edge) and whether each can run inside Chromium's sandbox; on a terminal, offer the default-browser menu (Enter keeps the current one). See [Installation: choosing the browser](installation.md#choosing-the-browser).
+4. Create or migrate the database.
+5. Print next steps.
 
 | Flag | Meaning |
 |---|---|
 | `--browsers chromium` | Browsers to install (only `chromium` today; Chrome and Edge channels use the OS installation). |
 | `--force` | Re-download even if present. |
-| `--skipBrowsers` | Skip the browser downloads (data directory and database only). |
+| `--skipBrowsers` | Skip the browser download (data directory and database only). |
 | `--dataDir <path>`, `--config <path>` | Where state and configuration live. |
-| `--stealthDriver <auto\|patchright\|playwright>` | `playwright` skips the Patchright download. |
 | `--writeSchema` | Write `browserhive.schema.json` next to a discovered config file. |
 | `--channel <chromium\|chrome\|edge>` | Make this the default browser and save `defaultChannel` to the config file. Without a terminal it needs `--yes`. |
-| `--installChrome` | Install Google Chrome with Google's installer (`playwright install chrome`; needs administrator rights). |
+| `--installChrome` | Install Google Chrome with Google's installer (`patchright install chrome`; needs administrator rights). |
 | `--yes` | Save the `--channel` choice without asking. |
 
 `init` never asks anything without a terminal, in CI (`CI` set) or in a container.
@@ -302,7 +300,7 @@ Exit codes: `0` every checked site is signed in; `1` failure; `2` a site is sign
 ## `version`
 
 ```
-browserhive 0.2.0 (bun 1.4.2, sqlite 3.53.2, playwright 1.63.0, patchright 1.63.0)
+browserhive 0.3.0 (bun 1.4.2, sqlite 3.53.2, patchright 1.63.0)
 ```
 
 `--json` for scripts.

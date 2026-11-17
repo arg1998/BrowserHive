@@ -1,27 +1,17 @@
 /** @module composition/phases/wire-observers — phase 5: recorder projection, notification producers, system status publisher, maintenance schedulers, lease sweeper, OTel metrics consumers. */
 
-import { createRequire } from 'node:module';
 import { listBackups } from '@browserhive/core/persistence';
 import { createProcessTreeReader, type Logger, serializeError } from '@browserhive/core/runtime';
-import { pinnedPlaywrightVersion, SystemStatusService } from '@browserhive/core/server';
+import { driverVersion, SystemStatusService } from '@browserhive/core/server';
 import { hostKey, startBrowserMemorySampler } from '../adapters/browser-memory.ts';
 import { wireMetrics } from '../adapters/metrics.ts';
 import { createTimers } from '../adapters/timers.ts';
 import { type BootContext, part } from '../context.ts';
 import type { PhaseHandle } from '../unwind.ts';
 
-/** Version of the optional `patchright` package, or `null` when it cannot be resolved. */
+/** Version of the `patchright` package (the browser driver, D-65), or `null` when it cannot be read. */
 export function patchrightVersion(): string | null {
-  try {
-    const require = createRequire(import.meta.url);
-    const manifest: unknown = require('patchright/package.json');
-    if (typeof manifest === 'object' && manifest !== null && 'version' in manifest) {
-      return typeof manifest.version === 'string' ? manifest.version : null;
-    }
-  } catch {
-    // Optional dependency absent.
-  }
-  return null;
+  return driverVersion();
 }
 
 /**
@@ -82,7 +72,8 @@ export async function wireObserversPhase(ctx: BootContext): Promise<PhaseHandle>
       runtime: {
         bun: Bun.version,
         sqlite: storage.sqliteVersion,
-        playwright: pinnedPlaywrightVersion(),
+        // Deprecated alias of `patchright` (D-65); the field is not nullable, hence 'unknown'.
+        playwright: patchrightVersion() ?? 'unknown',
         patchright: patchrightVersion(),
         chromium: domain.chromiumVersion,
       },

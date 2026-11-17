@@ -1,7 +1,7 @@
 /** @module infra/browsers/template-host-state.test — `pageHeaps` over fakes (review #79 L-7): at most 8 reads at once, an overall deadline after which unread pages are skipped, maintenance pages and unattributed pages left out. */
 
 import { describe, expect, it } from 'bun:test';
-import type { BrowserContext, Page } from 'playwright';
+import type { BrowserContext, Page } from 'patchright';
 import { CollectingLogger } from '../../../test/helpers/collecting-logger.ts';
 import type { HostPageDispatcher } from './page-dispatcher.ts';
 import type { ViewPages } from './template-host-ops.ts';

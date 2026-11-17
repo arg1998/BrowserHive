@@ -8,18 +8,20 @@ const TABS = ['sites', 'sessions', 'versions', 'access', 'settings', 'activity']
 
 /** Serious and critical violations on the page, as readable lines. */
 async function violations(page: Page): Promise<string[]> {
-  // Colour contrast is only meaningful on the settled page: a dialog fading in (opacity < 1) blends
-  // its text with the backdrop, which axe reads as low contrast (CI is slow enough to catch it).
   await page.mouse.move(0, 0);
-  await page.waitForFunction(
-    () =>
-      document
-        .getAnimations()
-        // Endless ones (the live dot, spinners) never settle and never fade text.
-        .every((a) => a.playState !== 'running' || a.effect?.getTiming().iterations === Infinity),
-    undefined,
-    { timeout: 10_000 },
-  );
+  // Colour contrast is computed from the current styles: let finite transitions (a dialog fading
+  // in, a focus ring, a button turning red once enabled) finish, or a slow runner measures them
+  // halfway. Infinite ones (the live dot's pulse) never finish and are left alone.
+  await page
+    .waitForFunction(
+      () =>
+        document
+          .getAnimations()
+          .every((a) => a.playState !== 'running' || a.effect?.getTiming().iterations === Infinity),
+      null,
+      { timeout: 5_000 },
+    )
+    .catch(() => undefined);
   await page.addScriptTag({ path: AXE });
   return page.evaluate(async () => {
     const axe = (

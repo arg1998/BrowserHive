@@ -20,6 +20,7 @@ import { interpolateJson } from './interpolate.ts';
 import type { JsonValue } from './json-parse.ts';
 import { keyKind } from './kinds.ts';
 import { emptyAfterMessage, refProblemMessage } from './ref-messages.ts';
+import { addRemovedKey, collectRemovedOverrides } from './removed-keys.ts';
 import { suggest, suggestKey } from './suggest.ts';
 
 /** One raw value for one key from one source, before parsing. */
@@ -46,6 +47,8 @@ export interface RawEntry {
 export interface CollectedLayer {
   readonly entries: ReadonlyMap<ConfigKey, RawEntry>;
   readonly problems: readonly ConfigProblem[];
+  /** Non-fatal findings (a removed key set to what is now the only behaviour, spec 08 §5.10). */
+  readonly warnings?: readonly string[];
 }
 
 const EMPTY_HINT = 'Unset it or provide a value.';
@@ -59,6 +62,8 @@ const EMPTY_HINT = 'Unset it or provide a value.';
 export function collectEnvLayer(env: Readonly<Record<string, string | undefined>>): CollectedLayer {
   const entries = new Map<ConfigKey, RawEntry>();
   const problems: ConfigProblem[] = [];
+  const warnings: string[] = [];
+  const sink = { problems, warnings };
   for (const name of Object.keys(env).sort()) {
     if (!name.startsWith(ENV_PREFIX)) continue;
     const value = env[name];
@@ -97,6 +102,10 @@ export function collectEnvLayer(env: Readonly<Record<string, string | undefined>
       });
       continue;
     }
+    if (found.kind === 'removed') {
+      addRemovedKey(found, value, { source: 'env', location: name, display: name }, sink);
+      continue;
+    }
     if (value === '') {
       problems.push({
         code: 'CONFIG_EMPTY_VALUE',
@@ -115,7 +124,7 @@ export function collectEnvLayer(env: Readonly<Record<string, string | undefined>
       display: name,
     });
   }
-  return { entries, problems };
+  return { entries, problems, warnings };
 }
 
 /** Hint for the unsupported `--admin-bind`, `--admin-port` and their env spellings (D-02). */
@@ -172,6 +181,8 @@ export function collectOtelLayer(
 export function collectCliLayer(tokens: TokenizedArgs): CollectedLayer {
   const entries = new Map<ConfigKey, RawEntry>();
   const problems: ConfigProblem[] = [];
+  const warnings: string[] = [];
+  const sink = { problems, warnings };
   for (const flag of [...tokens.unknown, ...tokens.shortFlags]) {
     const { suggestions, removed } = suggestKey(flag, 'cli', CONFIG_KEYS);
     const base = `unknown flag '${flag}'.`;
@@ -214,6 +225,11 @@ export function collectCliLayer(tokens: TokenizedArgs): CollectedLayer {
       });
       continue;
     }
+    if (found.kind === 'removed') {
+      const where = { source: 'cli', location: flag, display: flag } as const;
+      addRemovedKey(found, values.at(-1) ?? '', where, sink);
+      continue;
+    }
     const kind = keyKind(found.key);
     const raw = kind === 'list' || kind === 'map' ? values.join(',') : (values.at(-1) ?? '');
     if (raw === '') {
@@ -228,7 +244,7 @@ export function collectCliLayer(tokens: TokenizedArgs): CollectedLayer {
     }
     entries.set(found.key, { key: found.key, raw, source: 'cli', location: flag, display: flag });
   }
-  return { entries, problems };
+  return { entries, problems, warnings };
 }
 
 /** What a value was written as: the string itself, or compact JSON for arrays and objects. */
@@ -252,6 +268,8 @@ export function collectFileLayer(
 ): CollectedLayer {
   const entries = new Map<ConfigKey, RawEntry>();
   const problems: ConfigProblem[] = [];
+  const warnings: string[] = [];
+  const sink = { problems, warnings };
   const baseDir = dirname(filePath);
   for (const [name, raw] of Object.entries(json)) {
     if (name === '$schema') continue;
@@ -281,6 +299,18 @@ export function collectFileLayer(
         location,
         message: reservedMessage(found.key),
       });
+      continue;
+    }
+    if (found.kind === 'removed') {
+      // A reference resolves first, so `{env:X}` holding `patchright` reads as `patchright`.
+      const expanded = interpolateJson(raw, lookup);
+      const value = expanded.problems.length === 0 ? expanded.value : raw;
+      addRemovedKey(
+        found,
+        value,
+        { source: 'file', location, display: `'${name}' in ${filePath}` },
+        sink,
+      );
       continue;
     }
     const key = found.key;
@@ -339,7 +369,7 @@ export function collectFileLayer(
       ...(refs.length > 0 && { refs, template: templateOf(raw), refValues: expanded.values }),
     });
   }
-  return { entries, problems };
+  return { entries, problems, warnings };
 }
 
 /**
@@ -362,5 +392,6 @@ export function collectOverridesLayer(overrides: ConfigOverrides): CollectedLaye
     const location = `options.${key}`;
     entries.set(key, { key, raw, source: 'cli', location, display: location });
   }
-  return { entries, problems: [] };
+  const removed = collectRemovedOverrides(overrides);
+  return { entries, problems: removed.problems, warnings: removed.warnings };
 }

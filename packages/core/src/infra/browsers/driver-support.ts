@@ -1,4 +1,4 @@
-/** @module infra/browsers/driver-support — pieces of the Playwright driver that need no browser: the default sandbox policy, the display half recorded on metadata, and a Chromium session's engine capabilities (spec 11 §2.1, §4.1). */
+/** @module infra/browsers/driver-support — pieces of the browser driver that need no browser: the default sandbox policy, the display half recorded on metadata, and a Chromium session's engine capabilities (spec 11 §2.1, §4.1). */
 
 import type { AppliedDisplay, EngineCapabilities, LaunchSpec } from '../../ports/browser-driver.ts';
 import type { Clock } from '../../ports/clock.ts';
@@ -46,19 +46,16 @@ export function displayFor(spec: LaunchSpec): AppliedDisplay | null {
   };
 }
 
-/** Engine capabilities of a Chromium session (spec 11 §2.1). */
-export function capabilitiesFor(
-  driver: 'patchright' | 'playwright',
-  spec: Pick<LaunchSpec, 'headless'>,
-): EngineCapabilities {
+/** Engine capabilities of a Chromium session on Patchright, the only driver (spec 11 §2.1, D-65). */
+export function capabilitiesFor(spec: Pick<LaunchSpec, 'headless'>): EngineCapabilities {
   return {
     cdpScreencast: true,
     // Chromium can only print to PDF in headless mode.
     pdf: spec.headless,
     trace: true,
-    closedShadowRoot: driver === 'patchright',
+    closedShadowRoot: true,
     perContextProxy: true,
     // Patchright's isolated-world `evaluate` needs the `isolatedContext: false` argument.
-    isolatedEvaluate: driver === 'patchright',
+    isolatedEvaluate: true,
   };
 }

@@ -6,8 +6,8 @@ import { existsSync } from 'node:fs';
 import { mkdtemp } from 'node:fs/promises';
 import { arch, platform, release, tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Page } from 'playwright';
-import { chromium } from 'playwright';
+import type { Page } from 'patchright';
+import { driverChromium } from '../../src/infra/browsers/driver.ts';
 import { evaluateMainWorld } from '../../src/infra/browsers/evaluate.ts';
 import { resolveIdentity } from '../../src/infra/browsers/identity-resolver.ts';
 import { PlaywrightBrowserDriver } from '../../src/infra/browsers/playwright-browser-driver.ts';
@@ -56,19 +56,18 @@ export interface IntegrationState {
 }
 
 /**
- * Evaluate in the MAIN world. The stealth driver (Patchright) isolates `page.evaluate` by default; to
- * read what a page's own scripts see, the driver-aware helper passes `isolatedContext: false` only
- * where the driver accepts it (stock Playwright 1.63 rejects the extra argument).
+ * Evaluate in the MAIN world. The driver (Patchright, D-65) isolates `page.evaluate` by default; to
+ * read what a page's own scripts see, the helper passes `isolatedContext: false`.
  */
 export function evalMain<T>(session: LaunchedSession, fn: () => T, page?: Page): Promise<T> {
   return evaluateMainWorld(page ?? session.page, session.handle.capabilities.isolatedEvaluate, fn);
 }
 
 function assertChromiumPresent(): void {
-  const path = chromium.executablePath();
+  const path = driverChromium().executablePath();
   if (!existsSync(path)) {
     throw new Error(
-      `integration suite cannot run: Chromium is not installed at ${path}. Run 'bunx playwright install chromium' (and 'bunx patchright install chromium').`,
+      `integration suite cannot run: Chromium is not installed at ${path}. Run 'bunx patchright install chromium'.`,
     );
   }
 }
@@ -92,7 +91,6 @@ export function useDriverFixtures(): { state: IntegrationState } {
       logger: createCollectingLogger(),
       clock: createSystemClock(),
       host: HOST,
-      stealthDriver: 'auto',
     });
     state.launch = async (request) => {
       const sessionId = `${request.slug}-${(counter++).toString(36).padStart(8, '0')}`;
@@ -124,7 +122,6 @@ export function useDriverFixtures(): { state: IntegrationState } {
           userDataDir: join(sessionDir, 'profile'),
         }),
         stealth,
-        stealthDriver: 'auto',
         proxy: null,
         downloadsDir: join(sessionDir, 'downloads'),
         ...(request.launchOptions !== undefined && { launchOptions: request.launchOptions }),

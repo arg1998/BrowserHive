@@ -59,7 +59,6 @@ function setup(options: { maxSessions?: number; maxPagesPerHost?: number } = {})
     degradations,
     spec: {
       dataDir: '/data',
-      stealthDriver: 'auto',
       proxyResolver: { resolve: async (r) => r.requested },
       env: {},
       selfOrigins: () => ['http://127.0.0.1:9876'],
@@ -520,7 +519,6 @@ describe('T1b: holds, checkpoints and memory (spec 13 §3.2, §3.9, §3.12)', ()
       degradations,
       spec: {
         dataDir: '/data',
-        stealthDriver: 'auto',
         proxyResolver: { resolve: async (r) => r.requested },
         env: {},
         selfOrigins: () => [],

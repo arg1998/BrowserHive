@@ -189,7 +189,7 @@ describe('init: the menu', () => {
     );
   });
 
-  it('choosing the install entry runs playwright install chrome, then saves chrome', async () => {
+  it('choosing the install entry runs patchright install chrome, then saves chrome', async () => {
     const probes = probeState({ environment: ubuntu, sandbox: { chromium: unavailable } });
     const fs = dataDirFs();
     const run = await cliHarness({
@@ -211,7 +211,7 @@ describe('init: the menu', () => {
     });
     expect(run.code).toBe(0);
     expect(run.runs).toEqual([
-      { command: '/usr/bin/bun', args: ['/pkg/playwright/cli.js', 'install', 'chrome'] },
+      { command: '/usr/bin/bun', args: ['/pkg/patchright/cli.js', 'install', 'chrome'] },
     ]);
     expect(run.stdout).toContain('✓ Google Chrome  installed 154.0.8037.57');
     expect(JSON.parse(await fs.readFile(CONFIG))).toEqual({ defaultChannel: 'chrome' });
@@ -268,7 +268,7 @@ describe('init: non-interactive flags', () => {
     expect(failed.stdout).toContain(
       '✗ Google Chrome  install failed (exit 1): sudo: a password is required',
     );
-    expect(failed.stdout).toContain('Retry with: npx playwright install chrome');
+    expect(failed.stdout).toContain('Retry with: npx patchright install chrome');
   });
 
   it('a flag or env var that overrides the file is pointed out after saving', async () => {

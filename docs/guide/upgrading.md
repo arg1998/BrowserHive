@@ -6,7 +6,7 @@ BrowserHive follows semantic versioning from `0.1.0`. While the major version is
 
 ```bash
 bun add -g browserhive@latest     # or: npm i -g browserhive@latest / pnpm add -g browserhive@latest
-browserhive init                  # refreshes browsers if the Playwright version moved
+browserhive init                  # refreshes the browser if the Patchright version moved
 browserhive doctor
 ```
 
@@ -49,6 +49,24 @@ On the first start of 0.2.3, every snapshot in the flat layout whose manifest na
 
 If you use more than one token: before 0.2.3, an agent that saved a login under a name another principal already used took that name over (the snapshot and its owner were replaced). Such a takeover cannot be detected after the upgrade, because the files then belong to whoever saved last. Ask each agent to call `list_saved_auths`, check that each saved login is the one it expects, and save again any that is missing or wrong.
 
+### To 0.3: Patchright is the only browser driver
+
+From 0.3.0 every session runs on Patchright, whatever its stealth level. Stock Playwright is no longer used, and the `stealthDriver` setting is gone.
+
+What you may need to change:
+
+- **Remove `stealthDriver`** from your config file, environment (`BROWSERHIVE_STEALTH_DRIVER`) and command line.
+  - `stealthDriver: playwright` now stops startup (exit code 64) with a message that says to remove it.
+  - `auto` and `patchright` still start, with a warning that the setting is ignored. From 0.4.0 the name is an unknown key and stops startup like any other.
+- **Run `browserhive init` again** if you had set `stealthDriver: playwright` and never installed Patchright's Chromium. Patchright and Playwright of the same version use the same Chromium build and the same browser folder, so on most machines there is nothing to download.
+- **For a browser without BrowserHive's stealth, use `--stealth off`.** It no longer means "stock Playwright": the session still runs on Patchright, so `navigator.webdriver` is `false` there too. See [what `off` still includes](stealth.md#what-off-still-includes).
+- **Pages' console messages and uncaught page errors are not reported.** Patchright never enables the browser's console and runtime domains, at any stealth level, so a trace's console tab stays empty and page errors (`pageerror`) never fire. If you relied on either, log from the page another way.
+- **Chromium's popup blocker is on in every session.** A page opens a popup only from a user gesture, as in a normal browser: popups a page opens from a timer or after an `await` (some sign-in flows) are blocked. Clicks an agent makes count as gestures. Patchright also leaves Chromium's component updates, default apps and extensions enabled.
+- **The trace viewer is unchanged.** It is now served from Patchright's package; traces look the same.
+- **`/api/v1/system`**: `runtime.patchright` is the driver's version (`null` only when its package cannot be read). `runtime.playwright` is a deprecated alias of it (the same string, or `unknown` when `runtime.patchright` is `null`) and will be removed with the next API version. `stealth.driver` is always `patchright`.
+- **CORS preflights** (measured on Patchright 1.63): without request interception the site's preflight answer is honoured at every stealth level, so a write the site refuses is not sent. With interception (a configured blocklist, every template browser) the driver answers the preflight itself, so such a write is sent, as it was before 0.3.0. See the templates guide's [known limits](templates.md#known-limits).
+- `browserhive version` lists Patchright only, and `browserhive doctor` has one browser row, `chromium (patchright)`.
+
 ## Downgrade
 
 Nothing is ever migrated downward in place. Instead, each database records two numbers: its schema version, and the **oldest schema version whose code can still read it**. Purely additive migrations (new tables or columns) do not raise the second number.
@@ -76,4 +94,4 @@ browserhive db backup --out ./browserhive-before-change.db
 
 ## Browser versions
 
-Playwright and Patchright are pinned per release. After an upgrade that moves the pin, the installed browser build does not match the driver, and `launch_session` fails with [`BROWSER_NOT_INSTALLED`](../reference/errors.md#BROWSER_NOT_INSTALLED) until you run `browserhive init`.
+Patchright, the browser driver, is pinned per release. After an upgrade that moves the pin, the installed browser build does not match the driver, and `launch_session` fails with [`BROWSER_NOT_INSTALLED`](../reference/errors.md#BROWSER_NOT_INSTALLED) until you run `browserhive init`.

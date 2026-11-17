@@ -1,6 +1,6 @@
 /** @module test/helpers/fake-template-host — a scriptable `TemplateHost` and `TemplateHostLauncher` for the supervisor suites: views are `FakeSessionView`s, exits and start failures are triggered by the test. */
 
-import type { BrowserContext } from 'playwright';
+import type { BrowserContext } from 'patchright';
 import type {
   AppliedIdentity,
   Cookie,
@@ -38,7 +38,7 @@ export class FakeTemplateHost implements TemplateHost {
   readonly browser = null;
   readonly context = {} as BrowserContext;
   readonly capabilities = CAPABILITIES;
-  readonly driver = 'playwright' as const;
+  readonly driver = 'patchright' as const;
   readonly identity: AppliedIdentity | null;
   readonly warnings: readonly LaunchWarning[] = [];
   readonly tracing = null;

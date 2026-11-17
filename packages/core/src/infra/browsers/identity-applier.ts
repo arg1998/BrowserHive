@@ -1,6 +1,6 @@
 /** @module infra/browsers/identity-applier — applies the CDP `Emulation.setUserAgentOverride` per page (WeakMap-tracked, replayed on `context.on('page')`, detached on close). */
 
-import type { BrowserContext, CDPSession, Page } from 'playwright';
+import type { BrowserContext, CDPSession, Page } from 'patchright';
 import { z } from 'zod';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { AppliedDisplay, AppliedIdentity, GeoSeed } from '../../ports/browser-driver.ts';

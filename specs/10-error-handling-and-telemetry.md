@@ -204,9 +204,9 @@ export function errorFrom(code, details, opts?): AppError;   // factory with typ
 
 Process level (installed by the CLI, not by core): `unhandledRejection`/`uncaughtException` → log at `error` with `serializeError`, record `system.degraded {code:'UNHANDLED', ...}`, and continue; if the error is `DB_CORRUPT` or the storage handle is gone, initiate `stop()` with exit code 1. `no-floating-promises` is enforced by Biome (`noFloatingPromises`).
 
-### 1.5 Playwright error classification
+### 1.5 Driver error classification (Patchright, Playwright's wording)
 
-`infra/browsers/classify-error.ts` maps driver errors to codes with an ordered regex table pinned by tests (each row has a fixture message). A row that names a driver method accepts both the bare prefix Playwright and Patchright 1.63 write (`evaluate: …`, `goto: …`, `saveAs: …`, `async setInputFiles: …`) and the older object-qualified one (`page.evaluate: …`). The unit fixtures carry the 1.63 text plus the old text as extra cases, and the integration contract test (`test/integration/driver-messages.test.ts`) provokes each failure on real Chromium through both drivers, so a driver upgrade that rewords a message fails CI instead of surfacing as `INTERNAL_ERROR`:
+`infra/browsers/classify-error.ts` maps driver errors to codes with an ordered regex table pinned by tests (each row has a fixture message). A row that names a driver method accepts both the bare prefix Patchright 1.63 writes (Playwright's wording, which Patchright keeps) (`evaluate: …`, `goto: …`, `saveAs: …`, `async setInputFiles: …`) and the older object-qualified one (`page.evaluate: …`). The unit fixtures carry the 1.63 text plus the old text as extra cases, and the integration contract test (`test/integration/driver-messages.test.ts`) provokes each failure on real Chromium through Patchright, the only driver (D-65), with stealth off and on, so a driver upgrade that rewords a message fails CI instead of surfacing as `INTERNAL_ERROR`:
 
 | Match | Code |
 |---|---|
@@ -337,7 +337,7 @@ All spans use `@opentelemetry/api`'s tracer `browserhive`; attributes use the `b
 | `mcp.tool_call` (root for a tool call) | `browserhive.tool`, `browserhive.session_id`, `browserhive.tab_id`, `browserhive.principal`, `browserhive.event_id`, `browserhive.ok`, `browserhive.error_code`, `browserhive.result_bytes`, `browserhive.harness`, `browserhive.harness_source`, `browserhive.model` (only when reported) |
 | `session.create` + children `session.validate`, `session.admit`, `session.reserve`, `session.prepare_profile`, `session.resolve_identity`, `session.launch`, `session.install_policies`, `session.start_tracing`, `session.apply_identity`, `session.register` | `browserhive.session_id`, `browserhive.channel`, `browserhive.stealth`, `browserhive.persistence_mode`, `browserhive.phase_ms`, `browserhive.harness`, `browserhive.harness_source`, `browserhive.model` (only when reported) |
 | `session.close` | `browserhive.reason` |
-| `browser.launch` | `browserhive.driver` (`playwright`/`patchright`), `browserhive.channel`, `browserhive.headless` |
+| `browser.launch` | `browserhive.driver` (always `patchright` since D-65), `browserhive.channel`, `browserhive.headless` |
 | `page.navigate` | `url.full` (sanitized), `http.response.status_code`, `browserhive.wait_until` |
 | `cdp.command` (debug sampling only) | `browserhive.cdp.method` |
 | `vault.fill` + `vault.resolve_entry`, `vault.check_origin`, `vault.confirm`, `vault.fetch`, `vault.type`, `vault.submit` | `browserhive.entry_name`, `browserhive.result`, `browserhive.reason` |

@@ -1,6 +1,6 @@
 /** @module infra/browsers/template-host — the shared browser of a template (spec 13 §3.1–§3.6): every page attributed before any session sees it, background windows claimed by target id, the parked sentinel (recreated when closed by hand), the parked-page bound, crash and operator-stop detection, and a close only the supervisor calls. */
 
-import type { Browser, BrowserContext, Page } from 'playwright';
+import type { Browser, BrowserContext, Page } from 'patchright';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type {
   AppliedIdentity,
@@ -47,7 +47,7 @@ export interface TemplateHostInput {
   readonly targets: HostTargets;
   readonly chain: InterceptionChain;
   readonly capabilities: EngineCapabilities;
-  readonly driver: 'patchright' | 'playwright';
+  readonly driver: 'patchright';
   readonly browserInfo: SessionBrowserInfo;
   readonly warnings: readonly LaunchWarning[];
   readonly headless: boolean;
@@ -67,7 +67,7 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
   readonly browser: Browser | null;
   readonly context: BrowserContext;
   readonly capabilities: EngineCapabilities;
-  readonly driver: 'patchright' | 'playwright';
+  readonly driver: 'patchright';
   readonly browserInfo: SessionBrowserInfo;
   readonly warnings: LaunchWarning[];
   readonly tracing = null;

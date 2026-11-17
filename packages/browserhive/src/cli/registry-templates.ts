@@ -36,9 +36,9 @@ const createFlags: readonly FlagDescriptor[] = [
   {
     name: 'stealth',
     kind: 'value',
-    placeholder: '<standard|max>',
-    describe: "Stealth level of the template's browser. Templates always run with stealth on.",
-    defaultText: 'stealth, or standard when it is off',
+    placeholder: '<off|standard|max>',
+    describe: "Stealth level of the template's browser.",
+    defaultText: 'stealth',
   },
   {
     name: 'proxy',

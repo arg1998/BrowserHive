@@ -67,8 +67,7 @@ FLAGS — create
   --channel <chromium|chrome|edge>  The template's browser. default: defaultChannel
   --headless                        Run the template's browser without a window. Sites may challenge
                                     it more often.
-  --stealth <standard|max>          Stealth level of the template's browser. Templates always run
-                                    with stealth on. default: stealth, or standard when it is off
+  --stealth <off|standard|max>      Stealth level of the template's browser. default: stealth
   --proxy <url>                     Proxy the template's browser always uses (http://host:port).
   --proxyUsername <name>            Proxy user name (needs --proxy).
   --proxyPasswordEnv <ENV>          Environment variable holding the proxy password on the server's

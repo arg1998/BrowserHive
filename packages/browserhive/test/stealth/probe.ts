@@ -2,7 +2,7 @@
  * @module test/stealth/probe — the stealth and sandbox measurement harness (plan §6). Every value is
  * measured **through BrowserHive**: `createServer` → MCP over Streamable HTTP → `launch_session` →
  * `navigate` to a local `Bun.serve` page → `evaluate`. Only the reference engine version comes from a
- * raw Playwright launch, because it is the ground truth the page-visible version is compared with.
+ * raw driver (Patchright) launch, because it is the ground truth the page-visible version is compared with.
  *
  * Used by `scripts/stealth-matrix.ts` (the cross-OS CI job) and by the stealth-parity integration test.
  */
@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
-import { chromium } from 'playwright';
+import { chromium } from 'patchright';
 import { createServer } from '../../src/index.ts';
 
 /** A channel name as `launch_session` accepts it. */

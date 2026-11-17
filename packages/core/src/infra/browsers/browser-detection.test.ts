@@ -1,7 +1,7 @@
 /** @module infra/browsers/browser-detection.test — detection per OS with fake filesystems, `--version` output and registries; Playwright's own lookup is pinned. */
 
 import { describe, expect, it } from 'bun:test';
-import { chromium } from 'playwright';
+import { chromium } from 'patchright';
 import {
   type BrowserDetectionDeps,
   type CommandOutput,
@@ -177,8 +177,8 @@ describe('helpers', () => {
     expect(channelExecutable('edge', () => null, locate)).toBe('/msedge');
   });
 
-  it('Playwright’s internal executable lookup still exists in the pinned playwright-core', () => {
-    // If a Playwright bump moves `registry.findExecutable`, detection would silently find nothing;
+  it('the internal executable lookup still exists in the pinned patchright-core', () => {
+    // If a driver bump moves `registry.findExecutable`, detection would silently find nothing;
     // this pins the entry point against the bundled browser, which the stock API also reports.
     expect(playwrightExecutable('chromium')).toBe(chromium.executablePath());
   });

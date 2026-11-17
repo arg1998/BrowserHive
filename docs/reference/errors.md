@@ -3085,7 +3085,7 @@ Hint: Session warning: logged and broadcast on session:<id>, never thrown.
 
 Cause: The CDP identity override could not be applied; the session runs with reduced stealth.
 
-Resolution: Check the driver (Patchright/Playwright) version compatibility.
+Resolution: Check the driver (Patchright) version compatibility.
 
 Details:
 

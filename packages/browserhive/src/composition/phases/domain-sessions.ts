@@ -1,4 +1,4 @@
-/** @module composition/phases/domain-sessions — browser driver (Patchright resolution per `stealthDriver`), the sandbox policy and its `sandbox=on` preflight, identity/proxy resolvers, blocklist (+ watcher), auth-state store, session service and lease sweeper. */
+/** @module composition/phases/domain-sessions — browser driver (Patchright, the only driver, D-65), the sandbox policy and its `sandbox=on` preflight, identity/proxy resolvers, blocklist (+ watcher), auth-state store, session service and lease sweeper. */
 
 import { watch } from 'node:fs';
 import { readFile } from 'node:fs/promises';
@@ -15,7 +15,7 @@ import {
   assertChromiumInstalled,
   BlocklistService,
   bundledChromiumVersion,
-  DriverResolver,
+  driverChromium,
   HostGeoSeedResolver,
   installBlocklistRoute,
   LeaseSweeper,
@@ -47,7 +47,7 @@ export interface SessionsInput {
 
 /** Built session-side services. */
 export interface SessionsParts {
-  readonly driverName: () => 'patchright' | 'playwright';
+  readonly driverName: () => 'patchright';
   /** The browser driver; it also starts template hosts (spec 13 §3.1). */
   readonly driver: PlaywrightBrowserDriver;
   readonly browserInstalled: boolean;
@@ -71,20 +71,13 @@ export const nodeBlocklistWatcher: BlocklistFileWatcher = {
 };
 
 /**
- * Checks the Chromium binary for the resolved driver. A missing browser is not a boot failure
- * (D-18): it is reported as a `BROWSER_NOT_INSTALLED` degradation and surfaces as the typed error at
- * the first launch.
+ * Checks the driver's Chromium binary. A missing browser is not a boot failure (D-18): it is
+ * reported as a `BROWSER_NOT_INSTALLED` degradation and surfaces as the typed error at the first
+ * launch.
  */
-export function probeBrowser(
-  resolver: DriverResolver,
-  input: Pick<SessionsInput, 'config' | 'host' | 'relay' | 'logger'>,
-): boolean {
+export function probeBrowser(input: Pick<SessionsInput, 'host' | 'relay' | 'logger'>): boolean {
   try {
-    const browserType =
-      input.config.stealth === 'off'
-        ? resolver.stock()
-        : resolver.resolveStealth(input.config.stealthDriver).browserType;
-    assertChromiumInstalled(browserType, 'chromium', { env: input.host.env });
+    assertChromiumInstalled(driverChromium(), 'chromium', { env: input.host.env });
     return true;
   } catch (err) {
     const message = isAppError(err) ? err.message : 'Chromium is not installed';
@@ -102,14 +95,12 @@ export function probeBrowser(
 /** Builds the session side. `blocklist.load()` failing is fatal (`BLOCKLIST_LOAD_FAILED`). */
 export async function buildSessions(input: SessionsInput): Promise<SessionsParts> {
   const { config, clock, ids, logger, bus, host } = input;
-  const resolver = new DriverResolver({ logger });
-  const browserInstalled = probeBrowser(resolver, input);
+  const browserInstalled = probeBrowser(input);
   // Under sandbox=on this refuses to start (SANDBOX_UNAVAILABLE, exit code 3) before anything opens.
   const sandbox = await buildSandbox({
     config,
     provenance: input.provenance,
     configFilePath: input.configFilePath,
-    resolver,
     logger,
     clock,
     ...(input.sandboxHost !== undefined && { host: input.sandboxHost }),
@@ -136,8 +127,6 @@ export async function buildSessions(input: SessionsInput): Promise<SessionsParts
     logger,
     clock,
     host,
-    stealthDriver: config.stealthDriver,
-    driverResolver: resolver,
     sandbox: sandbox.policy,
     ...(input.testingArgs !== undefined && { testingArgs: input.testingArgs }),
     // Every template host's chain carries the configured blocklist (spec 13 §3.8).
@@ -145,11 +134,9 @@ export async function buildSessions(input: SessionsInput): Promise<SessionsParts
       ? { blocklist: blocklist.holder, observer: blocklist.requestObserver }
       : null,
   });
-  // The System page's runtime row: the build the driver actually launches (Patchright's or
-  // Playwright's bundled Chromium), not a system-wide browser.
-  const chromiumVersion = browserInstalled
-    ? bundledChromiumVersion(config.stealth === 'off' ? 'playwright' : driver.stealthDriverName())
-    : null;
+  // The System page's runtime row: the build the driver launches (Patchright's bundled Chromium),
+  // not a system-wide browser.
+  const chromiumVersion = browserInstalled ? bundledChromiumVersion() : null;
 
   const policies: SessionPolicyInstaller = {
     async install(host, context) {
@@ -183,7 +170,6 @@ export async function buildSessions(input: SessionsInput): Promise<SessionsParts
       persistence: config.persistence,
       maxSessions: config.maxSessions,
       stealth: config.stealth,
-      stealthDriver: config.stealthDriver,
       fingerprint: config.fingerprint,
       humanize: config.humanize,
       trace: config.trace,

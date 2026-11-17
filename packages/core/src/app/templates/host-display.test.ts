@@ -15,7 +15,6 @@ import { permanentFailure } from './host-state.ts';
 function deps(platform: string | undefined, env: Record<string, string>): HostSpecDeps {
   return {
     dataDir: '/data',
-    stealthDriver: 'patchright',
     proxyResolver: { resolve: async (r) => r.requested },
     env,
     selfOrigins: () => [],

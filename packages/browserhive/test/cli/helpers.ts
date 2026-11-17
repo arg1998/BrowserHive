@@ -337,7 +337,6 @@ function fakeStorage(
 export interface ProbeState {
   bun: string;
   sqlite: string;
-  playwright: { -readonly [K in keyof BrowserInstall]: BrowserInstall[K] };
   patchright: { -readonly [K in keyof BrowserInstall]: BrowserInstall[K] };
   portFree: boolean;
   bw: string | null;
@@ -412,11 +411,6 @@ export function probeState(overrides: Partial<ProbeState> = {}): ProbeState {
   return {
     bun: '1.4.2',
     sqlite: '3.53.2',
-    playwright: {
-      packageVersion: '1.63.0',
-      executablePath: '/cache/chromium-1243/chrome',
-      installed: true,
-    },
     patchright: {
       packageVersion: '1.63.0',
       executablePath: '/cache/chromium-1243/chrome',
@@ -444,7 +438,6 @@ function fakeProbes(state: ProbeState): HostProbes {
   return {
     bunVersion: () => state.bun,
     sqliteVersion: async () => state.sqlite,
-    playwright: async () => state.playwright,
     patchright: async () => state.patchright,
     portFree: async () => state.portFree,
     which: async () => state.bw,
@@ -454,7 +447,7 @@ function fakeProbes(state: ProbeState): HostProbes {
     },
     diskFreeBytes: async () => state.diskFree,
     pathMode: async (path) => state.modes[posixPath(path)] ?? state.modes[path] ?? 0o700,
-    installCommand: (driver) => ({ command: '/usr/bin/bun', args: [`/pkg/${driver}/cli.js`] }),
+    installCommand: () => ({ command: '/usr/bin/bun', args: ['/pkg/patchright/cli.js'] }),
     httpReachable: async () => state.otlp,
     fetchOnce: async (url) => state.fetches[url] ?? { kind: 'error', detail: 'connection refused' },
     browsers: async () => state.browsers,

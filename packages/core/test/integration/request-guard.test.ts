@@ -2,7 +2,7 @@
 /** @module test/integration/request-guard — the interception chain and the method-aware request guard on real Chromium: form, fetch and beacon posts, documents, the blocklist in the same chain, held confirmations, the HTTP cache and the documented redirect limit (spec 13 §3.8, §9.3, T0b; issue #59). */
 
 import { describe, expect, it } from 'bun:test';
-import type { Page } from 'playwright';
+import type { Page } from 'patchright';
 import { Blocklist, parseBlocklist } from '../../src/domain/policies/blocklist.ts';
 import {
   compileRequestGuardRules,
@@ -113,7 +113,8 @@ describe('request guard (real Chromium)', () => {
   const { state } = useDriverFixtures();
 
   for (const stealth of [false, true]) {
-    const driver = stealth ? 'patchright' : 'playwright';
+    // Both legs run on Patchright, the only driver (D-65); they differ in BrowserHive's stealth.
+    const driver = stealth ? 'stealth' : 'plain';
 
     it(`[${driver}] a POST form logout is aborted while the GET confirm page loads`, async () => {
       const session = await state.launch({ slug: `form-${driver}`, stealth });
@@ -394,7 +395,8 @@ describe('documented blind spots (real Chromium)', () => {
     });
 
   for (const stealth of [false, true]) {
-    const driver = stealth ? 'patchright' : 'playwright';
+    // Both legs run on Patchright, the only driver (D-65); they differ in BrowserHive's stealth.
+    const driver = stealth ? 'stealth' : 'plain';
 
     it(`[${driver}] a SharedWorker's requests are not routed; a dedicated worker's are`, async () => {
       const session = await state.launch({ slug: `workers-${driver}`, stealth });
@@ -434,37 +436,75 @@ describe('documented blind spots (real Chromium)', () => {
     });
   }
 
-  it('[playwright] CORS preflights are answered by Playwright, so a refused write is sent', async () => {
-    const other = startFixtureServer();
-    try {
-      const target = other.url('/cors/write');
-      const write = (page: Page) =>
-        page.evaluate(
-          (url) =>
-            fetch(url, {
-              method: 'POST',
-              headers: { 'content-type': 'application/json', 'x-custom': '1' },
-              body: '{}',
-            }).then(
-              (r) => `ok:${r.status}`,
-              (e: Error) => `err:${e.name}`,
-            ),
-          target,
-        );
-      const plain = await state.launch({ slug: 'cors-plain' });
-      await plain.page.goto(state.fixture.url('/'));
-      expect(await write(plain.page)).toBe('err:TypeError');
-      expect(other.requests.map((r) => r.method)).toEqual(['OPTIONS']);
+  /** A preflighted cross-origin write (JSON body, a custom header) from `page` to `url`. */
+  const write = (page: Page, url: string) =>
+    page.evaluate(
+      (target) =>
+        fetch(target, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-custom': '1' },
+          body: '{}',
+        }).then(
+          (r) => `ok:${r.status}`,
+          (e: Error) => `err:${e.name}`,
+        ),
+      url,
+    );
 
-      const routed = await state.launch({ slug: 'cors-routed' });
-      await guard(routed, ruleSet());
-      await routed.page.goto(state.fixture.url('/'));
-      await write(routed.page);
-      expect(other.requests.map((r) => r.method)).toEqual(['OPTIONS', 'POST']);
-    } finally {
-      other.stop();
-    }
-  });
+  // CORS preflights, measured on Patchright 1.63 after D40 (no driver document route): page and
+  // target are both on loopback, the same IP address space, so Local Network Access does not
+  // restrict them and the outcome is CORS alone. Pinned per stealth level, without and with a
+  // BrowserHive route (the blocklist route, the guard's chain). Enforcing preflights inside the
+  // chain is deferred item D41.
+  for (const stealth of [false, true]) {
+    const label = stealth ? 'stealth' : 'plain';
+
+    it(`[${label}] without a BrowserHive route a write the site refuses at preflight is not sent`, async () => {
+      const other = startFixtureServer();
+      try {
+        const session = await state.launch({ slug: `cors-free-${label}`, stealth });
+        await session.page.goto(state.fixture.url('/'));
+        expect(await write(session.page, other.url('/cors-allowed/write'))).toBe('ok:200');
+        expect(await write(session.page, other.url('/cors/write'))).toBe('err:TypeError');
+        expect(other.requests.map((r) => `${r.method} ${r.path}`)).toEqual([
+          'OPTIONS /cors-allowed/write',
+          'POST /cors-allowed/write',
+          'OPTIONS /cors/write',
+        ]);
+      } finally {
+        other.stop();
+      }
+    });
+
+    it(`[${label}] with a BrowserHive route the driver answers the preflight, so a refused write is sent`, async () => {
+      const other = startFixtureServer();
+      try {
+        // The blocklist route alone (a configured blocklist, even an empty one).
+        const blocked = await state.launch({ slug: `cors-bl-${label}`, stealth });
+        const warning = await installBlocklistRoute(blocked.handle.context, {
+          blocklist: new Blocklist(),
+          observer: { blocked: () => undefined },
+          sessionId: blocked.view.sessionId,
+          clock,
+          logger: createCollectingLogger(),
+        });
+        expect(warning).toBeNull();
+        await blocked.page.goto(state.fixture.url('/'));
+        // The page cannot read the answer (no CORS headers), but the write reached the site.
+        expect(await write(blocked.page, other.url('/cors/write'))).toBe('err:TypeError');
+        expect(other.requests.map((r) => r.method)).toEqual(['POST']);
+
+        // The interception chain with the request guard.
+        const guarded = await state.launch({ slug: `cors-guard-${label}`, stealth });
+        await guard(guarded, ruleSet());
+        await guarded.page.goto(state.fixture.url('/'));
+        await write(guarded.page, other.url('/cors/write'));
+        expect(other.requests.map((r) => r.method)).toEqual(['POST', 'POST']);
+      } finally {
+        other.stop();
+      }
+    });
+  }
 });
 
 describe('interception and the HTTP cache (real Chromium)', () => {

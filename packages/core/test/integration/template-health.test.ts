@@ -1,7 +1,7 @@
 /** @module test/integration/template-health — spec 13 §17 T2 acceptance against real Chromium and the HTTPS fixture sites: the generic probe's three outcomes, one sign-out notification per identity provider that resolves after a re-login, the queued act and **Show window**, agents paused during the window (D-60), vault auto-relogin through every gate, and `TEMPLATE_NEEDS_LOGIN` only when every site is out. */
 
 import { afterEach, describe, expect, it } from 'bun:test';
-import type { Page } from 'playwright';
+import type { Page } from 'patchright';
 import { InProcessEventBus } from '../../src/app/events/bus.ts';
 import type { DomainEvents } from '../../src/app/events/catalog.ts';
 import { NotificationService } from '../../src/app/notifications/notification-service.ts';
@@ -38,7 +38,7 @@ afterEach(async () => {
 
 /** The T2 services over a real template host, with in-memory rows. */
 async function setup(options: { readonly vault?: boolean } = {}) {
-  const w = await templateWorld('patchright');
+  const w = await templateWorld('standard');
   world = w;
   const clock = createSystemClock();
   const logger = createCollectingLogger();

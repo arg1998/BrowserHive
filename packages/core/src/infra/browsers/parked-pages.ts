@@ -1,6 +1,6 @@
 /** @module infra/browsers/parked-pages — the parked pages of a template host (spec 13 §3.4): pages no session owns, bounded per host, and closed when they commit a `data:` document (spec 13 §17 follow-up 1). */
 
-import type { Frame, Page } from 'playwright';
+import type { Frame, Page } from 'patchright';
 import type { Clock } from '../../ports/clock.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type { ParkedPageInfo } from '../../ports/template-host.ts';

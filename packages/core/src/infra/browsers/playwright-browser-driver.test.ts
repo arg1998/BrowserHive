@@ -1,11 +1,10 @@
 /** @module infra/browsers/playwright-browser-driver.test — launch failures map to typed errors: a browser that cannot start its sandbox is `SANDBOX_UNAVAILABLE` (`retryable: never`), never `INTERNAL_ERROR`/`backoff`. */
 
 import { describe, expect, it } from 'bun:test';
-import type { BrowserType, LaunchOptions } from 'playwright';
+import type { BrowserType, LaunchOptions } from 'patchright';
 import { FakeClock } from '../../../test/helpers/fake-clock.ts';
 import { createCollectingLogger } from '../../../test/helpers/test-logger.ts';
 import type { LaunchSpec } from '../../ports/browser-driver.ts';
-import { DriverResolver } from './driver-resolver.ts';
 import { PlaywrightBrowserDriver } from './playwright-browser-driver.ts';
 
 /** What Playwright throws on Ubuntu 23.10+ for the bundled browser with `chromiumSandbox: true`. */
@@ -50,7 +49,6 @@ function spec(overrides: Partial<LaunchSpec> = {}): LaunchSpec {
     headless: true,
     persistenceMode: 'memory',
     stealth: false,
-    stealthDriver: 'playwright',
     proxy: null,
     downloadsDir: '/data/sessions/shop-aaaaaaaa/downloads',
     ...overrides,
@@ -63,13 +61,8 @@ function driverFor(type: BrowserType): PlaywrightBrowserDriver {
     logger,
     clock: new FakeClock(),
     host: { platform: 'linux', arch: 'x64', release: '6.8.0', env: {} },
-    stealthDriver: 'playwright',
-    driverResolver: new DriverResolver({
-      logger,
-      playwrightChromium: type,
-      loadPatchright: () => undefined,
-    }),
-    chromium: { exists: () => true, playwrightVersion: '1.63.0' },
+    browserType: type,
+    chromium: { exists: () => true, driverVersion: '1.63.0' },
   });
 }
 

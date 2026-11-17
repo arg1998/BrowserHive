@@ -21,7 +21,7 @@ export interface BrowserChoiceOptions {
   readonly resolved: ResolvedConfigBundle;
   /** `--channel`: select (and save) this channel without a menu. */
   readonly channel: Channel | null;
-  /** `--installChrome`: run Google's installer through Playwright. */
+  /** `--installChrome`: run Google's installer through Patchright's CLI. */
   readonly installChrome: boolean;
   /** `--yes`: accept the save without a prompt. */
   readonly yes: boolean;
@@ -61,7 +61,7 @@ export function shortSandboxCause(environment: SandboxEnvironment): string {
   return 'sandbox failed';
 }
 
-/** Whether Playwright can install Google Chrome on this host (no Linux arm64 build exists). */
+/** Whether the driver's CLI can install Google Chrome on this host (no Linux arm64 build exists). */
 export function chromeInstallable(platform: string, arch: string): boolean {
   if (platform === 'linux') return arch === 'x64';
   return platform === 'darwin' || platform === 'win32';
@@ -185,8 +185,8 @@ export function menuEntries(
       pros: ['The real browser at the version real users run; updates itself'],
       cons: [
         platform.platform === 'linux'
-          ? "Runs Google's installer through 'playwright install chrome' (apt, with sudo)"
-          : "Runs Google's installer through 'playwright install chrome'",
+          ? "Runs Google's installer through 'patchright install chrome' (apt, with sudo)"
+          : "Runs Google's installer through 'patchright install chrome'",
       ],
     });
   }
@@ -306,24 +306,24 @@ async function ask(context: CommandContext, question: string): Promise<string> {
 }
 
 /**
- * Runs `playwright install chrome` (Google's official installer; needs administrator rights).
+ * Runs `patchright install chrome` (Google's official installer; needs administrator rights).
  *
  * @returns Whether Chrome is installed afterwards.
  */
 async function installChrome(context: CommandContext): Promise<boolean> {
   const { deps, out } = context;
-  const command = deps.probes.installCommand('playwright');
+  const command = deps.probes.installCommand();
   if (command === null) {
     out.status(
       'fail',
       'Google Chrome',
-      "cannot locate the Playwright CLI; run 'npx playwright install chrome'",
+      "cannot locate the Patchright CLI; run 'npx patchright install chrome'",
     );
     return false;
   }
   out.line(
     out.style.dim(
-      '  installing Google Chrome (playwright install chrome; may ask for your password)…',
+      '  installing Google Chrome (patchright install chrome; may ask for your password)…',
     ),
   );
   const env: Record<string, string> = {};
@@ -355,7 +355,7 @@ async function installChrome(context: CommandContext): Promise<boolean> {
     'Google Chrome',
     `install failed (exit ${outcome.code ?? 'signal'})${last === '' ? '' : `: ${last}`}`,
   );
-  out.line(`  Retry with: ${out.style.bold('npx playwright install chrome')}`);
+  out.line(`  Retry with: ${out.style.bold('npx patchright install chrome')}`);
   return false;
 }
 

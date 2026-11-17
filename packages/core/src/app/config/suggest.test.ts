@@ -58,7 +58,7 @@ describe('suggestKey', () => {
       removed: false,
     });
     expect(suggestKey('BROWSERHIVE_DISABLE_PATCHRIGHT', 'env', CONFIG_KEYS)).toEqual({
-      suggestions: ['BROWSERHIVE_STEALTH_DRIVER'],
+      suggestions: ['BROWSERHIVE_STEALTH'],
       removed: false,
     });
     expect(suggestKey('--admin-port', 'cli', CONFIG_KEYS)).toEqual({

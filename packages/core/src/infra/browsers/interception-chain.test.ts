@@ -1,7 +1,7 @@
 /** @module infra/browsers/interception-chain.test — one route per context, ordered handlers, first abort wins, fail-closed and fail-open handler errors, lazy memoized owner (spec 13 §3.8). */
 
 import { describe, expect, it } from 'bun:test';
-import type { BrowserContext, Request, Route } from 'playwright';
+import type { BrowserContext, Request, Route } from 'patchright';
 import { createCollectingLogger } from '../logging/collecting-logger.ts';
 import {
   fixedOwner,

@@ -1,6 +1,6 @@
 /** @module test/helpers/fake-page — FakePage: the Playwright `Page` subset the tools use, with scripted outcomes and call recording (spec 09 §4). */
 
-import type { Page } from 'playwright';
+import type { Page } from 'patchright';
 
 /** One recorded call. */
 export interface RecordedCall {

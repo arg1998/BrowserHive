@@ -161,69 +161,34 @@ export function checkReferenceDefaults(
   return rows;
 }
 
-/** Chromium for Playwright and, unless `stealthDriver=playwright`, for Patchright. */
-export async function checkBrowsers(
-  deps: CliDeps,
-  stealthDriver: ServerConfig['stealthDriver'],
-): Promise<readonly CheckResult[]> {
-  const rows: CheckResult[] = [];
-  const playwright = await deps.probes.playwright();
-  if (playwright.packageVersion === null) {
-    rows.push(
-      result(
-        'chromium (playwright)',
-        'fail',
-        'playwright package not found; reinstall browserhive',
-      ),
-    );
-  } else if (playwright.installed) {
-    rows.push(
-      result(
-        'chromium (playwright)',
-        'ok',
-        `playwright ${playwright.packageVersion} · ${playwright.executablePath ?? 'installed'}`,
-      ),
-    );
-  } else {
-    rows.push(
-      result(
-        'chromium (playwright)',
-        'fail',
-        `not installed${playwright.executablePath === null ? '' : ` at ${playwright.executablePath}`}; run 'browserhive init'`,
-      ),
-    );
-  }
-  if (stealthDriver === 'playwright') return rows;
+/** Patchright, the only browser driver (D-65), and its Chromium: required. */
+export async function checkBrowsers(deps: CliDeps): Promise<readonly CheckResult[]> {
   const patchright = await deps.probes.patchright();
-  const severity: CheckStatus = stealthDriver === 'patchright' ? 'fail' : 'warn';
   if (patchright.packageVersion === null) {
-    rows.push(
+    return [
       result(
         'chromium (patchright)',
-        severity,
-        stealthDriver === 'patchright'
-          ? 'stealthDriver=patchright but the patchright package is not installed'
-          : 'patchright not installed (optional); stealth sessions use Playwright',
+        'fail',
+        'patchright package not found; reinstall browserhive',
       ),
-    );
-  } else if (patchright.installed) {
-    rows.push(
+    ];
+  }
+  if (patchright.installed) {
+    return [
       result(
         'chromium (patchright)',
         'ok',
         `patchright ${patchright.packageVersion} · ${patchright.executablePath ?? 'installed'}`,
       ),
-    );
-  } else {
-    rows.push(
-      result(
-        'chromium (patchright)',
-        severity,
-        `patchright ${patchright.packageVersion}: Chromium not installed; run 'browserhive init'`,
-      ),
-    );
+    ];
   }
-  return rows;
+  return [
+    result(
+      'chromium (patchright)',
+      'fail',
+      `patchright ${patchright.packageVersion}: Chromium not installed${patchright.executablePath === null ? '' : ` at ${patchright.executablePath}`}; run 'browserhive init'`,
+    ),
+  ];
 }
 
 function octal(mode: number): string {

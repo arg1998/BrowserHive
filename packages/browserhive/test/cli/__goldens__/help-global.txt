@@ -115,17 +115,14 @@ FLAGS — sessions
                                     before closing them. default: 15m
 
 FLAGS — stealth
-  --stealth <off|standard|max>      Stealth level. max also defaults fingerprint to true.
-                                    default: standard
-  --stealthDriver <auto|patchright|playwright>
-                                    Chromium driver for stealth sessions. auto uses Patchright when
-                                    installed, else Playwright. default: auto
-  --fingerprint                     Coherent fingerprint identity per session. Defaults to true only
-                                    when stealth=max. default: true when stealth=max
-  --humanize                        Human-like cursor movement and typing cadence. Requires stealth
-                                    standard or max. default: false
-  --captcha <attention|off>         CAPTCHA policy. attention hands the page to an operator (needs
-                                    admin and http). default: attention
+  --stealth <off|standard|max>  Stealth level. max also defaults fingerprint to true.
+                                default: standard
+  --fingerprint                 Coherent fingerprint identity per session. Defaults to true only
+                                when stealth=max. default: true when stealth=max
+  --humanize                    Human-like cursor movement and typing cadence. Requires stealth
+                                standard or max. default: false
+  --captcha <attention|off>     CAPTCHA policy. attention hands the page to an operator (needs admin
+                                and http). default: attention
 
 FLAGS — logging
   --logLevel <level[,module=level]>

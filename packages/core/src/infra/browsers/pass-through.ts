@@ -1,6 +1,6 @@
 /** @module infra/browsers/pass-through — validated Playwright launch/context option pass-through, sibling-field policy and BYO-proxy detection (spec 11 §4, §11). */
 
-import type { BrowserContextOptions, LaunchOptions } from 'playwright';
+import type { BrowserContextOptions, LaunchOptions } from 'patchright';
 import { z } from 'zod';
 import { assertLaunchArgsAllowed } from '../../kernel/deny-list.ts';
 import { AppError } from '../../kernel/errors/app-error.ts';

@@ -9,8 +9,9 @@ export const CHANNEL_LABEL: { readonly [C in Channel]: string } = {
   edge: 'Microsoft Edge',
 };
 
-/** Stealth levels a template may use, in order: templates always run with stealth on (D6). */
+/** Stealth levels in order. */
 export const STEALTH: readonly { readonly value: StealthLevel; readonly label: string }[] = [
+  { value: 'off', label: 'Off' },
   { value: 'standard', label: 'Standard' },
   { value: 'max', label: 'Max' },
 ];
@@ -37,8 +38,7 @@ export function identityDefaults(
   const profile = system?.stealth.profile;
   return {
     channel: system?.browser?.default_channel ?? 'chromium',
-    // The server's level, or `standard` when the server runs with stealth off (D6).
-    stealth: profile === 'max' ? 'max' : 'standard',
+    stealth: profile === 'off' || profile === 'max' ? profile : 'standard',
     fingerprint: system?.stealth.fingerprint ?? true,
     installed:
       system?.browser === undefined

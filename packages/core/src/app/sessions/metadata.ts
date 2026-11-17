@@ -15,7 +15,7 @@ import { redactKeys } from '../../kernel/redact.ts';
 import type { AppliedIdentity } from '../../ports/browser-driver.ts';
 import type { JsonObject, SessionPatch, SessionRecord } from '../../ports/persistence/records.ts';
 
-/** `SessionMetadata` plus the extra `driver` key (`patchright`/`playwright`, D-13). */
+/** `SessionMetadata` plus the extra `driver` key (always `patchright` since D-65; D-13). */
 export type SessionMetadataWithDriver = SessionMetadata & {
   readonly driver: StealthDriverName | null;
 };

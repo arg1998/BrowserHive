@@ -107,7 +107,6 @@ describe('templates create: flags', () => {
     [['--sites', 'a.test', '--proxyUsername', 'me'], '--proxyUsername requires --proxy.'],
     [['--sites', 'a.test', '--channel', 'firefox'], 'invalid value for --channel'],
     [['--sites', 'a.test', '--stealth', 'ultra'], 'invalid value for --stealth'],
-    [['--sites', 'a.test', '--stealth', 'off'], 'invalid value for --stealth'],
   ])('rejects %j as a usage error (64)', async (flags, message) => {
     const server = fakeServer({});
     const result = await run(server, ['create', 'job-hunt', ...flags, ...URL_FLAGS]);

@@ -82,18 +82,21 @@ describe('stealth Phase 0 (real browser)', () => {
     expect(handle.identity?.brands.map((b) => b.brand)).toContain('Google Chrome');
     expect(handle.identity?.userAgent).not.toContain('HeadlessChrome');
     expect(handle.warnings.map((w) => w.code)).not.toContain('STEALTH_INIT_FAILED');
-    expect(['patchright', 'playwright']).toContain(handle.driver);
-    expect(handle.capabilities.isolatedEvaluate).toBe(handle.driver === 'patchright');
+    expect(handle.driver).toBe('patchright');
+    expect(handle.capabilities.isolatedEvaluate).toBe(true);
   });
 
   it('a non-stealth session applies no override (native identity, no recorded identity)', async () => {
     const session = await state.launch({ slug: 'plain', stealth: false });
     const { handle, page } = session;
     await page.goto(state.fixture.url('/probe'));
-    // Stock automation leaves navigator.webdriver true and applies no identity override.
-    expect((await readProbe(session)).webdriver).toBe(true);
+    // BrowserHive applies no identity override; Patchright's own launch flags (D-65) still keep
+    // navigator.webdriver false, and the headless UA keeps its `HeadlessChrome` token.
+    const probe = await readProbe(session);
+    expect(probe.webdriver).toBe(false);
+    expect(await evalMain(session, () => navigator.userAgent)).toContain('HeadlessChrome');
     expect(handle.identity).toBeNull();
-    expect(handle.driver).toBe('playwright');
+    expect(handle.driver).toBe('patchright');
   });
 
   it("a new tab's FIRST request already carries the overridden identity", async () => {

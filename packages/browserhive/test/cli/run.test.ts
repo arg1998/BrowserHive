@@ -9,8 +9,7 @@ import { cliHarness, probeState, storageState } from './helpers.ts';
 
 describe('version', () => {
   it('--version, -v and version print the one-line format', async () => {
-    const line =
-      'browserhive 0.1.0 (bun 1.4.2, sqlite 3.53.2, playwright 1.63.0, patchright 1.63.0)\n';
+    const line = 'browserhive 0.1.0 (bun 1.4.2, sqlite 3.53.2, patchright 1.63.0)\n';
     for (const argv of [['--version'], ['-v'], ['version']]) {
       const run = await cliHarness({ argv });
       expect(run.code).toBe(0);
@@ -24,14 +23,15 @@ describe('version', () => {
     });
     const run = await cliHarness({ argv: ['version'], probes });
     expect(run.stdout).toBe(
-      'browserhive 0.1.0 (bun 1.4.2, sqlite 3.53.2, playwright 1.63.0, patchright not installed)\n',
+      'browserhive 0.1.0 (bun 1.4.2, sqlite 3.53.2, patchright not installed)\n',
     );
     const json = await cliHarness({ argv: ['version', '--json'], probes });
     expect(JSON.parse(json.stdout)).toEqual({
       browserhive: '0.1.0',
       bun: '1.4.2',
       sqlite: '3.53.2',
-      playwright: '1.63.0',
+      // Deprecated (D-65): equals `patchright`, the Playwright release it is built on.
+      playwright: null,
       patchright: null,
       schema_version: 1,
     });

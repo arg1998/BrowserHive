@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'bun:test';
 import { createProcessTreeReader } from '../../src/infra/host/process-tree.ts';
-import { useDriverFixtures } from './driver-fixture.ts';
+import { evalMain, useDriverFixtures } from './driver-fixture.ts';
 
 /** What `/storage` renders into `#storage` after `window.__setStorage`. */
 interface StorageView {
@@ -42,7 +42,8 @@ describe('session isolation', () => {
     const b = await state.launch({ slug: 'sessb' });
     await a.page.goto(state.fixture.url('/storage'));
     await b.page.goto(state.fixture.url('/storage'));
-    await a.page.evaluate(() =>
+    // The page's own function lives in its main world (Patchright isolates `evaluate`).
+    await evalMain(a, () =>
       (window as unknown as { __setStorage(v: string): void }).__setStorage('from_A'),
     );
 
@@ -118,14 +119,15 @@ describe('session isolation', () => {
     await a.page.waitForFunction(
       () => (window as unknown as { __swReady?: boolean }).__swReady === true,
     );
-    await a.page.evaluate(() => navigator.serviceWorker.ready);
+    // `serviceWorker.ready` exists only in the page's main world (Patchright isolates `evaluate`).
+    await evalMain(a, () => navigator.serviceWorker.ready.then(() => undefined));
 
-    const aRegs = await a.page.evaluate(async () => {
+    const aRegs = await evalMain(a, async () => {
       const regs = await navigator.serviceWorker.getRegistrations();
       return regs.length;
     });
     expect(aRegs).toBeGreaterThanOrEqual(1);
-    const bRegs = await b.page.evaluate(async () => {
+    const bRegs = await evalMain(b, async () => {
       const regs = await navigator.serviceWorker.getRegistrations();
       return regs.length;
     });

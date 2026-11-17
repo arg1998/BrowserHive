@@ -72,7 +72,29 @@ const ROWS: readonly ErrorRow[] = [
     env: { BROWSERHIVE_DISABLE_PATCHRIGHT: '1' },
     exitCode: 64,
     rendered:
-      "browserhive: unknown environment variable 'BROWSERHIVE_DISABLE_PATCHRIGHT'. Did you mean 'BROWSERHIVE_STEALTH_DRIVER'?",
+      "browserhive: unknown environment variable 'BROWSERHIVE_DISABLE_PATCHRIGHT'. Did you mean 'BROWSERHIVE_STEALTH'?",
+  },
+  {
+    name: 'removed stealthDriver=playwright in the config file (spec 08 §5.10, D-65)',
+    file: '{"stealthDriver": "playwright"}',
+    exitCode: 64,
+    code: 'CONFIG_INVALID',
+    rendered:
+      "browserhive: 'stealthDriver' in /work/browserhive.config.json: the Playwright driver was removed in 0.3.0; every session runs on Patchright. Remove 'stealthDriver'. For a browser without BrowserHive's stealth patches, set stealth to off.",
+  },
+  {
+    name: 'removed stealthDriver=playwright as a flag',
+    argv: ['--stealthDriver', 'playwright'],
+    exitCode: 64,
+    rendered:
+      "browserhive: --stealthDriver: the Playwright driver was removed in 0.3.0; every session runs on Patchright. Remove 'stealthDriver'. For a browser without BrowserHive's stealth patches, set stealth to off.",
+  },
+  {
+    name: 'removed stealthDriver with a value it never had (a typo), in the environment',
+    env: { BROWSERHIVE_STEALTH_DRIVER: 'PATCHRIGHT' },
+    exitCode: 64,
+    rendered:
+      "browserhive: BROWSERHIVE_STEALTH_DRIVER: 'PATCHRIGHT' is not a value 'stealthDriver' ever had, and 'stealthDriver' itself is gone: Patchright is the only browser driver since 0.3.0. Remove 'stealthDriver'.",
   },
   {
     name: 'misspelt identity variable suggests the identity name (08 §2.2)',
@@ -402,5 +424,45 @@ describe('resolveConfig fail-fast messages (spec 08 §4)', () => {
     });
     expect(lan.config.host).toBe('0.0.0.0');
     expect(lan.diagnostics.warnings).toEqual([]);
+  });
+});
+
+describe('the removed stealthDriver key (spec 08 §5.10, D-65)', () => {
+  const tail =
+    'is deprecated and ignored: Patchright is the only browser driver since 0.3.0. Remove it; from 0.4.0 it is an unknown key.';
+
+  it('auto and patchright warn once per source and start: they asked for what always happens', () => {
+    const bundle = resolveOk({
+      env: { BROWSERHIVE_STEALTH_DRIVER: 'auto' },
+      argv: ['--stealthDriver', 'patchright'],
+      files: { [FILE]: '{"stealthDriver": "{env:DRIVER:-patchright}"}' },
+    });
+    expect(bundle.diagnostics.warnings).toEqual([
+      `BROWSERHIVE_STEALTH_DRIVER ${tail}`,
+      `--stealthDriver ${tail}`,
+      `'stealthDriver' in ${FILE} ${tail}`,
+    ]);
+    expect(Object.keys(bundle.config)).not.toContain('stealthDriver');
+    expect(Object.keys(bundle.provenance)).not.toContain('stealthDriver');
+  });
+
+  it('createServer options are treated like any other source', () => {
+    const kept = resolveOk({ overrides: { stealthDriver: 'patchright' } as never });
+    expect(kept.diagnostics.warnings).toEqual([`options.stealthDriver ${tail}`]);
+    const removed = resolveErr({ overrides: { stealthDriver: 'playwright' } as never });
+    expect(removed.exitCode).toBe(64);
+    expect(removed.render()).toBe(
+      "browserhive: options.stealthDriver: the Playwright driver was removed in 0.3.0; every session runs on Patchright. Remove 'stealthDriver'. For a browser without BrowserHive's stealth patches, set stealth to off.",
+    );
+  });
+
+  it('every problem is still reported together with the removed key', () => {
+    const failure = resolveErr({
+      argv: ['--stealthDriver', 'playwright', '--maxSession', '3'],
+    });
+    expect(failure.problems.map((p) => p.location).sort()).toEqual([
+      '--maxSession',
+      '--stealthDriver',
+    ]);
   });
 });

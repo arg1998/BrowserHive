@@ -1,7 +1,7 @@
 /** @module infra/browsers/blocklist-route.test — document-only blocking, hot reload, fail-closed handler, install failure warning. */
 
 import { describe, expect, it } from 'bun:test';
-import type { BrowserContext, Route } from 'playwright';
+import type { BrowserContext, Route } from 'patchright';
 import { FakeClock } from '../../../test/helpers/fake-clock.ts';
 import { Blocklist, parseBlocklist } from '../../domain/policies/blocklist.ts';
 import { createCollectingLogger } from '../logging/collecting-logger.ts';

@@ -1,6 +1,6 @@
 /** @module test/helpers/fake-host-targets — a template host over fakes: a `FakeBrowserContext` whose pages carry scripted target facts, and a `HostTargets` stand-in whose windows appear as `page` events (before or after `createTarget` answers). */
 
-import type { Page } from 'playwright';
+import type { Page } from 'patchright';
 import { InterceptionChain } from '../../src/infra/browsers/interception-chain.ts';
 import type { TargetFacts } from '../../src/infra/browsers/page-attribution.ts';
 import { PlaywrightTemplateHost } from '../../src/infra/browsers/template-host.ts';
@@ -148,7 +148,7 @@ export function fakeTemplateHost(
       perContextProxy: true,
       isolatedEvaluate: false,
     },
-    driver: 'playwright',
+    driver: 'patchright',
     browserInfo: { version: null, sandboxed: false },
     warnings: [],
     headless: options.headless ?? true,

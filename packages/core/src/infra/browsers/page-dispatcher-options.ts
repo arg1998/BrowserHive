@@ -1,6 +1,6 @@
 /** @module infra/browsers/page-dispatcher-options — the attribution dispatcher's hold length, its target-facts reader and its constructor options (spec 13 §3.4). */
 
-import type { Page } from 'playwright';
+import type { Page } from 'patchright';
 import type { Clock } from '../../ports/clock.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type { PageOwner, TargetFacts } from './page-attribution.ts';

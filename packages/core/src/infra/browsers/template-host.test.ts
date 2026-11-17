@@ -1,7 +1,7 @@
 /** @module infra/browsers/template-host.test — `PlaywrightTemplateHost` and `TemplateSessionView` over fakes (PR #76 F9): claims around `createTarget`, released sessions, CDP scoping, the parked bound, restored pages, maintenance pages, the new-tab path. */
 
 import { describe, expect, it } from 'bun:test';
-import type { Page } from 'playwright';
+import type { Page } from 'patchright';
 import { FakeCdp, fakeTemplateHost } from '../../../test/helpers/fake-host-targets.ts';
 import { asPage } from '../../../test/helpers/fake-page.ts';
 import { MAX_PARKED_PAGES, SENTINEL_GRACE_MS } from './template-host.ts';

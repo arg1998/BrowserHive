@@ -3,7 +3,7 @@ browserhive version — Print version information
 USAGE
   browserhive version [flags]
 
-Prints the BrowserHive, Bun, SQLite, Playwright and Patchright versions.
+Prints the BrowserHive, Bun, SQLite and Patchright (browser driver) versions.
 
 FLAGS
   --json  Print machine-readable JSON instead of text.

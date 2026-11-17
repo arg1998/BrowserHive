@@ -2,7 +2,6 @@
 import type { z } from 'zod';
 import { Channel } from '../enums/channel.ts';
 import { SandboxMode } from '../enums/sandbox-mode.ts';
-import { StealthDriver } from '../enums/stealth-driver.ts';
 import { StealthLevel } from '../enums/stealth-level.ts';
 import { derived, key } from './key.ts';
 import { zBool, zDuration, zEnumOf, zMaxSessions, zPath, zReservedEnum } from './parsers.ts';
@@ -89,12 +88,6 @@ export const STEALTH_KEYS = {
     default: 'standard',
     group: 'stealth',
     describe: 'Stealth level. max also defaults fingerprint to true.',
-  }),
-  stealthDriver: key(zEnumOf(StealthDriver.options), {
-    default: 'auto',
-    group: 'stealth',
-    describe:
-      'Chromium driver for stealth sessions. auto uses Patchright when installed, else Playwright.',
   }),
   fingerprint: key(zBool, {
     default: derived('stealth'),

@@ -1,4 +1,4 @@
-/** @module infra/browsers — named exports of the Playwright/Patchright browser adapter and the stealth pipeline. */
+/** @module infra/browsers — named exports of the browser adapter (Patchright, D-65) and the stealth pipeline. */
 
 export {
   type BlockedUrlHit,
@@ -36,7 +36,6 @@ export {
   browserNotInstalledFromLaunchError,
   type ChromiumResolverDeps,
   installCommandFor,
-  pinnedPlaywrightVersion,
 } from './chromium-resolver.ts';
 export {
   type ClassifyContext,
@@ -45,13 +44,7 @@ export {
   isActionabilityError,
   isTargetClosedError,
 } from './classify-error.ts';
-export {
-  DriverResolver,
-  type DriverResolverDeps,
-  loadPatchrightChromium,
-  type PatchrightLoader,
-  type ResolvedDriver,
-} from './driver-resolver.ts';
+export { DRIVER_NAME, driverChromium, driverVersion, suppressInjectRoute } from './driver.ts';
 export { type Evaluable, evaluateMainWorld } from './evaluate.ts';
 export {
   contextOptionsFor,

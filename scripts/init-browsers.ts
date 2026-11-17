@@ -1,4 +1,4 @@
-/** @module scripts/init-browsers — installs Chromium for Playwright and (fail-open) Patchright for local development. */
+/** @module scripts/init-browsers — installs Patchright's Chromium (the only driver, D-65) for local development; the dashboard e2e runner (`@playwright/test`, same pinned version) launches the same build from the same cache (pinned by test/lint/e2e-browser-pin.test.ts). */
 import { spawnSync } from 'node:child_process';
 
 function run(cmd: string, args: string[]): number {
@@ -7,15 +7,9 @@ function run(cmd: string, args: string[]): number {
   return res.status ?? 1;
 }
 
-const pw = run('bunx', ['playwright', 'install', 'chromium']);
-if (pw !== 0) {
-  console.error('init-browsers: playwright install chromium failed');
-  process.exit(pw);
-}
-const pr = run('bunx', ['patchright', 'install', 'chromium']);
-if (pr !== 0) {
-  console.warn(
-    'init-browsers: patchright install failed; stealth sessions will fall back to stock Playwright',
-  );
+const status = run('bunx', ['patchright', 'install', 'chromium']);
+if (status !== 0) {
+  console.error('init-browsers: patchright install chromium failed');
+  process.exit(status);
 }
 console.log('init-browsers: done');

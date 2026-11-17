@@ -77,7 +77,7 @@ describe('introspection tools', () => {
       sessions: { count: 1, limit: 8 },
       vault: { enabled: true, backend: 'bitwarden', evaluate_warning: true },
       persistence_mode: 'memory',
-      driver: 'playwright',
+      driver: 'patchright',
     });
   });
 

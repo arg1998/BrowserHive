@@ -1,6 +1,6 @@
 /** @module infra/browsers/template-targets — a template host's browser-level DevTools session: target discovery (target id → opener, also for targets that close before Playwright adopts them), background windows through `Target.createTarget`, and window bounds (spec 13 §3.3, §3.4). */
 
-import type { BrowserContext, CDPSession, Page } from 'playwright';
+import type { BrowserContext, CDPSession, Page } from 'patchright';
 import { AppError } from '../../kernel/errors/app-error.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { Logger } from '../../ports/logger.ts';

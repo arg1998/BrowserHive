@@ -250,7 +250,7 @@ browserhive templates list | create <name> --sites <site,…> | login <name> --s
                                      session templates (spec 13 §11.5)
 browserhive sitepacks list | check | diff <id> | approve <id> | import <dir|file> | …
                                      site packs and their updates (spec 13 §11.5)
-browserhive version | -v             print versions (app, schema, Playwright, Chromium)
+browserhive version | -v             print versions (app, Bun, SQLite, Patchright)
 browserhive help [command] | -h
 ```
 
@@ -277,7 +277,7 @@ Types ship with the package (`browserhive` exports `createServer`, `ServerOption
 ## 13. Troubleshooting
 
 - `browserhive doctor` first. It prints a table with ✓/✗ per check and the fix for each ✗.
-- **`BROWSER_NOT_INSTALLED`**: run `browserhive init` (or the exact `playwright install chromium@<ver>` it prints); for `chrome`, `browserhive init --installChrome`. `PLAYWRIGHT_BROWSERS_PATH` is honoured. BrowserHive never launches a different browser than the one configured.
+- **`BROWSER_NOT_INSTALLED`**: run `browserhive init` (or the exact `patchright install chromium@<ver>` it prints); for `chrome`, `browserhive init --installChrome`. `PLAYWRIGHT_BROWSERS_PATH` is honoured. BrowserHive never launches a different browser than the one configured.
 - **`SANDBOX_UNAVAILABLE`**: the sandbox was required (`--sandbox on`, or an agent's `launch_options.chromiumSandbox: true`) and the browser cannot run with it on this machine. The message lists what works here, easiest first: on Ubuntu 23.10+ use the installed Google Chrome (`--defaultChannel chrome`), or give the bundled browser an AppArmor profile (`browserhive doctor --printApparmorProfile | sudo tee /etc/apparmor.d/browserhive-chromium`, then `sudo apparmor_parser -r /etc/apparmor.d/browserhive-chromium`); as root, run as a normal user; or use `--sandbox auto` (the default: sandbox where possible) or `--sandbox off`. Retrying does not help.
 - `doctor` reports **"cannot run sandboxed here, falls back"**: under the default `sandbox=auto` that browser runs without Chromium's sandbox on this machine; the guidance under the table says how to change that.
 - **`PORT_IN_USE`**: another process holds the port; `--port` or `lsof -i :9876`. **`BIND_FAILED`**: the address cannot be bound for another reason (permissions, an address not on this host); the message carries the errno.
@@ -292,7 +292,7 @@ Types ship with the package (`browserhive` exports `createServer`, `ServerOption
 
 ## 14. Upgrading and downgrading
 
-- Upgrade: `bun install -g browserhive@latest` (or `npm`/`pnpm`), then `browserhive init` to refresh browsers if the Playwright pin moved. On first start the database is migrated automatically; a backup is written first to `<data-dir>/backups/browserhive-v<schema version>-<timestamp>.db` (the last `backupsKeep`, default 5, are retained). If a migration fails, startup stops with `MIGRATION_FAILED`, the database is left at its previous version, and the message names the backup. `browserhive db status` shows the schema version and migration history; the System page shows the same.
+- Upgrade: `bun install -g browserhive@latest` (or `npm`/`pnpm`), then `browserhive init` to refresh browsers if the Patchright pin moved. On first start the database is migrated automatically; a backup is written first to `<data-dir>/backups/browserhive-v<schema version>-<timestamp>.db` (the last `backupsKeep`, default 5, are retained). If a migration fails, startup stops with `MIGRATION_FAILED`, the database is left at its previous version, and the message names the backup. `browserhive db status` shows the schema version and migration history; the System page shows the same.
 - Downgrade (D-04): an older release opens a newer database as long as the newer schema is within its compatibility window (purely additive changes). Otherwise it refuses with `DB_NEWER_THAN_BINARY`, names the backup that matches the older release, and you restore it with `browserhive db restore <file>` (a copy of the current file is kept). Nothing is ever migrated downward in place.
 - Prereleases: `bun install -g browserhive@next`.
 - Release notes: `CHANGELOG.md` (Changesets) and GitHub Releases; versions follow semver from `0.1.0`.

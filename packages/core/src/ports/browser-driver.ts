@@ -1,6 +1,6 @@
-/** @module ports/browser-driver — engine-neutral session lifecycle port: a `BrowserHost` and the `SessionView`s over it; Playwright types appear only as `type` imports (spec 01 §5, 11 §2.1, 13 §3.13). */
+/** @module ports/browser-driver — engine-neutral session lifecycle port: a `BrowserHost` and the `SessionView`s over it; Playwright API types (from Patchright) appear only as `type` imports (spec 01 §5, 11 §2.1, 13 §3.13). */
 
-import type { Channel, PersistenceMode, StealthDriver } from '@browserhive/contracts/enums';
+import type { Channel, PersistenceMode } from '@browserhive/contracts/enums';
 import type {
   Browser,
   BrowserContext,
@@ -8,7 +8,7 @@ import type {
   CDPSession,
   LaunchOptions,
   Page,
-} from 'playwright';
+} from 'patchright';
 
 /** UA-CH brand entry (`{ brand, version }`). */
 export interface Brand {
@@ -134,8 +134,6 @@ export interface LaunchSpec {
   /** Validated context pass-through; identity options are spread before these so the caller wins. */
   readonly contextOptions?: BrowserContextOptions;
   readonly stealth: boolean;
-  /** Which driver to use for stealth sessions; `auto` prefers Patchright, fail-open to Playwright. */
-  readonly stealthDriver: StealthDriver;
   readonly identity?: LaunchIdentity;
   readonly proxy: ProxySpec | null;
   /** Session-scoped directory for downloads (`<data-dir>/sessions/<id>/downloads`). */
@@ -207,7 +205,7 @@ export interface SessionHost {
   readonly kind: 'exclusive' | 'template';
   readonly capabilities: EngineCapabilities;
   /** `patchright` or `playwright` — what actually launched. */
-  readonly driver: 'patchright' | 'playwright';
+  readonly driver: 'patchright';
   /** The identity applied after launch, or `null` when stealth is off or `applyIdentity` failed. */
   readonly identity: AppliedIdentity | null;
   /** The engine's real version (null when no `Browser` can be read; Chromium persistent contexts expose one) and whether it runs sandboxed. Absent in fakes. */
@@ -315,8 +313,8 @@ export interface LaunchedSession {
 
 /** Strategy for spawning a new isolated browser session (spec 01 §9 engine seam). */
 export interface BrowserDriver {
-  /** Reports which driver stealth sessions will use, for `server_status`/System page. */
-  stealthDriverName(): 'patchright' | 'playwright';
+  /** The driver every session runs on (Patchright, D-65), for `server_status`/System page. */
+  stealthDriverName(): 'patchright';
   /** Launches an exclusive host; the session keeps only the view, the pipeline uses the host once. */
   launch(spec: LaunchSpec, signal?: AbortSignal): Promise<LaunchedSession>;
 }

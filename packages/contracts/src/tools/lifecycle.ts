@@ -82,7 +82,7 @@ export function launchSessionInput(defaults: LaunchSessionDefaults = BASE_LAUNCH
 /** Agent-facing description of `launch_session` (spec 13 §5.2). */
 export const LAUNCH_SESSION_DESCRIPTION =
   'Launch a new browser session. Without `template`, the session is fully isolated: it owns its own ' +
-  'Playwright driver, browser, context and page, and its cookies and storage are its own. With ' +
+  'browser, context and page, and its cookies and storage are its own. With ' +
   "`template`, the session starts signed in to the template's sites (see list_templates). The " +
   "resolved session_id is '<slug>-<nanoid8>' and is returned as the 'session_id' field.";
 

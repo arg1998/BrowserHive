@@ -1,6 +1,6 @@
 /** @module infra/browsers/page-actions — the `PageActions` port over Playwright: main-world evaluate, per-session humanize state, driver error classification. */
 
-import type { Page } from 'playwright';
+import type { Page } from 'patchright';
 import type { Clock } from '../../ports/clock.ts';
 import type {
   DriverErrorContext,

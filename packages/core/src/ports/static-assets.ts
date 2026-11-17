@@ -27,7 +27,7 @@ export interface StaticAssets {
   get(path: string): Promise<StaticAsset | null>;
 }
 
-/** The Playwright trace viewer bundle located from `playwright-core` at runtime. */
+/** The Playwright trace viewer bundle located from `patchright-core` (the driver) at runtime. */
 export interface TraceViewerAssets {
   /** True when the viewer bundle was found on disk. */
   readonly available: boolean;

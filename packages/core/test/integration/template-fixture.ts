@@ -1,9 +1,9 @@
-/** @module test/integration/template-fixture — a real template host per test: the HTTPS fixture sites, a temporary data dir, the Playwright driver, a `SessionService` and the host supervisor; launches go through the template branch of the pipeline. */
+/** @module test/integration/template-fixture — a real template host per test: the HTTPS fixture sites, a temporary data dir, the browser driver (Patchright), a `SessionService` and the host supervisor; launches go through the template branch of the pipeline. */
 
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Page } from 'playwright';
+import type { Page } from 'patchright';
 import { InProcessEventBus } from '../../src/app/events/bus.ts';
 import type { DomainEvents } from '../../src/app/events/catalog.ts';
 import { SessionService } from '../../src/app/sessions/session-service.ts';
@@ -22,8 +22,11 @@ import { RecordingDegradations } from '../helpers/template-kit.ts';
 import { templateRecord, templateSiteRecord } from '../persistence/helpers.ts';
 import { HOST } from './driver-fixture.ts';
 
-/** Which driver a template host runs on in a suite. */
-export type DriverName = 'playwright' | 'patchright';
+/** The template stealth level a suite leg runs under; every leg runs on Patchright, the only driver (D-65). */
+export type StealthLeg = 'off' | 'standard';
+
+/** The legs a template suite iterates: BrowserHive's stealth off and on (both on Patchright). */
+export const STEALTH_LEGS: readonly StealthLeg[] = ['off', 'standard'];
 
 /**
  * Headed hosts run where a display is meant for tests: Linux CI under `xvfb-run -a` sets
@@ -50,9 +53,9 @@ export interface TemplateWorld {
   stop(): Promise<void>;
 }
 
-/** Builds a world for `driver`; `maxPagesPerHost` bounds agent pages. */
+/** Builds a world for a template with `stealth`; `maxPagesPerHost` bounds agent pages. */
 export async function templateWorld(
-  driver: DriverName,
+  stealth: StealthLeg,
   options: { readonly maxPagesPerHost?: number; readonly selfOrigins?: readonly string[] } = {},
 ): Promise<TemplateWorld> {
   const sites = startHttpsSites();
@@ -60,7 +63,7 @@ export async function templateWorld(
   const clock = createSystemClock();
   const logger = createCollectingLogger();
   const bus = new InProcessEventBus<DomainEvents>({ clock, logger });
-  const real = new PlaywrightBrowserDriver({ logger, clock, host: HOST, stealthDriver: driver });
+  const real = new PlaywrightBrowserDriver({ logger, clock, host: HOST });
   const hosts: PlaywrightTemplateHost[] = [];
   const launcher = {
     async launchTemplateHost(spec: TemplateHostSpec) {
@@ -85,7 +88,6 @@ export async function templateWorld(
       persistence: 'memory',
       maxSessions: 4,
       stealth: 'off',
-      stealthDriver: driver,
       fingerprint: false,
       humanize: false,
       trace: false,
@@ -94,7 +96,7 @@ export async function templateWorld(
   });
   const template = templateRecord({
     headless: !HEADED,
-    stealth: driver === 'patchright' ? 'standard' : 'off',
+    stealth,
     maxConcurrent: 5,
   });
   const degradations = new RecordingDegradations();
@@ -114,7 +116,6 @@ export async function templateWorld(
     degradations,
     spec: {
       dataDir,
-      stealthDriver: driver,
       proxyResolver: { resolve: async (r) => r.requested },
       env: {},
       selfOrigins: () => options.selfOrigins ?? [],

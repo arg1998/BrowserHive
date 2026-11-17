@@ -5,4 +5,4 @@
  * only through its `SessionView`, so it never needs (and, by the dependency-cruiser rule, never
  * imports) `BrowserContext` or `Browser`.
  */
-export type { CDPSession, Dialog, Download, Page, Response } from 'playwright';
+export type { CDPSession, Dialog, Download, Page, Response } from 'patchright';

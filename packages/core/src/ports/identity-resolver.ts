@@ -1,6 +1,6 @@
 /** @module ports/identity-resolver — resolves the LaunchIdentity (display fingerprint + geo) before launch (spec 11 §2.6); adapted from infra/browsers at composition. */
 
-import type { BrowserContextOptions, LaunchOptions } from 'playwright';
+import type { BrowserContextOptions, LaunchOptions } from 'patchright';
 import type { LaunchIdentity, LaunchWarning, ProxySpec } from './browser-driver.ts';
 
 /** What the `resolveIdentity` phase knows (fingerprint on). */
