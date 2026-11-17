@@ -68,13 +68,19 @@ export function waitForOutput(child: ChildProcessWithoutNullStreams, pattern: Re
 /** Visible X windows and their names (the display's view of the template's browser). */
 function windows(): { id: string; name: string }[] {
   let ids: string[] = [];
-  try {
-    ids = execFileSync('xdotool', ['search', '--onlyvisible', '--name', '.'], { encoding: 'utf8' })
-      .trim()
-      .split('\n')
-      .filter((id) => id !== '');
-  } catch {
-    return [];
+  // A window that closes while xdotool walks the tree makes it fail with X `BadWindow`: try again.
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      ids = execFileSync('xdotool', ['search', '--onlyvisible', '--name', '.'], {
+        encoding: 'utf8',
+      })
+        .trim()
+        .split('\n')
+        .filter((id) => id !== '');
+      break;
+    } catch {
+      execFileSync('sleep', ['0.2']);
+    }
   }
   return ids.map((id) => {
     try {
@@ -117,13 +123,16 @@ function waitForWindowName(id: string, text: string, xdo: (...args: string[]) =>
  */
 export function signInByKeyboard(shots: (name: string) => string, site = SITE): string {
   const log: string[] = [];
-  execFileSync('xdotool', ['search', '--sync', '--onlyvisible', '--name', 'BrowserHive'], {
-    timeout: 30_000,
-  });
   const xdo = (...args: string[]) =>
     execFileSync('xdotool', args, { encoding: 'utf8', timeout: 15_000 }).trim();
+  // Polled rather than `xdotool search --sync`, which fails outright when another window closes
+  // during its walk (X `BadWindow`; review of #84's e2e runs).
+  let marked: { id: string; name: string } | undefined;
+  for (let i = 0; i < 120 && marked === undefined; i += 1) {
+    marked = windows().find((w) => w.name.includes(`[BrowserHive] Sign in to ${site}`));
+    if (marked === undefined) execFileSync('sleep', ['0.25']);
+  }
   log.push(`windows: ${JSON.stringify(windows())}`);
-  const marked = windows().find((w) => w.name.includes(`[BrowserHive] Sign in to ${site}`));
   if (marked === undefined) return `${log.join('\n')}\nno marked window`;
   xdo('windowfocus', '--sync', marked.id);
   xdo('key', '--clearmodifiers', 'ctrl+2');
