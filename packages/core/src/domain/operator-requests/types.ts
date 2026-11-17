@@ -53,6 +53,8 @@ export interface OpenOperatorRequest {
   readonly timeoutMs?: number;
   /** Aborting settles the request as `cancelled` (client disconnect). */
   readonly signal?: AbortSignal;
+  /** `security_intercept` only: the template the request belongs to (spec 13 §9.9). */
+  readonly templateId?: string;
 }
 
 /** Returned by `OperatorRequestBroker.open`. */

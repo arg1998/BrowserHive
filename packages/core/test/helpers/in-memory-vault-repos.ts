@@ -246,6 +246,9 @@ export class InMemoryOperatorRequestRepository implements OperatorRequestReposit
   listHistory(query: OperatorRequestListQuery): Promise<Page<OperatorRequestListRow>> {
     const items = [...this.rows.values()]
       .filter((r) => query.kind === undefined || r.kind === query.kind)
+      .filter(
+        (r) => query.kinds === undefined || query.kinds.length === 0 || query.kinds.includes(r.kind),
+      )
       .filter((r) => query.statuses === undefined || query.statuses.includes(r.status))
       .filter((r) => query.modes === undefined || (r.mode !== null && query.modes.includes(r.mode)))
       .filter((r) => query.sessionId === undefined || r.sessionId === query.sessionId)

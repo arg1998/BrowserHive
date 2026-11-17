@@ -121,6 +121,7 @@ export class OperatorRequestBroker {
       createdAt,
       deadlineAt: timeoutMs === null ? null : createdAt + timeoutMs,
       resolvedAt: null,
+      ...(input.templateId !== undefined && { templateId: input.templateId }),
     };
 
     leaseCall(this.deps.leases, this.log, 'pause', record.sessionId, createdAt);
@@ -252,16 +253,19 @@ export class OperatorRequestBroker {
     return this.deps.requests.get(id);
   }
 
-  /** Open requests held in memory, oldest first. */
-  listOpen(kind?: OperatorRequestKind): readonly OperatorRequestRecord[] {
+  /** Open requests held in memory, oldest first; `kind` narrows to one kind or a list of kinds. */
+  listOpen(
+    kind?: OperatorRequestKind | readonly OperatorRequestKind[],
+  ): readonly OperatorRequestRecord[] {
+    const kinds = kind === undefined ? null : typeof kind === 'string' ? [kind] : kind;
     return [...this.pending.values()]
       .map((p) => p.record)
-      .filter((r) => kind === undefined || r.kind === kind)
+      .filter((r) => kinds === null || kinds.includes(r.kind))
       .sort((a, b) => a.createdAt - b.createdAt);
   }
 
-  /** Number of open requests, optionally of one kind. */
-  openCount(kind?: OperatorRequestKind): number {
+  /** Number of open requests, optionally of one kind or a list of kinds. */
+  openCount(kind?: OperatorRequestKind | readonly OperatorRequestKind[]): number {
     return this.listOpen(kind).length;
   }
 

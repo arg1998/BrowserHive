@@ -35,6 +35,9 @@ export { PreferenceService } from '../app/preferences/preference-service.ts';
 export { LeaseSweeper } from '../app/sessions/lease-sweeper.ts';
 export { sessionDirLayout } from '../app/sessions/profile-dir.ts';
 export { SessionService } from '../app/sessions/session-service.ts';
+// Site-pack enforcement (spec 13 §9.3, §9.5; PR T3a, WP-E1).
+export { SecurityInterceptService } from '../app/site-packs/security-intercepts.ts';
+export { TemplateWritePolicies } from '../app/site-packs/write-policies.ts';
 export { unavailableHealthFacade } from '../app/templates/health-facade.ts';
 export {
   type TemplateHealthParts,
@@ -122,6 +125,7 @@ export {
   type SandboxUnavailableFactory,
 } from '../infra/browsers/sandbox-policy.ts';
 export { createTemplateGeoResolver } from '../infra/browsers/template-geo.ts';
+export type { TemplateRequestGuard } from '../infra/browsers/template-launch.ts';
 export { createBunDesktop } from '../infra/desktop/bun-desktop.ts';
 export { createTemplateFiles } from '../infra/fs/template-files.ts';
 export {
@@ -136,6 +140,9 @@ export { type RekeyResult, rekeyTemplateFiles } from '../infra/fs/template-rekey
 export { FileTemplateStateStore } from '../infra/fs/template-state-store.ts';
 export { sweepStaleTemplateBrowsers } from '../infra/host/stale-template-browsers.ts';
 export { profileHasSecrets } from '../infra/persistence/profile-secrets.ts';
+export { SiteGuardHitsWriter } from '../infra/site-packs/guard-hits-writer.ts';
+export { GuardRuleCatalog, PackGuardRuleSource } from '../infra/site-packs/guard-rules.ts';
+export { NO_SITE_PACKS, templateRequestGuard } from '../infra/site-packs/template-guard.ts';
 export { createArtifactFiles } from '../infra/static/artifact-files.ts';
 export { createBunStaticAssets } from '../infra/static/bun-static-assets.ts';
 export { createTraceViewerAssets } from '../infra/static/playwright-trace-viewer.ts';

@@ -37,7 +37,11 @@ import { installNativeGetters, mergeNativeGetterPayloads } from './native-getter
 import type { SandboxPolicy } from './sandbox-policy.ts';
 import { ExclusiveSessionView } from './session-view.ts';
 import { deviceMemoryPayload } from './stealth-identity.ts';
-import { launchTemplateHostWith, type TemplateLaunchContext } from './template-launch.ts';
+import {
+  launchTemplateHostWith,
+  type TemplateLaunchContext,
+  type TemplateRequestGuard,
+} from './template-launch.ts';
 import { PlaywrightTracingHandle, traceStartWarning } from './tracing.ts';
 
 /** Constructor dependencies of {@link PlaywrightBrowserDriver}. */
@@ -74,6 +78,7 @@ export class PlaywrightBrowserDriver implements BrowserDriver, TemplateHostLaunc
   private readonly sandbox: SandboxPolicy;
   private readonly locateChannel: (playwrightChannel: 'chrome' | 'msedge') => string | null;
   private readonly templateBlocklist: TemplateLaunchContext['blocklist'];
+  private templateRequestGuard: TemplateRequestGuard | null = null;
 
   constructor(deps: PlaywrightBrowserDriverDeps) {
     this.logger = deps.logger.child({ module: 'browsers.launcher' });
@@ -85,6 +90,14 @@ export class PlaywrightBrowserDriver implements BrowserDriver, TemplateHostLaunc
     this.locateChannel = deps.locateChannel ?? playwrightChannelExecutable;
     this.templateBlocklist = deps.templateBlocklist ?? null;
     this.testingArgs = deps.testingArgs ?? [];
+  }
+
+  /**
+   * The site-pack request guard every template host started from now on carries (spec 13 §9.3).
+   * Set by composition once the guard's collaborators exist, before any host starts.
+   */
+  setTemplateRequestGuard(guard: TemplateRequestGuard | null): void {
+    this.templateRequestGuard = guard;
   }
 
   /** Starts a template host (spec 13 §3.1); the start is not abortable once Chromium is spawning. */
@@ -104,6 +117,7 @@ export class PlaywrightBrowserDriver implements BrowserDriver, TemplateHostLaunc
         clock: this.clock,
         logger: this.logger,
         blocklist: this.templateBlocklist,
+        requestGuard: this.templateRequestGuard,
       },
       spec,
     );

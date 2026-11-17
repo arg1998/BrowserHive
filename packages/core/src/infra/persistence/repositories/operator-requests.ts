@@ -72,6 +72,7 @@ function toListRow(row: Row): OperatorRequestListRow {
 function applyFilters(qb: BaseQuery, q: OperatorRequestListQuery): BaseQuery {
   let out = qb;
   if (q.kind !== undefined) out = out.where('r.kind', '=', q.kind);
+  if (q.kinds !== undefined && q.kinds.length > 0) out = out.where('r.kind', 'in', [...q.kinds]);
   if (q.statuses !== undefined && q.statuses.length > 0)
     out = out.where('r.status', 'in', [...q.statuses]);
   if (q.modes !== undefined && q.modes.length > 0) out = out.where('r.mode', 'in', [...q.modes]);

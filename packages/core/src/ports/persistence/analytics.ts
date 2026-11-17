@@ -4,6 +4,7 @@ import type { BlockedRequestListRow } from './blocklist-audit.ts';
 import type { OperatorRequestListRow } from './operator-requests.ts';
 import type { DomainCount, PageListRow } from './pages.ts';
 import type { Page, PageQuery, TimeWindow, TopDomainsQuery } from './queries.ts';
+import type { SiteGuardHitRecord } from './site-packs.ts';
 import type { ToolCallListRow } from './tool-calls.ts';
 import type { VaultAccessListRow } from './vault-audit.ts';
 
@@ -132,7 +133,7 @@ export interface TopErrorRow {
 }
 
 /** Timeline item kinds. */
-export type TimelineKind = 'tool' | 'page' | 'attention' | 'vault' | 'blocked';
+export type TimelineKind = 'tool' | 'page' | 'attention' | 'vault' | 'blocked' | 'guard';
 
 /** Query of `GET /sessions/{id}/timeline`. */
 export interface TimelineQuery extends PageQuery, TimeWindow {
@@ -175,6 +176,12 @@ export type TimelineItem =
       readonly ts: number;
       readonly id: string;
       readonly item: BlockedRequestListRow;
+    }
+  | {
+      readonly kind: 'guard';
+      readonly ts: number;
+      readonly id: string;
+      readonly item: SiteGuardHitRecord;
     };
 
 /** Analytical read model; every method is read-only and drains pending writes first. */

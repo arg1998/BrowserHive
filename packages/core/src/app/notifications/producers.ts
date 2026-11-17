@@ -16,6 +16,7 @@ import type { DomainEvent } from '../../ports/event-bus.ts';
 import type { DomainEventName, DomainEvents } from '../events/catalog.ts';
 import { code, formatDuration, link, type MessageContent, text, time } from './message.ts';
 import type { NotificationDraft, ThreadRevision } from './producer-types.ts';
+import { writeConfirmDraft, writeConfirmRevision } from './producers-site-packs.ts';
 import {
   hostFailedDraft,
   hostRevision,
@@ -67,6 +68,7 @@ export const PRODUCED_EVENTS = [
   'template.health',
   'template.relogin',
   'template.host',
+  'site_pack.confirm',
 ] as const satisfies readonly DomainEventName[];
 
 /** Element of {@link PRODUCED_EVENTS}. */
@@ -96,7 +98,13 @@ export type ProducedEvent = {
 export function draftFor(event: ProducedEvent): NotificationDraft | null {
   switch (event.name) {
     case 'attention.created':
-      return attentionCreated(event.payload);
+      // A security intercept's notice is its template's (`site_pack.write_confirm` from
+      // `site_pack.confirm`; a site check is `template.challenged`), never "Attention requested".
+      return event.payload.request.kind === 'security_intercept'
+        ? null
+        : attentionCreated(event.payload);
+    case 'site_pack.confirm':
+      return writeConfirmDraft(event.payload);
     case 'session.closed':
       return sessionClosed(event.payload);
     case 'tool.called':
@@ -131,7 +139,11 @@ export function draftFor(event: ProducedEvent): NotificationDraft | null {
 export function revisionFor(event: ProducedEvent): ThreadRevision | null {
   switch (event.name) {
     case 'attention.resolved':
-      return requestSettled('attention', factsOf(event.payload.request));
+      return event.payload.request.kind === 'security_intercept'
+        ? null
+        : requestSettled('attention', factsOf(event.payload.request));
+    case 'site_pack.confirm':
+      return writeConfirmRevision(event.payload);
     case 'vault.confirm.resolved':
       return requestSettled('vault', factsOf(event.payload.request));
     case 'system.recovered': {
