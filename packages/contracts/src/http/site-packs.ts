@@ -159,6 +159,8 @@ export const SitePackView = z.object({
   human_only: z.boolean(),
   write_policy_default: z.enum(['allow', 'warn', 'confirm']),
   stance: z.enum(['prohibited', 'restricted', 'writes_restricted', 'allowed']),
+  /** Guards (network and element) of kind `write`: 0 means the write policy has nothing to act on yet. */
+  write_guards: Count,
   verified: z.record(z.string(), z.string()),
   skipped: z
     .object({
@@ -476,6 +478,8 @@ export const TemplateSitePack = z.object({
   exception: z.string().nullable(),
   guards: Count,
   element_guards: Count,
+  /** Guards (network and element) of kind `write`: 0 means the write policy has nothing to act on yet. */
+  write_guards: Count,
   challenges: Count,
   enabled: z.boolean(),
 });

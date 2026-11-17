@@ -5252,6 +5252,11 @@
                                 "minimum": 0,
                                 "maximum": 9007199254740991
                               },
+                              "write_guards": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
                               "challenges": {
                                 "type": "integer",
                                 "minimum": 0,
@@ -5277,6 +5282,7 @@
                               "exception",
                               "guards",
                               "element_guards",
+                              "write_guards",
                               "challenges",
                               "enabled"
                             ],
@@ -6409,6 +6415,11 @@
                           "allowed"
                         ]
                       },
+                      "write_guards": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
                       "verified": {
                         "type": "object",
                         "propertyNames": {
@@ -6477,6 +6488,7 @@
                       "human_only",
                       "write_policy_default",
                       "stance",
+                      "write_guards",
                       "verified"
                     ],
                     "additionalProperties": false
@@ -12090,6 +12102,11 @@
                         "minimum": 0,
                         "maximum": 9007199254740991
                       },
+                      "write_guards": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
                       "challenges": {
                         "type": "integer",
                         "minimum": 0,
@@ -12115,6 +12132,7 @@
                       "exception",
                       "guards",
                       "element_guards",
+                      "write_guards",
                       "challenges",
                       "enabled"
                     ],
@@ -13247,6 +13265,11 @@
                   "allowed"
                 ]
               },
+              "write_guards": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
               "verified": {
                 "type": "object",
                 "propertyNames": {
@@ -13315,6 +13338,7 @@
               "human_only",
               "write_policy_default",
               "stance",
+              "write_guards",
               "verified"
             ],
             "additionalProperties": false

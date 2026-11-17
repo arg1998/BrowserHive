@@ -87,6 +87,7 @@ export function toSitePackView(
     used_by: [...entry.usedBy],
     human_only: display?.sign_in?.human_only ?? false,
     write_policy_default: display?.write_policy.default ?? 'allow',
+    write_guards: display == null ? 0 : writeGuardsOf(display),
     stance: display?.write_policy.stance ?? 'allowed',
     verified: { ...(display?.verified ?? {}) },
     ...(entry.skipped !== null && {
@@ -246,6 +247,7 @@ export function toTemplateSitePack(
         : `https://${pack.sign_in.url.host}${pack.sign_in.url.path}`,
     stance: policy.stance,
     write_policy_default: policy.default,
+    write_guards: writeGuardsOf(pack),
     clause: policy.clause === undefined ? null : { ...policy.clause },
     exception: policy.exception ?? null,
     guards: pack.guards.length,
@@ -294,4 +296,12 @@ export function toGuardHitRow(record: SiteGuardHitRecord): SiteGuardHitRow {
     tool: record.tool,
     ts: record.ts,
   };
+}
+
+/** Guards and element guards of kind `write`: what a write policy acts on (0 = nothing yet). */
+export function writeGuardsOf(pack: Pick<SitePackV1, 'guards' | 'element_guards'>): number {
+  return (
+    pack.guards.filter((g) => g.kind === 'write').length +
+    pack.element_guards.filter((g) => g.kind === 'write').length
+  );
 }

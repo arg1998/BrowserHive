@@ -54,6 +54,7 @@ export function packView(overrides: Partial<SitePackView> = {}): SitePackView {
     used_by: ['tp-abcdefghij'],
     human_only: false,
     write_policy_default: 'confirm',
+    write_guards: 1,
     stance: 'prohibited',
     verified: {},
     ...overrides,

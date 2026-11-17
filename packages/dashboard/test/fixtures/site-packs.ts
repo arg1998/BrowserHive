@@ -43,6 +43,7 @@ export function packView(patch: Partial<SitePackView> = {}): SitePackView {
     used_by: ['tp-0000000001'],
     human_only: false,
     write_policy_default: 'confirm',
+    write_guards: 1,
     stance: 'prohibited',
     verified: { guards: '2026-11-10' },
     ...patch,
@@ -65,6 +66,7 @@ export function offeredPack(patch: Partial<SitePackView> = {}): SitePackView {
     follow: { setting: 'auto', effective: false },
     used_by: [],
     write_policy_default: 'allow',
+    write_guards: 0,
     stance: 'allowed',
     ...patch,
   });
@@ -225,6 +227,7 @@ export function templateSitePack(patch: Partial<TemplateSitePack> = {}): Templat
     sign_in_url: 'https://www.linkedin.com/login',
     stance: 'prohibited',
     write_policy_default: 'confirm',
+    write_guards: 1,
     clause: {
       quote: 'You agree that you will not use bots or other automated methods.',
       url: 'https://www.linkedin.com/legal/user-agreement',

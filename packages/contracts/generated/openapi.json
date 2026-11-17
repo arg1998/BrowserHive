@@ -21412,6 +21412,10 @@
                           "type": "integer",
                           "minimum": 0
                         },
+                        "write_guards": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
                         "challenges": {
                           "type": "integer",
                           "minimum": 0
@@ -21436,6 +21440,7 @@
                         "exception",
                         "guards",
                         "element_guards",
+                        "write_guards",
                         "challenges",
                         "enabled"
                       ]
@@ -22257,6 +22262,10 @@
                     "type": "integer",
                     "minimum": 0
                   },
+                  "write_guards": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
                   "challenges": {
                     "type": "integer",
                     "minimum": 0
@@ -22281,6 +22290,7 @@
                   "exception",
                   "guards",
                   "element_guards",
+                  "write_guards",
                   "challenges",
                   "enabled"
                 ]
@@ -23737,6 +23747,10 @@
                           "type": "integer",
                           "minimum": 0
                         },
+                        "write_guards": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
                         "challenges": {
                           "type": "integer",
                           "minimum": 0
@@ -23761,6 +23775,7 @@
                         "exception",
                         "guards",
                         "element_guards",
+                        "write_guards",
                         "challenges",
                         "enabled"
                       ]
@@ -24679,6 +24694,10 @@
                           "type": "integer",
                           "minimum": 0
                         },
+                        "write_guards": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
                         "challenges": {
                           "type": "integer",
                           "minimum": 0
@@ -24703,6 +24722,7 @@
                         "exception",
                         "guards",
                         "element_guards",
+                        "write_guards",
                         "challenges",
                         "enabled"
                       ]
@@ -25436,6 +25456,10 @@
                       "type": "integer",
                       "minimum": 0
                     },
+                    "write_guards": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
                     "challenges": {
                       "type": "integer",
                       "minimum": 0
@@ -25460,6 +25484,7 @@
                     "exception",
                     "guards",
                     "element_guards",
+                    "write_guards",
                     "challenges",
                     "enabled"
                   ]
@@ -26092,6 +26117,10 @@
                     "type": "integer",
                     "minimum": 0
                   },
+                  "write_guards": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
                   "challenges": {
                     "type": "integer",
                     "minimum": 0
@@ -26116,6 +26145,7 @@
                   "exception",
                   "guards",
                   "element_guards",
+                  "write_guards",
                   "challenges",
                   "enabled"
                 ]
@@ -26436,6 +26466,10 @@
                           "type": "integer",
                           "minimum": 0
                         },
+                        "write_guards": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
                         "challenges": {
                           "type": "integer",
                           "minimum": 0
@@ -26460,6 +26494,7 @@
                         "exception",
                         "guards",
                         "element_guards",
+                        "write_guards",
                         "challenges",
                         "enabled"
                       ]
@@ -27632,6 +27667,10 @@
                     "type": "integer",
                     "minimum": 0
                   },
+                  "write_guards": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
                   "challenges": {
                     "type": "integer",
                     "minimum": 0
@@ -27656,6 +27695,7 @@
                   "exception",
                   "guards",
                   "element_guards",
+                  "write_guards",
                   "challenges",
                   "enabled"
                 ]
@@ -28322,6 +28362,10 @@
                     "allowed"
                   ]
                 },
+                "write_guards": {
+                  "type": "integer",
+                  "minimum": 0
+                },
                 "verified": {
                   "type": "object",
                   "additionalProperties": {
@@ -28380,6 +28424,7 @@
                 "human_only",
                 "write_policy_default",
                 "stance",
+                "write_guards",
                 "verified"
               ]
             }
@@ -29752,6 +29797,10 @@
                   "allowed"
                 ]
               },
+              "write_guards": {
+                "type": "integer",
+                "minimum": 0
+              },
               "verified": {
                 "type": "object",
                 "additionalProperties": {
@@ -29810,6 +29859,7 @@
               "human_only",
               "write_policy_default",
               "stance",
+              "write_guards",
               "verified"
             ]
           },
@@ -31460,6 +31510,10 @@
                   "allowed"
                 ]
               },
+              "write_guards": {
+                "type": "integer",
+                "minimum": 0
+              },
               "verified": {
                 "type": "object",
                 "additionalProperties": {
@@ -31518,6 +31572,7 @@
               "human_only",
               "write_policy_default",
               "stance",
+              "write_guards",
               "verified"
             ]
           }
