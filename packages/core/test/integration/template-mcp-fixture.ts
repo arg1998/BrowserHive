@@ -42,6 +42,8 @@ export interface TemplateMcpOptions {
   /** Passed to the tool harness (the security intercepts' tool hold). */
   readonly siteHolds?: ToolHarnessOptions['siteHolds'];
   readonly transport?: ToolHarnessOptions['transport'];
+  /** The host spec's pack switches (`webrtc-policy`, T3b). */
+  readonly hostFlags?: (template: TemplateRecord) => Promise<readonly string[]>;
 }
 
 /** A ready template `job-hunt` on site-a.test (and the given sites) behind the real tool stack. */
@@ -87,6 +89,7 @@ export async function templateMcp(
           env: {},
           selfOrigins: () => [SELF_ORIGIN],
           testingArgs: sites.chromiumArgs,
+          ...(options.hostFlags !== undefined && { hostFlags: options.hostFlags }),
         },
         config: {
           idleTimeoutMs: 0,

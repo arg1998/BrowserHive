@@ -23,6 +23,13 @@ export const PACK_PROBE_REASONS = {
 export const PROBE_NAVIGATION_MS = 20_000;
 
 /**
+ * After `load`, how long a `redirect` or `either` probe still on the probe path waits for a
+ * client-side navigation to a `signed_out_redirects` URL (D48: Reddit redirects after
+ * `DOMContentLoaded`).
+ */
+export const PROBE_REDIRECT_WINDOW_MS = 4_000;
+
+/**
  * Step 1 (no navigation): `signed_out` / `cookies_absent` when the pack names sign-in cookies and
  * none is present and unexpired on the pack's domains; otherwise `null` (navigate).
  */
@@ -46,9 +53,14 @@ export function packCookiePrecheck(
     : { outcome: 'signed_out', reason: PACK_PROBE_REASONS.cookiesAbsent, finalUrl: null };
 }
 
-/** `https://<probe.host><probe.path>`. */
-export function probeUrlOf(pack: SitePackV1): string {
-  return `https://${pack.signed_in.probe.host}${pack.signed_in.probe.path}`;
+/** `https://<probe.host><probe.path>`, or another path on the probe host (the keeper's). */
+export function probeUrlOf(pack: SitePackV1, path = pack.signed_in.probe.path): string {
+  return `https://${pack.signed_in.probe.host}${path}`;
+}
+
+/** True when `url` is a `signed_out_redirects` URL inside the pack's domains. */
+export function isSignedOutUrl(pack: SitePackV1, url: string): boolean {
+  return inPackDomains(pack, url) && matchesAnyPackGlob(pack.signed_in.signed_out_redirects, url);
 }
 
 /** True when `url`'s registrable domain is one of the pack's domains (the probe's domain guard). */
@@ -68,17 +80,24 @@ export interface PackProbeFacts {
   readonly status: number | null;
   /** The first challenge the page matches (spec 13 §9.5), detected before anything else. */
   readonly challenge: PackChallengeKind | null;
+  /**
+   * The page reached `load` and then stayed off every signed-out redirect for the post-load window
+   * ({@link PROBE_REDIRECT_WINDOW_MS}): a client-side redirect had its chance (D48).
+   */
+  readonly settled: boolean;
+  /** The path the navigation visited on the probe host (the keeper's path); default the probe's. */
+  readonly path?: string;
   /** A selector is present (`locator('css=…').count() > 0`, queried, never evaluated). */
   hasSelector(selector: string): Promise<boolean>;
 }
 
-function samePlace(pack: SitePackV1, url: string): boolean {
+function samePlace(pack: SitePackV1, url: string, path: string): boolean {
   try {
     const parsed = new URL(url);
     const probe = pack.signed_in.probe;
     return (
       parsed.hostname.toLowerCase() === probe.host.toLowerCase() &&
-      parsed.pathname.replace(/\/+$/, '') === probe.path.replace(/\/+$/, '')
+      parsed.pathname.replace(/\/+$/, '') === path.replace(/\/+$/, '')
     );
   } catch {
     return false;
@@ -88,10 +107,12 @@ function samePlace(pack: SitePackV1, url: string): boolean {
 /**
  * Step 2, in order (spec 13 §8.1): a challenge → `challenged`; the final URL (inside the pack's
  * domains) matches a `signed_out_redirects` glob → `signed_out` `redirect`; the signed-out marker →
- * `signed_out` `marker`; the landmark → `signed_in` `landmark`; a `redirect` (or `either`) pack
- * still on the probe host and path (and not a 4xx/5xx) → `signed_in` `no_redirect`; otherwise
- * `inconclusive` (`timeout`, `network`, `http_<status>` ≥ 400, `no_signal`). A challenge is never
- * `signed_out`.
+ * `signed_out` `marker`; the landmark → `signed_in` `landmark`; a `redirect` pack still on the
+ * probe host and path (and not a 4xx/5xx) → `signed_in` `no_redirect`, and an `either` pack only
+ * once the page `settled` (loaded, then no signed-out redirect within the post-load window, D48);
+ * otherwise `inconclusive` (`timeout`, `network`, `http_<status>` ≥ 400, `no_signal`). A challenge
+ * is never `signed_out`. A visit of another path (the keeper's) never answers `no_redirect`: only
+ * the probe path's staying put means signed in.
  */
 export async function classifyPackProbe(
   pack: SitePackV1,
@@ -106,10 +127,7 @@ export async function classifyPackProbe(
   if (facts.challenge !== null) return verdict('challenged', challengeReason(facts.challenge));
   if (facts.failure !== null) return verdict('inconclusive', facts.failure);
   const signals = pack.signed_in;
-  if (
-    inPackDomains(pack, facts.finalUrl) &&
-    matchesAnyPackGlob(signals.signed_out_redirects, facts.finalUrl)
-  ) {
+  if (isSignedOutUrl(pack, facts.finalUrl)) {
     return verdict('signed_out', PACK_PROBE_REASONS.redirect);
   }
   if (
@@ -126,7 +144,10 @@ export async function classifyPackProbe(
   if (facts.status !== null && facts.status >= 400) {
     return verdict('inconclusive', `http_${facts.status}`);
   }
-  if (signals.kind !== 'landmark' && samePlace(pack, facts.finalUrl)) {
+  const probePath = signals.probe.path;
+  const onProbePath = (facts.path ?? probePath) === probePath;
+  const trusted = signals.kind === 'redirect' || (signals.kind === 'either' && facts.settled);
+  if (trusted && onProbePath && samePlace(pack, facts.finalUrl, probePath)) {
     return verdict('signed_in', PACK_PROBE_REASONS.noRedirect);
   }
   return verdict('inconclusive', PACK_PROBE_REASONS.noSignal);

@@ -38,6 +38,11 @@ export interface TemplateHostSpec {
   readonly selfOrigins: readonly string[];
   /** Extra Chromium switches from the internal testing seam only (spec 13 §14); never agent input. */
   readonly testingArgs: readonly string[];
+  /**
+   * Switches pack strategies add (`webrtc-policy`, spec 13 §3.1, §9.4), only from the compiled-in
+   * table of `domain/site-packs/host-flags.ts`; absent = none.
+   */
+  readonly hostFlags?: readonly string[];
 }
 
 /** Why a host's browser went away, as the host saw it. */
@@ -184,13 +189,23 @@ export interface TemplateHost extends BrowserHost {
   closePage(targetId: string, scope: 'parked' | 'session'): Promise<boolean>;
 }
 
+/** A response a template host received (any page, worker or parked page of the host). */
+export interface HostResponse {
+  readonly url: string;
+  /** The response headers, names lower-cased (read only when needed). */
+  headers(): Readonly<Record<string, string>>;
+}
+
 /**
  * Sees every page of a template host once it is attributed to a session (spec 13 §9.5, challenge
- * detection on host pages). Called synchronously from the host's attribution; MUST NOT throw and
- * MUST NOT block (listeners only).
+ * detection on host pages; the keeper's record of agent loads, §9.4) and, when it wants them, every
+ * response of the host (`device-bound-session`, §9.4: response headers a route never sees). Called
+ * synchronously; MUST NOT throw and MUST NOT block (listeners only); observation never changes a
+ * request.
  */
 export interface TemplatePageWatcher {
   pageAttributed(templateId: string, page: Page, sessionId: string): void;
+  responseReceived?(templateId: string, response: HostResponse): void;
 }
 
 /** Starts template hosts (the browser driver, Patchright; spec 13 §3.1). */

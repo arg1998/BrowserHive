@@ -18,6 +18,7 @@ import type {
   RequestGuardHits,
   RequestOwner,
 } from '../../ports/request-guard.ts';
+import type { WritePaceVerdict } from '../../ports/write-pacing.ts';
 import {
   type InterceptionContext,
   type InterceptionHandler,
@@ -39,6 +40,11 @@ export interface RequestGuardHandlerDeps {
   readonly logger: Logger;
   /** Query keys kept in audited URLs (`urlQueryAllowlist`, D-20). */
   readonly urlQueryAllowlist?: readonly string[];
+  /**
+   * `pace-writes` for this host's template (spec 13 §9.4): asked before the action of every
+   * matched rule except `block`; absent or `null` = no pacing.
+   */
+  readonly pace?: ((ruleId: string) => Promise<WritePaceVerdict>) | null;
 }
 
 const ABORT_BLOCKED: InterceptionVerdict = Object.freeze({
@@ -59,6 +65,11 @@ const ABORT_FAILED: InterceptionVerdict = Object.freeze({ kind: 'abort', reason:
  * | `confirm` | **held** until the confirmer answers; `approved` passes, anything else is aborted | `confirm` with the outcome |
  * | `confirm`, no confirmer | aborted `blockedbyclient` at once | `block` (rule action `confirm`) |
  * | `confirm`, answered `asBlock` | aborted `blockedbyclient` | `block` (rule action `confirm`) |
+ *
+ * **Pacing** (`pace-writes`, spec 13 §9.4) runs before the action of an `allow`, `warn` or `confirm`
+ * rule: a write over budget is held for its token (hit `held` once it goes on to the action) or
+ * aborted `blockedbyclient` (hit `paced`, plus a `SITE_PACED` warning on the owning session). A
+ * held write whose request goes away is aborted and its token given back.
  *
  * Only `confirm` waits for the owner before deciding (the operator request goes to the owning
  * session); a resolver that holds a frameless popup navigation (PR T1a) delays nothing else. A
@@ -105,7 +116,7 @@ export function requestGuardHandler(deps: RequestGuardHandlerDeps): Interception
     context: InterceptionContext,
   ): Promise<InterceptionVerdict> => {
     const rule = match.rule;
-    const ts = deps.clock.now();
+    let ts = deps.clock.now();
     const hit =
       (fields: Pick<RequestGuardHit, 'ruleAction' | 'action'>) =>
       (sessionId: string | null): RequestGuardHit => ({
@@ -122,6 +133,15 @@ export function requestGuardHandler(deps: RequestGuardHandlerDeps): Interception
         ...fields,
       });
     const fields = { ruleId: rule.id, method: facts.method, url: facts.url };
+    if (rule.action !== 'block' && deps.pace != null) {
+      const verdict = await deps.pace(rule.id);
+      const paced = await pacing(verdict, context, fields, (action) =>
+        hit({ ruleAction: rule.action, action }),
+      );
+      if (paced !== null) return paced;
+      // A held write meets its action when it goes on.
+      ts = deps.clock.now();
+    }
     switch (rule.action) {
       case 'allow':
         return PASS;
@@ -167,6 +187,41 @@ export function requestGuardHandler(deps: RequestGuardHandlerDeps): Interception
       default:
         // A rule set built without `compileRequestGuardRules` (it refuses unknown actions).
         return assertNever(rule.action, 'request guard action');
+    }
+  };
+
+  /**
+   * Applies a pace verdict: `null` when the write goes on to the rule's action (not paced, or held
+   * until its token), an abort when refused or when the held request went away.
+   */
+  const pacing = async (
+    verdict: WritePaceVerdict,
+    context: InterceptionContext,
+    fields: Readonly<Record<string, string>>,
+    hit: (action: 'paced' | 'held') => (sessionId: string | null) => RequestGuardHit,
+  ): Promise<InterceptionVerdict | null> => {
+    switch (verdict.kind) {
+      case 'pass':
+        return null;
+      case 'refuse':
+        recordLater(context, hit('paced'));
+        log.info('guarded write paced', { ...fields, retryAfterMs: verdict.retryAfterMs });
+        return ABORT_BLOCKED;
+      case 'hold': {
+        try {
+          await deps.clock.sleep(verdict.holdMs, context.signal());
+        } catch {
+          verdict.release();
+          log.info('held write went away', fields);
+          return ABORT_BLOCKED;
+        }
+        const at = deps.clock.now();
+        recordLater(context, (sessionId) => ({ ...hit('held')(sessionId), ts: at }));
+        log.info('guarded write held', { ...fields, holdMs: verdict.holdMs });
+        return null;
+      }
+      default:
+        return assertNever(verdict, 'pace verdict');
     }
   };
 

@@ -1,7 +1,9 @@
-/** @module infra/browsers/profile-preferences — the Chromium profile preferences every template host start merges in (spec 13 §3.1): no password saving, no autofill, no browser sign-in, never restore pages. */
+/** @module infra/browsers/profile-preferences — the Chromium profile preferences every template host start merges in (spec 13 §3.1): no password saving, no autofill, no browser sign-in, never restore pages; and the `webrtc-policy` strategy's `webrtc.ip_handling_policy` (§9.4), set or removed at each start. */
 
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { WEBRTC_POLICY_PREFERENCE } from '../../domain/site-packs/host-flags.ts';
+import type { WebRtcPolicy } from '../../domain/site-packs/strategy-specs.ts';
 
 /** A nested JSON object. */
 type JsonObject = { [key: string]: unknown };
@@ -34,12 +36,33 @@ export function mergePreferences(base: JsonObject, patch: JsonObject): JsonObjec
 }
 
 /**
- * Merges {@link TEMPLATE_PREFERENCES} into `<userDataDir>/Default/Preferences`, creating the file
- * (and the directories, mode 0700) when absent. An unreadable or non-object file is replaced: the
- * profile is BrowserHive's, and a corrupt `Preferences` would otherwise make Chromium reset it.
- * Written through a temporary file and a rename, so a crash never leaves half a file.
+ * Sets the WebRTC IP handling policy preference (`webrtc-policy`), or removes it for `null`: the
+ * profile is BrowserHive's, so a policy no enabled site selects any longer leaves no trace.
  */
-export async function applyTemplatePreferences(userDataDir: string): Promise<void> {
+export function withWebRtcPolicy(prefs: JsonObject, policy: WebRtcPolicy | null): JsonObject {
+  const { section, key } = WEBRTC_POLICY_PREFERENCE;
+  const current = prefs[section];
+  const rest: JsonObject = isObject(current) ? { ...current } : {};
+  if (policy === null) {
+    if (!(key in rest)) return prefs;
+    delete rest[key];
+  } else {
+    rest[key] = policy;
+  }
+  return { ...prefs, [section]: rest };
+}
+
+/**
+ * Merges {@link TEMPLATE_PREFERENCES} into `<userDataDir>/Default/Preferences`, creating the file
+ * (and the directories, mode 0700) when absent, and sets or removes the WebRTC policy when
+ * `options.webrtcPolicy` is given. An unreadable or non-object file is replaced: the profile is
+ * BrowserHive's, and a corrupt `Preferences` would otherwise make Chromium reset it. Written
+ * through a temporary file and a rename, so a crash never leaves half a file.
+ */
+export async function applyTemplatePreferences(
+  userDataDir: string,
+  options: { readonly webrtcPolicy?: WebRtcPolicy | null } = {},
+): Promise<void> {
   const dir = join(userDataDir, 'Default');
   await mkdir(dir, { recursive: true, mode: 0o700 });
   const path = join(dir, 'Preferences');
@@ -51,8 +74,8 @@ export async function applyTemplatePreferences(userDataDir: string): Promise<voi
     current = {};
   }
   const tmp = `${path}.browserhive-tmp`;
-  await writeFile(tmp, JSON.stringify(mergePreferences(current, TEMPLATE_PREFERENCES)), {
-    mode: 0o600,
-  });
+  let next = mergePreferences(current, TEMPLATE_PREFERENCES);
+  if (options.webrtcPolicy !== undefined) next = withWebRtcPolicy(next, options.webrtcPolicy);
+  await writeFile(tmp, JSON.stringify(next), { mode: 0o600 });
   await rename(tmp, path);
 }

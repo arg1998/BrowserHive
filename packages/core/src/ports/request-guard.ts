@@ -19,10 +19,13 @@ export interface RequestGuardHit {
   /** The owning session, `null` for a host-owned request. */
   readonly sessionId: string | null;
   readonly ruleId: string;
-  /** The matching rule's action. */
-  readonly ruleAction: Exclude<RequestGuardAction, 'allow'>;
-  /** What was done: a `confirm` rule with no one to confirm it is a `block`. */
-  readonly action: 'block' | 'confirm' | 'warn';
+  /** The matching rule's action (`allow` only for a paced or held write). */
+  readonly ruleAction: RequestGuardAction;
+  /**
+   * What was done: a `confirm` rule with no one to confirm it is a `block`; a write `pace-writes`
+   * aborted is `paced`, one it held for its token and then let on to the rule's action `held`.
+   */
+  readonly action: 'block' | 'confirm' | 'warn' | 'paced' | 'held';
   /** Confirmations only. */
   readonly outcome: RequestConfirmOutcome | null;
   /** The operator who decided a confirmation. */

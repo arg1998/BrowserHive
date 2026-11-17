@@ -1,4 +1,4 @@
-/** @module infra/site-packs/guard-hits-writer.test — a guard decision becomes one `site_pack.guard_hit` row with its pack, guard, kind and template; a `warn` hit of a session records `SITE_GUARD_WARNED`; a failing bus never throws. */
+/** @module infra/site-packs/guard-hits-writer.test — a guard decision becomes one `site_pack.guard_hit` row with its pack, guard, kind and template; a `warn` hit of a session records `SITE_GUARD_WARNED` and a `paced` one `SITE_PACED`; a failing bus never throws. */
 
 import { describe, expect, it } from 'bun:test';
 import { FakeIdGenerator } from '../../../test/helpers/fake-id-generator.ts';
@@ -43,6 +43,19 @@ function world() {
 }
 
 describe('SiteGuardHitsWriter', () => {
+  it('a paced hit of a session records SITE_PACED; a held one and a host-owned paced one do not', () => {
+    const w = world();
+    const sink = w.writer.forTemplate('tp-aaaaaaaaaa');
+    sink.record(hit({ ruleId: 'site-a.test#invite', ruleAction: 'allow', action: 'held' }));
+    sink.record(
+      hit({ ruleId: 'site-a.test#invite', ruleAction: 'allow', action: 'paced', ts: 43 }),
+    );
+    sink.record(hit({ sessionId: null, ruleId: 'site-a.test#invite', action: 'paced', ts: 44 }));
+    expect(w.rows().map((r) => r.action)).toEqual(['held', 'paced', 'paced']);
+    expect(w.warnings.map((x) => [x.code, x.sessionId])).toEqual([['SITE_PACED', 'demo-00000001']]);
+    expect(w.warnings[0]?.message).toContain('POST https://github.com/login/oauth/authorize');
+  });
+
   it('maps a network hit to a site_guard_hits row of its template', () => {
     const w = world();
     w.writer.forTemplate('tp-aaaaaaaaaa').record(hit());

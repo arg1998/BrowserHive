@@ -42,6 +42,7 @@ import {
   type VaultService,
   wireTemplateHealth,
 } from '@browserhive/core/server';
+import type { SiteStrategies } from '../site-pack-strategies.ts';
 import { wireSitePackUsage } from '../site-packs.ts';
 
 export { type MachineNames, machineNames, selfOriginsOf } from '../self-origins.ts';
@@ -77,6 +78,8 @@ export interface TemplatesInput {
   readonly sitePacks?: SitePackRegistry;
   /** The prober of each site over the supervisor (T3a: the pack prober); default generic. */
   readonly probers?: (supervisor: TemplateHostSupervisor) => ProberSelector;
+  /** The host-side pack strategies (T3b: `webrtc-policy`, `keep-alive`, `device-bound-session`). */
+  readonly siteStrategies?: SiteStrategies;
 }
 
 /** How often template hosts are checked for idleness, age and memory (spec 13 §3.2). */
@@ -180,6 +183,7 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
           platform: input.host.platform,
           selfOrigins: () => selfOriginsOf(config),
           testingArgs: input.testingArgs ?? [],
+          ...(input.siteStrategies !== undefined && { hostFlags: input.siteStrategies.hostFlags }),
         },
         config: {
           idleTimeoutMs: config.templateHostIdleTimeout,
@@ -318,6 +322,9 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
           ...(input.probers !== undefined && { probers: input.probers(supervisor) }),
         });
   if (health !== null) restored = (id) => health.scheduler.restored(id);
+  if (supervisor !== null && ops instanceof TemplateHostOperations) {
+    input.siteStrategies?.attach({ supervisor, ops, health, changed, repeat: input.repeat });
+  }
   // Idle stop, age recycle, memory and checkpoints of template hosts (spec 13 §3.2, §3.9).
   const stopHostTicks =
     supervisor === null

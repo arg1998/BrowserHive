@@ -15,6 +15,7 @@ import {
   type TemplateHealthParts,
   TemplateWritePolicies,
   templateRequestGuard,
+  WritePacer,
 } from '@browserhive/core/server';
 
 /** Inputs of {@link buildSitePackEnforcement}. */
@@ -99,6 +100,16 @@ export function buildSitePackEnforcement(
       catalog,
       hits,
       confirmer: intercepts.confirmer,
+      // `pace-writes` with `ramp-up` (spec 13 §9.4; T3b WP-N).
+      pacer: new WritePacer({
+        describe: catalog.describe,
+        lookup,
+        templates: repos.templates,
+        sites: repos.templateSites,
+        clock: input.clock,
+        random: Math.random,
+        logger: input.logger,
+      }),
       clock: input.clock,
       logger: input.logger,
       urlQueryAllowlist: config.urlQueryAllowlist,

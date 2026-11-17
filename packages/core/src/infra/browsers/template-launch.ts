@@ -3,6 +3,7 @@
 import { mkdir } from 'node:fs/promises';
 import { connect } from 'node:net';
 import type { BrowserContext, BrowserContextOptions, BrowserType, Page } from 'patchright';
+import { webrtcPolicyOfFlags } from '../../domain/site-packs/host-flags.ts';
 import { AppError, isAppError } from '../../kernel/errors/app-error.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { LaunchWarning } from '../../ports/browser-driver.ts';
@@ -91,7 +92,11 @@ export async function launchTemplateHostWith(
   if (spec.proxy !== null) await assertProxyReachable(spec.proxy.server);
   await mkdir(spec.userDataDir, { recursive: true, mode: 0o700 });
   await mkdir(spec.downloadsDir, { recursive: true, mode: 0o700 });
-  await applyTemplatePreferences(spec.userDataDir);
+  // `webrtc-policy` (spec 13 §9.4): the full browser honours only the preference, the switch below
+  // covers the headless shell; both come from the compiled-in table.
+  await applyTemplatePreferences(spec.userDataDir, {
+    webrtcPolicy: webrtcPolicyOfFlags(spec.hostFlags ?? []),
+  });
   // Read before the browser holds the files (spec 13 §3.1).
   const profileSecrets = profileHasSecrets(spec.userDataDir);
 
@@ -102,7 +107,8 @@ export async function launchTemplateHostWith(
   const launch = buildLaunchOptions({
     kwargs,
     stealth: spec.stealth,
-    launchOptions: { args: ['--disable-sync', ...spec.testingArgs] },
+    // Pack strategy switches come only from the compiled-in table (spec 13 §9.10).
+    launchOptions: { args: ['--disable-sync', ...(spec.hostFlags ?? []), ...spec.testingArgs] },
     proxy: spec.proxy,
     downloadsDir: spec.downloadsDir,
   });
