@@ -1,5 +1,6 @@
 /** @module domain/policies/request-guard — pure method-, URL- and resource-type-aware request rules: compile, match, atomic holder (spec 13 §9.3, D-54). */
 
+import { matchesGlob } from '../../kernel/glob.ts';
 import { err, ok, type Result } from '../../kernel/result.ts';
 import {
   decodeUnreserved,
@@ -237,6 +238,7 @@ export function matchRequestGuard(
   request: GuardedRequest,
 ): RequestGuardMatch | null {
   if (rules.rules.length === 0) return null;
+  if (request.url.length > MAX_GUARD_MATCH_URL) return matchLongUrl(rules, request);
   const forms = guardComparisonForms(request.url);
   if (forms === null) return null;
   const method = request.method.toUpperCase();
@@ -250,6 +252,60 @@ export function matchRequestGuard(
     }
   }
   return null;
+}
+
+/**
+ * The longest URL whose path and query are matched glob by glob (review #83 N1): a glob part with
+ * `?` is scanned in O(URL × part), so a 2 MB URL would cost about a second per rule. A longer URL
+ * is decided by its host alone, failing closed: {@link matchLongUrl}.
+ */
+export const MAX_GUARD_MATCH_URL = 16_384;
+
+/**
+ * A URL over {@link MAX_GUARD_MATCH_URL} characters: the first rule (method and type admitted)
+ * whose host part matches the URL's host decides, preferring `block`, then `confirm`; `warn` and
+ * `allow` rules are not applied. So a protective guard can never be dodged by padding a URL, at
+ * the price of blocking an over-long URL on a host a protective guard names.
+ */
+function matchLongUrl(rules: RequestGuardRules, request: GuardedRequest): RequestGuardMatch | null {
+  let host: string;
+  try {
+    const url = new URL(request.url);
+    if (
+      url.protocol !== 'http:' &&
+      url.protocol !== 'https:' &&
+      url.protocol !== 'ws:' &&
+      url.protocol !== 'wss:'
+    ) {
+      return null;
+    }
+    host = url.hostname.toLowerCase().replace(/\.$/, '');
+  } catch {
+    return null;
+  }
+  const method = request.method.toUpperCase();
+  let confirm: RequestGuardRule | null = null;
+  for (const rule of rules.rules) {
+    if (rule.methods !== null && !rule.methods.has(method)) continue;
+    if (rule.resourceTypes !== null && !rule.resourceTypes.has(request.resourceType)) continue;
+    if (!matchesGlob(host, hostPartOf(rule.url))) continue;
+    if (rule.action === 'block')
+      return { rule, matched: `${host} (URL over ${MAX_GUARD_MATCH_URL} characters)` };
+    if (rule.action === 'confirm' && confirm === null) confirm = rule;
+  }
+  return confirm === null
+    ? null
+    : { rule: confirm, matched: `${host} (URL over ${MAX_GUARD_MATCH_URL} characters)` };
+}
+
+/** The host part of a rule glob (`*.site.test/logout` → `*.site.test`), without a scheme or port. */
+function hostPartOf(glob: string): string {
+  const scheme = glob.indexOf('://');
+  const rest = scheme < 0 ? glob : glob.slice(scheme + 3);
+  const slash = rest.indexOf('/');
+  const host = slash < 0 ? rest : rest.slice(0, slash);
+  const colon = host.indexOf(':');
+  return colon < 0 ? host : host.slice(0, colon);
 }
 
 /**

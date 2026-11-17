@@ -4,6 +4,7 @@ import { SITE_PACK_MAX_BYTES } from '@browserhive/contracts/site-packs';
 import { loadPackBytes } from '@browserhive/core/server';
 import type { CommandContext } from '../deps.ts';
 import { EXIT, type ExitCode, type Invocation } from '../invocation.ts';
+import { printable } from '../output/printable.ts';
 
 type VerifyInvocation = Extract<Invocation, { readonly command: 'sitepacks-verify' }>;
 
@@ -100,7 +101,9 @@ export async function runSitepacksVerify(
   context: CommandContext,
   invocation: VerifyInvocation,
 ): Promise<ExitCode> {
-  const report = await verifyPackFile(context, invocation.path);
+  // Everything in the report can come from the (possibly hostile) file: make it printable first
+  // (verify #83 N2), JSON included.
+  const report = printableReport(await verifyPackFile(context, invocation.path));
   const { out } = context;
   if (invocation.json) {
     out.json(report);
@@ -112,10 +115,27 @@ export async function runSitepacksVerify(
     );
     for (const warning of report.warnings) out.line(`  warning: ${warning}`);
   } else {
-    out.status('fail', invocation.path, `not a valid site pack (${report.reason ?? 'invalid'})`);
+    out.status(
+      'fail',
+      printable(invocation.path),
+      `not a valid site pack (${report.reason ?? 'invalid'})`,
+    );
     for (const issue of report.issues) {
       out.line(`  ${issue.path === '' ? issue.message : `${issue.path}: ${issue.message}`}`);
     }
   }
   return report.ok ? EXIT.ok : EXIT.fatal;
+}
+
+/** The report with every string made printable (paths, ids, issue texts, warnings). */
+function printableReport(report: VerifyReport): VerifyReport {
+  return {
+    ...report,
+    path: printable(report.path),
+    pack_id: report.pack_id === null ? null : printable(report.pack_id),
+    sha256: report.sha256 === null ? null : printable(report.sha256),
+    reason: report.reason === null ? null : printable(report.reason),
+    issues: report.issues.map((i) => ({ path: printable(i.path), message: printable(i.message) })),
+    warnings: report.warnings.map(printable),
+  };
 }

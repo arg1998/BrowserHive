@@ -62,6 +62,24 @@ describe('sitepacks verify', () => {
     expect(report.issues.some((i) => i.path.startsWith('sign_in'))).toBe(true);
   });
 
+  it('a hostile file cannot drive the terminal: escapes in its strings print as U+FFFD (verify #83 N2)', async () => {
+    // A key and an id that would overdraw the line with a fake "✓ valid" if printed raw.
+    const evilKey = '\u001b[2K\r\u001b[32m✓ valid\u001b[0m';
+    const evilId = '\u001b]8;;https://evil.test\u0007x\u001b]8;;\u0007';
+    const bad = JSON.stringify({ ...PACK, id: evilId, [evilKey]: 1 });
+    for (const json of [false, true]) {
+      const run = await cliHarness({
+        argv: ['sitepacks', 'verify', '/p/github.com.json', ...(json ? ['--json'] : [])],
+        files: { '/p/github.com.json': bad },
+      });
+      expect(run.code).toBe(1);
+      expect(run.stdout).not.toContain('\u001b');
+      expect(run.stdout).toContain('\ufffd');
+      expect(run.stdout).not.toContain('\u0007');
+      expect(run.stderr).not.toContain('\u001b');
+    }
+  });
+
   it('a file named for another pack, a missing file, an unknown key', async () => {
     const renamed = await cliHarness({
       argv: ['sitepacks', 'verify', '/p/x.com.json'],

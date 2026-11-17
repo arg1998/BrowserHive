@@ -196,7 +196,7 @@ Packs come from a source you trust less than yourself (a release, later a regist
 | `sign_in.url` | `https` only, a host inside the pack's domains, a path with no query. Shown in full before a sign-in window opens. |
 | `domains` | A domain another pack covers is refused, also for a local file you approve. A new domain is shown in the difference and needs your approval. |
 | Pages BrowserHive loads by itself (the probe page) | A path inside the domains, no query, and never one of the pack's own sign-out, account, credential or destructive guards. During a check, page loads that leave the domains are aborted. |
-| `guards` | The glob grammar only (`*` and `?`, at most 4 `*` and no `**` per pattern, matched in linear time), hosts inside the pack's domains, at most 64. |
+| `guards` | The glob grammar only (`*` and `?`, at most 4 `*` and no `**` per pattern, matched without backtracking; an address over 16 384 characters is judged by its host alone, so a padded address cannot slip past a sign-out or account guard), hosts inside the pack's domains, at most 64. |
 | `challenges` | Per-session and per-template bounds on Site checks; an agent's own navigation never triggers one. |
 | `signed_in` | Cookie **names** only, never values. A re-login never starts on `challenged` or "couldn't tell". |
 | Numbers (sessions, pacing, intervals) | Floors and ceilings built into BrowserHive; sessions never above the template's own cap. |
