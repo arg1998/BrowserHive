@@ -2,14 +2,14 @@
 
 import type { BrowserContext, CDPSession, Disposable } from 'patchright';
 import type { Logger } from '../../ports/logger.ts';
-import { patchOpenDocuments } from './clipboard-frames.ts';
+import { patchOpenDocuments, RestoredDocumentsWatch } from './clipboard-frames.ts';
 
 // Core compiles without the DOM lib; the page globals the init script touches.
 declare const Document: { readonly prototype: object };
 declare const Event: { readonly prototype: { readonly stopImmediatePropagation: unknown } };
-declare const window: {
-  addEventListener(type: string, listener: (event: object) => void, capture: boolean): void;
-};
+declare const EventTarget: { readonly prototype: object };
+declare const window: object;
+declare const document: object;
 
 /**
  * The permission descriptors denied while the switch is on: sanitized writes
@@ -32,14 +32,23 @@ const DENIED = [
  *   before any page script, stops the event), so a person's Ctrl/Cmd+C copies what they selected:
  *   the page cannot replace it with `clipboardData.setData` (measured: without this, a lingering
  *   `copy` listener rewrote a keyboard copy).
+ * - The stopper survives `document.open()`, which erases every listener of the window (verify #84
+ *   N2): `open`, `write` and `writeln` (the last two open a closed document implicitly) add it again
+ *   once the native call returns, and a `copy`/`cut` listener a page adds gets the stopper added to
+ *   the same target first, so a capturing listener registered while a `document.write` parses
+ *   (before the call returns) still runs after it. Called on another window's document (another
+ *   realm's method through `call`), they do nothing: a stopper is only ever this realm's own, and
+ *   a listener from a realm that goes away never runs (measured: a frame's `open` on its parent's
+ *   document removes the frame, and the stopper it added back was dead).
  *
  * Nothing a page can reach is consulted when a call happens (review #84 H1): the command is
  * coerced to a string once and that string is what the native method gets (a `toString` that
- * answers `bold` first and `copy` second cannot pass); `String`, `toLowerCase`, `Reflect.apply`
- * and `stopImmediatePropagation` are taken before page scripts run (a page that replaces them later
- * changes nothing and never receives the native method); the trap object has no prototype (an
- * `Object.prototype.get` would otherwise be called with the native method as its target); the
- * forwarded arguments are an array literal (no setter on `Array.prototype` is involved).
+ * answers `bold` first and `copy` second cannot pass); `String`, `toLowerCase`, `Reflect.apply`,
+ * `addEventListener`, the `defaultView` getter and `stopImmediatePropagation` are taken before page
+ * scripts run (a page that replaces them later changes nothing and never receives the native
+ * method); the trap objects have no prototype (an `Object.prototype.get` would otherwise be called
+ * with the native method as its target); the forwarded arguments are array literals (no setter on
+ * `Array.prototype` is involved).
  *
  * It must not close over anything (it is serialised into the page) and runs in the main world, in
  * every document and frame, before page scripts. Both are detectable, as is the denied permission
@@ -47,33 +56,82 @@ const DENIED = [
  */
 export function blockPageClipboardWrites(): void {
   const apply = Reflect.apply;
+  const define = Object.defineProperty;
   const toText = String;
   const lower = String.prototype.toLowerCase;
   const stopNow = Event.prototype.stopImmediatePropagation;
-  const proto = Document.prototype as { execCommand?: unknown };
-  const original = proto.execCommand;
-  if (typeof original === 'function') {
-    const blocked = new Proxy(original, {
-      __proto__: null,
-      apply(target: (...args: unknown[]) => unknown, thisArg: unknown, args: unknown[]): unknown {
-        const command = toText(args[0]);
-        const name = apply(lower, command, []);
-        if (name === 'copy' || name === 'cut') return false;
-        return apply(target, thisArg, args.length > 1 ? [command, args[1], args[2]] : [command]);
-      },
-    } as ProxyHandler<(...args: unknown[]) => unknown>);
-    Object.defineProperty(proto, 'execCommand', {
-      value: blocked,
+  const listen = (EventTarget.prototype as { addEventListener?: unknown }).addEventListener;
+  const viewOf = Object.getOwnPropertyDescriptor(Document.prototype, 'defaultView')?.get;
+  type Native = (...args: unknown[]) => unknown;
+  /** Replaces `holder[name]` by a `Proxy` of the native method with a prototype-less `handler`. */
+  const wrap = (holder: object, name: string, handler: ProxyHandler<Native>): void => {
+    const original = (holder as Record<string, unknown>)[name];
+    if (typeof original !== 'function') return;
+    define(holder, name, {
+      value: new Proxy(original as Native, handler),
       writable: true,
       enumerable: true,
       configurable: true,
     });
-  }
+  };
   const stop = (event: object): void => {
     apply(stopNow as (this: object) => void, event, []);
   };
-  window.addEventListener('copy', stop, true);
-  window.addEventListener('cut', stop, true);
+  /** The stopper on `target` for both events; adding it twice is a no-op (same listener). */
+  const arm = (target: unknown): void => {
+    try {
+      apply(listen as Native, target, ['copy', stop, true]);
+      apply(listen as Native, target, ['cut', stop, true]);
+    } catch {
+      // Not an event target (or a detached document's `null` window): nothing to arm.
+    }
+  };
+  wrap(Document.prototype, 'execCommand', {
+    __proto__: null,
+    apply(target: Native, thisArg: unknown, args: unknown[]): unknown {
+      const command = toText(args[0]);
+      const name = apply(lower, command, []);
+      if (name === 'copy' || name === 'cut') return false;
+      return apply(target, thisArg, args.length > 1 ? [command, args[1], args[2]] : [command]);
+    },
+  } as ProxyHandler<Native>);
+  const ownDocument = document;
+  const ownWindow = window;
+  const rearm = {
+    __proto__: null,
+    apply(target: Native, thisArg: unknown, args: unknown[]): unknown {
+      let view: unknown = null;
+      try {
+        view = viewOf === undefined ? null : apply(viewOf, thisArg, []);
+      } catch {
+        // Not a document: the native call throws its own TypeError below.
+      }
+      // Another window's document through this realm's method: refused, since the stopper added
+      // back would be this realm's, and a listener of a realm that goes away (a frame the call
+      // itself removes, a popup that closes) never runs again.
+      if (view !== null && thisArg !== ownDocument) return undefined;
+      try {
+        return apply(target, thisArg, args);
+      } finally {
+        if (view === ownWindow) arm(view);
+      }
+    },
+  } as ProxyHandler<Native>;
+  wrap(Document.prototype, 'open', rearm);
+  wrap(Document.prototype, 'write', rearm);
+  wrap(Document.prototype, 'writeln', rearm);
+  wrap(EventTarget.prototype, 'addEventListener', {
+    __proto__: null,
+    apply(target: Native, thisArg: unknown, args: unknown[]): unknown {
+      // Fewer than two arguments: the native method throws its own TypeError.
+      if (args.length < 2) return apply(target, thisArg, args);
+      // Coerced once, as the native method would (a symbol throws the same TypeError).
+      const type = `${args[0] as string}`;
+      if (type === 'copy' || type === 'cut') arm(thisArg);
+      return apply(target, thisArg, args.length > 2 ? [type, args[1], args[2]] : [type, args[1]]);
+    },
+  } as ProxyHandler<Native>);
+  arm(window);
 }
 
 /** Who asks: the host start (before any agent page) or an operator's change on a running browser. */
@@ -87,6 +145,8 @@ class ClipboardPolicy {
   /** A live change took effect: documents open at that moment keep their old state until a start. */
   #changedLive = false;
   #script: Disposable | null = null;
+  /** After a live "on": documents of open pages restored from the back/forward cache. */
+  #restores: RestoredDocumentsWatch | null = null;
   #contextId: string | null = null;
   #cdp: CDPSession | null = null;
   #queue: Promise<void> = Promise.resolve();
@@ -118,7 +178,17 @@ class ClipboardPolicy {
         this.#log,
       );
       if (reached.missed > 0) this.#log.warn('clipboard patch partial', { ...reached });
+      if (at === 'live') {
+        this.#restores = new RestoredDocumentsWatch(
+          this.#context,
+          blockPageClipboardWrites.toString(),
+          this.#log,
+        );
+        await this.#restores.watchOpenPages();
+      }
     } else {
+      await this.#restores?.stop();
+      this.#restores = null;
       await this.#permissions(false);
       // Documents loaded from now on are untouched; open ones keep the script part (`execCommand`
       // copy/cut refused, page copy listeners stopped) until they reload: a page could reach
@@ -187,11 +257,14 @@ const POLICIES = new WeakMap<BrowserContext, ClipboardPolicy>();
  * (`at: 'start'`), and live when an operator changes it (no restart). Off is the browser's own
  * behaviour, so a host started with the switch off is not touched.
  *
- * Live, turning it on reaches every open document, frames included, but a document open at that
- * moment may hold what it took earlier (a reference to the native `execCommand`, its own capturing
- * `copy` listener, replaced built-ins): only documents loaded afterwards are fully covered. Turning
- * it off lifts the permission at once; open documents keep refusing `execCommand` copy/cut until
- * they reload. Either way {@link clipboardNeedsRestart} is then true.
+ * Live, turning it on reaches every open document, frames included, and the documents those pages
+ * get back from the back/forward cache later, but a document open at that moment may hold what it
+ * took earlier (a reference to the native `execCommand`, its own capturing `copy` listener,
+ * replaced built-ins): only documents loaded afterwards are fully covered. In a browser started
+ * without the sandboxed-frames switch (`sandboxedFramesArgs`: stealth off and the switch off at the
+ * start), a sandboxed `srcdoc` frame loaded afterwards runs out of process and gets no init script.
+ * Turning it off lifts the permission at once; open documents keep refusing `execCommand` copy/cut
+ * until they reload. Either way {@link clipboardNeedsRestart} is then true.
  *
  * @throws When the permission cannot be set; a host start then fails (the switch is a protection).
  */
