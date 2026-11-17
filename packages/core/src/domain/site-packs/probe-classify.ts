@@ -14,6 +14,8 @@ export const PACK_PROBE_REASONS = {
   marker: 'marker',
   landmark: 'landmark',
   noRedirect: 'no_redirect',
+  /** An `either` probe that loaded and stayed put: a weaker sign than a `redirect` probe's (D48, D43). */
+  noRedirectSettled: 'no_redirect_settled',
   timeout: 'timeout',
   network: 'network',
   noSignal: 'no_signal',
@@ -109,7 +111,8 @@ function samePlace(pack: SitePackV1, url: string, path: string): boolean {
  * domains) matches a `signed_out_redirects` glob → `signed_out` `redirect`; the signed-out marker →
  * `signed_out` `marker`; the landmark → `signed_in` `landmark`; a `redirect` pack still on the
  * probe host and path (and not a 4xx/5xx) → `signed_in` `no_redirect`, and an `either` pack only
- * once the page `settled` (loaded, then no signed-out redirect within the post-load window, D48);
+ * once the page `settled` (loaded, then no signed-out redirect within the post-load window, D48),
+ * as `no_redirect_settled` (lower confidence: a later redirect or a sign-in modal reads the same);
  * otherwise `inconclusive` (`timeout`, `network`, `http_<status>` ≥ 400, `no_signal`). A challenge
  * is never `signed_out`. A visit of another path (the keeper's) never answers `no_redirect`: only
  * the probe path's staying put means signed in.
@@ -148,7 +151,12 @@ export async function classifyPackProbe(
   const onProbePath = (facts.path ?? probePath) === probePath;
   const trusted = signals.kind === 'redirect' || (signals.kind === 'either' && facts.settled);
   if (trusted && onProbePath && samePlace(pack, facts.finalUrl, probePath)) {
-    return verdict('signed_in', PACK_PROBE_REASONS.noRedirect);
+    return verdict(
+      'signed_in',
+      signals.kind === 'either'
+        ? PACK_PROBE_REASONS.noRedirectSettled
+        : PACK_PROBE_REASONS.noRedirect,
+    );
   }
   return verdict('inconclusive', PACK_PROBE_REASONS.noSignal);
 }
