@@ -198,9 +198,9 @@ Never: module-level mutable singletons holding server state.
   - Nav scroll region: `overflow-y-auto`, thin scrollbar, no `scrollbar-gutter`.
   - Brand: the hive hexagon `BrandMark` + "BrowserHive" wordmark (the rail shows the mark only).
   - Footer: a Shortcuts button (`?`; an icon in the rail; hidden on coarse pointers) and the daemon version.
-- **Nav groups**: primary items ordered by `staticData.nav.order` (Overview 10, Sessions 20, Websites 30, Blocklist 40, Attention 50, Vault 60, Vault log 65, Logs 80, System 90). Items whose `staticData.requires` (e.g. `vault`) is off in `/system` render in a "Not enabled" group; vault items render in no group until `/system` has loaded. Badges: Attention shows the open count; Vault shows the confirm count, and the confirm-count query never runs while the vault is disabled. Items carry `aria-current="page"` from the router's active match.
+- **Nav groups**: primary items ordered by `staticData.nav.order` (Overview 10, Sessions 20, Blocklist 40, Attentions 50, Vault 60, Vault log 65, Logs 80, System 90). Websites has no sidebar entry: it is a detail page of Overview (`staticData.parent: '/overview'`, §12.5), reached from the Overview Websites card, the palette and links. Items whose `staticData.requires` (e.g. `vault`) is off in `/system` render in a "Not enabled" group; vault items render in no group until `/system` has loaded. Badges: Attentions shows the open count; Vault shows the confirm count, and the confirm-count query never runs while the vault is disabled. Items carry `aria-current="page"` from the router's active match, and also on the pages that name them as `parent` (Overview on `/websites`).
 - **Topbar** (`--topbar-height` 3.5rem = 56 px, sticky, translucent with backdrop blur):
-  - Left: breadcrumbs on object pages only (`Sessions › slug`); list pages show nothing there because `PageHeader` carries the title. No "BrowserHive" root crumb. Under 768 px: menu button + brand mark instead.
+  - Left: breadcrumbs on object pages only (`Sessions › slug`, and `Overview › Websites` for a page filed under a sidebar item by `parent`); list pages show nothing there because `PageHeader` carries the title. No "BrowserHive" root crumb. Under 768 px: menu button + brand mark instead.
   - Right: a search field-button ("Search sessions, pages…" + `Ctrl K`/`⌘K` by platform) that opens the palette (an icon button under 768 px), `HealthPill`, `NotificationBell`, `ThemeMenu`, `PrincipalMenu` (display name, Change password, Keyboard shortcuts, Log out).
   - `document.title` = `${title} · BrowserHive`.
 - `HealthPill` is a ghost `Button` opening a popover with Realtime (WS `connected | connecting | offline` + reason), REST, the last answer ("2m ago", browser clock against browser clock) and daemon version. REST health follows how requests **ended**, never how long ago one ran (an idle page is not degraded, and the socket store already reconnects a socket that went silent): a query or mutation that fails with `NETWORK_ERROR`, `TIMEOUT` or an `INTERNAL_ERROR` 5xx that is not the daemon's own JSON answer marks REST failing (label Degraded); 4xx, aborts, malformed bodies, the daemon's typed operation failures (`NAVIGATION_FAILED`, `CHANNEL_PLATFORM_ERROR`, …) and realtime cache writes change nothing; the next successful request clears it, and while failing a `GET /health` probe runs every 15 s (any answer, a degraded 503 included, clears it) so a blip on a quiet page does not stick.
@@ -209,7 +209,7 @@ Never: module-level mutable singletons holding server state.
 
 ### 6.2 Route table as data
 
-Each route file exports `staticData: { title, nav?: { label, icon, group, order, key? }, crumb?: (params) => string, requires?: 'vault' | 'admin', palette?: { keywords } }`; object pages set `crumb` to show a breadcrumb instead of the title. The shell derives sidebar items, breadcrumbs, `document.title` and palette "Go to" commands from the matched route tree. No other list of routes exists.
+Each route file exports `staticData: { title, nav?: { label, icon, group, order, key? }, crumb?: (params) => string, parent?: string, requires?: 'vault' | 'admin', palette?: { keywords, icon? } }`; object pages set `crumb` to show a breadcrumb instead of the title. A page without `nav` may name the sidebar page it belongs to in `parent` (its breadcrumb starts there and that item stays highlighted) and get a palette "Go to" entry by giving `palette.icon`. The shell derives sidebar items, breadcrumbs, `document.title` and palette "Go to" commands from the matched route tree. No other list of routes exists.
 
 ### 6.3 Command palette
 
@@ -218,8 +218,8 @@ A 640 px (40rem) dialog (Base UI dialog: portal, focus trap, restore) with a `ro
 1. **This page**: actions registered by the mounted page through `usePageActions` (e.g. "Show/Hide live view" on a session, "Show/Hide dashboard traffic" on Logs).
 2. **Recent**: last selections (localStorage).
 3. **Sessions**: with a query of ≥ 2 characters, `GET /sessions?q=` sorted by last activity; each row shows slug, state dot and label, the id suffix (mono) and relative time in fixed columns, so same-slug sessions are distinguishable. `/search` is the fallback.
-4. **Attention**: pending requests filtered by the query.
-5. **Pages**: "Go to …" from the route table, plus Notifications.
+4. **Attentions**: pending requests filtered by the query.
+5. **Pages**: "Go to …" from the route table (sidebar items, then pages with a `palette.icon` such as Websites), plus Notifications.
 6. **Actions**: theme (light/dark/system), expand/collapse sidebar, change password, log out.
 
 ### 6.4 Toasts
@@ -421,12 +421,12 @@ Search: `range` (default `7d`), `since`, `until`. The activity chart is always s
 
 - **KPI tiles**: Live sessions (→ `/sessions?view=live`, sub "N watched live"), Open attention (→ `/attention`), Sessions, Tool calls, Errors (sparklines only with ≥ 3 non-empty buckets, drawn beside the value), Blocked URLs (→ `/blocklist`; shown only when a blocklist is configured or `blocked_total > 0`); with the vault on, Vault fills and Active live views. `tileGridClass(n)` places 4/5/6/7/8 tiles without an orphan row (first tile spans two columns for 5 and 7).
 - **Activity chart** (hand-rolled, `ActivityChart.tsx`): stacked calls/errors bars, `niceScale` integer y-axis, day labels centred over their day (a day less than half inside the window is unlabelled), session starts as amber dots under the baseline. Every non-empty bucket is a real `<a href="/sessions?since&until">` with a column-wide hover fill and focus ring. The tooltip is React state beside the column and clears on leave/blur. The description names the bucket size; when all activity is in the last day of a wider window it says so and offers "Zoom to 24h". Buckets: 24h → 1 h, 3d → 3 h, 7d → 6 h, 14d → 12 h, 30d/all → 1 d.
-- **Panels** (12-column from `xl`: left 7 = Recent sessions, Websites visited; right 5 = Recent failures, Most visited domains; stacked below): flush `LinkList` rows that are whole-row links, each with a `PanelLink` header action.
+- **Panels** (12-column from `xl`: left 7 = Recent sessions, Websites visited; right 5 = Recent failures, Harnesses; stacked below; then the full-width **Websites** card last): flush `LinkList` rows that are whole-row links, each with a `PanelLink` header action.
   - Recent sessions: slug + state dot, calls · errors (> 0 only) · last URL, time.
   - Websites visited: 10 live rows (URL, slug, time) → session.
   - Recent failures: latest failed calls from `GET /tool-calls?ok=false&has_session=true` (tool, code, session, message) → `/sessions/$id?kinds=tool&errors_only=1`; header → `/sessions?sort=errors`.
-  - Most visited domains: top 8 `BarList` → `/websites?domain=…` keeping the range.
-  - **Harnesses** (right column, under Most visited domains; `GET /metrics/harnesses` over the page window): one whole-row link per harness to `/sessions?harness=<slug>` keeping `since`/`until`: label (the known label, else the slug), `N sessions` (with `· N live` when > 0) and `N calls` (with errors in red when > 0), and a thin meter of its share of sessions. `Unknown` is always listed, last, muted. The header carries the self-reported `InfoDot` (§11) and a `PanelLink` to `/sessions`. Empty window: a compact zero-data line.
+  - **Harnesses** (right column, under Recent failures; `GET /metrics/harnesses` over the page window): one whole-row link per harness to `/sessions?harness=<slug>` keeping `since`/`until`: label (the known label, else the slug), `N sessions` (with `· N live` when > 0) and `N calls` (with errors in red when > 0), and a thin meter of its share of sessions. `Unknown` is always listed, last, muted. The header carries the self-reported `InfoDot` (§11) and a `PanelLink` to `/sessions`. Empty window: a compact zero-data line.
+  - **Websites** (`WebsitesStatsCard`, full width, the last thing on the page; the summary of `/websites`, which has no sidebar entry): header "Where agents browsed, across all sessions · <range>" with a `PanelLink` "View all websites" → `/websites` keeping `range`/`since`/`until`. A stats strip (2 × 2 on phones, 4 across from `lg`): Navigations (`GET /pages?limit=1&total=true` over the window; the total is bumped live by `page.visited`), Domains (distinct count from `GET /pages/domains?limit=100`, `100+` when the list is full), Top domain (mono, with its share of navigations) and Not public (visits whose category is not `public`, from the same `facets.category`, in warn text when > 0, sub line per category). Below, Most visited domains: top 9 `BarList` in columns → `/websites?domain=…` keeping the range. Skeletons from the first paint; zero-data empty state for the domains; errors through `DataPanel`.
 - **Data**: `useWindowAnchor` + `keepPreviousData`; a minute rollover never refetches with a new key or flashes a skeleton (tested with a mutable server clock).
 
 ### 12.2 `/sessions`
@@ -488,11 +488,11 @@ Search (`features/sessions/detail-search.ts`): `tab` (`activity|screenshots|file
 
 Data: `keys.sessions.detail(id)`, `.timeline(id, facet, params)`, `.screenshots(id, params)`, `.pageContext(id, params)`, `.attention(id)`, `.trace(id)`; topics `session:<id>`, `screencast:<id>`. Error: 404 → page-level "Session not found" with "Back to sessions". Skeleton shaped like header + tabs + rows.
 
-### 12.4 `/attention`
+### 12.4 `/attention` (Attentions)
 
 Search: `mode` (csv), `status` (csv), `session`, `range` (default `7d`), `since`, `until`, table params; sort `created|resolved|waited` (keyset cursors walked by `useCursorPager`).
 
-- **Header**: "Attention" + a warn "N open" pill (the only count); one-line description with the mode explainer behind Learn more; a labelled "Sound alerts" switch (per device).
+- **Header**: "Attentions" (sidebar label, page title, breadcrumb, palette group and Help menu entry; API fields, error codes and notification kinds keep `attention`) + a warn "N open" pill (the only count); one-line description with the mode explainer behind Learn more; a labelled "Sound alerts" switch (per device).
 - **Open requests**: Reject all / Resolve all when > 1 open (confirm). Empty queue = one compact panel. Cards (`AttentionCard`, memoised): 3 px left stripe (warn takeover / info notify); meta line = mode pill (Take over / Notify, `ICONS.takeover`), "Waiting 4m 12s", deadline pill; the reason as a 16 px headline clamped to 4 lines with Show all/less; Session / Page / Options facts (`{choices:[…]}` as chips, else collapsed JSON); the session's latest stored screenshot captioned with its age relative to the request (from md, zoomable); footer = message input, **Take over** (a real link to `/sessions/$id?live=1&takeover=1`) as primary for takeover or Resolve for notify, Resolve/Open session secondary, Reject (`destructive-ghost`, confirm). Phone order: primary (full width), secondary, Reject; from 640 px Reject · secondary · primary. The 1 Hz clock lives only in `Tickers.tsx`, so ticking and typing never re-render other cards.
 - **History** (`HistoryTable`): facet chips Outcome then Mode from the API's disjunctive `facets` (zero-filled); columns Outcome (dot), Reason (grow, 2-line clamp + message), Mode, Session (real link), Waited, Requested; click a row to expand (full reason, message, resolution, page, tool, requested/settled with by, options, Open session). Phone cards share the expansion state.
 - The success toast echoes the message ("Message sent: “…”"). `useResolveAttention` (`features/attention/api.ts`) serves this page and the session banner.
@@ -500,7 +500,7 @@ Search: `mode` (csv), `status` (csv), `session`, `range` (default `7d`), `since`
 
 ### 12.5 `/websites`
 
-`/navigation` is an alias route that redirects to `/websites` keeping the search (`replace: true`), so links using the other natural name for navigation history land on this page. The REST resource and WS topic are `pages` (§17).
+A detail page of Overview, not a sidebar item: `staticData.parent: '/overview'` makes the breadcrumb `Overview › Websites` and keeps Overview highlighted in the sidebar; it is reached from the Overview Websites card (§12.1), the palette ("Go to Websites"), links and the Help menu ("Help for Websites"). `/navigation` is an alias route that redirects to `/websites` keeping the search (`replace: true`), so links using the other natural name for navigation history land on this page. The REST resource and WS topic are `pages` (§17).
 
 Search: `range` (default `7d`), `since`, `until`, `category` (csv), `session_id`, `domain`, `top` (5|10|25|100, default 10), table params; sort `time|session|category|domain` (domain has no header; URL only).
 

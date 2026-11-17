@@ -1,4 +1,4 @@
-/** @module features/websites/components/TopDomainsCard — "Most visited domains" panel: compact `BarList` (optionally in columns for a full-width panel); rows link to `/websites?domain=` (Overview) or toggle the domain filter (Websites), Top-N select in the header (spec 04 §12.5) */
+/** @module features/websites/components/TopDomainsCard — "Most visited domains" panel on Websites: compact `BarList` (optionally in columns for a full-width panel); rows toggle the domain filter, Top-N select in the header; `BarListSkeleton` is shared with the Overview Websites card (spec 04 §12.5) */
 import type { PageDomainsResponse } from '@browserhive/contracts/http';
 import type { UseQueryResult } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
@@ -7,7 +7,6 @@ import { EmptyState } from '@/components/shared/EmptyState.tsx';
 import { Panel } from '@/components/shared/Section.tsx';
 import { SimpleSelect } from '@/components/ui/select.tsx';
 import { Skeleton } from '@/components/ui/skeleton.tsx';
-import { formatNumber } from '@/lib/format/bytes.ts';
 import { BarList } from './BarList.tsx';
 
 /** Top-N choices (spec 04 §12.5). */
@@ -25,8 +24,6 @@ export interface TopDomainsCardProps {
   readonly active?: string | undefined;
   /** Toggle the domain filter (Websites). */
   readonly onPick?: (domain: string) => void;
-  /** Link each row (Overview → `/websites?domain=`). Wins over `onPick`. */
-  readonly hrefFor?: (domain: string) => string;
   /** Hide the list (collapsed panel); the header stays. */
   readonly collapsed?: boolean;
   /** Full-width panel: flow the bars into columns. */
@@ -69,7 +66,6 @@ export function TopDomainsCard({
   onTop,
   active,
   onPick,
-  hrefFor,
   actions,
   columns = false,
   collapsed = false,
@@ -134,17 +130,8 @@ export function TopDomainsCard({
                 label: <span className="font-mono text-sm">{d.domain}</span>,
                 value: d.count,
                 active: active === d.domain,
-                ...(hrefFor !== undefined
-                  ? { href: hrefFor(d.domain) }
-                  : onPick !== undefined
-                    ? { onClick: () => onPick(d.domain) }
-                    : {}),
-                hint:
-                  hrefFor !== undefined
-                    ? `${formatNumber(d.count)} visit${d.count === 1 ? '' : 's'} · open in Websites`
-                    : active === d.domain
-                      ? 'Filtered · click to clear'
-                      : `Show only ${d.domain}`,
+                ...(onPick !== undefined && { onClick: () => onPick(d.domain) }),
+                hint: active === d.domain ? 'Filtered · click to clear' : `Show only ${d.domain}`,
               }))}
             />
           )}

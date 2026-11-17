@@ -28,7 +28,7 @@ export const DOCS_PAGES = {
   dashboardOverview: { page: 'guide/dashboard', anchor: 'overview' },
   dashboardSessions: { page: 'guide/dashboard', anchor: 'sessions' },
   dashboardSessionDetail: { page: 'guide/dashboard', anchor: 'session-detail' },
-  dashboardAttention: { page: 'guide/dashboard', anchor: 'attention' },
+  dashboardAttention: { page: 'guide/dashboard', anchor: 'attentions' },
   dashboardWebsites: { page: 'guide/dashboard', anchor: 'websites' },
   dashboardBlocklist: { page: 'guide/dashboard', anchor: 'blocklist' },
   dashboardVault: { page: 'guide/dashboard', anchor: 'vault' },

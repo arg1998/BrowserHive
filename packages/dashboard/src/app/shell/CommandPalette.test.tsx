@@ -1,4 +1,4 @@
-/** @module app/shell/CommandPalette.test — combobox/listbox roles, aria-activedescendant, keyboard selection, substring matching */
+/** @module app/shell/CommandPalette.test — combobox/listbox roles, aria-activedescendant, keyboard selection, substring matching, Go to entries for pages without a sidebar entry */
 
 import { describe, expect, it } from 'bun:test';
 import {
@@ -39,8 +39,18 @@ function makeRouter() {
       palette: { keywords: ['browsers'] },
     },
   });
+  const websites = createRoute({
+    getParentRoute: () => root,
+    path: '/websites',
+    component: () => null,
+    staticData: {
+      title: 'Websites',
+      parent: '/overview',
+      palette: { keywords: ['domains'], icon: 'websites' },
+    },
+  });
   return createRouter({
-    routeTree: root.addChildren([overview, sessions]),
+    routeTree: root.addChildren([overview, sessions, websites]),
     history: createMemoryHistory({ initialEntries: ['/overview'] }),
   });
 }
@@ -92,6 +102,12 @@ describe('CommandPalette', () => {
     });
     await waitFor(() => expect(screen.getAllByRole('option').length).toBe(1));
     expect(screen.getByRole('option').textContent).toContain('Go to Sessions');
+    // Websites has no sidebar entry but stays reachable from the palette.
+    await act(async () => {
+      fireEvent.change(input, { target: { value: 'domains' } });
+    });
+    await waitFor(() => expect(screen.getAllByRole('option').length).toBe(1));
+    expect(screen.getByRole('option').textContent).toContain('Go to Websites');
     await expectNoA11yViolations(container.ownerDocument.body);
   });
 });

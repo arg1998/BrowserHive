@@ -20,6 +20,7 @@ const nav = (to: string, requires?: 'vault'): NavItem => ({
   requires,
   keywords: [],
   key: undefined,
+  children: [],
 });
 
 describe('sidebar', () => {

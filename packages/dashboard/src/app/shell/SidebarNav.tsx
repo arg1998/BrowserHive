@@ -1,13 +1,13 @@
-/** @module app/shell/SidebarNav — nav items from the route table: expanded rows or 40px rail buttons with tooltips, badges (dot in the rail), "Not enabled" group only once `/system` is known */
+/** @module app/shell/SidebarNav — nav items from the route table: expanded rows or 40px rail buttons with tooltips, badges (dot in the rail), "Not enabled" group only once `/system` is known; an item stays active on the pages that name it as `parent` */
 import { useQuery } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
+import { Link, useRouterState } from '@tanstack/react-router';
 import { useApi } from '@/app/providers/AuthProvider.tsx';
 import { useTopic } from '@/app/providers/SocketProvider.tsx';
 import { Hint } from '@/components/ui/tooltip.tsx';
 import { keys } from '@/lib/api/keys.ts';
 import { ICONS } from '@/lib/icons.ts';
 import { cn } from '@/lib/utils.ts';
-import { type NavItem, useNavItems } from './use-route-table.ts';
+import { isUnder, type NavItem, useNavItems } from './use-route-table.ts';
 
 /** Badge counts and capabilities the nav needs. `vaultEnabled` is `null` until `/system` answered. */
 export function useNavSignals() {
@@ -123,6 +123,9 @@ function NavLink({
   readonly locked?: boolean;
   readonly onNavigate?: () => void;
 }) {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  // The router marks the item's own path; pages filed under it (`parent`) are marked here.
+  const childActive = item.children.some((path) => isUnder(pathname, path));
   const Icon = ICONS[item.icon];
   const Lock = ICONS.lock;
   const badgeText = badge > 99 ? '99+' : String(badge);
@@ -137,7 +140,9 @@ function NavLink({
         collapsed ? 'size-10 justify-center' : 'h-9 gap-3 px-2.5 text-base',
         // Locked items stay readable (≥ 4.5:1) and look like any active item once opened.
         locked && 'text-muted-foreground',
+        childActive && 'active font-medium',
       )}
+      {...(childActive && { 'aria-current': 'page' as const })}
       activeProps={{ 'aria-current': 'page', className: 'active font-medium' }}
     >
       <Icon
