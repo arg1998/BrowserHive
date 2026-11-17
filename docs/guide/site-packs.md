@@ -181,7 +181,9 @@ Strategies change how a template's sessions behave on the site, never what an ag
 
 ### Writes, responses and keeping the sign-in fresh
 
-STRATEGIES_N
+- **Pace writes (`pace-writes`).** The pack's `pacing.rules` give some `write` guards a budget (so many per minute, hour, day or week). The budget belongs to the template, the account, and every session of the template shares it; it refills continuously. A write over budget waits for the next token when that is at most a minute away (plus up to 20 %, so writes do not tick like a clock) and is then handled as usual (allowed, warned or held for confirmation by the write policy); a write further over budget is cancelled. Both appear in the guard-hit log (`held`, `paced`), and a cancelled one adds the warning "A write was paced" (`SITE_PACED`) to its session. To the agent a write may take a little longer, or fail like a request the site did not answer. A new template's budgets are scaled down by `ramp-up` (above).
+- **Detect device-bound sessions (`device-bound-session`).** When the site answers with a device-bound session header (DBSC: `Sec-Session-Registration` or `Sec-Session-Id`), the template's site is marked **Device-bound** on its Sites tab: the sign-in is tied to this machine's browser and will not survive being moved elsewhere. BrowserHive only reads the response headers; it never changes a request.
+- **Keep the sign-in fresh (`keep-alive`).** BrowserHive visits the pack's `keeper.path` (else its sign-in check page) in its own background window every `interval_h` hours (default: the pack's `keeper.interval_hours`, else 24; ± 20 %), so sign-in cookies that refresh on use stay fresh while no agent uses the template. A visit is skipped when an agent session of the template loaded the site within the interval, and for a site that is signed out or held by a security check. Like a scheduled check, a stopped browser is started for the visit when a browser slot is free (on a headed template it may briefly appear and take the focus) and stops again when idle. A visit counts as a sign-in check when it tells something (it appears in the template's checks as `schedule`). Only `GET` requests are made, and the visit cannot leave the pack's domains by script.
 
 ### Stealth
 
@@ -197,6 +199,8 @@ For a site with an approved pack, a [health check](templates.md#health-checks) l
 | ✗ signed out (`signed_out`) | `redirect`, `marker`, `cookies_absent` | The page redirected to a signed-out address, shows the signed-out marker, or no sign-in cookie is left. |
 | ✓ signed in (`signed_in`) | `landmark`, `no_redirect` | The signed-in landmark is on the page, or the page stayed where it was asked to load. |
 | ? couldn't tell (`inconclusive`) | `timeout`, `network`, `http_<status>`, `no_signal` | The page did not load in time, the network failed, the server answered an error, or nothing matched. |
+
+Some sites send a signed-out browser to their sign-in page from page script after the page loaded, not with a redirect. For packs whose check uses redirects (`redirect`, `either`), BrowserHive waits for the check page to finish loading and then up to 4 seconds for such a move before deciding. An `either` check page that loaded and stayed put counts as signed in (`no_redirect`); one that never finished loading is "couldn't tell". Reddit's check works this way; a signed-in landmark for Reddit is still to be verified.
 
 Selectors are only counted and texts only looked for; nothing from a pack is ever run in the page. A site without an approved pack keeps the cookie check of a generic site.
 
@@ -333,7 +337,7 @@ The first bundled packs were checked on 2026-11-16 without signing in: sign-in p
 |---|---|---|---|---|---|
 | Google | `google.com` | `myaccount.google.com/` | yes | restricted → warn | account, security, app-password, device and deletion pages blocked; device binding (DBSC on Windows) listed |
 | LinkedIn | `linkedin.com`, `licdn.com` | `www.linkedin.com/feed/` | no | prohibited → confirm | headed browser preferred |
-| Reddit | `reddit.com`, `redd.it` | `www.reddit.com/settings/account` (`either`) | no | prohibited → confirm | headed browser preferred; the redirect happens after the page loads, so checks are often "couldn't tell"; no logout guard yet |
+| Reddit | `reddit.com`, `redd.it` | `www.reddit.com/settings/account` (`either`) | no | prohibited → confirm | headed browser preferred; the redirect happens after the page loads (see [Navigation checks](#navigation-checks)); no logout guard yet |
 | Facebook | `facebook.com`, `fbcdn.net` | `www.facebook.com/settings` | no | prohibited → confirm | |
 | Instagram | `instagram.com`, `cdninstagram.com` | `www.instagram.com/accounts/edit/` | no | prohibited → confirm | |
 | X | `x.com`, `twitter.com`, `twimg.com` | `x.com/settings/account` | no | prohibited → confirm | headed browser preferred |
