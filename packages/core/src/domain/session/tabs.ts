@@ -1,6 +1,6 @@
 /** @module domain/session/tabs — per-session TabRegistry: opaque stable `t-<id>` ids ↔ Playwright pages, active tab, popup adoption. */
 
-import type { Page } from 'playwright';
+import type { Page } from 'patchright';
 import { AppError } from '../../kernel/errors/app-error.ts';
 
 /** Sentinel tab id reported when the active-tab fallback finds no open tab. */

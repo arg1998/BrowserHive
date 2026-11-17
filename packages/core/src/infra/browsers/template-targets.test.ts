@@ -1,7 +1,7 @@
 /** @module infra/browsers/template-targets.test — browser-level discovery of a template host: openers from discovery, targets lost before their page was read, and openers of modifier-click tabs (PR #76 F6, F9). */
 
 import { describe, expect, it } from 'bun:test';
-import type { BrowserContext, CDPSession, Page } from 'playwright';
+import type { BrowserContext, CDPSession, Page } from 'patchright';
 import { createCollectingLogger } from '../logging/collecting-logger.ts';
 import { NewTabRequests } from './new-tab-requests.ts';
 import type { TargetFacts } from './page-attribution.ts';

@@ -47,7 +47,6 @@ export const CONSUMED_KEYS: Readonly<Record<ConfigKey, string>> = {
   templateVersionsKeep: 'app/templates/template-state',
   templateRecycleRss: 'app/templates/host-supervisor',
   stealth: 'infra/browsers/launcher',
-  stealthDriver: 'infra/browsers/chromium-resolver',
   fingerprint: 'infra/browsers/launcher',
   humanize: 'infra/browsers/humanize',
   captcha: 'app/system/runtime-info',

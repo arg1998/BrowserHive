@@ -3,7 +3,7 @@
 import type { ClosedReason } from '@browserhive/contracts/enums';
 import type { SessionSummary } from '@browserhive/contracts/http';
 import { type Tracer, trace } from '@opentelemetry/api';
-import type { Page } from 'playwright';
+import type { Page } from 'patchright';
 import { type AdmissionPolicy, CapAdmissionPolicy } from '../../domain/session/admission.ts';
 import {
   type CreateSessionInput,
@@ -374,7 +374,6 @@ export class SessionService {
       trace: d.config.trace,
       screenshotTrace: d.config.screenshotTrace,
       closeTimeoutMs: d.config.sessionCloseTimeout,
-      stealthDriver: d.config.stealthDriver,
     };
   }
 

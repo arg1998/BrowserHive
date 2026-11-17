@@ -1,6 +1,6 @@
 /** @module infra/browsers/page-waiters — a template host's waits for pages it caused (a window it created, a tab it opened): resolved when the dispatcher commits a matching page, or `null` at the deadline. */
 
-import type { Page } from 'playwright';
+import type { Page } from 'patchright';
 import type { Clock } from '../../ports/clock.ts';
 import type { PageOwner, TargetFacts } from './page-attribution.ts';
 

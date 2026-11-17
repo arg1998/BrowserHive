@@ -1,4 +1,4 @@
-/** @module cli/production/probes — real host probes for `doctor`, `init` and `version`: Bun and SQLite versions, Chromium installs per driver, port, PATH lookup (and the `bh` shorthand), disk, file modes, OTLP reachability, template state files and profile secrets */
+/** @module cli/production/probes — real host probes for `doctor`, `init` and `version`: Bun and SQLite versions, the driver's Chromium install, port, PATH lookup (and the `bh` shorthand), disk, file modes, OTLP reachability, template state files and profile secrets */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { stat, statfs } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -30,20 +30,13 @@ function packageDir(name: string): string | null {
   }
 }
 
-async function browserInstall(
-  driver: 'playwright' | 'patchright',
-  logger: Logger,
-): Promise<BrowserInstall> {
-  const version = packageVersion(driver);
+/** Patchright's package and its Chromium (the only driver, D-65). */
+async function browserInstall(): Promise<BrowserInstall> {
+  const version = packageVersion('patchright');
   if (version === null) return { packageVersion: null, executablePath: null, installed: false };
   try {
-    const { DriverResolver } = await import('@browserhive/core/server');
-    const resolver = new DriverResolver({ logger });
-    const browserType =
-      driver === 'playwright'
-        ? resolver.stock()
-        : resolver.resolveStealth('patchright').browserType;
-    const path = browserType.executablePath();
+    const { driverChromium } = await import('@browserhive/core/server');
+    const path = driverChromium().executablePath();
     return {
       packageVersion: version,
       executablePath: path,
@@ -70,7 +63,7 @@ function listDir(path: string): readonly string[] {
   }
 }
 
-/** Playwright's `channel` for a public channel name. */
+/** The driver's (Playwright API) `channel` for a public channel name. */
 const PLAYWRIGHT_CHANNEL: Readonly<Record<Channel, string>> = {
   chromium: 'chromium',
   chrome: 'chrome',
@@ -94,12 +87,11 @@ async function runHelper(
   }
 }
 
-async function detect(logger: Logger) {
+async function detect() {
   const server = await import('@browserhive/core/server');
-  const resolver = new server.DriverResolver({ logger });
   let bundledPath: string | null = null;
   try {
-    const path = resolver.stock().executablePath();
+    const path = server.driverChromium().executablePath();
     bundledPath = path !== '' && existsSync(path) ? path : null;
   } catch {
     bundledPath = null;
@@ -111,7 +103,7 @@ async function detect(logger: Logger) {
     readFile: readText,
     listDir,
     run: runHelper,
-    bundled: { executablePath: bundledPath, version: server.bundledChromiumVersion('playwright') },
+    bundled: { executablePath: bundledPath, version: server.bundledChromiumVersion() },
   });
 }
 
@@ -127,8 +119,7 @@ export function createHostProbes(options: {
   let sqlite: string | undefined;
   return {
     bunVersion: () => Bun.version,
-    playwright: () => browserInstall('playwright', options.logger),
-    patchright: () => browserInstall('patchright', options.logger),
+    patchright: () => browserInstall(),
     portFree: (host, port) =>
       new Promise((resolve) => {
         const server = createServer();
@@ -161,8 +152,8 @@ export function createHostProbes(options: {
         return null;
       }
     },
-    installCommand: (driver) => {
-      const dir = packageDir(driver);
+    installCommand: () => {
+      const dir = packageDir('patchright');
       if (dir === null) return null;
       const cli = join(dir, 'cli.js');
       return existsSync(cli) ? { command: process.execPath, args: [cli] } : null;
@@ -171,11 +162,10 @@ export function createHostProbes(options: {
       sqlite ??= await readSqliteVersion(options);
       return sqlite;
     },
-    browsers: () => detect(options.logger),
+    browsers: () => detect(),
     sandbox: async (channel) => {
       const server = await import('@browserhive/core/server');
-      const resolver = new server.DriverResolver({ logger: options.logger });
-      return server.probeSandbox(resolver.stock(), {
+      return server.probeSandbox(server.driverChromium(), {
         playwrightChannel: PLAYWRIGHT_CHANNEL[channel],
       });
     },

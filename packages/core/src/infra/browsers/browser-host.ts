@@ -1,6 +1,6 @@
 /** @module infra/browsers/browser-host — the exclusive `BrowserHost`: one browser and context, its page-attribution dispatcher, crash listeners, identity replay and a deadline-capped close that never throws. */
 
-import type { Browser, BrowserContext, Page } from 'playwright';
+import type { Browser, BrowserContext, Page } from 'patchright';
 import { withDeadline } from '../../kernel/deadline.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type {
@@ -25,7 +25,7 @@ export interface BrowserHostInput {
   readonly browser: Browser | null;
   readonly context: BrowserContext;
   readonly capabilities: EngineCapabilities;
-  readonly driver: 'patchright' | 'playwright';
+  readonly driver: 'patchright';
   readonly identity: AppliedIdentity | null;
   readonly browserInfo: SessionBrowserInfo;
   readonly warnings: readonly LaunchWarning[];
@@ -48,7 +48,7 @@ export class PlaywrightBrowserHost implements BrowserHost {
   readonly browser: Browser | null;
   readonly context: BrowserContext;
   readonly capabilities: EngineCapabilities;
-  readonly driver: 'patchright' | 'playwright';
+  readonly driver: 'patchright';
   readonly identity: AppliedIdentity | null;
   readonly browserInfo: SessionBrowserInfo;
   readonly warnings: readonly LaunchWarning[];

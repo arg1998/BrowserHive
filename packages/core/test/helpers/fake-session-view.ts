@@ -1,6 +1,6 @@
 /** @module test/helpers/fake-session-view — FakeBrowserContext, FakeTracingHandle, FakeBrowserHost and FakeSessionView: an in-memory exclusive host and its one view, with crash injection (spec 09 §4, 13 §3.13). */
 
-import type { Browser, BrowserContext, Page } from 'playwright';
+import type { Browser, BrowserContext, Page } from 'patchright';
 import { sessionOwner } from '../../src/infra/browsers/page-attribution.ts';
 import { HostPageDispatcher } from '../../src/infra/browsers/page-dispatcher.ts';
 import { ExclusiveSessionView } from '../../src/infra/browsers/session-view.ts';
@@ -137,7 +137,7 @@ export class FakeTracingHandle implements TracingHandle {
 
 /** Constructor options of {@link FakeSessionView} (and its {@link FakeBrowserHost}). */
 export interface FakeSessionViewOptions {
-  readonly driver?: 'patchright' | 'playwright';
+  readonly driver?: 'patchright';
   readonly identity?: AppliedIdentity | null;
   readonly warnings?: readonly LaunchWarning[];
   /** `true` attaches a fresh {@link FakeTracingHandle}; an instance is used as-is. */
@@ -179,7 +179,7 @@ export class FakeBrowserHost implements BrowserHost {
   readonly fakeContext: FakeBrowserContext;
   readonly context: BrowserContext;
   readonly capabilities: EngineCapabilities;
-  readonly driver: 'patchright' | 'playwright';
+  readonly driver: 'patchright';
   readonly identity: AppliedIdentity | null;
   readonly browserInfo?: SessionBrowserInfo;
   readonly warnings: readonly LaunchWarning[];
@@ -200,7 +200,7 @@ export class FakeBrowserHost implements BrowserHost {
     this.fakeContext = new FakeBrowserContext(this.browser);
     this.context = this.fakeContext.context;
     this.capabilities = { ...DEFAULT_CAPABILITIES, ...options.capabilities };
-    this.driver = options.driver ?? 'playwright';
+    this.driver = options.driver ?? 'patchright';
     this.identity = options.identity ?? null;
     if (options.browserInfo !== undefined) this.browserInfo = options.browserInfo;
     this.warnings = options.warnings ?? [];

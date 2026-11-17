@@ -118,12 +118,15 @@ export function strayFlagMessage(name: string, invocationName: string): string {
   return `${where} Run ${helpCommand(invocationName)}.`;
 }
 
-/** Whether `name` is accepted by the invocation (command flag, config key, or reserved key where all keys are). */
+/** Whether `name` is accepted by the invocation (command flag, config key, reserved key where all keys are, removed key where any config key is). */
 export function isAccepted(name: string, accepted: AcceptedFlags): boolean {
   if (accepted.flags.has(name)) return true;
   const found = lookupKey('cli', `--${name}`);
   if (found.kind === 'key') return accepted.configKeys.has(found.key);
   if (found.kind === 'reserved') return accepted.configKeys.size === CONFIG_KEYS.length;
+  // A removed key reaches the resolver wherever configuration is read, for its warning or hint
+  // (spec 08 §5.10): `init --stealthDriver patchright` warns instead of failing as a stray flag.
+  if (found.kind === 'removed') return accepted.configKeys.size > 0;
   return false;
 }
 

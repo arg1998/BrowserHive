@@ -1,6 +1,7 @@
 /** @module infra/browsers/sandbox — Chromium sandbox facts: recognising a sandbox launch failure and Chrome's own reason, the host conditions that decide it (AppArmor, user namespaces, root, containers), the one-launch probe, and the AppArmor profile text (plan §3.4). */
 
-import type { BrowserType, LaunchOptions } from 'playwright';
+import type { BrowserType, LaunchOptions } from 'patchright';
+import { MISSING_BINARY_RE } from './missing-binary.ts';
 
 /**
  * Chrome's and Playwright's markers of a sandbox that could not start. Playwright rewrites the first
@@ -177,9 +178,6 @@ export interface SandboxProbeTarget {
   readonly playwrightChannel: string;
   readonly executablePath?: string;
 }
-
-const MISSING_BINARY_RE =
-  /Executable doesn't exist at|Chromium distribution '[\w-]+' is not found|Failed to launch: .*ENOENT/;
 
 /** Probe launch ceiling. */
 export const SANDBOX_PROBE_TIMEOUT_MS = 30_000;

@@ -2,7 +2,7 @@
 
 import { mkdir } from 'node:fs/promises';
 import { connect } from 'node:net';
-import type { BrowserContext, BrowserContextOptions, BrowserType, Page } from 'playwright';
+import type { BrowserContext, BrowserContextOptions, BrowserType, Page } from 'patchright';
 import { AppError, isAppError } from '../../kernel/errors/app-error.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { LaunchWarning } from '../../ports/browser-driver.ts';
@@ -16,6 +16,7 @@ import {
   browserNotInstalledFromLaunchError,
   type ChromiumResolverDeps,
 } from './chromium-resolver.ts';
+import { suppressInjectRoute } from './driver.ts';
 import { contextOptionsFor, deriveFingerprint, scriptPayloadFor } from './fingerprint.ts';
 import type { HostFacts } from './host-facts.ts';
 import { hostOwnerResolver, selfOriginHandler, templateHostCookies } from './host-interception.ts';
@@ -45,7 +46,7 @@ const NO_DISPLAY = [
 /** The driver-side facts a host launch needs. */
 export interface TemplateLaunchContext {
   readonly browserType: BrowserType;
-  readonly driver: 'patchright' | 'playwright';
+  readonly driver: 'patchright';
   readonly sandbox: SandboxPolicy;
   readonly sandboxTarget: SandboxTarget;
   readonly chromium: ChromiumResolverDeps;
@@ -127,6 +128,9 @@ export async function launchTemplateHostWith(
   }
 
   try {
+    // Before the init script: no Patchright document route (D40); the host's own chain is the
+    // only route on its context.
+    suppressInjectRoute(context);
     if (spec.stealth) {
       const payload = mergeNativeGetterPayloads(
         assertDisplay ? scriptPayloadFor(fingerprint) : undefined,
@@ -204,9 +208,10 @@ function buildHost(
       pdf: spec.headless,
       // Tracing is off for template hosts in v1 (spec 13 §5.4).
       trace: false,
-      closedShadowRoot: ctx.driver === 'patchright',
+      closedShadowRoot: true,
       perContextProxy: true,
-      isolatedEvaluate: ctx.driver === 'patchright',
+      // Patchright (the only driver, D-65) isolates `evaluate` by default.
+      isolatedEvaluate: true,
     },
     driver: ctx.driver,
     browserInfo: { version: context.browser()?.version() ?? null, sandboxed },

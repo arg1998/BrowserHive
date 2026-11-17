@@ -1,11 +1,6 @@
 /** @module app/sessions/service-deps — the SessionService constructor dependency record and the config keys it consumes. */
 
-import type {
-  Channel,
-  PersistenceMode,
-  StealthDriver,
-  StealthLevel,
-} from '@browserhive/contracts/enums';
+import type { Channel, PersistenceMode, StealthLevel } from '@browserhive/contracts/enums';
 import type { Tracer } from '@opentelemetry/api';
 import type { AdmissionPolicy, MaxSessions } from '../../domain/session/admission.ts';
 import type { AuthStateLocator } from '../../ports/auth-state-locator.ts';
@@ -30,7 +25,6 @@ export interface SessionServiceConfig {
   readonly persistence: PersistenceMode;
   readonly maxSessions: MaxSessions;
   readonly stealth: StealthLevel;
-  readonly stealthDriver: StealthDriver;
   readonly fingerprint: boolean;
   readonly humanize: boolean;
   readonly trace: boolean;
@@ -67,6 +61,6 @@ export interface SessionServerStatus {
   /** Live sessions, virtual ones included and maintenance ones excluded (operator surfaces only). */
   readonly liveSessions: number;
   readonly limit: number | null;
-  readonly driver: 'patchright' | 'playwright';
+  readonly driver: 'patchright';
   readonly persistenceMode: PersistenceMode;
 }

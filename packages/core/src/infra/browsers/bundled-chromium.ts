@@ -1,9 +1,8 @@
-/** @module infra/browsers/bundled-chromium — version of the Chromium build a driver package (Playwright or Patchright) downloads and launches for the `chromium` channel. */
+/** @module infra/browsers/bundled-chromium — version of the Chromium build the driver (Patchright) downloads and launches for the `chromium` channel. */
 
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
-import type { StealthDriverName } from '@browserhive/contracts/enums';
 import { z } from 'zod';
 
 const BrowsersJson = z.object({
@@ -34,14 +33,13 @@ function readText(path: string): string | null {
 }
 
 /**
- * The Chromium version pinned by the driver's core package (`browsers.json` of `playwright-core`,
- * or of `patchright-core` resolved through `patchright`). This is the build `chromium` sessions launch,
- * so pair it with an existence check of `executablePath()` before reporting it as installed.
+ * The Chromium version pinned by the driver's core package (`browsers.json` of `patchright-core`,
+ * resolved through `patchright`). This is the build `chromium` sessions launch, so pair it with an
+ * existence check of `executablePath()` before reporting it as installed.
  *
  * @returns E.g. `"140.0.7339.16"`, or `null` when the package or its manifest cannot be read.
  */
 export function bundledChromiumVersion(
-  driver: StealthDriverName,
   deps: {
     readonly locate?: PackageLocator;
     readonly read?: FileReader;
@@ -51,13 +49,8 @@ export function bundledChromiumVersion(
   const locate = deps.locate ?? locatePackage;
   const read = deps.read ?? readText;
   const from = deps.from ?? import.meta.url;
-  const corePackage =
-    driver === 'patchright'
-      ? (() => {
-          const wrapper = locate('patchright', from);
-          return wrapper === null ? null : locate('patchright-core', wrapper);
-        })()
-      : locate('playwright-core', from);
+  const wrapper = locate('patchright', from);
+  const corePackage = wrapper === null ? null : locate('patchright-core', wrapper);
   if (corePackage === null) return null;
   const text = read(join(dirname(corePackage), 'browsers.json'));
   if (text === null) return null;

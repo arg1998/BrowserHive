@@ -1,7 +1,7 @@
 /** @module infra/browsers/page-attribution.property.test — seeded property suite of the attribution invariant (spec 13 §3.4, §17 T0c) over a fake host model: 1 000 cases fast, 100 000 nightly. */
 
 import { describe, expect, it } from 'bun:test';
-import type { Page } from 'playwright';
+import type { Page } from 'patchright';
 import { FakeClock } from '../../../test/helpers/fake-clock.ts';
 import { asPage, FakePage } from '../../../test/helpers/fake-page.ts';
 import { createCollectingLogger } from '../logging/collecting-logger.ts';

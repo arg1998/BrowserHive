@@ -92,7 +92,6 @@ export function testConfig(overrides: Partial<SessionServiceConfig> = {}): Sessi
     persistence: 'memory',
     maxSessions: 2,
     stealth: 'off',
-    stealthDriver: 'auto',
     fingerprint: false,
     humanize: false,
     trace: false,

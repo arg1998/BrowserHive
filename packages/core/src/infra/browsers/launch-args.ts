@@ -1,6 +1,6 @@
 /** @module infra/browsers/launch-args — stealth flags, `ignoreDefaultArgs` merge rule and the channel → stealth → user arg merge order (spec 11 §2.2). */
 
-import type { LaunchOptions } from 'playwright';
+import type { LaunchOptions } from 'patchright';
 import type { LaunchWarning, ProxySpec } from '../../ports/browser-driver.ts';
 import type { LaunchKwargs } from './channel.ts';
 

@@ -1,7 +1,7 @@
 /** @module infra/browsers/page-dispatcher.test — delivery after attribution, same-turn delivery for synchronous facts, holds (claim, settle, expiry), async facts, closes and listener isolation. */
 
 import { describe, expect, it } from 'bun:test';
-import type { Page } from 'playwright';
+import type { Page } from 'patchright';
 import { FakeClock } from '../../../test/helpers/fake-clock.ts';
 import { asPage, FakePage } from '../../../test/helpers/fake-page.ts';
 import { createCollectingLogger } from '../logging/collecting-logger.ts';

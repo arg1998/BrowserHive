@@ -1,7 +1,7 @@
 /** @module infra/browsers/request-guard-route.test — the request guard's actions, held confirmations, fail-closed matched requests, sanitized hits and its place after the blocklist in one chain (spec 13 §3.8, §9.3). */
 
 import { describe, expect, it } from 'bun:test';
-import type { Request, Route } from 'playwright';
+import type { Request, Route } from 'patchright';
 import { FakeClock } from '../../../test/helpers/fake-clock.ts';
 import { Blocklist, parseBlocklist } from '../../domain/policies/blocklist.ts';
 import {

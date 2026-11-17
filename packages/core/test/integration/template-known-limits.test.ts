@@ -1,12 +1,10 @@
 /// <reference lib="dom" />
-/** @module test/integration/template-known-limits.test — what a template host's always-on routing changes, pinned under both drivers (spec 13 §3.8 "Known limits", `docs/guide/templates.md`; PR #76 F2): no HTTP cache and CORS preflights answered by Playwright (a refused write is sent) but not by Patchright, on every OS headless (routing does not depend on the display); a close-time beacon is never routed (whether it reaches the site depends on timing). */
+/** @module test/integration/template-known-limits.test — what a template host's always-on routing changes, pinned under template stealth off and standard on Patchright, the only driver (spec 13 §3.8 "Known limits", `docs/guide/templates.md`; PR #76 F2, D-65, deferred D41): no HTTP cache, and the driver answers CORS preflights itself, so a cross-origin write the site refuses at preflight is sent (the chain's route is the only route on the host: Patchright's document route is off, D40), on every OS headless (routing does not depend on the display); a close-time beacon is never routed (whether it reaches the site depends on timing). The fixture sites resolve to loopback like the page, so Local Network Access does not restrict them. */
 
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { Session } from '../../src/domain/session/session.ts';
 import { PASS } from '../../src/infra/browsers/interception-chain.ts';
-import { type DriverName, HEADED, type TemplateWorld, templateWorld } from './template-fixture.ts';
-
-const DRIVERS: readonly DriverName[] = ['playwright', 'patchright'];
+import { HEADED, STEALTH_LEGS, type TemplateWorld, templateWorld } from './template-fixture.ts';
 
 function pageOf(session: Session) {
   const page = session.view?.page;
@@ -20,13 +18,13 @@ afterEach(async () => {
   world = null;
 });
 
-for (const driver of DRIVERS) {
-  describe(`template host known limits (${driver}${HEADED ? ', headed' : ''})`, () => {
+for (const stealth of STEALTH_LEGS) {
+  describe(`template host known limits (stealth ${stealth}${HEADED ? ', headed' : ''})`, () => {
     // Routing semantics do not depend on the display: pinned on the headless legs.
     it.skipIf(HEADED)(
       'serves nothing from the HTTP cache: a reload refetches every cacheable script',
       async () => {
-        world = await templateWorld(driver);
+        world = await templateWorld(stealth);
         const page = pageOf(await world.launch('alpha'));
         const sites = world.sites;
         const cached = () => sites.requests.filter((r) => r.path.startsWith('/cached.js')).length;
@@ -39,12 +37,16 @@ for (const driver of DRIVERS) {
     );
 
     it.skipIf(HEADED)(
-      driver === 'playwright'
-        ? 'a cross-origin write whose preflight the site refuses is sent (Playwright answers the preflight)'
-        : 'a cross-origin write whose preflight the site refuses is not sent',
+      'a cross-origin write whose preflight the site refuses is sent: the driver answers the preflight (D41)',
       async () => {
-        world = await templateWorld(driver);
+        world = await templateWorld(stealth);
         const page = pageOf(await world.launch('alpha'));
+        // The host's chain is the only route on its context: Patchright's own is off (D40).
+        const raw = world.host().context as unknown as {
+          routeInjecting?: unknown;
+          _routes?: unknown[];
+        };
+        expect([raw.routeInjecting, raw._routes?.length]).toEqual([true, 1]);
         const sites = world.sites;
         await page.goto(sites.url('site-a.test', '/cors-page'));
         const result = await page.evaluate(() =>
@@ -63,12 +65,12 @@ for (const driver of DRIVERS) {
           .map((r) => r.method);
         // The page never reads the answer either way (no CORS headers).
         expect(result).toBe('blocked');
-        expect(seen).toEqual(driver === 'playwright' ? ['POST'] : []);
+        expect(seen).toEqual(['POST']);
       },
     );
 
     it('a beacon sent from pagehide while the page closes is never routed', async () => {
-      world = await templateWorld(driver);
+      world = await templateWorld(stealth);
       const session = await world.launch('alpha');
       const sites = world.sites;
       // What the host's chain sees (the request-guard slot is free until site packs).

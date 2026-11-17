@@ -13,9 +13,9 @@ import {
   SENTINEL_QUOTED_VALUE,
   SENTINEL_STORAGE_VALUE,
 } from '../helpers/https-sites-signin.ts';
+import { STEALTH_LEGS } from './template-fixture.ts';
 import { SELF_ORIGIN, type TemplateMcp, templateMcp } from './template-mcp-fixture.ts';
 
-const DRIVERS = ['playwright', 'patchright'] as const;
 /** What must never appear, raw or escaped: the quoted value is checked by its unquoted core. */
 const SENTINELS = [
   SENTINEL_COOKIE_VALUE,
@@ -60,10 +60,10 @@ function leaks(w: TemplateMcp, results: readonly CallToolResult[]): string[] {
   return SENTINELS.filter((s) => texts.some((t) => t.includes(s)));
 }
 
-for (const driver of DRIVERS) {
-  describe(`sealed template sessions (${driver})`, () => {
+for (const stealth of STEALTH_LEGS) {
+  describe(`sealed template sessions (stealth ${stealth})`, () => {
     it('never return a sentinel, across every reading tool and refused attempts', async () => {
-      world = await templateMcp(driver);
+      world = await templateMcp(stealth);
       const w = world;
       const id = await launch(w);
       const url = w.sites.url('site-a.test', '/sealed');
@@ -168,7 +168,7 @@ for (const driver of DRIVERS) {
     });
 
     it('unseals each flag for the listed principals only', async () => {
-      world = await templateMcp(driver, {
+      world = await templateMcp(stealth, {
         unseal: {
           cookieValues: true,
           evaluate: true,

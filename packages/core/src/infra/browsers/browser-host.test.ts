@@ -1,7 +1,7 @@
 /** @module infra/browsers/browser-host.test — the exclusive host and its one view over a fake context: every page is the session's, listener order, crash and close, context-wide state, CDP scoping. */
 
 import { describe, expect, it } from 'bun:test';
-import type { Page } from 'playwright';
+import type { Page } from 'patchright';
 import { FakeClock } from '../../../test/helpers/fake-clock.ts';
 import { asPage, FakePage } from '../../../test/helpers/fake-page.ts';
 import { FakeBrowserContext } from '../../../test/helpers/fake-session-view.ts';
@@ -28,7 +28,7 @@ function launched(options: { before?: (context: FakeBrowserContext) => void } = 
     browser: null,
     context: fake.context,
     capabilities: CAPABILITIES,
-    driver: 'playwright',
+    driver: 'patchright',
     identity: null,
     browserInfo: { version: null, sandboxed: false },
     warnings: [],

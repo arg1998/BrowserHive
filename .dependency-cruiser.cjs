@@ -38,13 +38,23 @@ module.exports = {
         path: '^packages/',
         pathNot: ['^packages/core/src/infra/browsers', '^packages/[^/]+/test', '\\.test\\.tsx?$'],
       },
-      // Resolved npm paths start with `node_modules/`; reading a driver's `package.json` (its
-      // version, for `server_status`) is not a use of the driver.
+      // Resolved npm paths start with `node_modules/`; reading the driver's `package.json` (its
+      // version, for `server_status`) is not a use of the driver. Stock Playwright is also matched
+      // here, although `no-stock-playwright` refuses it everywhere.
       to: {
         path: '^node_modules/(playwright|playwright-core|patchright|patchright-core)/',
         pathNot: '/package\\.json$',
         dependencyTypesNot: ['type-only'],
       },
+    },
+    {
+      // D-65: Patchright is the only browser driver. Stock Playwright is not a dependency of the
+      // published packages (the dashboard's `@playwright/test` e2e runner is a devDependency of
+      // its own package and is not checked here); types come from `patchright`.
+      name: 'no-stock-playwright',
+      severity: 'error',
+      from: { path: '^packages/(contracts|core|browserhive)/' },
+      to: { path: '^node_modules/(playwright|playwright-core)/' },
     },
     {
       // Spec 13 §3.13 (PR T0c): no `interface/` module imports `BrowserContext`. dependency-cruiser

@@ -1,18 +1,16 @@
 /// <reference lib="dom" />
-/** @module test/integration/template-pages.test — pages a site or a modified click opens in a template session (PR #76 F5, F6): a session's site cannot take the shared browser's pages, and Ctrl/Cmd/Shift- and middle-click tabs, which Chromium opens without an opener, still belong to the clicking session. Both drivers, real Chromium. */
+/** @module test/integration/template-pages.test — pages a site or a modified click opens in a template session (PR #76 F5, F6): a session's site cannot take the shared browser's pages, and Ctrl/Cmd/Shift- and middle-click tabs, which Chromium opens without an opener, still belong to the clicking session. Stealth off and standard on Patchright (D-65), real Chromium. */
 
 import { afterEach, describe, expect, it } from 'bun:test';
 import type { Session } from '../../src/domain/session/session.ts';
 import { isAppError } from '../../src/kernel/errors/app-error.ts';
 import {
-  type DriverName,
+  STEALTH_LEGS,
   type TemplateWorld,
   tabUrls,
   templateWorld,
   until,
 } from './template-fixture.ts';
-
-const DRIVERS: readonly DriverName[] = ['playwright', 'patchright'];
 
 function pageOf(session: Session) {
   const page = session.view?.page;
@@ -36,33 +34,27 @@ afterEach(async () => {
   world = null;
 });
 
-for (const driver of DRIVERS) {
-  describe(`template pages (${driver})`, () => {
+for (const stealth of STEALTH_LEGS) {
+  describe(`template pages (stealth ${stealth})`, () => {
     it('a site opening many pages stays within its session cap; other sessions are unaffected', async () => {
-      world = await templateWorld(driver, { maxPagesPerHost: 10 });
+      world = await templateWorld(stealth, { maxPagesPerHost: 10 });
       const a = await world.launch('alpha');
       const b = await world.launch('bravo');
       await pageOf(a).goto(world.sites.url('site-a.test'));
-      // Twelve popups from one click (Playwright allows them all; Patchright blocks after the first).
-      await pageOf(a).click('#many');
-      if (driver === 'playwright') {
-        await pageOf(a).evaluate(() => {
-          for (let i = 0; i < 12; i++) window.open(`/landing?script=${i}`);
-        });
-      }
+      // Each click opens popups; Patchright keeps Chromium's popup blocker on (it drops
+      // `--disable-popup-blocking`), so only the first popup of a click opens: click several times.
+      for (let i = 0; i < 6; i++) await pageOf(a).click('#many');
       await new Promise((resolve) => setTimeout(resolve, 2_000));
       // max(2, floor(10 / 5)) = 2 pages for this session, whatever its site does.
       await until(() => (a.view?.pages().length ?? 0) <= 2, 5_000, 'over-cap pages closed');
       expect(world.host().agentPageCount()).toBeLessThanOrEqual(3);
-      if (driver === 'playwright') {
-        expect(a.warnings.some((w) => w.code === 'SESSION_PAGE_LIMIT')).toBe(true);
-      }
+      expect(a.warnings.some((w) => w.code === 'SESSION_PAGE_LIMIT')).toBe(true);
       expect(await outcome(world.sessions.newTab(b))).toBe('ok');
       expect(await outcome(world.launch('charlie'))).toBe('ok');
     });
 
     it('modifier- and middle-click tabs belong to the clicking session, never parked', async () => {
-      world = await templateWorld(driver);
+      world = await templateWorld(stealth);
       const a = await world.launch('alpha');
       const b = await world.launch('bravo');
       const page = pageOf(a);
@@ -79,7 +71,7 @@ for (const driver of DRIVERS) {
     });
 
     it('a popup arriving after close_session is closed; the closed session cannot use the CDP of a sibling page', async () => {
-      world = await templateWorld(driver);
+      world = await templateWorld(stealth);
       const a = await world.launch('alpha');
       const b = await world.launch('bravo');
       const view = a.view;

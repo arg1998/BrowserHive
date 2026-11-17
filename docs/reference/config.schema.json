@@ -376,25 +376,6 @@
       "x-browserhive-env": "BROWSERHIVE_STEALTH",
       "x-browserhive-cli": "--stealth"
     },
-    "stealthDriver": {
-      "default": "auto",
-      "anyOf": [
-        {
-          "type": "string",
-          "enum": [
-            "auto",
-            "patchright",
-            "playwright"
-          ]
-        },
-        {
-          "$ref": "#/$defs/configRef"
-        }
-      ],
-      "description": "Chromium driver for stealth sessions. auto uses Patchright when installed, else Playwright.",
-      "x-browserhive-env": "BROWSERHIVE_STEALTH_DRIVER",
-      "x-browserhive-cli": "--stealthDriver"
-    },
     "fingerprint": {
       "description": "Coherent fingerprint identity per session. Defaults to true only when stealth=max. Derived from stealth when unset.",
       "x-browserhive-env": "BROWSERHIVE_FINGERPRINT",

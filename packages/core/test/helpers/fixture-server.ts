@@ -255,6 +255,18 @@ export function startFixtureServer(): FixtureServer {
                 `<form id="logout" method="post" action="/logout"><button id="sign-out" type="submit">Sign out</button></form>
                 <form id="search" method="get" action="/logout"><button id="search-go" type="submit">Search</button></form>`,
               );
+        case '/d40/page':
+        case '/d40/popup':
+        case '/d40/frame': {
+          // Records, at parse time, whether a context init script had already run (D40 contract).
+          const frame = url.searchParams.get('frame');
+          return html(
+            `<p id="where">${url.pathname}</p><a id="popup" href="/d40/popup" target="_blank">popup</a>${
+              frame === null ? '' : `<iframe id="frame" src="${frame.replace(/"/g, '')}"></iframe>`
+            }`,
+            '<script>window.__seenAtParse = typeof window.__bhMarker;</script>',
+          );
+        }
         case '/cached':
           // Fresh for an hour: a second `force-cache` fetch is served from the HTTP cache when
           // the context has one (routing disables it).
@@ -279,6 +291,17 @@ export function startFixtureServer(): FixtureServer {
             `<p id="unload">unload</p><script>addEventListener('pagehide', () => navigator.sendBeacon('/api/pagehide', 'bye'));</script>`,
           );
         default:
+          if (url.pathname.startsWith('/cors-allowed/')) {
+            // A cross-origin endpoint whose preflight allows the write (D-65 measurements).
+            const allow = {
+              'access-control-allow-origin': '*',
+              'access-control-allow-methods': 'POST',
+              'access-control-allow-headers': 'content-type, x-custom',
+            };
+            if (req.method === 'OPTIONS')
+              return new Response(null, { status: 204, headers: allow });
+            return new Response('cors write allowed', { headers: allow });
+          }
           if (url.pathname.startsWith('/cors/')) {
             // A cross-origin endpoint whose preflight refuses: an unrouted browser never sends
             // the write itself.

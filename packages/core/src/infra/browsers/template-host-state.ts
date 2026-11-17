@@ -1,6 +1,6 @@
 /** @module infra/browsers/template-host-state — a template host's state and memory operations (spec 13 §3.2, §3.9, §3.12, §7.4): the storage state read into memory with IndexedDB, applied with `setStorageState`, the JavaScript heap of each session's pages for the memory trim, and closing one page by target id. */
 
-import type { BrowserContext, Page } from 'playwright';
+import type { BrowserContext, Page } from 'patchright';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type { PageHeap } from '../../ports/template-host.ts';

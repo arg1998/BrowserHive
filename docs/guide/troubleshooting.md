@@ -14,7 +14,7 @@ It prints a ✓ or ✗ per check and the fix for each ✗. Every error code, its
 Another `bh` comes first on your `PATH`, or your shell has a `bh` alias or function (which `doctor` cannot see). `browserhive` always works. To make `bh` ours, rename or remove the other one, or move BrowserHive's bin directory earlier on `PATH`. `type -a bh` (bash, zsh) or `Get-Command bh -All` (PowerShell) lists every candidate. See [the `bh` shorthand](installation.md#the-bh-shorthand).
 
 **[`BROWSER_NOT_INSTALLED`](../reference/errors.md#BROWSER_NOT_INSTALLED)**
-Run `browserhive init`. If you keep browsers elsewhere, set `PLAYWRIGHT_BROWSERS_PATH` the same way for `init` and the server. With `--stealthDriver patchright`, Patchright's Chromium must be installed too. For `--defaultChannel chrome` (or a session asking for `channel: "chrome"`), install Google Chrome: `browserhive init --installChrome`. BrowserHive never falls back to another browser when the one asked for is missing.
+Run `browserhive init`. If you keep browsers elsewhere, set `PLAYWRIGHT_BROWSERS_PATH` the same way for `init` and the server (Patchright, BrowserHive's browser driver, reads it under that name). For `--defaultChannel chrome` (or a session asking for `channel: "chrome"`), install Google Chrome: `browserhive init --installChrome`. BrowserHive never falls back to another browser when the one asked for is missing.
 
 **[`SANDBOX_UNAVAILABLE`](../reference/errors.md#SANDBOX_UNAVAILABLE)** at startup (exit code 3)
 You set `--sandbox on` and the configured browser cannot run inside Chromium's sandbox on this machine. The message below the first line names the browser, Chrome's own reason, the cause on your OS, and what you can do, easiest first. On Ubuntu 23.10 and later that is usually: use the installed Google Chrome (`--defaultChannel chrome`), or give the bundled browser an AppArmor profile with `browserhive doctor --printApparmorProfile`. See [Security: the browser sandbox](security.md#the-browser-sandbox). `--sandbox auto` (the default) sandboxes where possible and never refuses to start.
@@ -73,7 +73,7 @@ The operator's blocklist matched. The Blocklist page shows which pattern.
 Use `snapshot` to see the page as the agent does, `wait_for_selector` before interacting, and check the tool call's screenshot on the session's Timeline tab.
 
 **Sites detect automation**
-Check the session's Identity tab. Make sure `browserhive init` installed Patchright and `--stealth` is not `off`. Read the [stealth ceilings](stealth.md#ceilings); some checks need [human takeover](attention.md).
+Check the session's Identity tab. Make sure `--stealth` is not `off`. Read the [stealth ceilings](stealth.md#ceilings); some checks need [human takeover](attention.md).
 
 ## Vault
 

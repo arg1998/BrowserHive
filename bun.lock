@@ -49,9 +49,9 @@
         "hono": "4.13.11",
         "kysely": "0.29.6",
         "nanoid": "^6.0.1",
+        "patchright": "1.63.0",
+        "patchright-core": "1.63.0",
         "picocolors": "^1.1.1",
-        "playwright": "1.63.0",
-        "playwright-core": "1.63.0",
         "tldts": "^7.4.13",
         "zod": "4.6.7",
       },
@@ -59,9 +59,6 @@
         "@browserhive/contracts": "workspace:*",
         "@browserhive/core": "workspace:*",
         "@browserhive/dashboard": "workspace:*",
-      },
-      "optionalDependencies": {
-        "patchright": "1.63.0",
       },
     },
     "packages/contracts": {
@@ -98,16 +95,13 @@
         "hono": "4.13.11",
         "kysely": "0.29.6",
         "nanoid": "^6.0.1",
-        "playwright": "1.63.0",
-        "playwright-core": "1.63.0",
+        "patchright": "1.63.0",
+        "patchright-core": "1.63.0",
         "tldts": "^7.4.13",
         "zod": "4.6.7",
       },
       "devDependencies": {
         "kysely-codegen": "^0.20.0",
-      },
-      "optionalDependencies": {
-        "patchright": "1.63.0",
       },
     },
     "packages/dashboard": {

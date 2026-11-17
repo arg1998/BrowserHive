@@ -47,7 +47,7 @@ export const COMMANDS: readonly CommandDescriptor[] = [
     name: 'init',
     summary: 'Install browsers and prepare the data directory',
     description:
-      'Creates the data directory (0700), installs Chromium for Playwright (and Patchright when stealthDriver is auto or patchright), reports the browsers on this host and whether each can run sandboxed, lets you pick the default browser on a terminal (Enter keeps the current one), creates and migrates the database, then prints the next steps. Safe to re-run; never prompts without a terminal, in CI or in a container.',
+      'Creates the data directory (0700), installs Chromium for Patchright (the browser driver), reports the browsers on this host and whether each can run sandboxed, lets you pick the default browser on a terminal (Enter keeps the current one), creates and migrates the database, then prints the next steps. Safe to re-run; never prompts without a terminal, in CI or in a container.',
     flags: [
       {
         name: 'browsers',
@@ -78,7 +78,7 @@ export const COMMANDS: readonly CommandDescriptor[] = [
         name: 'installChrome',
         kind: 'boolean',
         describe:
-          "Install Google Chrome with Google's installer (playwright install chrome; needs administrator rights).",
+          "Install Google Chrome with Google's installer (patchright install chrome; needs administrator rights).",
       },
       {
         name: 'yes',
@@ -86,7 +86,7 @@ export const COMMANDS: readonly CommandDescriptor[] = [
         describe: 'Save the --channel choice without asking.',
       },
     ],
-    configKeys: ['dataDir', 'config', 'stealthDriver', 'color'],
+    configKeys: ['dataDir', 'config', 'color'],
     subcommands: [],
     defaultSubcommand: null,
     args: [],
@@ -204,7 +204,7 @@ export const COMMANDS: readonly CommandDescriptor[] = [
   {
     name: 'version',
     summary: 'Print version information',
-    description: 'Prints the BrowserHive, Bun, SQLite, Playwright and Patchright versions.',
+    description: 'Prints the BrowserHive, Bun, SQLite and Patchright (browser driver) versions.',
     flags: [json],
     configKeys: [],
     subcommands: [],

@@ -154,7 +154,6 @@ export function buildPhases(
         ...(request.launchOptions !== undefined && { launchOptions: request.launchOptions }),
         ...(request.contextOptions !== undefined && { contextOptions: request.contextOptions }),
         stealth: request.stealth,
-        stealthDriver: deps.stealthDriver,
         ...(ctx.identity !== undefined && { identity: ctx.identity }),
         proxy: ctx.proxy,
         downloadsDir: dirs.downloads,

@@ -41,7 +41,7 @@ Non-goals: managed proxy networks, hosted CAPTCHA farms, cloud identity, telemet
 │                                                                                              │
 │  Application: SessionService · AttentionService · VaultService · AuthService · BlocklistSvc  │
 │  Domain: Session state machine · Lease · Identity/Stealth · Vault broker · OperatorRequests  │
-│  Infra: BrowserDriver (Playwright/Patchright) · SQLite (Kysely) · Logger · OTel · FS layout  │
+│  Infra: BrowserDriver (Patchright)            · SQLite (Kysely) · Logger · OTel · FS layout  │
 │  Event bus ──► DB projection · WS feed · notifications · OTLP (opt-in)                       │
 └──────────────────────────────────────────────────────────────────────────────────────────────┘
         │ one Chromium process per session                     │ optional OTLP/HTTP
@@ -107,12 +107,12 @@ BrowserHive/
 | L4 `interface` | kernel, contracts, app (services), ports (types) | infra, playwright |
 | `browserhive/composition` | everything | — |
 
-Concrete rules in `.dependency-cruiser.cjs`; violations fail CI. Two additional bans: `playwright`/`patchright` MUST be imported only under `infra/browsers/`; `kysely` and `bun:sqlite` only under `infra/persistence/`. Tests import package entry points, never deep paths across packages.
+Concrete rules in `.dependency-cruiser.cjs`; violations fail CI. Two additional bans: the browser driver (`patchright`, the only driver since D-65; `playwright` and `playwright-core` are not runtime dependencies) MUST be imported only under `infra/browsers/` (type-only imports excepted); `kysely` and `bun:sqlite` only under `infra/persistence/`. Tests import package entry points, never deep paths across packages.
 
 ## 5. Subsystems and their responsibilities
 
 - **Session subsystem** (`domain/session`, `app/sessions`): registry, state machine, lease (sliding, pausable), creation pipeline (D-21), tabs, ownership, warnings. Playwright appears only through `BrowserDriver`/`SessionHandle` ports; interaction still uses Playwright `Page` types (engine-neutral lifecycle, Playwright-typed interaction) until a second engine exists.
-- **Browser driver** (`infra/browsers`): launcher (channel map, arg merge, deny-list), stealth (Patchright resolution, CDP UA override per page, fingerprint init script, geo seed), tracing, blocklist route. Details in `11-stealth.md`.
+- **Browser driver** (`infra/browsers`): launcher (channel map, arg merge, deny-list), stealth (Patchright is the driver of every session, D-65; CDP UA override per page, fingerprint init script, geo seed), tracing, blocklist route. Details in `11-stealth.md`.
 - **Tools** (`interface/mcp`): 44 declarative `ToolDefinition`s grouped in packs (`list_templates` in the `templates` pack, spec 13 §5.1); one dispatcher (parse → authorize → policy → execute → map error → classify outcome → observe). Details in `02-mcp-and-tools.md`.
 - **HTTP/WS** (`interface/http`, `interface/ws`): admin API, realtime hub, static serving, auth middleware. Details in `03-admin-backend.md`.
 - **Persistence** (`infra/persistence`): Kysely dialect, migrations, repositories, analytics queries, retention, backups, purge inventory. Schema in `03-admin-backend.md` §Data model.
@@ -142,7 +142,7 @@ The programmatic API `createServer(options)` uses the same composition root; `li
 
 ```
 bun install
-bun run init:browsers        # playwright install chromium (+ patchright)
+bun run init:browsers        # patchright install chromium
 bun run dev                  # server in watch mode with pretty logs + dashboard Vite dev server proxying the API
 bun run browserhive --admin  # daemon from source + Vite on --port + 10000 (D-11)
 bun run typecheck            # tsc -b (all projects incl. dashboard)

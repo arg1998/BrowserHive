@@ -1,6 +1,6 @@
 /** @module domain/policies/launch-options — validated Playwright launch/context option pass-through: deny-list, unsafe sibling fields, managed-dir guard (spec 11 §4). */
 
-import type { BrowserContextOptions, LaunchOptions } from 'playwright';
+import type { BrowserContextOptions, LaunchOptions } from 'patchright';
 import { z } from 'zod';
 import { assertLaunchArgsAllowed } from '../../kernel/deny-list.ts';
 import { AppError } from '../../kernel/errors/app-error.ts';

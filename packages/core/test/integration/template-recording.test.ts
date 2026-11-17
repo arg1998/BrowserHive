@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'bun:test';
 import { spawnSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { Page } from 'playwright';
+import type { Page } from 'patchright';
 import { TemplateHostOperations } from '../../src/app/templates/host-operations.ts';
 import { RECORDING_TITLE_PREFIX } from '../../src/app/templates/recording-page.ts';
 import { TemplateRecordingService } from '../../src/app/templates/template-recording.ts';
@@ -18,15 +18,13 @@ import { InMemoryRepositories, InMemoryUnitOfWork } from '../helpers/in-memory-r
 import { InMemoryOperatorActionRepository } from '../helpers/in-memory-vault-repos.ts';
 import { templateSiteRecord } from '../persistence/helpers.ts';
 import {
-  type DriverName,
   HEADED,
+  STEALTH_LEGS,
   type TemplateWorld,
   tabUrls,
   templateWorld,
   until,
 } from './template-fixture.ts';
-
-const DRIVERS: readonly DriverName[] = ['playwright', 'patchright'];
 
 let world: TemplateWorld | null = null;
 afterEach(async () => {
@@ -94,10 +92,10 @@ async function windowState(w: TemplateWorld, page: Page): Promise<string | undef
   }
 }
 
-for (const driver of DRIVERS) {
-  describe(`recording a template (${driver}${HEADED ? ', headed' : ''})`, () => {
+for (const stealth of STEALTH_LEGS) {
+  describe(`recording a template (stealth ${stealth}${HEADED ? ', headed' : ''})`, () => {
     it("records a pack-less site with I'm signed in, removes an unlisted sign-in and saves no password", async () => {
-      world = await templateWorld(driver);
+      world = await templateWorld(stealth);
       const w = world;
       const agent = await w.launch('alpha');
       // Which windows BrowserHive asks to minimize (a bare Xvfb has no window manager to obey).
@@ -174,7 +172,7 @@ for (const driver of DRIVERS) {
 
     it('keeps the pinned locale, timezone and identity across restarts and a changed TZ', async () => {
       const before = process.env['TZ'];
-      world = await templateWorld(driver);
+      world = await templateWorld(stealth);
       const w = world;
       const read = async () => {
         const session = await w.launch('identity');
@@ -208,7 +206,7 @@ for (const driver of DRIVERS) {
     });
 
     it('Remove sign-in clears the site data of the domain and its subdomains, and keeps the rest', async () => {
-      world = await templateWorld(driver);
+      world = await templateWorld(stealth);
       const w = world;
       const session = await w.launch('storage');
       const page = session.view?.page;
@@ -246,7 +244,7 @@ for (const driver of DRIVERS) {
 
     it('a popup an agent site opens while the operator signs in does not keep the focus (review M-1)', async () => {
       if (!HEADED || process.platform !== 'linux') return;
-      world = await templateWorld(driver);
+      world = await templateWorld(stealth);
       const w = world;
       const agent = await w.launch('popups');
       const agentPage = agent.view?.page;

@@ -7683,7 +7683,9 @@
                 "type": "string"
               },
               "playwright": {
-                "type": "string"
+                "type": "string",
+                "deprecated": true,
+                "description": "Deprecated alias of `patchright`: the same version, or 'unknown' when `patchright` is null. Patchright's major.minor tracks Playwright's; its patch number is its own. Read `patchright`."
               },
               "patchright": {
                 "type": [

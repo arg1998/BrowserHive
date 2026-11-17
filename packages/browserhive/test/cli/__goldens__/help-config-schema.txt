@@ -51,7 +51,6 @@ NAMES
   --templateRecycleAfter        BROWSERHIVE_TEMPLATE_RECYCLE_AFTER
   --templateDrainTimeout        BROWSERHIVE_TEMPLATE_DRAIN_TIMEOUT
   --stealth                     BROWSERHIVE_STEALTH
-  --stealthDriver               BROWSERHIVE_STEALTH_DRIVER
   --fingerprint                 BROWSERHIVE_FINGERPRINT
   --humanize                    BROWSERHIVE_HUMANIZE
   --captcha                     BROWSERHIVE_CAPTCHA

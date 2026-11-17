@@ -1,6 +1,6 @@
 /** @module infra/browsers/template-host-ops — operator operations on a running template host (spec 13 §2.3, §3.3, §3.4): removing a domain's sign-in, minimizing agent windows while a recording is open, and the windows several sessions share. */
 
-import type { BrowserContext, CDPSession, Page } from 'playwright';
+import type { BrowserContext, CDPSession, Page } from 'patchright';
 import { AppError } from '../../kernel/errors/app-error.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import { registrableDomain } from '../../kernel/url.ts';

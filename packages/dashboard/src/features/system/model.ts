@@ -130,14 +130,13 @@ export function settingsGroups(s: SystemInfo): readonly SettingGroup[] {
         {
           label: 'Profile',
           value: s.stealth.profile,
-          hint: 'off (raw Playwright), standard (patched driver and hardened launch) or max (adds a display fingerprint). Set with --stealth.',
+          hint: "off (none of BrowserHive's own stealth; the Patchright driver's patches remain), standard (identity override and hardened launch) or max (adds a display fingerprint). Set with --stealth.",
           configKey: 'stealth',
         },
         {
           label: 'Driver',
           value: s.stealth.driver,
-          hint: 'patchright hides the CDP Runtime.enable leak; playwright is used when Patchright is absent. Set with --stealthDriver.',
-          configKey: 'stealthDriver',
+          hint: 'Every session runs on Patchright, a Playwright fork that hides the CDP Runtime.enable leak. It is the only driver.',
         },
         {
           label: 'Fingerprint by default',
@@ -200,13 +199,12 @@ export function runtimeRows(
   return [
     { label: 'Bun', value: s.runtime.bun },
     { label: 'SQLite', value: s.runtime.sqlite },
-    { label: 'Playwright', value: s.runtime.playwright },
     s.runtime.patchright === null
       ? {
           label: 'Patchright',
           value: 'Not installed',
           tone: 'warn',
-          fix: 'Stealth sessions fall back to stock Playwright. Install the optional patchright package to hide the CDP leak.',
+          fix: 'Sessions cannot launch without the driver. Reinstall browserhive, then run browserhive init.',
         }
       : { label: 'Patchright', value: s.runtime.patchright },
     s.runtime.chromium !== null
@@ -216,7 +214,7 @@ export function runtimeRows(
             label: 'Chromium',
             value: 'Available, version not reported',
             muted: true,
-            hint: `Sessions launch, so ${s.stealth.driver === 'patchright' ? 'Patchright' : 'Playwright'} found a browser (its bundled Chromium or an installed Chrome channel), but the daemon could not read its version. Run browserhive init only if a launch fails with BROWSER_NOT_INSTALLED.`,
+            hint: 'Sessions launch, so Patchright found a browser (its bundled Chromium or an installed Chrome channel), but the daemon could not read its version. Run browserhive init only if a launch fails with BROWSER_NOT_INSTALLED.',
           }
         : {
             label: 'Chromium',

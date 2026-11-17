@@ -11,7 +11,7 @@ const manifest = JSON.stringify({
 });
 
 describe('bundledChromiumVersion', () => {
-  it('reads playwright-core for playwright and patchright-core through patchright', () => {
+  it('reads patchright-core through patchright', () => {
     const lookups: string[] = [];
     const locate = (specifier: string, from: string) => {
       lookups.push(`${specifier}<-${from}`);
@@ -19,31 +19,24 @@ describe('bundledChromiumVersion', () => {
     };
     // Either separator: the path is joined with the host's `node:path`.
     const read = (path: string) => (/[\\/]browsers\.json$/.test(path) ? manifest : null);
-    expect(bundledChromiumVersion('playwright', { locate, read, from: '/app' })).toBe('150.0.1.2');
-    expect(bundledChromiumVersion('patchright', { locate, read, from: '/app' })).toBe('150.0.1.2');
-    expect(lookups).toEqual([
-      'playwright-core<-/app',
-      'patchright<-/app',
-      'patchright-core<-/nm/patchright/package.json',
-    ]);
+    expect(bundledChromiumVersion({ locate, read, from: '/app' })).toBe('150.0.1.2');
+    expect(lookups).toEqual(['patchright<-/app', 'patchright-core<-/nm/patchright/package.json']);
   });
 
   it('is null when the package, manifest or chromium entry is missing', () => {
     const found = () => '/nm/x/package.json';
-    expect(bundledChromiumVersion('patchright', { locate: () => null, read: () => manifest })).toBe(
-      null,
-    );
-    expect(bundledChromiumVersion('playwright', { locate: found, read: () => null })).toBeNull();
-    expect(bundledChromiumVersion('playwright', { locate: found, read: () => '{' })).toBeNull();
+    expect(bundledChromiumVersion({ locate: () => null, read: () => manifest })).toBeNull();
+    expect(bundledChromiumVersion({ locate: found, read: () => null })).toBeNull();
+    expect(bundledChromiumVersion({ locate: found, read: () => '{' })).toBeNull();
     expect(
-      bundledChromiumVersion('playwright', {
+      bundledChromiumVersion({
         locate: found,
         read: () => JSON.stringify({ browsers: [{ name: 'webkit', browserVersion: '1' }] }),
       }),
     ).toBeNull();
   });
 
-  it('resolves the real installed driver packages', () => {
-    expect(bundledChromiumVersion('playwright')).toMatch(/^\d+\.\d+\.\d+\.\d+$/);
+  it('resolves the real installed driver package', () => {
+    expect(bundledChromiumVersion()).toMatch(/^\d+\.\d+\.\d+\.\d+$/);
   });
 });

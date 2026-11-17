@@ -30,6 +30,11 @@ export function runConfigShow(
   json: boolean,
 ): ExitCode {
   const { out } = context;
+  // Resolver warnings (a removed key, spec 08 §5.10) go to stderr, so `--json` stays parseable;
+  // shadowing is already in the table's SHADOWED column.
+  for (const warning of resolved.diagnostics.warnings) {
+    context.out.diagnostic(`browserhive: warning: ${warning}`);
+  }
   if (json) {
     // Unset optional keys print `"value": null` so every key has the same shape.
     const view = configView(resolved.config, resolved.provenance);

@@ -62,8 +62,18 @@ describe('dependency-cruiser rules', () => {
 
   it('interface/ may not import Playwright or Patchright types (spec 13 §3.13)', () => {
     const found = hits('interface-no-playwright');
-    expect(found.some((h) => h.includes('node_modules/playwright/'))).toBe(true);
+    expect(found.some((h) => h.includes('node_modules/patchright/'))).toBe(true);
     expect(found.some((h) => h.includes('node_modules/patchright-core/'))).toBe(true);
+  });
+
+  it('stock Playwright is refused everywhere, also under infra/browsers (D-65)', () => {
+    const found = hits('no-stock-playwright');
+    expect(found.some((h) => h.includes('uses-stock-playwright') && h.includes('playwright'))).toBe(
+      true,
+    );
+    expect(
+      hits('playwright-only-in-browsers').some((h) => h.includes('uses-stock-playwright')),
+    ).toBe(false);
   });
 
   it('drivers only under infra/browsers, also patchright-core', () => {

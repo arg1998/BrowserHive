@@ -1,6 +1,6 @@
 /** @module infra/browsers/host-sentinel — a template host's sentinel window (spec 13 §1.1, §3.1, §3.2): the parked first window that keeps the browser alive, recreated when closed by hand, and the clock an operator stop is read from. */
 
-import type { BrowserContext, Page } from 'playwright';
+import type { BrowserContext, Page } from 'patchright';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { Clock } from '../../ports/clock.ts';
 import type { Logger } from '../../ports/logger.ts';

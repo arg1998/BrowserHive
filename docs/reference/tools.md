@@ -62,7 +62,7 @@ Defaults shown for `launch_session` `channel` and `headless` are the contract de
 
 **Launch session** · capability `lifecycle` · since 0.1.0
 
-> Launch a new browser session. Without `template`, the session is fully isolated: it owns its own Playwright driver, browser, context and page, and its cookies and storage are its own. With `template`, the session starts signed in to the template's sites (see list_templates). The resolved session_id is '<slug>-<nanoid8>' and is returned as the 'session_id' field.
+> Launch a new browser session. Without `template`, the session is fully isolated: it owns its own browser, context and page, and its cookies and storage are its own. With `template`, the session starts signed in to the template's sites (see list_templates). The resolved session_id is '<slug>-<nanoid8>' and is returned as the 'session_id' field.
 
 Annotations: readOnly no · destructive no · idempotent no · openWorld yes
 

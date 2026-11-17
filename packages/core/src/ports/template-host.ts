@@ -1,6 +1,6 @@
 /** @module ports/template-host — the shared browser of a session template and its launcher (spec 13 §3.1, §3.3, §3.13): one persistent context, a sentinel window, one background window set per virtual session, attribution of every page before any session sees it. */
 
-import type { Channel, StealthDriver } from '@browserhive/contracts/enums';
+import type { Channel } from '@browserhive/contracts/enums';
 import type { BrowserHost, Cookie, GeoSeed, ProxySpec, SessionView } from './browser-driver.ts';
 import type { TemplateState } from './template-state.ts';
 
@@ -21,7 +21,6 @@ export interface TemplateHostSpec {
   readonly stealth: boolean;
   /** Assert the derived display (only when headless, 11 §2.6 rule 5). */
   readonly fingerprint: boolean;
-  readonly stealthDriver: StealthDriver;
   /** `<data-dir>/templates/<id>/userdata`. */
   readonly userDataDir: string;
   /** `<data-dir>/templates/<id>/downloads`. */
@@ -179,7 +178,7 @@ export interface TemplateHost extends BrowserHost {
   closePage(targetId: string, scope: 'parked' | 'session'): Promise<boolean>;
 }
 
-/** Starts template hosts (the Playwright driver; spec 13 §3.1). */
+/** Starts template hosts (the browser driver, Patchright; spec 13 §3.1). */
 export interface TemplateHostLauncher {
   /**
    * Launches the persistent context of a template, prepares its profile preferences, installs the

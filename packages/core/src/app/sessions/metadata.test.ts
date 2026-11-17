@@ -136,7 +136,7 @@ describe('session metadata projections', () => {
       const handle = new FakeSessionView(session.id, {
         ...(info !== undefined && { browserInfo: info }),
       });
-      session.attach({ view: handle, driver: 'playwright', launchedAt: T0 + 2, launchMs: 2 });
+      session.attach({ view: handle, driver: 'patchright', launchedAt: T0 + 2, launchMs: 2 });
       session.apply({ type: 'launched', at: T0 + 2 });
       return { session, handle };
     }
@@ -184,7 +184,7 @@ describe('session metadata projections', () => {
         view: new FakeSessionView(session.id, {
           browserInfo: { version: '154.0.8037.57', sandboxed: true },
         }),
-        driver: 'playwright',
+        driver: 'patchright',
         launchedAt: T0 + 9,
         launchMs: 9,
       });

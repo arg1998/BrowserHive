@@ -2,6 +2,7 @@
 
 import { ERROR_REGISTRY, renderMessage } from '@browserhive/contracts/errors';
 import { AppError, isAppError } from '../../kernel/errors/app-error.ts';
+import { MISSING_BINARY_RE } from './missing-binary.ts';
 
 /** What the caller knows about the failed operation; fills detail slots the prose lacks. */
 export interface ClassifyContext {
@@ -51,11 +52,11 @@ const CLOSED_RE =
  * A row that names a driver method accepts both the bare prefix Playwright 1.63 writes
  * (`evaluate: …`, `goto: …`, `saveAs: …`, `async setInputFiles: …`) and the older object-qualified
  * one (`page.evaluate: …`). The driver message contract test (integration) provokes each failure
- * on both drivers, so a driver upgrade that rewords one fails CI rather than production.
+ * on the driver (Patchright) with stealth off and on, so a driver upgrade that rewords one fails CI rather than production.
  */
 const ROWS: readonly Row[] = [
   {
-    test: /Executable doesn't exist at|Chromium distribution '(?<channel>[\w-]+)' is not found|Failed to launch: .*ENOENT|Looks like Playwright Test or Playwright was just installed or updated/,
+    test: MISSING_BINARY_RE,
     build: (m, _message, ctx) => {
       const channel = ctx.channel ?? m.groups?.['channel'] ?? 'chromium';
       const details = { channel, install_command: 'browserhive init' };

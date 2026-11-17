@@ -37,7 +37,7 @@
  * saved as. A new UA and screen size against the same cookie jar is itself a signal.
  */
 
-import type { BrowserContextOptions } from 'playwright';
+import type { BrowserContextOptions } from 'patchright';
 import type { GeoSeed, SessionFingerprint } from '../../ports/browser-driver.ts';
 import { chance, type Rng, seededRng, uniformInt } from './humanize/rng.ts';
 import type { NativeGetterPayload, WindowMetrics } from './native-getter.ts';

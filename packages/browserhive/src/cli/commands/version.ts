@@ -1,4 +1,4 @@
-/** @module cli/commands/version — `browserhive version` / `--version`: `browserhive 0.1.0 (bun 1.4.2, sqlite 3.53.2, playwright 1.63.0, patchright 1.63.0|not installed)` (spec 08 §7.1) */
+/** @module cli/commands/version — `browserhive version` / `--version`: `browserhive 0.1.0 (bun 1.4.2, sqlite 3.53.2, patchright 1.63.0|not installed)` (spec 08 §7.1) */
 import type { CommandContext } from '../deps.ts';
 import { EXIT, type ExitCode } from '../invocation.ts';
 
@@ -7,7 +7,9 @@ export interface VersionReport {
   readonly browserhive: string;
   readonly bun: string;
   readonly sqlite: string;
+  /** Deprecated alias of `patchright` (D-65): the same value; kept so scripts reading it keep working. */
   readonly playwright: string | null;
+  /** The browser driver's version, or `null` when its package cannot be read. */
   readonly patchright: string | null;
   readonly schema_version: number;
 }
@@ -19,8 +21,7 @@ export interface VersionReport {
  */
 export async function versionReport(context: CommandContext): Promise<VersionReport> {
   const { deps } = context;
-  const [playwright, patchright, sqlite] = await Promise.all([
-    deps.probes.playwright(),
+  const [patchright, sqlite] = await Promise.all([
     deps.probes.patchright(),
     deps.probes.sqliteVersion(),
   ]);
@@ -28,7 +29,7 @@ export async function versionReport(context: CommandContext): Promise<VersionRep
     browserhive: deps.appVersion,
     bun: deps.probes.bunVersion(),
     sqlite,
-    playwright: playwright.packageVersion,
+    playwright: patchright.packageVersion,
     patchright: patchright.packageVersion,
     schema_version: deps.schemaVersion,
   };
@@ -37,12 +38,12 @@ export async function versionReport(context: CommandContext): Promise<VersionRep
 /**
  * The one-line text form.
  *
- * @returns `browserhive X (bun …, sqlite …, playwright …, patchright …)`.
+ * @returns `browserhive X (bun …, sqlite …, patchright …)`.
  */
 export function versionLine(report: VersionReport): string {
-  return `browserhive ${report.browserhive} (bun ${report.bun}, sqlite ${report.sqlite}, playwright ${
-    report.playwright ?? 'not installed'
-  }, patchright ${report.patchright ?? 'not installed'})`;
+  return `browserhive ${report.browserhive} (bun ${report.bun}, sqlite ${report.sqlite}, patchright ${
+    report.patchright ?? 'not installed'
+  })`;
 }
 
 /**

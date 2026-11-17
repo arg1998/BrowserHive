@@ -95,8 +95,19 @@ export type StorageStatus = z.infer<typeof StorageStatus>;
 export const RuntimeVersions = z.object({
   bun: z.string(),
   sqlite: z.string(),
-  playwright: z.string(),
+  /**
+   * Deprecated alias of `patchright` (D-65), kept for `/api/v1` clients: the same version string
+   * (Patchright's major.minor tracks Playwright's; its patch number is its own), or `'unknown'`
+   * when `patchright` is `null`, because this field is not nullable.
+   */
+  playwright: z.string().meta({
+    deprecated: true,
+    description:
+      "Deprecated alias of `patchright`: the same version, or 'unknown' when `patchright` is null. Patchright's major.minor tracks Playwright's; its patch number is its own. Read `patchright`.",
+  }),
+  /** The browser driver's version (Patchright, the only driver, D-65); `null` when its package cannot be read. */
   patchright: z.string().nullable(),
+  /** The Chromium build `patchright-core` pins, when its executable is installed. */
   chromium: z.string().nullable(),
 });
 /** Runtime versions. */
@@ -154,6 +165,7 @@ export const SystemInfo = z.object({
   persistence_mode: z.string(),
   stealth: z.object({
     profile: z.string(),
+    /** The browser driver; always `patchright` (D-65). */
     driver: z.string(),
     fingerprint: z.boolean(),
     humanize: z.boolean(),

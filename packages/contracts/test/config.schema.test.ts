@@ -41,7 +41,6 @@ describe('serverConfigSchema', () => {
       minAttentionWait: 1_800_000,
       allowEvaluate: true,
       stealth: 'standard',
-      stealthDriver: 'auto',
       humanize: false,
       captcha: 'attention',
       blocklistWatch: false,
@@ -305,7 +304,6 @@ describe('configFileJsonSchema and references (spec 08 §3.1, §6)', () => {
         'recordToolResults',
         'sandbox',
         'stealth',
-        'stealthDriver',
       ].sort(),
     );
     expect(acceptsString(props['stealth'], 'max', defs)).toBe(true);

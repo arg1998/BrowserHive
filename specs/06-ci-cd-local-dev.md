@@ -27,7 +27,7 @@ Branch and PR rules are in `07-branching-and-git.md`; test contents are in `09-t
 |---|---|---|
 | Bun | ≥ 1.4 (pinned in `.bun-version` and `package.json#packageManager`) | the only runtime (D-01) |
 | git | ≥ 2.40 | |
-| Chromium for Playwright/Patchright | installed by `bun run init:browsers` | integration tests, `dev` |
+| Chromium for Patchright (the only driver, D-65) | installed by `bun run init:browsers` | integration tests, `dev` |
 | Bitwarden CLI `bw` | optional | vault integration tests (skipped when absent) |
 | Node.js | **not required** | Vite, tsdown, Playwright run under Bun |
 
@@ -38,7 +38,7 @@ No native toolchain (no node-gyp, no Python) is needed anywhere.
 ```bash
 git clone git@github.com:<org>/BrowserHive.git && cd BrowserHive
 bun install                      # workspaces, frozen lockfile in CI (--frozen-lockfile)
-bun run init:browsers            # bunx playwright install chromium; patchright download (fail-open)
+bun run init:browsers            # bunx patchright install chromium
 bun run check                    # lint + typecheck + depcruise + unit + grep rules + generated-file checks
 bun run browserhive --admin      # daemon from source on :9876; hot-reloading dashboard on :19876
 ```
@@ -61,7 +61,7 @@ Dev-only environment variables (never read by the published package; they are no
 | `BHDEV_TEST_CHANNEL` | integration suites | the channel the real-browser suites launch sessions on (`chrome` in the weekly real-Chrome run); default `chromium` |
 | `BHDEV_TEST_TIMEOUT_MS` | `scripts/test-integration.ts` | per-test and per-hook limit of the real-browser suites; default 30000 (Bun's own 5 s is too short on macOS and Windows runners, issue #23) |
 
-`bun run doctor` (which calls `browserhive doctor` from source) reports Bun version, Chromium presence and version, Patchright presence, data dir permissions, and any unrecognised data file (such as an `events.db`) that BrowserHive does not read or migrate.
+`bun run doctor` (which calls `browserhive doctor` from source) reports Bun version, the Patchright version and its Chromium (`chromium (patchright)`), data dir permissions, and any unrecognised data file (such as an `events.db`) that BrowserHive does not read or migrate.
 
 ## 3. Root scripts
 
@@ -86,7 +86,7 @@ Dev-only environment variables (never read by the published package; they are no
 | `gen:db-types` | `kysely-codegen --dialect bun-sqlite --verify` against a fresh migrated temp DB |
 | `package:check` | `publint` + `attw --pack` + `scripts/smoke-installed.ts` + `scripts/smoke-programmatic.ts` |
 | `license:check` | allowed-license scan over production dependencies |
-| `init:browsers` | Chromium (+ Patchright) install for local dev |
+| `init:browsers` | Patchright's Chromium install for local dev |
 | `doctor` | runs the CLI doctor from source |
 | `release:version` | `changeset version && bun run sync:version && bun install --lockfile-only` |
 | `release:publish` | `bun run build && bun run package:check && changeset publish` (CI only) |
@@ -149,9 +149,9 @@ Triggers: `pull_request`, `push` to `main`. Concurrency group `ci-${{ github.ref
 | `unit-cross-os` | matrix `macos-latest`, `windows-latest`; `continue-on-error` on macOS until its system-SQLite differences are fixed (issue #23) | `test:server` and `test:dashboard` without coverage: the path, file-mode and process differences Ubuntu cannot show (issue #2) | no |
 | `goldens` | ubuntu | `test:goldens`, `gen:openapi --check`, `gen:docs --check`, `gen:db-types --check`, export snapshots | yes |
 | `build` | ubuntu | `build`; uploads `packages/browserhive/dist` and the packed tarball as artifacts | yes |
-| `integration` | matrix `ubuntu-latest`, `macos-latest`, `windows-latest` | Playwright cache (`~/.cache/ms-playwright`, `~/Library/Caches/ms-playwright`, `%LOCALAPPDATA%\ms-playwright`) keyed on the **resolved** Playwright version from `bun.lock`; `bunx playwright install chromium --with-deps` on miss; `test:integration` (isolation, stealth, tool surface, auth states, persistence, observability, migration fixtures), with a 30 s per-test and per-hook `--timeout` from `scripts/test-integration.ts` (Bun's 5 s was too short on the macOS and Windows runners, issue #23); every OS fails the workflow, none runs with `continue-on-error`; from spec 13's PR T1a-2 the ubuntu leg also installs `xvfb` and `xdotool` and runs the template suites (`templates-live`, `template-known-limits`, `template-pages`, `template-self-origin`, and from T1a-3 `template-sealing`, `template-recording`, `template-tools`) a second time under `xvfb-run -a` with `BROWSERHIVE_TEMPLATES_HEADED=1`, so template hosts run headed and the suite reads the input focus (the other suites keep their display-less environment: the T0b unload-beacon pin does not hold with a display) (macOS and Windows run template suites with headless templates) | yes (ubuntu); macos/windows required after the first release |
+| `integration` | matrix `ubuntu-latest`, `macos-latest`, `windows-latest` | browser cache (`~/.cache/ms-playwright`, `~/Library/Caches/ms-playwright`, `%LOCALAPPDATA%\ms-playwright`; Patchright uses Playwright's cache layout) keyed on the **resolved** `patchright-core` version from `bun.lock`; `bunx patchright install chromium --with-deps` on miss; `test:integration` (isolation, stealth, tool surface, auth states, persistence, observability, migration fixtures), with a 30 s per-test and per-hook `--timeout` from `scripts/test-integration.ts` (Bun's 5 s was too short on the macOS and Windows runners, issue #23); every OS fails the workflow, none runs with `continue-on-error`; from spec 13's PR T1a-2 the ubuntu leg also installs `xvfb` and `xdotool` and runs the template suites (`templates-live`, `template-known-limits`, `template-pages`, `template-self-origin`, and from T1a-3 `template-sealing`, `template-recording`, `template-tools`) a second time under `xvfb-run -a` with `BROWSERHIVE_TEMPLATES_HEADED=1`, so template hosts run headed and the suite reads the input focus (the other suites keep their display-less environment: the T0b unload-beacon pin does not hold with a display) (macOS and Windows run template suites with headless templates) | yes (ubuntu); macos/windows required after the first release |
 | `sandbox-matrix` | matrix `ubuntu-latest`, `macos-latest`, `windows-latest`; `continue-on-error` | `packages/browserhive/scripts/stealth-matrix.ts --sandbox config:off,config:auto,config:on,session --strict`: through BrowserHive (`createServer` → MCP → `launch_session` → `navigate` → `evaluate`) for the bundled Chromium and the runner's Google Chrome and Microsoft Edge, both stealth levels; the job summary gets one row per channel × stealth × sandbox request (sandboxed or not, measured on the browser process command lines; the page-visible stealth signals), the sandbox on/off parity verdict, and the raw sandboxed-launch error of any browser that could not sandbox; `--strict` fails on a stealth check miss or a parity difference; channels the runner lacks are reported as skipped. The evidence behind `sandbox=auto` as the default (D-27) | no |
-| `e2e` | ubuntu | needs `build`; starts the built server with a temp data dir; `bunx playwright test` (dashboard) with trace-on-failure artifact; from spec 13's PR T1a-3 also a second daemon from source (`packages/browserhive/test/e2e/template-server.ts`, port 9877, the internal testing seam pointing Chromium at the HTTPS fixture sites) on a CI-only Xvfb display `:99`, for the templates journey (`templates.e2e.ts`: CLI `templates create`, sign-in typed into the window with `xdotool`, Enter, then an agent over MCP); only that daemon needs the display | yes |
+| `e2e` | ubuntu | needs `build`; installs Patchright's Chromium for the daemon (`bunx patchright install chromium --with-deps`) and keeps `bunx playwright install chromium` for the `@playwright/test` runner; starts the built server with a temp data dir; `bunx playwright test` (dashboard) with trace-on-failure artifact; from spec 13's PR T1a-3 also a second daemon from source (`packages/browserhive/test/e2e/template-server.ts`, port 9877, the internal testing seam pointing Chromium at the HTTPS fixture sites) on a CI-only Xvfb display `:99`, for the templates journey (`templates.e2e.ts`: CLI `templates create`, sign-in typed into the window with `xdotool`, Enter, then an agent over MCP); only that daemon needs the display | yes |
 | `package` | ubuntu | needs `build`; `publint`, `attw --pack`, `smoke-installed` (pack → `bun add` into a clean temp project → `browserhive --version` and `bh --version` print the same line, `--help`, stdio `initialize → tools/list` equals `ALL_TOOL_NAMES`, `serve` on a random port → `/health` ready → SIGTERM exits 0), `smoke-programmatic` (`import { createServer } from 'browserhive'`) | yes |
 | `global-install` | matrix `ubuntu-latest`, `macos-latest`, `windows-latest` | needs `build`; `scripts/smoke-global-install.ts` on the packed tarball: `npm i -g` into a temp prefix and `bun add -g` into a temp `BUN_INSTALL`; for each, `browserhive --version` and `bh --version` print the same line, on Windows the `.cmd` and `.ps1` shims exist for both names (npm), and `browserhive doctor --json` reports the `bh` row ✓. Never touches the runner's real global prefix | no |
 | `licenses` | ubuntu | `license:check` over `dependencies` of `browserhive` and `dashboard` | yes |
@@ -163,7 +163,7 @@ Windows note: integration tests set `BROWSERHIVE_DATA_DIR` to a short temp path 
 
 ### 6.1 `real-chrome.yml` (weekly drift check)
 
-Trigger: `schedule` (Mondays 07:00 UTC) and `workflow_dispatch`. One ubuntu job: installs the bundled Chromium, updates the runner's Google Chrome to current stable (`bunx playwright install chrome`), runs `test:integration` with `BHDEV_TEST_CHANNEL=chrome` (the real-browser suites launch their sessions on the installed Chrome; suites that test the `chromium` channel on purpose keep it), then the stealth and sandbox matrix for `chrome` with `--strict`. On failure it opens an issue titled "Weekly real-Chrome check failed", or comments on the open one, with the Chrome version and the run link. It never gates a pull request (D-26: installed browsers drift ahead of the tested build; the bundled channel does not).
+Trigger: `schedule` (Mondays 07:00 UTC) and `workflow_dispatch`. One ubuntu job: installs the bundled Chromium, updates the runner's Google Chrome to current stable (`bunx patchright install chrome`), runs `test:integration` with `BHDEV_TEST_CHANNEL=chrome` (the real-browser suites launch their sessions on the installed Chrome; suites that test the `chromium` channel on purpose keep it), then the stealth and sandbox matrix for `chrome` with `--strict`. On failure it opens an issue titled "Weekly real-Chrome check failed", or comments on the open one, with the Chrome version and the run link. It never gates a pull request (D-26: installed browsers drift ahead of the tested build; the bundled channel does not).
 
 ## 7. `release.yml`
 
@@ -187,7 +187,7 @@ Steps:
 
 ## 9. Renovate / Dependabot
 
-`renovate.json`: weekly schedule (Monday 06:00 UTC), grouped PRs (`tanstack`, `hono`, `opentelemetry`, `biome+typescript`, `playwright+patchright` in one group so Chromium versions stay aligned), `rangeStrategy: pin` for the exact-pin list in `05-coding-standards.md` §8, `automerge: false`, lockfile maintenance monthly. Dependabot is used only for security alerts (`dependabot.yml` with `open-pull-requests-limit: 0` for version updates). GitHub Actions are updated by Renovate with SHA pinning (`helpers:pinGitHubActionDigests`).
+`renovate.json`: weekly schedule (Monday 06:00 UTC), grouped PRs (`tanstack`, `hono`, `opentelemetry`, `biome+typescript`, `patchright+@playwright/test` in one group so the driver and the e2e runner stay on one Chromium revision), `rangeStrategy: pin` for the exact-pin list in `05-coding-standards.md` §8, `automerge: false`, lockfile maintenance monthly. Dependabot is used only for security alerts (`dependabot.yml` with `open-pull-requests-limit: 0` for version updates). GitHub Actions are updated by Renovate with SHA pinning (`helpers:pinGitHubActionDigests`).
 
 ## 10. Repository files
 
@@ -206,8 +206,8 @@ Require PR; require status checks `lint, typecheck, depcruise, unit, goldens, bu
 
 ## 13. Troubleshooting
 
-- **Playwright cannot find Chromium**: `bun run init:browsers`; honor `PLAYWRIGHT_BROWSERS_PATH`; the error from the server names the exact `playwright install chromium@<ver>` command.
-- **Patchright missing**: stealth sessions fall back to stock Playwright with a `warn`; `doctor` shows it; `bun run init:browsers` installs it.
+- **Patchright cannot find Chromium**: `bun run init:browsers`; `PLAYWRIGHT_BROWSERS_PATH` is honored (Patchright reads it under that name); the error from the server names the exact `patchright install chromium@<ver>` command.
+- **Patchright missing**: it is a regular dependency since D-65, so a missing package is a broken install: run `bun install`; `doctor` reports `chromium (patchright)` as ✗. There is no fallback driver.
 - **Bun version mismatch**: `.bun-version` is read by `setup-bun` and by `bun`'s own version manager; `bun upgrade --stable` or `bunx bun@<ver>`.
 - **Windows**: use short `BROWSERHIVE_DATA_DIR` paths; profile zips are written with POSIX separators inside the archive; `xdg-open` reveal is replaced by `explorer.exe`.
 - **Type errors only in CI**: CI typechecks the dashboard and tests too; run `bun run typecheck` (not the editor's per-file check).
