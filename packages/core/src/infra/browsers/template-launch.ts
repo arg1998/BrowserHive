@@ -32,6 +32,7 @@ import { buildLaunchOptions } from './launch-args.ts';
 import { installNativeGetters, mergeNativeGetterPayloads } from './native-getter.ts';
 import { applyTemplatePreferences } from './profile-preferences.ts';
 import type { SandboxPolicy, SandboxTarget } from './sandbox-policy.ts';
+import { sandboxedFramesArgs } from './sandboxed-frames.ts';
 import { deviceMemoryPayload } from './stealth-identity.ts';
 import { PlaywrightTemplateHost } from './template-host.ts';
 import { HostTargets } from './template-targets.ts';
@@ -108,8 +109,16 @@ export async function launchTemplateHostWith(
   const launch = buildLaunchOptions({
     kwargs,
     stealth: spec.stealth,
-    // Pack strategy switches come only from the compiled-in table (spec 13 §9.10).
-    launchOptions: { args: ['--disable-sync', ...(spec.hostFlags ?? []), ...spec.testingArgs] },
+    // Pack strategy switches come only from the compiled-in table (spec 13 §9.10); sandboxed
+    // frames stay in process where an init script must reach every frame (verify #84 N1).
+    launchOptions: {
+      args: [
+        '--disable-sync',
+        ...(spec.hostFlags ?? []),
+        ...sandboxedFramesArgs(spec),
+        ...spec.testingArgs,
+      ],
+    },
     proxy: spec.proxy,
     downloadsDir: spec.downloadsDir,
   });
