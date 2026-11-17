@@ -1,4 +1,4 @@
-/** @module app/site-packs/strategies/site-slots.test — `serialize-site` turns with a fake clock (spec 13 §9.4): at most `max_parallel` sessions at once, FIFO waiting, a refusal after exactly 30 s, aborts leave the queue, a session's own concurrent calls share its turn, and a released turn lets the next one in. */
+/** @module app/site-packs/strategies/site-slots.test — `serialize-site` turns with a fake clock (spec 13 §9.4): at most `max_parallel` sessions at once, FIFO waiting, a refusal after exactly 30 s, aborts leave the queue, a session's own concurrent calls share its turn while nobody waits and queue behind a waiting session otherwise (no barging, no starvation: review PR #84 M4), and a released turn lets the next one in. */
 
 import { describe, expect, it } from 'bun:test';
 import { FakeClock } from '../../../../test/helpers/fake-clock.ts';
@@ -114,5 +114,63 @@ describe('SiteSlots', () => {
     await flush();
     await clock.advance(500);
     expect(await waiting).toBe('timeout');
+  });
+
+  it("a session's extra call queues behind a waiting session instead of barging ahead", async () => {
+    const clock = new FakeClock();
+    const slots = new SiteSlots(clock);
+    const a1 = turnOf(await slots.acquire(KEY, 's-a', 1, never));
+    const order: string[] = [];
+    const b = slots.acquire(KEY, 's-b', 1, never).then((t) => {
+      order.push('b');
+      return turnOf(t);
+    });
+    await flush();
+    const a2 = slots.acquire(KEY, 's-a', 1, never).then((t) => {
+      order.push('a2');
+      return turnOf(t);
+    });
+    const a3 = slots.acquire(KEY, 's-a', 1, never).then((t) => {
+      order.push('a3');
+      return turnOf(t);
+    });
+    await flush();
+    expect(order).toEqual([]);
+    expect(slots.waiting(KEY)).toBe(3);
+    a1.release();
+    const bTurn = await b;
+    await flush();
+    expect(order).toEqual(['b']);
+    bTurn.release();
+    // A's queued calls reach the head together and share A's turn.
+    (await a2).release();
+    (await a3).release();
+    expect(order).toEqual(['b', 'a2', 'a3']);
+    expect(slots.holders(KEY)).toBe(0);
+  });
+
+  it('overlapping calls of one session do not starve another (the review PoC)', async () => {
+    const clock = new FakeClock();
+    const slots = new SiteSlots(clock);
+    let a = turnOf(await slots.acquire(KEY, 's-a', 1, never));
+    let got: SlotTurn | 'timeout' | null = null;
+    void slots.acquire(KEY, 's-b', 1, never).then((t) => {
+      got = t;
+    });
+    await flush();
+    // A keeps one call in flight at all times (two tabs, pipelined calls), each 2 s long.
+    let next = slots.acquire(KEY, 's-a', 1, never);
+    a.release();
+    await flush();
+    expect(got).not.toBeNull();
+    expect(got).not.toBe('timeout');
+    const bTurn = turnOf(got ?? 'timeout');
+    await clock.advance(2_000);
+    bTurn.release();
+    a = turnOf(await next);
+    next = slots.acquire(KEY, 's-a', 1, never);
+    // Nobody else waits: A's own extra call shares its turn at once.
+    expect(turnOf(await next).queued).toBe(false);
+    a.release();
   });
 });

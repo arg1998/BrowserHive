@@ -1,4 +1,4 @@
-/** @module app/site-packs/strategies/site-slots — the `serialize-site` slots (spec 13 §9.4): at most `max_parallel` sessions of a template act on a site's pages at once; the others wait in FIFO order up to 30 s. In memory, per process (lead decision 1). */
+/** @module app/site-packs/strategies/site-slots — the `serialize-site` slots (spec 13 §9.4): at most `max_parallel` sessions of a template act on a site's pages at once; the others wait in FIFO order up to 30 s. A session's concurrent calls share its turn only while no other session waits (no barging past a waiter, review PR #84 M4). In memory, per process (lead decision 1). */
 
 import type { Clock } from '../../../ports/clock.ts';
 
@@ -41,7 +41,10 @@ export class SiteSlots {
 
   /**
    * Takes a turn on `key` for `sessionId`, waiting in FIFO order while `max` other sessions hold
-   * one. Resolves with the turn, or `'timeout'` after the wait budget.
+   * one. A session already holding a turn shares it at once only when nobody waits; otherwise the
+   * call queues behind the waiters, so a session keeping one call in flight at all times cannot
+   * starve the others (it never waits on its own later call: no deadlock). Resolves with the turn,
+   * or `'timeout'` after the wait budget.
    *
    * @throws the signal's reason when the call is aborted while waiting
    */
@@ -55,7 +58,7 @@ export class SiteSlots {
     const slot = this.#slot(key, max);
     const startedAt = this.#clock.now();
     const own = slot.holders.get(sessionId);
-    if (own !== undefined || (slot.holders.size < slot.max && slot.queue.length === 0)) {
+    if ((own !== undefined || slot.holders.size < slot.max) && slot.queue.length === 0) {
       slot.holders.set(sessionId, (own ?? 0) + 1);
       return this.#turn(key, sessionId, 0, false);
     }
@@ -142,7 +145,10 @@ export class SiteSlots {
     this.#pump(key, slot);
   }
 
-  /** Grants waiting turns in FIFO order while there is room. */
+  /**
+   * Grants waiting turns in FIFO order while there is room; a waiter whose session already holds a
+   * turn (it queued behind another session) shares it when it reaches the head.
+   */
   #pump(key: string, slot: Slot): void {
     while (slot.queue.length > 0) {
       const next = slot.queue[0];
