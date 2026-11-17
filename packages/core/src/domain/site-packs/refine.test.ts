@@ -289,6 +289,34 @@ describe('refinePack', () => {
       },
       'sign_in',
     ],
+    [
+      'sign-in post target on another site',
+      (p) => {
+        if (p.sign_in) p.sign_in.post = ['evil.io/collect'];
+      },
+      'sign_in.post[0]',
+    ],
+    [
+      'sign-in post target over a whole host (as wide as no list)',
+      (p) => {
+        if (p.sign_in) p.sign_in.post = ['www.linkedin.com/checkpoint/lg/*', 'www.linkedin.com/*'];
+      },
+      'sign_in.post[1]',
+    ],
+    [
+      'sign-in post target listed twice',
+      (p) => {
+        if (p.sign_in) p.sign_in.post = ['www.linkedin.com/x', 'WWW.linkedin.com/x'];
+      },
+      'sign_in.post[1]',
+    ],
+    [
+      'sign-in post target with a scheme',
+      (p) => {
+        if (p.sign_in) p.sign_in.post = ['https://www.linkedin.com/checkpoint/lg/login-submit'];
+      },
+      'sign_in.post[0]',
+    ],
   ];
   for (const [name, mutate, path] of corpus) {
     it(`refuses: ${name}`, () => {
@@ -307,6 +335,27 @@ describe('refinePack', () => {
       action: 'confirm',
     });
     expect(issuePaths(p)).toEqual([]);
+  });
+
+  it('accepts sign-in post targets; one covered by a blocking guard of the pack is a warning (review #84 N4)', () => {
+    const p = basePack();
+    if (p.sign_in) p.sign_in.post = ['www.linkedin.com/checkpoint/lg/login-submit'];
+    expect(refineInput(p)).toEqual({ issues: [], warnings: [] });
+    p.guards?.push({
+      id: 'hold-sign-in',
+      kind: 'account',
+      match: { url: 'www.linkedin.com/checkpoint/*', methods: ['POST'] },
+      action: 'confirm',
+    });
+    const result = refineInput(p);
+    expect(result.issues).toEqual([]);
+    expect(result.warnings).toEqual([
+      "sign_in.post[0] (www.linkedin.com/checkpoint/lg/login-submit) is covered by the pack's own guard 'hold-sign-in' (confirm): BrowserHive holds or blocks the sign-in there",
+    ]);
+    // A GET-only or `warn` guard there cannot stop the post: no warning.
+    const g = p.guards?.at(-1);
+    if (g !== undefined) g.match.methods = ['GET'];
+    expect(refineInput(p).warnings).toEqual([]);
   });
 
   it('accepts a stance exception with its reason', () => {

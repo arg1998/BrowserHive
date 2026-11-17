@@ -1,4 +1,4 @@
-/** @module domain/site-packs/classify-fuzz.test — a seeded property test of `classifyPackChange` (spec 13 §9.7, D-73; adopted from the review of PR #84): random candidates built from the bundled packs and the fixture pack by mutation families that truly loosen, that can stop the site, or that only tighten or describe. A candidate with any loosening mutation classifies `loosening`; one with a stopping mutation and no loosening one classifies at least `restrictive`; one with neither never classifies `loosening`. Plus the reviewer's probes on the bundled LinkedIn pack, each `restrictive`. */
+/** @module domain/site-packs/classify-fuzz.test — a seeded property test of `classifyPackChange` (spec 13 §9.7, D-73; adopted from the review of PR #84): random candidates built from the bundled packs and the fixture pack by mutation families that truly loosen, that can stop the site, or that only tighten or describe. A candidate with any loosening mutation classifies `loosening`; one with a stopping mutation and no loosening one classifies at least `restrictive`; one with neither is at most `tightening` (a routine guard on the sign-in host of a pack that declares `sign_in.post` included: review #84 N4; any change of `sign_in.post` is loosening). Plus the reviewer's probes on the bundled LinkedIn pack, each `restrictive`. */
 
 import { describe, expect, it } from 'bun:test';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -26,9 +26,22 @@ function stoppingBase(): Pack {
   return pack;
 }
 
+/** The fixture pack declaring its sign-in form's post target (review #84 N4). */
+function postingBase(): Pack {
+  const pack = basePack();
+  if (pack.sign_in !== undefined) {
+    pack.sign_in.post = [
+      'www.linkedin.com/checkpoint/lg/login-submit',
+      'www.linkedin.com/checkpoint/challenge/verify*',
+    ];
+  }
+  return pack;
+}
+
 const BASES: readonly Pack[] = [
   basePack(),
   stoppingBase(),
+  postingBase(),
   ...readdirSync(PACKS_DIR)
     .filter((f) => f.endsWith('.json'))
     .sort()
@@ -382,6 +395,26 @@ const LOOSENING: readonly Mutation[] = [
     },
   },
   {
+    name: 'sign-in post target changed',
+    effect: 'loosens',
+    apply: (p, rng) => {
+      const signIn = p.sign_in;
+      if (signIn === undefined) return false;
+      const post = signIn.post;
+      if (post === undefined) {
+        signIn.post = [`${signIn.url.host}/zz-session`];
+        return true;
+      }
+      const how = rng.pick(['removed', 'moved', 'added', 'dropped'] as const);
+      if (how === 'removed') delete signIn.post;
+      else if (how === 'moved') post[0] = `${signIn.url.host}/zz-moved`;
+      else if (how === 'added' && post.length < 4) post.push(`${signIn.url.host}/zz-also`);
+      else if (post.length > 1) post.pop();
+      else delete signIn.post;
+      return true;
+    },
+  },
+  {
     name: 'device binding removed',
     effect: 'loosens',
     apply: (p) => {
@@ -450,11 +483,11 @@ const CAN_STOP: readonly Mutation[] = [
     },
   },
   {
-    name: 'guard blocking a post on the sign-in host',
+    name: 'guard blocking a post on the sign-in host (no sign_in.post)',
     effect: 'can_stop',
     apply: (p) => {
       const signIn = p.sign_in?.url.host;
-      if (signIn === undefined) return false;
+      if (signIn === undefined || p.sign_in?.post !== undefined) return false;
       const guard: Guard = {
         id: 'zz-submit',
         kind: 'account',
@@ -465,9 +498,62 @@ const CAN_STOP: readonly Mutation[] = [
       return true;
     },
   },
+  {
+    name: 'guard on a declared sign-in post target',
+    effect: 'can_stop',
+    apply: (p, rng) => {
+      const target = p.sign_in?.post?.[0];
+      if (target === undefined) return false;
+      // The target itself, a wider glob over it, its folder, or a wildcard first host label
+      // (`github.com/session` → `*.com/…` is refused by refinePack and skipped).
+      const url = rng.pick([
+        target,
+        `${target.replace(/\*$/, '')}*`,
+        `${target.slice(0, target.lastIndexOf('/'))}/*`,
+        target.replace(/^[^./]+\./, '*.'),
+      ]);
+      const guard: Guard = {
+        id: 'zz-post',
+        kind: rng.pick(['account', 'credential', 'write'] as const),
+        match: {
+          url,
+          ...(rng.next() < 0.5 && {
+            methods: rng.pick([['POST'], ['POST', 'PUT']] as const).slice(),
+          }),
+        },
+        action: rng.pick(['block', 'confirm'] as const),
+      };
+      p.guards = [...(p.guards ?? []), guard];
+      return true;
+    },
+  },
 ];
 
+/** A routine guard on the sign-in host away from the declared post targets: tightening only. */
+const ROUTINE_WITH_POST: Mutation = {
+  name: 'routine guard on the sign-in host, sign_in.post declared elsewhere',
+  effect: 'tightens_or_describes',
+  apply: (p, rng) => {
+    const signIn = p.sign_in;
+    if (signIn?.post === undefined) return false;
+    const h = signIn.url.host;
+    const guard: Guard = rng.pick<Guard>([
+      { id: 'zz-logout', kind: 'logout', match: { url: `${h}/zz-logout` }, action: 'block' },
+      { id: 'zz-settings', kind: 'account', match: { url: `${h}/zz-settings*` }, action: 'block' },
+      {
+        id: 'zz-write',
+        kind: 'write',
+        match: { url: `${h}/zz-api/*`, methods: ['POST'] },
+        action: 'confirm',
+      },
+    ]);
+    p.guards = [...(p.guards ?? []), guard];
+    return true;
+  },
+};
+
 const TIGHTENING_OR_DESCRIPTIVE: readonly Mutation[] = [
+  ROUTINE_WITH_POST,
   {
     name: 'title',
     effect: 'tightens_or_describes',
@@ -549,7 +635,7 @@ const RANK: Readonly<Record<string, number>> = {
 };
 
 describe('classifyPackChange, a seeded property test', () => {
-  it('loosening stays loosening; what can stop the site is at least restrictive; the rest never loosens', () => {
+  it('loosening stays loosening; what can stop the site is at least restrictive; the rest is at most tightening', () => {
     const rng = generator(12_345);
     const failures: string[] = [];
     let ran = 0;
@@ -587,7 +673,7 @@ describe('classifyPackChange, a seeded property test', () => {
           ? result.classification !== 'loosening'
           : strongest === 'restrictive'
             ? got < 2 // below restrictive
-            : result.classification === 'loosening';
+            : got > 1; // tightening or descriptive changes: never restrictive or loosening
       if (bad) {
         failures.push(
           `${base.id}: [${applied.map((m) => m.name).join(', ')}] → ${result.classification}`,

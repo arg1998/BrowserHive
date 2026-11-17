@@ -1,4 +1,4 @@
-/** @module domain/site-packs/classify-rules — spec 13 §9.7 for `guards`, `element_guards` and `challenges`: an entry added or made stricter tightens, and is **restrictive** when its match covers the pack's probe path, its sign-in URL or a whole host, or (a guard) can block a form post on the sign-in host; a challenge added or made stricter is restrictive when it stops the site, when its match has no `url` (content-only matches cannot be bounded), or when it covers those pages (D-73, review #84 M2); an entry removed, laxer, or with its match, target or `request_guard` changed loosens. */
+/** @module domain/site-packs/classify-rules — spec 13 §9.7 for `guards`, `element_guards` and `challenges`: an entry added or made stricter tightens, and is **restrictive** when its match covers the pack's probe path, its sign-in URL or a whole host, or (a guard) can block the sign-in form's post (a declared `sign_in.post` target, else any `POST` on the sign-in host); a challenge added or made stricter is restrictive when it stops the site, when its match has no `url` (content-only matches cannot be bounded), or when it covers those pages (D-73, review #84 M2); an entry removed, laxer, or with its match, target or `request_guard` changed loosens. */
 
 import type {
   PackChallenge,
@@ -10,7 +10,7 @@ import { matchesGlob } from '../../kernel/glob.ts';
 import { compileRequestGuardRules, matchRequestGuard } from '../policies/request-guard.ts';
 import type { ChangeClass, ClassifyInput } from './classify-types.ts';
 import { scopedUrl, scopeOfGlob } from './glob-scope.ts';
-import { matchesPackGlob } from './pack-glob.ts';
+import { matchesPackGlob, packGlobsOverlap } from './pack-glob.ts';
 
 /** Guard actions from laxest to strictest; `write_policy` stands apart (any move to or from it loosens). */
 const GUARD_ORDER = ['warn', 'confirm', 'block'] as const;
@@ -99,17 +99,22 @@ function wholeHost(glob: string, pack: SitePackV1): boolean {
 }
 
 /**
- * True when a guard can stop a form post on the sign-in host: its methods include `POST` (or are
- * absent) and its host covers the sign-in URL's host. The form's post target is not in the pack
- * (LinkedIn posts to `/checkpoint/lg/login-submit`, not `/login`), so any such guard counts
- * (D-73, review #84 M2).
+ * True when a guard can stop the sign-in form's post: its methods include `POST` (or are absent)
+ * and its URL glob overlaps one of the pack's `sign_in.post` targets (`packGlobsOverlap`). A pack
+ * that declares no target keeps the host-wide reading: any such guard whose host covers the sign-in
+ * URL's host counts, since LinkedIn's form, for one, posts to `/checkpoint/lg/login-submit`, not
+ * `/login` (D-73, review #84 M2 and N4). Resource types are not read: a guard limited to beacons
+ * counts too.
  */
 function coversSignInPost(guard: PackGuard, pack: SitePackV1): boolean {
-  const signIn = pack.sign_in?.url.host;
+  const signIn = pack.sign_in;
   if (signIn === undefined) return false;
   if (guard.match.methods !== undefined && !guard.match.methods.includes('POST')) return false;
+  if (signIn.post !== undefined) {
+    return signIn.post.some((target) => packGlobsOverlap(guard.match.url, target));
+  }
   const scoped = scopeOfGlob(guard.match.url, pack.domains);
-  return scoped.ok && matchesGlob(signIn.toLowerCase(), scoped.value.host);
+  return scoped.ok && matchesGlob(signIn.url.host.toLowerCase(), scoped.value.host);
 }
 
 /** True when the guard's match covers the probe path, the sign-in URL or a whole host. */

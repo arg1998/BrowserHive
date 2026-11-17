@@ -1,4 +1,4 @@
-/** @module app/site-packs/registry-floor — D-71 where no operator action can be refused (review #84 M1): when the content in force changes without an Apply (an approved local file deleted or back, a revocation's fallback, a stored approval readable again), each template whose enabled site falls below the new content's `stealth-profile` floor gets that site turned off (`enabled=false` and an audit row by `browserhive`), and the operator a `TEMPLATE_SITE_BELOW_FLOOR` degradation naming the templates and why. It resolves once no turned-off site is below its pack's floor (the site or template removed, or a version with a lower floor). */
+/** @module app/site-packs/registry-floor — D-71 where no operator action can be refused (review #84 M1): when the content in force changes without an Apply (an approved local file deleted or back, a revocation's fallback, a stored approval readable again), each template whose enabled site falls below the new content's `stealth-profile` floor gets that site turned off (`enabled=false` and an audit row by `browserhive`), and the operator a `TEMPLATE_SITE_BELOW_FLOOR` degradation naming the templates and why. It resolves once no site that this enforcement turned off is still off below its pack's floor (the site or template removed, the site turned on again, or a version with a lower floor); a site the operator turned off themselves never keeps it open (review #84 N5). */
 
 import { ERROR_REGISTRY, renderMessage } from '@browserhive/contracts/errors';
 import { packFloorIssues, type StealthFloorIssue } from '../../domain/site-packs/stealth-floor.ts';
@@ -27,7 +27,8 @@ interface BelowFloor {
 
 /**
  * Turns off every enabled template site whose template is below the floor of its pack's content in
- * force, and reports it; resolves the degradation when no turned-off site is below a floor. Every
+ * force, and reports it; resolves the degradation when no site it turned off is still off below a
+ * floor (sites the operator turned off do not count: `anyTurnedOffHere`). Every
  * operator path (template creation, site add and enable, Apply, Revert, approve-local) refuses a
  * below-floor state first, so anything found here came from a change no operator approved.
  * Returns the templates whose sites were turned off. Never throws: a failure is logged.
@@ -50,7 +51,7 @@ async function enforce(core: RegistryCore): Promise<string[]> {
   ]);
   const byId = new Map(templates.map((t) => [t.templateId, t]));
   const below = new Map<string, Map<string, BelowFloor>>();
-  let offBelow = false;
+  const offBelow: TemplateSiteRecord[] = [];
   for (const site of sites) {
     if (site.packId === null) continue;
     const effective = snapshot.packs.get(site.packId)?.effective ?? null;
@@ -59,7 +60,7 @@ async function enforce(core: RegistryCore): Promise<string[]> {
     const issues = packFloorIssues(template, effective.pack);
     if (issues.length === 0) continue;
     if (!site.enabled) {
-      offBelow = true;
+      offBelow.push(site);
       continue;
     }
     const perPack = below.get(site.packId) ?? new Map<string, BelowFloor>();
@@ -83,8 +84,61 @@ async function enforce(core: RegistryCore): Promise<string[]> {
     await turnOff(core, entry, list);
     for (const t of list) touched.add(t.template_id);
   }
-  if (!offBelow && below.size === 0) core.deps.degradations?.recovered(SITE_BELOW_FLOOR);
+  if (below.size === 0 && !(await anyTurnedOffHere(core, offBelow))) {
+    core.deps.degradations?.recovered(SITE_BELOW_FLOOR);
+  }
   return [...touched];
+}
+
+/** Pages of the audit log read at most while looking for enforcement rows; past it, the record stays open. */
+const MAX_AUDIT_PAGES = 40;
+
+/**
+ * True when one of `offBelow` (sites off and below their pack's floor) was turned off by this
+ * enforcement: the latest audit row that changed the site (newest first, since it was added) is
+ * BrowserHive's `below_pack_floor` row. A site the operator turned off, or changed after
+ * BrowserHive did (turned on again once a lower floor applied, then off), does not count, nor one
+ * removed and added again (its row predates `addedAt`). An audit log too long to read to the end
+ * counts as "turned off here", so the record stays open rather than resolve wrongly.
+ */
+async function anyTurnedOffHere(
+  core: RegistryCore,
+  offBelow: readonly TemplateSiteRecord[],
+): Promise<boolean> {
+  if (offBelow.length === 0) return false;
+  const pending = new Map(offBelow.map((s) => [`${s.templateId}\u0000${s.siteId}`, s]));
+  const since = Math.min(...offBelow.map((s) => s.addedAt));
+  let cursor: string | null = null;
+  for (let page = 0; page < MAX_AUDIT_PAGES; page += 1) {
+    const result = await core.deps.repos.operatorActions.list({
+      types: ['template.update'],
+      since,
+      limit: 500,
+      ...(cursor !== null && { cursor }),
+    });
+    for (const row of result.items) {
+      if (row.action !== 'template.update' || row.resourceId === null) continue;
+      const changed = row.details?.['changed'];
+      if (!Array.isArray(changed)) continue;
+      for (const path of changed) {
+        if (typeof path !== 'string' || !path.startsWith('sites.')) continue;
+        const key = `${row.resourceId}\u0000${path.slice('sites.'.length)}`;
+        const site = pending.get(key);
+        if (site === undefined) continue;
+        pending.delete(key);
+        if (
+          row.occurredAt >= site.addedAt &&
+          row.principalId === SYSTEM &&
+          row.details?.['reason'] === 'below_pack_floor'
+        ) {
+          return true;
+        }
+      }
+    }
+    if (pending.size === 0 || result.nextCursor === null) return false;
+    cursor = result.nextCursor;
+  }
+  return true;
 }
 
 async function turnOff(

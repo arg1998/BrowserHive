@@ -1,4 +1,4 @@
-/** @module app/site-packs/registry-floor.test — D-71 on every path that changes the content in force (review #84 surfaces M1, runtime M3): Revert is refused with `SITE_PACK_BELOW_FLOOR` like Apply; deleting an approved local file turns the site off on templates below the floor now in force (audit row, `TEMPLATE_SITE_BELOW_FLOOR`, `template.changed`) and the record resolves once no turned-off site is below a floor; a revocation's fallback above a template's floor is never applied by itself, and one that is applied leaves every template at or above its floor. */
+/** @module app/site-packs/registry-floor.test — D-71 on every path that changes the content in force (review #84 surfaces M1, runtime M3): Revert is refused with `SITE_PACK_BELOW_FLOOR` like Apply; deleting an approved local file turns the site off on templates below the floor now in force (audit row, `TEMPLATE_SITE_BELOW_FLOOR`, `template.changed`) and the record resolves once no site it turned off is still off below a floor (a site the operator turned off never keeps it open: review #84 N5); a revocation's fallback above a template's floor is never applied by itself, and one that is applied leaves every template at or above its floor. */
 
 import { afterEach, describe, expect, it } from 'bun:test';
 import { rmSync } from 'node:fs';
@@ -147,7 +147,9 @@ describe('a deleted local file ends the override without an Apply', () => {
    * The bundled v1 (floor max) is approved for a `max` template; a local file without a floor is
    * approved; a `standard` template adds the site under it. Then the file is deleted.
    */
-  async function localSetup() {
+  async function localSetup(
+    beforeDelete?: (kit: ReturnType<typeof createSitePackKit>) => Promise<void>,
+  ) {
     dirs = makeDirs();
     const degradations = new RecordingDegradations();
     writePack(dirs.bundled, sitePack(SITE, 1, floor('max')));
@@ -168,6 +170,7 @@ describe('a deleted local file ends the override without an Apply', () => {
       templateSiteRecord({ templateId: SECOND, packId: SITE, packVersion: 7 }),
     );
     await kit.registry.refreshUsage();
+    await beforeDelete?.(kit);
     expect(degradations.reports).toEqual([]);
     rmSync(join(dirs.local, `${SITE}.json`));
     await kit.registry.reload();
@@ -238,6 +241,98 @@ describe('a deleted local file ends the override without an Apply', () => {
     await kit.repos.templateSites.remove(SECOND, SITE);
     await kit.registry.refreshUsage();
     expect(kit.degradations.recoveries.slice(before)).toContain(SITE_BELOW_FLOOR);
+  });
+
+  describe('only sites the enforcement turned off keep the record open (review #84 N5)', () => {
+    const THIRD = 'tp-third00001';
+    /** An unrelated `standard` template whose operator turned the site off themselves. */
+    const operatorDisabled = async (kit: ReturnType<typeof createSitePackKit>) => {
+      await kit.repos.templates.insert(
+        templateRecord({ templateId: THIRD, name: 'third', stealth: 'standard' }),
+      );
+      await kit.repos.templateSites.upsert(
+        templateSiteRecord({ templateId: THIRD, packId: SITE, packVersion: 7, enabled: false }),
+      );
+      await kit.actions.append({
+        eventId: 'ev-op-third',
+        principalId: 'p-op',
+        action: 'template.update',
+        resourceKind: 'template',
+        resourceId: THIRD,
+        details: { changed: [`sites.${SITE}`], site: { site_id: SITE, enabled: false } },
+        occurredAt: kit.clock.now(),
+      });
+    };
+    const recoveredAfter = async (
+      kit: Awaited<ReturnType<typeof localSetup>>,
+      act: () => Promise<unknown>,
+    ) => {
+      const before = kit.degradations.recoveries.length;
+      await act();
+      await kit.registry.refreshUsage();
+      return kit.degradations.recoveries.slice(before).includes(SITE_BELOW_FLOOR);
+    };
+
+    it("the verifier's scenario: an operator-disabled site below the floor on another template does not keep it open", async () => {
+      const kit = await localSetup(operatorDisabled);
+      // The operator's own site is below the floor too, but enforcement only touched SECOND.
+      const third = (await kit.repos.templateSites.list(THIRD))[0];
+      expect(third?.enabled).toBe(false);
+      expect(kit.degradations.reports[0]?.details).toMatchObject({ template_ids: [SECOND] });
+      expect(await recoveredAfter(kit, () => kit.registry.reload())).toBe(false);
+      expect(await recoveredAfter(kit, () => kit.repos.templateSites.remove(SECOND, SITE))).toBe(
+        true,
+      );
+    });
+
+    it('resolves when the named template is removed', async () => {
+      const kit = await localSetup(operatorDisabled);
+      expect(await recoveredAfter(kit, () => kit.repos.templates.remove(SECOND))).toBe(true);
+    });
+
+    it('a site the operator changed after BrowserHive turned it off no longer counts', async () => {
+      const kit = await localSetup();
+      // E.g. turned on again once a lower floor applied, then off by the operator.
+      expect(
+        await recoveredAfter(kit, () =>
+          kit.actions.append({
+            eventId: 'ev-op-second',
+            principalId: 'p-op',
+            action: 'template.update',
+            resourceKind: 'template',
+            resourceId: SECOND,
+            details: { changed: [`sites.${SITE}`], site: { site_id: SITE, enabled: false } },
+            occurredAt: kit.clock.now() + 1,
+          }),
+        ),
+      ).toBe(true);
+    });
+
+    it('a site removed and added again (off) no longer counts', async () => {
+      const kit = await localSetup();
+      const [site] = await kit.repos.templateSites.list(SECOND);
+      if (site === undefined) throw new Error('no site');
+      expect(
+        await recoveredAfter(kit, async () => {
+          await kit.repos.templateSites.remove(SECOND, SITE);
+          await kit.repos.templateSites.upsert({ ...site, addedAt: kit.clock.now() + 1_000 });
+        }),
+      ).toBe(true);
+    });
+
+    it('a later row about another site or a template setting does not clear it', async () => {
+      const kit = await localSetup();
+      await kit.actions.append({
+        eventId: 'ev-op-name',
+        principalId: 'p-op',
+        action: 'template.update',
+        resourceKind: 'template',
+        resourceId: SECOND,
+        details: { changed: ['name', 'sites.other.test'] },
+        occurredAt: kit.clock.now() + 1,
+      });
+      expect(await recoveredAfter(kit, () => kit.registry.reload())).toBe(false);
+    });
   });
 });
 

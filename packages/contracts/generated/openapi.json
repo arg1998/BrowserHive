@@ -30362,6 +30362,16 @@
                   "human_only": {
                     "type": "boolean"
                   },
+                  "post": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 300
+                    },
+                    "minItems": 1,
+                    "maxItems": 4
+                  },
                   "form": {
                     "type": "object",
                     "properties": {

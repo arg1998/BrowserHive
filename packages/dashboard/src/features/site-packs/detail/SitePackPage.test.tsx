@@ -47,6 +47,9 @@ describe('SitePackPage', () => {
     expect(screen.getByText('https://www.linkedin.com/login')).toBeDefined();
     expect(screen.getByText('https://www.linkedin.com/feed/')).toBeDefined();
     expect(screen.getByText('www.linkedin.com/uas/login*')).toBeDefined();
+    // Where the sign-in form posts (review #84 N4), as text.
+    expect(screen.getByText('Sign-in form posts to')).toBeDefined();
+    expect(screen.getByText('www.linkedin.com/checkpoint/lg/login-submit')).toBeDefined();
     // Terms: the stance as a label, the clause verbatim, its date and address as text, no link.
     expect(screen.getAllByText('The site’s terms prohibit automated access').length).toBe(1);
     expect(screen.getByText(/will not use bots or other automated methods/)).toBeDefined();

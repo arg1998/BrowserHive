@@ -122,7 +122,11 @@ export function packContent(patch: Partial<SitePackV1Input> = {}): SitePackV1Inp
     min_client: '0.3.0',
     title: 'LinkedIn',
     domains: ['linkedin.com', 'licdn.com'],
-    sign_in: { url: { host: 'www.linkedin.com', path: '/login' }, human_only: false },
+    sign_in: {
+      url: { host: 'www.linkedin.com', path: '/login' },
+      human_only: false,
+      post: ['www.linkedin.com/checkpoint/lg/login-submit'],
+    },
     signed_in: {
       probe: { host: 'www.linkedin.com', path: '/feed/' },
       kind: 'redirect',
