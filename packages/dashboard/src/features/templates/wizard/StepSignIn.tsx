@@ -1,4 +1,4 @@
-/** @module features/templates/wizard/StepSignIn — step 5 (spec 13 §7.1, §3.11): open the sign-in window on the machine running BrowserHive (the remote-operator notice when that is not this device), confirm each site with **I'm signed in**, watch the window from here, Finish (warned when a site is not signed in; unlisted sign-ins offered for removal), close the window or Finish later (the template stays Setting up), or **Cancel setup** (after a confirmation, deletes the template and its browser profile and returns to the list); on a ready template, `again` signs in again to a signed-out site. Every error state has its copy and action, and a reload resumes where it was */
+/** @module features/templates/wizard/StepSignIn — step 5 (spec 13 §7.1, §3.11): open the sign-in window on the machine running BrowserHive (the remote-operator notice when that is not this device), confirm each site with **I'm signed in**, watch the window from here, Finish (warned when a site is not signed in; unlisted sign-ins offered for removal), close the window or Finish later (the template stays Setting up), or **Cancel setup** (only for a template this tab's wizard created that is still being set up: after a confirmation it reads the template again, closes the window and deletes it only while the server still has it being set up, never closing a session, then returns to the list); on a ready template, `again` signs in again to a signed-out site. Every error state has its copy and action, and a reload resumes where it was */
 import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { useConfirm } from '@/app/providers/ConfirmProvider.tsx';
@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button.tsx';
 import { toAppError } from '@/lib/api/errors.ts';
 import { cancelSetupConfirm } from '../confirm-copy.ts';
 import { RemoteOperatorBanner, useRemoteHost } from '../RemoteOperatorBanner.tsx';
+import { createdHere, forgetCreated } from './draft.ts';
 import { FinishDialog } from './FinishDialog.tsx';
 import { SignInDone } from './SignInDone.tsx';
 import { SignInProblemCallout } from './SignInProblemCallout.tsx';
@@ -70,6 +71,7 @@ export function StepSignIn({
   const cancelSetup = async () => {
     if (!(await confirm(cancelSetupConfirm(template.display_name)))) return;
     if (!(await s.cancelSetup())) return;
+    forgetCreated(templateId);
     toast.success({ title: `Deleted ${template.display_name}` });
     void navigate({ to: '/templates' });
   };
@@ -127,14 +129,16 @@ export function StepSignIn({
           </Button>
         ) : (
           <>
-            <Button
-              type="button"
-              variant="destructive-ghost"
-              disabled={s.closing || s.cancelling || s.finishing}
-              onClick={() => void cancelSetup()}
-            >
-              Cancel setup
-            </Button>
+            {template.status === 'recording' && createdHere(templateId) ? (
+              <Button
+                type="button"
+                variant="destructive-ghost"
+                disabled={s.closing || s.cancelling || s.finishing}
+                onClick={() => void cancelSetup()}
+              >
+                Cancel setup
+              </Button>
+            ) : null}
             <Button
               type="button"
               variant="ghost"

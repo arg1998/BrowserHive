@@ -31,6 +31,7 @@ import type { IdentityApplier } from './identity-applier.ts';
 import type { InterceptionChain } from './interception-chain.ts';
 import { PARKED, type PageOwner, sessionOwner, type TargetFacts } from './page-attribution.ts';
 import { HostPageDispatcher } from './page-dispatcher.ts';
+import { pageSitesFileOf, watchPageSites } from './page-sites.ts';
 import { PageWaiters } from './page-waiters.ts';
 import { ParkedPages } from './parked-pages.ts';
 import type { TemplateHostInput } from './template-host-input.ts';
@@ -69,8 +70,9 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
   private readonly waiters: PageWaiters;
   private readonly parked: ParkedPages;
   private readonly origins = new Set<string>();
-  /** Registrable domains a window opened as a page (main frame). */
+  /** Registrable domains a window opened as a page (top-level requests, redirect hops, popups). */
   private readonly topSites = new Set<string>();
+  private readonly pageSitesWatch: ReturnType<typeof watchPageSites>;
   /** Origins whose data a sign-in removal cleared: never carried forward (spec 13 §3.9). */
   private readonly cleared = new Set<string>();
   private readonly userDataDir: string | null;
@@ -128,6 +130,12 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
     this.browser?.on('disconnected', () => this.exited('browser disconnected'));
     this.context.on('close', () => this.exited('context closed'));
     this.context.on('page', (page) => this.dispatcher.adopt(page));
+    this.pageSitesWatch = watchPageSites(
+      this.context,
+      this.topSites,
+      this.userDataDir === null ? null : pageSitesFileOf(this.userDataDir),
+      this.log,
+    );
     if (this.pageWatcher !== null) {
       observeHostResponses(this.context, this.hostId, this.pageWatcher, this.log);
     }
@@ -357,6 +365,7 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
     this.closed ??= (async () => {
       this.closing = true;
       this.dispose();
+      await this.pageSitesWatch.flush();
       // A persistent context: closing it closes the browser too.
       await closeContextWithin(this.context, this.browser, deadlineMs, signal, this.log);
       return [];
@@ -372,7 +381,9 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
       ops.watchPage(this.pageWatcher?.() ?? null, this.hostId, page, owner.sessionId, this.log);
     }
     ops.deleteUnclaimedDownloads(page);
-    ops.watchOrigins(page, this.origins, this.topSites);
+    ops.watchOrigins(page, this.origins);
+    // A popup's first request can precede the context's listener seeing its page (review #85 M4).
+    this.pageSitesWatch.record(page.url());
     if (this.waiters.committed(page, owner, facts)) return;
     if (owner.kind !== 'parked' || page === this.keeper.page) return;
     this.parked.add(page, facts.targetId);

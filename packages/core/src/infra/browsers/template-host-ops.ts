@@ -177,23 +177,13 @@ const MAX_COMMITTED_ORIGINS = 10_000;
 
 /**
  * Records the `http(s)` origin of every frame `page` commits into `origins` (a sign-in removal
- * clears every origin under the domain, also those without a cookie of their own), and the
- * registrable domain of every main-frame navigation into `pageSites` (an unlisted sign-in to a
- * domain without a pack counts only for a domain a window opened as a page, spec 13 §2.3).
+ * clears every origin under the domain, also those without a cookie of their own).
  */
-export function watchOrigins(page: Page, origins: Set<string>, pageSites?: Set<string>): void {
+export function watchOrigins(page: Page, origins: Set<string>): void {
   const emitter: { on?: unknown } = page;
   if (typeof emitter.on !== 'function') return;
-  const add = (url: string, main: boolean): void => {
+  const add = (url: string): void => {
     if (!/^https?:/i.test(url)) return;
-    if (main && pageSites !== undefined && pageSites.size < MAX_COMMITTED_ORIGINS) {
-      try {
-        const site = registrableDomain(new URL(url).hostname);
-        if (site !== '') pageSites.add(site);
-      } catch {
-        // not a URL: nothing to record
-      }
-    }
     try {
       origins.add(new URL(url).origin);
     } catch {
@@ -204,7 +194,7 @@ export function watchOrigins(page: Page, origins: Set<string>, pageSites?: Set<s
       if (oldest.done !== true) origins.delete(oldest.value);
     }
   };
-  page.on('framenavigated', (frame) => add(frame.url(), frame.parentFrame() === null));
+  page.on('framenavigated', (frame) => add(frame.url()));
 }
 
 /**

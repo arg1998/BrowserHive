@@ -2,9 +2,11 @@
 import { describe, expect, it } from 'bun:test';
 import {
   isAnalyticsCookie,
+  jarExpiries,
   jarNames,
   learnedCookieNames,
   MAX_LEARNED_COOKIE_NAMES,
+  packCookiesChanged,
   packCookiesPresent,
   type UnlistedContext,
   unlistedDomains,
@@ -172,5 +174,47 @@ describe('unlistedDomains', () => {
     const visited = ['idp.test', 'cdn-a.test', 'tracker.test', 'plain.test'];
     expect(unlistedDomains(jar, ['site-a.test'], context(visited))).toEqual(['idp.test']);
     expect(unlistedDomains(jar, ['site-a.test'], context())).toEqual([]);
+  });
+
+  it('never lists an ad or tracking domain, even opened as a page with a sign-in-shaped cookie', () => {
+    const jar = [cookie('.doubleclick.net', 'session_id'), cookie('.adnxs.com', 'sess')];
+    expect(
+      unlistedDomains(jar, ['linkedin.com'], context(['doubleclick.net', 'adnxs.com'])),
+    ).toEqual([]);
+    // The same cookie on an ordinary domain the window opened is a sign-in.
+    expect(
+      unlistedDomains(
+        [cookie('.mail.test', 'session_id')],
+        ['linkedin.com'],
+        context(['mail.test']),
+      ),
+    ).toEqual(['mail.test']);
+  });
+
+  it('a pack domain without the pack’s full set still counts when the window opened it (review #85 L1)', () => {
+    const jar = [cookie('.google.com', 'SID'), cookie('.google.com', '__Secure-1PSID')];
+    expect(unlistedDomains(jar, ['linkedin.com'], context())).toEqual([]);
+    expect(unlistedDomains(jar, ['linkedin.com'], context(['google.com']))).toEqual(['google.com']);
+  });
+});
+
+describe('packCookiesChanged (review #85 H2)', () => {
+  const pack = PACKS['linkedin.com'] as { domains: string[]; cookieNames: string[] };
+  it('a sign-in cookie that appeared or was set again since the window opened', () => {
+    const before = [cookie('.linkedin.com', 'liap'), cookie('.www.linkedin.com', 'li_at')];
+    const baseline = jarExpiries(before);
+    expect(packCookiesChanged(pack, baseline, before)).toBe(false);
+    expect(packCookiesChanged(pack, jarExpiries([before[0] as never]), before)).toBe(true);
+    expect(
+      packCookiesChanged(pack, baseline, [
+        before[0] as never,
+        cookie('.www.linkedin.com', 'li_at', { expires: 2_000_000_600 }),
+      ]),
+    ).toBe(true);
+    // Other cookies changing say nothing; no baseline proves nothing.
+    expect(
+      packCookiesChanged(pack, baseline, [...before, cookie('.linkedin.com', 'bcookie')]),
+    ).toBe(false);
+    expect(packCookiesChanged(pack, undefined, before)).toBe(false);
   });
 });

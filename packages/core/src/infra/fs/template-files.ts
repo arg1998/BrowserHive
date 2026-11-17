@@ -3,6 +3,7 @@
 import { lstat, readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { TemplateFiles } from '../../ports/template-files.ts';
+import { readPageSites } from '../browsers/page-sites.ts';
 
 function isMissing(error: unknown): boolean {
   return (
@@ -44,5 +45,6 @@ export function createTemplateFiles(templatesDir: string): TemplateFiles {
       await rm(dir, { recursive: true, force: true, maxRetries: 3 });
       return bytes;
     },
+    pageSites: (templateId) => readPageSites(join(dirOf(templateId), 'page-sites.json')),
   };
 }

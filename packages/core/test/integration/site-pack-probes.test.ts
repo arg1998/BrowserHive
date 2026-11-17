@@ -1,4 +1,4 @@
-/** @module test/integration/site-pack-probes.test — spec 13 §17 T3a acceptance for navigation probes (§8.1) on real Chromium with the HTTPS fixture sites: the pack prober, in a page of BrowserHive's own maintenance session, produces all four outcomes (landmark, redirect, challenge, timeout), a probe path that moves below itself still reads signed in (`/feed/` → `/feed/foryou/`), every sign-in cookie present with no other signal reads `cookies_present`, the cookie pre-check decides without navigating, a challenged probe is never `signed_out`, and the probe page is closed afterwards. */
+/** @module test/integration/site-pack-probes.test — spec 13 §17 T3a acceptance for navigation probes (§8.1) on real Chromium with the HTTPS fixture sites: the pack prober, in a page of BrowserHive's own maintenance session, produces all four outcomes (landmark, redirect, challenge, timeout), a probe path that moves below itself still reads signed in (`/feed/` → `/feed/foryou/`), every sign-in cookie present but a landing off the probe path stays `inconclusive` (review #85 M1), the cookie pre-check decides without navigating, a challenged probe is never `signed_out`, and the probe page is closed afterwards. */
 
 import { afterEach, describe, expect, it } from 'bun:test';
 import { fixturePack, type PackWorld, packWorld } from './site-pack-fixture.ts';
@@ -76,7 +76,7 @@ describe('pack probes', () => {
     expect(row?.finalUrl).toBe('https://site-a.test/pack/probe/feed/foryou/');
   });
 
-  it('every sign-in cookie present and no other signal reads cookies_present', async () => {
+  it('every sign-in cookie present but the probe moved elsewhere reads couldn’t tell (review #85 M1)', async () => {
     const pack = fixturePack('/pack/probe/moved');
     const plain = {
       ...pack,
@@ -84,11 +84,12 @@ describe('pack probes', () => {
     };
     world = await packWorld(plain);
     const p = world;
-    // The first visit sets the sign-in cookie; the pack names none yet, so nothing says signed in.
+    // The first visit sets the sign-in cookie on its way elsewhere; then the pack names it, so the
+    // pre-check finds it and the probe navigates: a landing off the probe path is not signed in.
     expect((await probe(p)).result).toMatchObject({ outcome: 'inconclusive', reason: 'no_signal' });
     p.lookup.swap({ ...plain, signed_in: { ...plain.signed_in, cookie_names: ['sid'] } });
     const { result, row } = await probe(p);
-    expect(result).toMatchObject({ outcome: 'signed_in', reason: 'cookies_present' });
+    expect(result).toMatchObject({ outcome: 'inconclusive', reason: 'no_signal' });
     expect(row?.finalUrl).toBe('https://site-a.test/pack/moved-home');
   });
 

@@ -105,29 +105,32 @@ export function publishTemplateChanged(
 
 /**
  * The unlisted sign-ins of a stopped browser, from its newest version (spec 13 §2.3): domains that
- * are not sites, whose pack's sign-in cookies the version holds (every name of the pack, on its
- * domains), and that are not ad or tracking domains. A domain without a pack is listed only while
- * the browser runs (whether a window opened it is not kept in a version).
+ * are not sites, not ad or tracking domains, and either hold every sign-in cookie of the pack that
+ * covers them (the version records pack-covered domains' sign-in cookie names), or were opened as a
+ * page by a window (`visited`, kept across restarts) and hold a persistent cookie.
  */
 export async function storedUnlisted(
   versions: Pick<TemplateVersionRepository, 'list'> | undefined,
   templateId: string,
   own: ReadonlySet<string>,
   packs?: TemplatePacks,
+  visited: ReadonlySet<string> = new Set(),
 ): Promise<string[]> {
   const newest = (await versions?.list(templateId))?.[0];
   if (newest === undefined) return [];
   const domains = newest.summary.domains;
   return domains
     .filter((d) => {
-      if (own.has(d.domain) || TRACKER_DOMAINS.has(d.domain) || d.signInCookies.length === 0)
-        return false;
+      if (own.has(d.domain) || TRACKER_DOMAINS.has(d.domain)) return false;
       const pack = packSignInOf(packs, d.domain);
-      if (pack === null || pack.domains.some((x) => own.has(x))) return false;
-      const present = new Set(
-        domains.filter((x) => pack.domains.includes(x.domain)).flatMap((x) => x.signInCookies),
-      );
-      return pack.cookieNames.every((name) => present.has(name));
+      if (pack?.domains.some((x) => own.has(x)) === true) return false;
+      if (pack !== null && d.signInCookies.length > 0) {
+        const present = new Set(
+          domains.filter((x) => pack.domains.includes(x.domain)).flatMap((x) => x.signInCookies),
+        );
+        if (pack.cookieNames.every((name) => present.has(name))) return true;
+      }
+      return visited.has(d.domain) && d.earliestExpiry !== null;
     })
     .map((d) => d.domain);
 }

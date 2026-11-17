@@ -16,6 +16,7 @@ import {
   EMPTY_DRAFT,
   firstProblemStep,
   issuesOf,
+  markCreatedHere,
   readDraft,
   stepOfIssue,
   stepProblems,
@@ -139,6 +140,7 @@ export function useWizard() {
       const { template } = await create.mutateAsync(toTemplateInput(draft, catalogShas));
       // The saved draft goes; the URL now names the template, so the earlier steps no longer show.
       clearDraft();
+      markCreatedHere(template.template_id);
       goTo(5, { template: template.template_id }, true);
     } catch (error) {
       const e = toAppError(error);

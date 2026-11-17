@@ -87,14 +87,26 @@ export function useSignIn(templateId: string) {
       return false;
     }
   };
-  /** Delete the template still being set up (its window closes with it); `true` once deleted. */
+  /**
+   * Delete the template still being set up; `true` once deleted. It reads the template again first
+   * (another tab may have finished it), closes the sign-in window, then deletes only while the
+   * server still has it being set up (`if_status`), never closing anyone's session.
+   */
   const cancelSetup = async (): Promise<boolean> => {
+    const fresh = await detail.refetch();
+    if (fresh.data?.template.status !== 'recording') {
+      toast.warning({
+        title: 'This template is no longer being set up',
+        description: 'Nothing was deleted. Delete it from its page if you meant to.',
+      });
+      return false;
+    }
+    if (!(await closeWindow())) return false;
     try {
-      // `force`: the sign-in window is the only session a template being set up can have.
-      await m.remove.mutateAsync(true);
+      await m.cancelSetup.mutateAsync();
       return true;
     } catch {
-      // The mutation's toast says why; the step stays.
+      // The mutation's toast says why (`CONFLICT`, `TEMPLATE_IN_USE`); the step stays.
       return false;
     }
   };
@@ -109,7 +121,7 @@ export function useSignIn(templateId: string) {
     opening: m.startRecording.isPending,
     finishing: m.finish.isPending,
     closing: m.cancel.isPending,
-    cancelling: m.remove.isPending,
+    cancelling: m.cancelSetup.isPending,
     open,
     confirmSite,
     finish,

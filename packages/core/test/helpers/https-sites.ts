@@ -75,6 +75,32 @@ function route(host: string, path: string, method = 'GET', search = ''): Respons
         'closer',
         `<button id="go" onclick="window.open('https://idp.test/landing'); window.close()">go</button>`,
       );
+    case '/bounce-set': {
+      // An SSO cookie bounce (review #85 H1): a 302 hop that sets a sign-in cookie on this site
+      // and sends the window on; the hop is never committed as a page.
+      const to = new URLSearchParams(search).get('to') ?? '/landing';
+      return new Response(null, {
+        status: 302,
+        headers: {
+          location: to,
+          'set-cookie': `bounce_sid=${site.replace(/\W/g, '_')}; Path=/; Max-Age=3600; Secure; HttpOnly; SameSite=None`,
+        },
+      });
+    }
+    case '/embed-set':
+      // A page embedding another site's frame that sets a sign-in-shaped cookie (an ad or widget).
+      return page(
+        'embed',
+        `<iframe id="frame" src="https://cdn-a.test/frame-set"></iframe>
+        <button id="popup-set" onclick="window.open('https://site-b.test/bounce-set?to=/landing', 'idp', 'popup,width=420,height=320')">popup</button>`,
+      );
+    case '/frame-set':
+      return new Response('<!doctype html><p id="framed">framed</p>', {
+        headers: {
+          'content-type': 'text/html',
+          'set-cookie': `frame_sid=${site.replace(/\W/g, '_')}; Path=/; Max-Age=3600; Secure; HttpOnly; SameSite=None`,
+        },
+      });
     case '/set-cookie':
       return new Response('<!doctype html><p id="set">set</p>', {
         headers: {

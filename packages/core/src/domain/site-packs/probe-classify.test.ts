@@ -1,4 +1,4 @@
-/** @module domain/site-packs/probe-classify.test — the pack probe's decision table (spec 13 §8.1): the cookie pre-check, then challenge → `challenged`, a `signed_out_redirects` final URL inside the pack's domains → `signed_out` `redirect`, the marker, the landmark, `no_redirect` (`no_redirect_settled` for an `either` probe) on the probe path or below it at a segment boundary (LinkedIn's `/feed/` → `/feed/foryou/`), `cookies_present` when every sign-in cookie was there and nothing else showed, and every `inconclusive` reason; a challenge is never `signed_out`. */
+/** @module domain/site-packs/probe-classify.test — the pack probe's decision table (spec 13 §8.1): the cookie pre-check, then challenge → `challenged`, a `signed_out_redirects` final URL inside the pack's domains → `signed_out` `redirect`, the marker, the landmark, `no_redirect` (`no_redirect_settled` for an `either` probe) on the probe path or below it at a segment boundary (LinkedIn's `/feed/` → `/feed/foryou/`), a landing elsewhere on the site never signed in (review #85 M1), and every `inconclusive` reason; a challenge is never `signed_out`. */
 
 import { describe, expect, it } from 'bun:test';
 import { SitePackV1 } from '@browserhive/contracts/site-packs';
@@ -7,7 +7,6 @@ import {
   inPackDomains,
   type PackProbeFacts,
   packCookiePrecheck,
-  packCookiesAllPresent,
   probeUrlOf,
   samePlace,
 } from './probe-classify.ts';
@@ -34,7 +33,6 @@ function facts(over: Partial<PackProbeFacts> & { selectors?: string[] } = {}): P
     challenge: over.challenge ?? null,
     settled: over.settled ?? true,
     ...(over.path !== undefined && { path: over.path }),
-    ...(over.cookiesPresent !== undefined && { cookiesPresent: over.cookiesPresent }),
     hasSelector: async (s) => (over.selectors ?? []).includes(s),
   };
 }
@@ -231,71 +229,19 @@ describe('classifyPackProbe', () => {
     expect(samePlace(at('/feed/'), 'not a url', '/feed/')).toBe(false);
   });
 
-  it('cookies_present: every sign-in cookie there, a probe-path visit with no other signal on the pack domains', async () => {
-    const elsewhere = facts({
-      finalUrl: 'https://www.linkedin.com/somewhere',
-      cookiesPresent: true,
-    });
-    expect(await classifyPackProbe(redirectPack, elsewhere)).toMatchObject({
-      outcome: 'signed_in',
-      reason: 'cookies_present',
-    });
-    // Without every cookie, off the pack's domains, on a keeper visit, or an unsettled `either`
-    // probe: still no signal.
-    expect(
-      await classifyPackProbe(redirectPack, { ...elsewhere, cookiesPresent: false }),
-    ).toMatchObject({ outcome: 'inconclusive', reason: 'no_signal' });
-    expect(
-      await classifyPackProbe(redirectPack, { ...elsewhere, finalUrl: 'https://other.test/' }),
-    ).toMatchObject({ outcome: 'inconclusive', reason: 'no_signal' });
-    expect(await classifyPackProbe(redirectPack, { ...elsewhere, path: '/keep' })).toMatchObject({
-      outcome: 'inconclusive',
-      reason: 'no_signal',
-    });
-    expect(await classifyPackProbe(pack, { ...elsewhere, settled: false })).toMatchObject({
-      outcome: 'inconclusive',
-      reason: 'no_signal',
-    });
-    // Every stronger signal still wins: a signed-out redirect, the marker, an error page.
-    expect(
-      await classifyPackProbe(redirectPack, {
-        ...elsewhere,
-        finalUrl: 'https://www.linkedin.com/uas/login?x=1',
-      }),
-    ).toMatchObject({ outcome: 'signed_out', reason: 'redirect' });
-    const marked = SitePackV1.parse({
-      ...base,
-      signed_in: { ...redirectPack.signed_in, signed_out_marker: 'form#login' },
-    });
-    expect(
-      await classifyPackProbe(marked, facts({ ...elsewhere, selectors: ['form#login'] })),
-    ).toMatchObject({ outcome: 'signed_out', reason: 'marker' });
-    expect(await classifyPackProbe(redirectPack, { ...elsewhere, status: 404 })).toMatchObject({
-      outcome: 'inconclusive',
-      reason: 'http_404',
-    });
-  });
-
-  it('packCookiesAllPresent: every named cookie present and unexpired on the pack domains', () => {
-    const now = 1_700_000_000_000;
-    const jar = [
-      { name: 'li_at', domain: '.www.linkedin.com', expires: now / 1000 + 60 },
-      { name: 'liap', domain: '.linkedin.com', expires: -1 },
-      { name: 'IDE', domain: '.doubleclick.net', expires: now / 1000 + 60 },
-    ];
-    expect(packCookiesAllPresent(redirectPack, jar, now)).toBe(true);
-    expect(packCookiesAllPresent(redirectPack, jar.slice(1), now)).toBe(false);
-    expect(
-      packCookiesAllPresent(
-        redirectPack,
-        [
-          { ...jar[0], expires: now / 1000 - 1 } as (typeof jar)[number],
-          jar[1] as (typeof jar)[number],
-        ],
-        now,
-      ),
-    ).toBe(false);
-    expect(packCookiesAllPresent(SitePackV1.parse(base), jar, now)).toBe(false);
+  it('a landing elsewhere on the site stays “couldn’t tell”, never signed in (review #85 M1)', async () => {
+    // A server that invalidated the session keeps the cookies and may land anywhere not listed as
+    // signed out (LinkedIn's /, Google's re-auth page): only the probe path staying put counts.
+    for (const finalUrl of [
+      'https://www.linkedin.com/',
+      'https://www.linkedin.com/jobs/',
+      'https://www.linkedin.com/somewhere',
+    ]) {
+      expect(await classifyPackProbe(redirectPack, facts({ finalUrl }))).toMatchObject({
+        outcome: 'inconclusive',
+        reason: 'no_signal',
+      });
+    }
   });
 
   it('a selector read that throws counts as absent', async () => {

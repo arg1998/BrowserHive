@@ -312,3 +312,39 @@ export function clearDraft(): void {
   removeStorage(DRAFT_KEY, 'session');
   removeStorage(DRAFT_KEY);
 }
+
+/** The templates this tab's wizard created (`bh.templatesCreated`, this tab only; sign-out clears it). */
+export const CREATED_KEY = 'bh.templatesCreated';
+
+function createdIds(): string[] {
+  return (
+    readStorageJson(
+      CREATED_KEY,
+      (raw) => (Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : null),
+      'session',
+    ) ?? []
+  );
+}
+
+/** Remember that this tab's wizard created `templateId` (only such a template offers Cancel setup). */
+export function markCreatedHere(templateId: string): void {
+  writeStorageJson(
+    CREATED_KEY,
+    [...createdIds().filter((id) => id !== templateId), templateId].slice(-20),
+    'session',
+  );
+}
+
+/** True when this tab's wizard created `templateId`. */
+export function createdHere(templateId: string): boolean {
+  return createdIds().includes(templateId);
+}
+
+/** Forget a template this tab created (it was finished or deleted). */
+export function forgetCreated(templateId: string): void {
+  writeStorageJson(
+    CREATED_KEY,
+    createdIds().filter((id) => id !== templateId),
+    'session',
+  );
+}

@@ -7,8 +7,10 @@ import type {
 } from '@browserhive/contracts/http';
 import type { SessionPrincipal } from '../../domain/session/principal.ts';
 import {
+  jarExpiries,
   jarNames,
   learnedCookieNames,
+  packCookiesChanged,
   packCookiesPresent,
   unlistedDomains,
 } from '../../domain/templates/sign-ins.ts';
@@ -67,16 +69,21 @@ export class TemplateRecordingService {
   readonly #log: Logger;
   /** Cookie names (`<site>\t<name>`) when each template's recording window opened. */
   readonly #baselines = new Map<string, ReadonlySet<string>>();
-  /** Records a detected sign-in as a probe row (attached once the health service exists). */
-  #health: Pick<TemplateHealthService, 'record'> | null = null;
+  /** The same cookies' expiries (`<site>\t<name>` → expires), to tell a sign-in made in the window. */
+  readonly #expiries = new Map<string, ReadonlyMap<string, number>>();
+  /** Records a detected sign-in and probes stale cookies (attached once the health service exists). */
+  #health: Pick<TemplateHealthService, 'record' | 'probe'> | null = null;
 
   constructor(deps: TemplateRecordingDeps) {
     this.#deps = deps;
     this.#log = deps.logger.child({ module: 'templates.recording' });
   }
 
-  /** Attaches the health service: a detected sign-in becomes a probe row (`trigger: 'recording'`). */
-  attachHealth(health: Pick<TemplateHealthService, 'record'>): void {
+  /**
+   * Attaches the health service: a detected sign-in becomes a probe row (`trigger: 'recording'`),
+   * and at Finish a pack site whose cookies were already there is probed.
+   */
+  attachHealth(health: Pick<TemplateHealthService, 'record' | 'probe'>): void {
     this.#health = health;
   }
 
@@ -97,22 +104,32 @@ export class TemplateRecordingService {
 
   /**
    * Checks the jar of a running browser for every site of the template that is not signed in and
-   * whose pack names sign-in cookies: when they are all there the site reads signed in (reason
+   * whose pack names sign-in cookies: when they are all there and at least one of them appeared or
+   * was set again since the window opened, the site reads signed in (reason
    * `detected_by_pack_cookies`, a probe row with trigger `recording`), without **I'm signed in**.
-   * Returns the sites as they are now. A generic site still needs **I'm signed in**.
+   * Cookies that were all there unchanged when the window opened prove nothing (a server that
+   * invalidated the session keeps them, review #85 H2): with `probeStale` (Finish) such a site gets
+   * the pack's navigation probe instead; the tick leaves it. Returns the sites as they are now. A
+   * generic site still needs **I'm signed in**.
    */
-  async detect(templateId: string): Promise<readonly TemplateSiteRecord[]> {
+  async detect(
+    templateId: string,
+    options: { readonly probeStale?: boolean } = {},
+  ): Promise<readonly TemplateSiteRecord[]> {
     const { template, sites } = await this.#load(templateId);
     const jar = await this.#deps.ops.jar(templateId);
     if (jar === null) return sites;
     const now = this.#deps.clock.now();
-    const found = sites.filter((site) => {
-      if (site.health.state === 'signed_in') return false;
+    const baseline = this.#expiries.get(templateId);
+    const fresh: TemplateSiteRecord[] = [];
+    const stale: TemplateSiteRecord[] = [];
+    for (const site of sites) {
+      if (site.health.state === 'signed_in') continue;
       const pack = packSignInById(this.#deps.packs, site.packId);
-      return pack !== null && packCookiesPresent(pack, jar, now);
-    });
-    if (found.length === 0) return sites;
-    for (const site of found) {
+      if (pack === null || !packCookiesPresent(pack, jar, now)) continue;
+      (packCookiesChanged(pack, baseline, jar) ? fresh : stale).push(site);
+    }
+    for (const site of fresh) {
       const verdict = {
         outcome: 'signed_in',
         reason: DETECTED_BY_PACK_COOKIES,
@@ -127,7 +144,21 @@ export class TemplateRecordingService {
         });
       }
     }
-    this.#log.info('sign-in detected', { templateId, sites: found.map((s) => s.siteId) });
+    const probed = options.probeStale === true && stale.length > 0 && this.#health !== null;
+    if (probed) {
+      try {
+        await this.#health?.probe(templateId, {
+          trigger: 'recording',
+          siteIds: stale.map((s) => s.siteId),
+          start: 'never',
+        });
+      } catch (err) {
+        this.#log.warn('sign-in probe failed', { templateId, err: serializeError(err) });
+      }
+    }
+    if (fresh.length === 0 && !probed) return sites;
+    if (fresh.length > 0)
+      this.#log.info('sign-in detected', { templateId, sites: fresh.map((s) => s.siteId) });
     this.#deps.changed?.(templateId);
     return await this.#deps.repos.templateSites.list(templateId);
   }
@@ -151,6 +182,7 @@ export class TemplateRecordingService {
     if (!this.#baselines.has(templateId)) {
       const jar = (await this.#deps.ops.jar(templateId)) ?? [];
       this.#baselines.set(templateId, jarNames(jar));
+      this.#expiries.set(templateId, jarExpiries(jar));
       await this.#audit(principal.subject, 'template.record.start', templateId, {
         session_id: session.id,
         sites: [...siteIds],
@@ -222,7 +254,7 @@ export class TemplateRecordingService {
     }
     const removals = this.#removals(loaded.sites, request.removeSignIns ?? []);
     // A pack site whose sign-in cookies are in the jar is signed in, pressed or not (spec 13 §7.1).
-    const sites = await this.detect(templateId);
+    const sites = await this.detect(templateId, { probeStale: true });
     // The window's pages close first, so none of them writes a removed sign-in back.
     await this.#deps.ops.closeRecording(templateId);
     const removed: RemovedSignIn[] = [];
@@ -256,6 +288,7 @@ export class TemplateRecordingService {
       return updated;
     });
     this.#baselines.delete(templateId);
+    this.#expiries.delete(templateId);
     const version = await this.#version(templateId, by);
     this.#log.info('recording finished', { templateId, removed: removals.length, version });
     this.#deps.changed?.(templateId);
@@ -272,6 +305,7 @@ export class TemplateRecordingService {
     await this.#load(templateId);
     await this.#deps.ops.closeRecording(templateId);
     this.#baselines.delete(templateId);
+    this.#expiries.delete(templateId);
     await this.#audit(by, 'template.record.cancel', templateId, {});
   }
 

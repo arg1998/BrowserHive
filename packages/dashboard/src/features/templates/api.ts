@@ -81,6 +81,20 @@ export function useTemplateMutations(id: string) {
     toast.fromError(toAppError(error));
   };
   return {
+    /**
+     * The wizard's **Cancel setup**: deletes the template only while it is still being set up
+     * (`if_status=recording`, 409 otherwise) and never closes sessions (`TEMPLATE_IN_USE`).
+     */
+    cancelSetup: useMutation({
+      mutationFn: () =>
+        api.deleteTemplate({ params, query: { force: false, if_status: 'recording' } }),
+      onError,
+      onSuccess: () => {
+        qc.removeQueries({ queryKey: keys.templates.detail(id) });
+        void qc.invalidateQueries({ queryKey: keys.templates.lists() });
+        void qc.invalidateQueries({ queryKey: keys.templates.overview() });
+      },
+    }),
     remove: useMutation({
       mutationFn: (force: boolean) => api.deleteTemplate({ params, query: { force } }),
       onError,

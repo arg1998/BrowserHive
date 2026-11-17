@@ -81,7 +81,6 @@ export const TRACKER_DOMAINS: ReadonlySet<string> = new Set([
   'everesttech.net',
   'bidswitch.net',
   'clarity.ms',
-  'bing.com',
   'hotjar.com',
   'segment.io',
   'amazon-adsystem.com',
@@ -127,13 +126,19 @@ function isSignInCookie(cookie: JarCookie): boolean {
   return cookie.httpOnly && cookie.secure && cookie.expires > 0 && !isAnalyticsCookie(cookie.name);
 }
 
+/** A pack's domains and sign-in `cookie_names`. */
+export interface PackCookies {
+  readonly domains: readonly string[];
+  readonly cookieNames: readonly string[];
+}
+
 /**
  * True when every one of a pack's sign-in `cookie_names` is in the jar, unexpired, on one of the
  * pack's domains (spec 13 §7.1: a pack site counts as signed in without **I'm signed in**).
  * `false` for a pack that names none.
  */
 export function packCookiesPresent(
-  pack: { readonly domains: readonly string[]; readonly cookieNames: readonly string[] },
+  pack: PackCookies,
   jar: readonly Pick<JarCookie, 'name' | 'domain' | 'expires'>[],
   now: number,
 ): boolean {
@@ -148,15 +153,41 @@ export function packCookiesPresent(
   return pack.cookieNames.every((name) => present.has(name));
 }
 
+/** Each cookie's expiry by `<registrable domain>\t<name>` (a window-open baseline; names only). */
+export function jarExpiries(
+  jar: readonly Pick<JarCookie, 'name' | 'domain' | 'expires'>[],
+): ReadonlyMap<string, number> {
+  return new Map(jar.map((c) => [`${cookieSite(c)}\t${c.name}`, c.expires]));
+}
+
+/**
+ * True when at least one of a pack's sign-in cookies appeared, or was set again with a new expiry,
+ * since `baseline` (the jar when the sign-in window opened): the operator signed in in the window
+ * (review #85 H2). Cookies that were all there unchanged prove nothing: a server that invalidated
+ * the session keeps them. `false` without a baseline.
+ */
+export function packCookiesChanged(
+  pack: PackCookies,
+  baseline: ReadonlyMap<string, number> | undefined,
+  jar: readonly Pick<JarCookie, 'name' | 'domain' | 'expires'>[],
+): boolean {
+  if (baseline === undefined) return false;
+  const domains = new Set(pack.domains);
+  return jar.some((c) => {
+    const site = cookieSite(c);
+    if (!domains.has(site) || !pack.cookieNames.includes(c.name)) return false;
+    const before = baseline.get(`${site}\t${c.name}`);
+    return before === undefined || before !== c.expires;
+  });
+}
+
 /** What deciding the unlisted sign-ins needs beyond the jar. */
 export interface UnlistedContext {
   /**
    * The sign-in `cookie_names` and domains of the pack that covers a registrable domain, or `null`
    * when no pack covers it (or the pack names no cookies).
    */
-  readonly packOf: (
-    domain: string,
-  ) => { readonly domains: readonly string[]; readonly cookieNames: readonly string[] } | null;
+  readonly packOf: (domain: string) => PackCookies | null;
   /** Registrable domains a window of the browser opened as a page (main frame, not an embed). */
   readonly visited: ReadonlySet<string>;
   /** Now (epoch ms): an expired pack cookie is no sign-in. */
@@ -166,9 +197,10 @@ export interface UnlistedContext {
 /**
  * Registrable domains the jar is signed in to that are not sites of the template (spec 13 §2.3),
  * sorted: a domain a pack covers when every one of the pack's sign-in cookies is present (and the
- * domain holds one of them, and no domain of that pack is a site of the template); any other
- * domain when a window opened it as a page and it holds a persistent `HttpOnly` and `Secure` cookie
- * that is not an ad or analytics name. Ad and tracking domains ({@link TRACKER_DOMAINS}) and
+ * domain holds one of them); any domain (a pack's too) when a window opened it as a page (a
+ * top-level request or redirect hop, never an embedded frame) and it holds a persistent `HttpOnly`
+ * and `Secure` cookie that is not an ad or analytics name. A domain of a pack whose site is a site
+ * of the template is never listed. Ad and tracking domains ({@link TRACKER_DOMAINS}) and
  * domains with no registrable domain (IPs, `localhost`) are left out: the cookies embedded frames
  * and pixels of a site's pages leave are not sign-ins the operator made.
  */
@@ -187,13 +219,15 @@ export function unlistedDomains(
   const found: string[] = [];
   for (const [domain, cookies] of byDomain) {
     const pack = context.packOf(domain);
-    const signedIn =
-      pack !== null
-        ? // A pack's other domain (licdn.com of linkedin.com) is the site's own when a site uses it.
-          !pack.domains.some((d) => own.has(d)) &&
-          cookies.some((c) => pack.cookieNames.includes(c.name)) &&
-          packCookiesPresent(pack, jar, context.now)
-        : context.visited.has(domain) && cookies.some(isSignInCookie);
+    // A pack's other domain (licdn.com of linkedin.com) is the site's own when a site uses it.
+    if (pack?.domains.some((d) => own.has(d)) === true) continue;
+    const byPack =
+      pack !== null &&
+      cookies.some((c) => pack.cookieNames.includes(c.name)) &&
+      packCookiesPresent(pack, jar, context.now);
+    // Without the pack's full set (or without a pack), a page the window opened that holds a
+    // sign-in-shaped cookie still counts (review #85 L1).
+    const signedIn = byPack || (context.visited.has(domain) && cookies.some(isSignInCookie));
     if (signedIn) found.push(domain);
   }
   return found.sort();

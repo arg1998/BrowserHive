@@ -199,9 +199,37 @@ const OWNER_JAR = () => [
 describe('a pack site signed in without I’m signed in (owner report 2026-11-17)', () => {
   const LI = 'tp-linkedin01';
   let recorded: { siteId: string; verdict: ProbeVerdict; trigger: string }[];
+  let probed: { siteIds: readonly string[] | undefined; trigger: string }[];
+  /** What the fake navigation probe answers for a probed site. */
+  let probeAnswer: ProbeVerdict;
+
+  /** A health service that records verdicts and answers probes with `probeAnswer`. */
+  function attachFakeHealth(): void {
+    const apply = async (templateId: string, siteId: string, verdict: ProbeVerdict) => {
+      const [row] = (await repos.templateSites.list(templateId)).filter((s) => s.siteId === siteId);
+      if (row !== undefined)
+        await repos.templateSites.upsert({
+          ...row,
+          health: { ...row.health, state: verdict.outcome, reason: verdict.reason },
+        });
+    };
+    service.attachHealth({
+      record: async (template: TemplateRecord, siteId: string, verdict: ProbeVerdict, trigger) => {
+        recorded.push({ siteId, verdict, trigger });
+        await apply(template.templateId, siteId, verdict);
+      },
+      probe: async (templateId, options) => {
+        probed.push({ siteIds: options.siteIds, trigger: options.trigger });
+        for (const siteId of options.siteIds ?? []) await apply(templateId, siteId, probeAnswer);
+        return [];
+      },
+    });
+  }
 
   beforeEach(async () => {
     recorded = [];
+    probed = [];
+    probeAnswer = { outcome: 'signed_out', reason: 'redirect', finalUrl: null };
     const bundle = { ...repos, operatorActions: actions };
     service = new TemplateRecordingService({
       repos: bundle,
@@ -246,19 +274,7 @@ describe('a pack site signed in without I’m signed in (owner report 2026-11-17
   });
 
   it('while the window is open, the tick records the detection as a probe row (trigger recording)', async () => {
-    service.attachHealth({
-      record: async (template: TemplateRecord, siteId: string, verdict: ProbeVerdict, trigger) => {
-        recorded.push({ siteId, verdict, trigger });
-        const [row] = (await repos.templateSites.list(template.templateId)).filter(
-          (s) => s.siteId === siteId,
-        );
-        if (row !== undefined)
-          await repos.templateSites.upsert({
-            ...row,
-            health: { ...row.health, state: 'signed_in', reason: verdict.reason },
-          });
-      },
-    });
+    attachFakeHealth();
     ops.jarCookies = [];
     await service.start(LI, {}, OPERATOR);
     ops.recording = { id: 'recording-0000aaaa' } as never;
@@ -289,5 +305,68 @@ describe('a pack site signed in without I’m signed in (owner report 2026-11-17
       fakeCookie('.google.com', 'HSID'),
     ];
     expect(await service.unlisted(LI, await repos.templateSites.list(LI))).toEqual(['google.com']);
+  });
+
+  it('cookies already there when the window opened prove nothing: no tick flips the site (review #85 H2)', async () => {
+    attachFakeHealth();
+    // Signing in again to a site whose server invalidated the session: the cookies are still there.
+    ops.jarCookies = OWNER_JAR();
+    await service.start(LI, {}, OPERATOR);
+    ops.recording = { id: 'recording-0000aaaa' } as never;
+    await service.tick();
+    await service.tick();
+    expect(recorded).toEqual([]);
+    const [site] = await repos.templateSites.list(LI);
+    expect(site?.health.state).toBe('signed_out');
+  });
+
+  it('at Finish, stale cookies get the navigation probe instead (here: signed out)', async () => {
+    attachFakeHealth();
+    ops.jarCookies = OWNER_JAR();
+    await service.start(LI, {}, OPERATOR);
+    const done = await service.finish(LI, {}, 'operator');
+    expect(recorded).toEqual([]);
+    expect(probed).toEqual([{ siteIds: ['linkedin.com'], trigger: 'recording' }]);
+    expect(done.template.sites[0]?.health.state).toBe('signed_out');
+  });
+
+  it('at Finish, a probe that finds the site signed in keeps it signed in', async () => {
+    attachFakeHealth();
+    probeAnswer = { outcome: 'signed_in', reason: 'no_redirect', finalUrl: null };
+    ops.jarCookies = OWNER_JAR();
+    await service.start(LI, {}, OPERATOR);
+    const done = await service.finish(LI, {}, 'operator');
+    expect(done.template.sites[0]?.health).toMatchObject({
+      state: 'signed_in',
+      reason: 'no_redirect',
+    });
+  });
+
+  it('a sign-in cookie set again in the window (a new expiry) counts as a sign-in', async () => {
+    attachFakeHealth();
+    ops.jarCookies = OWNER_JAR();
+    await service.start(LI, {}, OPERATOR);
+    ops.recording = { id: 'recording-0000aaaa' } as never;
+    ops.jarCookies = OWNER_JAR().map((c) =>
+      c.name === 'li_at' ? { ...c, expires: c.expires + 600 } : c,
+    );
+    await service.tick();
+    expect(recorded.map((r) => r.verdict.reason)).toEqual([DETECTED_BY_PACK_COOKIES]);
+  });
+
+  it('signing in again on a ready template: stale cookies stay signed out until a real sign-in', async () => {
+    attachFakeHealth();
+    await repos.templates.update(LI, { status: 'ready' });
+    ops.jarCookies = OWNER_JAR();
+    await service.start(LI, {}, OPERATOR);
+    ops.recording = { id: 'recording-0000aaaa' } as never;
+    await service.tick();
+    expect(recorded).toEqual([]);
+    // The operator signs in: LinkedIn replaces li_at.
+    ops.jarCookies = OWNER_JAR().map((c) =>
+      c.name === 'li_at' ? { ...c, expires: c.expires + 86_400 } : c,
+    );
+    await service.tick();
+    expect(recorded).toHaveLength(1);
   });
 });

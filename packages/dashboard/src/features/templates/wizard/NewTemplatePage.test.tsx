@@ -28,7 +28,7 @@ import {
 } from '../../../../test/helpers/render.tsx';
 import { RemoteOperatorBanner } from '../RemoteOperatorBanner.tsx';
 import { wizardSearch } from '../search.ts';
-import { DRAFT_KEY } from './draft.ts';
+import { CREATED_KEY, DRAFT_KEY } from './draft.ts';
 import { NewTemplatePage } from './NewTemplatePage.tsx';
 import { STEP_LABEL } from './StepRail.tsx';
 
@@ -145,6 +145,7 @@ const click = async (element: HTMLElement) => {
 
 beforeEach(() => {
   sessionStorage.removeItem(DRAFT_KEY);
+  sessionStorage.removeItem(CREATED_KEY);
   localStorage.removeItem(DRAFT_KEY);
 });
 
@@ -421,6 +422,7 @@ describe('NewTemplatePage Cancel and the draft', () => {
   });
 
   it('Cancel setup on the sign-in step deletes the template after a confirmation; axe clean', async () => {
+    sessionStorage.setItem(CREATED_KEY, JSON.stringify([ID]));
     const view = mount(`/templates/new?step=5&template=${ID}`, server({ existing: true }));
     const cancel = await screen.findByRole('button', { name: 'Cancel setup' });
     expect(screen.getByRole('button', { name: 'Finish later' })).toBeDefined();
@@ -440,10 +442,74 @@ describe('NewTemplatePage Cancel and the draft', () => {
     await waitFor(() => expect(view.router.state.location.pathname).toBe('/templates'));
     const del = view.requests.find((r) => r.method === 'DELETE');
     expect(del?.path).toBe(`/api/v1/templates/${ID}`);
-    expect(del?.query.get('force')).toBe('true');
+    // Only while it is still being set up, and never closing a session (review #85 M2).
+    expect(del?.query.get('force')).toBe('false');
+    expect(del?.query.get('if_status')).toBe('recording');
+    expect(JSON.parse(sessionStorage.getItem(CREATED_KEY) ?? '[]')).toEqual([]);
+  });
+
+  it('no Cancel setup for a template this tab did not create, or one that is disabled', async () => {
+    const first = mount(`/templates/new?step=5&template=${ID}`, server({ existing: true }));
+    await screen.findByRole('button', { name: 'Finish later' });
+    expect(screen.queryByRole('button', { name: 'Cancel setup' })).toBeNull();
+    first.unmount();
+
+    sessionStorage.setItem(CREATED_KEY, JSON.stringify([ID]));
+    const fake = server({ existing: true });
+    mount(`/templates/new?step=5&template=${ID}`, {
+      routes: {
+        ...fake.routes,
+        [`GET /templates/${ID}`]: templateDetail({ template_id: ID, status: 'disabled' }),
+      },
+    });
+    await screen.findByRole('button', { name: 'Finish later' });
+    expect(screen.queryByRole('button', { name: 'Cancel setup' })).toBeNull();
+  });
+
+  it('Cancel setup deletes nothing when another tab finished the template meanwhile', async () => {
+    sessionStorage.setItem(CREATED_KEY, JSON.stringify([ID]));
+    const fake = server({ existing: true });
+    let reads = 0;
+    const view = mount(`/templates/new?step=5&template=${ID}`, {
+      routes: {
+        ...fake.routes,
+        // The step loaded it being set up; by the time Cancel setup reads it again it is ready.
+        [`GET /templates/${ID}`]: () => {
+          reads += 1;
+          return templateDetail({
+            template_id: ID,
+            status: reads <= 1 ? 'recording' : 'ready',
+            sites: [templateSite('linkedin.com')],
+          });
+        },
+      },
+    });
+    await click(await screen.findByRole('button', { name: 'Cancel setup' }));
+    const dialog = await screen.findByRole('alertdialog', { name: /^Cancel setting up/ });
+    await click(within(dialog).getByRole('button', { name: 'Delete template' }));
+    expect(
+      (await screen.findAllByText('This template is no longer being set up')).length,
+    ).toBeGreaterThan(0);
+    expect(view.requests.some((r) => r.method === 'DELETE')).toBe(false);
+    expect(view.router.state.location.pathname).toBe('/templates/new');
+  });
+
+  it('a server refusal (finished elsewhere: 409) leaves the step as it is', async () => {
+    sessionStorage.setItem(CREATED_KEY, JSON.stringify([ID]));
+    const fake = server({ existing: true });
+    const view = mount(`/templates/new?step=5&template=${ID}`, {
+      routes: { ...fake.routes, [`DELETE /templates/${ID}`]: problem(409, 'CONFLICT') },
+    });
+    await click(await screen.findByRole('button', { name: 'Cancel setup' }));
+    const dialog = await screen.findByRole('alertdialog', { name: /^Cancel setting up/ });
+    await click(within(dialog).getByRole('button', { name: 'Delete template' }));
+    await waitFor(() => expect(view.requests.some((r) => r.method === 'DELETE')).toBe(true));
+    expect(view.router.state.location.pathname).toBe('/templates/new');
+    expect(screen.getByRole('button', { name: 'Cancel setup' })).toBeDefined();
   });
 
   it('a ready template offers no Cancel setup', async () => {
+    sessionStorage.setItem(CREATED_KEY, JSON.stringify([ID]));
     const fake = server({ existing: true });
     mount(`/templates/new?step=5&template=${ID}&again=1`, {
       routes: {

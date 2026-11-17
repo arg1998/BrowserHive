@@ -9,4 +9,9 @@ export interface TemplateFiles {
    * are removed, never followed). A missing directory is `0`.
    */
   removeTemplateDir(templateId: string): Promise<number>;
+  /**
+   * Registrable domains the template browser's windows opened as pages, kept across restarts
+   * (`page-sites.json`, names only; spec 13 §2.3). `[]` when none were recorded.
+   */
+  pageSites?(templateId: string): Promise<string[]>;
 }
