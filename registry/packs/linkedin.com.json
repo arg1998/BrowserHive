@@ -41,10 +41,26 @@
       "action": "block"
     },
     {
+      "id": "logout-uas-apex",
+      "kind": "logout",
+      "match": {
+        "url": "linkedin.com/uas/logout"
+      },
+      "action": "block"
+    },
+    {
       "id": "logout-m",
       "kind": "logout",
       "match": {
         "url": "www.linkedin.com/m/logout"
+      },
+      "action": "block"
+    },
+    {
+      "id": "logout-m-apex",
+      "kind": "logout",
+      "match": {
+        "url": "linkedin.com/m/logout"
       },
       "action": "block"
     },

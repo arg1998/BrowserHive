@@ -28,6 +28,33 @@
   },
   "guards": [
     {
+      "id": "app-credentials",
+      "kind": "credential",
+      "match": {
+        "url": "www.reddit.com/prefs/apps"
+      },
+      "action": "block"
+    },
+    {
+      "id": "app-credentials-old",
+      "kind": "credential",
+      "match": {
+        "url": "old.reddit.com/prefs/apps"
+      },
+      "action": "block"
+    },
+    {
+      "id": "oauth-approve",
+      "kind": "credential",
+      "match": {
+        "url": "www.reddit.com/api/v1/authorize*",
+        "methods": [
+          "POST"
+        ]
+      },
+      "action": "block"
+    },
+    {
       "id": "account-settings-writes",
       "kind": "account",
       "match": {
@@ -69,9 +96,19 @@
   },
   "challenges": [
     {
-      "id": "network-block",
+      "id": "network-block-probe",
       "kind": "rejected",
       "match": {
+        "url": "www.reddit.com/settings/account*",
+        "text": "You've been blocked by network security"
+      },
+      "action": "attention"
+    },
+    {
+      "id": "network-block-login",
+      "kind": "rejected",
+      "match": {
+        "url": "www.reddit.com/login*",
         "text": "You've been blocked by network security"
       },
       "action": "attention"
@@ -92,6 +129,10 @@
   "sources": [
     {
       "url": "https://redditinc.com/policies/user-agreement",
+      "kind": "official"
+    },
+    {
+      "url": "https://github.com/reddit-archive/reddit/wiki/OAuth2",
       "kind": "official"
     },
     {

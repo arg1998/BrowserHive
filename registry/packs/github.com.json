@@ -101,6 +101,38 @@
       "action": "block"
     },
     {
+      "id": "oauth-app-secrets",
+      "kind": "credential",
+      "match": {
+        "url": "github.com/settings/developers"
+      },
+      "action": "block"
+    },
+    {
+      "id": "github-app-keys",
+      "kind": "credential",
+      "match": {
+        "url": "github.com/settings/apps"
+      },
+      "action": "block"
+    },
+    {
+      "id": "recovery-codes",
+      "kind": "credential",
+      "match": {
+        "url": "github.com/settings/auth"
+      },
+      "action": "block"
+    },
+    {
+      "id": "two-factor",
+      "kind": "credential",
+      "match": {
+        "url": "github.com/settings/two_factor_authentication"
+      },
+      "action": "block"
+    },
+    {
       "id": "sessions",
       "kind": "account",
       "match": {

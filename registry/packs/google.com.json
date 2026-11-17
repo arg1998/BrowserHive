@@ -50,7 +50,15 @@
       "id": "oauth-consent",
       "kind": "credential",
       "match": {
-        "url": "accounts.google.com/signin/oauth/*consent*"
+        "url": "accounts.google.com/signin/oauth/v?/consent*"
+      },
+      "action": "block"
+    },
+    {
+      "id": "oauth-consent-unversioned",
+      "kind": "credential",
+      "match": {
+        "url": "accounts.google.com/signin/oauth/consent*"
       },
       "action": "block"
     },

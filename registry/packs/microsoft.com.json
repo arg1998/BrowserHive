@@ -48,7 +48,7 @@
       "id": "admin-consent",
       "kind": "credential",
       "match": {
-        "url": "login.microsoftonline.com/*adminconsent*"
+        "url": "login.microsoftonline.com/*/adminconsent"
       },
       "action": "block"
     },
