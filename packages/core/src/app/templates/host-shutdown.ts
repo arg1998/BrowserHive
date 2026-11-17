@@ -5,7 +5,11 @@ import { settlesWithin } from '../../kernel/deadline.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { Clock } from '../../ports/clock.ts';
 import type { Logger } from '../../ports/logger.ts';
-import type { TemplateRecord, TemplateRepository } from '../../ports/persistence/index.ts';
+import type {
+  ObservedIdentityRecord,
+  TemplateRecord,
+  TemplateRepository,
+} from '../../ports/persistence/index.ts';
 import type { TemplateHost } from '../../ports/template-host.ts';
 import type { HostLifecycle } from './host-lifecycle.ts';
 import { observeStart } from './host-spec.ts';
@@ -74,15 +78,29 @@ export class IdentityObserver {
   started(template: TemplateRecord, host: TemplateHost): void {
     const id = template.templateId;
     const seen = observeStart(template, host, this.#deps.clock.now());
+    const observed = template.identityObserved;
     if (seen?.kind === 'drift') {
       this.#deps.log.warn('identity drift', { templateId: id, from: seen.from, to: seen.to });
       this.#drift.set(id, { from: seen.from, to: seen.to });
       this.#deps.changed(null, id);
+      // Kept with the row so a restart still shows it (deferred D23).
+      if (observed !== null && observed.drift?.to !== seen.to) {
+        const drift = { from: seen.from, to: seen.to, at: this.#deps.clock.now() };
+        this.#save(id, { ...observed, drift });
+      }
       return;
     }
     if (this.#drift.delete(id)) this.#deps.changed(null, id);
+    if (observed?.drift !== undefined && seen === null) {
+      const { drift: _cleared, ...rest } = observed;
+      this.#save(id, rest);
+    }
     if (seen?.kind !== 'record') return;
-    this.#deps.templates.update(id, { identityObserved: seen.record }).then(
+    this.#save(id, seen.record);
+  }
+
+  #save(id: string, identityObserved: ObservedIdentityRecord): void {
+    this.#deps.templates.update(id, { identityObserved }).then(
       (updated) => this.#deps.changed(updated, id),
       (err: unknown) =>
         this.#deps.log.warn('observed identity unsaved', { err: serializeError(err) }),

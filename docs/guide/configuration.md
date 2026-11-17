@@ -178,6 +178,7 @@ These keys apply to every [session template](templates.md). What belongs to one 
 |---|---|---|
 | [`templates`](../reference/configuration.md#templates) | `true` | `false` turns templates off: `list_templates` answers `TOOL_NOT_AVAILABLE`, a launch with `template` answers `TEMPLATE_NOT_FOUND`, and no template browser starts |
 | [`templateHostIdleTimeout`](../reference/configuration.md#templateHostIdleTimeout) | `1h` | stop a template's browser after this long with no session; `0` = never |
+| `templateHealthInterval` | `6h` | how often a new template's sites are [checked](templates.md#health-checks) (30 minutes to 7 days); each template keeps its own `policy.health_interval_ms`. A check of a stopped template starts its browser briefly |
 | [`templateMaxPagesPerHost`](../reference/configuration.md#templateMaxPagesPerHost) | `40` | agent pages per template browser (2 to 200); each session may hold `max(2, floor(value / cap))` |
 | [`templateRecycleAfter`](../reference/configuration.md#templateRecycleAfter) | `24h` | restart a template's browser after this age (at least `1h`), once its sessions finish |
 | [`templateDrainTimeout`](../reference/configuration.md#templateDrainTimeout) | `15m` | how long such a restart, or a restore, waits for sessions before closing them (`1m` to `2h`) |

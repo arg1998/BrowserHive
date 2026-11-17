@@ -1,5 +1,5 @@
 /** @module cli/invocation — `CliPlan`: the pure decision `planCli` reaches from argv before any side effect (spec 09 §3.3) */
-import type { Channel } from '@browserhive/contracts/enums';
+import type { Channel, TemplateReloginMethod } from '@browserhive/contracts/enums';
 import type { TemplateInput } from '@browserhive/contracts/http';
 import type {
   PreviewSample,
@@ -185,6 +185,22 @@ export type Invocation =
     } & TemplateTarget)
   | ({ readonly command: 'templates-disable' } & TemplateTarget)
   | ({ readonly command: 'templates-enable' } & TemplateTarget)
+  | ({
+      readonly command: 'templates-login';
+      /** `--site`: the site to sign in to again (a registrable domain, lower-cased). */
+      readonly site: string;
+      /** `--method`: a window on the server's machine (default), or a fill with the linked vault binding. */
+      readonly method: TemplateReloginMethod;
+      /** `--timeout` in milliseconds (default 30 min): how long the command waits. */
+      readonly timeoutMs: number;
+      /** `--letAgentsContinue`: do not pause the template's agents while the window is open. */
+      readonly letAgentsContinue: boolean;
+    } & TemplateTarget)
+  | ({
+      readonly command: 'templates-probe';
+      /** `--site`: check only this site; `null` checks every enabled site. */
+      readonly site: string | null;
+    } & TemplateTarget)
   | ({
       readonly command: 'templates-rekey';
       /** The variable that holds the old key (never the key itself). */

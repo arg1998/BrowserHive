@@ -151,6 +151,54 @@ A confirmation that nobody answers within `--attentionTimeout` (default 6 h) is 
 
 Every fill and every rejected listing writes one row to the **Vault log**: time, entry, result, origin check, whether `evaluate` was enabled, session, page URL and the reason. A fill refused by a harness list says `harness_not_allowed`, with the session's harness, its declared name and whether the binding or the folder refused it. A fill refused with `password_target_invalid` records which field (`username` or `password`), what was wrong (`not_password_input`, `not_text_input`, `multiple_matches`, `no_match`, `hidden`, `disabled`, `readonly`, or `unverifiable` when the page could not be inspected) and whether it was caught before the fetch (`pre_fetch`) or just before typing (`pre_fill`). It never contains credentials.
 
+## Signing template sites in again
+
+Agents cannot use the vault in [session template](templates.md) sessions: a fill there would sign in every session of the template. BrowserHive itself can, though: when a template's site is signed out, it can fill a vault login into the site's sign-in page in a background window of the template's browser, on the machine running BrowserHive. This is **auto-relogin** ([the other ways to sign in again](templates.md#signing-in-again)). It suits sites with a plain username-and-password form; a site that asks for a code or a security key needs you in a [window](templates.md#in-a-window).
+
+### Link a login to a site
+
+On the template page, link a binding to the site, or call:
+
+```bash
+curl -X PUT http://127.0.0.1:9876/api/v1/templates/tp-…/sites/linkedin.com/relogin \
+  -H "Authorization: Bearer $BH_API_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"vault_handle":"work.linkedin","auto_relogin":true,"allow_template":true,
+       "form":{"path":"/login","username":"#username","password":"#password","submit":"button[type=submit]"}}'
+```
+
+It needs the scopes `templates:login` and `vault:write`.
+
+| Field | Meaning |
+|---|---|
+| `vault_handle` | The binding's handle. `null` unlinks the login and turns auto-relogin off. |
+| `auto_relogin` | Sign the site in again by itself when a check finds it signed out. Off: only when you ask, from the template page or with `browserhive templates login <name> --site <site> --method vault`. |
+| `form` | Where the sign-in form is. Until site packs describe sites, a template site needs it: `path` (the sign-in page on the site, default `/`), `username` and `password` (CSS selectors), `submit` (the sign-in button) and `next` (the button between the username and password steps of a two-step form). |
+| `allow_template` | **Allow this template**: adds `template:<template_id>` to the binding's authorized principals, nothing else. This **widens who can use the credential** (to BrowserHive's own sign-in sessions of that template, never an agent's), so the dashboard asks first. |
+
+The answer says whether the binding lets the template fill (`binding_allows_template`) and, when it does not, why (`binding_problems`): `binding_not_found`, `principals_open`, `principal_not_listed` or `harness_list`.
+
+### The same rules as any fill
+
+Linking a login does not authorize anything by itself. The fill runs as the principal `template:<template_id>`, in a BrowserHive session of the template (slug `relogin`) with no harness, through every rule of a [binding](#bindings):
+
+- **The principal must be listed by name.** A binding whose authorized principals are empty (any principal) does not count (`principals_open`): list `template:<template_id>`, which **Allow this template** does.
+- **The session.** A binding's session rule (slug globs or all sessions) is met by the template's own re-login session: BrowserHive keys it on the session being a maintenance session of that template, never on its slug, so no agent session named `relogin` gains anything. `template:<template_id>` is a reserved subject: no token can be it.
+- **No harness list.** A template fill has no harness, so a binding (or its folder) with a [harness list](#harness-restrictions) refuses it.
+- **Origins and fields.** The sign-in page must be on the binding's allowed origins, and the password goes only into a password input ([what the agent does](#5-what-the-agent-does)).
+- **Confirmation.** With `dashboard_confirm`, the fill waits for you to approve it like any [confirmation](#6-confirmations).
+
+A refusal fails the re-login with the reason (for example `not_authorized`) on the template page and as a `template.relogin_failed` [notification](notifications.md#template-sign-ins).
+
+### When it runs
+
+- With `auto_relogin` on, a check that finds the site signed out starts one fill. A "couldn't tell" result never does.
+- **One attempt per sign-out.** If the site is signed out again within 24 hours of an automatic attempt, BrowserHive does not try again: it sends `template.relogin_failed` and leaves the site to you, because signing in again and again is how accounts get locked.
+- On success, the site is checked, a `relogin` version is saved and the sign-out notification resolves.
+
+### What is recorded
+
+Each fill writes one row to the [Vault log](#7-audit), on the re-login's own BrowserHive session (owned by the template's owner), with `trigger: auto_relogin` and the principal that linked the binding. Like every row, it never contains the credential.
+
 ## Hardening checklist
 
 - Prefer `manual` folders and narrow origins.

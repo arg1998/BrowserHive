@@ -9,7 +9,7 @@ import type { IdGenerator } from '../../ports/id-generator.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type { Repositories, TemplateRecord } from '../../ports/persistence/index.ts';
 import type { JsonObject } from '../../ports/persistence/json.ts';
-import type { TemplateHostOps } from '../../ports/template-runtime.ts';
+import type { TemplateHostOps, TemplateOperationHold } from '../../ports/template-runtime.ts';
 import type { StateSlot, TemplateState } from '../../ports/template-state.ts';
 import type { DomainEvents } from '../events/catalog.ts';
 import { busy } from './host-operations.ts';
@@ -19,6 +19,15 @@ import type { TemplateStateService } from './template-state.ts';
 
 /** Operations kept for `GET /templates/operations/{id}` (oldest finished ones go first). */
 const MAX_OPERATIONS = 200;
+
+/**
+ * Overall deadline of one restore or seed (review #79 L-3, D25): past it the operation fails, the
+ * browser (whose state may be half applied) is stopped without a checkpoint, and the hold released.
+ */
+export const TEMPLATE_OPERATION_DEADLINE_MS = 10 * 60_000;
+
+/** A restore or seed past its deadline (the operation's `error.code`). */
+export const OPERATION_TIMEOUT_CODE = 'WAIT_TIMEOUT';
 
 /** Collaborators of {@link TemplateOperations}. */
 export interface TemplateOperationsDeps {
@@ -31,6 +40,13 @@ export interface TemplateOperationsDeps {
   readonly bus?: EventPublisher<DomainEvents>;
   /** Called when a template's row or summary changed (the `template.changed` event). */
   readonly changed?: (templateId: string) => void;
+  /** {@link TEMPLATE_OPERATION_DEADLINE_MS} unless given (tests). */
+  readonly deadlineMs?: number;
+  /**
+   * Called after a restore or seed succeeded (fire and forget; what it throws is logged, never
+   * fails the operation): composition probes every site (spec 13 §3.12, §7.4).
+   */
+  readonly afterApply?: (templateId: string, kind: 'restore' | 'seed') => void;
 }
 
 /** `CONFLICT` with an operator-facing message. */
@@ -97,13 +113,13 @@ export class TemplateOperations {
         action: 'template.version.restore',
         details: { version: slot, force_close: options.forceClose },
       },
-      run: (token) =>
+      run: (token, signal) =>
         inTemplateSpan(
           'template.restore',
           { 'browserhive.template_id': templateId, 'browserhive.version': restoredFrom },
           async () => {
             const closed = await this.#deps.ops.drainForOperation(template, options.forceClose);
-            const version = await this.#apply(template, state, token, {
+            const version = await this.#apply(template, state, token, signal, {
               reason: 'restore',
               by: options.by,
               restoredFrom,
@@ -149,14 +165,14 @@ export class TemplateOperations {
         action: 'template.seed',
         details: { cookies: state.cookies.length, origins: state.origins.length },
       },
-      run: async (token) => {
+      run: async (token, signal) => {
         const closed = await this.#deps.ops.drainForOperation(template, true);
-        const version = await this.#apply(template, state, token, {
+        const version = await this.#apply(template, state, token, signal, {
           reason: 'import',
           by: options.by,
         });
         const current = await this.#deps.repos.templates.get(templateId);
-        if (current?.status === 'recording') {
+        if (current?.status === 'recording' && !signal.aborted) {
           await this.#deps.repos.templates.update(templateId, { status: 'ready' });
         }
         return { version, closed };
@@ -172,21 +188,29 @@ export class TemplateOperations {
     return template;
   }
 
-  /** Starts the browser for the holder, applies `state`, writes the version from what it holds. */
+  /**
+   * Starts the browser for the holder, applies `state`, writes the version from what it holds. A
+   * state applied after the deadline (`signal`) is never written as a version.
+   */
   async #apply(
     template: TemplateRecord,
     state: TemplateState,
     token: symbol,
+    signal: AbortSignal,
     request: Parameters<TemplateStateService['saveVersion']>[1],
   ): Promise<number | undefined> {
     // Re-checked after the drain, right before a browser starts (review #79 H-1).
     if ((await this.#deps.repos.templates.get(template.templateId)) === null) {
       throw notFoundForOperator(template.templateId);
     }
+    // Past the deadline the hold is gone: a late drain must not start a browser and apply a state.
+    if (signal.aborted) throw signal.reason;
     return await this.#deps.ops.withHost(
       template,
       async (host) => {
+        if (signal.aborted) throw signal.reason;
         await host.setStorageState(state);
+        if (signal.aborted) throw signal.reason;
         const version = await this.#deps.state.saveVersion(template.templateId, request);
         return version ?? undefined;
       },
@@ -202,6 +226,7 @@ export class TemplateOperations {
       readonly audit: { readonly action: string; readonly details: JsonObject };
       readonly run: (
         token: symbol,
+        signal: AbortSignal,
       ) => Promise<{ version: number | undefined; closed: readonly string[] }>;
     },
   ): Promise<{ readonly operation_id: string }> {
@@ -238,34 +263,98 @@ export class TemplateOperations {
       kind,
       operationId: op.operation_id,
     });
-    void work
-      .run(hold.token)
-      .then(
-        ({ version, closed }) =>
-          this.#put({
-            ...op,
-            state: 'done',
-            ...(version !== undefined && { version }),
-            closed_sessions: [...closed],
-            finished_at: this.#deps.clock.now(),
-          }),
-        (err: unknown) => {
-          this.#log.warn('template operation failed', {
-            templateId: template.templateId,
-            kind,
-            err: serializeError(err),
-          });
-          const error = isAppError(err)
-            ? { code: err.code, message: serializeError(err).message }
-            : { code: 'INTERNAL_ERROR', message: 'The operation failed; see the server log.' };
-          this.#put({ ...op, state: 'failed', error, finished_at: this.#deps.clock.now() });
-        },
-      )
-      .finally(() => {
-        hold.release();
-        this.#deps.changed?.(template.templateId);
-      });
+    void this.#run(template, op, work.run, hold);
     return { operation_id: op.operation_id };
+  }
+
+  /**
+   * Runs the work within the deadline and records how it ended. On a timeout the operation fails at
+   * once and the browser is stopped without a checkpoint before the hold is released, so no agent
+   * attaches to a half-applied state; the late work's outcome is ignored.
+   */
+  async #run(
+    template: TemplateRecord,
+    op: TemplateOperation,
+    run: (
+      token: symbol,
+      signal: AbortSignal,
+    ) => Promise<{ version: number | undefined; closed: readonly string[] }>,
+    hold: TemplateOperationHold,
+  ): Promise<void> {
+    const templateId = template.templateId;
+    const limit = this.#deps.deadlineMs ?? TEMPLATE_OPERATION_DEADLINE_MS;
+    const expired = new AbortController();
+    const timer = new AbortController();
+    const outcome = await Promise.race([
+      run(hold.token, expired.signal).then(
+        (value) => ({ kind: 'done' as const, ...value }),
+        (err: unknown) => ({ kind: 'failed' as const, err }),
+      ),
+      this.#deps.clock.sleep(limit, timer.signal).then(
+        () => ({ kind: 'timeout' as const }),
+        () => new Promise<never>(() => undefined),
+      ),
+    ]);
+    timer.abort();
+    try {
+      if (outcome.kind === 'done') {
+        this.#put({
+          ...op,
+          state: 'done',
+          ...(outcome.version !== undefined && { version: outcome.version }),
+          closed_sessions: [...outcome.closed],
+          finished_at: this.#deps.clock.now(),
+        });
+        this.#afterApply(templateId, op.kind);
+        return;
+      }
+      if (outcome.kind === 'failed') {
+        this.#log.warn('template operation failed', {
+          templateId,
+          kind: op.kind,
+          err: serializeError(outcome.err),
+        });
+        const err = outcome.err;
+        const error = isAppError(err)
+          ? { code: err.code, message: serializeError(err).message }
+          : { code: 'INTERNAL_ERROR', message: 'The operation failed; see the server log.' };
+        this.#put({ ...op, state: 'failed', error, finished_at: this.#deps.clock.now() });
+        return;
+      }
+      expired.abort(new Error(`template operation deadline of ${limit}ms exceeded`));
+      this.#log.warn('operation timed out', { templateId, kind: op.kind, limitMs: limit });
+      const minutes = Math.round(limit / 60_000);
+      const within = minutes >= 1 ? `${minutes} min` : `${limit} ms`;
+      this.#put({
+        ...op,
+        state: 'failed',
+        error: {
+          code: OPERATION_TIMEOUT_CODE,
+          message: `The ${op.kind} did not finish within ${within}; the browser was stopped and no version was written.`,
+        },
+        finished_at: this.#deps.clock.now(),
+      });
+      await this.#deps.ops.discardHost(template).catch((err: unknown) => {
+        this.#log.warn('host discard failed', {
+          templateId,
+          err: serializeError(err),
+        });
+      });
+    } finally {
+      hold.release();
+      this.#deps.changed?.(templateId);
+    }
+  }
+
+  /** Probes after a successful restore or seed (never fails the operation). */
+  #afterApply(templateId: string, kind: TemplateOperation['kind']): void {
+    const hook = this.#deps.afterApply;
+    if (hook === undefined) return;
+    try {
+      hook(templateId, kind);
+    } catch (err) {
+      this.#log.warn('after-apply hook failed', { templateId, kind, err: serializeError(err) });
+    }
   }
 
   #put(op: TemplateOperation): void {

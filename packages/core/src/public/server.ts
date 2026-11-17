@@ -35,6 +35,12 @@ export { PreferenceService } from '../app/preferences/preference-service.ts';
 export { LeaseSweeper } from '../app/sessions/lease-sweeper.ts';
 export { sessionDirLayout } from '../app/sessions/profile-dir.ts';
 export { SessionService } from '../app/sessions/session-service.ts';
+export { unavailableHealthFacade } from '../app/templates/health-facade.ts';
+export {
+  type TemplateHealthParts,
+  wireTemplateHealth,
+} from '../app/templates/health-wiring.ts';
+export { displayMissing } from '../app/templates/host-display.ts';
 export {
   RECORDING_SLUG,
   TemplateHostOperations,
@@ -44,6 +50,7 @@ export type {
   HostSupervisorConfig,
   HostSupervisorDeps,
 } from '../app/templates/host-supervisor-types.ts';
+export { reloginActionExecutor } from '../app/templates/relogin-executor.ts';
 export { reconcileTemplateState } from '../app/templates/state-reconcile.ts';
 export { TemplateActions } from '../app/templates/template-actions.ts';
 export { TemplateEditService } from '../app/templates/template-edit.ts';

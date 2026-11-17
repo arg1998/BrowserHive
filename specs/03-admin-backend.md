@@ -752,10 +752,13 @@ Producer (`app/notifications`) subscribes to the bus and writes every row to **o
 | `tool.called` with `ok=false` | `tool.errors` | problems · warn · open | type `error`, **grouped per session** (below) |
 | `system.degraded` (severity error) | `system.degraded` | system · error · open | type `system`, message, target `/system` |
 | `system.recovered` | revision | state `resolved` | as above |
-| template health, hosts, site-pack challenges and write confirmations, pending pack updates (spec 13 §8.6) | `template.signed_out`, `template.challenged`, `template.relogin_failed`, `template.host_failed`, `site_pack.write_confirm`, `site_pack.update_pending` | as listed in spec 13 §8.6 | as listed there |
+| site-pack write confirmations and pending pack updates (spec 13 §8.6, T3a/T4b) | `site_pack.write_confirm`, `site_pack.update_pending` | as listed in spec 13 §8.6 | as listed there |
 | `notification.channel.changed` to `broken` (internal) | `channel.broken` | system · error · final | type `system`, "Notification channel {name} is failing", target `/system`; **in-app only** (§9.4) |
 | the report scheduler, a channel's digest time (§9.7) | `digest.daily` / `digest.weekly` | reports · info · final | type `lifecycle`, "Daily digest · Tue 29 Sep", target `/overview?since=…&until=…`; stored read and dismissed; **addressed** to that channel |
 | the report scheduler, a crossing of a channel's anomaly check (§9.7) | `report.anomaly` | reports · warn (error while `degraded` or `capacity` is active) · open, later `resolved` | type `system`, "Something looks off: …", target `/overview`; stored read and dismissed; **addressed** to that channel |
+| `template.health` with a sign-in transition to `signed_out` / `challenged` (internal key, spec 13 §8.6, T2) | `template.signed_out` / `template.challenged` | needs-you · warn · open, `resolved` when every site of the identity provider is `signed_in` again | type `attention`, "<template>: <site> signed out", thread `template:<template_id>:<provider>`, target `/templates/<id>?site=<site>`; at most one open row per thread; act `template.relogin` (**Re-login on <machine>**, queues only, scope `templates:login`) |
+| `template.relogin` ending `failed` or `timed_out` (T2) | `template.relogin_failed` | problems · warn · final | type `error`, thread `template:<template_id>:<provider>`, target the template page |
+| `template.host` reaching `failed` (internal keys: names, previous state; T2) | `template.host_failed` | problems · error · open, `resolved` when the browser runs again | type `error`, thread `template-host:<template_id>`, target the template page |
 
 Reserved kinds without a producer yet: `session.finished`, `vault.filled` (wrap-ups · info). `test` (system · info) is produced only by the test send. The kind → category map is fixed in `contracts/notifications`; severity is set per producer.
 

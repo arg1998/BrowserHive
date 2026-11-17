@@ -6,6 +6,7 @@ import type { AppliedIdentity, ProxySpec } from '../../ports/browser-driver.ts';
 import type { ObservedIdentityRecord, TemplateRecord } from '../../ports/persistence/index.ts';
 import type { ProxyResolver } from '../../ports/proxy-resolver.ts';
 import type { TemplateHostSpec } from '../../ports/template-host.ts';
+import { assertDisplay } from './host-display.ts';
 
 /** A virtual session's window before the first recording sets one (spec 13 §2.2). */
 export const DEFAULT_TEMPLATE_WINDOW = Object.freeze({ width: 1280, height: 800 });
@@ -21,6 +22,11 @@ export interface HostSpecDeps {
   readonly selfOrigins: () => readonly string[];
   /** Chromium switches from the internal testing seam (spec 13 §14). */
   readonly testingArgs: readonly string[];
+  /**
+   * The OS BrowserHive runs on (`HostEnvironment.platform`): on `linux` a headed host needs
+   * `DISPLAY` or `WAYLAND_DISPLAY` in `env` (spec 13 §3.11, D29). Absent = no display check.
+   */
+  readonly platform?: string;
 }
 
 /** `<data-dir>/templates/<id>`. */
@@ -28,11 +34,17 @@ export function templateDir(dataDir: string, templateId: string): string {
   return join(dataDir, 'templates', templateId);
 }
 
-/** Builds the spec of one host start. */
+/**
+ * Builds the spec of one host start.
+ *
+ * @throws AppError `INTERNAL_ERROR` `ref: 'no_display'` for a headed template on Linux without a
+ *   display (the host becomes `failed`, spec 13 §3.11).
+ */
 export async function buildHostSpec(
   template: TemplateRecord,
   deps: HostSpecDeps,
 ): Promise<TemplateHostSpec> {
+  assertDisplay(template, deps.platform, deps.env);
   const dir = templateDir(deps.dataDir, template.templateId);
   const identity = template.identity;
   return {

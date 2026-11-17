@@ -150,11 +150,46 @@ describe('TemplateService.create', () => {
   it('derives fingerprint and humanize from the stealth level as sessions do', async () => {
     const max = await kit.service.create(input({ name: 'max-one', stealth: 'max' }), 'local');
     expect([max.fingerprint, max.humanize]).toEqual([true, false]);
-    const off = await kit.service.create(
-      input({ name: 'off-one', stealth: 'off', fingerprint: true, humanize: true }),
+    const standard = await kit.service.create(
+      input({ name: 'std-one', stealth: 'standard', humanize: true }),
       'local',
     );
-    expect([off.fingerprint, off.humanize]).toEqual([false, false]);
+    expect([standard.stealth, standard.fingerprint, standard.humanize]).toEqual([
+      'standard',
+      false,
+      true,
+    ]);
+  });
+
+  it('refuses stealth off (D6): templates run with stealth on', async () => {
+    const error = await refusal(kit.service.create(input({ stealth: 'off' }), 'local'));
+    expect(isAppError(error, 'VALIDATION_FAILED')).toBe(true);
+    if (isAppError(error, 'VALIDATION_FAILED')) {
+      expect(error.details.issues).toContainEqual({
+        path: 'stealth',
+        code: 'stealth_off',
+        message: "templates run with stealth on: use 'standard' or 'max'",
+      });
+    }
+    expect(await kit.repos.templates.count()).toBe(0);
+  });
+
+  it("takes the server's stealth by default, and standard when the server's is off", async () => {
+    const own = await kit.service.create(input({ name: 'own-one' }), 'local');
+    expect(own.stealth).toBe('standard');
+    kit = build({
+      defaults: { channel: 'chromium', stealth: 'max', fingerprint: true, humanize: false },
+    });
+    expect((await kit.service.create(input({ name: 'max-two' }), 'local')).stealth).toBe('max');
+    kit = build({
+      defaults: { channel: 'chromium', stealth: 'off', fingerprint: false, humanize: true },
+    });
+    const fromOff = await kit.service.create(input({ name: 'off-server' }), 'local');
+    expect([fromOff.stealth, fromOff.fingerprint, fromOff.humanize]).toEqual([
+      'standard',
+      false,
+      true,
+    ]);
   });
 
   it('stores a proxy without credentials, labelled by its host', async () => {

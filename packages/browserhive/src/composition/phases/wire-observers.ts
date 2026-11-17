@@ -50,11 +50,13 @@ function wireMetricsFor(ctx: BootContext, logger: Logger): () => void {
     repeat: createTimers(report).every,
     onError: report,
   });
+  const supervisor = domain.templateParts.supervisor;
   const unwire = wireMetrics(telemetry.instruments, domain.bus, {
     queue: storage.queue,
     analytics: storage.analytics,
     realtime: () => ctx.listeners?.realtime,
     browserMemory: () => sampler.latest(),
+    ...(supervisor !== null && { templateHosts: () => supervisor.states().values() }),
   });
   return () => {
     unwire();

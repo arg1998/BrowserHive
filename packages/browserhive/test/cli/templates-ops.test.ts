@@ -165,6 +165,7 @@ describe('templates host', () => {
                 parked_pages: 0,
                 sandboxed: true,
                 profile_secrets: false,
+                agents_paused: false,
               },
             },
           ]

@@ -1,11 +1,6 @@
 /** @module app/notifications/producers — the pure producer rules (spec 03 §9.1, D-16, D-32): bus event → notification draft (with its contract content) or a lifecycle revision of an existing thread, or null. */
 
-import type {
-  NotificationKind,
-  NotificationSeverity,
-  NotificationState,
-  NotificationType,
-} from '@browserhive/contracts/enums';
+import type { NotificationState } from '@browserhive/contracts/enums';
 import { ERROR_REGISTRY, isErrorCode } from '@browserhive/contracts/errors';
 import type { OperatorRequestRow } from '@browserhive/contracts/http';
 import { parseSessionId } from '@browserhive/contracts/ids';
@@ -19,72 +14,22 @@ import { assertNever } from '../../kernel/errors/app-error.ts';
 import { sanitizeUrl } from '../../kernel/url.ts';
 import type { DomainEvent } from '../../ports/event-bus.ts';
 import type { DomainEventName, DomainEvents } from '../events/catalog.ts';
+import { code, formatDuration, link, type MessageContent, text, time } from './message.ts';
+import type { NotificationDraft, ThreadRevision } from './producer-types.ts';
 import {
-  code,
-  formatDuration,
-  type LifecycleChange,
-  link,
-  type MessageContent,
-  text,
-  time,
-} from './message.ts';
+  hostFailedDraft,
+  hostRevision,
+  reloginFailedDraft,
+  signinDraft,
+  signinRevision,
+} from './producers-templates.ts';
 
-/** What a producer rule yields before persistence assigns id, principal and timestamps. */
-export interface NotificationDraft {
-  readonly type: NotificationType;
-  /** Contract kind (D-32); category follows from it. */
-  readonly kind: NotificationKind;
-  readonly severity: NotificationSeverity;
-  /** State of the first revision (`open` for requests and groups, `final` for one-shot facts). */
-  readonly state: NotificationState;
-  /** Conversation key (`attention:<request_id>`, `session:<id>`, `tool-errors:<session|none>`). */
-  readonly thread: string;
-  readonly title: string;
-  readonly body: string | null;
-  readonly sessionId: string | null;
-  /** Dashboard route to open on click. */
-  readonly target: string | null;
-  /** Id of the originating event/request (for de-duplication across reconnect replays). */
-  readonly sourceEventId: string | null;
-  /** Idempotency key (`att:<id>`, `closed:<id>:<at>`, `err:<event>`, `vault:<id>`). */
-  readonly dedupKey: string;
-  /** When set, occurrences fold into one open row of the group instead of new rows (spec 03 §9). */
-  readonly group?: NotificationGroup;
-  /** Blocks, actions and entities of the message for a row holding `count` occurrences (1 unless grouped). */
-  readonly content: (count: number) => MessageContent;
-  /**
-   * A screenshot this notification may carry (D-36): `live` captures the session's page now
-   * (attention, vault confirm: before the fill starts), `last` uses its last stored screenshot (a
-   * crash). Taken only when a channel wants it (spec 03 §9.5).
-   */
-  readonly image?: ImageRequest;
-}
-
-/** What screenshot a draft asks for. */
-export interface ImageRequest {
-  readonly sessionId: string;
-  readonly source: 'live' | 'last';
-  /** Alt text of the image block. */
-  readonly alt: string;
-  /** Dashboard page that shows the context (used where a channel cannot carry images). */
-  readonly path: string;
-}
-
-/** How a draft folds into an existing row. */
-export interface NotificationGroup {
-  /** Group identity within one inbox (`tool-errors:<session_id>`). */
-  readonly key: string;
-  /** Title of the row once it holds `count` occurrences. */
-  readonly title: (count: number) => string;
-}
-
-/** A lifecycle revision of the notification that owns `thread` (spec 03 §9.1). */
-export interface ThreadRevision {
-  readonly thread: string;
-  readonly change: LifecycleChange;
-  /** Idempotency key of the revision (`att-res:<id>`). */
-  readonly dedupKey: string;
-}
+export type {
+  ImageRequest,
+  NotificationDraft,
+  NotificationGroup,
+  ThreadRevision,
+} from './producer-types.ts';
 
 /** A group row stops growing once it has been idle this long (a new failure starts a new row). */
 export const NOTIFICATION_GROUP_IDLE_MS = 5 * 60_000;
@@ -119,6 +64,9 @@ export const PRODUCED_EVENTS = [
   'system.degraded',
   'system.recovered',
   'notification.channel.changed',
+  'template.health',
+  'template.relogin',
+  'template.host',
 ] as const satisfies readonly DomainEventName[];
 
 /** Element of {@link PRODUCED_EVENTS}. */
@@ -159,6 +107,12 @@ export function draftFor(event: ProducedEvent): NotificationDraft | null {
       return systemDegraded(event.payload);
     case 'notification.channel.changed':
       return channelChanged(event.payload);
+    case 'template.health':
+      return signinDraft(event.payload);
+    case 'template.relogin':
+      return reloginFailedDraft(event.payload);
+    case 'template.host':
+      return hostFailedDraft(event.payload);
     case 'attention.resolved':
     case 'vault.confirm.resolved':
     case 'system.recovered':
@@ -193,6 +147,10 @@ export function revisionFor(event: ProducedEvent): ThreadRevision | null {
         },
       };
     }
+    case 'template.health':
+      return signinRevision(event.payload);
+    case 'template.host':
+      return hostRevision(event.payload);
     default:
       return null;
   }

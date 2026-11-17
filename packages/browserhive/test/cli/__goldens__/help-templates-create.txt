@@ -4,11 +4,12 @@ USAGE
   browserhive templates create <name> [flags]
 
 Talks to a running server over its REST API (--url, default the configured host and port) with an
-operator bearer (--token) or the dashboard cookie (--cookie). create opens a sign-in window on the
-machine running the server, wherever the CLI runs, and waits until every site is signed in, you
-press Enter, or --timeout passes. create and finish exit 0 when every site is signed in, 2 when one
-is not, 1 on an API error. seed and restore run on the server and the CLI waits for them. rekey is
-the exception: it runs locally against the data directory with the server stopped.
+operator bearer (--token) or the dashboard cookie (--cookie). create and login open a sign-in window
+on the machine running the server, wherever the CLI runs, and wait until the sites are signed in,
+you press Enter, or --timeout passes. create, finish, login and probe exit 0 when every site is
+signed in, 2 when one is not, 1 on an API error. seed and restore run on the server and the CLI
+waits for them. rekey is the exception: it runs locally against the data directory with the server
+stopped.
 
 ARGUMENTS
   <name>  Template name agents use: 2–32 characters, a–z first, then a–z, 0–9 or -.
@@ -21,7 +22,8 @@ FLAGS
   --channel <chromium|chrome|edge>  The template's browser. default: defaultChannel
   --headless                        Run the template's browser without a window. Sites may challenge
                                     it more often.
-  --stealth <off|standard|max>      Stealth level of the template's browser. default: stealth
+  --stealth <standard|max>          Stealth level of the template's browser. Templates always run
+                                    with stealth on. default: stealth, or standard when it is off
   --proxy <url>                     Proxy the template's browser always uses (http://host:port).
   --proxyUsername <name>            Proxy user name (needs --proxy).
   --proxyPasswordEnv <ENV>          Environment variable holding the proxy password on the server's

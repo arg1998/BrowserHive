@@ -41,6 +41,8 @@ export interface TemplateHostView extends TemplateHostFacts {
   readonly sandboxed: boolean | null;
   /** Saved passwords or autofill data were found in the profile at the last start (spec 13 §3.1). */
   readonly profileSecrets: boolean;
+  /** A re-login or recording window is open and agents wait (D-60). */
+  readonly agentsPaused: boolean;
   /** The Chrome major changed since the first start (spec 13 §2.2); absent = no drift seen. */
   readonly identityDrift?: { readonly from: string; readonly to: string };
 }
@@ -60,6 +62,7 @@ export const STOPPED_HOST: TemplateHostView = Object.freeze({
   recycleAt: null,
   sandboxed: null,
   profileSecrets: false,
+  agentsPaused: false,
 });
 
 /**
@@ -179,6 +182,12 @@ export interface TemplateHostOps {
    * final checkpoint). Returns the closed session ids.
    */
   drainForOperation(template: TemplateRecord, forceClose: boolean): Promise<readonly string[]>;
+  /**
+   * Stops the browser **without** the final checkpoint (its sessions close with `operator`): a
+   * restore or seed past its deadline may have half applied a state that must not be saved or used
+   * (spec 13 §3.12, review #79 L-3). No-op when it is not running.
+   */
+  discardHost(template: TemplateRecord): Promise<void>;
 }
 
 /** A template's operation hold (`TemplateHostOps.hold`). */

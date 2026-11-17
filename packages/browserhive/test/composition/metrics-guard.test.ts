@@ -348,6 +348,49 @@ const SOURCES: readonly Source[] = [
     },
   },
   {
+    name: 'template hosts and health (supervisor states, template.probe, template.relogin)',
+    drives: [
+      'browserhive.template.hosts',
+      'browserhive.template.probes',
+      'browserhive.template.relogins',
+    ],
+    async run(w) {
+      // Outcomes no notification producer turns into a message (the webhook count stays put).
+      publish(w, 'template.probe', {
+        type: 'template.probe',
+        template_id: 'tp-aaaaaaaaaa',
+        probe: {
+          seq: 1,
+          site_id: 'site-a.test',
+          outcome: 'signed_in',
+          reason: 'cookies',
+          trigger: 'schedule',
+          final_url: null,
+          duration_ms: 3,
+          at: Date.now(),
+        },
+      });
+      publish(w, 'template.relogin', {
+        type: 'template.relogin',
+        template_id: 'tp-aaaaaaaaaa',
+        relogin: {
+          site_id: 'site-a.test',
+          method: 'window',
+          state: 'signed_in',
+          session_id: null,
+          requested_by: 'admin',
+          requested_at: Date.now() - 1_000,
+          deadline_at: null,
+          finished_at: Date.now(),
+          agents_paused: false,
+          version: 2,
+          unlisted_domains: [],
+          error: null,
+        },
+      });
+    },
+  },
+  {
     name: 'retention scheduler (retention.completed)',
     drives: ['browserhive.retention.pruned_rows'],
     async run(w) {
@@ -657,6 +700,8 @@ describe('documented == recorded', () => {
         analytics,
         realtime: () => realtimeMetrics(realtime.hub),
         browserMemory: () => sampler.latest(),
+        // The supervisor's states (`TemplateHostSupervisor.states()`), as `wire-observers` passes them.
+        templateHosts: () => ['running', 'running', 'stopped', 'failed'],
       }),
     );
     const world: World = { bus, queue, realtime, ops, retention, sampler, channelId, hooks };
@@ -730,6 +775,16 @@ describe('documented == recorded', () => {
       value: 1,
       attrs: { kind: 'vault_confirm' },
     });
+    expect(points('browserhive.template.hosts')).toContainEqual({
+      value: 2,
+      attrs: { state: 'running' },
+    });
+    expect(points('browserhive.template.probes')).toEqual([
+      { value: 1, attrs: { outcome: 'signed_in', trigger: 'schedule' } },
+    ]);
+    expect(points('browserhive.template.relogins')).toEqual([
+      { value: 1, attrs: { method: 'window', outcome: 'signed_in' } },
+    ]);
     expect(points('browserhive.retention.pruned_rows')).toEqual([
       { value: 4, attrs: { table: 'tool_calls' } },
     ]);

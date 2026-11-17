@@ -1,6 +1,7 @@
 /** @module domain/vault/decide-fill — pure policy gates of a fill, in a fixed order, returning (never throwing) stable reason strings. */
 
 import type { OriginCheck } from '@browserhive/contracts/http';
+import { isPrincipalAuthorized } from '../policies/access-rule.ts';
 import { type CallerSubject, isCallerAuthorized } from './bindings.ts';
 import { checkHarnessRules, type HarnessRuleSource } from './harness-rule.ts';
 import { checkOrigin, type OriginCheckResult } from './origin.ts';
@@ -18,6 +19,16 @@ export interface FillDecisionInput {
   readonly entry: ResolvedEntry | undefined;
   /** Dashboard tester: skip the subject check when no slug/principal was supplied. */
   readonly checkSubject?: boolean;
+  /**
+   * The principal must be named in the rule: an empty list ("any principal") does not admit it
+   * (a template's auto-relogin, spec 13 §8.4).
+   */
+  readonly strictPrincipal?: boolean;
+  /**
+   * The fill runs in a maintenance session of the template the principal names: the binding's slug
+   * rule is satisfied by it (a template's auto-relogin; no agent session can be one).
+   */
+  readonly templateMaintenance?: boolean;
 }
 
 /** Reasons a fill is refused before any credential is fetched. */
@@ -94,7 +105,13 @@ export function decideFill(input: FillDecisionInput): FillDecision {
     harnessDeclared: session.harnessDeclared,
   };
   if (input.checkSubject !== false) {
-    if (!isCallerAuthorized(entry.rule, subject)) {
+    const named =
+      input.strictPrincipal !== true || entry.rule.principals.includes(subject.principal);
+    const authorized =
+      input.templateMaintenance === true
+        ? isPrincipalAuthorized(entry.rule, subject.principal)
+        : isCallerAuthorized(entry.rule, subject);
+    if (!named || !authorized) {
       return { kind: 'blocked', reason: 'not_authorized', originCheck: 'skipped', entry };
     }
     const harness = checkHarnessRules(entry.harnessRules, {

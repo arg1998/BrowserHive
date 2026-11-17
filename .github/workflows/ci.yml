@@ -404,7 +404,7 @@ jobs:
           Xvfb :99 -screen 0 1600x1000x24 -nolisten tcp > "$RUNNER_TEMP/xvfb.log" 2>&1 &
           echo "DISPLAY=:99" >> "$GITHUB_ENV"
           sleep 1
-          DISPLAY=:99 nohup bun packages/browserhive/test/e2e/template-server.ts 9877 "$tpl" > "$RUNNER_TEMP/template-daemon.log" 2>&1 &
+          DISPLAY=:99 BHDEV_TESTING=1 nohup bun packages/browserhive/test/e2e/template-server.ts 9877 "$tpl" > "$RUNNER_TEMP/template-daemon.log" 2>&1 &
           for _ in $(seq 1 60); do
             if curl -sf http://127.0.0.1:9877/health > /dev/null; then break; fi
             sleep 1

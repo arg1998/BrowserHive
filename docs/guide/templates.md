@@ -1,6 +1,6 @@
 # Session templates
 
-> **In this release:** you create a template and sign it in to its sites (or seed it from a storage state) from the command line or the REST API, BrowserHive keeps encrypted versions of its sign-ins that you can restore, agents list and launch it over MCP, and template sessions are sealed. The dashboard's Templates pages, health checks with re-login, and site packs arrive in later releases.
+> **In this release:** you create a template and sign it in to its sites (or seed it from a storage state) from the dashboard, the command line or the REST API; BrowserHive keeps encrypted versions of its sign-ins that you can restore, checks on a schedule that the sites are still signed in, tells you when one is not, and lets you sign it in again in a window or with the vault; agents list and launch it over MCP, and template sessions are sealed. Site packs (per-site knowledge such as a site's sign-in page and security checks) arrive in a later release; until then every site is a generic site.
 
 A session template is a browser identity you sign in to sites once. Agents then launch sessions from it with `launch_session` and its `template` parameter, and every such session starts signed in. Agents never see your passwords, and by default they never see the cookie values either.
 
@@ -22,7 +22,7 @@ A template's status is `recording` ("setting up") until you finish signing in, t
 - **It starts on demand.** The first launch (or a recording) starts it; it stops after `templateHostIdleTimeout` (default `1h`) with no session, and is restarted after `templateRecycleAfter` (default `24h`) once its sessions have finished (at most `templateDrainTimeout`, default `15m`).
 - **It counts as one browser.** `maxSessions` bounds browsers: a template's browser takes one slot however many sessions it serves. `server_status` reports that browser count; the System page's capacity shows both sessions and browsers.
 - **It is headed by default.** It needs a display on the machine running BrowserHive; see [Displays](#displays).
-- **Windows open in the background.** On a desktop a session's windows open without taking the focus, and agent windows are never raised or moved. The one exception is the browser's start: its first window appears as a normal window before BrowserHive minimizes it, so starting a template's browser (the first launch after it was stopped) can take the focus once.
+- **Windows open in the background.** On a desktop a session's windows open without taking the focus, and agent windows are never raised or moved. The one exception is the browser's start: its first window appears as a normal window before BrowserHive minimizes it, so starting a template's browser (the first launch after it was stopped, or a [scheduled check](#when-sites-are-checked) of an idle template) can take the focus once. Chromium has no way to start with that window inactive, so this stays.
 - **If it crashes,** every session of the template ends at once (agents get `SESSION_DEAD`) and the browser restarts after 5 s, 15 s, 45 s, 135 s and 405 s; after five failures in 30 minutes it stays down until you restart it (`browserhive templates host <name> restart`) or BrowserHive. If you quit it yourself (close its windows), its sessions end and it starts again at the next launch.
 - **It has a memory limit.** BrowserHive measures the memory of each template's browser (all its processes) every 60 s. Above `templateRecycleRss` (default `3GiB`), it closes the largest page of the session whose pages hold the most JavaScript memory, and that session gets a [`SESSION_RESOURCE_LIMIT`](../reference/errors.md#SESSION_RESOURCE_LIMIT) warning. If the browser is still above the limit 5 minutes later, it is restarted: sessions get up to `templateDrainTimeout` to finish, then close.
 - **Its sign-ins are saved, encrypted.** While it runs, BrowserHive keeps an encrypted checkpoint of its cookies and storage, and writes numbered versions at milestones ([Versions](#versions-and-the-checkpoint)).
@@ -79,7 +79,7 @@ BrowserHive lists such domains as "Also signed in to: … — agents can use thi
 
 Closing the sign-in window by hand cancels nothing: the template's browser keeps running, and the recording stays open until you finish or cancel.
 
-While the sign-in window is open, every agent window of that template is minimized and new agent windows open minimized, so you are not typing into an agent's page by mistake. A window an agent's site opens by itself meanwhile (a popup, a new tab) is minimized as soon as it appears, or closed when Chromium placed it in your sign-in window, and the sign-in window is shown again; an agent's `set_viewport` does not restore a minimized window.
+While the sign-in window is open, every agent window of that template is minimized and new agent windows open minimized, so you are not typing into an agent's page by mistake, and the template's agents are paused ([Agents wait while you sign in](#agents-wait-while-you-sign-in)). A window an agent's site opens by itself meanwhile (a popup, a new tab) is minimized as soon as it appears, or closed when Chromium placed it in your sign-in window, and the sign-in window is shown again; an agent's `set_viewport` does not restore a minimized window.
 
 The residual risk: Chromium shows a site-opened popup as an active window before BrowserHive can minimize it, so for a moment it can take the keyboard focus, and a page can call `window.focus()`. Keystrokes typed in that instant can land in the agent's page. If agents may be using the template, check the window title (`[BrowserHive] Sign in to …`) before you type a password, or sign in while no agent session is open.
 
@@ -142,7 +142,7 @@ It asks you to type the name again (or pass `--yes` in scripts), refuses while s
 |---|---|
 | `name` | What the agent passes as `template`. |
 | `display_name`, `description` | Your text. Write the description for the agent: what the template is for. |
-| `sites[]` | `site`, `title`, `status` (`signed_in`, `signed_out`, `challenged`, `inconclusive`, `unknown`) and `checked_at`. A site you confirmed while signing in is `signed_in`, one you did not is `signed_out`. BrowserHive does not check sites again until health checks arrive in a later release, so a status can be out of date. |
+| `sites[]` | `site`, `title`, `status` (`signed_in`, `signed_out`, `challenged`, `inconclusive`, `unknown`) and `checked_at`. A site you confirmed while signing in is `signed_in`, one you did not is `signed_out`; after that the status is the result of the newest [health check](#health-checks), so it can be up to the template's check interval old. |
 | `availability` | `available` (a launch would be admitted now; a stopped browser counts as available), `busy` (at its cap), `needs_login` (every site is signed out), `unavailable` (not ready, or cannot run until you act). |
 | `sealed` | Whether sessions of this template are sealed for this agent. |
 
@@ -178,9 +178,12 @@ A refusal is [`INVALID_ARGUMENTS`](../reference/errors.md#INVALID_ARGUMENTS) wit
 |---|---|
 | [`TEMPLATE_NOT_FOUND`](../reference/errors.md#TEMPLATE_NOT_FOUND) | No template has that name, the agent's principal or harness is not allowed, the template is still being set up, or `templates=false`. All answer identically. |
 | [`TEMPLATE_BUSY`](../reference/errors.md#TEMPLATE_BUSY) | The template is at its cap, or a page cap is reached ([Capacity](#capacity)). |
-| [`TEMPLATE_UNAVAILABLE`](../reference/errors.md#TEMPLATE_UNAVAILABLE) | The browser is starting, restarting (also during a restore or a seed) or recovering from a crash; retry after `retry_after_ms`. |
+| [`TEMPLATE_UNAVAILABLE`](../reference/errors.md#TEMPLATE_UNAVAILABLE) | The browser is starting, restarting (also during a restore or a seed) or recovering from a crash, or you are signing in to one of its sites and its agents are paused (`reason: paused`, [below](#agents-wait-while-you-sign-in)); retry after `retry_after_ms`. |
+| `TEMPLATE_NEEDS_LOGIN` | The [check before the launch](#before-a-launch) found every enabled site signed out. The agent is told to retry after you have signed in again; you get a [notification](notifications.md#template-sign-ins). |
 | [`TEMPLATE_DISABLED`](../reference/errors.md#TEMPLATE_DISABLED) | You disabled the template, or its browser cannot start until you act. The cause (`disabled`, `no_display`, `host_failed`, `proxy_unreachable`, `sandbox_unavailable`) is shown to you only: in `GET /templates/{id}` (`host.state`, `host.last_error`), the log, and `templates list`. See [Troubleshooting](troubleshooting.md#session-templates). |
 | [`SESSION_LIMIT_REACHED`](../reference/errors.md#SESSION_LIMIT_REACHED) | The template's browser is not running and every browser slot is taken. |
+
+When only some sites are signed out, the launch goes ahead: the session's `template.sites` show each site's status, and the session carries a `TEMPLATE_SITE_SIGNED_OUT` warning naming the signed-out sites (on its dashboard page too).
 
 What agents are told is limited to what they can and cannot do; no agent-visible text explains the shared browser or reveals that other sessions exist.
 
@@ -245,7 +248,7 @@ Operators create, record and delete templates. Agents only list and launch them;
 
 - **Who may launch.** The template's access rule lists principals (`policy.authorized_principals`; empty = any principal) and optionally harnesses (`policy.harnesses`, matched as in [vault harness lists](vault.md#harness-restrictions)). The harness list is a guard against mistakes, not a security boundary: real separation is one token per agent. A refused agent gets `TEMPLATE_NOT_FOUND`, and the log line `template launch refused` tells you why.
 - **Sessions belong to whoever launched them**, as always: another agent cannot see or drive them. The recording session belongs to no agent.
-- **Operator scopes.** `templates:read` lists and reads templates, their versions and running operations, and tests access; `templates:write` creates, edits, disables, enables and deletes templates, starts and stops their browsers, saves, pins and restores versions, seeds, removes sign-ins and clears profile secrets; `templates:login` opens, confirms, finishes and cancels a recording. Operator tokens issued without `scopes` hold all three.
+- **Operator scopes.** `templates:read` lists and reads templates, their versions, their check history and running operations, and tests access; `templates:write` creates, edits, disables, enables and deletes templates, starts and stops their browsers, saves, pins and restores versions, seeds, checks sites now, removes sign-ins and clears profile secrets; `templates:login` opens, confirms, finishes and cancels a recording or a re-login, shows its window and lets agents continue. Linking a vault login to a site needs `templates:login` and `vault:write`. Operator tokens issued without `scopes` hold all of them.
 - **Watching sessions.** Template sessions appear in the dashboard's session list and in `GET /api/v1/sessions` like any other, with `template` and `sealed`. Filter with `template=<id>`; the recording session is left out unless you pass `maintenance=include` (or `only`). Their live view and screenshots need `templates:read` in addition to the session scopes; those of a recording session need `templates:login`, because it shows you typing.
 
 ## Capacity
@@ -310,13 +313,15 @@ Saved passwords and autofill are off in a template's browser. If its profile sti
 
 ## Manage a template
 
-Every change below is an operator call (scopes in [Access](#access)) and is recorded in the audit log. The dashboard's Templates pages arrive in a later release; until then use the command line or the REST API. REST paths are under `/api/v1/templates/{id}`.
+Every change below is an operator call (scopes in [Access](#access)) and is recorded in the audit log. The dashboard's template page does all of it ([Templates in the dashboard](dashboard.md#templates)); the table lists the command line and the REST API. REST paths are under `/api/v1/templates/{id}`.
 
 | Task | Command line | REST |
 |---|---|---|
 | Show a template, its browser and its sites | `templates show <name>` | `GET` |
 | Start, stop or restart its browser | `templates host <name> start\|stop\|restart` | `POST …/host/start`, `…/host/stop`, `…/host/restart` |
 | Disable or enable it | `templates disable <name>`, `templates enable <name>` | `POST …/disable`, `…/enable` |
+| Check now whether its sites are signed in | `templates probe <name> [--site <site>]` | `POST …/probe` |
+| Sign a site in again | `templates login <name> --site <site>` | `POST …/relogin` ([below](#signing-in-again)) |
 | Edit it | — | `PATCH` |
 | Add, change or remove a site | — | `PUT …/sites/{site}`, `DELETE …/sites/{site}` |
 | Close one of its other windows | — | `POST …/host/pages/{target_id}/close` |
@@ -328,6 +333,100 @@ Every change below is an operator call (scopes in [Access](#access)) and is reco
 - **Disable** ends the template's live sessions and refuses new launches (agents get `TEMPLATE_DISABLED`). Its browser cannot be started, and seeding is refused, until you **enable** it again.
 - **Edit** (`PATCH`) changes the name, display name, description, browser channel, headless mode, humanize, proxy, how agent windows open (`agent_windows`) and the policy (access, cap, sealing). Renaming changes the name agents pass as `template`. The identity stays fixed ([Identity](#identity)). Changing `proxy` or `channel` restarts the browser and needs `confirm_identity_change: true`, because a site may sign the account out when the IP address or browser changes. An access change ends the live sessions whose principal or harness lost access, and a sealing change applies to live sessions at once; the answer lists the sessions it closed (`closed_sessions`).
 - **Removing a site** leaves its sign-in in the template's browser. [Remove the sign-in](#unlisted-sign-ins) too if agents should not use it. A template keeps at least one site.
+
+## Health checks
+
+Sites sign templates out: a session expires, a password changes, a site logs out every device after a security event. BrowserHive checks each site of a template on a schedule and before launches, shows the result per site (the template page, `templates list`, `templates show`, `list_templates`), and [notifies you](notifications.md#template-sign-ins) when a site is signed out.
+
+### How a site is checked
+
+Until site packs arrive, every site is a **generic site**: BrowserHive decides from the sign-in cookies it learned when you confirmed the site ([How BrowserHive knows you signed in](#how-browserhive-knows-you-signed-in)). A check reads the names and expiry of the site's cookies in the template's browser. It never reads a value and opens no page, so the site sees no traffic from it.
+
+| Result | Reason | Meaning |
+|---|---|---|
+| ✓ signed in (`signed_in`) | `learned_cookies` | Every learned sign-in cookie is there and unexpired. |
+| ✗ signed out (`signed_out`) | `cookies_absent` | None of them is left. |
+| ? couldn't tell (`inconclusive`) | `partial_cookies` | Some are there, some are not. The site may have signed the template out, or uses some of the cookies only now and then. |
+| ? couldn't tell (`inconclusive`) | `no_pack` | BrowserHive has not learned any sign-in cookie for the site, for example on a template you only [seeded](#seeding-from-a-storage-state). Sign the site in again in a window and press **I'm signed in**: it learns them then. |
+
+Checks that open the site's own page, and the `challenged` result (a security check or CAPTCHA in the way, "! check needed"), arrive with site packs. A "couldn't tell" result never starts a re-login, and neither will a challenge: signing in again into a site's security check is how accounts get locked. Three "couldn't tell" results in a row put a warning on the template page ("BrowserHive couldn't tell whether … is signed in"); they send no notification.
+
+### When sites are checked
+
+- **On a schedule:** every `templateHealthInterval` (default `6h`; 30 minutes to 7 days), give or take 10 % so checks do not line up. Each template keeps its own interval, `policy.health_interval_ms`, set at creation from `templateHealthInterval` and changed with `PATCH /api/v1/templates/{id}`. A template's sites are checked one after the other, 5 to 20 seconds apart, and at most two templates are checked at the same time.
+- **Idle templates start briefly for their checks.** A check needs the template's browser, so when it is stopped, BrowserHive starts it, checks, and lets it stop again once it has been idle for `templateHostIdleTimeout`. Its windows open in the background and minimized, but a headed browser shows its first window for a moment when it starts and can take the keyboard focus once (see [the template's browser](#the-templates-browser)). Keystrokes that land in that window reach no agent. When every browser slot is taken (`maxSessions`), the check is skipped until the next interval. To make such starts rarer, raise the interval; to avoid them, keep the browser running with `templateHostIdleTimeout` set to `0`.
+- **After events:** every site is checked whenever the template's browser starts, after a [restore](#restoring-a-version) or a [seed](#seeding-from-a-storage-state), and when an [attention request](#through-an-attention-request) of one of the template's sessions is resolved.
+- **Before a launch,** see below.
+- **On demand:** **Check now** on the template page, `browserhive templates probe <name> [--site <site>]`, or `POST …/probe`. It waits for the result (at most 2 minutes) and starts a stopped browser.
+
+`GET /api/v1/templates/{id}/probes` lists past checks, newest first, with the site, result, reason, what triggered it (`schedule`, `prelaunch`, `recording`, `relogin`, `manual`, `host_start`, `attention`, `restore`), how long it took and when.
+
+### Before a launch
+
+With `policy.prelaunch_check` on (the default), a launch checks every enabled site whose last check is older than 15 minutes, once the template's browser runs. The check takes at most 10 seconds (less when the launch has less time left); a site not done by then counts as "couldn't tell" for that launch. Launches arriving together share one check.
+
+- **Every enabled site is signed out:** the launch fails with `TEMPLATE_NEEDS_LOGIN`, which tells the agent to retry after you have signed in again, and you get the sign-out notification.
+- **Otherwise** the session starts. When some sites are signed out, it carries a `TEMPLATE_SITE_SIGNED_OUT` warning naming them, and its `template.sites` show each site's status.
+
+Turn the check off for a template with `PATCH` and `{"policy": {"prelaunch_check": false}}`; launches then trust the last scheduled check.
+
+## Signing in again
+
+| How | Who | When to use it |
+|---|---|---|
+| [In a window](#in-a-window) | you, at the machine running BrowserHive (or its screen over VNC) | The default. Any site, any kind of sign-in (passkeys, security keys, codes). |
+| [Through an attention request](#through-an-attention-request) | you, from anywhere, in the dashboard's live view | An agent hit the site's sign-in page and asked for help. |
+| [With the vault](#with-the-vault) | BrowserHive, with a vault login you linked to the site | Username-and-password sites, signed in again without you. |
+
+When a site is signed in again, BrowserHive checks it, saves a `relogin` [version](#versions-and-the-checkpoint), lists any new [unlisted sign-ins](#unlisted-sign-ins), and resolves the sign-out notification. One re-login runs per template at a time.
+
+### In a window
+
+```bash
+browserhive templates login job-hunt --site linkedin.com
+```
+
+Or **Re-login** beside the site on the template page. BrowserHive starts the template's browser if needed and opens a window titled `[BrowserHive] Sign in to <site>` at the site, **on the machine running BrowserHive**: the command warns when `--url` points at another machine, and the dashboard says where the window opens (on a server, see [Signing in on Xvfb](#signing-in-on-xvfb-vnc)). Every agent window of the template is minimized meanwhile.
+
+1. Sign in by hand. Type rather than paste, and check the address bar first.
+2. BrowserHive checks the site's sign-in cookies every 5 seconds. When every cookie it learned for the site is back and one of them appeared or changed since the window opened, the re-login finishes by itself.
+3. Otherwise press **I'm signed in** (Enter on the command line). It learns the site's sign-in cookies again, as when you first signed in; a `409` means no new cookie appeared on the site yet.
+4. When the site's sign-in cookies were all still there as the window opened (the site's server ended the sign-in, the cookies stayed), nothing tells BrowserHive when you are done: it never finishes by itself and writes no version until you press **Done** (Enter on the command line).
+
+**Headless templates and servers without a display.** A template whose browser runs headless has no window to show. When its browser is stopped and the machine has a display, BrowserHive starts it with a window for the re-login (it returns to headless at its next start). Otherwise (it is running headless, or the machine has no display) you sign in through the **live view** of the re-login's session: the dashboard and `templates login` link to it, and its input is open to operators with `templates:login` while the re-login runs. Agents then wait only while you type there (from your first input until 2 minutes without any).
+
+The window gives up after 30 minutes (`timed_out`, and a [re-login failed](notifications.md#template-sign-ins) notification). **Cancel** (`DELETE …/relogin`) closes it. On the command line, `--timeout` (default `30m`) and Ctrl+C cancel it too.
+
+**From a notification.** **Re-login on …** on a sign-out notification, pressed in Telegram, Discord or ntfy, only **queues** the re-login: nothing opens on a desktop nobody may be watching. The template page shows it as queued, and the window opens when you press **Show window** there (`POST …/host/show`), at the machine.
+
+#### Agents wait while you sign in
+
+While a re-login or sign-in window is open, the template's agents are **paused**, so nothing types into the template's pages or changes its sign-ins under you. Their launches and tool calls wait up to 15 seconds, then answer `TEMPLATE_UNAVAILABLE` with `reason: paused` and a retry time; agents retry by themselves. They resume when the window closes, however it ends.
+
+If agents must not wait, press **Let agents continue** on the template page (`POST …/agents/continue`), or start with `templates login … --letAgentsContinue` (`"let_agents_continue": true`). Agents then run while you type: a site an agent visits can open a popup that takes the focus for a moment, so check the window title before you type a password.
+
+### Through an attention request
+
+An agent in a template session that lands on a sign-in page can call [`request_attention`](attention.md). Take over in the session's live view and sign in there. The template's browser shares its cookies, so the whole template is signed in again, and every site is checked when the request is resolved. The takeover shows the page's real address prominently and warns when it is not one of the site's own domains: an agent can open a look-alike page and ask you to sign in to it. Live-view input has [limits](attention.md) (no clipboard, no IME).
+
+### With the vault
+
+A site can have a [vault](vault.md) login linked to it. BrowserHive then fills it into the site's sign-in page itself, in a background window of the template's browser on the BrowserHive machine, acting as the principal `template:<template_id>` through every rule of the vault. With **auto-relogin** on, a check that finds the site signed out starts this by itself, once per sign-out; you can also start it yourself from the template page or with `templates login <name> --site <site> --method vault`. Setting it up, the vault's rules and what is recorded: [Template sites in the vault guide](vault.md#signing-template-sites-in-again).
+
+### Over the REST API
+
+| Call | Scope | Result |
+|---|---|---|
+| `POST /templates/{id}/probe` `{site_ids?}` | `templates:write` | `{results: [{site_id, outcome, reason, duration_ms}]}` after at most 2 minutes. |
+| `GET /templates/{id}/probes` | `templates:read` | Past checks, newest first (filters `site_id`, `outcome`, `trigger`, `since`, `until`). |
+| `POST /templates/{id}/relogin` `{site_id, method?, let_agents_continue?}` | `templates:login` | `{session_id, relogin}`. `method` is `window` (default) or `vault`. |
+| `POST /templates/{id}/relogin/confirm` `{site_id}` | `templates:login` | **I'm signed in**. `409 CONFLICT` when no new cookie appeared on the site. |
+| `DELETE /templates/{id}/relogin` | `templates:login` | Cancels it and closes its window. |
+| `POST /templates/{id}/host/show` | `templates:login` | Opens a queued re-login's window, or raises an open sign-in window. |
+| `POST /templates/{id}/agents/continue` | `templates:login` | Lets agents continue while a window is open. |
+| `PUT /templates/{id}/sites/{site}/relogin` | `templates:login` and `vault:write` | Links a vault login to the site ([vault guide](vault.md#signing-template-sites-in-again)). |
+
+`GET /templates/{id}` reports the current or last re-login as `relogin`: its `state` (`queued`, `open`, `filling`, then `signed_in`, `failed`, `timed_out` or `cancelled`), `deadline_at`, `agents_paused`, the `version` it saved, `unlisted_domains` and an `error` when it failed; `host.agents_paused`; and `machine.name`, the machine windows open on.
 
 ## Versions and the checkpoint
 
@@ -342,10 +441,11 @@ BrowserHive keeps encrypted copies of a template's sign-ins, so you can roll the
 | `manual` | You ask: `browserhive templates save <name>`, or `POST …/versions`. The browser must be running (otherwise `409`). When nothing changed since the newest version, nothing is written (`version: null`). |
 | `restore` | A [restore](#restoring-a-version) finished. |
 | `import` | The template was [seeded](#seeding-from-a-storage-state). |
+| `relogin` | You [signed a site in again](#signing-in-again) and the check confirmed it. |
 | `signin_change` | At a checkpoint, the sign-in cookies present for a site differ from the newest version's: you signed in again, or the site signed the template out. |
 | `daily` | At the first checkpoint of a day (this machine's local time), when the state's structure differs from the newest version's: which cookies (domain and name), local storage keys and IndexedDB databases exist, never their values. |
 
-A site that refreshes its session cookie's value never causes a version. `signin_change` looks at the sign-in cookie names BrowserHive learned when you confirmed the site ([How BrowserHive knows you signed in](#how-browserhive-knows-you-signed-in)), so a site you never confirmed in a sign-in window (for example on a template you only seeded) does not trigger it. Versions after a re-login arrive with health checks in a later release.
+A site that refreshes its session cookie's value never causes a version. `signin_change` looks at the sign-in cookie names BrowserHive learned when you confirmed the site ([How BrowserHive knows you signed in](#how-browserhive-knows-you-signed-in)), so a site you never confirmed in a sign-in window (for example on a template you only seeded) does not trigger it. Each version also records every site's sign-in state when it was written.
 
 **What a copy holds.** The cookies, local storage and IndexedDB of every origin the browser holds data for. Not session storage, service workers, Cache Storage, the HTTP cache, permissions, history or saved passwords; the live profile keeps those, but a restore does not bring them back. An origin the browser has not visited since it last started is carried forward from the previous checkpoint, so a sign-in kept in local storage survives a browser restart. A sign-in you remove is removed from the next checkpoint too. A copy is at most 64 MiB: above that, the IndexedDB data of the largest origins is left out, and [`TEMPLATE_CHECKPOINT_TOO_LARGE`](../reference/errors.md#TEMPLATE_CHECKPOINT_TOO_LARGE) names them. A failed write records [`TEMPLATE_CHECKPOINT_FAILED`](../reference/errors.md#TEMPLATE_CHECKPOINT_FAILED) and keeps the previous file.
 
@@ -366,7 +466,7 @@ A restore runs on the server as an operation. Over the REST API, `POST /api/v1/t
 2. **The browser restarts.** It stops (writing a final checkpoint) and starts again.
 3. **The version is applied** and saved as a new `restore` version. Old versions are never changed.
 
-A restore brings back sign-ins, not a clean profile. It clears the cookies and storage of the origins in the version and of the origins the browser visited since it started, then sets the version's; other origins keep their data. BrowserHive does not check the sites after a restore yet (health checks arrive in a later release), so open a session and look.
+A restore brings back sign-ins, not a clean profile. It clears the cookies and storage of the origins in the version and of the origins the browser visited since it started, then sets the version's; other origins keep their data. Every site is [checked](#health-checks) right after a restore, so the template page and `templates show` tell you whether the version brought the sign-ins back.
 
 `templates restore` asks you to type the template's name on a terminal and refuses without one unless `--yes`. It waits for the operation; Ctrl+C stops waiting, and the restore goes on. A version deleted by retention answers [`TEMPLATE_VERSION_NOT_FOUND`](../reference/errors.md#TEMPLATE_VERSION_NOT_FOUND). A version written with a key BrowserHive does not hold answers `409` [`TEMPLATE_VERSION_UNREADABLE`](../reference/errors.md#TEMPLATE_VERSION_UNREADABLE) ([Rotating the key](#rotating-the-key)).
 
@@ -386,7 +486,7 @@ Instead of signing in in the template's browser, you can give BrowserHive a Play
 
 3. Delete the file. It is a plaintext copy of your sign-ins.
 
-Seeding follows the restore steps above, except that the template's live sessions close at once: the browser restarts, the state is applied, an `import` version is written and the template becomes `ready`. Over the REST API, `POST /api/v1/templates/{id}/state` takes the JSON as the body (at most 16 MiB) and answers `202 {operation_id}`; over a `ready` template it needs `?confirm=true`, otherwise `409 CONFLICT`.
+Seeding follows the restore steps above, except that the template's live sessions close at once: the browser restarts, the state is applied, an `import` version is written, every site is checked and the template becomes `ready`. Over the REST API, `POST /api/v1/templates/{id}/state` takes the JSON as the body (at most 16 MiB) and answers `202 {operation_id}`; over a `ready` template it needs `?confirm=true`, otherwise `409 CONFLICT`.
 
 - The command checks the file (at most 16 MiB, Playwright's `{"cookies": […], "origins": […]}` shape) before it sends or creates anything. `templates seed` asks you to type the template's name, or `--yes`. It prints each site's status and exits `2` when a site is signed out or needs a check.
 - If seeding a template made with `create --fromState` fails, the template stays "setting up": seed it again, or delete it.
@@ -438,6 +538,7 @@ Rotation protects copies made from now on. Copies made before it can still be re
 |---|---|---|
 | [`templates`](../reference/configuration.md#templates) | `true` | `false` turns templates off: `list_templates` answers `TOOL_NOT_AVAILABLE`, `launch_session` with `template` answers `TEMPLATE_NOT_FOUND`, and no template browser starts. |
 | [`templateHostIdleTimeout`](../reference/configuration.md#templateHostIdleTimeout) | `1h` | Stop a template's browser after this long with no session; `0` = never. |
+| `templateHealthInterval` | `6h` | How often a new template's sites are [checked](#health-checks) (30 minutes to 7 days). Change one template's with `policy.health_interval_ms`. |
 | [`templateMaxPagesPerHost`](../reference/configuration.md#templateMaxPagesPerHost) | `40` | Agent pages per template browser (2 to 200). |
 | [`templateRecycleAfter`](../reference/configuration.md#templateRecycleAfter) | `24h` | Restart a template's browser after this age (at least `1h`). |
 | [`templateDrainTimeout`](../reference/configuration.md#templateDrainTimeout) | `15m` | How long a restart or a restore waits for sessions before closing them (`1m` to `2h`). |
@@ -454,7 +555,7 @@ A template's browser always routes its requests through BrowserHive (that is how
 | Limit | What happens | What to do |
 |---|---|---|
 | **No HTTP cache** | Every page load fetches every script, style and image again: more traffic, slower pages, and a site can notice that nothing is ever served from cache. On the test site, reloading a page with five cacheable scripts fetched all five again. | Nothing to configure. A cache-preserving mode is planned. |
-| **CORS preflights under the Playwright driver** | With the stock Playwright driver, Playwright answers a cross-origin request's preflight itself and allows it, so the site's own refusal is never consulted: a page an agent visits can send a cross-origin write (for example a JSON `POST` with a custom header) to another site the template is signed in to, with its cookies. With Patchright (the stealth driver) the write is not sent. | **Use Patchright for templates**: keep `stealth` on (the default) and `stealthDriver` at `auto` or `patchright`, and do not create templates with `stealth: off`, which run on the stock driver. |
+| **CORS preflights under the Playwright driver** | With the stock Playwright driver, Playwright answers a cross-origin request's preflight itself and allows it, so the site's own refusal is never consulted: a page an agent visits can send a cross-origin write (for example a JSON `POST` with a custom header) to another site the template is signed in to, with its cookies. With Patchright (the stealth driver) the write is not sent. Templates refuse `stealth: off`, so they run on Patchright as long as `stealthDriver` is `auto` (the default) or `patchright`. Patchright becomes BrowserHive's only driver in a later release. |
 | **SharedWorker requests** | Requests a page's SharedWorker makes are not seen by routing, so they have no owning session and site rules (once site packs exist) cannot stop them. Dedicated and service workers are routed. | Accepted; site packs express such writes as rules on the page actions instead. |
 | **Requests sent while a page closes** | A beacon or `keepalive` fetch a page sends while it closes (`close_tab`, `close_session`) is not routed: no owning session and no site rule ever sees it, and whether it reaches the site depends on timing. | Accepted; site packs express such writes as rules on the page actions instead. |
 | **Redirects into BrowserHive** | Routing sees only the first URL of a redirect chain. A page can therefore redirect the template's browser to BrowserHive's own address; the request carries the template's marker cookie and BrowserHive refuses it (403), so the dashboard never loads there. BrowserHive also answers only `localhost`, `127.0.0.1` and `::1` among loopback names (not `*.localhost`, other `127.x` addresses or IPv4-mapped forms), so the marker covers every address it answers. | Nothing to configure. |

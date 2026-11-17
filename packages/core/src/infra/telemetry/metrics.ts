@@ -28,7 +28,10 @@ export const METRIC = {
   ATTENTION_WAIT: 'browserhive.attention.wait',
   VAULT_FILLS: 'browserhive.vault.fills',
   BLOCKLIST_HITS: 'browserhive.blocklist.hits',
+  TEMPLATE_HOSTS: 'browserhive.template.hosts',
   TEMPLATE_CHECKPOINTS: 'browserhive.template.checkpoints',
+  TEMPLATE_PROBES: 'browserhive.template.probes',
+  TEMPLATE_RELOGINS: 'browserhive.template.relogins',
   RETENTION_PRUNED_ROWS: 'browserhive.retention.pruned_rows',
   NOTIFICATION_DELIVERIES: 'browserhive.notifications.deliveries',
   NOTIFICATION_ACTIONS: 'browserhive.notifications.actions',
@@ -152,11 +155,33 @@ export const METRIC_DEFINITIONS: readonly MetricDefinition[] = [
   def(METRIC.VAULT_FILLS, 'counter', '{fill}', ['result'], 'Vault fills by result'),
   def(METRIC.BLOCKLIST_HITS, 'counter', '{hit}', ['source'], 'Blocked URLs by source'),
   def(
+    METRIC.TEMPLATE_HOSTS,
+    'gauge',
+    '{host}',
+    ['state'],
+    'Template hosts by state (starting, running, draining, crashed, failed)',
+    true,
+  ),
+  def(
     METRIC.TEMPLATE_CHECKPOINTS,
     'counter',
     '{checkpoint}',
     ['reason'],
     'Template checkpoints and versions written, by reason',
+  ),
+  def(
+    METRIC.TEMPLATE_PROBES,
+    'counter',
+    '{probe}',
+    ['outcome', 'trigger'],
+    'Template site sign-in probes by outcome and trigger',
+  ),
+  def(
+    METRIC.TEMPLATE_RELOGINS,
+    'counter',
+    '{relogin}',
+    ['method', 'outcome'],
+    'Finished template re-logins by method and outcome',
   ),
   def(METRIC.RETENTION_PRUNED_ROWS, 'counter', '{row}', ['table'], 'Rows pruned by table'),
   def(
@@ -210,7 +235,10 @@ export interface Instruments {
   readonly attentionWait: Histogram;
   readonly vaultFills: Counter;
   readonly blocklistHits: Counter;
+  readonly templateHosts: ObservableGauge;
   readonly templateCheckpoints: Counter;
+  readonly templateProbes: Counter;
+  readonly templateRelogins: Counter;
   readonly retentionPrunedRows: Counter;
   /** Outbox jobs by `channel_kind` and `status` (D-34). */
   readonly notificationDeliveries: Counter;
@@ -302,8 +330,17 @@ export function createInstruments(meter: Meter): Instruments {
     get blocklistHits() {
       return counter(METRIC.BLOCKLIST_HITS);
     },
+    get templateHosts() {
+      return gauge(METRIC.TEMPLATE_HOSTS);
+    },
     get templateCheckpoints() {
       return counter(METRIC.TEMPLATE_CHECKPOINTS);
+    },
+    get templateProbes() {
+      return counter(METRIC.TEMPLATE_PROBES);
+    },
+    get templateRelogins() {
+      return counter(METRIC.TEMPLATE_RELOGINS);
     },
     get retentionPrunedRows() {
       return counter(METRIC.RETENTION_PRUNED_ROWS);

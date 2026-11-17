@@ -117,4 +117,8 @@ export class UnavailableTemplateHostOps implements TemplateHostOps {
   async drainForOperation(): Promise<readonly string[]> {
     return [];
   }
+
+  async discardHost(): Promise<void> {
+    return;
+  }
 }

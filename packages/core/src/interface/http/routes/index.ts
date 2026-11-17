@@ -16,6 +16,7 @@ import { SESSION_FACT_ROUTES } from './session-facts.ts';
 import { SESSION_LIVE_ROUTES } from './session-live.ts';
 import { SESSION_ROUTES } from './sessions.ts';
 import { SYSTEM_ROUTES } from './system.ts';
+import { TEMPLATE_HEALTH_ROUTES } from './template-health.ts';
 import { TEMPLATE_OPS_ROUTES } from './template-ops.ts';
 import { TEMPLATE_RECORDING_ROUTES } from './template-recording.ts';
 import { TEMPLATE_ROUTES } from './templates.ts';
@@ -45,5 +46,6 @@ export function apiRoutes(deps: MetaRouteDeps & { readonly logger: Logger }): re
     ...TEMPLATE_OPS_ROUTES,
     ...TEMPLATE_ROUTES,
     ...TEMPLATE_RECORDING_ROUTES,
+    ...TEMPLATE_HEALTH_ROUTES,
   ];
 }

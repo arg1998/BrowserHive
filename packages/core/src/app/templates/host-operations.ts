@@ -178,6 +178,10 @@ export class TemplateHostOperations implements TemplateHostOps {
     return closed.filter((sid) => !live().includes(sid));
   }
 
+  async discardHost(template: TemplateRecord): Promise<void> {
+    await this.#deps.supervisor.lifecycle(template).stop('operation timed out', 'operator', false);
+  }
+
   recordingOf(templateId: string): Session | null {
     const open = this.#deps.supervisor
       .sessionsOf(templateId, 'maintenance')
@@ -191,19 +195,47 @@ export class TemplateHostOperations implements TemplateHostOps {
       await raise(open.view?.page);
       return open;
     }
-    const session = await this.#deps.supervisor.launchMaintenance({
+    return this.openSignInWindow(request, RECORDING_SLUG);
+  }
+
+  /**
+   * Opens a sign-in window (a maintenance session owned by the operator, agent windows minimized
+   * meanwhile, spec 13 §3.3): the marker tab with the instructions, then one tab per site at
+   * `https://<site><path>` (a recording, or a re-login with slug `relogin`, §8.4).
+   */
+  async openSignInWindow(
+    request: RecordingRequest & {
+      readonly paths?: Readonly<Record<string, string>>;
+      /** Agents keep working while the window is open (the urgent override, D-60). */
+      readonly letAgentsContinue?: boolean;
+      /** `false`: the window does not pause agents by itself (a live-view re-login pauses on input). */
+      readonly pauseAgents?: boolean;
+    },
+    slug: string,
+  ): Promise<Session> {
+    const { supervisor } = this.#deps;
+    const session = await supervisor.launchMaintenance({
       template: request.template,
       sites: request.sites,
-      slug: RECORDING_SLUG,
+      slug,
       principal: request.principal,
       recording: true,
     });
+    // Agents wait while the operator signs in (D-60); the pause ends with the window.
+    if (request.pauseAgents !== false) {
+      supervisor.pause.open(request.template.templateId, session.id, request.letAgentsContinue);
+    }
     try {
-      await this.#openTabs(session, request.siteIds);
+      await this.#openTabs(session, request.siteIds, request.paths ?? {});
     } catch (err) {
-      this.#log.warn('recording tabs incomplete', { err: serializeError(err) });
+      this.#log.warn('sign-in tabs incomplete', { err: serializeError(err) });
     }
     return session;
+  }
+
+  /** Raises a sign-in window (**Show window**: an explicit operator action, spec 13 §3.3). */
+  async raiseWindow(session: Session): Promise<void> {
+    await raise(session.view?.page);
   }
 
   async closeRecording(templateId: string): Promise<void> {
@@ -219,7 +251,11 @@ export class TemplateHostOperations implements TemplateHostOps {
    * tab per site follows at `https://<site>/`. The session's active tab is the first site (what
    * the live view shows); the window is raised on the marker tab, an explicit operator action.
    */
-  async #openTabs(session: Session, siteIds: readonly string[]): Promise<void> {
+  async #openTabs(
+    session: Session,
+    siteIds: readonly string[],
+    paths: Readonly<Record<string, string>>,
+  ): Promise<void> {
     const view = session.view;
     if (view === null) return;
     await view.page.setContent(recordingPage(siteIds));
@@ -228,7 +264,10 @@ export class TemplateHostOperations implements TemplateHostOps {
       const { tabId, page } = await this.#deps.sessions.newTab(session);
       first ??= tabId;
       await page
-        .goto(`https://${site}/`, { waitUntil: 'commit', timeout: SITE_TAB_COMMIT_MS })
+        .goto(`https://${site}${paths[site] ?? '/'}`, {
+          waitUntil: 'commit',
+          timeout: SITE_TAB_COMMIT_MS,
+        })
         .catch((err: unknown) => this.#log.debug('site tab', { err: serializeError(err) }));
     }
     if (first !== null) this.#deps.sessions.switchTab(session, first);

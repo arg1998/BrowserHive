@@ -28,6 +28,11 @@ import {
   formatPercent,
   text,
 } from './message.ts';
+import {
+  hasTemplateNews,
+  type TemplateDigestFacts,
+  templateDigestBlocks,
+} from './report-templates.ts';
 import { formatClock, formatDay, formatSpan, formatStamp } from './schedule.ts';
 
 /** Tools with fewer calls than this in a window do not compete for "slowest tool". */
@@ -86,6 +91,8 @@ export interface DigestFacts {
   }[];
   /** Tool calls per bucket over the window (the chart). */
   readonly chart: { readonly start: number; readonly stepMs: number; readonly values: number[] };
+  /** Template sign-outs, re-logins and challenges (spec 13 §8.6); absent or `null` = templates off. */
+  readonly templates?: TemplateDigestFacts | null;
 }
 
 /** How a report is being produced for one channel. */
@@ -155,7 +162,8 @@ export function reportMessage(
 
 /**
  * Whether a window had nothing worth a digest (D-43): no session started, no tool call, no
- * attention request, no vault access, no blocked request and no open degradation.
+ * attention request, no vault access, no blocked request, no open degradation and no template
+ * sign-out, re-login or challenge.
  *
  * @returns True when a scheduled digest is suppressed as `empty`.
  */
@@ -166,7 +174,8 @@ export function isEmptyDigest(facts: DigestFacts): boolean {
     facts.attention.created === 0 &&
     facts.vault.every((v) => v.count === 0) &&
     facts.blocked.count === 0 &&
-    facts.degradations.length === 0
+    facts.degradations.length === 0 &&
+    !hasTemplateNews(facts.templates)
   );
 }
 
@@ -360,6 +369,7 @@ export function buildDigest(
       unit: 'calls',
     });
   }
+  blocks.push(...templateDigestBlocks(facts.templates));
   if (names && facts.topErrors.length > 0) {
     blocks.push({ type: 'heading', text: 'Top errors' });
     blocks.push({

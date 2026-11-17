@@ -1,0 +1,43 @@
+/** @module composition/testing-seam — the internal testing seam of `createServer` (spec 08 §9, spec 13 §14): Chromium switches that let BrowserHive's own suites use HTTPS fixture sites with `*.test` names, refused unless the developer opts in with `BHDEV_TESTING=1` (D-63). Not reachable from the CLI, the environment or a config file. Private: `browserhive/testing` re-exports only the type. @internal */
+
+/** The variable that enables the seam: dev tooling only (`BHDEV_`, never a config key). @internal */
+export const TESTING_ENV = 'BHDEV_TESTING';
+
+/** `createServer({ testing })`. @internal */
+export interface ServerTesting {
+  /** Chromium's `--host-resolver-rules` (e.g. `MAP *.test:443 127.0.0.1:8443`). */
+  readonly hostResolverRules?: string;
+  /** Chromium's `--ignore-certificate-errors-spki-list` (base64 SHA-256 of the fixture key). */
+  readonly ignoreCertificateErrorsSpkiList?: string;
+}
+
+/**
+ * Whether the seam is enabled: `BHDEV_TESTING` is exactly `1` in the process environment (the
+ * default; the `env` option of `createServer` does not count, so a caller cannot enable it by
+ * passing values).
+ *
+ * @internal
+ */
+export function testingEnabled(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): boolean {
+  return env[TESTING_ENV] === '1';
+}
+
+/** The message of a refused seam (import of `browserhive/testing`, or `createServer({ testing })`). @internal */
+export function testingRefusedMessage(what: string): string {
+  return `${what} is BrowserHive's internal testing seam; it is refused unless the environment sets ${TESTING_ENV}=1 (BrowserHive's own test suites only).`;
+}
+
+/** The Chromium switches of `testing`. @internal */
+export function testingArgsOf(testing: ServerTesting | undefined): readonly string[] {
+  if (testing === undefined) return [];
+  return [
+    ...(testing.hostResolverRules !== undefined
+      ? [`--host-resolver-rules=${testing.hostResolverRules}`]
+      : []),
+    ...(testing.ignoreCertificateErrorsSpkiList !== undefined
+      ? [`--ignore-certificate-errors-spki-list=${testing.ignoreCertificateErrorsSpkiList}`]
+      : []),
+  ];
+}

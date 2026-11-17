@@ -286,7 +286,7 @@ describe('wireMetrics: observable instruments', () => {
       bus,
       sources({ eventLoop: () => ({ takeP99Ms: () => 1, stop: () => void stopped++ }) }),
     );
-    expect([...callbacks.values()].flat().length).toBe(10);
+    expect([...callbacks.values()].flat().length).toBe(11);
     unwire();
     expect([...callbacks.values()].flat().length).toBe(0);
     expect(stopped).toBe(1);

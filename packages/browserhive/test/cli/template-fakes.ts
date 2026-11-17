@@ -2,6 +2,7 @@
 import type { TemplateHealthState } from '@browserhive/contracts/enums';
 import type {
   HostView,
+  ReloginView,
   Template,
   TemplateDetailResponse,
   TemplateSiteView,
@@ -24,6 +25,7 @@ function siteView(siteId: string, state: TemplateHealthState): TemplateSiteView 
     write_policy: null,
     vault_handle: null,
     auto_relogin: false,
+    auto_relogin_at: null,
     form: null,
     learned_cookie_names: [],
     health: {
@@ -48,6 +50,7 @@ const HOST: HostView = {
   parked_pages: 0,
   sandboxed: true,
   profile_secrets: false,
+  agents_paused: false,
 };
 
 /** A fake server holding one template; scripted per test. */
@@ -64,6 +67,8 @@ export interface FakeServer {
   uncleared: string[];
   /** Runs on every `GET /templates/{id}` with the number of earlier polls (0 first). */
   onPoll?: (poll: number) => void;
+  /** The template's re-login as `GET /templates/{id}` reports it (T2). */
+  relogin: ReloginView | null;
   /** Extra routes (T1b operations), tried before the built-in ones; `undefined` falls through. */
   routes?: (method: string, path: string, body: unknown) => [number, unknown] | undefined;
 }
@@ -76,6 +81,7 @@ export function fakeServer(sites: Record<string, TemplateHealthState>): FakeServ
     refuse: new Set(),
     calls: [],
     uncleared: [],
+    relogin: null,
   };
 }
 
@@ -186,6 +192,8 @@ function route(server: FakeServer, method: string, path: string, body: unknown):
       parked_pages: [],
       shared_windows: [],
       unlisted_domains: server.unlisted,
+      relogin: server.relogin,
+      machine: { name: 'hive-box' },
       now: 1,
     };
     return [200, detail];

@@ -22,6 +22,7 @@ import type { ChannelService } from '../../app/notifications/channel-service.ts'
 import type { PublicUrlChecker } from '../../app/notifications/public-url.ts';
 import type { SessionDirLayout } from '../../app/sessions/profile-dir.ts';
 import type { SessionService } from '../../app/sessions/session-service.ts';
+import type { TemplateHealthFacade } from '../../app/templates/health-facade.ts';
 import type { TemplateActions } from '../../app/templates/template-actions.ts';
 import type { TemplateEditService } from '../../app/templates/template-edit.ts';
 import type { TemplateOperations } from '../../app/templates/template-operations.ts';
@@ -320,7 +321,22 @@ export interface HttpServices {
   readonly templateVersions: TemplateVersionsPort;
   /** Restore and seed operations (T1b). */
   readonly templateOperations: TemplateOperationsPort;
+  /** Probes, re-login and the vault link (spec 13 §8, T2). */
+  readonly templateHealth: TemplateHealthPort;
 }
+
+/** The health and re-login routes' service. */
+export type TemplateHealthPort = Pick<
+  TemplateHealthFacade,
+  | 'probe'
+  | 'probes'
+  | 'startRelogin'
+  | 'confirmRelogin'
+  | 'cancelRelogin'
+  | 'show'
+  | 'continueAgents'
+  | 'putLink'
+>;
 
 /** The template edit routes' service. */
 export type TemplateEditPort = Pick<

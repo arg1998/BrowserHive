@@ -17,6 +17,10 @@ BrowserHive can also put them on your phone: through your own Telegram bot, a Di
 |---|---|---|---|
 | An agent called `request_attention` ([human takeover](attention.md)) | `attention.requested` | needs you | warn |
 | A vault fill waits for your confirmation ([vault](vault.md)) | `vault.confirm` | needs you | warn |
+| A [session template](templates.md#health-checks) is signed out of a site | `template.signed_out` | needs you | warn |
+| A template site is held by a security check (arrives with site packs) | `template.challenged` | needs you | warn |
+| Signing a template site in again failed | `template.relogin_failed` | problems | warn |
+| A template's browser stopped trying to start | `template.host_failed` | problems | error |
 | A session crashed | `session.crashed` | problems | error |
 | A session was reaped because its lease expired | `session.reaped` | problems | warn |
 | Tools failed (grouped per session: "shop · 12 tool errors") | `tool.errors` | problems | warn |
@@ -26,6 +30,17 @@ BrowserHive can also put them on your phone: through your own Telegram bot, a Di
 | A channel's hourly check found something off | `report.anomaly` | reports | warn (error while degraded or at capacity) |
 
 Routine events are deliberately silent: a session opening, a page visit, a clean close. Agents cannot send notifications themselves: every notification comes from something BrowserHive observed. The `request_attention` tool is how an agent reaches you.
+
+### Template sign-ins
+
+- **`template.signed_out`**: a [health check](templates.md#health-checks) found a site of a template signed out ("Job hunt: linkedin.com signed out"). There is one per template and sign-in provider; until site packs say which sites share a sign-in, every site is its own provider. It resolves by itself when the site is signed in again, and ends when the site or the template is removed. Its buttons: **Re-login on …** (naming the machine running BrowserHive) and a link to the site on the template page.
+- **`template.challenged`**: a site shows a security check or CAPTCHA. It arrives with site packs, and resolves when the next check finds the site signed in.
+- **`template.relogin_failed`**: an automatic [vault re-login](vault.md#signing-template-sites-in-again) failed or was not retried (a second sign-out within 24 hours), or a re-login window closed after 30 minutes without a sign-in. It is final; the sign-out notification stays open.
+- **`template.host_failed`**: a template's browser failed five times in 30 minutes, or cannot start at all (no display, an unreachable proxy). It resolves when the browser runs again. See [Troubleshooting](troubleshooting.md#session-templates).
+
+A notification about a site shares one thread with that site's other notifications, so a chat shows its sign-out, its re-login failures and its recovery in one place.
+
+**Re-login on … only queues.** Pressed as an [act button](#answer-from-your-phone) in Telegram, Discord or ntfy, it queues a re-login of that site; it never opens a window on a desktop nobody may be watching. The window opens when you press **Show window** on the template page, at the machine running BrowserHive ([In a window](templates.md#in-a-window)). The press runs with the scope `templates:login`, like the dashboard's **Re-login**, and is recorded in the audit log with who pressed it.
 
 ## A notification has a life
 
@@ -143,7 +158,7 @@ A revision is POSTed again with `op: "edit"` and a higher `message.revision`; ke
 
 ## Answer from your phone
 
-With **act buttons** on, a notification that waits for you carries buttons that act, not just links: **Mark resolved** and **Reject** for an attention request, **Approve** and **Deny** for a vault fill. Press one in the chat, and BrowserHive does exactly what the same button in the dashboard does, then edits the message: the buttons disappear and it says who answered and when ("Resolved on Telegram by 123456789 after 42 s"). Everything else (take over, open the live view) stays a link.
+With **act buttons** on, a notification that waits for you carries buttons that act, not just links: **Mark resolved** and **Reject** for an attention request, **Approve** and **Deny** for a vault fill, **Re-login on …** for a signed-out template site (it [only queues](#template-sign-ins) the re-login). Press one in the chat, and BrowserHive does exactly what the same button in the dashboard does, then edits the message: the buttons disappear and it says who answered and when ("Resolved on Telegram by 123456789 after 42 s"). Everything else (take over, open the live view) stays a link.
 
 Act buttons are **off** by default. Switch them on per channel in the wizard's **What to send → Answer from the chat**, or with `actButtons=true` on a [startup channel](#startup-channels).
 
@@ -241,6 +256,7 @@ A channel can also get **reports**: a summary on a schedule you pick, and a head
 - sessions started and live now; tool calls, errors and the error rate (with the previous period's rate);
 - attention requests: how many, how many were answered and the median wait, how many timed out, how many wait now;
 - vault fills and how many failed; blocked requests and the most blocked pattern;
+- **Templates:** template sites signed out, re-logins (and how many failed) and security checks in the period;
 - the slowest tool (its p95, against the previous period), the top errors, and open problems;
 - tool calls per hour as a small chart (text bars in chats; the numbers themselves in the webhook payload), and a table per harness;
 - a link to the **Overview** for exactly that period.

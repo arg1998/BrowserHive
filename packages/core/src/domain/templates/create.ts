@@ -112,7 +112,8 @@ export function validateProxy(
 /**
  * Field-level validation the schema cannot express (spec 13 §11.1 `POST /templates` 400s):
  * registrable sites without duplicates, a credential-free proxy, `locale` and `timezone_id` given
- * explicitly with a proxy, a timezone ICU knows, and under `auth=token` an explicit
+ * explicitly with a proxy, a timezone ICU knows, stealth on (`standard` or `max`; D6: templates
+ * never run as plain Playwright), and under `auth=token` an explicit
  * `policy.authorized_principals`. Pack-dependent refusals (`headless` with a `headed: 'required'`
  * pack, `stealth: 'off'` with a `human_only` pack) arrive with site packs (T3a).
  */
@@ -167,6 +168,13 @@ export function validateTemplateInput(
         code: 'required_with_proxy',
       });
     }
+  }
+  if (input.stealth === 'off') {
+    issues.push({
+      path: 'stealth',
+      message: "templates run with stealth on: use 'standard' or 'max'",
+      code: 'stealth_off',
+    });
   }
   if (input.timezone_id !== undefined && !isValidTimezone(input.timezone_id)) {
     issues.push({
@@ -257,16 +265,24 @@ export interface NewTemplateFacts {
 export const AUTH_OFF_DEFAULT_PRINCIPALS: readonly string[] = ['local'];
 
 /**
+ * The stealth level a new template takes when the input gives none: the server's, unless that is
+ * `off` (templates never run without stealth, D6), then `standard`.
+ */
+export function defaultTemplateStealth(server: TemplateStealthLevel): TemplateStealthLevel {
+  return server === 'off' ? 'standard' : server;
+}
+
+/**
  * The new template (status `recording`, version 1) and its sites. `fingerprint` and `humanize` are
- * derived as for sessions: both collapse to `false` with stealth `off`; `fingerprint` defaults to
- * `true` at stealth `max`.
+ * derived as for sessions: both collapse to `false` with stealth `off` (records created before D6);
+ * `fingerprint` defaults to `true` at stealth `max`.
  */
 export function buildTemplate(
   input: TemplateInput,
   validated: ValidatedTemplateInput,
   facts: NewTemplateFacts,
 ): { readonly template: TemplateRecord; readonly sites: readonly TemplateSiteRecord[] } {
-  const stealth = input.stealth ?? facts.defaults.stealth;
+  const stealth = input.stealth ?? defaultTemplateStealth(facts.defaults.stealth);
   const stealthOn = stealth !== 'off';
   const fingerprint =
     stealthOn && (input.fingerprint ?? (stealth === 'max' || facts.defaults.fingerprint));
@@ -331,6 +347,8 @@ export function buildTemplate(
       writePolicy: site.writePolicy,
       vaultHandle: null,
       autoRelogin: false,
+      vaultLinkedBy: null,
+      autoReloginAt: null,
       form: null,
       learnedCookieNames: [],
       health: UNKNOWN_SITE_HEALTH,

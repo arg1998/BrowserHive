@@ -139,7 +139,7 @@ Subscribe with `{ "type": "subscribe", "topic": "<topic>", "cursor"?: <last seq>
 | `logs` | `logs:read` | [`log.record`](#event-log-record) |
 | `notifications` | `notifications:read` | [`notification.created`](#event-notification-created), [`notification.updated`](#event-notification-updated) |
 | `channels` | `channels:read` | [`channel.changed`](#event-channel-changed), [`channel.removed`](#event-channel-removed), [`delivery.updated`](#event-delivery-updated), [`action.recorded`](#event-action-recorded) |
-| `templates` | `templates:read` | [`template.changed`](#event-template-changed), [`template.removed`](#event-template-removed), [`template.host`](#event-template-host), [`template.health`](#event-template-health), [`template.version`](#event-template-version), [`template.operation`](#event-template-operation) |
+| `templates` | `templates:read` | [`template.changed`](#event-template-changed), [`template.removed`](#event-template-removed), [`template.host`](#event-template-host), [`template.health`](#event-template-health), [`template.version`](#event-template-version), [`template.operation`](#event-template-operation), [`template.relogin`](#event-template-relogin), [`template.probe`](#event-template-probe) |
 | `session:<id>` | `sessions:read` | [`session.opened`](#event-session-opened), [`session.updated`](#event-session-updated), [`session.closed`](#event-session-closed), [`session.removed`](#event-session-removed), [`session.warning`](#event-session-warning), [`tool.called`](#event-tool-called), [`page.visited`](#event-page-visited), [`screenshot.captured`](#event-screenshot-captured), [`vault.access`](#event-vault-access), [`blocklist.hit`](#event-blocklist-hit), [`attention.created`](#event-attention-created), [`attention.resolved`](#event-attention-resolved), [`vault.confirm.created`](#event-vault-confirm-created), [`vault.confirm.resolved`](#event-vault-confirm-resolved) |
 | `screencast:<id>` | `sessions:read` | stream messages `meta`, `started`, `stopped`, `failed` and binary frames |
 
@@ -385,7 +385,7 @@ Payloads of `kind: "event"` frames, discriminated on `type`. DTO fields (`sessio
 | Field | Type | Required | Constraints |
 |---|---|---|---|
 | `template_id` | `string` | yes | — |
-| `host` | `object` | yes | keys `state`, `since`, `started_at`, `restarts`, `last_error`, `pages`, `parked_pages`, `rss_bytes`, `recycle_at`, `sandboxed`, `profile_secrets` |
+| `host` | `object` | yes | keys `state`, `since`, `started_at`, `restarts`, `last_error`, `pages`, `parked_pages`, `rss_bytes`, `recycle_at`, `sandboxed`, `profile_secrets`, `agents_paused` |
 
 <a id="event-template-health"></a>
 ### `template.health`
@@ -393,7 +393,7 @@ Payloads of `kind: "event"` frames, discriminated on `type`. DTO fields (`sessio
 | Field | Type | Required | Constraints |
 |---|---|---|---|
 | `template_id` | `string` | yes | — |
-| `site` | `object` | yes | keys `site_id`, `title`, `pack_id`, `pack_version`, `enabled`, `write_policy`, `vault_handle`, `auto_relogin`, `form`, `learned_cookie_names`, `health`, `stopped_at`, `device_bound`, `added_at` |
+| `site` | `object` | yes | keys `site_id`, `title`, `pack_id`, `pack_version`, `enabled`, `write_policy`, `vault_handle`, `auto_relogin`, `form`, `learned_cookie_names`, `auto_relogin_at`, `health`, `stopped_at`, `device_bound`, `added_at` |
 
 <a id="event-template-version"></a>
 ### `template.version`
@@ -414,6 +414,22 @@ Payloads of `kind: "event"` frames, discriminated on `type`. DTO fields (`sessio
 | `template_id` | `string` | yes | — |
 | `version` | `integer` | no | — |
 | `error` | `object` | no | keys `code`, `message` |
+
+<a id="event-template-relogin"></a>
+### `template.relogin`
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `template_id` | `string` | yes | — |
+| `relogin` | `object` | yes | keys `site_id`, `method`, `state`, `session_id`, `requested_by`, `requested_at`, `deadline_at`, `finished_at`, `agents_paused`, `sign_in_via`, `confirm_required`, `version`, `unlisted_domains`, `error` |
+
+<a id="event-template-probe"></a>
+### `template.probe`
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `template_id` | `string` | yes | — |
+| `probe` | `object` | yes | keys `seq`, `site_id`, `outcome`, `reason`, `trigger`, `final_url`, `duration_ms`, `at` |
 
 <a id="event-log-record"></a>
 ### `log.record`

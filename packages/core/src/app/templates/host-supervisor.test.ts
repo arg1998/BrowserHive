@@ -551,3 +551,51 @@ describe('T1b: holds, checkpoints and memory (spec 13 §3.2, §3.9, §3.12)', ()
     expect(supervisor.host(template.templateId).state).toBe('draining');
   });
 });
+
+describe('agents paused while the operator signs in (D-60, review #81 M-4)', () => {
+  it('a launch waits while a sign-in window is open, and goes ahead once agents may continue', async () => {
+    const { supervisor, clock } = setup();
+    const template = templateRecord();
+    const window = await supervisor.launchMaintenance({
+      template,
+      sites: [],
+      slug: 'relogin',
+      principal: { subject: 'admin' },
+      recording: true,
+    });
+    supervisor.pause.open(template.templateId, window.id);
+    let launched = false;
+    const launch = supervisor.launch(request(template, 'waits')).then((s) => {
+      launched = true;
+      return s;
+    });
+    await flush();
+    await clock.advance(5_000);
+    await flush();
+    expect(launched).toBe(false);
+    supervisor.pause.release(template.templateId);
+    await clock.advance(250);
+    await flush();
+    const session = await launch;
+    expect(session.template?.mode).toBe('live');
+  });
+
+  it('a launch that waited the whole bound answers TEMPLATE_UNAVAILABLE paused', async () => {
+    const { supervisor, clock } = setup();
+    const template = templateRecord();
+    const window = await supervisor.launchMaintenance({
+      template,
+      sites: [],
+      slug: 'relogin',
+      principal: { subject: 'admin' },
+      recording: true,
+    });
+    supervisor.pause.open(template.templateId, window.id);
+    const refused = codeOf(supervisor.launch(request(template, 'gives-up')));
+    for (let i = 0; i < 70; i++) {
+      await clock.advance(250);
+      await flush();
+    }
+    expect(await refused).toBe('TEMPLATE_UNAVAILABLE');
+  });
+});

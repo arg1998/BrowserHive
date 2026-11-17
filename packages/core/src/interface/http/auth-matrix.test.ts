@@ -241,6 +241,31 @@ describe('auth matrix: bearer principals', () => {
     expect((await kit.request('DELETE', path, { headers: writer })).status).toBe(200);
   });
 
+  it('linking a vault binding for auto-relogin needs templates:login AND vault:write (spec 13 §11.1)', async () => {
+    const kit = await createHttpKit();
+    const cookie = await kit.login();
+    const issue = async (scopes: string[]) => {
+      const response = await kit.request('POST', '/api/v1/auth/tokens', {
+        cookie,
+        body: { owner_kind: 'operator', display: `t-${scopes.length}`, scopes },
+      });
+      const { token } = (await response.json()) as { token: string };
+      return { authorization: `Bearer ${token}` };
+    };
+    const created = await kit.request('POST', '/api/v1/templates', { cookie, body: TEMPLATE_BODY });
+    const { template } = (await created.json()) as { template: { template_id: string } };
+    const url = `/api/v1/templates/${template.template_id}/sites/site-a.test/relogin`;
+    const body = { vault_handle: 'github' };
+    const loginOnly = await issue(['templates:read', 'templates:login']);
+    const refused = await kit.request('PUT', url, { headers: loginOnly, body });
+    expect(refused.status).toBe(403);
+    expect(ProblemDetails.parse(await refused.json()).code).toBe('FORBIDDEN');
+    const vaultOnly = await issue(['vault:read', 'vault:write']);
+    expect((await kit.request('PUT', url, { headers: vaultOnly, body })).status).toBe(403);
+    const both = await issue(['templates:read', 'templates:login', 'vault:write']);
+    expect((await kit.request('PUT', url, { headers: both, body })).status).toBe(200);
+  });
+
   it('a token whose stored scopes are all unknown holds none (never the full set)', async () => {
     const kit = await createHttpKit();
     const cookie = await kit.login();

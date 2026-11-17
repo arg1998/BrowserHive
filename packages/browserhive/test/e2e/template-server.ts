@@ -4,7 +4,8 @@
  * HTTPS fixture sites (`*.test`), and those sites. Run it on a display (CI: `xvfb-run -a`) so the
  * template's sign-in window is a real window.
  *
- * Usage: `bun packages/browserhive/test/e2e/template-server.ts <port> <dataDir>`; stops on SIGINT/SIGTERM.
+ * Usage: `BHDEV_TESTING=1 bun packages/browserhive/test/e2e/template-server.ts <port> <dataDir>`; stops
+ * on SIGINT/SIGTERM. The testing seam is refused without `BHDEV_TESTING=1` (D-63).
  */
 
 import { FIXTURE_SPKI, startHttpsSites } from '@browserhive/core/test/https-sites';
@@ -14,7 +15,7 @@ const port = Number(process.argv[2] ?? '9877');
 const dataDir = process.argv[3];
 if (dataDir === undefined || !Number.isInteger(port)) {
   process.stderr.write(
-    'usage: bun packages/browserhive/test/e2e/template-server.ts <port> <dataDir>\n',
+    'usage: BHDEV_TESTING=1 bun packages/browserhive/test/e2e/template-server.ts <port> <dataDir>\n',
   );
   process.exit(64);
 }

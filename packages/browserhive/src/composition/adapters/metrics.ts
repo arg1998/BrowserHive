@@ -1,4 +1,4 @@
-/** @module composition/adapters/metrics — OTel metrics consumers (spec 10 §7): bus events → counters/histograms; observable instruments over the write queue, the database size, the realtime hub, the browser-memory sampler and this process. Only wired when metrics are exported. */
+/** @module composition/adapters/metrics — OTel metrics consumers (spec 10 §7): bus events → counters/histograms; observable instruments over the write queue, the database size, the realtime hub, the browser-memory sampler, the template hosts and this process. Only wired when metrics are exported. */
 
 import { metricHarness } from '@browserhive/contracts/harness';
 import type {
@@ -17,6 +17,7 @@ import {
 } from '@browserhive/core/runtime';
 import type { ActionCounter, DeliveryCounter, ReportCounter } from '@browserhive/core/server';
 import { rssAttributes } from './browser-memory.ts';
+import { subscribeTemplateMetrics, templateHostsCallback } from './template-metrics.ts';
 
 /** What the realtime hub exposes to the metrics (http transport only). */
 export interface RealtimeMetricsSource {
@@ -50,6 +51,8 @@ export interface MetricSources {
   readonly browserMemory?: () => ReadonlyMap<string, number>;
   /** Starts the event-loop monitor (default the `perf_hooks` one); `null` disables the gauge. */
   readonly eventLoop?: () => EventLoopLagMonitor | null;
+  /** Every template host's state (`TemplateHostSupervisor.states()`); absent under `templates=false`. */
+  readonly templateHosts?: () => Iterable<string>;
 }
 
 interface Observer {
@@ -161,6 +164,7 @@ export function wireMetrics(
     bus.subscribe('template.checkpoint.written', ({ payload }) =>
       instruments.templateCheckpoints.add(1, { reason: payload.reason }),
     ),
+    ...subscribeTemplateMetrics(instruments, bus),
     bus.subscribe('retention.completed', ({ payload }) => {
       for (const [table, rows] of Object.entries(payload.prunedByTable ?? {})) {
         if (rows > 0) instruments.retentionPrunedRows.add(rows, { table });
@@ -233,6 +237,7 @@ export function wireMetrics(
         }
       },
     ],
+    [instruments.templateHosts, templateHostsCallback(sources.templateHosts)],
     [
       instruments.browserRssBytes,
       (r) => {

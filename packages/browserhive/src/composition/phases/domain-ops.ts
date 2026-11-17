@@ -193,7 +193,12 @@ export function buildOps(input: OpsInput): OpsParts {
         ? bus.publish('notification.created', { type: 'notification.created', notification })
         : bus.publish('notification.updated', { type: 'notification.updated', notification }),
     registry: channels,
-    facts: createReportFacts({ analytics: input.analytics, repos, capacity: input.capacity }),
+    facts: createReportFacts({
+      analytics: input.analytics,
+      repos,
+      capacity: input.capacity,
+      templates: config.templates,
+    }),
     uow: input.uow,
     repos,
     outbox: notificationOutbox,
