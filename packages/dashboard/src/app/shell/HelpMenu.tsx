@@ -35,7 +35,7 @@ export function pageDocs(pathname: string): { readonly key: DocsPage; readonly l
         ? { key: 'dashboardSessions', label: 'Sessions' }
         : { key: 'dashboardSessionDetail', label: 'Session detail' };
     case 'attention':
-      return { key: 'dashboardAttention', label: 'Attention' };
+      return { key: 'dashboardAttention', label: 'Attentions' };
     case 'websites':
       return { key: 'dashboardWebsites', label: 'Websites' };
     case 'blocklist':

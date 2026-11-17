@@ -1,7 +1,13 @@
-/** @module app/shell/use-route-table.test — breadcrumbs follow the URL hierarchy without an app-root crumb; only object pages get a trail */
+/** @module app/shell/use-route-table.test — breadcrumbs follow the URL hierarchy without an app-root crumb; a page with a `parent` starts at it; only object pages get a trail */
 
 import { describe, expect, it } from 'bun:test';
-import { type CrumbRoute, deriveCrumbs, isObjectPage, routePathOf } from './use-route-table.ts';
+import {
+  type CrumbRoute,
+  deriveCrumbs,
+  isObjectPage,
+  isUnder,
+  routePathOf,
+} from './use-route-table.ts';
 
 const ROOT = { title: 'BrowserHive' };
 
@@ -19,6 +25,7 @@ const ROUTES: readonly CrumbRoute[] = [
   { fullPath: '/sessions/$id/live', staticData: { title: 'Live view' } },
   { fullPath: '/vault', staticData: { title: 'Vault' } },
   { fullPath: '/vault/log', staticData: { title: 'Vault log' } },
+  { fullPath: '/websites', staticData: { title: 'Websites', parent: '/overview' } },
 ];
 
 describe('deriveCrumbs', () => {
@@ -44,6 +51,19 @@ describe('deriveCrumbs', () => {
     expect(vaultLog.map((c) => c.label)).toEqual(['Vault', 'Vault log']);
     expect(isObjectPage(vaultLog, true)).toBe(false);
     expect(deriveCrumbs('/', {}, ROUTES)).toEqual([]);
+  });
+
+  it('starts a page filed under a sidebar item at that item', () => {
+    const crumbs = deriveCrumbs('/websites', {}, ROUTES);
+    expect(crumbs).toEqual([
+      { label: 'Overview', to: '/overview' },
+      { label: 'Websites', to: '/websites' },
+    ]);
+    // Not a sidebar page itself, so the topbar shows the trail.
+    expect(isObjectPage(crumbs)).toBe(true);
+    expect(isUnder('/websites', '/websites')).toBe(true);
+    expect(isUnder('/websites/x', '/websites')).toBe(true);
+    expect(isUnder('/websitesx', '/websites')).toBe(false);
   });
 
   it('never repeats a label from layout routes', () => {

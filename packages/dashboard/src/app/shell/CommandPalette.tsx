@@ -36,7 +36,7 @@ export function visibleCommands(
   const ordered = PALETTE_GROUPS.flatMap((group) => matched.filter((c) => c.group === group));
   if (query.trim() !== '') return ordered;
   const recents = recent
-    .map((id) => commands.find((c) => c.id === id && c.group !== 'Attention'))
+    .map((id) => commands.find((c) => c.id === id && c.group !== 'Attentions'))
     .filter((c): c is PaletteCommand => c !== undefined)
     .map((c) => ({ ...c, group: 'Recent' as const, id: `recent:${c.id}` }));
   return [...recents, ...ordered];

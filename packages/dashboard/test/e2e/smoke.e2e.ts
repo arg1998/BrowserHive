@@ -56,6 +56,28 @@ test.describe('smoke', () => {
     await expect(page.getByText(/wikipedia\.org/).first()).toBeVisible();
   });
 
+  test('overview websites card → websites detail, filed under Overview', async ({
+    page,
+  }, testInfo) => {
+    await signIn(page);
+    const card = page.locator('section', {
+      has: page.getByRole('heading', { level: 2, name: 'Websites', exact: true }),
+    });
+    await expect(card.getByText(/example\.com/).first()).toBeVisible();
+    await card.getByRole('link', { name: /View all websites/ }).click();
+    await expect(page).toHaveURL(/\/websites$/);
+    await expect(page.getByRole('heading', { level: 1, name: 'Websites' })).toBeVisible();
+    // Phones show the menu button instead of the sidebar and breadcrumb.
+    if (testInfo.project.name === 'phone') return;
+    const nav = page.getByRole('navigation', { name: 'Primary' });
+    await expect(nav.getByRole('link', { name: 'Websites' })).toHaveCount(0);
+    await expect(nav.getByRole('link', { name: 'Attentions' })).toBeVisible();
+    await expect(nav.locator('[aria-current="page"]')).toHaveText(/Overview/);
+    const crumbs = page.getByRole('navigation', { name: 'Breadcrumb' });
+    await crumbs.getByRole('link', { name: 'Overview' }).click();
+    await expect(page).toHaveURL(/\/overview$/);
+  });
+
   test('websites, logs and system pages render live data', async ({ page }) => {
     await signIn(page);
     await page.goto('/websites');
