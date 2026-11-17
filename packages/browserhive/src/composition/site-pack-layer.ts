@@ -8,6 +8,11 @@ import type {
 import { selectGenericProber } from '@browserhive/core/server';
 import type { SitePackEnforcement, SitePackEnforcementInput } from './site-pack-enforcement.ts';
 import { buildSitePackEnforcement } from './site-pack-enforcement.ts';
+import {
+  buildSiteStrategies,
+  joinPageWatchers,
+  type SiteStrategies,
+} from './site-pack-strategies.ts';
 import { buildSitePacks, type SitePacksInput } from './site-packs.ts';
 import {
   buildSitePackPages,
@@ -21,6 +26,8 @@ export interface SitePackLayer {
   readonly pages: SitePackPagesParts;
   /** The prober selector for the template health wiring; absent when packs are off. */
   readonly probers?: (supervisor: TemplateHostSupervisor) => ProberSelector;
+  /** The host strategies (`webrtc-policy`, `keep-alive`, `device-bound-session`); absent when off. */
+  readonly strategies?: SiteStrategies;
 }
 
 /** Builds the registry and the page enforcement; `undo` receives their stops. */
@@ -33,10 +40,13 @@ export async function buildSitePackLayer(
   input.undo.push(pages.stop);
   // `sitePacks=false` (or `templates=false`) turns the whole layer off (spec 13 §9.6).
   const on = input.config.templates && input.config.sitePacks;
+  const strategies = buildSiteStrategies({ ...input, registry });
+  if (strategies !== null) input.undo.push(strategies.stop);
   return {
     registry,
     pages,
     ...(on && { probers: (supervisor) => pages.probers(supervisor, selectGenericProber) }),
+    ...(strategies !== null && { strategies }),
   };
 }
 
@@ -58,6 +68,8 @@ export function attachSitePackEnforcement(
     lookup: layer.registry,
     health: input.health?.health ?? null,
   });
-  input.driver.attachTemplatePageWatcher(layer.pages.pageWatcher);
+  input.driver.attachTemplatePageWatcher(
+    joinPageWatchers(input.logger, layer.pages.pageWatcher, layer.strategies?.pageWatcher),
+  );
   return enforcement;
 }

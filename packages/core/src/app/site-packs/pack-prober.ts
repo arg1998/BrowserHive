@@ -1,4 +1,4 @@
-/** @module app/site-packs/pack-prober — the pack prober of spec 13 §8.1 through T2's probe seam: the cookie pre-check with the pack's `cookie_names`, then one `GET` navigation to `https://<probe.host><probe.path>` in a page of BrowserHive's own maintenance session (minimized, never an agent's window), with a guard that aborts every main-frame document request leaving the pack's domains (fail-closed), classified by `classifyPackProbe`. */
+/** @module app/site-packs/pack-prober — the pack prober of spec 13 §8.1 through T2's probe seam: the cookie pre-check with the pack's `cookie_names`, then one `GET` navigation to `https://<probe.host><probe.path>` in a page of BrowserHive's own maintenance session (minimized, never an agent's window), with a guard that aborts every main-frame document request leaving the pack's domains (fail-closed), a bounded wait after `load` for a client-side signed-out redirect (D48), classified by `classifyPackProbe`. The keeper (`keep-alive`) visits its own path through {@link PackProber.visit}. */
 
 import type { SitePackV1 } from '@browserhive/contracts/site-packs';
 import type { Page, Route } from 'patchright';
@@ -14,8 +14,10 @@ import {
 import {
   classifyPackProbe,
   inPackDomains,
+  isSignedOutUrl,
   PACK_PROBE_REASONS,
   PROBE_NAVIGATION_MS,
+  PROBE_REDIRECT_WINDOW_MS,
   packCookiePrecheck,
   probeUrlOf,
 } from '../../domain/site-packs/probe-classify.ts';
@@ -54,6 +56,8 @@ export interface PackProberDeps {
   readonly logger: Logger;
   /** The navigation's timeout (default {@link PROBE_NAVIGATION_MS}; a test seam). */
   readonly navigationMs?: number;
+  /** The post-load redirect window (default {@link PROBE_REDIRECT_WINDOW_MS}; a test seam). */
+  readonly redirectWindowMs?: number;
 }
 
 /** The pack prober (`needsBrowser`: a stopped browser is started for it). */
@@ -67,7 +71,16 @@ export class PackProber implements SiteProber {
     this.#log = deps.logger.child({ module: 'site-packs.prober' });
   }
 
-  async probe(ctx: SiteProbeContext): Promise<ProbeVerdict> {
+  probe(ctx: SiteProbeContext): Promise<ProbeVerdict> {
+    return this.visit(ctx, null);
+  }
+
+  /**
+   * A probe that loads `path` on the probe host instead of the probe path (`keep-alive`'s keeper
+   * path, spec 13 §9.4; `null` = the probe path), with the same cookie pre-check, domain guard and
+   * classification. Staying on another path is no sign of a session (`no_signal`).
+   */
+  async visit(ctx: SiteProbeContext, path: string | null): Promise<ProbeVerdict> {
     const packId = ctx.site.packId;
     const effective = packId === null ? null : (this.#deps.lookup()?.effectiveById(packId) ?? null);
     // The pack went away (disabled, `sitePacks=false`) since the selection: the generic probe.
@@ -80,14 +93,14 @@ export class PackProber implements SiteProber {
     const onAbort = () => void opened.close().catch(() => undefined);
     ctx.signal.addEventListener('abort', onAbort, { once: true });
     try {
-      return await this.#navigate(pack, opened.page);
+      return await this.#navigate(pack, opened.page, path ?? pack.signed_in.probe.path);
     } finally {
       ctx.signal.removeEventListener('abort', onAbort);
       await opened.close().catch(() => undefined);
     }
   }
 
-  async #navigate(pack: SitePackV1, page: Page): Promise<ProbeVerdict> {
+  async #navigate(pack: SitePackV1, page: Page, path: string): Promise<ProbeVerdict> {
     try {
       await page.route('**/*', (route) => guardDocument(pack, page, route));
     } catch (err) {
@@ -98,7 +111,7 @@ export class PackProber implements SiteProber {
     let failure: 'timeout' | 'network' | null = null;
     let status: number | null = null;
     try {
-      const response = await page.goto(probeUrlOf(pack), {
+      const response = await page.goto(probeUrlOf(pack, path), {
         waitUntil: 'domcontentloaded',
         timeout: this.#deps.navigationMs ?? PROBE_NAVIGATION_MS,
       });
@@ -106,9 +119,7 @@ export class PackProber implements SiteProber {
     } catch (err) {
       failure = err instanceof Error && err.name === 'TimeoutError' ? 'timeout' : 'network';
     }
-    if (failure === null) {
-      await page.waitForLoadState('load', { timeout: PROBE_SETTLE_MS }).catch(() => undefined);
-    }
+    const settled = failure === null && (await this.#settle(pack, page));
     const finalUrl = safeUrl(page);
     const challenge = failure === null ? await this.#challenge(pack, page, finalUrl) : null;
     return await classifyPackProbe(pack, {
@@ -116,8 +127,31 @@ export class PackProber implements SiteProber {
       finalUrl,
       status,
       challenge,
+      settled,
+      path,
       hasSelector: async (selector) => (await page.locator(`css=${selector}`).count()) > 0,
     });
+  }
+
+  /**
+   * Waits for `load` (bounded), then, for a `redirect` or `either` pack whose page is not on a
+   * signed-out redirect yet, up to the redirect window for a client-side navigation to one (D48).
+   * True when the page loaded and the window passed without one (or no window applies).
+   */
+  async #settle(pack: SitePackV1, page: Page): Promise<boolean> {
+    const loaded = await page
+      .waitForLoadState('load', { timeout: PROBE_SETTLE_MS })
+      .then(() => true)
+      .catch(() => false);
+    if (pack.signed_in.kind === 'landmark' || isSignedOutUrl(pack, safeUrl(page))) return loaded;
+    const redirected = await page
+      .waitForURL((url) => isSignedOutUrl(pack, url.href), {
+        timeout: this.#deps.redirectWindowMs ?? PROBE_REDIRECT_WINDOW_MS,
+        waitUntil: 'commit',
+      })
+      .then(() => true)
+      .catch(() => false);
+    return loaded && !redirected;
   }
 
   /** The first challenge the probe page matches (the page's pack, else the site's; then defaults). */

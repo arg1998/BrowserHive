@@ -24,6 +24,7 @@ import type {
 } from '../../ports/template-host.ts';
 import type { TemplateState } from '../../ports/template-state.ts';
 import { closeContextWithin, readBrowserPid } from './host-process.ts';
+import { observeHostResponses } from './host-responses.ts';
 import { SentinelKeeper } from './host-sentinel.ts';
 import type { IdentityApplier } from './identity-applier.ts';
 import type { InterceptionChain } from './interception-chain.ts';
@@ -31,6 +32,7 @@ import { PARKED, type PageOwner, sessionOwner, type TargetFacts } from './page-a
 import { HostPageDispatcher } from './page-dispatcher.ts';
 import { PageWaiters } from './page-waiters.ts';
 import { ParkedPages } from './parked-pages.ts';
+import type { TemplateHostInput } from './template-host-input.ts';
 import * as ops from './template-host-ops.ts';
 import * as hostState from './template-host-state.ts';
 import type { HostTargets } from './template-targets.ts';
@@ -40,28 +42,7 @@ import { TemplateSessionView, type TemplateViewHost } from './template-view.ts';
 export const ADOPTION_DEADLINE_MS = 10_000;
 export { OPERATOR_STOP_WINDOW_MS, SENTINEL_GRACE_MS } from './host-sentinel.ts';
 export { MAX_PARKED_PAGES } from './parked-pages.ts';
-
-/** What the launcher hands the host. */
-export interface TemplateHostInput {
-  readonly templateId: string;
-  readonly context: BrowserContext;
-  readonly targets: HostTargets;
-  readonly chain: InterceptionChain;
-  readonly capabilities: EngineCapabilities;
-  readonly driver: 'patchright';
-  readonly browserInfo: SessionBrowserInfo;
-  readonly warnings: readonly LaunchWarning[];
-  readonly headless: boolean;
-  readonly window: { readonly width: number; readonly height: number };
-  /** Saved passwords or autofill data were found in the profile before the start (spec 13 §3.1). */
-  readonly profileSecrets?: boolean;
-  /** The profile directory (a sign-in removal finds origins stored by earlier starts). */
-  readonly userDataDir?: string;
-  /** The watcher of attributed pages (spec 13 §9.5), read per page. */
-  readonly pageWatcher?: () => PageWatcher | null;
-  readonly clock: Clock;
-  readonly logger: Logger;
-}
+export type { TemplateHostInput } from './template-host-input.ts';
 
 /** A template host over a persistent context; built by the driver, held only by the supervisor. */
 export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
@@ -144,6 +125,9 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
     this.browser?.on('disconnected', () => this.exited('browser disconnected'));
     this.context.on('close', () => this.exited('context closed'));
     this.context.on('page', (page) => this.dispatcher.adopt(page));
+    if (this.pageWatcher !== null) {
+      observeHostResponses(this.context, this.hostId, this.pageWatcher, this.log);
+    }
   }
 
   get identity(): AppliedIdentity | null {

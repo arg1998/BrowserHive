@@ -1,12 +1,15 @@
-/** @module test/helpers/https-sites-strategies — the before-action strategy pages of the HTTPS fixture sites (spec 13 §9.4, §14): an input page that records pointer moves and key timings in the DOM (humanized input), warm-up entries that leave the pack's domains by a server redirect and by a script navigation (the fail-closed guard), and a page whose body arrives late (a long-running action). */
+/** @module test/helpers/https-sites-strategies — the strategy pages of the HTTPS fixture sites (spec 13 §9.4, §14). Before-action strategies: an input page that records pointer moves and key timings in the DOM (humanized input), warm-up entries that leave the pack's domains by a server redirect and by a script navigation (the fail-closed guard), and a page whose body arrives late (a long-running action). Network strategies: a burst of guarded writes (`pace-writes`), a response carrying the DBSC registration header (`device-bound-session`), a keeper path (`keep-alive`), a Reddit-shaped probe page that redirects to the sign-in page client-side after `load` and one that stays (D48). */
 
 /** How long `/strategy/slow` waits before answering. */
 export const STRATEGY_SLOW_MS = 4_000;
 
-const html = (title: string, body: string): Response =>
+/** How long after `load` the Reddit-shaped page navigates to `/login` (client-side, D48). */
+export const CLIENT_REDIRECT_AFTER_LOAD_MS = 800;
+
+const html = (title: string, body: string, headers: Record<string, string> = {}): Response =>
   new Response(
     `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title></head><body>${body}</body></html>`,
-    { headers: { 'content-type': 'text/html; charset=utf-8' } },
+    { headers: { 'content-type': 'text/html; charset=utf-8', ...headers } },
   );
 
 /** The strategy pages, or `null` for any other path. */
@@ -46,6 +49,30 @@ export function strategyRoute(path: string): Response | null {
       });
       return new Response(body, { headers: { 'content-type': 'text/html; charset=utf-8' } });
     }
+    case '/strategies/burst':
+      // Five guarded writes at once; their outcomes land in `#out` once all settled.
+      return html(
+        'burst',
+        `<button id="burst" onclick="Promise.all([1, 2, 3, 4, 5].map((n) => fetch('/api/invite?n=' + n, {method: 'POST', body: 'x'}).then((r) => 'sent ' + r.status, () => 'blocked'))).then((all) => { document.getElementById('out').textContent = all.join(','); })">burst</button><pre id="out"></pre>`,
+      );
+    case '/strategies/dbsc':
+      return html('dbsc', '<p id="dbsc">bound</p>', {
+        'sec-session-registration':
+          '(ES256 RS256);path="/strategies/dbsc-start";challenge="fixture"',
+      });
+    case '/strategies/plain':
+      return html('plain', '<p id="plain">plain</p>');
+    case '/strategies/keep':
+      return html('keep', '<div id="feed">kept</div>');
+    case '/strategies/reddit':
+      // Answers 200 and is still here at DOMContentLoaded and at load; then the app sends a
+      // signed-out browser to the sign-in page (Reddit's /settings/account, D48).
+      return html(
+        'settings',
+        `<p id="app">loading</p><script>addEventListener('load', () => setTimeout(() => location.replace('/login/?dest=' + encodeURIComponent(location.href)), ${CLIENT_REDIRECT_AFTER_LOAD_MS}))</script>`,
+      );
+    case '/strategies/stays':
+      return html('settings', '<p id="app">settings</p>');
     default:
       return null;
   }

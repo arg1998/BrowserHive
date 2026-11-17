@@ -30,6 +30,8 @@ function facts(over: Partial<PackProbeFacts> & { selectors?: string[] } = {}): P
     finalUrl: over.finalUrl ?? PROBE,
     status: over.status === undefined ? 200 : over.status,
     challenge: over.challenge ?? null,
+    settled: over.settled ?? true,
+    ...(over.path !== undefined && { path: over.path }),
     hasSelector: async (s) => (over.selectors ?? []).includes(s),
   };
 }
@@ -115,6 +117,43 @@ describe('classifyPackProbe', () => {
       outcome: 'inconclusive',
       reason: 'no_signal',
     });
+  });
+
+  it('D48: an `either` probe still on the probe path is signed in only once the page settled', async () => {
+    expect(await classifyPackProbe(pack, facts({ settled: false }))).toMatchObject({
+      outcome: 'inconclusive',
+      reason: 'no_signal',
+    });
+    expect(await classifyPackProbe(pack, facts({ settled: true }))).toMatchObject({
+      outcome: 'signed_in',
+      reason: 'no_redirect',
+    });
+    // A redirect that landed during the post-load window wins whatever `settled` says.
+    const out = facts({ settled: false, finalUrl: 'https://www.linkedin.com/uas/login?x=1' });
+    expect(await classifyPackProbe(pack, out)).toMatchObject({ outcome: 'signed_out' });
+  });
+
+  it('a `redirect` probe keeps no_redirect at DOMContentLoaded (not weakened by the window)', async () => {
+    const redirectPack = SitePackV1.parse({
+      ...base,
+      signed_in: { ...base.signed_in, kind: 'redirect' },
+    });
+    expect(await classifyPackProbe(redirectPack, facts({ settled: false }))).toMatchObject({
+      outcome: 'signed_in',
+      reason: 'no_redirect',
+    });
+  });
+
+  it('a keeper visit of another path never answers no_redirect; the landmark and redirects still count', async () => {
+    const keeper = (over: Partial<PackProbeFacts> & { selectors?: string[] }) =>
+      facts({ path: '/keep', finalUrl: 'https://www.linkedin.com/keep', ...over });
+    expect(await classifyPackProbe(pack, keeper({}))).toMatchObject({ reason: 'no_signal' });
+    expect(await classifyPackProbe(pack, keeper({ selectors: ['#global-nav'] }))).toMatchObject({
+      outcome: 'signed_in',
+      reason: 'landmark',
+    });
+    const out = keeper({ finalUrl: 'https://www.linkedin.com/uas/login?next=/keep' });
+    expect(await classifyPackProbe(pack, out)).toMatchObject({ outcome: 'signed_out' });
   });
 
   it('a selector read that throws counts as absent', async () => {

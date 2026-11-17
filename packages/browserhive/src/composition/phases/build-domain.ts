@@ -291,6 +291,7 @@ async function buildDomain(
     repeat: timers.every,
     vault: operators.vault,
     ...(layer.probers !== undefined && { probers: layer.probers }),
+    ...(layer.strategies !== undefined && { siteStrategies: layer.strategies }),
   });
   const templates = tpl.service;
   // The notification button of a sign-out only queues the re-login (spec 13 §8.4, §8.6).

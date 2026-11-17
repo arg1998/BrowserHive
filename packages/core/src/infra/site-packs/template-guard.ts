@@ -1,10 +1,11 @@
-/** @module infra/site-packs/template-guard — the request guard every template host carries as its chain's handler 3 (spec 13 §3.8, §9.3): the host's pack rule source, the guard-hit writer bound to its template, and the security intercepts' confirmer (`null` under `transport=stdio`). */
+/** @module infra/site-packs/template-guard — the request guard every template host carries as its chain's handler 3 (spec 13 §3.8, §9.3): the host's pack rule source, the guard-hit writer bound to its template, the security intercepts' confirmer (`null` under `transport=stdio`) and the write pacer (`pace-writes`, §9.4). */
 
 import type { Clock } from '../../ports/clock.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type { RequestConfirmer } from '../../ports/request-guard.ts';
 import type { WritePolicyOverrides } from '../../ports/site-guards.ts';
 import type { SitePackLookup } from '../../ports/site-packs.ts';
+import type { WritePacing } from '../../ports/write-pacing.ts';
 import { requestGuardHandler } from '../browsers/request-guard-route.ts';
 import type { TemplateRequestGuard } from '../browsers/template-launch.ts';
 import type { SiteGuardHitsWriter } from './guard-hits-writer.ts';
@@ -25,6 +26,8 @@ export interface TemplateRequestGuardDeps {
   readonly catalog: GuardRuleCatalog;
   readonly hits: SiteGuardHitsWriter;
   readonly confirmer: RequestConfirmer | null;
+  /** `pace-writes` (spec 13 §9.4); absent = no pacing. */
+  readonly pacer?: WritePacing | null;
   readonly clock: Clock;
   readonly logger: Logger;
   /** Query keys kept in audited URLs (`urlQueryAllowlist`, D-20). */
@@ -45,9 +48,15 @@ export function templateRequestGuard(deps: TemplateRequestGuardDeps): TemplateRe
       }),
       hits: deps.hits.forTemplate(templateId),
       confirmer: deps.confirmer,
+      pace: paceOf(deps.pacer ?? null, templateId),
       clock: deps.clock,
       logger: deps.logger,
       ...(deps.urlQueryAllowlist !== undefined && { urlQueryAllowlist: deps.urlQueryAllowlist }),
     });
   };
+}
+
+/** The host's pace question, bound to its template. */
+function paceOf(pacer: WritePacing | null, templateId: string) {
+  return pacer === null ? null : (ruleId: string) => pacer.pace({ templateId, ruleId });
 }

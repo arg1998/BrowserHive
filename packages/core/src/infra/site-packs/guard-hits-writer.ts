@@ -1,4 +1,4 @@
-/** @module infra/site-packs/guard-hits-writer — every guard decision becomes one `site_guard_hits` row (spec 13 §9.3, §9.9): published as `site_pack.guard_hit` (the recorder writes the row through the write queue; the metric `browserhive.site_pack.guard_hits` counts the event), and a `warn` hit of a session records `SITE_GUARD_WARNED` on it. */
+/** @module infra/site-packs/guard-hits-writer — every guard decision becomes one `site_guard_hits` row (spec 13 §9.3, §9.9): published as `site_pack.guard_hit` (the recorder writes the row through the write queue; the metric `browserhive.site_pack.guard_hits` counts the event); a `warn` hit of a session records `SITE_GUARD_WARNED` on it and a `paced` one `SITE_PACED` (§9.4). */
 
 import type { SiteGuardHitRow } from '@browserhive/contracts/http';
 import { type SessionWarning, sessionWarning } from '../../domain/session/warnings.ts';
@@ -65,6 +65,9 @@ export class SiteGuardHitsWriter implements SiteGuardHitSink {
       if (input.action === 'warn' && input.sessionId !== null) {
         this.#deps.warn(input.sessionId, guardWarned(input.sessionId, input));
       }
+      if (input.action === 'paced' && input.sessionId !== null) {
+        this.#deps.warn(input.sessionId, sitePaced(input.sessionId, input));
+      }
     } catch (error) {
       this.#log.warn('guard hit not written', {
         packId: input.packId,
@@ -126,6 +129,23 @@ export function guardWarned(sessionId: string, hit: SiteGuardHitInput): SessionW
     'SITE_GUARD_WARNED',
     sessionId,
     `A guarded request went out: ${method}${hit.url} (guard ${hit.packId}#${hit.guardId}, ${hit.guardKind}).`,
+    {
+      pack_id: hit.packId,
+      guard_id: hit.guardId,
+      guard_kind: hit.guardKind,
+      method: hit.method,
+      url: hit.url,
+    },
+  );
+}
+
+/** The `SITE_PACED` warning (shown to operators): a write aborted by `pace-writes`. */
+export function sitePaced(sessionId: string, hit: SiteGuardHitInput): SessionWarning {
+  const method = hit.method === null ? '' : `${hit.method} `;
+  return sessionWarning(
+    'SITE_PACED',
+    sessionId,
+    `A write was paced and not sent: ${method}${hit.url} (guard ${hit.packId}#${hit.guardId}); the template's write budget for it is spent.`,
     {
       pack_id: hit.packId,
       guard_id: hit.guardId,
