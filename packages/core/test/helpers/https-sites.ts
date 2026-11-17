@@ -2,6 +2,7 @@
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { clipboardRoute } from './https-sites-clipboard.ts';
 import { guardRoute } from './https-sites-guards.ts';
 import { FIXTURE_PROVIDER_HOSTS } from './https-sites-packs.ts';
 import { signInRoute } from './https-sites-signin.ts';
@@ -160,6 +161,7 @@ export function startHttpsSites(options: HttpsSitesOptions = {}): HttpsSites {
       return (
         (await signInRoute(req, site, url.pathname)) ??
         guardRoute(site, url.pathname) ??
+        clipboardRoute(url.pathname) ??
         route(host, url.pathname, req.method, url.search)
       );
     },

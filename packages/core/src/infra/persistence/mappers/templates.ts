@@ -245,6 +245,7 @@ export function templateFromRow(row: Selectable<Templates>): TemplateRecord {
     identityObserved: observedFromJson(row.identity_observed_json, where),
     proxy: proxyFromJson(row.proxy_json, where),
     agentWindows: parseEnum(AGENT_WINDOW_STATES, row.agent_windows, where),
+    denyClipboardWrites: intToBool(row.deny_clipboard_writes),
     authorizedPrincipals: parseStringArray(row.authorized_principals_json, where),
     harnesses: harnessesFromJson(row.harnesses_json, where),
     maxConcurrent: row.max_concurrent,
@@ -281,6 +282,7 @@ export function templateToRow(record: TemplateRecord): Insertable<Templates> {
     identity_observed_json: observedToJson(record.identityObserved),
     proxy_json: proxyToJson(record.proxy),
     agent_windows: record.agentWindows,
+    deny_clipboard_writes: boolToInt(record.denyClipboardWrites),
     authorized_principals_json: toJson(record.authorizedPrincipals),
     harnesses_json: harnessesToJson(record.harnesses),
     max_concurrent: record.maxConcurrent,
@@ -316,6 +318,9 @@ export function templatePatchToRow(patch: TemplatePatch): Partial<Insertable<Tem
     }),
     ...(patch.proxy !== undefined && { proxy_json: proxyToJson(patch.proxy) }),
     ...(patch.agentWindows !== undefined && { agent_windows: patch.agentWindows }),
+    ...(patch.denyClipboardWrites !== undefined && {
+      deny_clipboard_writes: boolToInt(patch.denyClipboardWrites),
+    }),
     ...(patch.authorizedPrincipals !== undefined && {
       authorized_principals_json: toJson(patch.authorizedPrincipals),
     }),

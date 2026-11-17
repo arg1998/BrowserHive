@@ -127,6 +127,12 @@ export const Template = z.object({
   proxy: TemplateProxy.nullable(),
   policy: TemplatePolicy,
   agent_windows: AgentWindows,
+  /**
+   * "Deny clipboard writes" (spec 13 §2.1, D18): pages in the template's browser cannot put text on
+   * the operator's clipboard (`navigator.clipboard` writes and `document.execCommand('copy'|'cut')`
+   * are refused; sites can detect the refusal). Applies at once to a running browser.
+   */
+  deny_clipboard_writes: z.boolean(),
   current_version: z.number().int().nullable(),
   checkpoint_at: EpochMs.nullable(),
   checkpoint_size_bytes: Bytes.nullable(),
@@ -159,6 +165,8 @@ export const TemplateInput = z.strictObject({
   timezone_id: TemplateTimezoneId.optional(),
   geolocation: TemplateGeolocation.optional(),
   agent_windows: AgentWindows.optional(),
+  /** "Deny clipboard writes" (spec 13 §2.1, D18); default `false`. */
+  deny_clipboard_writes: z.boolean().optional(),
   policy: TemplatePolicyInput.optional(),
 });
 /** `POST /templates` body. */

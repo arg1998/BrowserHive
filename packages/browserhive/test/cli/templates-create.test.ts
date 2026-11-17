@@ -50,6 +50,7 @@ describe('templates create: flags', () => {
       'agent-1',
       '--principal',
       'agent-2',
+      '--denyClipboardWrites',
       '--noLogin',
       ...URL_FLAGS,
     ]);
@@ -71,6 +72,7 @@ describe('templates create: flags', () => {
       locale: 'en-CA',
       timezone_id: 'America/Toronto',
       policy: { max_concurrent: 3, authorized_principals: ['agent-1', 'agent-2'] },
+      deny_clipboard_writes: true,
     });
     expect(result.stdout).toContain(`created template job-hunt (${ID})`);
   });

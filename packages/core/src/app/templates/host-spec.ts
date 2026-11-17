@@ -68,6 +68,7 @@ export async function buildHostSpec(
     window: template.identityObserved?.window ?? DEFAULT_TEMPLATE_WINDOW,
     selfOrigins: deps.selfOrigins(),
     testingArgs: deps.testingArgs,
+    denyClipboardWrites: template.denyClipboardWrites,
   };
 }
 

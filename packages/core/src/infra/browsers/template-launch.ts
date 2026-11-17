@@ -20,6 +20,7 @@ import {
   browserNotInstalledFromLaunchError,
   type ChromiumResolverDeps,
 } from './chromium-resolver.ts';
+import { applyClipboardPolicy } from './clipboard-policy.ts';
 import { suppressInjectRoute } from './driver.ts';
 import { contextOptionsFor, deriveFingerprint, scriptPayloadFor } from './fingerprint.ts';
 import type { HostFacts } from './host-facts.ts';
@@ -156,6 +157,7 @@ export async function launchTemplateHostWith(
     // refuses, redirect hops included (spec 13 §3.8).
     await context.addCookies(templateHostCookies(spec.selfOrigins));
     const anchor = context.pages()[0] ?? (await context.newPage());
+    await applyClipboardPolicy(context, spec.denyClipboardWrites === true, log);
     const targets = await HostTargets.open(context, anchor, log);
     const guard = (await ctx.requestGuard?.(spec.templateId)) ?? null;
     const host = buildHost(ctx, spec, context, targets, { sandboxed, profileSecrets, guard });

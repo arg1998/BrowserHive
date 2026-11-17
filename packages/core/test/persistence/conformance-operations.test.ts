@@ -434,6 +434,7 @@ describe('SchemaMigrationRepository', () => {
       [8, 'operator-token-scopes'],
       [9, 'templates'],
       [10, 'site-packs'],
+      [11, 'template-clipboard'],
     ]);
     expect(await t.repos.schemaMigrations.currentVersion()).toBe(SCHEMA_VERSION);
   });

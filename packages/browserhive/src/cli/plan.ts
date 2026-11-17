@@ -248,6 +248,7 @@ function planInvocation(name: string, input: PlanInput): CliPlan {
     case 'templates save':
     case 'templates restore':
     case 'templates host':
+    case 'templates clipboard':
     case 'templates login':
     case 'templates probe':
     case 'templates disable':

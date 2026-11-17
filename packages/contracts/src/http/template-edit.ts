@@ -31,6 +31,8 @@ export const TemplatePatchInput = z.strictObject({
   humanize: z.boolean().optional(),
   proxy: TemplateProxyInput.nullable().optional(),
   agent_windows: AgentWindows.optional(),
+  /** "Deny clipboard writes" (spec 13 §2.1, D18): applied to a running browser at once, no restart. */
+  deny_clipboard_writes: z.boolean().optional(),
   policy: TemplatePolicyInput.optional(),
   /** Required with `proxy` or `channel`: sites may sign the account out (spec 13 §2.2). */
   confirm_identity_change: z.boolean().optional(),

@@ -49,6 +49,9 @@ export function validateTemplatePatch(
   if (input.display_name !== undefined) set('displayName', input.display_name, 'display_name');
   if (input.description !== undefined) set('description', input.description, 'description');
   if (input.agent_windows !== undefined) set('agentWindows', input.agent_windows, 'agent_windows');
+  if (input.deny_clipboard_writes !== undefined) {
+    set('denyClipboardWrites', input.deny_clipboard_writes, 'deny_clipboard_writes');
+  }
   if (input.headless !== undefined) set('headless', input.headless, 'headless');
   if (input.humanize !== undefined) {
     // Collapses to false with stealth off, as at creation.

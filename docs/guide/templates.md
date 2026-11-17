@@ -327,6 +327,20 @@ ssh -L 5900:127.0.0.1:5900 server
 
 Saved passwords and autofill are off in a template's browser. If its profile still holds some (for example a profile created by an earlier build, or copied in), BrowserHive reports it at the browser's start (`host.profile_secrets` in `GET /templates/{id}`), because agents could trigger autofill. Clear them with `POST /templates/{id}/host/clear-profile-secrets`; this stops the browser, which starts again on the next use.
 
+## Deny clipboard writes
+
+A page in a template's browser can put text on your clipboard: an agent's click counts as a user gesture, so the page's own script may call `navigator.clipboard.writeText` or `document.execCommand('copy')`. On a headed template that is your desktop's clipboard, and what you paste next (say into a sign-in form or a terminal) may be what the page chose.
+
+**Deny clipboard writes** (`deny_clipboard_writes`, off by default) stops that for the whole template browser: agent windows, the sign-in window and tabs you open by hand.
+
+- `navigator.clipboard.writeText` and `navigator.clipboard.write` are rejected (`NotAllowedError`), and `document.execCommand('copy')` and `('cut')` do nothing and return `false`. Other editing commands are unchanged.
+- Your own copy keeps working, and copies what you selected: the page's `copy` and `cut` handlers no longer run, so a page cannot swap in other text when you press Ctrl/Cmd+C (without the switch it can). A page can still change what is selected before you copy, so look at the selection. Reading the clipboard (paste) is not affected; `press_key` already refuses clipboard shortcuts in template sessions ([above](#always-on-in-template-sessions)).
+- Sites can detect it: the `clipboard-write` permission reads `denied`, and a site's own **Copy** buttons (a share link, a code to copy) stop working, also when you click them. That is why it is off by default.
+- It applies at once to a running browser, without a restart. Turning it on takes effect for the open pages too (frames already loaded inside a page are covered from their next load). Turning it off lets `navigator.clipboard` writes through at once, while a page that was already open keeps refusing `execCommand('copy')` and its copy handlers until it reloads.
+- It does not cover other ways to reach your desktop: drag and drop out of the window, downloads you open, or the primary selection on Linux (whatever a page selects can be pasted with a middle click elsewhere).
+
+Turn it on in the template's **Settings** tab in the dashboard, with `templates clipboard <name> deny` (and `allow`), with `templates create --denyClipboardWrites`, or over REST with `PATCH /templates/{id}` `{"deny_clipboard_writes": true}` (`deny_clipboard_writes` in `POST /templates` too).
+
 ## Manage a template
 
 Every change below is an operator call (scopes in [Access](#access)) and is recorded in the audit log. The dashboard's template page does all of it ([Templates in the dashboard](dashboard.md#templates)); the table lists the command line and the REST API. REST paths are under `/api/v1/templates/{id}`.
@@ -338,6 +352,7 @@ Every change below is an operator call (scopes in [Access](#access)) and is reco
 | Disable or enable it | `templates disable <name>`, `templates enable <name>` | `POST …/disable`, `…/enable` |
 | Check now whether its sites are signed in | `templates probe <name> [--site <site>]` | `POST …/probe` |
 | Sign a site in again | `templates login <name> --site <site>` | `POST …/relogin` ([below](#signing-in-again)) |
+| Deny or allow clipboard writes by its pages ([above](#deny-clipboard-writes)) | `templates clipboard <name> deny\|allow` | `PATCH` `{"deny_clipboard_writes": true}` |
 | Edit it | — | `PATCH` |
 | Add, change or remove a site, or set its write policy | — | `PUT …/sites/{site}` `{enabled?, write_policy?, pack_sha256?}`, `DELETE …/sites/{site}` |
 | Clear a [stopped site](#sites-with-a-site-pack) | — | `POST …/sites/{site}/clear-stop` |
@@ -348,7 +363,7 @@ Every change below is an operator call (scopes in [Access](#access)) and is reco
 
 - **Stop** writes a final checkpoint, closes the browser and ends its sessions. **Restart** gives sessions up to `templateDrainTimeout` to finish, then closes them and starts the browser again. Restart also clears a browser that stopped trying after five failures (`host_failed`).
 - **Disable** ends the template's live sessions and refuses new launches (agents get `TEMPLATE_DISABLED`). Its browser cannot be started, and seeding is refused, until you **enable** it again.
-- **Edit** (`PATCH`) changes the name, display name, description, browser channel, headless mode, humanize, proxy, how agent windows open (`agent_windows`) and the policy (access, cap, sealing). Renaming changes the name agents pass as `template`. The identity stays fixed ([Identity](#identity)). Changing `proxy` or `channel` restarts the browser and needs `confirm_identity_change: true`, because a site may sign the account out when the IP address or browser changes. An access change ends the live sessions whose principal or harness lost access, and a sealing change applies to live sessions at once; the answer lists the sessions it closed (`closed_sessions`).
+- **Edit** (`PATCH`) changes the name, display name, description, browser channel, headless mode, humanize, proxy, how agent windows open (`agent_windows`), [Deny clipboard writes](#deny-clipboard-writes) (`deny_clipboard_writes`, applied at once) and the policy (access, cap, sealing). Renaming changes the name agents pass as `template`. The identity stays fixed ([Identity](#identity)). Changing `proxy` or `channel` restarts the browser and needs `confirm_identity_change: true`, because a site may sign the account out when the IP address or browser changes. An access change ends the live sessions whose principal or harness lost access, and a sealing change applies to live sessions at once; the answer lists the sessions it closed (`closed_sessions`).
 - **Removing a site** leaves its sign-in in the template's browser. [Remove the sign-in](#unlisted-sign-ins) too if agents should not use it. A template keeps at least one site.
 
 ## Health checks

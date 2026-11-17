@@ -56,7 +56,12 @@ export interface TemplateWorld {
 /** Builds a world for a template with `stealth`; `maxPagesPerHost` bounds agent pages. */
 export async function templateWorld(
   stealth: StealthLeg,
-  options: { readonly maxPagesPerHost?: number; readonly selfOrigins?: readonly string[] } = {},
+  options: {
+    readonly maxPagesPerHost?: number;
+    readonly selfOrigins?: readonly string[];
+    /** Template fields over the defaults (e.g. `denyClipboardWrites`). */
+    readonly template?: Partial<TemplateRecord>;
+  } = {},
 ): Promise<TemplateWorld> {
   const sites = startHttpsSites();
   const dataDir = await mkdtemp(join(tmpdir(), 'bh-tpl-'));
@@ -98,6 +103,7 @@ export async function templateWorld(
     headless: !HEADED,
     stealth,
     maxConcurrent: 5,
+    ...options.template,
   });
   const degradations = new RecordingDegradations();
   const updates: Partial<TemplateRecord>[] = [];

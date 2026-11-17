@@ -191,6 +191,44 @@ describe('templates host', () => {
   });
 });
 
+describe('templates clipboard', () => {
+  it('patches deny_clipboard_writes and says it applies at once', async () => {
+    const server = fakeServer({ 'a.com': 'signed_in' });
+    server.routes = (method, path) =>
+      method === 'PATCH' && path === `${BASE}/${ID}`
+        ? [
+            200,
+            {
+              template: { ...template(server), deny_clipboard_writes: true },
+              closed_sessions: [],
+            },
+          ]
+        : undefined;
+    const deny = await run(server, ['clipboard', 'job-hunt', 'deny', ...URL_FLAGS]);
+    expect(deny.code).toBe(0);
+    expect(deny.stdout).toContain("pages in job-hunt's browser can no longer write the clipboard");
+    expect(deny.stdout).toContain('applies at once');
+    const patch = server.calls.find((c) => c.method === 'PATCH');
+    expect(patch?.body).toEqual({ deny_clipboard_writes: true });
+    const json = await run(server, ['clipboard', 'job-hunt', 'allow', '--json', ...URL_FLAGS]);
+    expect(json.code).toBe(0);
+    expect(server.calls.filter((c) => c.method === 'PATCH').map((c) => c.body)).toEqual([
+      { deny_clipboard_writes: true },
+      { deny_clipboard_writes: false },
+    ]);
+  });
+
+  it('a missing or unknown mode is a usage error (64) before any request', async () => {
+    const server = fakeServer({ 'a.com': 'signed_in' });
+    const bad = await run(server, ['clipboard', 'job-hunt', 'off', ...URL_FLAGS]);
+    expect(bad.code).toBe(64);
+    expect(bad.stderr).toContain("unknown value 'off' for 'templates clipboard'");
+    const missing = await run(server, ['clipboard', 'job-hunt', ...URL_FLAGS]);
+    expect(missing.code).toBe(64);
+    expect(server.calls).toEqual([]);
+  });
+});
+
 describe('templates disable | enable', () => {
   it('posts the change and names the sessions it closed', async () => {
     const server = fakeServer({ 'a.com': 'signed_in' });

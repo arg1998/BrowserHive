@@ -116,6 +116,7 @@ export function template(i: number, patch: Partial<Template> = {}): Template {
       prelaunch_check: true,
     },
     agent_windows: 'normal',
+    deny_clipboard_writes: false,
     current_version: null,
     checkpoint_at: null,
     checkpoint_size_bytes: null,
