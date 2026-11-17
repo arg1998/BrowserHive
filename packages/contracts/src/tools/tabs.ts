@@ -45,6 +45,8 @@ export const NEW_TAB = defineTool({
     'NAVIGATION_FAILED',
     'DOWNLOAD_FAILED',
     'TEMPLATE_BUSY',
+    'SITE_OPERATOR_PENDING',
+    'TEMPLATE_UNAVAILABLE',
   ],
   since: SINCE,
 });

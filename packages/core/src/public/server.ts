@@ -35,6 +35,14 @@ export { PreferenceService } from '../app/preferences/preference-service.ts';
 export { LeaseSweeper } from '../app/sessions/lease-sweeper.ts';
 export { sessionDirLayout } from '../app/sessions/profile-dir.ts';
 export { SessionService } from '../app/sessions/session-service.ts';
+export { AgentNavigations } from '../app/site-packs/agent-navigations.ts';
+export { ChallengeOutcomes } from '../app/site-packs/challenge-outcomes.ts';
+export { ChallengeWatch } from '../app/site-packs/challenge-watch.ts';
+export { PackProber, packProberSelector } from '../app/site-packs/pack-prober.ts';
+export { maintenanceProbePages } from '../app/site-packs/probe-pages.ts';
+export { TemplateSiteStops } from '../app/site-packs/site-stops.ts';
+export { SiteToolGate } from '../app/site-packs/tool-gate.ts';
+export { type SiteGuardHitSink, ToolGuardHits } from '../app/site-packs/tool-guard-hits.ts';
 export { unavailableHealthFacade } from '../app/templates/health-facade.ts';
 export {
   type TemplateHealthParts,
@@ -51,6 +59,7 @@ export type {
   HostSupervisorDeps,
 } from '../app/templates/host-supervisor-types.ts';
 export { reloginActionExecutor } from '../app/templates/relogin-executor.ts';
+export { type ProberSelector, selectGenericProber } from '../app/templates/site-prober.ts';
 export { reconcileTemplateState } from '../app/templates/state-reconcile.ts';
 export { TemplateActions } from '../app/templates/template-actions.ts';
 export { TemplateEditService } from '../app/templates/template-edit.ts';
@@ -67,6 +76,7 @@ export {
 } from '../app/templates/unavailable-runtime.ts';
 export { VaultService } from '../app/vault/vault-service.ts';
 export { OperatorRequestBroker } from '../domain/operator-requests/broker.ts';
+export type { BuiltinGuard } from '../domain/site-packs/tool-guards.ts';
 export {
   type TemplateKey,
   templateKeyId,

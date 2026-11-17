@@ -83,4 +83,10 @@ export const TEMPLATE_HEALTH_CASES: readonly RouteCase[] = [
       body: { vault_handle: 'github', form: { username: '#u', password: '#p', path: 'login?x' } },
     },
   },
+  {
+    operationId: 'clearTemplateSiteStop',
+    setup: template,
+    success: { method: 'POST', path: tpl('/sites/site-a.test/clear-stop'), status: 200 },
+    invalid: { method: 'POST', path: tpl('/sites/BAD_SITE!/clear-stop') },
+  },
 ];

@@ -16,6 +16,7 @@ import type {
   TemplateHost,
   TemplateHostLauncher,
   TemplateHostSpec,
+  TemplatePageWatcher,
 } from '../../ports/template-host.ts';
 import { clearProfileSecrets } from '../persistence/profile-secrets.ts';
 import { ATTR, SPAN, withSpan } from '../telemetry/spans.ts';
@@ -74,6 +75,7 @@ export class PlaywrightBrowserDriver implements BrowserDriver, TemplateHostLaunc
   private readonly sandbox: SandboxPolicy;
   private readonly locateChannel: (playwrightChannel: 'chrome' | 'msedge') => string | null;
   private readonly templateBlocklist: TemplateLaunchContext['blocklist'];
+  private templatePages: TemplatePageWatcher | null = null;
 
   constructor(deps: PlaywrightBrowserDriverDeps) {
     this.logger = deps.logger.child({ module: 'browsers.launcher' });
@@ -85,6 +87,11 @@ export class PlaywrightBrowserDriver implements BrowserDriver, TemplateHostLaunc
     this.locateChannel = deps.locateChannel ?? playwrightChannelExecutable;
     this.templateBlocklist = deps.templateBlocklist ?? null;
     this.testingArgs = deps.testingArgs ?? [];
+  }
+
+  /** Attaches the watcher of template hosts' pages (site pack challenges, spec 13 §9.5). */
+  attachTemplatePageWatcher(watcher: TemplatePageWatcher | null): void {
+    this.templatePages = watcher;
   }
 
   /** Starts a template host (spec 13 §3.1); the start is not abortable once Chromium is spawning. */
@@ -104,6 +111,7 @@ export class PlaywrightBrowserDriver implements BrowserDriver, TemplateHostLaunc
         clock: this.clock,
         logger: this.logger,
         blocklist: this.templateBlocklist,
+        pageWatcher: () => this.templatePages,
       },
       spec,
     );

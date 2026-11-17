@@ -6,6 +6,7 @@ import {
   SESSION_ERRORS,
   SINCE,
   TabId,
+  TEMPLATE_SITE_ERRORS,
   Timeout,
   WaitUntil,
 } from './shared.ts';
@@ -27,6 +28,7 @@ const HISTORY_ERRORS = [
   'TAB_NOT_FOUND',
   'NAVIGATION_TIMEOUT',
   'NAVIGATION_FAILED',
+  ...TEMPLATE_SITE_ERRORS,
 ] as const;
 
 /** `navigate`: `page.goto`; the URL scheme, then the blocklist, are checked before the browser is touched. */
@@ -67,6 +69,7 @@ export const NAVIGATE = defineTool({
     'NAVIGATION_TIMEOUT',
     'NAVIGATION_FAILED',
     'DOWNLOAD_FAILED',
+    ...TEMPLATE_SITE_ERRORS,
   ],
   since: SINCE,
 });
@@ -136,6 +139,6 @@ export const WAIT_FOR_URL = defineTool({
   annotations: annotations(true, false, true, false),
   pack: 'navigation',
   capability: 'read',
-  errors: [...SESSION_ERRORS, 'TAB_NOT_FOUND', 'WAIT_TIMEOUT'],
+  errors: [...SESSION_ERRORS, 'TAB_NOT_FOUND', 'WAIT_TIMEOUT', ...TEMPLATE_SITE_ERRORS],
   since: SINCE,
 });

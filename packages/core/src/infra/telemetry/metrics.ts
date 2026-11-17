@@ -32,6 +32,7 @@ export const METRIC = {
   TEMPLATE_CHECKPOINTS: 'browserhive.template.checkpoints',
   TEMPLATE_PROBES: 'browserhive.template.probes',
   TEMPLATE_RELOGINS: 'browserhive.template.relogins',
+  SITE_PACK_CHALLENGES: 'browserhive.site_pack.challenges',
   RETENTION_PRUNED_ROWS: 'browserhive.retention.pruned_rows',
   NOTIFICATION_DELIVERIES: 'browserhive.notifications.deliveries',
   NOTIFICATION_ACTIONS: 'browserhive.notifications.actions',
@@ -183,6 +184,13 @@ export const METRIC_DEFINITIONS: readonly MetricDefinition[] = [
     ['method', 'outcome'],
     'Finished template re-logins by method and outcome',
   ),
+  def(
+    METRIC.SITE_PACK_CHALLENGES,
+    'counter',
+    '{challenge}',
+    ['kind', 'action'],
+    'Challenges detected on agent pages of template hosts by kind and action',
+  ),
   def(METRIC.RETENTION_PRUNED_ROWS, 'counter', '{row}', ['table'], 'Rows pruned by table'),
   def(
     METRIC.NOTIFICATION_DELIVERIES,
@@ -239,6 +247,8 @@ export interface Instruments {
   readonly templateCheckpoints: Counter;
   readonly templateProbes: Counter;
   readonly templateRelogins: Counter;
+  /** Challenges seen on agents' pages by `kind` and `action` (spec 13 §11.7). */
+  readonly sitePackChallenges: Counter;
   readonly retentionPrunedRows: Counter;
   /** Outbox jobs by `channel_kind` and `status` (D-34). */
   readonly notificationDeliveries: Counter;
@@ -341,6 +351,9 @@ export function createInstruments(meter: Meter): Instruments {
     },
     get templateRelogins() {
       return counter(METRIC.TEMPLATE_RELOGINS);
+    },
+    get sitePackChallenges() {
+      return counter(METRIC.SITE_PACK_CHALLENGES);
     },
     get retentionPrunedRows() {
       return counter(METRIC.RETENTION_PRUNED_ROWS);

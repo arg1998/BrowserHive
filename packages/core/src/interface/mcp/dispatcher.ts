@@ -271,6 +271,9 @@ export class ToolDispatcher {
         typeof args === 'object' && args !== null ? Object.fromEntries(Object.entries(args)) : {};
       for (const policy of definition.policies) await policy.apply(ctx, argRecord);
       await this.holdWhilePaused(name, holder.session, call.signal);
+      const site = holder.session;
+      if (site !== null)
+        await services.siteGuards?.beforeTool({ tool: name, args: argRecord, session: site });
       const handlerCtx: ToolCallContext = ctx;
       // The registry pairs each name with its own definition; the parsed args came from that
       // definition's schema, so the widened handler receives exactly its contract's input.

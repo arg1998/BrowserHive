@@ -27,6 +27,7 @@ import {
   createPlaywrightPageActions,
   InProcessEventBus,
   reloginActionExecutor,
+  selectGenericProber,
 } from '@browserhive/core/server';
 import { notificationCounters } from '../adapters/metrics.ts';
 import { asyncTick, createTimers } from '../adapters/timers.ts';
@@ -34,6 +35,7 @@ import { createAuthStack } from '../auth-stack.ts';
 import { type BootContext, part, type SeedNotice } from '../context.ts';
 import { hostFactsOf } from '../host.ts';
 import { createNotificationSnapshots } from '../notification-snapshots.ts';
+import { buildSitePackPages } from '../site-packs-pages.ts';
 import type { PhaseHandle } from '../unwind.ts';
 import { buildOperators } from './domain-operators.ts';
 import { buildOps, reconcile } from './domain-ops.ts';
@@ -256,6 +258,19 @@ async function buildDomain(
     .reconcileRequests(repos.operatorRequests)
     .catch((err: unknown) => logger.warn('catch-up failed', { err: serializeError(err) }));
 
+  // Site pack enforcement on pages and tools (spec 13 §9.3, §9.5); the registry and the intercepts
+  // attach once built.
+  const sitePackPages = buildSitePackPages({
+    repos,
+    queue: storage.queue,
+    sessions,
+    transport,
+    bus,
+    clock,
+    ids,
+    logger,
+  });
+  undo.push(sitePackPages.stop);
   const tpl = await buildTemplates({
     config,
     bus,
@@ -271,7 +286,10 @@ async function buildDomain(
     driver: sessionParts.driver,
     repeat: timers.every,
     vault: operators.vault,
+    probers: (supervisor) => sitePackPages.probers(supervisor, selectGenericProber),
   });
+  sitePackPages.attach({ health: tpl.health?.health ?? null });
+  if (config.templates) sessionParts.driver.attachTemplatePageWatcher(sitePackPages.pageWatcher);
   const templates = tpl.service;
   // The notification button of a sign-out only queues the re-login (spec 13 §8.4, §8.6).
   const relogin = tpl.health?.relogin;
@@ -294,6 +312,7 @@ async function buildDomain(
     templates,
     ...(tpl.supervisor !== null && { templatePause: tpl.supervisor.pause }),
     pageActions,
+    ...(config.templates && { siteGuards: sitePackPages.gate }),
     redactor,
     bus,
     clock,
@@ -341,6 +360,7 @@ async function buildDomain(
     templates,
     templateRecording: tpl.recording,
     templateParts: tpl,
+    sitePackPages,
     instanceId,
     preferences: ops.preferences,
     recorder: ops.recorder,

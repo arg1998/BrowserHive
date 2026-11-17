@@ -259,7 +259,7 @@ Result (JSON text block, mirrored in `structuredContent`):
 | `status` | `number` or `null` | yes |
 | `download` | `object` | no |
 
-Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`URL_SCHEME_NOT_ALLOWED`](errors.md#URL_SCHEME_NOT_ALLOWED), [`URL_BLOCKED`](errors.md#URL_BLOCKED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`NAVIGATION_TIMEOUT`](errors.md#NAVIGATION_TIMEOUT), [`NAVIGATION_FAILED`](errors.md#NAVIGATION_FAILED), [`DOWNLOAD_FAILED`](errors.md#DOWNLOAD_FAILED). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
+Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`URL_SCHEME_NOT_ALLOWED`](errors.md#URL_SCHEME_NOT_ALLOWED), [`URL_BLOCKED`](errors.md#URL_BLOCKED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`NAVIGATION_TIMEOUT`](errors.md#NAVIGATION_TIMEOUT), [`NAVIGATION_FAILED`](errors.md#NAVIGATION_FAILED), [`DOWNLOAD_FAILED`](errors.md#DOWNLOAD_FAILED), [`SITE_OPERATOR_PENDING`](errors.md#SITE_OPERATOR_PENDING), [`TEMPLATE_BUSY`](errors.md#TEMPLATE_BUSY), [`TEMPLATE_UNAVAILABLE`](errors.md#TEMPLATE_UNAVAILABLE). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
 
 <a id="go_back"></a>
 ### `go_back`
@@ -286,7 +286,7 @@ Result (JSON text block, mirrored in `structuredContent`):
 | `session_id` | `string` | yes |
 | `url` | `string` | yes |
 
-Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`NAVIGATION_TIMEOUT`](errors.md#NAVIGATION_TIMEOUT), [`NAVIGATION_FAILED`](errors.md#NAVIGATION_FAILED). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
+Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`NAVIGATION_TIMEOUT`](errors.md#NAVIGATION_TIMEOUT), [`NAVIGATION_FAILED`](errors.md#NAVIGATION_FAILED), [`SITE_OPERATOR_PENDING`](errors.md#SITE_OPERATOR_PENDING), [`TEMPLATE_BUSY`](errors.md#TEMPLATE_BUSY), [`TEMPLATE_UNAVAILABLE`](errors.md#TEMPLATE_UNAVAILABLE). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
 
 <a id="go_forward"></a>
 ### `go_forward`
@@ -313,7 +313,7 @@ Result (JSON text block, mirrored in `structuredContent`):
 | `session_id` | `string` | yes |
 | `url` | `string` | yes |
 
-Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`NAVIGATION_TIMEOUT`](errors.md#NAVIGATION_TIMEOUT), [`NAVIGATION_FAILED`](errors.md#NAVIGATION_FAILED). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
+Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`NAVIGATION_TIMEOUT`](errors.md#NAVIGATION_TIMEOUT), [`NAVIGATION_FAILED`](errors.md#NAVIGATION_FAILED), [`SITE_OPERATOR_PENDING`](errors.md#SITE_OPERATOR_PENDING), [`TEMPLATE_BUSY`](errors.md#TEMPLATE_BUSY), [`TEMPLATE_UNAVAILABLE`](errors.md#TEMPLATE_UNAVAILABLE). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
 
 <a id="reload"></a>
 ### `reload`
@@ -340,7 +340,7 @@ Result (JSON text block, mirrored in `structuredContent`):
 | `session_id` | `string` | yes |
 | `url` | `string` | yes |
 
-Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`NAVIGATION_TIMEOUT`](errors.md#NAVIGATION_TIMEOUT), [`NAVIGATION_FAILED`](errors.md#NAVIGATION_FAILED). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
+Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`NAVIGATION_TIMEOUT`](errors.md#NAVIGATION_TIMEOUT), [`NAVIGATION_FAILED`](errors.md#NAVIGATION_FAILED), [`SITE_OPERATOR_PENDING`](errors.md#SITE_OPERATOR_PENDING), [`TEMPLATE_BUSY`](errors.md#TEMPLATE_BUSY), [`TEMPLATE_UNAVAILABLE`](errors.md#TEMPLATE_UNAVAILABLE). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
 
 <a id="wait_for_url"></a>
 ### `wait_for_url`
@@ -367,7 +367,7 @@ Result (JSON text block, mirrored in `structuredContent`):
 | `session_id` | `string` | yes |
 | `url` | `string` | yes |
 
-Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`WAIT_TIMEOUT`](errors.md#WAIT_TIMEOUT). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
+Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`WAIT_TIMEOUT`](errors.md#WAIT_TIMEOUT), [`SITE_OPERATOR_PENDING`](errors.md#SITE_OPERATOR_PENDING), [`TEMPLATE_BUSY`](errors.md#TEMPLATE_BUSY), [`TEMPLATE_UNAVAILABLE`](errors.md#TEMPLATE_UNAVAILABLE). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
 
 ## Tabs
 
@@ -398,7 +398,7 @@ Result (JSON text block, mirrored in `structuredContent`):
 | `url` | `string` | yes |
 | `download` | `object` | no |
 
-Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`URL_SCHEME_NOT_ALLOWED`](errors.md#URL_SCHEME_NOT_ALLOWED), [`URL_BLOCKED`](errors.md#URL_BLOCKED), [`NAVIGATION_TIMEOUT`](errors.md#NAVIGATION_TIMEOUT), [`NAVIGATION_FAILED`](errors.md#NAVIGATION_FAILED), [`DOWNLOAD_FAILED`](errors.md#DOWNLOAD_FAILED), [`TEMPLATE_BUSY`](errors.md#TEMPLATE_BUSY). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
+Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`URL_SCHEME_NOT_ALLOWED`](errors.md#URL_SCHEME_NOT_ALLOWED), [`URL_BLOCKED`](errors.md#URL_BLOCKED), [`NAVIGATION_TIMEOUT`](errors.md#NAVIGATION_TIMEOUT), [`NAVIGATION_FAILED`](errors.md#NAVIGATION_FAILED), [`DOWNLOAD_FAILED`](errors.md#DOWNLOAD_FAILED), [`TEMPLATE_BUSY`](errors.md#TEMPLATE_BUSY), [`SITE_OPERATOR_PENDING`](errors.md#SITE_OPERATOR_PENDING), [`TEMPLATE_UNAVAILABLE`](errors.md#TEMPLATE_UNAVAILABLE). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
 
 <a id="close_tab"></a>
 ### `close_tab`
@@ -510,7 +510,7 @@ Result (JSON text block, mirrored in `structuredContent`):
 | `selector` | `string` | yes |
 | `ok` | `true` | yes |
 
-Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`ELEMENT_NOT_ACTIONABLE`](errors.md#ELEMENT_NOT_ACTIONABLE). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
+Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`ELEMENT_NOT_ACTIONABLE`](errors.md#ELEMENT_NOT_ACTIONABLE), [`SITE_OPERATOR_PENDING`](errors.md#SITE_OPERATOR_PENDING), [`TEMPLATE_BUSY`](errors.md#TEMPLATE_BUSY), [`TEMPLATE_UNAVAILABLE`](errors.md#TEMPLATE_UNAVAILABLE), [`SITE_ACTION_BLOCKED`](errors.md#SITE_ACTION_BLOCKED). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
 
 <a id="type_text"></a>
 ### `type_text`
@@ -540,7 +540,7 @@ Result (JSON text block, mirrored in `structuredContent`):
 | `selector` | `string` | yes |
 | `ok` | `true` | yes |
 
-Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`ELEMENT_NOT_ACTIONABLE`](errors.md#ELEMENT_NOT_ACTIONABLE). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
+Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`ELEMENT_NOT_ACTIONABLE`](errors.md#ELEMENT_NOT_ACTIONABLE), [`SITE_OPERATOR_PENDING`](errors.md#SITE_OPERATOR_PENDING), [`TEMPLATE_BUSY`](errors.md#TEMPLATE_BUSY), [`TEMPLATE_UNAVAILABLE`](errors.md#TEMPLATE_UNAVAILABLE), [`SITE_ACTION_BLOCKED`](errors.md#SITE_ACTION_BLOCKED). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
 
 <a id="fill"></a>
 ### `fill`
@@ -569,7 +569,7 @@ Result (JSON text block, mirrored in `structuredContent`):
 | `selector` | `string` | yes |
 | `ok` | `true` | yes |
 
-Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`ELEMENT_NOT_ACTIONABLE`](errors.md#ELEMENT_NOT_ACTIONABLE). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
+Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`ELEMENT_NOT_ACTIONABLE`](errors.md#ELEMENT_NOT_ACTIONABLE), [`SITE_OPERATOR_PENDING`](errors.md#SITE_OPERATOR_PENDING), [`TEMPLATE_BUSY`](errors.md#TEMPLATE_BUSY), [`TEMPLATE_UNAVAILABLE`](errors.md#TEMPLATE_UNAVAILABLE), [`SITE_ACTION_BLOCKED`](errors.md#SITE_ACTION_BLOCKED). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
 
 <a id="press_key"></a>
 ### `press_key`
@@ -598,7 +598,7 @@ Result (JSON text block, mirrored in `structuredContent`):
 | `key` | `string` | yes |
 | `ok` | `true` | yes |
 
-Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`ELEMENT_NOT_ACTIONABLE`](errors.md#ELEMENT_NOT_ACTIONABLE). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
+Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`ELEMENT_NOT_ACTIONABLE`](errors.md#ELEMENT_NOT_ACTIONABLE), [`SITE_OPERATOR_PENDING`](errors.md#SITE_OPERATOR_PENDING), [`TEMPLATE_BUSY`](errors.md#TEMPLATE_BUSY), [`TEMPLATE_UNAVAILABLE`](errors.md#TEMPLATE_UNAVAILABLE), [`SITE_ACTION_BLOCKED`](errors.md#SITE_ACTION_BLOCKED). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
 
 <a id="hover"></a>
 ### `hover`
@@ -626,7 +626,7 @@ Result (JSON text block, mirrored in `structuredContent`):
 | `selector` | `string` | yes |
 | `ok` | `true` | yes |
 
-Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`ELEMENT_NOT_ACTIONABLE`](errors.md#ELEMENT_NOT_ACTIONABLE). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
+Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`ELEMENT_NOT_ACTIONABLE`](errors.md#ELEMENT_NOT_ACTIONABLE), [`SITE_OPERATOR_PENDING`](errors.md#SITE_OPERATOR_PENDING), [`TEMPLATE_BUSY`](errors.md#TEMPLATE_BUSY), [`TEMPLATE_UNAVAILABLE`](errors.md#TEMPLATE_UNAVAILABLE), [`SITE_ACTION_BLOCKED`](errors.md#SITE_ACTION_BLOCKED). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
 
 <a id="select_option"></a>
 ### `select_option`
@@ -655,7 +655,7 @@ Result (JSON text block, mirrored in `structuredContent`):
 | `selector` | `string` | yes |
 | `selected` | `string[]` | yes |
 
-Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`ELEMENT_NOT_ACTIONABLE`](errors.md#ELEMENT_NOT_ACTIONABLE). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
+Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`ELEMENT_NOT_ACTIONABLE`](errors.md#ELEMENT_NOT_ACTIONABLE), [`SITE_OPERATOR_PENDING`](errors.md#SITE_OPERATOR_PENDING), [`TEMPLATE_BUSY`](errors.md#TEMPLATE_BUSY), [`TEMPLATE_UNAVAILABLE`](errors.md#TEMPLATE_UNAVAILABLE), [`SITE_ACTION_BLOCKED`](errors.md#SITE_ACTION_BLOCKED). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
 
 <a id="scroll"></a>
 ### `scroll`
@@ -689,7 +689,7 @@ Result (JSON text block, mirrored in `structuredContent`):
 | `x` | `number` | yes |
 | `y` | `number` | yes |
 
-Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`ELEMENT_NOT_ACTIONABLE`](errors.md#ELEMENT_NOT_ACTIONABLE). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
+Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`ELEMENT_NOT_ACTIONABLE`](errors.md#ELEMENT_NOT_ACTIONABLE), [`SITE_OPERATOR_PENDING`](errors.md#SITE_OPERATOR_PENDING), [`TEMPLATE_BUSY`](errors.md#TEMPLATE_BUSY), [`TEMPLATE_UNAVAILABLE`](errors.md#TEMPLATE_UNAVAILABLE). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
 
 <a id="drag_and_drop"></a>
 ### `drag_and_drop`
@@ -717,7 +717,7 @@ Result (JSON text block, mirrored in `structuredContent`):
 | `session_id` | `string` | yes |
 | `ok` | `true` | yes |
 
-Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`ELEMENT_NOT_ACTIONABLE`](errors.md#ELEMENT_NOT_ACTIONABLE). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
+Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`ELEMENT_NOT_ACTIONABLE`](errors.md#ELEMENT_NOT_ACTIONABLE), [`SITE_OPERATOR_PENDING`](errors.md#SITE_OPERATOR_PENDING), [`TEMPLATE_BUSY`](errors.md#TEMPLATE_BUSY), [`TEMPLATE_UNAVAILABLE`](errors.md#TEMPLATE_UNAVAILABLE), [`SITE_ACTION_BLOCKED`](errors.md#SITE_ACTION_BLOCKED). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
 
 ## Inspection
 

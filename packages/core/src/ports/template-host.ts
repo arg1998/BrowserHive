@@ -1,6 +1,7 @@
 /** @module ports/template-host — the shared browser of a session template and its launcher (spec 13 §3.1, §3.3, §3.13): one persistent context, a sentinel window, one background window set per virtual session, attribution of every page before any session sees it. */
 
 import type { Channel } from '@browserhive/contracts/enums';
+import type { Page } from 'patchright';
 import type { BrowserHost, Cookie, GeoSeed, ProxySpec, SessionView } from './browser-driver.ts';
 import type { TemplateState } from './template-state.ts';
 
@@ -74,6 +75,11 @@ export interface TemplateViewOptions {
    * of the host is minimized and new agent windows open minimized (spec 13 §3.3).
    */
   readonly recording?: boolean;
+  /**
+   * A maintenance page BrowserHive works in by itself (a probe, spec 13 §8.1): its window opens
+   * minimized on a headed host, never in front of the operator.
+   */
+  readonly background?: boolean;
   /** The three per-session context options (spec 13 §4), applied to each of the session's pages. */
   readonly pageOptions?: TemplatePageOptions;
 }
@@ -176,6 +182,15 @@ export interface TemplateHost extends BrowserHost {
    * page (`session`, the memory trim). False when no such page is open.
    */
   closePage(targetId: string, scope: 'parked' | 'session'): Promise<boolean>;
+}
+
+/**
+ * Sees every page of a template host once it is attributed to a session (spec 13 §9.5, challenge
+ * detection on host pages). Called synchronously from the host's attribution; MUST NOT throw and
+ * MUST NOT block (listeners only).
+ */
+export interface TemplatePageWatcher {
+  pageAttributed(templateId: string, page: Page, sessionId: string): void;
 }
 
 /** Starts template hosts (the browser driver, Patchright; spec 13 §3.1). */

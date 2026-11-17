@@ -16,6 +16,7 @@ import type {
   PageActions,
   RuntimeFacts,
   SessionService,
+  SiteToolGate,
   TemplateService,
   VaultRedaction,
   VaultService,
@@ -42,6 +43,8 @@ export interface ToolsInput {
     wait(templateId: string, name: string, signal?: AbortSignal): Promise<void>;
   };
   readonly pageActions: PageActions;
+  /** Site pack enforcement on the tool path (spec 13 §9.3, §9.5); absent under `templates=false`. */
+  readonly siteGuards?: SiteToolGate;
   readonly redactor: Redactor;
   readonly bus: EventBus<DomainEvents>;
   readonly clock: Clock;
@@ -88,6 +91,7 @@ export function buildTools(input: ToolsInput): {
       templates: input.templates,
       ...(input.templatePause !== undefined && { templatePause: input.templatePause }),
       pageActions: input.pageActions,
+      ...(input.siteGuards !== undefined && { siteGuards: input.siteGuards }),
       fs: createNodeToolFs(),
       redaction: {
         scrubText: (sessionId, text) =>

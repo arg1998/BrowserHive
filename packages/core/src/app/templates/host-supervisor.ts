@@ -242,6 +242,7 @@ export class TemplateHostSupervisor implements TemplateRuntime {
             session,
             caps: null,
             ...(input.recording === true && { recording: true }),
+            ...(input.background === true && { background: true }),
           }),
           { signal: budget, deadlineMs: TEMPLATE_LAUNCH_BUDGET_MS },
         ),

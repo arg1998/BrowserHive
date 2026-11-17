@@ -14,6 +14,7 @@ import type { Clock } from '../../ports/clock.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type {
   PageHeap,
+  TemplatePageWatcher as PageWatcher,
   ParkedPageInfo,
   SharedWindowInfo,
   SignInRemoval,
@@ -56,6 +57,8 @@ export interface TemplateHostInput {
   readonly profileSecrets?: boolean;
   /** The profile directory (a sign-in removal finds origins stored by earlier starts). */
   readonly userDataDir?: string;
+  /** The watcher of attributed pages (spec 13 §9.5), read per page. */
+  readonly pageWatcher?: () => PageWatcher | null;
   readonly clock: Clock;
   readonly logger: Logger;
 }
@@ -87,6 +90,7 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
   /** Origins whose data a sign-in removal cleared: never carried forward (spec 13 §3.9). */
   private readonly cleared = new Set<string>();
   private readonly userDataDir: string | null;
+  private readonly pageWatcher: (() => PageWatcher | null) | null;
   private readonly exitListeners = new Set<(exit: TemplateHostExit) => void>();
   private applied: { identity: AppliedIdentity; applier: IdentityApplier } | null = null;
   private readonly keeper: SentinelKeeper;
@@ -109,6 +113,7 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
     this.clock = input.clock;
     this.profileSecrets = input.profileSecrets === true;
     this.userDataDir = input.userDataDir ?? null;
+    this.pageWatcher = input.pageWatcher ?? null;
     this.waiters = new PageWaiters(input.clock);
     this.log = input.logger.child({
       module: 'browsers.template-host',
@@ -174,7 +179,8 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
     if (this.closing) throw ops.windowUnavailable('host closing');
     const agent = options.maintenance !== true;
     const minimized =
-      !this.headless && agent && (options.windowState === 'minimized' || this.recording);
+      !this.headless &&
+      (agent ? options.windowState === 'minimized' || this.recording : options.background === true);
     const page = await this.openWindow(sessionId, minimized, options.signal);
     const view = new TemplateSessionView(this, sessionId, page, options, this.log);
     this.views.set(sessionId, view);
@@ -366,7 +372,10 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
   /** The dispatcher committed an open page: resolve waiters, bound the parked pages. */
   private committed(page: Page, owner: PageOwner, facts: TargetFacts): void {
     // A session's page may open tabs Chromium gives no opener (modifier clicks): watch for them.
-    if (owner.kind === 'session') void this.targets.watchNewTabs(page, facts.targetId);
+    if (owner.kind === 'session') {
+      void this.targets.watchNewTabs(page, facts.targetId);
+      ops.watchPage(this.pageWatcher?.() ?? null, this.hostId, page, owner.sessionId, this.log);
+    }
     ops.deleteUnclaimedDownloads(page);
     ops.watchOrigins(page, this.origins);
     if (this.waiters.committed(page, owner, facts)) return;

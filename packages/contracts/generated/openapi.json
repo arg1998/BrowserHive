@@ -151,6 +151,8 @@
               "TEMPLATE_NEEDS_LOGIN",
               "TEMPLATE_DISABLED",
               "SESSION_SEALED",
+              "SITE_OPERATOR_PENDING",
+              "SITE_ACTION_BLOCKED",
               "EVALUATE_DISABLED",
               "ELEMENT_NOT_ACTIONABLE",
               "ELEMENT_NOT_FOUND",
@@ -196,6 +198,9 @@
               "TEMPLATE_IN_USE",
               "TEMPLATE_VERSION_NOT_FOUND",
               "TEMPLATE_VERSION_UNREADABLE",
+              "SITE_PACK_NOT_FOUND",
+              "SITE_PACK_INVALID",
+              "SITE_PACK_UPDATE_NOT_PENDING",
               "ADMIN_REQUIRES_HTTP",
               "INSECURE_BIND_REFUSED",
               "PORT_IN_USE",
@@ -257,7 +262,9 @@
               "SCREENSHOT_ARCHIVE_FAILED",
               "SESSION_RESOURCE_LIMIT",
               "TEMPLATE_SITE_SIGNED_OUT",
-              "TEMPLATE_STATE_COPY"
+              "TEMPLATE_STATE_COPY",
+              "SITE_GUARD_WARNED",
+              "SITE_WRITE_HELD"
             ]
           },
           "retryable": {
@@ -2530,7 +2537,8 @@
                   "type": "string",
                   "enum": [
                     "attention",
-                    "vault_confirm"
+                    "vault_confirm",
+                    "security_intercept"
                   ]
                 },
                 "session_id": {
@@ -2631,6 +2639,12 @@
                   "pattern": "^e-[0-9A-HJKMNP-TV-Z]{26}$"
                 },
                 "entry_name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "template_id": {
                   "type": [
                     "string",
                     "null"
@@ -3602,7 +3616,8 @@
                           "type": "string",
                           "enum": [
                             "attention",
-                            "vault_confirm"
+                            "vault_confirm",
+                            "security_intercept"
                           ]
                         },
                         "session_id": {
@@ -3703,6 +3718,12 @@
                           "pattern": "^e-[0-9A-HJKMNP-TV-Z]{26}$"
                         },
                         "entry_name": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "template_id": {
                           "type": [
                             "string",
                             "null"
@@ -5295,7 +5316,8 @@
                   "type": "string",
                   "enum": [
                     "attention",
-                    "vault_confirm"
+                    "vault_confirm",
+                    "security_intercept"
                   ]
                 },
                 "session_id": {
@@ -5396,6 +5418,12 @@
                   "pattern": "^e-[0-9A-HJKMNP-TV-Z]{26}$"
                 },
                 "entry_name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "template_id": {
                   "type": [
                     "string",
                     "null"
@@ -5728,7 +5756,8 @@
                   "type": "string",
                   "enum": [
                     "attention",
-                    "vault_confirm"
+                    "vault_confirm",
+                    "security_intercept"
                   ]
                 },
                 "session_id": {
@@ -5829,6 +5858,12 @@
                   "pattern": "^e-[0-9A-HJKMNP-TV-Z]{26}$"
                 },
                 "entry_name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "template_id": {
                   "type": [
                     "string",
                     "null"
@@ -9202,7 +9237,9 @@
                         "template.signed_out",
                         "template.challenged",
                         "template.relogin_failed",
-                        "template.host_failed"
+                        "template.host_failed",
+                        "site_pack.write_confirm",
+                        "site_pack.update_pending"
                       ]
                     },
                     "category": {
@@ -9586,7 +9623,9 @@
                       "template.signed_out",
                       "template.challenged",
                       "template.relogin_failed",
-                      "template.host_failed"
+                      "template.host_failed",
+                      "site_pack.write_confirm",
+                      "site_pack.update_pending"
                     ]
                   },
                   "category": {
@@ -9786,7 +9825,9 @@
                   "template.signed_out",
                   "template.challenged",
                   "template.relogin_failed",
-                  "template.host_failed"
+                  "template.host_failed",
+                  "site_pack.write_confirm",
+                  "site_pack.update_pending"
                 ]
               },
               "category": {
@@ -11680,7 +11721,9 @@
                     "template.signed_out",
                     "template.challenged",
                     "template.relogin_failed",
-                    "template.host_failed"
+                    "template.host_failed",
+                    "site_pack.write_confirm",
+                    "site_pack.update_pending"
                   ]
                 },
                 "category": {
@@ -13886,7 +13929,9 @@
                   "template.signed_out",
                   "template.challenged",
                   "template.relogin_failed",
-                  "template.host_failed"
+                  "template.host_failed",
+                  "site_pack.write_confirm",
+                  "site_pack.update_pending"
                 ]
               },
               "category": {
@@ -15768,6 +15813,8 @@
                     "template.challenged",
                     "template.relogin_failed",
                     "template.host_failed",
+                    "site_pack.write_confirm",
+                    "site_pack.update_pending",
                     null
                   ]
                 },
@@ -16094,6 +16141,8 @@
                   "template.challenged",
                   "template.relogin_failed",
                   "template.host_failed",
+                  "site_pack.write_confirm",
+                  "site_pack.update_pending",
                   null
                 ]
               },
@@ -16295,7 +16344,9 @@
                   "template.signed_out",
                   "template.challenged",
                   "template.relogin_failed",
-                  "template.host_failed"
+                  "template.host_failed",
+                  "site_pack.write_confirm",
+                  "site_pack.update_pending"
                 ]
               },
               "category": {
@@ -18641,6 +18692,8 @@
                   "template.challenged",
                   "template.relogin_failed",
                   "template.host_failed",
+                  "site_pack.write_confirm",
+                  "site_pack.update_pending",
                   null
                 ]
               },
@@ -18965,7 +19018,9 @@
                       "template.signed_out",
                       "template.challenged",
                       "template.relogin_failed",
-                      "template.host_failed"
+                      "template.host_failed",
+                      "site_pack.write_confirm",
+                      "site_pack.update_pending"
                     ]
                   },
                   "category": {
@@ -20576,6 +20631,8 @@
                   "template.challenged",
                   "template.relogin_failed",
                   "template.host_failed",
+                  "site_pack.write_confirm",
+                  "site_pack.update_pending",
                   null
                 ]
               },
@@ -21101,6 +21158,133 @@
                     "added_at": {
                       "type": "integer",
                       "minimum": 0
+                    },
+                    "pack": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "pack_id": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "integer"
+                        },
+                        "sha256": {
+                          "type": "string",
+                          "pattern": "^[0-9a-f]{64}$"
+                        },
+                        "source": {
+                          "type": "string",
+                          "enum": [
+                            "bundled",
+                            "remote",
+                            "import",
+                            "local"
+                          ]
+                        },
+                        "local_override": {
+                          "type": "boolean"
+                        },
+                        "identity_provider": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "human_only": {
+                          "type": "boolean"
+                        },
+                        "sign_in_url": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "stance": {
+                          "type": "string",
+                          "enum": [
+                            "prohibited",
+                            "restricted",
+                            "writes_restricted",
+                            "allowed"
+                          ]
+                        },
+                        "write_policy_default": {
+                          "type": "string",
+                          "enum": [
+                            "allow",
+                            "warn",
+                            "confirm"
+                          ]
+                        },
+                        "clause": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "quote": {
+                              "type": "string"
+                            },
+                            "url": {
+                              "type": "string"
+                            },
+                            "checked": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "quote",
+                            "url",
+                            "checked"
+                          ]
+                        },
+                        "exception": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "guards": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "element_guards": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "challenges": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "enabled": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "pack_id",
+                        "title",
+                        "version",
+                        "sha256",
+                        "source",
+                        "local_override",
+                        "identity_provider",
+                        "human_only",
+                        "sign_in_url",
+                        "stance",
+                        "write_policy_default",
+                        "clause",
+                        "exception",
+                        "guards",
+                        "element_guards",
+                        "challenges",
+                        "enabled"
+                      ]
                     }
                   },
                   "required": [
@@ -21118,7 +21302,8 @@
                     "health",
                     "stopped_at",
                     "device_bound",
-                    "added_at"
+                    "added_at",
+                    "pack"
                   ]
                 }
               },
@@ -21818,6 +22003,133 @@
               "added_at": {
                 "type": "integer",
                 "minimum": 0
+              },
+              "pack": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "pack_id": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "integer"
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "bundled",
+                      "remote",
+                      "import",
+                      "local"
+                    ]
+                  },
+                  "local_override": {
+                    "type": "boolean"
+                  },
+                  "identity_provider": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "human_only": {
+                    "type": "boolean"
+                  },
+                  "sign_in_url": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "stance": {
+                    "type": "string",
+                    "enum": [
+                      "prohibited",
+                      "restricted",
+                      "writes_restricted",
+                      "allowed"
+                    ]
+                  },
+                  "write_policy_default": {
+                    "type": "string",
+                    "enum": [
+                      "allow",
+                      "warn",
+                      "confirm"
+                    ]
+                  },
+                  "clause": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "quote": {
+                        "type": "string"
+                      },
+                      "url": {
+                        "type": "string"
+                      },
+                      "checked": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "quote",
+                      "url",
+                      "checked"
+                    ]
+                  },
+                  "exception": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "guards": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "element_guards": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "challenges": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "pack_id",
+                  "title",
+                  "version",
+                  "sha256",
+                  "source",
+                  "local_override",
+                  "identity_provider",
+                  "human_only",
+                  "sign_in_url",
+                  "stance",
+                  "write_policy_default",
+                  "clause",
+                  "exception",
+                  "guards",
+                  "element_guards",
+                  "challenges",
+                  "enabled"
+                ]
               }
             },
             "required": [
@@ -21835,7 +22147,8 @@
               "health",
               "stopped_at",
               "device_bound",
-              "added_at"
+              "added_at",
+              "pack"
             ]
           }
         },
@@ -21860,6 +22173,10 @@
               "confirm",
               null
             ]
+          },
+          "pack_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
           }
         },
         "additionalProperties": false
@@ -23166,6 +23483,133 @@
                     "added_at": {
                       "type": "integer",
                       "minimum": 0
+                    },
+                    "pack": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "pack_id": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "integer"
+                        },
+                        "sha256": {
+                          "type": "string",
+                          "pattern": "^[0-9a-f]{64}$"
+                        },
+                        "source": {
+                          "type": "string",
+                          "enum": [
+                            "bundled",
+                            "remote",
+                            "import",
+                            "local"
+                          ]
+                        },
+                        "local_override": {
+                          "type": "boolean"
+                        },
+                        "identity_provider": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "human_only": {
+                          "type": "boolean"
+                        },
+                        "sign_in_url": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "stance": {
+                          "type": "string",
+                          "enum": [
+                            "prohibited",
+                            "restricted",
+                            "writes_restricted",
+                            "allowed"
+                          ]
+                        },
+                        "write_policy_default": {
+                          "type": "string",
+                          "enum": [
+                            "allow",
+                            "warn",
+                            "confirm"
+                          ]
+                        },
+                        "clause": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "quote": {
+                              "type": "string"
+                            },
+                            "url": {
+                              "type": "string"
+                            },
+                            "checked": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "quote",
+                            "url",
+                            "checked"
+                          ]
+                        },
+                        "exception": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "guards": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "element_guards": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "challenges": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "enabled": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "pack_id",
+                        "title",
+                        "version",
+                        "sha256",
+                        "source",
+                        "local_override",
+                        "identity_provider",
+                        "human_only",
+                        "sign_in_url",
+                        "stance",
+                        "write_policy_default",
+                        "clause",
+                        "exception",
+                        "guards",
+                        "element_guards",
+                        "challenges",
+                        "enabled"
+                      ]
                     }
                   },
                   "required": [
@@ -23183,7 +23627,8 @@
                     "health",
                     "stopped_at",
                     "device_bound",
-                    "added_at"
+                    "added_at",
+                    "pack"
                   ]
                 }
               },
@@ -23612,6 +24057,10 @@
                     "warn",
                     "confirm"
                   ]
+                },
+                "pack_sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
                 }
               },
               "required": [
@@ -23976,6 +24425,133 @@
                     "added_at": {
                       "type": "integer",
                       "minimum": 0
+                    },
+                    "pack": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "pack_id": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "integer"
+                        },
+                        "sha256": {
+                          "type": "string",
+                          "pattern": "^[0-9a-f]{64}$"
+                        },
+                        "source": {
+                          "type": "string",
+                          "enum": [
+                            "bundled",
+                            "remote",
+                            "import",
+                            "local"
+                          ]
+                        },
+                        "local_override": {
+                          "type": "boolean"
+                        },
+                        "identity_provider": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "human_only": {
+                          "type": "boolean"
+                        },
+                        "sign_in_url": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "stance": {
+                          "type": "string",
+                          "enum": [
+                            "prohibited",
+                            "restricted",
+                            "writes_restricted",
+                            "allowed"
+                          ]
+                        },
+                        "write_policy_default": {
+                          "type": "string",
+                          "enum": [
+                            "allow",
+                            "warn",
+                            "confirm"
+                          ]
+                        },
+                        "clause": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "quote": {
+                              "type": "string"
+                            },
+                            "url": {
+                              "type": "string"
+                            },
+                            "checked": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "quote",
+                            "url",
+                            "checked"
+                          ]
+                        },
+                        "exception": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "guards": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "element_guards": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "challenges": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "enabled": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "pack_id",
+                        "title",
+                        "version",
+                        "sha256",
+                        "source",
+                        "local_override",
+                        "identity_provider",
+                        "human_only",
+                        "sign_in_url",
+                        "stance",
+                        "write_policy_default",
+                        "clause",
+                        "exception",
+                        "guards",
+                        "element_guards",
+                        "challenges",
+                        "enabled"
+                      ]
                     }
                   },
                   "required": [
@@ -23993,7 +24569,8 @@
                     "health",
                     "stopped_at",
                     "device_bound",
-                    "added_at"
+                    "added_at",
+                    "pack"
                   ]
                 }
               },
@@ -24605,6 +25182,133 @@
                 "added_at": {
                   "type": "integer",
                   "minimum": 0
+                },
+                "pack": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "properties": {
+                    "pack_id": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "integer"
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    "source": {
+                      "type": "string",
+                      "enum": [
+                        "bundled",
+                        "remote",
+                        "import",
+                        "local"
+                      ]
+                    },
+                    "local_override": {
+                      "type": "boolean"
+                    },
+                    "identity_provider": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "human_only": {
+                      "type": "boolean"
+                    },
+                    "sign_in_url": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "stance": {
+                      "type": "string",
+                      "enum": [
+                        "prohibited",
+                        "restricted",
+                        "writes_restricted",
+                        "allowed"
+                      ]
+                    },
+                    "write_policy_default": {
+                      "type": "string",
+                      "enum": [
+                        "allow",
+                        "warn",
+                        "confirm"
+                      ]
+                    },
+                    "clause": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "quote": {
+                          "type": "string"
+                        },
+                        "url": {
+                          "type": "string"
+                        },
+                        "checked": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "quote",
+                        "url",
+                        "checked"
+                      ]
+                    },
+                    "exception": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "guards": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "element_guards": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "challenges": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "pack_id",
+                    "title",
+                    "version",
+                    "sha256",
+                    "source",
+                    "local_override",
+                    "identity_provider",
+                    "human_only",
+                    "sign_in_url",
+                    "stance",
+                    "write_policy_default",
+                    "clause",
+                    "exception",
+                    "guards",
+                    "element_guards",
+                    "challenges",
+                    "enabled"
+                  ]
                 }
               },
               "required": [
@@ -24622,7 +25326,8 @@
                 "health",
                 "stopped_at",
                 "device_bound",
-                "added_at"
+                "added_at",
+                "pack"
               ]
             }
           },
@@ -25133,6 +25838,133 @@
               "added_at": {
                 "type": "integer",
                 "minimum": 0
+              },
+              "pack": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "pack_id": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "integer"
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "bundled",
+                      "remote",
+                      "import",
+                      "local"
+                    ]
+                  },
+                  "local_override": {
+                    "type": "boolean"
+                  },
+                  "identity_provider": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "human_only": {
+                    "type": "boolean"
+                  },
+                  "sign_in_url": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "stance": {
+                    "type": "string",
+                    "enum": [
+                      "prohibited",
+                      "restricted",
+                      "writes_restricted",
+                      "allowed"
+                    ]
+                  },
+                  "write_policy_default": {
+                    "type": "string",
+                    "enum": [
+                      "allow",
+                      "warn",
+                      "confirm"
+                    ]
+                  },
+                  "clause": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "quote": {
+                        "type": "string"
+                      },
+                      "url": {
+                        "type": "string"
+                      },
+                      "checked": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "quote",
+                      "url",
+                      "checked"
+                    ]
+                  },
+                  "exception": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "guards": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "element_guards": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "challenges": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "pack_id",
+                  "title",
+                  "version",
+                  "sha256",
+                  "source",
+                  "local_override",
+                  "identity_provider",
+                  "human_only",
+                  "sign_in_url",
+                  "stance",
+                  "write_policy_default",
+                  "clause",
+                  "exception",
+                  "guards",
+                  "element_guards",
+                  "challenges",
+                  "enabled"
+                ]
               }
             },
             "required": [
@@ -25150,7 +25982,8 @@
               "health",
               "stopped_at",
               "device_bound",
-              "added_at"
+              "added_at",
+              "pack"
             ]
           }
         },
@@ -25349,6 +26182,133 @@
                     "added_at": {
                       "type": "integer",
                       "minimum": 0
+                    },
+                    "pack": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "pack_id": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "integer"
+                        },
+                        "sha256": {
+                          "type": "string",
+                          "pattern": "^[0-9a-f]{64}$"
+                        },
+                        "source": {
+                          "type": "string",
+                          "enum": [
+                            "bundled",
+                            "remote",
+                            "import",
+                            "local"
+                          ]
+                        },
+                        "local_override": {
+                          "type": "boolean"
+                        },
+                        "identity_provider": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "human_only": {
+                          "type": "boolean"
+                        },
+                        "sign_in_url": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "stance": {
+                          "type": "string",
+                          "enum": [
+                            "prohibited",
+                            "restricted",
+                            "writes_restricted",
+                            "allowed"
+                          ]
+                        },
+                        "write_policy_default": {
+                          "type": "string",
+                          "enum": [
+                            "allow",
+                            "warn",
+                            "confirm"
+                          ]
+                        },
+                        "clause": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "quote": {
+                              "type": "string"
+                            },
+                            "url": {
+                              "type": "string"
+                            },
+                            "checked": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "quote",
+                            "url",
+                            "checked"
+                          ]
+                        },
+                        "exception": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "guards": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "element_guards": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "challenges": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "enabled": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "pack_id",
+                        "title",
+                        "version",
+                        "sha256",
+                        "source",
+                        "local_override",
+                        "identity_provider",
+                        "human_only",
+                        "sign_in_url",
+                        "stance",
+                        "write_policy_default",
+                        "clause",
+                        "exception",
+                        "guards",
+                        "element_guards",
+                        "challenges",
+                        "enabled"
+                      ]
                     }
                   },
                   "required": [
@@ -25366,7 +26326,8 @@
                     "health",
                     "stopped_at",
                     "device_bound",
-                    "added_at"
+                    "added_at",
+                    "pack"
                   ]
                 }
               },
@@ -26417,6 +27378,133 @@
               "added_at": {
                 "type": "integer",
                 "minimum": 0
+              },
+              "pack": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "pack_id": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "integer"
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "bundled",
+                      "remote",
+                      "import",
+                      "local"
+                    ]
+                  },
+                  "local_override": {
+                    "type": "boolean"
+                  },
+                  "identity_provider": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "human_only": {
+                    "type": "boolean"
+                  },
+                  "sign_in_url": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "stance": {
+                    "type": "string",
+                    "enum": [
+                      "prohibited",
+                      "restricted",
+                      "writes_restricted",
+                      "allowed"
+                    ]
+                  },
+                  "write_policy_default": {
+                    "type": "string",
+                    "enum": [
+                      "allow",
+                      "warn",
+                      "confirm"
+                    ]
+                  },
+                  "clause": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "quote": {
+                        "type": "string"
+                      },
+                      "url": {
+                        "type": "string"
+                      },
+                      "checked": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "quote",
+                      "url",
+                      "checked"
+                    ]
+                  },
+                  "exception": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "guards": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "element_guards": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "challenges": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "pack_id",
+                  "title",
+                  "version",
+                  "sha256",
+                  "source",
+                  "local_override",
+                  "identity_provider",
+                  "human_only",
+                  "sign_in_url",
+                  "stance",
+                  "write_policy_default",
+                  "clause",
+                  "exception",
+                  "guards",
+                  "element_guards",
+                  "challenges",
+                  "enabled"
+                ]
               }
             },
             "required": [
@@ -26434,7 +27522,8 @@
               "health",
               "stopped_at",
               "device_bound",
-              "added_at"
+              "added_at",
+              "pack"
             ]
           },
           "binding_allows_template": {
@@ -38183,7 +39272,9 @@
                   "template.signed_out",
                   "template.challenged",
                   "template.relogin_failed",
-                  "template.host_failed"
+                  "template.host_failed",
+                  "site_pack.write_confirm",
+                  "site_pack.update_pending"
                 ]
               },
               "minItems": 1
@@ -44536,6 +45627,118 @@
           },
           "413": {
             "description": "PAYLOAD_TOO_LARGE",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/templates/{template_id}/sites/{site_id}/clear-stop": {
+      "post": {
+        "operationId": "clearTemplateSiteStop",
+        "tags": [
+          "templates"
+        ],
+        "summary": "Clear stop: agents may navigate to and act on a site a terminal security check stopped (a no-op when the site is not stopped).",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-browserhive-scope": "templates:write",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^tp-[A-Za-z0-9_-]{10}$"
+            },
+            "required": true,
+            "name": "template_id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 253,
+              "pattern": "^[a-z0-9.-]+$"
+            },
+            "required": true,
+            "name": "site_id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Clear stop: agents may navigate to and act on a site a terminal security check stopped (a no-op when the site is not stopped).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateSiteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, PASSWORD_CHANGE_REQUIRED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "TEMPLATE_NOT_FOUND",
             "content": {
               "application/problem+json": {
                 "schema": {
