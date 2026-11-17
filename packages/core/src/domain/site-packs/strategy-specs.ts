@@ -238,7 +238,7 @@ export const STRATEGY_SPECS: { readonly [K in StrategyId]: StrategySpec } = {
     id: 'single-focus',
     title: 'One focused tab',
     description:
-      "Only the site's page the template's sessions acted on last keeps focus; the site's other pages report their real visibility, so the site never sees several focused tabs of one account.",
+      "Only the site's page the template's sessions acted on last keeps focus; the site's other pages report that they do not have focus, so the site never sees several focused tabs of one account.",
     kind: 'stealth',
     hooks: ['page_focus'],
     params: [],
