@@ -37,6 +37,8 @@ export const HEADED = process.env['BROWSERHIVE_TEMPLATES_HEADED'] === '1';
 /** One test's world. */
 export interface TemplateWorld {
   readonly sites: HttpsSites;
+  /** The bus the sessions and the supervisor publish on (`template.host`). */
+  readonly bus: InProcessEventBus<DomainEvents>;
   readonly sessions: SessionService;
   readonly supervisor: TemplateHostSupervisor;
   readonly template: TemplateRecord;
@@ -120,6 +122,7 @@ export async function templateWorld(
     clock,
     logger,
     degradations,
+    bus,
     spec: {
       dataDir,
       proxyResolver: { resolve: async (r) => r.requested },
@@ -138,6 +141,7 @@ export async function templateWorld(
   const site = templateSiteRecord();
   return {
     sites,
+    bus,
     sessions,
     supervisor,
     template,

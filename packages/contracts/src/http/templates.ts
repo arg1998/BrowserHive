@@ -146,7 +146,8 @@ export const Template = z.object({
   /**
    * "Deny clipboard writes" (spec 13 §2.1, D18): pages in the template's browser cannot put text on
    * the operator's clipboard (`navigator.clipboard` writes and `document.execCommand('copy'|'cut')`
-   * are refused; sites can detect the refusal). Applies at once to a running browser.
+   * are refused; sites can detect the refusal). Reaches a running browser at once; pages already
+   * open are fully covered after a browser restart (`HostView.clipboard_needs_restart`).
    */
   deny_clipboard_writes: z.boolean(),
   current_version: z.number().int().nullable(),
@@ -224,6 +225,13 @@ export const HostView = z.object({
    * continue (D-60). Launches and tool calls of the template's sessions wait meanwhile.
    */
   agents_paused: z.boolean(),
+  /**
+   * Present (`true`) when "Deny clipboard writes" changed while this browser ran (spec 13 §2.1,
+   * D18): the change reached every open page, but a page open at that moment may keep what it took
+   * before (turned on: it may still write the clipboard; turned off: it keeps refusing to copy until
+   * it reloads). Restarting the browser gives the switch full effect.
+   */
+  clipboard_needs_restart: z.boolean().optional(),
 });
 /** A template's browser. */
 export type HostView = z.infer<typeof HostView>;

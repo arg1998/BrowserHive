@@ -163,7 +163,7 @@ export async function launchTemplateHostWith(
     // refuses, redirect hops included (spec 13 §3.8).
     await context.addCookies(templateHostCookies(spec.selfOrigins));
     const anchor = context.pages()[0] ?? (await context.newPage());
-    await applyClipboardPolicy(context, spec.denyClipboardWrites === true, log);
+    await applyClipboardPolicy(context, spec.denyClipboardWrites === true, log, 'start');
     const targets = await HostTargets.open(context, anchor, log);
     const guard = (await ctx.requestGuard?.(spec.templateId)) ?? null;
     const host = buildHost(ctx, spec, context, targets, { sandboxed, profileSecrets, guard });

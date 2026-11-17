@@ -189,6 +189,8 @@ export type Invocation =
       readonly command: 'templates-clipboard';
       /** `deny` (true) or `allow` (false): the "Deny clipboard writes" switch (D18). */
       readonly deny: boolean;
+      /** `--restart`: restart a running browser when the change needs it for full effect. */
+      readonly restart: boolean;
     } & TemplateTarget)
   | ({ readonly command: 'templates-disable' } & TemplateTarget)
   | ({ readonly command: 'templates-enable' } & TemplateTarget)

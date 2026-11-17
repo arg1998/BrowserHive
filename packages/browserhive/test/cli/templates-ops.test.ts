@@ -192,7 +192,7 @@ describe('templates host', () => {
 });
 
 describe('templates clipboard', () => {
-  it('patches deny_clipboard_writes and says it applies at once', async () => {
+  it('patches deny_clipboard_writes and says it applies at once (browser not running)', async () => {
     const server = fakeServer({ 'a.com': 'signed_in' });
     server.routes = (method, path) =>
       method === 'PATCH' && path === `${BASE}/${ID}`
@@ -216,6 +216,59 @@ describe('templates clipboard', () => {
       { deny_clipboard_writes: true },
       { deny_clipboard_writes: false },
     ]);
+  });
+
+  it('says when pages already open need a restart; --restart restarts the browser', async () => {
+    const server = fakeServer({ 'a.com': 'signed_in' });
+    server.routes = (method, path) => {
+      if (method === 'PATCH' && path === `${BASE}/${ID}`)
+        return [
+          200,
+          {
+            template: { ...template(server), deny_clipboard_writes: true },
+            closed_sessions: [],
+            clipboard_needs_restart: true,
+          },
+        ];
+      if (method === 'POST' && path === `${BASE}/${ID}/host/restart`)
+        return [
+          200,
+          {
+            host: {
+              state: 'starting',
+              since: 1,
+              started_at: null,
+              restarts: 1,
+              pages: 0,
+              parked_pages: 0,
+              sandboxed: null,
+              profile_secrets: false,
+              agents_paused: false,
+            },
+          },
+        ];
+      return undefined;
+    };
+    const told = await run(server, ['clipboard', 'job-hunt', 'deny', ...URL_FLAGS]);
+    expect(told.code).toBe(0);
+    expect(told.stdout).toContain('pages it opens from now on');
+    expect(told.stdout).toContain(
+      'pages already open may still write it until the browser restarts',
+    );
+    expect(told.stdout).toContain('--restart, or templates host job-hunt restart');
+    expect(paths(server)).not.toContain(`POST ${BASE}/${ID}/host/restart`);
+    const restarted = await run(server, [
+      'clipboard',
+      'job-hunt',
+      'deny',
+      '--restart',
+      ...URL_FLAGS,
+    ]);
+    expect(restarted.code).toBe(0);
+    expect(restarted.stdout).toContain('restarted the browser of job-hunt');
+    expect(paths(server)).toContain(`POST ${BASE}/${ID}/host/restart`);
+    const json = await run(server, ['clipboard', 'job-hunt', 'deny', '--json', ...URL_FLAGS]);
+    expect(JSON.parse(json.stdout)).toMatchObject({ clipboard_needs_restart: true });
   });
 
   it('a missing or unknown mode is a usage error (64) before any request', async () => {

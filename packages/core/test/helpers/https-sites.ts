@@ -171,7 +171,7 @@ export function startHttpsSites(options: HttpsSitesOptions = {}): HttpsSites {
       return (
         (await signInRoute(req, site, url.pathname)) ??
         guardRoute(site, url.pathname) ??
-        clipboardRoute(url.pathname) ??
+        clipboardRoute(site, url.pathname) ??
         route(host, url.pathname, req.method, url.search)
       );
     },

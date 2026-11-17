@@ -111,7 +111,8 @@ export class TemplateEditService {
       return row;
     });
     const closed = await this.#reach(updated, current.sites);
-    if (changed.includes('deny_clipboard_writes')) await applyClipboardSwitch(this.#deps, updated);
+    const clipboard = changed.includes('deny_clipboard_writes');
+    if (clipboard) await applyClipboardSwitch(this.#deps, updated);
     if (restart && this.#deps.runtime.host(templateId).state === 'running') {
       await this.#deps.ops
         .restartHost(updated)
@@ -124,6 +125,9 @@ export class TemplateEditService {
     return {
       template: toTemplateView(updated, current.sites, this.#deps.packs),
       closed_sessions: closed,
+      ...(clipboard && {
+        clipboard_needs_restart: this.#deps.runtime.host(templateId).clipboardNeedsRestart === true,
+      }),
     };
   }
 

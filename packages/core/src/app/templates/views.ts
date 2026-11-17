@@ -175,6 +175,7 @@ export function toHostView(host: TemplateHostView): HostView {
     sandboxed: host.sandboxed,
     profile_secrets: host.profileSecrets,
     agents_paused: host.agentsPaused,
+    ...(host.clipboardNeedsRestart === true && { clipboard_needs_restart: true }),
   };
 }
 

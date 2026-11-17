@@ -89,7 +89,8 @@ export function templatesInvocation(name: string, input: TemplatesPlanInput): Re
     }
     case 'templates clipboard': {
       const deny = clipboardMode(reader, args[1] ?? '');
-      return (remote) => ({ command: 'templates-clipboard', deny, ...target(remote) });
+      const restart = reader.bool('restart');
+      return (remote) => ({ command: 'templates-clipboard', deny, restart, ...target(remote) });
     }
     case 'templates login':
       return loginInvocation(reader, target);

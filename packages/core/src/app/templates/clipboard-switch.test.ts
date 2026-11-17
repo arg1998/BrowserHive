@@ -1,4 +1,4 @@
-/** @module app/templates/clipboard-switch.test — "Deny clipboard writes" through `PATCH` (spec 13 §2.1, D18): the field is stored and audited by name, reaches a running browser live without a restart, an unchanged value does nothing, and a browser that cannot take it live is restarted (a stopped one is left for its next start). */
+/** @module app/templates/clipboard-switch.test — "Deny clipboard writes" through `PATCH` (spec 13 §2.1, D18): the field is stored and audited by name, reaches a running browser live without a restart, the response says when pages already open need a browser restart, an unchanged value does nothing, and a browser that cannot take it live is restarted (a stopped one is left for its next start). */
 
 import { beforeEach, describe, expect, it } from 'bun:test';
 import { CollectingLogger } from '../../../test/helpers/collecting-logger.ts';
@@ -80,6 +80,18 @@ describe('deny_clipboard_writes (D18)', () => {
       ['template.update', { changed: ['deny_clipboard_writes'] }],
     ]);
     expect(ops.calls).toEqual([]);
+  });
+
+  it('the response says when only a browser restart gives the change full effect', async () => {
+    runtime.hosts.set(TEMPLATE_ID, { state: 'running', clipboardNeedsRestart: true });
+    const on = await edit.update(TEMPLATE_ID, { deny_clipboard_writes: true }, { by: 'admin' });
+    expect(on.clipboard_needs_restart).toBe(true);
+    runtime.hosts.set(TEMPLATE_ID, { state: 'stopped' });
+    const off = await edit.update(TEMPLATE_ID, { deny_clipboard_writes: false }, { by: 'admin' });
+    expect(off.clipboard_needs_restart).toBe(false);
+    // Another edit does not carry it.
+    const renamed = await edit.update(TEMPLATE_ID, { description: 'x' }, { by: 'admin' });
+    expect(renamed.clipboard_needs_restart).toBeUndefined();
   });
 
   it('an unchanged value writes and applies nothing', async () => {

@@ -42,6 +42,7 @@ import {
   UnavailableTemplateRuntime,
   unavailableHealthFacade,
   type VaultService,
+  watchClipboardOnStart,
   wireTemplateHealth,
 } from '@browserhive/core/server';
 import type { SiteStrategies } from '../site-pack-strategies.ts';
@@ -279,6 +280,22 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
     wireSitePackUsage(input.sitePacks, input.bus, input.logger, changed);
   }
   const common = { ids: input.ids, clock: input.clock, logger: input.logger, changed };
+  const clipboardWrites = async (id: string, deny: boolean) => {
+    const host = supervisor?.runningHost(id) ?? null;
+    if (host !== null) await applyClipboardPolicy(host.context, deny, input.logger);
+  };
+  // A clipboard change that landed while the browser started is applied once it runs (D18).
+  const offClipboard =
+    supervisor === null
+      ? () => undefined
+      : watchClipboardOnStart({
+          templates: input.uow.repos.templates,
+          runtime,
+          ops,
+          clipboardWrites,
+          bus: input.bus,
+          logger: input.logger,
+        });
   const edit = new TemplateEditService({
     repos: input.uow.repos,
     uow: input.uow,
@@ -288,10 +305,7 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
     bus: input.bus,
     ...packs,
     ...common,
-    clipboardWrites: async (id, deny) => {
-      const host = supervisor?.runningHost(id) ?? null;
-      if (host !== null) await applyClipboardPolicy(host.context, deny, input.logger);
-    },
+    clipboardWrites,
   });
   const actions = new TemplateActions({
     repos: input.uow.repos,
@@ -356,6 +370,7 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
     stopHostTicks();
     stopHealthTicks();
     health?.stop();
+    offClipboard();
   };
   return {
     service,
