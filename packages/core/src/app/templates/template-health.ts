@@ -7,6 +7,7 @@ import {
   providerOf,
   sitesOfProvider,
 } from '../../domain/templates/probe.ts';
+import type { JarCookie } from '../../domain/templates/sign-ins.ts';
 import { AppError } from '../../kernel/errors/app-error.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import { registrableDomain } from '../../kernel/url.ts';
@@ -41,6 +42,18 @@ export interface ProbeHosts {
   withHost<T>(template: TemplateRecord, fn: (host: TemplateHost) => Promise<T>): Promise<T>;
   /** A browser slot is free for a start (spec 13 §6.3). */
   slotFree(): boolean;
+  /** The cookies of a stopped browser's last checkpoint, or `null` (none, or no key). */
+  storedJar?(templateId: string): Promise<readonly JarCookie[] | null>;
+}
+
+/** Where a probe reads the jar from: the running browser, or a stopped one's checkpoint. */
+interface ProbeSource {
+  readonly host: TemplateHost | null;
+  readonly jar: () => Promise<readonly JarCookie[]>;
+}
+
+function browserJar(host: TemplateHost): ProbeSource {
+  return { host, jar: () => host.jar() };
 }
 
 /** When a probe may start a stopped browser. */
@@ -167,9 +180,18 @@ export class TemplateHealthService {
     options: ProbeOptions,
   ): Promise<ProbeRun> {
     if (sites.length === 0) return [];
-    const each = (host: TemplateHost) => this.#sites(template, sites, host, options);
+    const each = (host: TemplateHost) => this.#sites(template, sites, browserJar(host), options);
     const running = this.#deps.hosts.runningHost(template.templateId);
     if (running !== null) return each(running);
+    // A stopped browser's cookies are its last checkpoint (written at every clean stop): sites
+    // that need no navigation are checked from it, so a check never starts a window that could
+    // take the operator's focus (review #81 e2e).
+    const stored = this.#deps.hosts.storedJar;
+    if (stored !== undefined && sites.every((s) => this.#probers(s).needsBrowser !== true)) {
+      const jar = await stored(template.templateId);
+      if (jar !== null)
+        return this.#sites(template, sites, { host: null, jar: async () => jar }, options);
+    }
     if (options.start === 'never') return null;
     if (options.start === 'if_slot_free' && !this.#deps.hosts.slotFree()) return null;
     return this.#deps.hosts.withHost(template, each);
@@ -178,7 +200,7 @@ export class TemplateHealthService {
   async #sites(
     template: TemplateRecord,
     sites: readonly TemplateSiteRecord[],
-    host: TemplateHost,
+    source: ProbeSource,
     options: ProbeOptions,
   ): Promise<SiteProbeResult[]> {
     const results: SiteProbeResult[] = [];
@@ -190,7 +212,7 @@ export class TemplateHealthService {
       const site = current.find((s) => s.siteId === chosen.siteId);
       if (site === undefined) continue;
       const started = this.#deps.clock.now();
-      const verdict = await this.#probeOne(template, site, host, options.signal);
+      const verdict = await this.#probeOne(template, site, source, options.signal);
       const durationMs = Math.max(0, this.#deps.clock.now() - started);
       await this.#apply(template, site.siteId, verdict, options.trigger, durationMs);
       results.push({
@@ -206,14 +228,15 @@ export class TemplateHealthService {
   async #probeOne(
     template: TemplateRecord,
     site: TemplateSiteRecord,
-    host: TemplateHost,
+    source: ProbeSource,
     signal: AbortSignal | undefined,
   ): Promise<ProbeVerdict> {
     try {
       return await this.#probers(site).probe({
         template,
         site,
-        host,
+        host: source.host,
+        jar: source.jar,
         now: this.#deps.clock.now(),
         signal: signal ?? new AbortController().signal,
       });

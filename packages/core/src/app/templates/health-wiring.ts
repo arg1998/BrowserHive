@@ -65,6 +65,13 @@ export function wireTemplateHealth(input: TemplateHealthWiring): TemplateHealthP
     hosts: {
       runningHost: (id) => supervisor.runningHost(id),
       withHost: (template, fn) => ops.withHost(template, fn),
+      storedJar: async (id) => {
+        try {
+          return (await input.state.read(id, 'latest')).cookies;
+        } catch {
+          return null;
+        }
+      },
       slotFree: () => {
         const cap = input.sessions.capacity();
         return cap === null || input.sessions.occupiedSlots() < cap;
