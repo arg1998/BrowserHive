@@ -191,6 +191,7 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
         },
         bus: input.bus,
         onTemplateChanged: (id) => changed(id),
+        sitePacks: () => (input.sitePacks?.enabled === true ? input.sitePacks : null),
         ...(reader !== null && {
           rssOf: async (pid: number) => (await reader.rssOfTrees([pid])).get(pid) ?? null,
         }),

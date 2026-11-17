@@ -100,6 +100,11 @@ export interface TemplateRuntime {
   /** Ids of the live agent virtual sessions of a template (maintenance sessions excluded). */
   liveSessions(templateId: string): readonly string[];
   /**
+   * The effective live-session cap with the enabled sites' packs (`concurrency.max_sessions`,
+   * `ramp-up`; spec 13 §6.3); absent = `max_concurrent`.
+   */
+  cap?(template: TemplateRecord, sites: readonly TemplateSiteRecord[]): number;
+  /**
    * Launches a virtual session (spec 13 §3.7 after `validate`).
    *
    * @throws AppError `TEMPLATE_DISABLED`, `TEMPLATE_UNAVAILABLE`, `TEMPLATE_BUSY`,

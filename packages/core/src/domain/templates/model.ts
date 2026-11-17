@@ -80,12 +80,27 @@ export function isSessionSealed(sealing: SessionSealing): boolean {
   );
 }
 
+/** What the enabled sites' packs do to a template's cap (spec 13 §6.3, §9.4, §9.10). */
+export interface CapLimits {
+  /** The smallest `concurrency.max_sessions` of the enabled sites' packs; `null` = none. */
+  readonly siteMax: number | null;
+  /** The smallest `ramp-up` factor (1 = no ramp). */
+  readonly rampFactor: number;
+}
+
+/** No pack limits (packs off, or no enabled site's pack sets one). */
+export const NO_CAP_LIMITS: CapLimits = Object.freeze({ siteMax: null, rampFactor: 1 });
+
 /**
- * The effective live-session cap of a template (spec 13 §6.3): `max_concurrent`, later bounded by
- * the enabled sites' packs (`concurrency.max_sessions`, T3a) and scaled by `ramp-up` (T3b).
+ * The effective live-session cap of a template (spec 13 §6.3): `min(max_concurrent, the enabled
+ * sites' pack concurrency.max_sessions)` (never above `max_concurrent`, §9.10), scaled by the
+ * `ramp-up` factor and rounded up, never below 1.
  */
-export function effectiveCap(template: TemplateRecord): number {
-  return template.maxConcurrent;
+export function effectiveCap(template: TemplateRecord, limits: CapLimits = NO_CAP_LIMITS): number {
+  const base = Math.min(template.maxConcurrent, limits.siteMax ?? template.maxConcurrent);
+  const factor = Math.min(1, Math.max(0, limits.rampFactor));
+  // A hair below the integer first: 10 × 0.6 is 6.000000000000001 in binary floating point.
+  return Math.max(1, Math.ceil(base * factor - 1e-9));
 }
 
 /** Agent page limits for one host (spec 13 §6.3, D-56). */
@@ -125,6 +140,7 @@ export function availabilityOf(
   template: TemplateRecord,
   sites: readonly TemplateSiteRecord[],
   host: TemplateHostFacts,
+  cap: number = effectiveCap(template),
 ): Availability {
   const enabled = sites.filter((s) => s.enabled);
   // A template with every site disabled offers nothing to sign in to until the operator acts.
@@ -133,7 +149,7 @@ export function availabilityOf(
   }
   if (enabled.every((s) => OUT.has(s.health.state))) return 'needs_login';
   if (host.state === 'draining' || host.state === 'crashed') return 'busy';
-  if (host.liveAgentSessions >= effectiveCap(template)) return 'busy';
+  if (host.liveAgentSessions >= cap) return 'busy';
   return 'available';
 }
 

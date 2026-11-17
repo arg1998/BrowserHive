@@ -152,7 +152,13 @@ export class TemplateService {
       return {
         record: t,
         sites: own,
-        summary: toTemplateSummary(t, own, this.#deps.runtime.host(t.templateId), this.#deps.packs),
+        summary: toTemplateSummary(
+          t,
+          own,
+          this.#deps.runtime.host(t.templateId),
+          this.#deps.packs,
+          this.#deps.runtime.cap?.(t, own),
+        ),
       };
     });
     return pageTemplates(rows, query, this.#deps.clock.now());
@@ -250,7 +256,7 @@ export class TemplateService {
         toAgentTemplate(
           template,
           own,
-          availabilityOf(template, own, host),
+          availabilityOf(template, own, host, this.#deps.runtime.cap?.(template, own)),
           isSessionSealed(sealing),
           this.#deps.packs,
         ),
