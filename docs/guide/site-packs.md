@@ -60,7 +60,7 @@ If another version is on offer by the time you confirm, adding the site fails wi
 | Review | the pack page | `sitepacks diff <pack> [--to <version>]` | Shows the version's classification, each changed field with its class, its old and new value, and any new domain. |
 | **Apply** | **Apply** | `sitepacks apply <pack> [version]` | The version becomes the approved one. Every template that uses the pack follows it at once. The version it replaces is kept for Revert. |
 | **Reject** | **Reject** | `sitepacks reject <pack> [version]` | Dismisses the version. A newer one is offered again. |
-| **Revert** | **Revert** | `sitepacks revert <pack>` | Goes back to the previous approved version in one step. |
+| **Revert** | **Revert** | `sitepacks revert <pack>` | Goes back to the previous approved version in one step. The dashboard and the command line show its classification first, like Apply. |
 | **Pin** | **Pin** | `sitepacks pin <pack> <version>`, `sitepacks unpin <pack>` | Keeps the approved version. Newer versions are listed as "pinned at v7, v9 available". |
 | **Follow updates** | **Follow updates** | `sitepacks follow <pack> on\|off\|auto` | Whether the pack lists pending updates, counts in the badge and sends [`site_pack.update_pending`](notifications.md#site-packs). `auto` (the default) follows a pack while a template uses it. |
 | Turn off | the **Enabled** switch | `sitepacks disable <pack>`, `sitepacks enable <pack>` | A disabled pack applies nowhere: its guards (sign-out, account and credential ones included) stop applying for every template, and its sites are generic sites until you enable it again. Turning a pack off asks for confirmation (the command line asks you to type the pack id, or takes `--yes`). |
@@ -74,6 +74,17 @@ Every decision is recorded with who made it and when (`GET /api/v1/site-packs/ch
 **A domain belongs to one pack.** Content that claims a domain another pack already covers is refused: approving or importing a local file that lists `github.com` while the GitHub pack covers it answers 409 [`SITE_PACK_DOMAIN_TAKEN`](../reference/errors.md#SITE_PACK_DOMAIN_TAKEN) naming that pack, and nothing of the other pack changes. A version skipped for this reason names the pack that owns the domain.
 
 **One broken pack stays alone.** If BrowserHive cannot read one pack's stored approval, only that pack is left out (its sites are generic), and the Site packs page and `browserhive doctor` say so; every other pack keeps applying.
+
+### When a version raises the stealth floor
+
+A pack's [`stealth-profile`](stealth.md#site-pack-stealth-strategies) sets a floor: a minimum stealth level, and fingerprint noise on or off. A template's stealth level and fingerprint noise are fixed for its life, so a template cannot be changed to meet a higher floor. A version whose floor is above a template that uses the pack (with the site turned on there) therefore cannot apply: **Apply**, **Revert** to such a version and **Approve** of such a local file are refused with [`SITE_PACK_BELOW_FLOOR`](../reference/errors.md#SITE_PACK_BELOW_FLOOR), which names each template and what it lacks, and nothing changes. The dashboard explains it in a dialog. To go ahead, for each named template:
+
+- turn the site off on that template (its **Sites** tab), so the template no longer uses the pack; or
+- create a new template with the stealth settings the pack needs, sign in to the site there, and remove the site from the old template.
+
+Or reject the version: the current one keeps applying.
+
+**When the version in force changes without you.** Deleting an approved local file cannot be refused: the approved published version applies again at once. If its floor is above a template that uses the pack (the same holds when a revoked version falls back to an earlier one), BrowserHive turns the site off on that template, records it in the audit log and tells you: the template's page says the site was turned off and why, System lists [`TEMPLATE_SITE_BELOW_FLOOR`](../reference/errors.md#TEMPLATE_SITE_BELOW_FLOOR), and you get a notification. A template never runs a site below its pack's floor. Turning the site on again is refused while the template is below the floor; the record clears once no turned-off site is below its pack's floor (the site or the template removed, or a version with a lower floor applied).
 
 ## Classification
 
@@ -90,7 +101,9 @@ Chips always carry words and an icon, never colour alone. Other labels you can m
 
 **Default deny.** A field, or a strategy parameter, that has no rule above is **loosening**. A new pack format field, a pacing rule's period or its `guard`, a challenge's `kind` and every strategy parameter without a safe direction (a path, `entry-warmup`'s `referrer`) count as relaxing rules until someone writes a rule for them. Numbers are compared as BrowserHive reads them: defaults applied and clamped to the bounds built into it, so writing out a default changes nothing.
 
-**It follows your templates.** Whether a `stealth-profile` change can stop the site depends on the templates that use the pack (their enabled sites). When you change a template's stealth or fingerprint noise, or turn a site on or off, the pending versions are classified again.
+**It follows your templates.** Whether a `stealth-profile` change can stop the site depends on the templates that use the pack (their enabled sites). When you create or delete a template, or add, remove, or turn a site on or off on one, the pending versions are classified again.
+
+Because the address a sign-in form posts to is not in a pack, most guards that block or ask on a site's main host (where its sign-in page usually is) classify **Can stop the site**: they wait for you even once automatic updates arrive.
 
 Because the address a sign-in form posts to is not in a pack, most guards that block or ask on a site's main host (where its sign-in page usually is) classify **Can stop the site**: they wait for you even once automatic updates arrive.
 

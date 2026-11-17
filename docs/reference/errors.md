@@ -1993,13 +1993,13 @@ Details:
 | Category | `domain` |
 | Retryable | `after_operator` (retry after an operator acts (unlock the vault, resolve a request, change policy)) |
 
-Message: `Version {version} of site pack '{pack_id}' needs stronger stealth settings than templates using it have: {templates_text}. Change those templates or disable the site in them, then apply again.`
+Message: `Version {version} of site pack '{pack_id}' needs stronger stealth settings than templates using it have: {templates_text}. Turn the site off on those templates, or create new templates that meet the floor, then try again.`
 
-Hint: Raise the stealth level or change fingerprint noise on the named templates (or disable the site there), then Apply.
+Hint: Stealth is fixed for a template's life: turn the site off on the named templates (their Sites tab), or create a new template with the stealth the pack needs; rejecting the version keeps the current one.
 
-Cause: The version selects the `stealth-profile` strategy (spec 13 §9.4) with a floor (minimum stealth level, required or forbidden fingerprint noise) that templates whose enabled sites use the pack do not meet. Applying it would leave those templates running the site below the pack's floor, so Apply is refused and the approved version stays in force.
+Cause: The version selects the `stealth-profile` strategy (spec 13 §9.4) with a floor (minimum stealth level, required or forbidden fingerprint noise) that templates whose enabled sites use the pack do not meet. Applying it (or reverting to it, or approving such a local file) would leave those templates running the site below the pack's floor (D-71), so the action is refused and the version in force stays. A template's stealth level and fingerprint noise are fixed when it is created, so the template itself cannot be changed to meet the floor.
 
-Resolution: Edit each named template (Settings: stealth level, fingerprint noise) to meet the floor, or disable the site on it, then apply the version again. Rejecting the version keeps the current one.
+Resolution: For each named template, turn the site off on it (the template's Sites tab, or `PUT /api/v1/templates/{id}/sites/{site}` with `enabled: false`), or create a new template with the stealth level and fingerprint noise the pack needs, sign in to the site there and remove it from the old template; then try again. Rejecting the version keeps the current one.
 
 Details:
 

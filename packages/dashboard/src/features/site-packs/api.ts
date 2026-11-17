@@ -116,8 +116,9 @@ function useSettle() {
 }
 
 /**
- * The operator actions on one pack. Errors toast, except a below-floor refusal of Apply or Approve
- * (`SITE_PACK_BELOW_FLOOR`), which the card explains in place; every action refreshes when it settles.
+ * The operator actions on one pack. Errors toast, except a below-floor refusal of Apply, Approve or
+ * Revert (`SITE_PACK_BELOW_FLOOR`), which a dialog explains in place; every action refreshes when it
+ * settles.
  */
 export function useSitePackActions(packId: string) {
   const api = useApi();

@@ -264,15 +264,27 @@ describe('a pending version', () => {
     );
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText(/v4 wasn’t applied/)).toBeDefined();
-    const link = within(dialog).getByRole('link', { name: 'sales' });
-    expect(link.getAttribute('href')).toBe('/templates/tp-0000000001?tab=settings');
+    // Stealth is fixed for a template's life (review #84 M3): the fix is the site's Sites tab or a
+    // new template, never the template's Settings.
+    const link = within(dialog).getByRole('link', { name: 'Open the Sites tab of sales' });
+    expect(link.getAttribute('href')).toBe('/templates/tp-0000000001?tab=sites');
+    expect(dialog.querySelector('a[href*="tab=settings"]')).toBeNull();
+    expect(dialog.textContent).not.toMatch(/Settings|Raise/);
     expect(
-      within(dialog).getByText("Needs stealth 'max' or higher (the template has 'standard')"),
+      within(dialog).getByText("Needs stealth 'max' or higher (the template has 'standard')."),
     ).toBeDefined();
-    expect(within(dialog).getByText('Raise Stealth in its Settings.')).toBeDefined();
-    expect(within(dialog).getByText('Turn fingerprint noise on in its Settings.')).toBeDefined();
+    expect(
+      within(dialog).getByText(
+        'Turn the site off on this template, or create a new template with higher stealth and fingerprint noise on.',
+      ),
+    ).toBeDefined();
+    expect(within(dialog).getByText(/can’t change after it is created/)).toBeDefined();
+    expect(within(dialog).getByText(/Or reject the version/)).toBeDefined();
     await expectNoA11yViolations(document.body, AXE);
-    await click(within(dialog).getAllByRole('button', { name: 'Close' })[0] as HTMLElement);
+    // One close affordance (review #84 L5).
+    const closes = within(dialog).getAllByRole('button', { name: 'Close' });
+    expect(closes).toHaveLength(1);
+    await click(closes[0] as HTMLElement);
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     // The card keeps saying why, and reopens the explanation.
     expect(

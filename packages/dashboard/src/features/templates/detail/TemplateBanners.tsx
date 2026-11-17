@@ -1,4 +1,4 @@
-/** @module features/templates/detail/TemplateBanners — the template page's notices (spec 13 §11.4): the browser failed (with its error and Restart), agents paused while a sign-in window is open or the operator types in the live view (**Let agents continue**, confirmed; focus moves to the site's card when it goes), sites not signed in on a ready template (**Re-login…**, not while a re-login runs), a missing or mismatched key, identity drift, unsandboxed, saved passwords or autofill in the profile (Clear), and unlisted sign-ins (Remove sign-in each) */
+/** @module features/templates/detail/TemplateBanners — the template page's notices (spec 13 §11.4): the browser failed (with its error and Restart), agents paused while a sign-in window is open or the operator types in the live view (**Let agents continue**, confirmed; focus moves to the site's card when it goes), sites not signed in on a ready template (**Re-login…**, not while a re-login runs), a missing or mismatched key, a site turned off below its pack's stealth floor, identity drift, unsandboxed, saved passwords or autofill in the profile (Clear), and unlisted sign-ins (Remove sign-in each) */
 import type { TemplateDetailResponse } from '@browserhive/contracts/http';
 import { useRef } from 'react';
 import { useConfirm } from '@/app/providers/ConfirmProvider.tsx';
@@ -16,6 +16,7 @@ import { liveViewSession } from '../LiveViewSignIn.tsx';
 import { needsSignIn } from '../model.ts';
 import { reloginActive } from '../relogin-text.ts';
 import { useTemplateActions } from '../use-template-actions.ts';
+import { FloorOffBanner } from './FloorOffBanner.tsx';
 import { selectedTemplateTab, siteCardHeading, useFocusRescue } from './focus-rescue.ts';
 
 /** Props. */
@@ -140,6 +141,7 @@ export function TemplateBanners({ detail, onRelogin }: TemplateBannersProps) {
           <DocsLink page="templatesBackups">Backups and keys</DocsLink>
         </Callout>
       ) : null}
+      <FloorOffBanner events={system.data?.degradations} templateId={template.template_id} />
       {host.state === 'failed' ? (
         <Callout
           tone="danger"

@@ -80,7 +80,9 @@ export function PendingUpdateCard({
       }
       diff={
         <>
-          {refusal !== null ? <FloorRefusal refusal={refusal} title={pack.title} /> : null}
+          {refusal !== null ? (
+            <FloorRefusal refusal={refusal} title={pack.title} action="apply" />
+          ) : null}
           <DiffLoader packId={pack.pack_id} to={pending.version} />
         </>
       }

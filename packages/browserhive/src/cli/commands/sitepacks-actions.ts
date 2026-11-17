@@ -1,4 +1,4 @@
-/** @module cli/commands/sitepacks-actions — `browserhive sitepacks apply | reject | revert | approve-local | pin | unpin | follow | enable | disable` over a running server's REST API; apply, revert, approve-local and disable confirm on a terminal or with `--yes`, and approve-local approves the SHA-256 of the difference it printed (spec 13 §9.6, §10.5, §10.6, §11.5); reload and import are in `sitepacks-local.ts`. */
+/** @module cli/commands/sitepacks-actions — `browserhive sitepacks apply | reject | revert | approve-local | pin | unpin | follow | enable | disable` over a running server's REST API; apply, revert, approve-local and disable confirm on a terminal or with `--yes`, apply and revert print the classified diff first, and approve-local approves the SHA-256 of the difference it printed (spec 13 §9.6, §10.5, §10.6, §11.5); reload and import are in `sitepacks-local.ts`. */
 import { type SitePackView, SitePackViewResponse } from '@browserhive/contracts/http';
 import type { CommandContext } from '../deps.ts';
 import { EXIT, type ExitCode, type SitePacksAction } from '../invocation.ts';
@@ -123,7 +123,8 @@ export async function runSitePacksReject(
 }
 
 /**
- * `sitepacks revert <id> [--yes]`: back to the previous approved version.
+ * `sitepacks revert <id> [--yes]`: prints the classified diff from the version in force to the
+ * previous one (review #84 L4), confirms, then goes back to it.
  *
  * @returns 0, or 1 on a failure or refusal.
  */
@@ -140,6 +141,9 @@ export async function runSitePacksRevert(
     context.out.diagnostic(`browserhive: ${packId} has no previous approved version to revert to.`);
     return EXIT.fatal;
   }
+  const diff = await fetchDiff(context, target.remote, packId, previous.version);
+  if (typeof diff === 'number') return diff;
+  if (!target.json) printDiff(context, packId, diff);
   const current = approved === null ? '' : ` from v${approved.version}`;
   const confirmed = await confirmByPackId(context, { packId, command: 'revert', yes: action.yes }, [
     `This reverts ${packId}${current} to v${previous.version} (${previous.source}).`,

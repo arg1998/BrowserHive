@@ -1,4 +1,4 @@
-/** @module features/site-packs/LocalApprovalCard — a local file waiting for approval (spec 13 §10.5): its path and state, the classified approved-versus-current diff (a below-floor refusal explained in place), and **Approve** behind a confirmation naming the SHA-256. The hash approved is the one of the diff on screen (`to.sha256` of that response, review S-M3): Approve waits while the diff loads or refreshes, and when the file changed since the list was read */
+/** @module features/site-packs/LocalApprovalCard — a local file waiting for approval (spec 13 §10.5): its path and state, the classified approved-versus-current diff (a below-floor refusal explained in place), and **Approve** behind a confirmation naming the SHA-256 whose copy and care follow the classification (review #84 L1). The hash approved is the one of the diff on screen (`to.sha256` of that response, review S-M3): Approve waits while the diff loads or refreshes, and when the file changed since the list was read */
 import type { SitePackView } from '@browserhive/contracts/http';
 import { useId } from 'react';
 import { useConfirm } from '@/app/providers/ConfirmProvider.tsx';
@@ -41,7 +41,8 @@ export function LocalApprovalCard({ pack }: { readonly pack: SitePackView }) {
   const stale = diff.data !== undefined && !diff.isFetching && sha === null;
   const onApprove = async () => {
     if (sha === null) return;
-    if (!(await confirm(approveLocalConfirm(pack, local.path, sha)))) return;
+    if (!(await confirm(approveLocalConfirm(pack, local.path, sha, diff.data?.classification))))
+      return;
     actions.approveLocal.mutate(sha, {
       onSuccess: () => toast.success({ title: `${iso(pack.title)}: local file approved` }),
     });
@@ -77,7 +78,9 @@ export function LocalApprovalCard({ pack }: { readonly pack: SitePackView }) {
       }
       diff={
         <>
-          {refusal !== null ? <FloorRefusal refusal={refusal} title={pack.title} /> : null}
+          {refusal !== null ? (
+            <FloorRefusal refusal={refusal} title={pack.title} action="approve" />
+          ) : null}
           <DiffPanel query={diff} />
         </>
       }
