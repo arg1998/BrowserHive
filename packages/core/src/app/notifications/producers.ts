@@ -14,6 +14,7 @@ import { assertNever } from '../../kernel/errors/app-error.ts';
 import { sanitizeUrl } from '../../kernel/url.ts';
 import type { DomainEvent } from '../../ports/event-bus.ts';
 import type { DomainEventName, DomainEvents } from '../events/catalog.ts';
+import { updatesDraft, updatesRevision } from '../site-packs/update-notifications.ts';
 import { code, formatDuration, link, type MessageContent, text, time } from './message.ts';
 import type { NotificationDraft, ThreadRevision } from './producer-types.ts';
 import {
@@ -67,6 +68,7 @@ export const PRODUCED_EVENTS = [
   'template.health',
   'template.relogin',
   'template.host',
+  'site_pack.status',
 ] as const satisfies readonly DomainEventName[];
 
 /** Element of {@link PRODUCED_EVENTS}. */
@@ -113,6 +115,8 @@ export function draftFor(event: ProducedEvent): NotificationDraft | null {
       return reloginFailedDraft(event.payload);
     case 'template.host':
       return hostFailedDraft(event.payload);
+    case 'site_pack.status':
+      return updatesDraft(event.payload);
     case 'attention.resolved':
     case 'vault.confirm.resolved':
     case 'system.recovered':
@@ -151,6 +155,8 @@ export function revisionFor(event: ProducedEvent): ThreadRevision | null {
       return signinRevision(event.payload);
     case 'template.host':
       return hostRevision(event.payload);
+    case 'site_pack.status':
+      return updatesRevision(event.payload);
     default:
       return null;
   }
