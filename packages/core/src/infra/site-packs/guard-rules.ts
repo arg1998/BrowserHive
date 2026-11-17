@@ -30,7 +30,7 @@ export function defaultGuardRuleInputs(): RequestGuardRuleInput[] {
     id: defaultGuardRuleId(g.id),
     url: g.url,
     ...(g.methods !== undefined && { methods: g.methods }),
-    ...(g.resourceTypes !== undefined && { resourceTypes: g.resourceTypes }),
+    resourceTypes: g.resourceTypes ?? 'all',
     action: g.action,
   }));
 }
@@ -59,7 +59,11 @@ export function packGuardRuleInput(
     id: `${packId}#${guard.id}`,
     url: guard.match.url,
     ...(guard.match.methods !== undefined && { methods: guard.match.methods }),
-    ...(guard.match.resource_types !== undefined && { resourceTypes: guard.match.resource_types }),
+    // A guard protecting the account covers every request type unless it narrows them: an <img>
+    // or a prefetch signs out as well as a form (review PR #83 M2). Writes keep the default types.
+    ...(guard.match.resource_types !== undefined
+      ? { resourceTypes: guard.match.resource_types }
+      : guard.kind !== 'write' && { resourceTypes: 'all' as const }),
     action: guard.action === 'write_policy' ? policyAction(policy) : guard.action,
   };
 }

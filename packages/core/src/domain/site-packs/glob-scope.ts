@@ -17,6 +17,19 @@ export interface ScopedGlob {
 const HOST_CHARS = /^[a-z0-9.*?-]+$/;
 
 /**
+ * At most this many `*` per pack glob (review PR #83 H1). Matching is linear per star anyway
+ * (`kernel/glob`); the cap keeps every glob a reader can follow, and bounds the cost of a pack's
+ * load-time checks whatever its source, approved or not.
+ */
+export const MAX_GLOB_STARS = 4;
+
+function starsOf(text: string): number {
+  let n = 0;
+  for (const char of text) if (char === '*') n += 1;
+  return n;
+}
+
+/**
  * Splits a pack glob into host and path and checks its scope: no scheme, ASCII only, a host part
  * whose labels right of the last wildcard form a literal name whose registrable domain is in
  * `domains`. `*.linkedin.com/logout` is scoped to `linkedin.com`; `*linkedin.com`, `*.com`,
@@ -34,6 +47,10 @@ export function scopeOfGlob(
   }
   if (!/^[\x21-\x7e]+$/.test(text)) {
     return { ok: false, reason: 'a glob is printable ASCII (punycode hosts)' };
+  }
+  if (text.includes('**')) return { ok: false, reason: "a glob has no '**'" };
+  if (starsOf(text) > MAX_GLOB_STARS) {
+    return { ok: false, reason: `a glob has at most ${MAX_GLOB_STARS} '*'` };
   }
   const slash = text.indexOf('/');
   const host = slash < 0 ? text : text.slice(0, slash);

@@ -1,7 +1,15 @@
 /** @module kernel/glob.test — anchored glob semantics. */
 
 import { describe, expect, it } from 'bun:test';
-import { globToRegExp, hasGlobWildcard, MAX_PATTERN_LENGTH, matchesGlob } from './glob.ts';
+import {
+  compileGlob,
+  compileGlobTokens,
+  globTokens,
+  hasGlobWildcard,
+  MAX_PATTERN_LENGTH,
+  matchesCompiledGlob,
+  matchesGlob,
+} from './glob.ts';
 
 describe('matchesGlob', () => {
   it('is anchored and whole-string', () => {
@@ -40,10 +48,44 @@ describe('matchesGlob', () => {
     expect(matchesGlob('x', `${'*'.repeat(MAX_PATTERN_LENGTH)}*`)).toBe(false);
   });
 
-  it('compiles to an anchored regexp with no flags', () => {
-    const re = globToRegExp('*.example.com');
-    expect(re.source).toBe('^.*\\.example\\.com$');
-    expect(re.flags).toBe('');
+  it.each([
+    ['a*b*c', 'abc', true],
+    ['a*b*c', 'axxbyyc', true],
+    ['a*b*c', 'acb', false],
+    ['*a*', 'bab', true],
+    ['*ab', 'aab', true],
+    ['ab*ab', 'ab', false],
+    ['ab*ab', 'abab', true],
+    ['a?c*', 'abcdef', true],
+    ['*?b', 'b', false],
+    ['*?b', 'ab', true],
+    ['x*y?z*w', 'xyzw', false],
+    ['x*y?z*w', 'xQyQzRw', true],
+    ['**', '', true],
+    ['*.example.com', 'a.b.example.com', true],
+    ['*.example.com', 'example.com', false],
+  ] as const)('%s against %s is %p (no regular expression)', (pattern, value, expected) => {
+    expect(matchesGlob(value, pattern)).toBe(expected);
+  });
+
+  it('extends a pattern with literal characters (a literal `?` and a star)', () => {
+    const glob = compileGlobTokens([
+      ...globTokens('site.test/logout'),
+      { kind: 'char', char: '?' },
+      { kind: 'star' },
+    ]);
+    expect(matchesCompiledGlob(glob, 'site.test/logout?next=/')).toBe(true);
+    expect(matchesCompiledGlob(glob, 'site.test/logoutx')).toBe(false);
+  });
+
+  it('runs in linear time whatever the stars (review PR #83 H1)', () => {
+    // The reviewer's worst case: a 300-character glob of 100 stars against a 2 MB URL.
+    const glob = compileGlob(`x.com/${'*a'.repeat(99)}*b`.slice(0, 300));
+    const url = `x.com/${'a'.repeat(2 * 1024 * 1024)}`;
+    const started = performance.now();
+    expect(matchesCompiledGlob(glob, url)).toBe(false);
+    expect(matchesGlob(url, `x.com/${'*a'.repeat(99)}*b`.slice(0, 300))).toBe(false);
+    expect(performance.now() - started).toBeLessThan(50);
   });
 
   it('hasGlobWildcard', () => {

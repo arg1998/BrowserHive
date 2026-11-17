@@ -61,9 +61,25 @@ describe('DEFAULT_GUARDS', () => {
     expect(ruleFor(url, method)).toBeNull();
   });
 
-  it('never matches a subresource type it does not guard (an image)', () => {
-    expect(ruleFor('https://accounts.google.com/signin/oauth/v3/consent', 'GET', 'image')).toBe(
-      null,
-    );
+  it('covers every resource type: an <img> or a prefetch of a consent URL is blocked too (M2)', () => {
+    for (const type of ['image', 'other', 'script', 'stylesheet']) {
+      expect(ruleFor('https://accounts.google.com/signin/oauth/v3/consent', 'GET', type)).toBe(
+        defaultGuardRuleId('google-oauth-consent'),
+      );
+    }
+  });
+
+  it('the consent globs span the query string, failing closed (review S-L8, pinned)', () => {
+    // `*consent*` also matches a consent page reached with `prompt=consent` in the query, and an
+    // `adminconsent` anywhere after the host; the sign-in identifier step is never matched.
+    expect(
+      ruleFor('https://accounts.google.com/signin/oauth/v2/x?prompt=consent', 'GET'),
+    ).toBe(defaultGuardRuleId('google-oauth-consent'));
+    expect(
+      ruleFor('https://login.microsoftonline.com/common/oauth2/authorize?adminconsent=1', 'GET'),
+    ).toBe(defaultGuardRuleId('entra-admin-consent'));
+    expect(
+      ruleFor('https://accounts.google.com/v3/signin/identifier?prompt=consent', 'GET'),
+    ).toBeNull();
   });
 });
