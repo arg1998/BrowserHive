@@ -163,6 +163,7 @@ export async function networkWorld(options: NetworkWorldOptions = {}): Promise<N
     lookup: lookupOrNull,
     uow,
     changed: (id) => harness.bus.publish('template.changed', changedEvent(id)),
+    bus: harness.bus,
     logger,
   });
   if (on) {
@@ -202,6 +203,7 @@ export async function networkWorld(options: NetworkWorldOptions = {}): Promise<N
             }),
           },
           sites: repos.templateSites,
+          bus: harness.bus,
           clock: pace,
           random: () => 0,
           logger,

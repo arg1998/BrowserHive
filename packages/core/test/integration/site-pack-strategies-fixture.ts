@@ -14,7 +14,7 @@ import type { Page } from '../../src/ports/page-types.ts';
 import { textOf } from '../helpers/fake-transport.ts';
 import { FixtureLookup, fixturePack } from './site-pack-fixture.ts';
 import type { StealthLeg } from './template-fixture.ts';
-import { type TemplateMcp, templateMcp } from './template-mcp-fixture.ts';
+import { type TemplateMcp, type TemplateMcpOptions, templateMcp } from './template-mcp-fixture.ts';
 
 export const SITE = 'site-a.test';
 
@@ -44,6 +44,10 @@ export interface StrategyWorldOptions {
   readonly serializeWaitMs?: number;
   /** `false`: the registry's lookup is `null`, as under `sitePacks=false`. */
   readonly sitePacks?: boolean;
+  /** The security intercepts' tool hold. */
+  readonly siteHolds?: TemplateMcpOptions['siteHolds'];
+  /** The operator sign-in pause (D-60). */
+  readonly templatePause?: TemplateMcpOptions['templatePause'];
 }
 
 /** A world whose `site-a.test` pack selects `strategies`. */
@@ -60,6 +64,8 @@ export async function strategyWorld(
   const built: { runner: SiteActionStrategies | null } = { runner: null };
   const w = await templateMcp(options.stealth ?? 'standard', {
     sites: [{ siteId: SITE, packId: SITE, packVersion: 1 }],
+    ...(options.siteHolds !== undefined && { siteHolds: options.siteHolds }),
+    ...(options.templatePause !== undefined && { templatePause: options.templatePause }),
     siteGuards: ({ sessions, templates }) =>
       new SiteToolGate({
         sites: (id) => templates.repos.templateSites.list(id),

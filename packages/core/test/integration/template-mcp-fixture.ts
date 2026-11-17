@@ -44,6 +44,8 @@ export interface TemplateMcpOptions {
   readonly siteGuards?: ToolHarnessOptions['siteGuards'];
   /** Passed to the tool harness (the security intercepts' tool hold). */
   readonly siteHolds?: ToolHarnessOptions['siteHolds'];
+  /** Passed to the tool harness (agents wait while the operator signs in, D-60). */
+  readonly templatePause?: ToolHarnessOptions['templatePause'];
   /** Before-action strategies of site packs (spec 13 §9.4). */
   readonly siteActions?: ToolHarnessOptions['siteActions'];
   readonly transport?: ToolHarnessOptions['transport'];
@@ -76,6 +78,7 @@ export async function templateMcp(
     driver: real,
     vault: true,
     ...(options.siteHolds !== undefined && { siteHolds: options.siteHolds }),
+    ...(options.templatePause !== undefined && { templatePause: options.templatePause }),
     ...(options.transport !== undefined && { transport: options.transport }),
     selfOrigins: [SELF_ORIGIN],
     ...(options.siteGuards !== undefined && { siteGuards: options.siteGuards }),

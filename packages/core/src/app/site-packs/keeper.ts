@@ -1,5 +1,6 @@
-/** @module app/site-packs/keeper — `keep-alive` (spec 13 §8.3, §9.4): for every ready template, each enabled site whose approved pack selects the strategy is visited with `GET` at the pack's keeper path (else its probe path) on the probe host, in a page of BrowserHive's own maintenance session, every `interval_h` ± 20 %, unless an agent session of the template loaded the site within the interval. A visit doubles as a probe (trigger `schedule`): its outcome is recorded when it is the probe path, or when a keeper path still told something (signed out, challenged, a landmark). One visit at a time; in memory (a restart plans every site again from its last check). */
+/** @module app/site-packs/keeper — `keep-alive` (spec 13 §8.3, §9.4): for every ready template, each enabled site whose approved pack selects the strategy is visited with `GET` at the pack's keeper path (else its probe path) on the probe host, in a page of BrowserHive's own maintenance session, every `interval_h` ± 20 %, unless an agent session of the template loaded the site within the interval. A visit due outside the template's `active-hours` window (every enabled site's, in the template's time zone, as for launches) is deferred to the window's opening plus a random spread: an account restricted to 08–22 shows no keeper activity at 03:00 (review PR #84 L4). A visit doubles as a probe (trigger `schedule`): its outcome is recorded when it is the probe path, or when a keeper path still told something (signed out, challenged, a landmark). One visit at a time; in memory (a restart plans every site again from its last check). */
 
+import { type ActiveWindow, msUntilActive } from '../../domain/site-packs/active-hours.ts';
 import { jitteredKeeperMs, keeperStep } from '../../domain/site-packs/keeper-schedule.ts';
 import type { ProbeVerdict } from '../../domain/templates/probe.ts';
 import { assertNever } from '../../kernel/errors/app-error.ts';
@@ -18,6 +19,15 @@ import { templateStrategies } from './strategy-scope.ts';
 
 /** A keeper visit's deadline (the probe navigation's 20 s plus its settling). */
 export const KEEPER_VISIT_MS = 45_000;
+
+/**
+ * How far past the opening of the active hours a deferred visit lands, at random: visits of many
+ * templates do not all fall on the hour, and the shortest window (one hour) still holds it.
+ */
+export const KEEPER_HOURS_SPREAD_MS = 20 * 60_000;
+
+/** When the sites' windows never overlap, a deferred visit looks again a day later. */
+const NO_WINDOW_RETRY_MS = 24 * 3_600_000;
 
 /** How the keeper gets a template's browser (the probes' `ProbeHosts`). */
 export interface KeeperHosts {
@@ -54,7 +64,7 @@ export type KeeperOutcome =
   | { readonly kind: 'visited'; readonly verdict: ProbeVerdict; readonly recorded: boolean }
   | {
       readonly kind: 'skipped';
-      readonly reason: 'agent_load' | 'not_signed_in' | 'no_slot' | 'failed';
+      readonly reason: 'agent_load' | 'outside_hours' | 'not_signed_in' | 'no_slot' | 'failed';
     };
 
 /** The keeper of every template. */
@@ -94,10 +104,11 @@ export class SiteKeeper {
       for (const template of templates) {
         if (template.status !== 'ready') continue;
         const own = sites.filter((s) => s.templateId === template.templateId);
+        const hours = templateStrategies(own, lookup, 'active-hours').map((w) => w.params);
         for (const { site, pack, params } of templateStrategies(own, lookup, 'keep-alive')) {
           const key = keyOf(template.templateId, site.siteId);
           live.add(key);
-          const outcome = await this.#site(template, site, pack, params.intervalH);
+          const outcome = await this.#site(template, site, pack, params.intervalH, hours);
           if (outcome !== null) done.set(key, outcome);
         }
       }
@@ -115,6 +126,7 @@ export class SiteKeeper {
     site: TemplateSiteRecord,
     pack: EffectivePack,
     intervalH: number,
+    hours: readonly ActiveWindow[],
   ): Promise<KeeperOutcome | null> {
     const { clock, random } = this.#deps;
     const key = keyOf(template.templateId, site.siteId);
@@ -145,6 +157,17 @@ export class SiteKeeper {
         break;
       default:
         return assertNever(step, 'keeper step');
+    }
+    const closedMs = msUntilActive(hours, template.identity.timezoneId, now);
+    if (closedMs !== 0) {
+      const wait = closedMs ?? NO_WINDOW_RETRY_MS;
+      this.#due.set(key, now + wait + Math.floor(random() * KEEPER_HOURS_SPREAD_MS));
+      this.#log.debug('keeper visit deferred', {
+        templateId: template.templateId,
+        site: site.siteId,
+        reason: 'outside active hours',
+      });
+      return { kind: 'skipped', reason: 'outside_hours' };
     }
     // A site that is signed out or held by a security check has nothing to keep fresh, and
     // poking an anti-abuse checkpoint is what the design avoids (spec 13 §8.1): wait.

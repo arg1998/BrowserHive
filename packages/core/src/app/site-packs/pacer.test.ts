@@ -1,13 +1,15 @@
-/** @module app/site-packs/pacer.test — `pace-writes` and `ramp-up` on a fake clock (spec 13 §9.4, lead decision 5): only `write` guards of a pack selecting the strategy with a pace rule naming the guard are paced; one budget per (template, pack, rule) shared by the template's sessions; held writes reserve their token (released ones give it back); a young template's budget is lowered by its enabled sites' smallest ramp factor. */
+/** @module app/site-packs/pacer.test — `pace-writes` and `ramp-up` on a fake clock (spec 13 §9.4, lead decision 5): only `write` guards of a pack selecting the strategy with a pace rule naming the guard are paced; one budget per (template, pack, rule) shared by the template's sessions; held writes reserve their token (released ones give it back); a young template's budget is lowered by its enabled sites' smallest ramp factor; a deleted template's buckets go (review PR #84 L5). */
 
 import { describe, expect, test } from 'bun:test';
 import { FakeClock } from '../../../test/helpers/fake-clock.ts';
+import { RecordingEventBus } from '../../../test/helpers/recording-event-bus.ts';
 import { createCollectingLogger } from '../../../test/helpers/test-logger.ts';
 import { templateRecord, templateSiteRecord } from '../../../test/persistence/helpers.ts';
 import { PACE_PERIOD_MS } from '../../domain/site-packs/pace.ts';
 import type { TemplateSiteRecord } from '../../ports/persistence/index.ts';
 import type { GuardRuleInfo } from '../../ports/site-guards.ts';
 import type { EffectivePack } from '../../ports/site-packs.ts';
+import type { DomainEvents } from '../events/catalog.ts';
 import { WritePacer } from './pacer.ts';
 import { effective, lookupOf } from './strategy-test-packs.ts';
 
@@ -56,6 +58,7 @@ function world(
   options: { createdAt?: number; sites?: TemplateSiteRecord[]; random?: number } = {},
 ) {
   const clock = new FakeClock(T0);
+  const bus = new RecordingEventBus<DomainEvents>();
   const sites = options.sites ?? [
     templateSiteRecord({ siteId: 'linkedin.com', packId: 'linkedin.com' }),
   ];
@@ -68,11 +71,17 @@ function world(
     sites: { list: async () => sites },
     clock,
     random: () => options.random ?? 0,
+    bus,
     logger: createCollectingLogger(),
   });
   const pace = (templateId = 'tpl-a', ruleId = 'linkedin.com#invite') =>
     pacer.pace({ templateId, ruleId });
-  return { clock, pacer, pace };
+  const removed = (templateId: string) =>
+    bus.publish('template.removed', {
+      type: 'template.removed',
+      template_id: templateId,
+    } as unknown as DomainEvents['template.removed']);
+  return { clock, pacer, pace, removed };
 }
 
 describe('WritePacer', () => {
@@ -163,10 +172,23 @@ describe('WritePacer', () => {
       sites: { list: async () => [] },
       clock,
       random: () => 0,
+      bus: new RecordingEventBus<DomainEvents>(),
       logger: createCollectingLogger(),
     });
     expect((await pacer.pace({ templateId: 't', ruleId: 'linkedin.com#invite' })).kind).toBe(
       'pass',
     );
+  });
+
+  test("a deleted template's buckets go; other templates keep theirs", async () => {
+    const { pace, pacer, removed } = world(paced(1, 'hour'));
+    expect((await pace('tpl-a')).kind).toBe('pass');
+    expect((await pace('tpl-b')).kind).toBe('pass');
+    removed('tpl-a');
+    expect((await pace('tpl-a')).kind).toBe('pass');
+    expect((await pace('tpl-b')).kind).toBe('refuse');
+    pacer.stop();
+    removed('tpl-b');
+    expect((await pace('tpl-b')).kind).toBe('refuse');
   });
 });

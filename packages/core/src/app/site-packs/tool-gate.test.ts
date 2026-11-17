@@ -1,4 +1,4 @@
-/** @module app/site-packs/tool-gate.test — the tool path of site packs (spec 13 §9.3, §9.5) over a scripted page: a stopped site refuses navigations to it and tools on its pages; `GET` document guards act as block / warn / confirm (pass, pending, blocked) / allow with the right hit rows (none for confirmations); element guards query the target, a descendant inside the guard, a newline's submit controls, the focused element and both drag ends; the write policy comes from the template's override; queries fail open; the agent's own navigation is recorded. */
+/** @module app/site-packs/tool-gate.test — the tool path of site packs (spec 13 §9.3, §9.5) over a scripted page: a stopped site refuses navigations to it and tools on its pages; `GET` document guards act as block / warn / confirm (pass, pending, blocked) / allow with the right hit rows (none for confirmations); element guards query the target, a descendant inside the guard, a newline's submit controls, the focused element and both drag ends; the write policy comes from the template's override; queries fail open; the agent's own navigation is recorded; a re-check after a strategy wait (review PR #84 H2) refuses on a stop or a new decision and never acts on a settled one twice. */
 
 import { beforeEach, describe, expect, it } from 'bun:test';
 import { SitePackV1 } from '@browserhive/contracts/site-packs';
@@ -126,7 +126,7 @@ beforeEach(() => {
   w = Object.assign(state, { gate, page, hits, approvals, navigations });
 });
 
-async function refusal(work: Promise<void>): Promise<{ code: string; details: unknown }> {
+async function refusal(work: Promise<unknown>): Promise<{ code: string; details: unknown }> {
   try {
     await work;
   } catch (err) {
@@ -320,5 +320,72 @@ describe('element guards', () => {
     };
     await call('click', { selector: '#signout' });
     expect(w.hits).toEqual([]);
+  });
+});
+
+describe('re-check after a strategy wait (review PR #84 H2)', () => {
+  const url = `https://${SITE}/logout?next=/`;
+  const docGuard = (action: DocumentGuardHit['action']): DocumentGuardHit => ({
+    ruleId: `${SITE}#logout`,
+    packId: SITE,
+    guardId: 'logout',
+    kind: 'logout',
+    action,
+  });
+
+  it('acts on no settled decision twice: one warn row, one approval (its pass is not used again)', async () => {
+    w.docGuard = docGuard('warn');
+    const settled = await call('navigate', { url });
+    await w.gate.beforeTool({ tool: 'navigate', args: { url }, session: session() }, settled);
+    expect(w.hits.map((h) => h.action)).toEqual(['warn']);
+    w.docGuard = docGuard('confirm');
+    w.approval = { kind: 'pass' };
+    const passed = await call('navigate', { url });
+    w.approval = { kind: 'pending', requestId: 'a-req2' };
+    await w.gate.beforeTool({ tool: 'navigate', args: { url }, session: session() }, passed);
+    expect(w.approvals).toHaveLength(1);
+  });
+
+  it('refuses a site stopped meanwhile, and a decision that is new (the pack or the page changed)', async () => {
+    w.page.count = when('#like', 'css=#like');
+    const settled = await call('click', { selector: '#like' });
+    expect(w.hits.map((h) => h.action)).toEqual(['warn']);
+    w.sites = [{ ...(w.sites[0] as TemplateSiteRecord), stoppedAt: 1_000 }];
+    expect(
+      await refusal(
+        w.gate.beforeTool(
+          { tool: 'click', args: { selector: '#like' }, session: session() },
+          settled,
+        ),
+      ),
+    ).toMatchObject({ code: 'SITE_OPERATOR_PENDING', details: { reason: 'stopped' } });
+    w.sites = [{ ...(w.sites[0] as TemplateSiteRecord), stoppedAt: null }];
+    const first = await call('navigate', { url });
+    w.docGuard = docGuard('block');
+    expect(
+      (
+        await refusal(
+          w.gate.beforeTool({ tool: 'navigate', args: { url }, session: session() }, first),
+        )
+      ).code,
+    ).toBe('URL_BLOCKED');
+  });
+
+  it("re-arms the page's own-navigation record; a new tab's is armed once", async () => {
+    const settled = await call('navigate', { url: 'https://site-b.test/' });
+    expect(w.navigations.consume(w.page, 's-1', 'https://site-b.test/')).toBe(true);
+    await w.gate.beforeTool(
+      { tool: 'navigate', args: { url: 'https://site-b.test/' }, session: session() },
+      settled,
+    );
+    expect(w.navigations.consume(w.page, 's-1', 'https://site-b.test/')).toBe(true);
+    const tab = await call('new_tab', { url: 'https://site-b.test/t' });
+    await w.gate.beforeTool(
+      { tool: 'new_tab', args: { url: 'https://site-b.test/t' }, session: session() },
+      tab,
+    );
+    const other = {};
+    expect(w.navigations.consume(other, 's-1', 'https://site-b.test/t')).toBe(true);
+    expect(w.navigations.consume(other, 's-1', 'https://site-b.test/t')).toBe(false);
   });
 });

@@ -105,12 +105,21 @@ export interface ToolRedaction {
  * stopped site, `GET` document guards, element guards (`SiteToolGate` satisfies it).
  */
 export interface SiteGuardsLike {
-  /** @throws `SITE_OPERATOR_PENDING`, `URL_BLOCKED`, `SITE_ACTION_BLOCKED` */
-  beforeTool(call: {
-    readonly tool: string;
-    readonly args: Readonly<Record<string, unknown>>;
-    readonly session: Session;
-  }): Promise<void>;
+  /**
+   * The pack's stops and guards before a tool acts. A re-check of the same call after a strategy
+   * wait passes the decisions the earlier run returned (`settled`) and acts only on new ones.
+   *
+   * @returns every guard decision acted on so far
+   * @throws `SITE_OPERATOR_PENDING`, `URL_BLOCKED`, `SITE_ACTION_BLOCKED`
+   */
+  beforeTool(
+    call: {
+      readonly tool: string;
+      readonly args: Readonly<Record<string, unknown>>;
+      readonly session: Session;
+    },
+    settled?: ReadonlySet<string>,
+  ): Promise<ReadonlySet<string>>;
 }
 
 /**
@@ -119,7 +128,12 @@ export interface SiteGuardsLike {
  * (`SiteActionStrategies` satisfies it).
  */
 export interface SiteActionsLike {
-  /** Runs a tool's handler inside the strategies. @throws `TEMPLATE_BUSY` (`pace`) */
+  /**
+   * Runs a tool's handler inside the strategies; when the call waited for one, `recheck` (the
+   * dispatcher's site gate) runs again after the wait and before the handler.
+   *
+   * @throws `TEMPLATE_BUSY` (`pace`), and what `recheck` throws
+   */
   around<T>(
     call: {
       readonly tool: string;
@@ -128,8 +142,12 @@ export interface SiteActionsLike {
       readonly signal: AbortSignal;
     },
     run: () => Promise<T>,
+    recheck?: () => Promise<void>,
   ): Promise<T>;
-  /** The warm-up before a navigation of `page` to `url`; resolves with the milliseconds it used. */
+  /**
+   * The warm-up before a navigation of `page` to `url`; resolves with the milliseconds it used.
+   * After a warm-up, `recheck` runs before the agent's own navigation.
+   */
   beforeGoto(call: {
     readonly tool: string;
     readonly session: Session;
@@ -137,6 +155,7 @@ export interface SiteActionsLike {
     readonly url: string;
     readonly timeoutMs: number;
     readonly signal: AbortSignal;
+    readonly recheck?: (() => Promise<void>) | null;
   }): Promise<number>;
   /** True when the site of `url` forces humanized input for the session. */
   forcesHumanize(session: Session, url: string): boolean;

@@ -91,12 +91,13 @@ export function buildSiteStrategies(input: SiteStrategiesInput): SiteStrategies 
     lookup,
     uow: input.uow,
     changed: (id) => attached.parts?.changed(id),
+    bus: input.bus,
     logger,
   });
   const offRemoved = input.bus.subscribe('template.removed', ({ payload }) =>
     visits.forget(payload.template_id),
   );
-  const stops: (() => void)[] = [() => flags.stop(), offRemoved];
+  const stops: (() => void)[] = [() => flags.stop(), () => binding.stop(), offRemoved];
   return {
     hostFlags: (template) => flags.hostFlags(template),
     pageWatcher: {

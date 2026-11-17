@@ -1,6 +1,10 @@
-/** @module test/integration/site-pack-strategies-actions.test — spec 13 §17 T3b acceptance for the before-action strategies on real headless Chromium with the HTTPS fixture sites: `serialize-site` makes a second session wait for its turn and answers `TEMPLATE_BUSY` `pace` when the wait runs out (a short test seam stands in for the production 30 s); `human-dwell` delays a session's next action on the site; `entry-warmup` loads the entry path with the chosen referrer before a deep link, once, and aborts a warm-up that leaves the pack's domains by script while the agent's navigation still succeeds (a server redirect is the driver's known routing limit, §3.8); `single-focus` leaves one focused page per site across sessions, keeps an unfocused page unfocused across a reload, screenshots it, and gives focus back when the pack drops the strategy; `humanize-input` forces humanized pointer input (ignored with stealth `off`); with `sitePacks=false` none of them applies. */
+/** @module test/integration/site-pack-strategies-actions.test — spec 13 §17 T3b acceptance for the before-action strategies on real headless Chromium with the HTTPS fixture sites: `serialize-site` makes a second session wait for its turn and answers `TEMPLATE_BUSY` `pace` when the wait runs out (a short test seam stands in for the production 30 s); `human-dwell` delays a session's next action on the site; `entry-warmup` loads the entry path with the chosen referrer before a deep link, once, and aborts a warm-up that leaves the pack's domains by script while the agent's navigation still succeeds (a server redirect is the driver's known routing limit, §3.8); a hold, a site stop or an operator sign-in arriving while a call waits for its turn is honoured before it acts (review PR #84 H2); `single-focus` leaves one focused page per site across sessions, keeps an unfocused page unfocused across a reload, screenshots it, and gives focus back when the pack drops the strategy; `humanize-input` forces humanized pointer input (ignored with stealth `off`); with `sitePacks=false` none of them applies. */
 
 import { afterEach, describe, expect, it } from 'bun:test';
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { TemplatePause } from '../../src/app/templates/template-pause.ts';
+import { createSystemClock } from '../../src/infra/clock/system-clock.ts';
+import type { SiteHold } from '../../src/ports/security-intercepts.ts';
 import { STRATEGY_SLOW_MS } from '../helpers/https-sites-strategies.ts';
 import { fixturePack } from './site-pack-fixture.ts';
 import {
@@ -8,6 +12,7 @@ import {
   ok,
   refusal,
   SITE,
+  type StrategySession,
   type StrategyWorld,
   strategyWorld,
 } from './site-pack-strategies-fixture.ts';
@@ -72,6 +77,84 @@ describe('serialize-site', () => {
     // B ran after A's navigation finished (the slow page takes STRATEGY_SLOW_MS).
     expect(Date.now() - slowAt).toBeGreaterThanOrEqual(STRATEGY_SLOW_MS - 200);
     ok(await slow);
+  }, 40_000);
+});
+
+describe('the site gate after the turn (review PR #84 H2)', () => {
+  /** A holds the site's turn with a slow navigation; `queue` runs while B waits behind it. */
+  async function queuedBehindSlow(
+    p: StrategyWorld,
+    meanwhile: (b: StrategySession) => Promise<void>,
+  ): Promise<{ b: StrategySession; queued: CallToolResult }> {
+    const a = await p.session('a');
+    const b = await p.session('b');
+    ok(await a.call('navigate', { url: url('/strategy/input') }));
+    ok(await b.call('navigate', { url: url('/strategy/input') }));
+    const slow = a.call('navigate', { url: url('/strategy/slow') });
+    await Bun.sleep(300);
+    const queued = b.call('type_text', { selector: '#field', text: 'after-wait' });
+    await Bun.sleep(300);
+    await meanwhile(b);
+    ok(await slow);
+    return { b, queued: await queued };
+  }
+
+  it('a session held while it waits for its turn does not act', async () => {
+    const holds = new Map<string, SiteHold>();
+    world = await strategyWorld([{ id: 'serialize-site', params: { max_parallel: 1 } }], {
+      serializeWaitMs: 10_000,
+      siteHolds: { holdOf: (id) => holds.get(id) ?? null },
+    });
+    const { b, queued } = await queuedBehindSlow(world, async (s) => {
+      // A security intercept now holds B (a challenge its page met, or a write approval).
+      holds.set(s.id, { requestId: 'req-1', site: SITE, reason: 'challenge' });
+    });
+    expect(refusal(queued)).toMatchObject({
+      code: 'SITE_OPERATOR_PENDING',
+      details: { request_id: 'req-1', reason: 'challenge' },
+    });
+    expect(await b.page().inputValue('#field')).toBe('');
+  }, 40_000);
+
+  it('a site stopped while a call waits for its turn refuses it', async () => {
+    world = await strategyWorld([{ id: 'serialize-site', params: { max_parallel: 1 } }], {
+      serializeWaitMs: 10_000,
+    });
+    const p = world;
+    const sites = p.w.harness.templates.repos.templateSites;
+    const { b, queued } = await queuedBehindSlow(p, async () => {
+      const [site] = await sites.list(p.w.template.templateId);
+      if (site === undefined) throw new Error('no site');
+      await sites.upsert({ ...site, stoppedAt: Date.now() });
+    });
+    expect(refusal(queued)).toMatchObject({
+      code: 'SITE_OPERATOR_PENDING',
+      details: { reason: 'stopped' },
+    });
+    expect(await b.page().inputValue('#field')).toBe('');
+  }, 40_000);
+
+  it('a sign-in window opened while a call waits for its turn makes it wait for the operator', async () => {
+    const pause = new TemplatePause({ clock: createSystemClock(), alive: () => true });
+    world = await strategyWorld([{ id: 'serialize-site', params: { max_parallel: 1 } }], {
+      serializeWaitMs: 10_000,
+      templatePause: pause,
+    });
+    const p = world;
+    const templateId = p.w.template.templateId;
+    const whilePaused: { value: string | null } = { value: null };
+    const { b, queued } = await queuedBehindSlow(p, async (s) => {
+      pause.open(templateId, 'maintenance-1');
+      // The operator signs in until a second after A's action ended; B must not type meanwhile.
+      void (async () => {
+        await Bun.sleep(STRATEGY_SLOW_MS + 1_000);
+        whilePaused.value = await s.page().inputValue('#field');
+        pause.close(templateId, 'maintenance-1');
+      })();
+    });
+    ok(queued);
+    expect(whilePaused.value).toBe('');
+    expect(await b.page().inputValue('#field')).toBe('after-wait');
   }, 40_000);
 });
 

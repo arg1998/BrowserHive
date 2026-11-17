@@ -1,4 +1,4 @@
-/** @module app/site-packs/webrtc-host-flags — `webrtc-policy` (spec 13 §3.1, §3.2, §9.4): a template host's command line gets `--force-webrtc-ip-handling-policy=<policy>` while any enabled site's approved pack selects it (the strictest wins), from the compiled-in table only. Each start records the switches it got; when the desired set of a running host changes (a pack applied, reverted, enabled or disabled: `site_pack.changed`; a site added, enabled or disabled: `template.changed`), the host restarts through the operator restart's drain (`templateDrainTimeout`, then a new start). */
+/** @module app/site-packs/webrtc-host-flags — `webrtc-policy` (spec 13 §3.1, §3.2, §9.4): a template host's command line gets `--force-webrtc-ip-handling-policy=<policy>` while any enabled site's approved pack selects it (the strictest wins), from the compiled-in table only. Each start records the switches it got; when the desired set of a running host changes (a pack applied, reverted, enabled or disabled: `site_pack.changed`; a site added, enabled or disabled: `template.changed`), the host restarts through the operator restart's drain (`templateDrainTimeout`, then a new start). A change that lands while the host is still starting (its switches were read already) is caught when the host reaches `running` (`template.host`), which re-checks it (review PR #84 M1). */
 
 import {
   hostFlagsOf,
@@ -47,6 +47,12 @@ export class HostFlagsWatch {
       deps.bus.subscribe('template.changed', ({ payload }) => {
         const id = payload.template.template_id;
         if (this.#started.has(id)) void this.check(id);
+      }),
+      // A host that started with switches read before a change landed gets them now.
+      deps.bus.subscribe('template.host', ({ payload }) => {
+        if (payload.host.state === 'running' && this.#started.has(payload.template_id)) {
+          void this.check(payload.template_id);
+        }
       }),
       deps.bus.subscribe('template.removed', ({ payload }) => {
         this.#started.delete(payload.template_id);

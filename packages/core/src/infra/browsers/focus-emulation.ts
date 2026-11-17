@@ -66,10 +66,6 @@ export class CdpPageFocus implements PageFocusControl {
     this.#minimizes = minimizes;
   }
 
-  isUnfocused(page: Page): boolean {
-    return this.#entries.get(page)?.emulated === false;
-  }
-
   async setEmulated(page: Page, emulated: boolean, headless: boolean): Promise<void> {
     let entry = this.#entries.get(page);
     // Never touched: the driver's default (emulated) is in force.

@@ -1,12 +1,14 @@
-/** @module app/site-packs/device-binding — `device-bound-session` (spec 13 §9.4): a response of a template host whose URL belongs to an approved pack selecting the strategy and that carries `Sec-Session-Registration` or `Sec-Session-Id` (Device Bound Session Credentials) marks the template site of that URL `device_bound` once, and the template's views are refreshed. Observation only: no request is ever changed, and a failure is logged (fail-open). */
+/** @module app/site-packs/device-binding — `device-bound-session` (spec 13 §9.4): a response of a template host whose URL belongs to an approved pack selecting the strategy and that carries `Sec-Session-Registration` or `Sec-Session-Id` (Device Bound Session Credentials) marks the template site of that URL `device_bound` once, and the template's views are refreshed. Observation only: no request is ever changed, and a failure is logged (fail-open). A deleted template's pairs are forgotten (`template.removed`). */
 
 import { hostOf, templateSiteOf } from '../../domain/site-packs/site-of-url.ts';
 import { strategyOf } from '../../domain/site-packs/strategy-params.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
+import type { EventBus } from '../../ports/event-bus.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type { UnitOfWork } from '../../ports/persistence/index.ts';
 import type { SitePackLookup } from '../../ports/site-packs.ts';
 import type { HostResponse } from '../../ports/template-host.ts';
+import type { DomainEvents } from '../events/catalog.ts';
 
 /** The DBSC response headers (lower-cased, as Chromium reports them). */
 export const DBSC_HEADERS = ['sec-session-registration', 'sec-session-id'] as const;
@@ -18,6 +20,8 @@ export interface DeviceBindingWatchDeps {
   readonly uow: UnitOfWork;
   /** `template.changed` (the Sites tab's badge). */
   readonly changed: (templateId: string) => void;
+  /** `template.removed`: a deleted template's pairs are forgotten. */
+  readonly bus: Pick<EventBus<DomainEvents>, 'subscribe'>;
   readonly logger: Logger;
 }
 
@@ -27,10 +31,20 @@ export class DeviceBindingWatch {
   readonly #log: Logger;
   /** `(template, pack)` pairs already handled in this process: one write each. */
   readonly #seen = new Set<string>();
+  readonly #off: () => void;
 
   constructor(deps: DeviceBindingWatchDeps) {
     this.#deps = deps;
     this.#log = deps.logger.child({ module: 'site-packs.device-binding' });
+    this.#off = deps.bus.subscribe('template.removed', ({ payload }) => {
+      const prefix = `${payload.template_id}\u0000`;
+      for (const key of [...this.#seen]) if (key.startsWith(prefix)) this.#seen.delete(key);
+    });
+  }
+
+  /** Unsubscribes from the bus. */
+  stop(): void {
+    this.#off();
   }
 
   /** One response of a template host (the host's `responseReceived`). Never throws. */

@@ -74,6 +74,7 @@ export async function gotoCapturingDownload(
     url: target.url,
     timeoutMs: target.timeoutMs,
     signal: ctx.signal,
+    recheck: ctx.siteRecheck,
   }) ?? 0);
   const gotoTimeout = target.timeoutMs === 0 ? 0 : Math.max(1, target.timeoutMs - warmupMs);
   const listener = downloadListener();
