@@ -6,6 +6,7 @@ import type { Clock } from '../../ports/clock.ts';
 import type { Repositories, TemplateVersionRepository } from '../../ports/persistence/index.ts';
 import type { TemplateHostOps, TemplateRuntime } from '../../ports/template-runtime.ts';
 import { notFoundForOperator } from './template-errors.ts';
+import type { TemplatePacks } from './template-packs.ts';
 import { storedUnlisted } from './template-reads.ts';
 import { toTemplateDetail } from './views.ts';
 
@@ -16,6 +17,8 @@ export interface TemplateDetailDeps {
   readonly ops?: Pick<TemplateHostOps, 'jar' | 'sharedWindows'>;
   readonly versions?: Pick<TemplateVersionRepository, 'list'>;
   readonly clock: Clock;
+  /** The packs in force for the sites' views (T3a). */
+  readonly packs?: TemplatePacks;
 }
 
 /** The T2 parts of the detail. */
@@ -56,6 +59,7 @@ export async function readTemplateDetail(
       relogin: extras.reloginOf?.(templateId) ?? null,
       machine: extras.machine ?? '',
     },
+    deps.packs,
   );
 }
 

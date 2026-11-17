@@ -29,7 +29,6 @@ import {
   sealingFor,
   templateGate,
 } from '../../domain/templates/model.ts';
-import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { Clock } from '../../ports/clock.ts';
 import type { DegradationReporter } from '../../ports/degradation-reporter.ts';
 import type { EventPublisher } from '../../ports/event-bus.ts';
@@ -61,7 +60,8 @@ import {
 } from './template-errors.ts';
 import { pageTemplates } from './template-list.ts';
 import { TemplateLocks } from './template-locks.ts';
-import { publishTemplateChanged, readTemplates } from './template-reads.ts';
+import { attachPacks, NO_PACKS, reviewedHashes, type TemplatePacks } from './template-packs.ts';
+import { publishTemplateChanged, readTemplates, removeTemplateFiles } from './template-reads.ts';
 import { toAgentTemplate, toTemplateSummary, toTemplateView } from './views.ts';
 
 /** Server configuration the service reads. */
@@ -95,6 +95,8 @@ export interface TemplateServiceDeps {
   readonly bus?: EventPublisher<DomainEvents>;
   /** The newest version's summary (unlisted sign-ins of a stopped browser, spec 13 §2.3). */
   readonly versions?: Pick<TemplateVersionRepository, 'list'>;
+  /** Site packs: approval on first use and the sites' packs (T3a); absent = none. */
+  readonly packs?: TemplatePacks;
 }
 
 /** The caller of an agent-facing operation: the principal and the call's resolved client (harness). */
@@ -154,7 +156,7 @@ export class TemplateService {
     });
     const identity = pinnedIdentity(ids.opaque(SEED_LENGTH), resolved, input.geolocation);
     const now = clock.now();
-    const { template, sites } = buildTemplate(input, validated.value, {
+    const built = buildTemplate(input, validated.value, {
       templateId: `tp-${ids.opaque(TEMPLATE_ID_LENGTH)}`,
       owner,
       now,
@@ -162,6 +164,9 @@ export class TemplateService {
       defaults: config.defaults,
       authMode: config.authMode,
     });
+    const { template } = built;
+    const packs = this.#deps.packs ?? NO_PACKS;
+    const sites = await attachPacks(packs, built.sites, reviewedHashes(input.sites), owner);
     await this.#deps.uow.transaction(async (repos) => {
       await repos.templates.insert(template);
       for (const site of sites) await repos.templateSites.upsert(site);
@@ -181,7 +186,7 @@ export class TemplateService {
       sites: sites.length,
     });
     this.publishChanged(template.templateId);
-    return toTemplateView(template, sites);
+    return toTemplateView(template, sites, packs);
   }
 
   /** `GET /templates`: every template as a summary, filtered, sorted and paged (spec 13 §11.1). */
@@ -192,7 +197,7 @@ export class TemplateService {
       return {
         record: t,
         sites: own,
-        summary: toTemplateSummary(t, own, this.#deps.runtime.host(t.templateId)),
+        summary: toTemplateSummary(t, own, this.#deps.runtime.host(t.templateId), this.#deps.packs),
       };
     });
     return pageTemplates(rows, query, this.#deps.clock.now());
@@ -249,7 +254,7 @@ export class TemplateService {
           occurredAt: now,
         });
       });
-      const deletedBytes = await this.#removeFiles(templateId);
+      const deletedBytes = await removeTemplateFiles(this.#deps.files, templateId, this.#log);
       this.#deps.bus?.publish('template.removed', {
         type: 'template.removed',
         template_id: templateId,
@@ -292,6 +297,7 @@ export class TemplateService {
           own,
           availabilityOf(template, own, host),
           isSessionSealed(sealing),
+          this.#deps.packs,
         ),
       );
     }
@@ -383,18 +389,5 @@ export class TemplateService {
       harness: launchHarnessOf(caller.client),
       declared: launchDeclaredHarnessOf(caller.client),
     };
-  }
-
-  /** Deletes `templates/<id>/`; the rows are gone already, so a failure is logged, never thrown. */
-  async #removeFiles(templateId: string): Promise<number> {
-    try {
-      return await this.#deps.files.removeTemplateDir(templateId);
-    } catch (cause) {
-      this.#log.warn('template dir not removed', {
-        templateId,
-        err: serializeError(cause),
-      });
-      return 0;
-    }
   }
 }

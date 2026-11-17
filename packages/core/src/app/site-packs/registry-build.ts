@@ -256,3 +256,19 @@ function effectiveOf(r: ResolvedPack, enabled: boolean): EffectivePack | null {
     localOverride: local !== null,
   };
 }
+
+/** The snapshot with `used_by` re-read from the template sites; `changed` lists the packs it moved. */
+export function withUsage(
+  snapshot: RegistrySnapshot,
+  sites: readonly TemplateSiteRecord[],
+): { snapshot: RegistrySnapshot; changed: string[] } {
+  const packs = new Map(snapshot.packs);
+  const changed: string[] = [];
+  for (const [packId, entry] of snapshot.packs) {
+    const usedBy = [...new Set(sites.filter((s) => s.packId === packId).map((s) => s.templateId))];
+    if (usedBy.join() === entry.usedBy.join()) continue;
+    packs.set(packId, { ...entry, usedBy });
+    changed.push(packId);
+  }
+  return { snapshot: { ...snapshot, packs }, changed };
+}

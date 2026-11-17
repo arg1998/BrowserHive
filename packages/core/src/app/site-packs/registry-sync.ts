@@ -4,8 +4,10 @@ import type { SitePackPendingEvent } from '@browserhive/contracts/ws';
 import type { z } from 'zod';
 import { diffPacks, newDomains } from '../../domain/site-packs/diff.ts';
 import { loadPackBytes } from '../../domain/site-packs/load.ts';
+import { serializeError } from '../../kernel/errors/serialize-error.ts';
+import type { Logger } from '../../ports/logger.ts';
 import type { SitePackChangeRecord } from '../../ports/persistence/site-packs.ts';
-import type { SourceCatalog } from '../../ports/site-packs.ts';
+import type { SitePackSource, SourceCatalog } from '../../ports/site-packs.ts';
 import type { SitePackUpdatesFact } from '../events/catalog.ts';
 import type { ResolvedPack } from './registry-build.ts';
 import { auditPack, type RegistryCore } from './registry-core.ts';
@@ -171,5 +173,32 @@ export function updatesFact(snapshot: RegistrySnapshot, at: number): SitePackUpd
             local: p.state,
           },
     ),
+  };
+}
+
+/** Loads one source; a failure keeps `previous` (D-22) and is logged. */
+export async function loadCatalog(
+  source: SitePackSource,
+  previous: SourceCatalog,
+  signal: AbortSignal,
+  log: Logger,
+): Promise<SourceCatalog> {
+  try {
+    const result = await source.load(signal);
+    if (result.ok) return result.value;
+    log.warn('site pack source failed', { source: source.id, detail: result.error.message });
+  } catch (err) {
+    log.warn('site pack source failed', { source: source.id, err: serializeError(err) });
+  }
+  return previous;
+}
+
+/** What one load of a source found. */
+export function sourceStats(catalog: SourceCatalog): SourceStats {
+  return {
+    source: catalog.source,
+    loaded: catalog.packs.length,
+    skipped: catalog.skipped,
+    signedLayouts: catalog.signedLayouts,
   };
 }

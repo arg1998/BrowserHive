@@ -12,17 +12,25 @@ import type { AgentTemplate } from '@browserhive/contracts/tools';
 import { type Availability, effectiveCap, isTemplateSealed } from '../../domain/templates/model.ts';
 import type { TemplateRecord, TemplateSiteRecord } from '../../ports/persistence/index.ts';
 import type { TemplateHostView } from '../../ports/template-runtime.ts';
+import { NO_PACKS, type TemplatePacks } from './template-packs.ts';
 
-/** A site's display title: its pack's title once packs exist (T3a), else the domain. */
-export function siteTitle(site: TemplateSiteRecord): string {
-  return site.siteId;
+/** The pack lookup the views use (the pack in force for a site's `pack_id`). */
+export type SitePackReader = Pick<TemplatePacks, 'sitePackOf'>;
+
+/** A site's display title: its pack's title when a pack applies (T3a), else the domain. */
+export function siteTitle(site: TemplateSiteRecord, packs: SitePackReader = NO_PACKS): string {
+  return packs.sitePackOf(site.packId)?.title ?? site.siteId;
 }
 
-/** One site for operators. */
-export function toSiteView(site: TemplateSiteRecord): TemplateSiteView {
+/** One site for operators, with the pack in force (spec 13 §11.4). */
+export function toSiteView(
+  site: TemplateSiteRecord,
+  packs: SitePackReader = NO_PACKS,
+): TemplateSiteView {
+  const pack = packs.sitePackOf(site.packId);
   return {
     site_id: site.siteId,
-    title: siteTitle(site),
+    title: pack?.title ?? site.siteId,
     pack_id: site.packId,
     pack_version: site.packVersion,
     enabled: site.enabled,
@@ -42,7 +50,7 @@ export function toSiteView(site: TemplateSiteRecord): TemplateSiteView {
     stopped_at: site.stoppedAt,
     device_bound: site.deviceBound,
     added_at: site.addedAt,
-    pack: null,
+    pack,
   };
 }
 
@@ -50,6 +58,7 @@ export function toSiteView(site: TemplateSiteRecord): TemplateSiteView {
 export function toTemplateView(
   template: TemplateRecord,
   sites: readonly TemplateSiteRecord[],
+  packs: SitePackReader = NO_PACKS,
 ): Template {
   const id = template.identity;
   const observed = template.identityObserved;
@@ -60,7 +69,7 @@ export function toTemplateView(
     description: template.description,
     status: template.status,
     owner: template.owner,
-    sites: sites.map(toSiteView),
+    sites: sites.map((s) => toSiteView(s, packs)),
     identity: {
       seed: id.seed,
       locale: id.locale,
@@ -164,11 +173,12 @@ export function toTemplateDetail(
     readonly relogin?: ReloginView | null;
     readonly machine?: string;
   } = { unlistedDomains: [] },
+  packs: SitePackReader = NO_PACKS,
 ): TemplateDetailResponse {
   return {
-    template: toTemplateView(template, sites),
+    template: toTemplateView(template, sites, packs),
     host: toHostView(host),
-    sites: sites.map(toSiteView),
+    sites: sites.map((s) => toSiteView(s, packs)),
     sessions_live: sessionsLive,
     parked_pages: host.parkedPages.map((p) => ({
       target_id: p.targetId,
@@ -193,6 +203,7 @@ export function toTemplateSummary(
   template: TemplateRecord,
   sites: readonly TemplateSiteRecord[],
   host: TemplateHostView,
+  packs: SitePackReader = NO_PACKS,
 ): TemplateSummary {
   return {
     template_id: template.templateId,
@@ -203,7 +214,7 @@ export function toTemplateSummary(
     headless: template.headless,
     sites: sites.map((s) => ({
       site_id: s.siteId,
-      title: siteTitle(s),
+      title: siteTitle(s, packs),
       health_state: s.health.state,
       checked_at: s.health.checkedAt,
     })),
@@ -232,6 +243,7 @@ export function toAgentTemplate(
   sites: readonly TemplateSiteRecord[],
   availability: Availability,
   sealed: boolean,
+  packs: SitePackReader = NO_PACKS,
 ): AgentTemplate {
   return {
     name: template.name,
@@ -241,7 +253,7 @@ export function toAgentTemplate(
       .filter((s) => s.enabled)
       .map((s) => ({
         site: s.siteId,
-        title: siteTitle(s),
+        title: siteTitle(s, packs),
         status: s.health.state,
         checked_at: s.health.checkedAt,
       })),

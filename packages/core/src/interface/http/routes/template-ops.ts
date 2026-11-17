@@ -124,10 +124,11 @@ export const TEMPLATE_OPS_ROUTES = [
   defineRoute({
     operationId: 'putTemplateSite',
     tags,
-    summary: 'Add a site (at most 16) or change its enabled flag and write policy.',
+    summary:
+      'Add a site (at most 16) or change its enabled flag and write policy. Adding a site approves its site pack on first use; pack_sha256 names the version reviewed (another one is 409) and attaches it to a generic site.',
     request: { params: TemplateSiteParams, body: PutTemplateSiteRequest },
     responses: { 200: TemplateSiteResponse },
-    errors: ['TEMPLATE_NOT_FOUND'],
+    errors: ['TEMPLATE_NOT_FOUND', 'VALIDATION_FAILED', 'CONFLICT'],
     async handler({ input, principal, services }) {
       const site = await services.templateEdit.putSite(
         input.params.template_id,

@@ -1,0 +1,17 @@
+{
+  "data": [],
+  "page": {
+    "next_cursor": null,
+    "limit": 50
+  },
+  "applied": {
+    "filters": {},
+    "sort": {
+      "key": "seq",
+      "dir": "desc"
+    }
+  },
+  "meta": {
+    "now": 1700000000000
+  }
+}

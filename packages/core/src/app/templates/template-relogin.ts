@@ -228,6 +228,7 @@ export class TemplateReloginService {
   signedOut(template: TemplateRecord, site: TemplateSiteRecord): void {
     const vault = this.#vault;
     if (vault === null || site.vaultHandle === null || !site.autoRelogin) return;
+    if (this.#deps.packs?.humanOnly(site.packId) === true) return;
     if (template.status !== 'ready' || this.#runs.active(template.templateId) !== null) return;
     const run = this.#runs.begin(template, site, 'vault', 'browserhive', 'filling');
     if (!vault.mayRetry(site)) {
@@ -306,6 +307,10 @@ export class TemplateReloginService {
   }
 
   #vaultFor(site: TemplateSiteRecord): ReloginVaultFill {
+    if (this.#deps.packs?.humanOnly(site.packId) === true) {
+      const message = `${site.siteId} is signed in by a person only (its site pack is human_only); use a window`;
+      throw validationFailed([{ path: 'method', message, code: 'human_only' }]);
+    }
     if (this.#vault === null || site.vaultHandle === null) {
       const message =
         this.#vault === null

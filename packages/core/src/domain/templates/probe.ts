@@ -84,20 +84,30 @@ export function isOut(state: TemplateSiteRecord['health']['state']): boolean {
   return state === 'signed_out' || state === 'challenged';
 }
 
+/** A pack's identity provider by pack id (`null`: the pack has none or is not in force). */
+export type PackProviderLookup = (packId: string) => string | null;
+
+const NO_PROVIDER: PackProviderLookup = () => null;
+
 /**
- * The identity provider a site's sign-in belongs to (spec 13 §8.6): the pack's
- * `identity_provider` once packs exist (T3a), else the site itself.
+ * The identity provider a site's sign-in belongs to (spec 13 §8.6): the `identity_provider` of the
+ * site's pack in force (T3a), else the site itself.
  */
-export function providerOf(site: Pick<TemplateSiteRecord, 'siteId'>): string {
-  return site.siteId;
+export function providerOf(
+  site: Pick<TemplateSiteRecord, 'siteId'> & { readonly packId?: string | null },
+  providerOfPack: PackProviderLookup = NO_PROVIDER,
+): string {
+  const packId = site.packId ?? null;
+  return (packId === null ? null : providerOfPack(packId)) ?? site.siteId;
 }
 
 /** The enabled sites that share `provider`'s sign-in. */
 export function sitesOfProvider(
   sites: readonly TemplateSiteRecord[],
   provider: string,
+  providerOfPack: PackProviderLookup = NO_PROVIDER,
 ): readonly TemplateSiteRecord[] {
-  return sites.filter((s) => s.enabled && providerOf(s) === provider);
+  return sites.filter((s) => s.enabled && providerOf(s, providerOfPack) === provider);
 }
 
 /** Sites whose last probe is older than `maxAgeMs` (or never ran): what a pre-launch check probes. */

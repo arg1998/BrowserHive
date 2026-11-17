@@ -35,6 +35,8 @@ export { PreferenceService } from '../app/preferences/preference-service.ts';
 export { LeaseSweeper } from '../app/sessions/lease-sweeper.ts';
 export { sessionDirLayout } from '../app/sessions/profile-dir.ts';
 export { SessionService } from '../app/sessions/session-service.ts';
+export { SitePackRegistry } from '../app/site-packs/registry.ts';
+export type { PendingUpdate, SitePackRegistryDeps } from '../app/site-packs/registry-types.ts';
 export { unavailableHealthFacade } from '../app/templates/health-facade.ts';
 export {
   type TemplateHealthParts,
@@ -67,6 +69,7 @@ export {
 } from '../app/templates/unavailable-runtime.ts';
 export { VaultService } from '../app/vault/vault-service.ts';
 export { OperatorRequestBroker } from '../domain/operator-requests/broker.ts';
+export { issuesText, loadPackBytes, sha256Hex } from '../domain/site-packs/load.ts';
 export {
   type TemplateKey,
   templateKeyId,
@@ -136,6 +139,9 @@ export { type RekeyResult, rekeyTemplateFiles } from '../infra/fs/template-rekey
 export { FileTemplateStateStore } from '../infra/fs/template-state-store.ts';
 export { sweepStaleTemplateBrowsers } from '../infra/host/stale-template-browsers.ts';
 export { profileHasSecrets } from '../infra/persistence/profile-secrets.ts';
+export { BundledIndex, BundledPackSource } from '../infra/site-packs/bundled-source.ts';
+export { LocalPackSource } from '../infra/site-packs/local-source.ts';
+export { createLocalPackWriter, createSitePackCache } from '../infra/site-packs/pack-cache.ts';
 export { createArtifactFiles } from '../infra/static/artifact-files.ts';
 export { createBunStaticAssets } from '../infra/static/bun-static-assets.ts';
 export { createTraceViewerAssets } from '../infra/static/playwright-trace-viewer.ts';

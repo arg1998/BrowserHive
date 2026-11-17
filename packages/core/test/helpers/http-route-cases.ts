@@ -5,6 +5,7 @@ import { sampleDigestFacts } from '../../src/app/notifications/samples.ts';
 import { ARCHIVED_ID, CLOSED_ID, EVENT_OK } from './http-fixtures.ts';
 import { PASSWORD } from './http-kit.ts';
 import { TEMPLATE_HEALTH_CASES } from './http-route-cases-health.ts';
+import { SITE_PACK_CASES } from './http-route-cases-site-packs.ts';
 import { TEMPLATE_OPS_CASES } from './http-route-cases-templates.ts';
 
 export type { CaseContext, CaseRequest, RouteCase } from './http-route-case-types.ts';
@@ -166,6 +167,7 @@ const bad = api('/sessions/NOT_AN_ID');
 export const ROUTE_CASES: readonly RouteCase[] = [
   ...TEMPLATE_OPS_CASES,
   ...TEMPLATE_HEALTH_CASES,
+  ...SITE_PACK_CASES,
   { operationId: 'getHealth', success: { path: api('/health'), status: 200 }, invalid: null },
   {
     operationId: 'login',

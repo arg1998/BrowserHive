@@ -184,6 +184,15 @@ describe('isOut, providerOf, sitesOfProvider', () => {
     expect(sitesOfProvider([a, b], 'a.test')).toEqual([a]);
     expect(sitesOfProvider([off, b], 'a.test')).toEqual([]);
   });
+
+  it("a pack's identity provider groups its sites (glassdoor.com signs in with indeed.com)", () => {
+    const indeed = templateSiteRecord({ siteId: 'indeed.com', packId: 'indeed.com' });
+    const glassdoor = templateSiteRecord({ siteId: 'glassdoor.com', packId: 'glassdoor.com' });
+    const lookup = (packId: string) => (packId === 'glassdoor.com' ? 'indeed.com' : null);
+    expect(providerOf(glassdoor, lookup)).toBe('indeed.com');
+    expect(providerOf(glassdoor)).toBe('glassdoor.com');
+    expect(sitesOfProvider([indeed, glassdoor], 'indeed.com', lookup)).toEqual([indeed, glassdoor]);
+  });
 });
 
 describe('jitteredInterval and siteGapMs', () => {

@@ -16,12 +16,11 @@ import type {
   SitePackView,
   TemplateSitePack,
 } from '@browserhive/contracts/http';
-import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import { registrableDomain } from '../../kernel/url.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type { EffectivePack, SitePackLookup, SourceCatalog } from '../../ports/site-packs.ts';
 import * as actions from './registry-actions.ts';
-import { assembleSnapshot, resolvePacks } from './registry-build.ts';
+import { assembleSnapshot, resolvePacks, withUsage } from './registry-build.ts';
 import { packNotFound } from './registry-errors.ts';
 import {
   diffOf,
@@ -31,6 +30,7 @@ import {
   packDetail,
   pendingOf,
 } from './registry-reads.ts';
+import { loadCatalog, sourceStats } from './registry-sync.ts';
 import {
   emptySnapshot,
   type PackEntry,
@@ -42,21 +42,25 @@ import {
 } from './registry-types.ts';
 import { toRegistryStats, toRegistryStatus, toSitePackView, toTemplateSitePack } from './views.ts';
 
-/** The principal of automatic decisions (`decided_by: 'browserhive'`, spec 13 §11.8). */
-export const SYSTEM_PRINCIPAL = 'browserhive';
-
 /** The site-pack registry. */
 export class SitePackRegistry implements SitePackLookup {
   readonly #deps: SitePackRegistryDeps;
   readonly #log: Logger;
   #snapshot: RegistrySnapshot = emptySnapshot();
   #stats: readonly SourceStats[] = [];
+  #templateChanged: ((templateId: string) => void) | undefined;
   /** Reloads and decisions run one at a time. */
   #tail: Promise<unknown> = Promise.resolve();
 
   constructor(deps: SitePackRegistryDeps) {
     this.#deps = deps;
     this.#log = deps.logger.child({ module: 'site-packs' });
+    this.#templateChanged = deps.templateChanged;
+  }
+
+  /** Sets the `template.changed` hook (the template service is built after the registry). */
+  attachTemplateChanged(fn: (templateId: string) => void): void {
+    this.#templateChanged = fn;
   }
 
   /** `sitePacks`. */
@@ -202,22 +206,23 @@ export class SitePackRegistry implements SitePackLookup {
   reload(by?: string): Promise<SitePackRegistryStats> {
     return this.#serial(async () => {
       const signal = AbortSignal.timeout(30_000);
-      const bundled = await this.#loadSource('bundled', signal);
-      const local = await this.#loadSource('local', signal);
+      const bundled = await loadCatalog(
+        this.#deps.bundled,
+        this.#snapshot.bundled,
+        signal,
+        this.#log,
+      );
+      const local = await loadCatalog(this.#deps.local, this.#snapshot.local, signal, this.#log);
       const previous = this.#snapshot;
       await this.#rebuild(bundled, local);
       const now = this.#deps.clock.now();
-      this.#stats = [bundled, local].map((c) => ({
-        source: c.source,
-        loaded: c.packs.length,
-        skipped: c.skipped,
-        signedLayouts: c.signedLayouts,
-      }));
+      this.#stats = [bundled, local].map(sourceStats);
       await actions.recordLocalOverrides(this.#core(), previous, this.#snapshot);
       if (by !== undefined) {
         await actions.auditReload(this.#core(), by, this.#stats);
       }
-      this.#publishAll();
+      for (const packId of this.#snapshot.packs.keys()) this.#publishPack(packId);
+      this.#publishStatus();
       this.#log.info('site packs loaded', {
         bundled: bundled.packs.length,
         local: local.packs.length,
@@ -225,6 +230,20 @@ export class SitePackRegistry implements SitePackLookup {
         generation: this.#snapshot.generation,
       });
       return toRegistryStats(this.#stats, now);
+    });
+  }
+
+  /**
+   * Re-reads which templates use each pack (`used_by`, automatic Follow) after template or site
+   * changes; the content in force is unchanged.
+   */
+  refreshUsage(): Promise<void> {
+    return this.#serial(async () => {
+      const next = withUsage(this.#snapshot, await this.#deps.repos.templateSites.listAll());
+      if (next.changed.length === 0) return;
+      this.#snapshot = next.snapshot;
+      for (const packId of next.changed) this.#publishPack(packId);
+      this.#publishStatus();
     });
   }
 
@@ -310,7 +329,6 @@ export class SitePackRegistry implements SitePackLookup {
 
   #readFacts() {
     return {
-      release: this.#deps.bundled.release,
       view: (entry: PackEntry) => this.#view(entry),
       status: {
         enabled: this.#deps.enabled,
@@ -330,7 +348,7 @@ export class SitePackRegistry implements SitePackLookup {
       this.#publishStatus();
     });
     const entry = this.#entry(packId);
-    for (const templateId of entry.usedBy) this.#deps.templateChanged?.(templateId);
+    for (const templateId of entry.usedBy) this.#templateChanged?.(templateId);
     return this.#view(entry);
   }
 
@@ -338,19 +356,6 @@ export class SitePackRegistry implements SitePackLookup {
     const run = this.#tail.then(fn, fn);
     this.#tail = run.catch(() => undefined);
     return run;
-  }
-
-  async #loadSource(which: 'bundled' | 'local', signal: AbortSignal): Promise<SourceCatalog> {
-    const source = which === 'bundled' ? this.#deps.bundled : this.#deps.local;
-    const previous = which === 'bundled' ? this.#snapshot.bundled : this.#snapshot.local;
-    try {
-      const result = await source.load(signal);
-      if (result.ok) return result.value;
-      this.#log.warn('site pack source failed', { source: which, detail: result.error.message });
-    } catch (err) {
-      this.#log.warn('site pack source failed', { source: which, err: serializeError(err) });
-    }
-    return previous;
   }
 
   /** Re-derives the snapshot from the catalogs and the stored state, then swaps it. */
@@ -369,11 +374,6 @@ export class SitePackRegistry implements SitePackLookup {
       loadedAt: this.#deps.clock.now(),
     });
     for (const event of fresh) this.#deps.bus?.publish('site_pack.pending', event);
-  }
-
-  #publishAll(): void {
-    for (const packId of this.#snapshot.packs.keys()) this.#publishPack(packId);
-    this.#publishStatus();
   }
 
   #publishPack(packId: string): void {
