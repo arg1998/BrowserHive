@@ -104,11 +104,14 @@ export function createPlaywrightPageActions(deps: PlaywrightPageActionsDeps = {}
       });
     },
     humanScroll(sessionId, input: HumanScrollInput) {
+      const state = stateFor(sessionId);
       return humanScroll({
         page: asActionPage(input.page),
-        rng: stateFor(sessionId).rng,
+        rng: state.rng,
+        tracker: state.tracker,
         deltaX: input.deltaX,
         deltaY: input.deltaY,
+        ...(input.at !== undefined && { at: input.at }),
         ...(sleep !== undefined && { sleep }),
       });
     },

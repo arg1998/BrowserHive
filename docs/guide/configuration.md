@@ -182,7 +182,7 @@ These keys apply to every [session template](templates.md). What belongs to one 
 | [`templateMaxPagesPerHost`](../reference/configuration.md#templateMaxPagesPerHost) | `40` | agent pages per template browser (2 to 200); each session may hold `max(2, floor(value / cap))` |
 | [`templateRecycleAfter`](../reference/configuration.md#templateRecycleAfter) | `24h` | restart a template's browser after this age (at least `1h`), once its sessions finish |
 | [`templateDrainTimeout`](../reference/configuration.md#templateDrainTimeout) | `15m` | how long such a restart, or a restore, waits for sessions before closing them (`1m` to `2h`) |
-| [`templateRecycleRss`](../reference/configuration.md#templateRecycleRss) | `3GiB` | a template browser's memory limit (at least `512MiB`): above it the largest page of the heaviest session is closed, and if that is not enough, the browser is restarted |
+| [`templateRecycleRss`](../reference/configuration.md#templateRecycleRss) | `3GiB` | a template browser's memory limit (at least `512MiB`): above it the largest background tab of the heaviest session is closed (never a session's active tab), and if that is not enough, the browser is restarted |
 | [`templateCheckpointInterval`](../reference/configuration.md#templateCheckpointInterval) | `15m` | how often a running template browser's encrypted checkpoint is rewritten (at least `1m`) |
 | [`templateVersionsKeep`](../reference/configuration.md#templateVersionsKeep) | `10` | versions kept per template (1 to 100), besides pinned versions and the last one with every site signed in |
 | [`templateKey`](../reference/configuration.md#templateKey) | unset | the key that encrypts checkpoints and versions: base64 of exactly 32 bytes; unset = `<data-dir>/admin/template.key` |

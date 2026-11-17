@@ -223,6 +223,7 @@ export class ToolDispatcher {
       get siteRecheck() {
         return holder.recheck;
       },
+      sealedScrubber: () => this.sealed.scrubberFor(holder.session),
     };
     try {
       if (definition === undefined || !registry.isAvailable(name)) {

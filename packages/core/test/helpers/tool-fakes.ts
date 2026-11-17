@@ -171,8 +171,10 @@ export function spyPageActions(): { actions: PageActions; calls: string[] } {
         calls.push(`humanType:${input.timeout}`);
         await input.native();
       },
-      humanScroll: async () => {
-        calls.push('humanScroll');
+      humanScroll: async (_id, input) => {
+        calls.push(
+          input.at === undefined ? 'humanScroll' : `humanScroll@${input.at.x},${input.at.y}`,
+        );
       },
       invalidateCursor: (id, page) => {
         calls.push('invalidateCursor');

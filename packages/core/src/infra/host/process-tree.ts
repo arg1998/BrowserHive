@@ -17,13 +17,20 @@ export interface ProcessTreeReader {
    * the result. Never rejects: an unreadable table yields an empty map.
    */
   rssOfTrees(roots: readonly number[]): Promise<ReadonlyMap<number, number>>;
+  /**
+   * Like {@link rssOfTrees}, but each process counts its proportional share of the pages it shares
+   * with others (PSS, Linux `smaps_rollup`), so a tree's total is not inflated by the memory its
+   * processes share (a Chrome tree's summed RSS is about three times its PSS). Absent where the
+   * platform has no such figure (callers use {@link rssOfTrees}).
+   */
+  memoryOfTrees?(roots: readonly number[]): Promise<ReadonlyMap<number, number>>;
 }
 
-/** Sums each root's tree over a process table (pure). */
-export function sumProcessTrees(
+/** Each root's tree over a process table: the root and every descendant (pure). */
+export function processTrees(
   table: readonly ProcessEntry[],
   roots: readonly number[],
-): Map<number, number> {
+): Map<number, ProcessEntry[]> {
   const children = new Map<number, ProcessEntry[]>();
   const byPid = new Map<number, ProcessEntry>();
   for (const entry of table) {
@@ -32,20 +39,65 @@ export function sumProcessTrees(
     if (siblings === undefined) children.set(entry.ppid, [entry]);
     else siblings.push(entry);
   }
-  const sums = new Map<number, number>();
+  const trees = new Map<number, ProcessEntry[]>();
   for (const root of roots) {
     const top = byPid.get(root);
     if (top === undefined) continue;
-    let total = 0;
+    const members: ProcessEntry[] = [];
     const seen = new Set<number>();
     const stack: ProcessEntry[] = [top];
     for (let next = stack.pop(); next !== undefined; next = stack.pop()) {
       if (seen.has(next.pid)) continue;
       seen.add(next.pid);
-      total += next.rssBytes;
+      members.push(next);
       for (const child of children.get(next.pid) ?? []) stack.push(child);
     }
-    sums.set(root, total);
+    trees.set(root, members);
+  }
+  return trees;
+}
+
+/** Parses the `Pss:` line of `/proc/<pid>/smaps_rollup` into bytes, or `null`. */
+export function parseSmapsRollupPss(text: string): number | null {
+  const kb = /^Pss:\s+(\d+)\s+kB/m.exec(text)?.[1];
+  return kb === undefined ? null : Number(kb) * 1024;
+}
+
+/** Sums each Linux tree's PSS; a process whose `smaps_rollup` cannot be read counts its RSS. */
+async function linuxPssOfTrees(roots: readonly number[]): Promise<Map<number, number>> {
+  const sums = new Map<number, number>();
+  for (const [root, members] of processTrees(await linuxTable(), roots)) {
+    const shares = await Promise.all(
+      members.map(async (entry) => {
+        try {
+          const pss = parseSmapsRollupPss(
+            await readFile(`/proc/${entry.pid}/smaps_rollup`, 'utf8'),
+          );
+          return pss ?? entry.rssBytes;
+        } catch {
+          return entry.rssBytes;
+        }
+      }),
+    );
+    sums.set(
+      root,
+      shares.reduce((a, b) => a + b, 0),
+    );
+  }
+  return sums;
+}
+
+/** Sums each root's tree over a process table (pure). */
+export function sumProcessTrees(
+  table: readonly ProcessEntry[],
+  roots: readonly number[],
+): Map<number, number> {
+  const sums = new Map<number, number>();
+  for (const [root, members] of processTrees(table, roots)) {
+    sums.set(
+      root,
+      members.reduce((total, entry) => total + entry.rssBytes, 0),
+    );
   }
   return sums;
 }
@@ -161,5 +213,15 @@ export function createProcessTreeReader(
         return new Map();
       }
     },
+    ...(platform === 'linux' && {
+      async memoryOfTrees(roots: readonly number[]) {
+        if (roots.length === 0) return new Map<number, number>();
+        try {
+          return await linuxPssOfTrees(roots);
+        } catch {
+          return new Map<number, number>();
+        }
+      },
+    }),
   };
 }

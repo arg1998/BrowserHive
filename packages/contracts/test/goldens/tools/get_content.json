@@ -1,7 +1,7 @@
 {
   "name": "get_content",
   "title": "Get content",
-  "description": "Return the current HTML content of a tab. While the tab is still navigating, waits up to 5 s for the new page to reach domcontentloaded; if it is still navigating then, fails with WAIT_TIMEOUT, which is safe to retry.",
+  "description": "Return the current HTML content of a tab. While the tab is still navigating, waits up to 5 s for the new page to reach domcontentloaded; if it is still navigating then, fails with WAIT_TIMEOUT, which is safe to retry. HTML longer than max_chars (default 100000) is cut to its first max_chars characters and the result says so (truncated, total_chars, notice); max_chars: 0 returns all of it. Web apps can be megabytes of HTML: snapshot is the readable view of a page. In a template session, text equal to a stored sign-in value that could be a secret (a cookie or site-data value) reads [sealed]; only that text is replaced, and URLs, numbers, language and time-zone names are shown as they are.",
   "inputSchema": {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "type": "object",
@@ -11,6 +11,13 @@
       },
       "tab_id": {
         "type": "string"
+      },
+      "max_chars": {
+        "default": 100000,
+        "description": "At most this many characters of HTML (0 = no limit).",
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 9007199254740991
       }
     },
     "required": [
@@ -28,6 +35,16 @@
         "type": "string"
       },
       "html": {
+        "type": "string"
+      },
+      "truncated": {
+        "type": "boolean",
+        "const": true
+      },
+      "total_chars": {
+        "type": "number"
+      },
+      "notice": {
         "type": "string"
       }
     },

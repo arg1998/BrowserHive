@@ -1,9 +1,9 @@
-/** @module app/templates/host-memory — the memory limit of template hosts (spec 13 §3.2): above `templateRecycleRss` the session whose pages hold the most JavaScript heap loses its largest page and gets the `SESSION_RESOURCE_LIMIT` warning; a host still above the limit five minutes later is drained and restarted. */
+/** @module app/templates/host-memory — the memory limit of template hosts (spec 13 §3.2): above `templateRecycleRss` the session whose pages hold the most JavaScript heap loses its largest page that is not its active tab and gets the `SESSION_RESOURCE_LIMIT` warning (a session never loses its active tab, workload test B2); a host still above the limit five minutes later is drained and restarted. */
 
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { Clock } from '../../ports/clock.ts';
 import type { Logger } from '../../ports/logger.ts';
-import type { PageHeap, TemplateHost } from '../../ports/template-host.ts';
+import type { ActivePageOf, PageHeap, TemplateHost } from '../../ports/template-host.ts';
 import type { SessionService } from '../sessions/session-service.ts';
 
 /** How long a trimmed host may stay above the limit before it is drained (spec 13 §3.2). */
@@ -11,7 +11,11 @@ export const MEMORY_DRAIN_AFTER_MS = 5 * 60_000;
 
 /** The warning text: what happened and what the session can do (spec 13 §5 wording). */
 export const RESOURCE_LIMIT_MESSAGE =
-  "Memory is running low, so this session's largest page was closed. Close pages you no longer need.";
+  "Memory is running low, so this session's largest background tab was closed. Close tabs you no longer need.";
+
+/** The warning when every session holds only its active tab: nothing was closed. */
+export const RESOURCE_LIMIT_KEPT_MESSAGE =
+  'Memory is running low. Close tabs you no longer need; if it stays low, this session may be ended.';
 
 /** The warning after a site-opened page over the session's cap was closed (spec 13 §6.3). */
 export const PAGE_LIMIT_MESSAGE =
@@ -26,29 +30,48 @@ export interface HostMemoryDeps {
   readonly limitBytes: number;
   readonly clock: Clock;
   readonly logger: Logger;
-  /** Gives a session the `SESSION_RESOURCE_LIMIT` warning. */
-  readonly warn: (sessionId: string, details: Readonly<Record<string, unknown>>) => void;
+  /**
+   * Gives a session the `SESSION_RESOURCE_LIMIT` warning; `closed` says whether one of its tabs was
+   * closed (else every session held only its active tab).
+   */
+  readonly warn: (
+    sessionId: string,
+    details: Readonly<Record<string, unknown>>,
+    closed: boolean,
+  ) => void;
+  /** Each session's active tab, which is never closed (workload test B2). */
+  readonly activeOf?: ActivePageOf;
 }
 
-/** The session holding the most heap and its largest page. */
-export function largestConsumer(
-  heaps: readonly PageHeap[],
-): { readonly sessionId: string; readonly page: PageHeap; readonly total: number } | null {
-  const totals = new Map<string, { total: number; page: PageHeap }>();
+/** What the memory trim picked: a session, its summed heap and the page to close (`null`: none). */
+export interface TrimPick {
+  readonly sessionId: string;
+  readonly page: PageHeap | null;
+  readonly total: number;
+}
+
+/**
+ * The page to close: the largest page that is not its session's active tab, of the session holding
+ * the most heap among those that have one. When every session holds only its active tab, the
+ * session holding the most heap with `page: null` (nothing is closed; workload test B2: closing
+ * the only tab left the session with no page). `null` without heaps.
+ */
+export function largestConsumer(heaps: readonly PageHeap[]): TrimPick | null {
+  const totals = new Map<string, { total: number; page: PageHeap | null }>();
   for (const heap of heaps) {
-    const entry = totals.get(heap.sessionId);
-    if (entry === undefined) {
-      totals.set(heap.sessionId, { total: heap.jsHeapTotalBytes, page: heap });
-      continue;
-    }
+    const entry = totals.get(heap.sessionId) ?? { total: 0, page: null };
+    totals.set(heap.sessionId, entry);
     entry.total += heap.jsHeapTotalBytes;
-    if (heap.jsHeapTotalBytes > entry.page.jsHeapTotalBytes) entry.page = heap;
+    if (heap.active === true) continue;
+    if (entry.page === null || heap.jsHeapTotalBytes > entry.page.jsHeapTotalBytes) {
+      entry.page = heap;
+    }
   }
-  let best: { sessionId: string; page: PageHeap; total: number } | null = null;
-  for (const [sessionId, { total, page }] of totals) {
-    if (best === null || total > best.total) best = { sessionId, page, total };
-  }
-  return best;
+  const ranked = [...totals].sort((a, b) => b[1].total - a[1].total);
+  const pick = ranked.find(([, entry]) => entry.page !== null) ?? ranked[0];
+  if (pick === undefined) return null;
+  const [sessionId, { total, page }] = pick;
+  return { sessionId, page, total };
 }
 
 /** Tracks each host against the limit across ticks. */
@@ -88,9 +111,9 @@ export class HostMemoryGuard {
     }
     this.#trimmedAt.set(templateId, now);
     try {
-      const top = largestConsumer(await host.pageHeaps());
+      const top = largestConsumer(await host.pageHeaps(this.#deps.activeOf));
       if (top === null) return 'trimmed';
-      const closed = await host.closePage(top.page.targetId, 'session');
+      const closed = top.page === null ? false : await host.closePage(top.page.targetId, 'session');
       this.#log.warn('host over memory, trimmed', {
         templateId,
         sessionId: top.sessionId,
@@ -98,11 +121,11 @@ export class HostMemoryGuard {
         limitBytes: limit,
         closed,
       });
-      this.#deps.warn(top.sessionId, {
-        rss_bytes: rssBytes,
-        limit_bytes: limit,
-        js_heap_bytes: top.total,
-      });
+      this.#deps.warn(
+        top.sessionId,
+        { rss_bytes: rssBytes, limit_bytes: limit, js_heap_bytes: top.total },
+        closed,
+      );
     } catch (err) {
       this.#log.warn('memory trim failed', { templateId, err: serializeError(err) });
     }

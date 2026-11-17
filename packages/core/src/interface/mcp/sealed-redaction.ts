@@ -1,7 +1,8 @@
-/** @module interface/mcp/sealed-redaction — the dispatcher's redaction in sealed template sessions (spec 13 §5.4, §14): before an agent-facing text result leaves the dispatcher, and before it is stored, every cookie value of the template's browser and every storage value of its sites (≥ 12 characters, in every escaped or encoded form) becomes `[sealed]`. */
+/** @module interface/mcp/sealed-redaction — the dispatcher's redaction in sealed template sessions (spec 13 §5.4, §14): before an agent-facing text result leaves the dispatcher, and before it is stored, every cookie value of the template's browser and every storage value of its sites that could be a secret (≥ 12 characters and not plain text: `couldBeSecret`), in every escaped or encoded form, becomes `[sealed]`; only the matching text is replaced. */
 
 import type { Session } from '../../domain/session/session.ts';
 import {
+  couldBeSecret,
   MIN_SEALED_VALUE_LENGTH,
   redactSealed,
   sealedValues,
@@ -80,6 +81,8 @@ export class SealedRedaction {
     if (view !== null) {
       try {
         for (const cookie of await view.cookies()) {
+          // Plain values (`0`, `en-US`, a time zone, a plain URL) are never redacted, nor remembered.
+          if (!couldBeSecret(cookie.value)) continue;
           current.add(cookie.value);
           if (sites.has(registrableDomain(cookie.domain.replace(/^\./, '')))) {
             known.set(cookie.value, now);
@@ -90,7 +93,7 @@ export class SealedRedaction {
       }
       // The sites' storage values, from the session's own pages on them (spec 13 §14).
       for (const value of await storageValues(view.pages(), isSite, MIN_SEALED_VALUE_LENGTH)) {
-        known.set(value, now);
+        if (couldBeSecret(value)) known.set(value, now);
       }
     }
     for (const [value, at] of known) {

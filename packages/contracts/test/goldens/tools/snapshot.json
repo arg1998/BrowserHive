@@ -1,7 +1,7 @@
 {
   "name": "snapshot",
   "title": "Snapshot",
-  "description": "Return the tab's ARIA accessibility tree (YAML) — purpose-built for LLM consumption.",
+  "description": "Return the tab's ARIA accessibility tree (YAML) — purpose-built for LLM consumption. In a template session, text equal to a stored sign-in value that could be a secret (a cookie or site-data value) reads [sealed]; only that text is replaced, and URLs, numbers, language and time-zone names are shown as they are.",
   "inputSchema": {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "type": "object",
@@ -13,7 +13,9 @@
         "type": "string"
       }
     },
-    "required": ["session_id"]
+    "required": [
+      "session_id"
+    ]
   },
   "outputSchema": {
     "$schema": "http://json-schema.org/draft-07/schema#",
@@ -29,7 +31,11 @@
         "type": "string"
       }
     },
-    "required": ["session_id", "url", "tree"],
+    "required": [
+      "session_id",
+      "url",
+      "tree"
+    ],
     "additionalProperties": false
   },
   "annotations": {

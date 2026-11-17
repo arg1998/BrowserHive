@@ -5,7 +5,7 @@ import { readBounded } from '../../kernel/bounded.ts';
 import { withDeadline } from '../../kernel/deadline.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { Logger } from '../../ports/logger.ts';
-import type { PageHeap } from '../../ports/template-host.ts';
+import type { ActivePageOf, PageHeap } from '../../ports/template-host.ts';
 import type { TemplateState } from '../../ports/template-state.ts';
 import type { HostPageDispatcher } from './page-dispatcher.ts';
 import type { ViewPages } from './template-host-ops.ts';
@@ -23,6 +23,12 @@ export const HEAP_READS_DEADLINE_MS = 10_000;
 export interface HeapReadLimits {
   readonly concurrency: number;
   readonly deadlineMs: number;
+}
+
+/** Options of {@link pageHeaps}. */
+export interface HeapReadOptions extends Partial<HeapReadLimits> {
+  /** Each session's active tab: marked `active` so the memory trim never closes it. */
+  readonly activeOf?: ActivePageOf | undefined;
 }
 
 /**
@@ -82,18 +88,26 @@ export async function pageHeaps(
   dispatcher: HostPageDispatcher,
   views: Iterable<ViewPages>,
   log: Logger,
-  limits: HeapReadLimits = {
-    concurrency: HEAP_READ_CONCURRENCY,
-    deadlineMs: HEAP_READS_DEADLINE_MS,
-  },
+  options: HeapReadOptions = {},
 ): Promise<readonly PageHeap[]> {
-  const targets: { readonly sessionId: string; readonly targetId: string; readonly page: Page }[] =
-    [];
+  const limits: HeapReadLimits = {
+    concurrency: options.concurrency ?? HEAP_READ_CONCURRENCY,
+    deadlineMs: options.deadlineMs ?? HEAP_READS_DEADLINE_MS,
+  };
+  const targets: {
+    readonly sessionId: string;
+    readonly targetId: string;
+    readonly page: Page;
+    readonly active: boolean;
+  }[] = [];
   for (const view of views) {
     if (view.maintenance) continue;
+    const active = options.activeOf?.(view.sessionId);
     for (const page of view.pages()) {
       const targetId = dispatcher.targetIdOf(page);
-      if (targetId !== undefined) targets.push({ sessionId: view.sessionId, targetId, page });
+      if (targetId !== undefined) {
+        targets.push({ sessionId: view.sessionId, targetId, page, active: page === active });
+      }
     }
   }
   const deadline = withDeadline(undefined, limits.deadlineMs);
@@ -118,6 +132,7 @@ export async function pageHeaps(
       sessionId: target.sessionId,
       targetId: target.targetId,
       jsHeapTotalBytes: Math.round(value),
+      ...(target.active && { active: true }),
     });
   });
   if (unread > 0) log.debug('page heaps unread', { unread, pages: targets.length });

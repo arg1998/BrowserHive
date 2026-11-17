@@ -1,7 +1,7 @@
 {
   "name": "list_tabs",
   "title": "List tabs",
-  "description": "List every open tab: its tab_id, current URL, title, and whether it is active.",
+  "description": "List every open tab: its tab_id, current URL, title, and whether it is active. In a template session, text equal to a stored sign-in value that could be a secret (a cookie or site-data value) reads [sealed]; only that text is replaced, and URLs, numbers, language and time-zone names are shown as they are.",
   "inputSchema": {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "type": "object",
@@ -10,7 +10,9 @@
         "type": "string"
       }
     },
-    "required": ["session_id"]
+    "required": [
+      "session_id"
+    ]
   },
   "outputSchema": {
     "$schema": "http://json-schema.org/draft-07/schema#",
@@ -31,7 +33,12 @@
           "type": "boolean"
         }
       },
-      "required": ["tab_id", "url", "title", "active"],
+      "required": [
+        "tab_id",
+        "url",
+        "title",
+        "active"
+      ],
       "additionalProperties": false
     }
   },

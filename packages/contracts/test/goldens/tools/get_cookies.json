@@ -1,7 +1,7 @@
 {
   "name": "get_cookies",
   "title": "Get cookies",
-  "description": "Return the session context's cookies, optionally filtered to those that would be sent to the given URLs.",
+  "description": "Return the session context's cookies, optionally filtered to those that would be sent to the given URLs. In a template session whose cookie values are hidden, every value is empty and the result carries sealed: true.",
   "inputSchema": {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "type": "object",

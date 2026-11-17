@@ -82,6 +82,14 @@ export const TEMPLATE_BUSY_LIMIT_TEXT = {
 export const TEMPLATE_VAULT_NOTE =
   'Vault fills are not available in template sessions; the operator keeps the template signed in.';
 
+/**
+ * What `EVALUATE_DISABLED` adds in a template session whose operator has not allowed `evaluate`
+ * (workload test 2026-11-17: the bare refusal did not say why or who can change it).
+ */
+export const TEMPLATE_EVALUATE_TEXT =
+  "its sign-ins belong to the operator's session template. Ask the operator to allow evaluate " +
+  'for this template, or use the structured tools (click, fill, get_content, snapshot).';
+
 /** `press_key`'s refusal of a clipboard shortcut in a template session (spec 13 §3.3). */
 export const TEMPLATE_CLIPBOARD_TEXT = 'clipboard shortcuts are not available in template sessions';
 

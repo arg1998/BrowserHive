@@ -2,7 +2,10 @@
 /** @module test/integration/template-pages.test — pages a site or a modified click opens in a template session (PR #76 F5, F6): a session's site cannot take the shared browser's pages, and Ctrl/Cmd/Shift- and middle-click tabs, which Chromium opens without an opener, still belong to the clicking session. Stealth off and standard on Patchright (D-65), real Chromium. */
 
 import { afterEach, describe, expect, it } from 'bun:test';
+import { HostMemoryGuard } from '../../src/app/templates/host-memory.ts';
 import type { Session } from '../../src/domain/session/session.ts';
+import { createSystemClock } from '../../src/infra/clock/system-clock.ts';
+import { createCollectingLogger } from '../../src/infra/logging/collecting-logger.ts';
 import { isAppError } from '../../src/kernel/errors/app-error.ts';
 import {
   STEALTH_LEGS,
@@ -51,6 +54,36 @@ for (const stealth of STEALTH_LEGS) {
       expect(a.warnings.some((w) => w.code === 'SESSION_PAGE_LIMIT')).toBe(true);
       expect(await outcome(world.sessions.newTab(b))).toBe('ok');
       expect(await outcome(world.launch('charlie'))).toBe('ok');
+    });
+
+    it('the memory trim closes a background tab, never the active one (workload test B2)', async () => {
+      world = await templateWorld(stealth);
+      const a = await world.launch('alpha');
+      await pageOf(a).goto(world.sites.url('site-a.test'));
+      const warned: boolean[] = [];
+      const sessions = world.sessions;
+      const guard = () =>
+        new HostMemoryGuard({
+          limitBytes: 1,
+          clock: createSystemClock(),
+          logger: createCollectingLogger(),
+          warn: (_id, _details, closed) => void warned.push(closed),
+          activeOf: (id) => sessions.peek(id)?.tabs.activePage(),
+        });
+      // One tab only: it is the active one, so nothing is closed (the session keeps its page).
+      expect(await guard().check(world.template.templateId, 2, world.host())).toBe('trimmed');
+      expect(warned).toEqual([false]);
+      expect(a.tabs.size()).toBe(1);
+      // A second tab in the background: that one goes, the active tab stays.
+      const active = a.tabs.activeTabId();
+      await world.sessions.newTab(a);
+      if (active !== undefined) a.tabs.setActive(active);
+      await until(() => a.tabs.size() === 2, 5_000, 'two tabs');
+      expect(await guard().check(world.template.templateId, 2, world.host())).toBe('trimmed');
+      await until(() => a.tabs.size() === 1, 5_000, 'the background tab closed');
+      expect(warned).toEqual([false, true]);
+      expect(a.tabs.activeTabId()).toBe(active);
+      expect(a.tabs.activePage()?.url()).toContain('site-a.test');
     });
 
     it('modifier- and middle-click tabs belong to the clicking session, never parked', async () => {

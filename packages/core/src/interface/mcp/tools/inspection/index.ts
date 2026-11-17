@@ -17,7 +17,7 @@ import { isolatedEvaluate } from '../interaction/act.ts';
 import { drive, pageOf, safeUrl } from '../shared.ts';
 import { contentWhenSettled } from './content.ts';
 import { wrapFunctionExpression } from './evaluate-wrap.ts';
-import { captureScreenshot } from './screenshot-capture.ts';
+import { captureScreenshot, pngSize } from './screenshot-capture.ts';
 
 /** Content type of every tool screenshot. */
 export const SCREENSHOT_CONTENT_TYPE = 'image/png';
@@ -72,10 +72,11 @@ export const screenshot = defineTool('screenshot', {
       omitBackground: args.omit_background,
       ...(savedTo !== undefined && { path: savedTo }),
     });
-    const viewport = page.viewportSize() ?? { width: 0, height: 0 };
+    // The image's own size (a clip, a full page, a template page without a fixed viewport).
+    const size = pngSize(bytes) ?? page.viewportSize() ?? { width: 0, height: 0 };
     const artifact = await archive(ctx, session.id, bytes, {
-      width: viewport.width,
-      height: viewport.height,
+      width: size.width,
+      height: size.height,
       url: safeUrl(page),
     });
     const content: ContentBlock[] = [
@@ -92,8 +93,8 @@ export const screenshot = defineTool('screenshot', {
       content,
       structured: {
         ...(savedTo !== undefined && { saved_to: savedTo }),
-        width: viewport.width,
-        height: viewport.height,
+        width: size.width,
+        height: size.height,
         bytes: bytes.byteLength,
       },
       ...(artifact !== undefined && {
@@ -116,16 +117,47 @@ export const snapshot = defineTool('snapshot', {
   },
 });
 
-/** `get_content`: `page.content()`, waiting out a navigation in flight once (`contentWhenSettled`). */
+/**
+ * `get_content`: `page.content()`, waiting out a navigation in flight once (`contentWhenSettled`),
+ * cut to `max_chars` with a notice (workload test 2026-11-17: 5.5 MB for one webmail message).
+ */
 export const getContent = defineTool('get_content', {
   policies: [sessionOwnership],
   async handler(ctx, args) {
     const session = requireSession(ctx);
     const page = pageOf(ctx, session, args.tab_id);
     const html = await contentWhenSettled(ctx, page, session.id);
-    return json({ session_id: session.id, url: safeUrl(page), html });
+    const url = safeUrl(page);
+    if (args.max_chars === 0 || html.length <= args.max_chars) {
+      return json({ session_id: session.id, url, html });
+    }
+    // Secrets (vault values, a sealed session's values) are redacted before the cut: a cut through
+    // one would leave its start where the dispatcher's redaction no longer recognizes it.
+    const scrubbed = ctx.services.redaction.scrubText(session.id, html);
+    const sealed = (await ctx.sealedScrubber?.()) ?? null;
+    const full = sealed === null ? scrubbed : sealed(scrubbed);
+    const cut = truncateChars(full, args.max_chars);
+    if (cut === full) return json({ session_id: session.id, url, html: full });
+    return json({
+      session_id: session.id,
+      url,
+      html: cut,
+      truncated: true as const,
+      total_chars: full.length,
+      notice:
+        `Cut to the first ${cut.length} of ${full.length} characters. Pass max_chars: 0 for all ` +
+        'of it, or use snapshot for the readable structure of the page.',
+    });
   },
 });
+
+/** The first `max` characters of `text`, never splitting a surrogate pair. */
+export function truncateChars(text: string, max: number): string {
+  if (text.length <= max) return text;
+  const code = text.charCodeAt(max - 1);
+  const end = code >= 0xd800 && code <= 0xdbff ? max - 1 : max;
+  return text.slice(0, end);
+}
 
 /**
  * `evaluate`: refused by `evaluateAllowed` (session `disable_evaluate` or server

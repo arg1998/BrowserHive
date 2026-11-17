@@ -83,7 +83,7 @@ Parameters:
 | `stealth` | `boolean` | no | — | — |
 | `fingerprint` | `boolean` | no | — | — |
 | `humanize` | `boolean` | no | — | — |
-| `template` | `string` | no | — | Name of a session template from list_templates. The session starts signed in to the template's sites; sign-ins and site data it changes are kept in the template.; pattern `^[a-z][a-z0-9-]{1,31}$` |
+| `template` | `string` | no | — | Name of a session template from list_templates. The session starts signed in to the template's sites; sign-ins and site data it changes are kept in the template. The session reports persistence_mode 'memory' because it keeps no profile of its own: what it changes on the template's sites persists in the template, not in the session.; pattern `^[a-z][a-z0-9-]{1,31}$` |
 
 Result (JSON text block, mirrored in `structuredContent`):
 
@@ -236,7 +236,7 @@ Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](err
 
 **Navigate** · capability `navigate` · since 0.1.0
 
-> Navigate a tab to a URL (defaults to the active tab). Only web URLs can be opened: http://, https://, about:blank and data:. Other schemes (file:, chrome:, view-source:, javascript:, app links) and URLs without a scheme fail with URL_SCHEME_NOT_ALLOWED; pass a full https:// URL instead. The operator may maintain a URL blocklist; a blocked target fails with URL_BLOCKED and must not be retried. A URL that answers with a download (Content-Disposition: attachment) saves the file into the managed downloads dir (<data-dir>/sessions/<id>/downloads/) within the same timeout: the tab keeps its page, status is null, and download holds saved_to, suggested_name and size, as download_file returns them. A download that fails or runs out of time is DOWNLOAD_FAILED.
+> Navigate a tab to a URL (defaults to the active tab). Only web URLs can be opened: http://, https://, about:blank and data:. Other schemes (file:, chrome:, view-source:, javascript:, app links) and URLs without a scheme fail with URL_SCHEME_NOT_ALLOWED; pass a full https:// URL instead. The operator may maintain a URL blocklist; a blocked target fails with URL_BLOCKED and must not be retried. A URL that answers with a download (Content-Disposition: attachment) saves the file into the managed downloads dir (<data-dir>/sessions/<id>/downloads/) within the same timeout: the tab keeps its page, status is null, and download holds saved_to, suggested_name and size, as download_file returns them. A download that fails or runs out of time is DOWNLOAD_FAILED. In a template session, text equal to a stored sign-in value that could be a secret (a cookie or site-data value) reads [sealed]; only that text is replaced, and URLs, numbers, language and time-zone names are shown as they are.
 
 Annotations: readOnly no · destructive no · idempotent no · openWorld yes
 
@@ -457,7 +457,7 @@ Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](err
 
 **List tabs** · capability `read` · since 0.1.0
 
-> List every open tab: its tab_id, current URL, title, and whether it is active.
+> List every open tab: its tab_id, current URL, title, and whether it is active. In a template session, text equal to a stored sign-in value that could be a secret (a cookie or site-data value) reads [sealed]; only that text is replaced, and URLs, numbers, language and time-zone names are shown as they are.
 
 Annotations: readOnly yes · destructive no · idempotent yes · openWorld no
 
@@ -662,7 +662,7 @@ Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](err
 
 **Scroll** · capability `mutate` · since 0.1.0
 
-> Scroll a tab: mode="by" scrolls by (dx,dy); mode="to" scrolls to (x,y); mode="selector" brings an element into view. Returns the resulting scroll offset.
+> Scroll a tab: mode="by" scrolls by (dx,dy); mode="to" scrolls to (x,y); mode="selector" brings an element into view. "by" and "to" scroll the document, or, when the document itself does not scroll (app layouts whose feed is an inner panel), the page's main scroll container: the scrollable element under the centre of the viewport, else the largest one. Returns the resulting offset (x, y) of what scrolled, target ("window" or "element") and, for an element, a short description of it (element, e.g. "main#feed").
 
 Annotations: readOnly no · destructive no · idempotent no · openWorld yes
 
@@ -688,6 +688,8 @@ Result (JSON text block, mirrored in `structuredContent`):
 | `session_id` | `string` | yes |
 | `x` | `number` | yes |
 | `y` | `number` | yes |
+| `target` | one of `window`, `element` | no |
+| `element` | `string` | no |
 
 Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`ELEMENT_NOT_ACTIONABLE`](errors.md#ELEMENT_NOT_ACTIONABLE), [`SITE_OPERATOR_PENDING`](errors.md#SITE_OPERATOR_PENDING), [`TEMPLATE_BUSY`](errors.md#TEMPLATE_BUSY), [`TEMPLATE_UNAVAILABLE`](errors.md#TEMPLATE_UNAVAILABLE). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
 
@@ -757,7 +759,7 @@ Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](err
 
 **Snapshot** · capability `read` · since 0.1.0
 
-> Return the tab's ARIA accessibility tree (YAML) — purpose-built for LLM consumption.
+> Return the tab's ARIA accessibility tree (YAML) — purpose-built for LLM consumption. In a template session, text equal to a stored sign-in value that could be a secret (a cookie or site-data value) reads [sealed]; only that text is replaced, and URLs, numbers, language and time-zone names are shown as they are.
 
 Annotations: readOnly yes · destructive no · idempotent yes · openWorld no
 
@@ -783,7 +785,7 @@ Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](err
 
 **Get content** · capability `read` · since 0.1.0
 
-> Return the current HTML content of a tab. While the tab is still navigating, waits up to 5 s for the new page to reach domcontentloaded; if it is still navigating then, fails with WAIT_TIMEOUT, which is safe to retry.
+> Return the current HTML content of a tab. While the tab is still navigating, waits up to 5 s for the new page to reach domcontentloaded; if it is still navigating then, fails with WAIT_TIMEOUT, which is safe to retry. HTML longer than max_chars (default 100000) is cut to its first max_chars characters and the result says so (truncated, total_chars, notice); max_chars: 0 returns all of it. Web apps can be megabytes of HTML: snapshot is the readable view of a page. In a template session, text equal to a stored sign-in value that could be a secret (a cookie or site-data value) reads [sealed]; only that text is replaced, and URLs, numbers, language and time-zone names are shown as they are.
 
 Annotations: readOnly yes · destructive no · idempotent yes · openWorld no
 
@@ -793,6 +795,7 @@ Parameters:
 |---|---|---|---|---|
 | `session_id` | `string` | yes | — | — |
 | `tab_id` | `string` | no | — | — |
+| `max_chars` | `integer` | no | `100000` | At most this many characters of HTML (0 = no limit).; ≥ 0 |
 
 Result (JSON text block, mirrored in `structuredContent`):
 
@@ -801,6 +804,9 @@ Result (JSON text block, mirrored in `structuredContent`):
 | `session_id` | `string` | yes |
 | `url` | `string` | yes |
 | `html` | `string` | yes |
+| `truncated` | `true` | no |
+| `total_chars` | `number` | no |
+| `notice` | `string` | no |
 
 Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`WAIT_TIMEOUT`](errors.md#WAIT_TIMEOUT). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
 
@@ -809,7 +815,7 @@ Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](err
 
 **Evaluate** · capability `mutate` · since 0.1.0
 
-> Evaluate a JavaScript expression in the tab context and return the result. An expression that is exactly one function (an arrow or function expression, async included) is called and its result returned; anything else, including an IIFE that is already invoked, runs as written. A page-side exception fails with SCRIPT_ERROR carrying its message. A session launched with disable_evaluate: true rejects this call with EVALUATE_DISABLED.
+> Evaluate a JavaScript expression in the tab context and return the result. An expression that is exactly one function (an arrow or function expression, async included) is called and its result returned; anything else, including an IIFE that is already invoked, runs as written. A page-side exception fails with SCRIPT_ERROR carrying its message. A session launched with disable_evaluate: true rejects this call with EVALUATE_DISABLED, as does a template session unless the operator allows evaluate for its template.
 
 Annotations: readOnly no · destructive no · idempotent no · openWorld yes
 
@@ -948,7 +954,7 @@ Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](err
 
 **Get cookies** · capability `read` · since 0.1.0
 
-> Return the session context's cookies, optionally filtered to those that would be sent to the given URLs.
+> Return the session context's cookies, optionally filtered to those that would be sent to the given URLs. In a template session whose cookie values are hidden, every value is empty and the result carries sealed: true.
 
 Annotations: readOnly yes · destructive no · idempotent yes · openWorld no
 

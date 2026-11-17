@@ -1,6 +1,7 @@
 /** @module interface/mcp/policies — the pre-execution tool policies: session ownership, URL scheme, URL blocklist, evaluate gate, path sandbox, http-only transport, vault configured (spec 02 §2.3). */
 
 import { ERROR_REGISTRY, renderMessage } from '@browserhive/contracts/errors';
+import { TEMPLATE_EVALUATE_TEXT } from '@browserhive/contracts/tools';
 import { assertAttentionTransport } from '../../domain/operator-requests/heartbeat.ts';
 import { checkAgentUrl, type SchemeOptions } from '../../domain/policies/url-scheme.ts';
 import type { Session } from '../../domain/session/session.ts';
@@ -139,9 +140,14 @@ export function urlBlocklist(field: string): ToolPolicy {
   };
 }
 
-/** Public text of `EVALUATE_DISABLED` for both scopes (stable wire text agents may match on). */
-export function evaluateDisabledMessage(sessionId: string): string {
-  return `The 'evaluate' tool is disabled for session '${sessionId}'.`;
+/**
+ * Public text of `EVALUATE_DISABLED` for both scopes (stable wire text agents may match on). In a
+ * template session whose operator has not allowed `evaluate`, it goes on to say why and who can
+ * change it (workload test 2026-11-17), after the same first sentence.
+ */
+export function evaluateDisabledMessage(sessionId: string, template = false): string {
+  const base = `The 'evaluate' tool is disabled for session '${sessionId}'`;
+  return template ? `${base}: ${TEMPLATE_EVALUATE_TEXT}` : `${base}.`;
 }
 
 /**
@@ -155,9 +161,9 @@ export const evaluateAllowed: ToolPolicy = {
   apply(ctx) {
     const session = ctx.session;
     const sessionId = session?.id ?? '';
+    const sealed = session?.template?.sealing.forceDisableEvaluate === true;
     const scope =
-      session?.request.disableEvaluate === true ||
-      session?.template?.sealing.forceDisableEvaluate === true
+      session?.request.disableEvaluate === true || sealed
         ? 'session'
         : ctx.services.runtime.allowEvaluate
           ? null
@@ -166,7 +172,7 @@ export const evaluateAllowed: ToolPolicy = {
     throw new AppError(
       'EVALUATE_DISABLED',
       { session_id: sessionId, scope },
-      { publicMessage: evaluateDisabledMessage(sessionId) },
+      { publicMessage: evaluateDisabledMessage(sessionId, sealed) },
     );
   },
 };

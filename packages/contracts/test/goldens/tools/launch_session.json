@@ -76,7 +76,7 @@
         "type": "boolean"
       },
       "template": {
-        "description": "Name of a session template from list_templates. The session starts signed in to the template's sites; sign-ins and site data it changes are kept in the template.",
+        "description": "Name of a session template from list_templates. The session starts signed in to the template's sites; sign-ins and site data it changes are kept in the template. The session reports persistence_mode 'memory' because it keeps no profile of its own: what it changes on the template's sites persists in the template, not in the session.",
         "type": "string",
         "pattern": "^[a-z][a-z0-9-]{1,31}$"
       }

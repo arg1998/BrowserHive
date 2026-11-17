@@ -64,6 +64,50 @@ for (const stealth of STEALTH_LEGS) {
       expect(image(ok(await call('screenshot')))).toBe(true);
     });
 
+    it('an inner-scroll feed: scroll moves it, the tab survives PageDown, URL rewrites and a prerender, screenshots report their size (workload test B2-B4)', async () => {
+      world = await templateMcp(stealth);
+      const w = world;
+      const id = await launch(w);
+      const call = (name: string, args: Record<string, unknown> = {}) =>
+        w.harness.call(name, { session_id: id, ...args });
+      const json = async (name: string, args: Record<string, unknown> = {}) =>
+        JSON.parse(textOf(ok(await call(name, args)))) as Record<string, unknown>;
+      ok(await call('navigate', { url: w.sites.url('site-a.test', '/inner-feed') }));
+      // B4: the document does not scroll; the feed does, and scroll says so.
+      expect(await json('scroll', { mode: 'by', dy: 700 })).toMatchObject({
+        x: 0,
+        y: 700,
+        target: 'element',
+        element: 'main#feed',
+      });
+      const smooth = await json('scroll', { mode: 'by', dy: 700, behavior: 'smooth' });
+      expect(smooth).toMatchObject({ y: 1400, target: 'element' });
+      expect(await json('scroll', { mode: 'to', x: 0, y: 100 })).toMatchObject({ y: 100 });
+      // B2: PageDown, replaceState and pushState rewrites keep the session's one tab.
+      ok(await call('click', { selector: '#feed article >> nth=2' }));
+      ok(await call('press_key', { key: 'PageDown' }));
+      for (let i = 0; i < 4; i++) ok(await call('scroll', { mode: 'by', dy: 2_000 }));
+      // B3: the image's own size, for the viewport and for a clip.
+      const shot = ok(await call('screenshot'));
+      const size = shot.structuredContent as { width: number; height: number };
+      expect(size.width).toBeGreaterThan(100);
+      expect(size.height).toBeGreaterThan(100);
+      const clipped = ok(
+        await call('screenshot', { clip: { x: 0, y: 0, width: 400, height: 120 } }),
+      );
+      expect(clipped.structuredContent).toMatchObject({ width: 400, height: 120 });
+      const tabs = JSON.parse(textOf(ok(await call('list_tabs')))) as { url: string }[];
+      expect(tabs).toHaveLength(1);
+      expect(tabs[0]?.url).toContain('/inner-feed?');
+      // A link to the prerendered page activates it; the session still has its tab.
+      ok(await call('click', { selector: '#next' }));
+      ok(await call('wait_for_url', { url: '**/landing?prerendered' }));
+      expect(await json('session_info')).toMatchObject({ page_count: 1 });
+      expect(image(ok(await call('screenshot')))).toBe(true);
+      const after = JSON.parse(textOf(ok(await call('list_tabs')))) as { url: string }[];
+      expect(after.map((t) => new URL(t.url).pathname)).toEqual(['/landing']);
+    });
+
     it('a minimized window after a popup, a dialog and a download still yields a screenshot within 15 s', async () => {
       world = await templateMcp(stealth);
       const w = world;

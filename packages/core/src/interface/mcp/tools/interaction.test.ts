@@ -98,19 +98,37 @@ describe('interaction tools (native)', () => {
   it('scroll by / to / selector return the offset; superRefine enforces mode fields', async () => {
     h = await createToolHarness();
     const id = await h.launch();
-    handle().firstPage.script.evaluateResult = { x: 0, y: 500 };
+    handle().firstPage.script.evaluateResult = { x: 0, y: 500, target: 'window' };
     expect((await executeTool(h, 'scroll', { session_id: id, mode: 'by', dy: 500 })).value).toEqual(
-      { session_id: id, x: 0, y: 500 },
+      { session_id: id, x: 0, y: 500, target: 'window' },
     );
     await executeTool(h, 'scroll', { session_id: id, mode: 'to', x: 0, y: 10 });
     await executeTool(h, 'scroll', { session_id: id, mode: 'selector', selector: '#bottom' });
     const evaluated = handle()
       .firstPage.calls.filter((c) => c.method === 'evaluate')
-      .map((c) => c.args[0]);
-    expect(evaluated).toContain('window.scrollBy({ left: 0, top: 500, behavior: "auto" })');
-    expect(evaluated).toContain('window.scrollTo({ left: 0, top: 10, behavior: "auto" })');
+      .map((c) => String(c.args[0]));
+    // One script per call scrolls and reports (`by`, `to`); a selector scroll only reports.
+    expect(evaluated).toHaveLength(3);
+    expect(evaluated[0]).toContain('"mode":"by","dx":0,"dy":500,"x":0,"y":0,"behavior":"auto"');
+    expect(evaluated[1]).toContain('"mode":"to","dx":0,"dy":0,"x":0,"y":10,"behavior":"auto"');
+    expect(evaluated[2]).toContain('"mode":"read"');
     const bad = await h.call('scroll', { session_id: id, mode: 'to', x: 1 });
     expect(textOf(bad)).toBe('[INVALID_ARGUMENTS] input: mode="to" requires x and y');
+  });
+
+  it('scroll reports an inner scroll container it moved, without its wheel point (B4)', async () => {
+    h = await createToolHarness();
+    const id = await h.launch();
+    handle().firstPage.script.evaluateResult = {
+      x: 0,
+      y: 700,
+      target: 'element',
+      element: 'main#feed',
+      point: { x: 640, y: 400 },
+    };
+    expect((await executeTool(h, 'scroll', { session_id: id, mode: 'by', dy: 700 })).value).toEqual(
+      { session_id: id, x: 0, y: 700, target: 'element', element: 'main#feed' },
+    );
   });
 });
 
@@ -134,5 +152,21 @@ describe('interaction tools (humanized)', () => {
       'humanScroll',
       'invalidateCursor',
     ]);
+  });
+
+  it('a humanized scroll points the wheel at the inner scroll container first (B4)', async () => {
+    const spy = spyPageActions();
+    h = await createToolHarness({ pageActions: spy.actions });
+    const id = await h.launch({ stealth: true, humanize: true });
+    handle().firstPage.script.evaluateResult = {
+      x: 0,
+      y: 0,
+      target: 'element',
+      element: 'main#feed',
+      point: { x: 640, y: 400 },
+    };
+    const { value } = await executeTool(h, 'scroll', { session_id: id, mode: 'by', dy: 300 });
+    expect(spy.calls).toEqual(['humanScroll@640,400']);
+    expect(value).toMatchObject({ target: 'element', element: 'main#feed' });
   });
 });

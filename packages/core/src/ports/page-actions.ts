@@ -35,6 +35,8 @@ export interface HumanScrollInput {
   readonly page: Page;
   readonly deltaX: number;
   readonly deltaY: number;
+  /** Move the pointer here first (a scroll container's visible centre): the wheel scrolls what is under it. */
+  readonly at?: { readonly x: number; readonly y: number };
 }
 
 /** What the caller knows about a failed driver call (fills the detail slots the prose lacks). */

@@ -7,8 +7,16 @@ import { sessionOwnership } from '../../policies.ts';
 import { pageOf } from '../shared.ts';
 import { act, humanized, isolatedEvaluate } from './act.ts';
 import { click, fill, hover, pressKey, typeText } from './pointer.ts';
+import { type ScrollScriptArgs, scrollExpression } from './scroll.ts';
 
-const ScrollOffset = z.object({ x: z.number(), y: z.number() });
+/** What the in-page scroll script reports (validated: it runs in the page). */
+const ScrollReport = z.object({
+  x: z.number(),
+  y: z.number(),
+  target: z.enum(['window', 'element']),
+  element: z.string().optional(),
+  point: z.object({ x: z.number(), y: z.number() }).optional(),
+});
 
 /** `select_option`: always native. */
 export const selectOption = defineTool('select_option', {
@@ -25,7 +33,9 @@ export const selectOption = defineTool('select_option', {
 
 /**
  * `scroll`: `by` a delta (humanized wheel notches when on — `window.scrollBy` dispatches no `wheel`
- * event), `to` an absolute position, or a `selector` into view. Returns the resulting offset.
+ * event), `to` an absolute position, or a `selector` into view. `by` and `to` move the document, or
+ * when the document does not scroll, the page's main scroll container (workload test B4,
+ * `scroll.ts`). Returns the resulting offset of what scrolled, and what that was.
  */
 export const scroll = defineTool('scroll', {
   policies: [sessionOwnership],
@@ -34,36 +44,49 @@ export const scroll = defineTool('scroll', {
     const page = pageOf(ctx, session, args.tab_id);
     const actions = ctx.services.pageActions;
     const isolated = isolatedEvaluate(session);
-    const behavior = JSON.stringify(args.behavior);
+    const script = (mode: ScrollScriptArgs['mode']) =>
+      scrollExpression({
+        mode,
+        dx: args.dx,
+        dy: args.dy,
+        x: args.x ?? 0,
+        y: args.y ?? 0,
+        behavior: args.behavior,
+      });
+    const report = async (mode: ScrollScriptArgs['mode']) => {
+      const parsed = ScrollReport.safeParse(await actions.evaluate(page, isolated, script(mode)));
+      return parsed.success ? parsed.data : null;
+    };
+    let done: z.infer<typeof ScrollReport> | null = null;
     // `superRefine` guarantees the mode-specific fields; the guards narrow the optionals.
     if (args.mode === 'selector' && args.selector !== undefined) {
       const selector = args.selector;
       await act(ctx, session, selector, args.timeout, () =>
         page.locator(selector).scrollIntoViewIfNeeded({ timeout: args.timeout }),
       );
-    } else if (args.mode === 'to' && args.x !== undefined && args.y !== undefined) {
-      await actions.evaluate(
-        page,
-        isolated,
-        `window.scrollTo({ left: ${JSON.stringify(args.x)}, top: ${JSON.stringify(args.y)}, behavior: ${behavior} })`,
-      );
+    } else if (args.mode === 'to') {
+      done = await report('to');
     } else if (humanized(ctx, session, page)) {
-      await actions.humanScroll(session.id, { page, deltaX: args.dx, deltaY: args.dy });
-    } else {
-      await actions.evaluate(
+      // The wheel scrolls what is under the pointer: point it at the container when it is one.
+      const before = await report('read');
+      await actions.humanScroll(session.id, {
         page,
-        isolated,
-        `window.scrollBy({ left: ${JSON.stringify(args.dx)}, top: ${JSON.stringify(args.dy)}, behavior: ${behavior} })`,
-      );
+        deltaX: args.dx,
+        deltaY: args.dy,
+        ...(before?.point !== undefined && { at: before.point }),
+      });
+    } else {
+      done = await report('by');
     }
-    const raw = await actions.evaluate(
-      page,
-      isolated,
-      '({ x: window.scrollX, y: window.scrollY })',
-    );
-    const offset = ScrollOffset.safeParse(raw);
-    const { x, y } = offset.success ? offset.data : { x: 0, y: 0 };
-    return json({ session_id: session.id, x, y });
+    const after = done ?? (await report('read'));
+    if (after === null) return json({ session_id: session.id, x: 0, y: 0 });
+    return json({
+      session_id: session.id,
+      x: after.x,
+      y: after.y,
+      target: after.target,
+      ...(after.element !== undefined && { element: after.element }),
+    });
   },
 });
 

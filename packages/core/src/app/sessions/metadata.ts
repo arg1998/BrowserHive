@@ -22,10 +22,14 @@ export type SessionMetadataWithDriver = SessionMetadata & {
 
 /**
  * `page.url()` can throw "Target closed" once the connection dropped. Defensive: `null` instead,
- * since metadata is read from listings where one dead session must not poison the whole list.
+ * since metadata is read from listings where one dead session must not poison the whole list. A
+ * running session whose last tab closed has no current URL (`null`, workload test B2), not the URL
+ * of the tab it lost.
  */
 export function safeCurrentUrl(session: Session): string | null {
   if (session.dead) return null;
+  const running = session.state.kind === 'live' || session.state.kind === 'paused';
+  if (running && session.view !== null && session.tabs.size() === 0) return null;
   try {
     return session.tabs.activePage()?.url() ?? session.currentUrl;
   } catch {

@@ -174,15 +174,29 @@ export const ScrollInput = z
     }
   });
 
-/** `scroll`: three modes; returns the resulting `scrollX`/`scrollY`. */
+/**
+ * `scroll`: three modes; returns the resulting offset of what scrolled (`target`, additive): the
+ * document (`window`, its `scrollX`/`scrollY`) or the page's main scroll container (`element`, its
+ * `scrollLeft`/`scrollTop`, described by `element`) when the document does not scroll.
+ */
 export const SCROLL = defineTool({
   name: 'scroll',
   title: 'Scroll',
   description:
     'Scroll a tab: mode="by" scrolls by (dx,dy); mode="to" scrolls to (x,y); mode="selector" ' +
-    'brings an element into view. Returns the resulting scroll offset.',
+    'brings an element into view. "by" and "to" scroll the document, or, when the document ' +
+    "itself does not scroll (app layouts whose feed is an inner panel), the page's main scroll " +
+    'container: the scrollable element under the centre of the viewport, else the largest one. ' +
+    'Returns the resulting offset (x, y) of what scrolled, target ("window" or "element") and, ' +
+    'for an element, a short description of it (element, e.g. "main#feed").',
   input: ScrollInput,
-  output: z.object({ session_id: z.string(), x: z.number(), y: z.number() }),
+  output: z.object({
+    session_id: z.string(),
+    x: z.number(),
+    y: z.number(),
+    target: z.enum(['window', 'element']).optional(),
+    element: z.string().optional(),
+  }),
   annotations: annotations(false, false, false, true),
   pack: 'interaction',
   capability: 'mutate',

@@ -1,6 +1,13 @@
 /** @module contracts/tools/tabs — new_tab, close_tab, switch_tab, list_tabs contracts */
 import { z } from 'zod';
-import { annotations, SavedDownload, SESSION_ERRORS, SINCE, WaitUntil } from './shared.ts';
+import {
+  annotations,
+  SavedDownload,
+  SEALED_TEXT_NOTE,
+  SESSION_ERRORS,
+  SINCE,
+  WaitUntil,
+} from './shared.ts';
 import { defineTool } from './types.ts';
 
 /** One `list_tabs` row. `title` is `''` when the page refused to report one. */
@@ -83,7 +90,9 @@ export const SWITCH_TAB = defineTool({
 export const LIST_TABS = defineTool({
   name: 'list_tabs',
   title: 'List tabs',
-  description: 'List every open tab: its tab_id, current URL, title, and whether it is active.',
+  description:
+    'List every open tab: its tab_id, current URL, title, and whether it is active. ' +
+    SEALED_TEXT_NOTE,
   input: z.object({ session_id: z.string() }),
   output: z.array(TabSummary),
   annotations: annotations(true, false, true, false),

@@ -81,6 +81,14 @@ for (const stealth of STEALTH_LEGS) {
       const content = textOf(await call('get_content'));
       expect(content).toContain('[sealed]');
       expect(content).not.toContain(SENTINEL_COOKIE_VALUE);
+      // A size cap that cuts through the sentinel still leaves none of it (redacted before the cut).
+      const page = w.harness.services.sessions.peek(id)?.tabs.activePage();
+      const at = (await page?.content())?.indexOf(SENTINEL_COOKIE_VALUE) ?? -1;
+      expect(at).toBeGreaterThan(0);
+      const cut = await call('get_content', { max_chars: at + 12 });
+      const cutHtml = structured<{ html: string; truncated?: boolean }>(cut);
+      expect(cutHtml.truncated).toBe(true);
+      expect(cutHtml.html).not.toContain(SENTINEL_COOKIE_VALUE.slice(0, 10));
       expect(textOf(await call('snapshot'))).toContain('[sealed]');
       // A wait whose failure message would quote the page.
       await call('wait_for_selector', { selector: `text=${SENTINEL_COOKIE_VALUE}`, timeout: 500 });
@@ -115,9 +123,10 @@ for (const stealth of STEALTH_LEGS) {
         expect([name, textOf(result).includes('[sealed]')]).toEqual([name, true]);
       }
       // Every sealed tool refuses, typed.
-      expect(codeOf(await call('evaluate', { expression: 'document.cookie' }))).toBe(
-        'EVALUATE_DISABLED',
-      );
+      const refused = await call('evaluate', { expression: 'document.cookie' });
+      expect(codeOf(refused)).toBe('EVALUATE_DISABLED');
+      // The refusal says why and who can change it (workload test 2026-11-17).
+      expect(textOf(refused)).toContain("belong to the operator's session template");
       expect(codeOf(await call('set_cookies', { cookies: [{ name: 'x', value: 'y', url }] }))).toBe(
         'SESSION_SEALED',
       );

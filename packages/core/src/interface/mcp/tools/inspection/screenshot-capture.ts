@@ -22,6 +22,20 @@ export interface CaptureRequest {
   readonly path?: string;
 }
 
+/** The PNG signature: the 8 bytes every PNG starts with. */
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
+/**
+ * The pixel size of a PNG, read from its `IHDR` chunk (bytes 16–23), or `null` when `bytes` is not
+ * a PNG. A template session's page has no fixed viewport (`viewportSize()` is `null`), and a
+ * `clip` or `full_page` capture is not the viewport's size anyway (workload test B3).
+ */
+export function pngSize(bytes: Uint8Array): { width: number; height: number } | null {
+  if (bytes.byteLength < 24 || PNG_SIGNATURE.some((b, i) => bytes[i] !== b)) return null;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  return { width: view.getUint32(16), height: view.getUint32(20) };
+}
+
 function isTimeout(err: unknown): boolean {
   return (
     err instanceof Error &&
