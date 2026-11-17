@@ -451,7 +451,7 @@ export const BOOT_ERRORS = {
     cause:
       "The content in force of a site pack changed without an operator's Apply (the approved local file was deleted or came back, a revoked version fell back to the previous one, or a stored approval became readable again; spec 13 §9.6), and its `stealth-profile` floor is above templates whose enabled sites use the pack. A template never runs a site below its pack's floor (D-71), and a file deletion cannot be refused, so the site was turned off on those templates (`enabled=false`, an audit row by `browserhive`).",
     resolution:
-      "Stealth and fingerprint noise are fixed for a template's life: create a new template with the settings the pack names for this site and sign in there, or remove the site from the named templates. Turning the site on again is refused while the template is below the floor. The record resolves once no turned-off site is below its pack's floor.",
+      "Stealth and fingerprint noise are fixed for a template's life: create a new template with the settings the pack names for this site and sign in there, or remove the site from the named templates. Turning the site on again is refused while the template is below the floor. The record resolves once no site BrowserHive turned off is still off below its pack's floor (removed, its template removed, or a version with a lower floor); a site you turned off yourself never keeps it open.",
   }),
   SITE_PACKS_STATE_CORRUPT: defineError({
     code: 'SITE_PACKS_STATE_CORRUPT',
