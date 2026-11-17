@@ -10,6 +10,7 @@ import {
 import { isAnchoredChallenge } from './challenges.ts';
 import { checkPackSelector } from './css-selector.ts';
 import { scopedUrl, scopeOfGlob } from './glob-scope.ts';
+import { strategyParamIssues } from './strategy-specs.ts';
 import { unsafeTextIssues } from './text-safety.ts';
 
 /** One refinement failure: a JSON path into the pack and why. */
@@ -190,6 +191,22 @@ export function refinePack(pack: SitePackV1): RefineResult {
     }
   }
 
+  // Strategies: each id once, parameters known and well-typed (numbers are clamped when read).
+  const strategyIds = new Set<string>();
+  for (const [i, strategy] of pack.strategies.entries()) {
+    if (strategyIds.has(strategy.id)) fail(`strategies[${i}].id`, 'duplicate strategy');
+    strategyIds.add(strategy.id);
+    for (const issue of strategyParamIssues(strategy.id, strategy.params)) {
+      fail(
+        issue.param === null ? `strategies[${i}]` : `strategies[${i}].params.${issue.param}`,
+        issue.message,
+      );
+    }
+  }
+  if (strategyIds.has('pace-writes') && (pack.pacing?.rules ?? []).length === 0) {
+    warnings.push("strategy 'pace-writes' has no pacing rules to apply");
+  }
+
   // The stance rule.
   const policy = pack.write_policy;
   if (policy.default !== STANCE_DEFAULT[policy.stance] && policy.exception === undefined) {
@@ -225,10 +242,8 @@ export function refinePack(pack: SitePackV1): RefineResult {
     for (const [i, strategy] of pack.strategies.entries()) {
       const path = strategy.params['path'];
       if (strategy.id !== 'entry-warmup' || typeof path !== 'string') continue;
-      if (!/^\/[A-Za-z0-9\-._~/%]*$/.test(path) || path.length > 200) {
-        fail(`strategies[${i}].params.path`, 'must be a path without query');
-        continue;
-      }
+      // A malformed path is already an issue (strategyParamIssues).
+      if (!/^\/[A-Za-z0-9\-._~/%]*$/.test(path) || path.length > 200) continue;
       loads.push([`strategies[${i}].params.path`, scopedUrl({ host: probe.probe.host, path })]);
       loads.push([`strategies[${i}].params.path`, scopedUrl({ host: `www.${pack.id}`, path })]);
     }
