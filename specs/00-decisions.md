@@ -1322,7 +1322,9 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 
 **Decision.** Creating a template, adding or enabling a site, and an edit that lowers stealth or changes fingerprint below an enabled site's floor answer `VALIDATION_FAILED` (issue codes `stealth_below_floor`, `fingerprint_required`, `fingerprint_forbidden`). Applying a pack version whose floor is above a using template's settings answers `SITE_PACK_BELOW_FLOOR` (409, naming the templates and what each must change); such a candidate classifies `restrictive`. `stealth-profile.humanize: true` is not a refusal: it forces humanized input on the site's pages at run time, as `humanize-input` does.
 
-**Consequences.** A template can never run a site below its pack's floor; the operator fixes the template (or disables the site) before applying.
+**Consequences.** A template can never run a site below its pack's floor. Stealth and fingerprint noise are fixed for a template's life, so the operator turns the site off on the template (or creates a new template with the settings the pack needs, or rejects the version) before applying.
+
+*As built (review #84 M1).* Revert is refused with `SITE_PACK_BELOW_FLOOR` like Apply. A change of the content in force that no operator action made, and that cannot be refused (an approved local file deleted, so another approved version applies; a revocation's fallback; a stored approval readable again), turns the site off on each template below the new floor (`enabled=false`, an audit row by `browserhive`) and records the degradation `TEMPLATE_SITE_BELOW_FLOOR` (error, so it notifies) naming the templates and the reason; it resolves once no turned-off site is below its pack's floor. A revocation's fallback above a using template's floor classifies `restrictive` and therefore never applies by itself.
 
 ## D-72 Bundled packs select only strategies that need no signed-in data
 

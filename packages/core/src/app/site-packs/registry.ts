@@ -23,6 +23,7 @@ import * as actions from './registry-actions.ts';
 import { withFreshUsage } from './registry-classify.ts';
 import { packNotFound } from './registry-errors.ts';
 import { prepareFirstUse } from './registry-first-use.ts';
+import { enforceFloor } from './registry-floor.ts';
 import { humanOnlyOf, importResponse } from './registry-helpers.ts';
 import { loadSnapshot } from './registry-load.ts';
 import {
@@ -241,6 +242,8 @@ export class SitePackRegistry implements SitePackLookup {
   /** After template or site changes: re-reads `used_by` and re-classifies pending versions (§9.7). */
   refreshUsage(): Promise<void> {
     return this.#serial(async () => {
+      // A removed site or template may end a below-floor record (D-71, `registry-floor.ts`).
+      await this.#enforceFloor();
       const next = await withFreshUsage(this.#deps.repos, this.#snapshot);
       if (next.changed.length === 0) return;
       this.#snapshot = next.snapshot;
@@ -271,7 +274,10 @@ export class SitePackRegistry implements SitePackLookup {
     return { ...outcome, view };
   }
 
-  /** Restore the previous approved version. @throws `SITE_PACK_NOT_FOUND`, `CONFLICT`. */
+  /**
+   * Restore the previous approved version.
+   * @throws `SITE_PACK_NOT_FOUND`, `SITE_PACK_NO_PREVIOUS`, `SITE_PACK_BELOW_FLOOR`.
+   */
   revert(packId: string, by: string): Promise<SitePackView> {
     return this.#act(packId, () => actions.revertVersion(this.#core(), packId, by));
   }
@@ -375,6 +381,18 @@ export class SitePackRegistry implements SitePackLookup {
     const loaded = await loadSnapshot(this.#core(), bundled, local, next);
     this.#snapshot = loaded.snapshot;
     for (const event of loaded.fresh) this.#deps.bus?.publish('site_pack.pending', event);
+    await this.#enforceFloor();
+  }
+
+  /**
+   * D-71 for content in force that changed without an Apply (a local file deleted, a revocation's
+   * fallback): sites below the new floor are turned off; usage and verdicts are re-read after.
+   */
+  async #enforceFloor(): Promise<void> {
+    const off = await enforceFloor(this.#core());
+    if (off.length === 0) return;
+    this.#snapshot = (await withFreshUsage(this.#deps.repos, this.#snapshot)).snapshot;
+    for (const templateId of off) this.#templateChanged?.(templateId);
   }
 
   #publishPack(packId: string): void {

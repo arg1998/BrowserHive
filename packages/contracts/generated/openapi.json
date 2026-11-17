@@ -230,6 +230,7 @@
               "TEMPLATE_KEY_MISMATCH",
               "TEMPLATE_CHECKPOINT_FAILED",
               "TEMPLATE_CHECKPOINT_TOO_LARGE",
+              "TEMPLATE_SITE_BELOW_FLOOR",
               "SITE_PACKS_STATE_CORRUPT",
               "SITE_PACKS_LOAD_FAILED",
               "UNAUTHORIZED",
@@ -50758,7 +50759,7 @@
         "tags": [
           "site-packs"
         ],
-        "summary": "The field-level diff from the approved version (or `from`) to a pending version or the current local file (`to=local`), classified (spec 13 §9.7): each change's class and the candidate's (the strongest; `new_pack` without an approved version), with the templates' current settings.",
+        "summary": "The field-level diff from the approved version (or `from`) to a pending version, the previous approved version (what Revert restores) or the current local file (`to=local`), classified (spec 13 §9.7): each change's class and the candidate's (the strongest; `new_pack` without an approved version), with the templates' current settings.",
         "security": [
           {
             "cookieAuth": []
@@ -50810,7 +50811,7 @@
         ],
         "responses": {
           "200": {
-            "description": "The field-level diff from the approved version (or `from`) to a pending version or the current local file (`to=local`), classified (spec 13 §9.7): each change's class and the candidate's (the strongest; `new_pack` without an approved version), with the templates' current settings.",
+            "description": "The field-level diff from the approved version (or `from`) to a pending version, the previous approved version (what Revert restores) or the current local file (`to=local`), classified (spec 13 §9.7): each change's class and the candidate's (the strongest; `new_pack` without an approved version), with the templates' current settings.",
             "content": {
               "application/json": {
                 "schema": {
@@ -51162,7 +51163,7 @@
         "tags": [
           "site-packs"
         ],
-        "summary": "Restore the previous approved version in one action.",
+        "summary": "Restore the previous approved version in one action. Refused (SITE_PACK_BELOW_FLOOR) while a template using the pack is below that version's stealth floor.",
         "security": [
           {
             "cookieAuth": []
@@ -51186,7 +51187,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Restore the previous approved version in one action.",
+            "description": "Restore the previous approved version in one action. Refused (SITE_PACK_BELOW_FLOOR) while a template using the pack is below that version's stealth floor.",
             "content": {
               "application/json": {
                 "schema": {
@@ -51236,7 +51237,7 @@
             }
           },
           "409": {
-            "description": "SITE_PACK_NO_PREVIOUS",
+            "description": "SITE_PACK_NO_PREVIOUS, SITE_PACK_BELOW_FLOOR",
             "content": {
               "application/problem+json": {
                 "schema": {

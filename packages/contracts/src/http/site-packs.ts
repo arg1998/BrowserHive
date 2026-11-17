@@ -198,7 +198,7 @@ export const SitePackDetailResponse = z.object({
 /** `GET /site-packs/{pack_id}` body. */
 export type SitePackDetailResponse = z.infer<typeof SitePackDetailResponse>;
 
-/** `GET /site-packs/{pack_id}/diff` query: `to` a pending version or `local`; `from` defaults to the approved version. */
+/** `GET /site-packs/{pack_id}/diff` query: `to` a pending version, the previous approved version (what Revert restores) or `local`; `from` defaults to the approved version. */
 export const SitePackDiffQuery = z.strictObject({
   to: z.union([z.literal('local'), z.coerce.number().int().min(1)]),
   from: z.coerce.number().int().min(1).optional(),

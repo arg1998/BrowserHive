@@ -129,7 +129,11 @@ export async function rejectVersion(
   await core.refresh();
 }
 
-/** Restore the previous approved version (from its source or BrowserHive's copy). */
+/**
+ * Restore the previous approved version (from its source or BrowserHive's copy). Refused with
+ * `SITE_PACK_BELOW_FLOOR` like Apply (D-71, review #84 M1): a template that added the site under
+ * the newer version may be below the previous version's `stealth-profile` floor.
+ */
 export async function revertVersion(core: RegistryCore, packId: string, by: string): Promise<void> {
   const entry = core.entry(packId);
   const state = entry.state;
@@ -154,6 +158,7 @@ export async function revertVersion(core: RegistryCore, packId: string, by: stri
           core.deps.binaryVersion,
         );
   if (content === null) throw noPrevious(packId);
+  await assertFloorMet(core, packId, content.pack);
   const classified =
     entry.approved === null
       ? null
@@ -322,7 +327,8 @@ export async function approveLocal(
 
 /**
  * Refuses content whose `stealth-profile` floor is above a template that uses the pack
- * (`SITE_PACK_BELOW_FLOOR`): the operator changes the template or disables the site first.
+ * (`SITE_PACK_BELOW_FLOOR`, D-71): stealth and fingerprint noise are fixed for a template's life, so
+ * the operator turns the site off on that template (or rejects the version) first.
  */
 async function assertFloorMet(core: RegistryCore, packId: string, pack: SitePackV1): Promise<void> {
   const blockers = floorBlockers(await usageOf(core.deps.repos, packId), pack);
