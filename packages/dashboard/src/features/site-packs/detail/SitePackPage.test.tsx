@@ -1,6 +1,12 @@
 /** @module features/site-packs/detail/SitePackPage.test — `/site-packs/$id` (spec 13 §11.4, T3a): every section as text (sign-in address in full, the check, the terms clause with its date and address as text and never a link, guards with methods and types, guarded controls, checks, pacing with its vendor label and source, strategies as data), provenance and SHA-256, settings (Follow updates, Enabled, Revert… behind a confirmation), versions, a local file waiting for approval, history, 404; axe clean */
 import { describe, expect, it } from 'bun:test';
-import { packDetail, packDiff, packView, sha } from '../../../../test/fixtures/site-packs.ts';
+import {
+  packDetail,
+  packDiff,
+  packView,
+  sha,
+  strategiesResponse,
+} from '../../../../test/fixtures/site-packs.ts';
 import { expectNoA11yViolations } from '../../../../test/helpers/axe.ts';
 import {
   envelope,
@@ -18,7 +24,11 @@ function mount(routes: Record<string, FakeRoute>) {
   return renderPage({
     path: '/site-packs/$id',
     component: SitePackPage,
-    routes: { 'GET /site-packs/changes': envelope([]), ...routes },
+    routes: {
+      'GET /site-packs/changes': envelope([]),
+      'GET /site-packs/strategies': strategiesResponse(),
+      ...routes,
+    },
     url: '/site-packs/linkedin.com',
   });
 }
@@ -56,8 +66,10 @@ describe('SitePackPage', () => {
     // Pacing labelled vendor guidance with its source; strategies as data.
     expect(screen.getByText(/At most 100 per week/)).toBeDefined();
     expect(screen.getByText('(vendor guidance)')).toBeDefined();
-    expect(screen.getByText('min_ms = 800')).toBeDefined();
-    expect(screen.getByText(/applied from a later release/)).toBeDefined();
+    // Strategies as readable text: the title from the binary's table, the pack's value and the default.
+    const strategies = await screen.findByRole('list', { name: 'Human dwell time parameters' });
+    expect(within(strategies).getByText('800')).toBeDefined();
+    expect(within(strategies).getByText(/Default 2500 · Allowed 0–20000/)).toBeDefined();
     // Provenance, SHA-256, versions.
     expect(screen.getAllByText('Bundled with BrowserHive 0.3.0').length).toBeGreaterThan(0);
     expect(screen.getAllByText(`${sha('a').slice(0, 12)}…`, { exact: false }).length).toBe(2);

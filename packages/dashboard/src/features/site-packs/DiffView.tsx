@@ -1,13 +1,15 @@
-/** @module features/site-packs/DiffView — a field-level pack diff (spec 13 §10.6, §11.4): new domains first, then the changed fields with their old and new values as text (JSON, never markup; the first four, then Show all; a new pack starts folded), unclassified until T3b's classifier; `DiffLoader` fetches `GET /site-packs/{id}/diff` and shows loading, error and empty states */
+/** @module features/site-packs/DiffView — a field-level pack diff (spec 13 §10.6, §11.4): new domains first, then the classified changes (the candidate's chip and what it means, counts per class, fields that relax rules or can stop the site first and highlighted, each with its class) with their old and new values as text (JSON, never markup; the first four, then Show all; a new pack starts folded); `DiffLoader` fetches `GET /site-packs/{id}/diff` and shows loading, error and empty states */
 import type { SitePackDiffResponse } from '@browserhive/contracts/http';
 import { useState } from 'react';
-import { Chip } from '@/components/shared/Chip.tsx';
 import { ErrorState } from '@/components/shared/ErrorState.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { Skeleton } from '@/components/ui/skeleton.tsx';
 import { toAppError } from '@/lib/api/errors.ts';
 import { ICONS } from '@/lib/icons.ts';
+import { cn } from '@/lib/utils.ts';
 import { useSitePackDiff } from './api.ts';
+import { ClassificationChip } from './ClassificationChip.tsx';
+import { bySeverity, CLASSIFICATION_INFO, classCounts, countText } from './classification.ts';
 import { valueText } from './model.ts';
 
 /** One value cell. */
@@ -31,34 +33,87 @@ function Value({ label, value, tone }: { label: string; value: unknown; tone: 'o
 /** Changes shown before "Show all". */
 export const DIFF_PREVIEW = 4;
 
-/** The changes of a diff. A new pack (nothing approved yet) starts folded: every field is new. */
+/** Highlight of a field that needs a careful look (loosening or restrictive); `''` otherwise. */
+const ROW_TONE: Readonly<Record<string, string>> = {
+  loosening: 'border-l-danger-solid bg-danger-bg/35',
+  restrictive: 'border-l-warn-solid bg-warn-bg/35',
+};
+
+/** The headline of a classified diff: the candidate's chip, what it means, and counts per class. */
+function DiffSummary({ diff }: { readonly diff: SitePackDiffResponse }) {
+  const info = CLASSIFICATION_INFO[diff.classification];
+  const counts = classCounts(diff.changes);
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <ClassificationChip classification={diff.classification} />
+        <span className="text-sm text-muted-foreground">
+          {diff.changes.length} {diff.changes.length === 1 ? 'field changes' : 'fields change'}
+          {counts.length > 1
+            ? `: ${counts.map((c) => countText(c.cls, c.count)).join(' · ')}`
+            : null}
+        </span>
+      </div>
+      {diff.classification !== 'unclassified' ? (
+        <p className="max-w-3xl text-sm text-pretty text-muted-foreground">{info.summary}</p>
+      ) : null}
+    </div>
+  );
+}
+
+/** One changed field: its path, its class, before and after as text. */
+function ChangeItem({ change }: { readonly change: SitePackDiffResponse['changes'][number] }) {
+  const tone = change.class === null ? undefined : ROW_TONE[change.class];
+  return (
+    <li
+      data-class={change.class ?? 'none'}
+      className={cn(
+        'flex min-w-0 flex-col gap-2 border-l-[3px] border-l-transparent px-3 py-2.5',
+        tone,
+      )}
+    >
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <span className="min-w-0 font-mono text-sm font-medium [overflow-wrap:anywhere]">
+          {change.path}
+        </span>
+        {change.class !== null ? <ClassificationChip classification={change.class} /> : null}
+      </div>
+      <div className="grid min-w-0 gap-2 sm:grid-cols-2">
+        <Value label="Before" value={change.from} tone="old" />
+        <Value label="After" value={change.to} tone="new" />
+      </div>
+    </li>
+  );
+}
+
+/**
+ * The changes of a diff, classified (spec 13 §9.7): fields that relax rules or can stop the site
+ * come first and are highlighted. A new pack (nothing approved yet) starts folded: every field is
+ * new.
+ */
 export function DiffView({ diff }: { readonly diff: SitePackDiffResponse }) {
   const [open, setOpen] = useState(false);
   const fresh = diff.from === null;
   const limit = fresh ? 0 : DIFF_PREVIEW;
-  const shown = open ? diff.changes : diff.changes.slice(0, limit);
-  const hidden = diff.changes.length - shown.length;
+  const ordered = fresh ? diff.changes : bySeverity(diff.changes);
+  const shown = open ? ordered : ordered.slice(0, limit);
+  const hidden = ordered.length - shown.length;
   return (
     <div className="flex min-w-0 flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-        <span>
-          {fresh
-            ? `A new pack: all ${diff.changes.length} fields are new`
-            : `${diff.changes.length} ${diff.changes.length === 1 ? 'field changes' : 'fields change'}`}
-        </span>
-        {fresh ? null : diff.classification === 'unclassified' ? (
-          <Chip tone="neutral">Unclassified</Chip>
-        ) : (
-          <Chip tone="info">{diff.classification.replaceAll('_', ' ')}</Chip>
-        )}
-      </div>
+      {fresh ? (
+        <p className="text-sm text-muted-foreground">
+          A new pack: all {diff.changes.length} fields are new
+        </p>
+      ) : (
+        <DiffSummary diff={diff} />
+      )}
       {fresh && diff.new_domains.length > 0 ? (
         <p className="text-sm text-muted-foreground">
           Covers <span className="font-mono text-foreground">{diff.new_domains.join(', ')}</span>
         </p>
       ) : null}
       {!fresh && diff.new_domains.length > 0 ? (
-        <p className="rounded-lg bg-warn-bg px-3 py-2 text-sm text-warn-text">
+        <p className="rounded-lg border-l-[3px] border-l-warn-solid bg-warn-bg px-3 py-2 text-sm text-warn-text">
           <span className="font-medium">New domains:</span>{' '}
           <span className="font-mono">{diff.new_domains.join(', ')}</span>. The pack’s guards and
           checks will cover them too.
@@ -67,21 +122,16 @@ export function DiffView({ diff }: { readonly diff: SitePackDiffResponse }) {
       {diff.changes.length === 0 ? (
         <p className="text-sm text-muted-foreground">The content is the same.</p>
       ) : shown.length === 0 ? null : (
-        <ol className="flex min-w-0 flex-col divide-y rounded-lg border">
+        <ol
+          aria-label="Changed fields"
+          className="flex min-w-0 flex-col divide-y overflow-hidden rounded-lg border"
+        >
           {shown.map((change) => (
-            <li key={change.path} className="flex min-w-0 flex-col gap-2 px-3 py-2.5">
-              <span className="font-mono text-sm font-medium [overflow-wrap:anywhere]">
-                {change.path}
-              </span>
-              <div className="grid min-w-0 gap-2 sm:grid-cols-2">
-                <Value label="Before" value={change.from} tone="old" />
-                <Value label="After" value={change.to} tone="new" />
-              </div>
-            </li>
+            <ChangeItem key={change.path} change={change} />
           ))}
         </ol>
       )}
-      {hidden > 0 || (open && diff.changes.length > limit) ? (
+      {hidden > 0 || (open && ordered.length > limit) ? (
         <div>
           <Button
             type="button"

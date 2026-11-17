@@ -5,6 +5,8 @@ import type {
   SitePackRegistryStatus,
   SitePacksResponse,
   SitePackView,
+  SiteStrategiesResponse,
+  SiteStrategyParam,
   TemplateSitePack,
 } from '@browserhive/contracts/http';
 import type { SitePackV1Input } from '@browserhive/contracts/site-packs';
@@ -206,9 +208,9 @@ export function packDiff(patch: Partial<SitePackDiffResponse> = {}): SitePackDif
   return {
     from: { version: 3, sha256: sha('a'), source: 'bundled' },
     to: { version: 4, sha256: sha('c'), source: 'bundled' },
-    classification: 'unclassified',
+    classification: 'tightening',
     new_domains: [],
-    changes: [{ path: 'guards[logout].action', from: 'confirm', to: 'block', class: null }],
+    changes: [{ path: 'guards[logout].action', from: 'confirm', to: 'block', class: 'tightening' }],
     ...patch,
   };
 }
@@ -239,5 +241,79 @@ export function templateSitePack(patch: Partial<TemplateSitePack> = {}): Templat
     challenges: 4,
     enabled: true,
     ...patch,
+  };
+}
+
+/** A slice of `GET /site-packs/strategies` (the shapes the binary's table produces). */
+export function strategiesResponse(): SiteStrategiesResponse {
+  const param = (p: Partial<SiteStrategyParam> & Pick<SiteStrategyParam, 'name' | 'type'>) => ({
+    default: null,
+    default_from: null,
+    fallback: null,
+    min: null,
+    max: null,
+    values: null,
+    safe_direction: 'up' as const,
+    safe_value: null,
+    ...p,
+  });
+  return {
+    data: [
+      {
+        id: 'human-dwell',
+        title: 'Human dwell time',
+        description:
+          "Before an action on the site's pages, the session waits until a random dwell since its previous action on the site has passed.",
+        kind: 'behaviour',
+        hooks: ['before_action'],
+        params: [
+          param({ name: 'min_ms', type: 'integer', default: 600, min: 0, max: 10_000 }),
+          param({ name: 'max_ms', type: 'integer', default: 2500, min: 0, max: 20_000 }),
+        ],
+      },
+      {
+        id: 'launch-spacing',
+        title: 'Space launches',
+        description: 'Spaces consecutive sessions of the template on this site.',
+        kind: 'behaviour',
+        hooks: ['admit'],
+        params: [
+          param({
+            name: 'min_gap_s',
+            type: 'integer',
+            default_from: 'pacing.min_launch_gap_s',
+            fallback: 0,
+            min: 0,
+            max: 3600,
+          }),
+          param({ name: 'jitter_pct', type: 'integer', default: 20, min: 0, max: 50 }),
+        ],
+      },
+      {
+        id: 'webrtc-policy',
+        title: 'WebRTC address policy',
+        description: 'Limits which network addresses WebRTC exposes.',
+        kind: 'stealth',
+        hooks: ['host_flags'],
+        params: [
+          param({
+            name: 'policy',
+            type: 'enum',
+            default: 'default_public_interface_only',
+            values: ['default_public_interface_only', 'disable_non_proxied_udp'],
+            safe_direction: 'toward',
+            safe_value: 'disable_non_proxied_udp',
+          }),
+        ],
+      },
+      {
+        id: 'single-focus',
+        title: 'One focused tab',
+        description: "Only the site's page acted on last keeps focus.",
+        kind: 'stealth',
+        hooks: ['page_focus'],
+        params: [],
+      },
+    ],
   };
 }

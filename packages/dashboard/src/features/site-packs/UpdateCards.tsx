@@ -1,15 +1,18 @@
-/** @module features/site-packs/UpdateCards — a pending version of a followed pack in Updates available (spec 13 §10.6, §11.4): from → to, provenance, release and notes, the field-level diff unclassified, **Apply** behind a confirmation, **Reject**, **Pin**. A local file waiting for approval is `LocalApprovalCard` */
+/** @module features/site-packs/UpdateCards — a pending version of a followed pack in Updates available (spec 13 §10.6, §11.4): from → to, its classification chip (a revocation's fallback marked Revoked), provenance, release and notes, the classified field-level diff, **Apply** behind a confirmation whose copy follows the classification (a below-floor refusal explained in place, `FloorRefusal`), **Reject**, **Pin**. A local file waiting for approval is `LocalApprovalCard` */
 import type { SitePackPending, SitePackView } from '@browserhive/contracts/http';
 import { useId } from 'react';
 import { useConfirm } from '@/app/providers/ConfirmProvider.tsx';
 import { useToast } from '@/app/providers/ToastProvider.tsx';
 import { Chip } from '@/components/shared/Chip.tsx';
 import { Button } from '@/components/ui/button.tsx';
+import { toAppError } from '@/lib/api/errors.ts';
 import { formatBytes } from '@/lib/format/bytes.ts';
 import { ICONS } from '@/lib/icons.ts';
 import { useSitePackActions } from './api.ts';
+import { ClassificationChip } from './ClassificationChip.tsx';
 import { applyConfirm } from './confirm-copy.ts';
 import { DiffLoader } from './DiffView.tsx';
+import { FloorRefusal, floorRefusalOf } from './FloorRefusal.tsx';
 import { iso, provenanceText } from './model.ts';
 import { ShaText } from './PackBits.tsx';
 import { UpdateFrame } from './UpdateFrame.tsx';
@@ -27,9 +30,14 @@ export function PendingUpdateCard({
   const confirm = useConfirm();
   const toast = useToast();
   const from = pack.approved?.version ?? null;
+  const classification = pending.classification ?? 'unclassified';
+  const revoked = classification === 'revoked';
+  const refusal = floorRefusalOf(
+    actions.apply.error === null ? null : toAppError(actions.apply.error),
+  );
   const busy = actions.apply.isPending || actions.reject.isPending || actions.pin.isPending;
   const onApply = async () => {
-    if (!(await confirm(applyConfirm(pack, pending.version)))) return;
+    if (!(await confirm(applyConfirm(pack, pending.version, classification)))) return;
     actions.apply.mutate(pending.version, {
       onSuccess: () => toast.success({ title: `${iso(pack.title)} v${pending.version} applied` }),
     });
@@ -39,9 +47,20 @@ export function PendingUpdateCard({
       pack={pack}
       headingId={headingId}
       heading={from === null ? `v${pending.version}` : `v${from} → v${pending.version}`}
-      badge={<Chip tone="accent">Update</Chip>}
+      badge={
+        <span className="flex flex-wrap items-center gap-1.5">
+          {revoked ? null : <Chip tone="accent">Update</Chip>}
+          <ClassificationChip classification={classification} />
+        </span>
+      }
       facts={
         <>
+          {revoked ? (
+            <span className="text-foreground text-pretty">
+              The publisher revoked v{from ?? '?'}, the version in force. It keeps applying until
+              you apply this earlier version or reject it.
+            </span>
+          ) : null}
           <bdi>{provenanceText(pending.provenance, pending.source)}</bdi>
           {pending.released !== null || pending.size !== null ? (
             <span>
@@ -59,7 +78,12 @@ export function PendingUpdateCard({
           {pending.sha256 !== null ? <ShaText sha256={pending.sha256} /> : null}
         </>
       }
-      diff={<DiffLoader packId={pack.pack_id} to={pending.version} />}
+      diff={
+        <>
+          {refusal !== null ? <FloorRefusal refusal={refusal} title={pack.title} /> : null}
+          <DiffLoader packId={pack.pack_id} to={pending.version} />
+        </>
+      }
       actions={
         <>
           {from !== null ? (

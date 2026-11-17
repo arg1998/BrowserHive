@@ -1,6 +1,7 @@
 /** @module features/site-packs/confirm-copy — confirmation copy of the pack actions (spec 13 §11.4 Confirmations, spec 04 §11): applying a version, approving a local file (naming its SHA-256), reverting, turning a pack off (review S-M2), adding a pack to an existing site. Pack strings are bidi-isolated (`iso`) */
-import type { SitePackView } from '@browserhive/contracts/http';
+import type { SitePackClassification, SitePackView } from '@browserhive/contracts/http';
 import type { ConfirmOptions } from '@/components/shared/ConfirmDialog.tsx';
+import { needsCare } from './classification.ts';
 import { iso } from './model.ts';
 
 /** The templates line of a confirmation. */
@@ -10,17 +11,35 @@ function usedByText(pack: SitePackView): string {
   return `${n} ${n === 1 ? 'template uses' : 'templates use'} it and ${n === 1 ? 'follows' : 'follow'} the change at once.`;
 }
 
-/** Apply a pending version. */
-export function applyConfirm(pack: SitePackView, version: number): ConfirmOptions {
+/** What applying a version of each classification means, in one sentence (spec 13 §9.7). */
+const APPLY_CLASS_TEXT: { readonly [K in SitePackClassification]: string } = {
+  loosening:
+    'This version relaxes rules: check every highlighted field, it removes or weakens protections.',
+  restrictive:
+    'This version can stop agents from using the site: check every highlighted field before applying it.',
+  tightening: 'This version only tightens rules.',
+  neutral: 'This version changes no rule.',
+  new_pack: 'Every rule of this pack is new.',
+  local_override: 'This content replaces the published version.',
+  revoked:
+    'The publisher revoked the version in force; this earlier version relaxes rules or can stop the site.',
+  unclassified: 'Review the changes first: they are not classified.',
+};
+
+/** Apply a pending version; a version that relaxes rules or can stop the site asks with care. */
+export function applyConfirm(
+  pack: SitePackView,
+  version: number,
+  classification: SitePackClassification = 'unclassified',
+): ConfirmOptions {
   const from = pack.approved?.version;
   return {
     title: `Apply ${iso(pack.title)} v${version}?`,
     description:
-      `${usedByText(pack)} ` +
-      (from === undefined
-        ? 'Review the changes first: they are not classified yet.'
-        : `v${from} is kept, so Revert restores it in one step. Review the changes first: they are not classified yet.`),
+      `${APPLY_CLASS_TEXT[classification]} ${usedByText(pack)}` +
+      (from === undefined ? '' : ` v${from} is kept, so Revert restores it in one step.`),
     confirmLabel: `Apply v${version}`,
+    danger: needsCare(classification),
   };
 }
 

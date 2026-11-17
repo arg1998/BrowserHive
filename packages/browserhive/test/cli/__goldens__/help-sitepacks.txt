@@ -27,8 +27,10 @@ without one unless --yes. list --pending exits 2 when an update or a local file 
 COMMANDS
   list                     List site packs with their approved version, local file and pending
                            updates
-  show <pack>              Show a pack: approval and provenance, local file, pending versions, rules
-  diff <pack>              Show the field changes between the approved version and a candidate
+  show <pack>              Show a pack: approval, local file, classified pending versions, rules,
+                           strategies
+  diff <pack>              Show the classified field changes from the approved version to a
+                           candidate
   apply <pack> [version]   Approve a pending version: every template using the pack follows it
   reject <pack> [version]  Dismiss a pending version (a newer one appears again)
   revert <pack>            Go back to the previous approved version
