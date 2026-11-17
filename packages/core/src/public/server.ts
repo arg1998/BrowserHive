@@ -55,6 +55,7 @@ export { SiteToolGate } from '../app/site-packs/tool-gate.ts';
 export { ToolGuardHits } from '../app/site-packs/tool-guard-hits.ts';
 export { HostFlagsWatch } from '../app/site-packs/webrtc-host-flags.ts';
 export { TemplateWritePolicies } from '../app/site-packs/write-policies.ts';
+export { watchClipboardOnStart } from '../app/templates/clipboard-switch.ts';
 export { unavailableHealthFacade } from '../app/templates/health-facade.ts';
 export {
   type TemplateHealthParts,
