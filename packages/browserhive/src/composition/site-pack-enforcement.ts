@@ -93,6 +93,17 @@ export function buildSitePackEnforcement(
     bus: input.bus,
     logger: input.logger,
   });
+  // `pace-writes` with `ramp-up` (spec 13 §9.4; T3b WP-N).
+  const pacer = new WritePacer({
+    describe: catalog.describe,
+    lookup,
+    templates: repos.templates,
+    sites: repos.templateSites,
+    clock: input.clock,
+    random: Math.random,
+    bus: input.bus,
+    logger: input.logger,
+  });
   input.driver.setTemplateRequestGuard(
     templateRequestGuard({
       lookup,
@@ -100,16 +111,7 @@ export function buildSitePackEnforcement(
       catalog,
       hits,
       confirmer: intercepts.confirmer,
-      // `pace-writes` with `ramp-up` (spec 13 §9.4; T3b WP-N).
-      pacer: new WritePacer({
-        describe: catalog.describe,
-        lookup,
-        templates: repos.templates,
-        sites: repos.templateSites,
-        clock: input.clock,
-        random: Math.random,
-        logger: input.logger,
-      }),
+      pacer,
       clock: input.clock,
       logger: input.logger,
       urlQueryAllowlist: config.urlQueryAllowlist,
@@ -124,6 +126,7 @@ export function buildSitePackEnforcement(
       input.driver.setTemplateRequestGuard(null);
       intercepts.stop();
       policies.stop();
+      pacer.stop();
     },
   };
 }

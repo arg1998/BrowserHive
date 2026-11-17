@@ -1,4 +1,4 @@
-/** @module app/site-packs/pacer — `pace-writes` with `ramp-up` (spec 13 §9.4, lead decision 5): one token bucket per (template, pack, pace rule), refilled continuously at `limit × ramp factor` per period, shared by every session of the template. A guarded write of kind `write` whose pack selects `pace-writes` and has pace rules naming its guard is held for its token (≤ 60 s, plus 0–20 % jitter) or refused. In memory: a restart refills every bucket. */
+/** @module app/site-packs/pacer — `pace-writes` with `ramp-up` (spec 13 §9.4, lead decision 5): one token bucket per (template, pack, pace rule), refilled continuously at `limit × ramp factor` per period, shared by every session of the template. A guarded write of kind `write` whose pack selects `pace-writes` and has pace rules naming its guard is held for its token (≤ 60 s, plus 0–20 % jitter) or refused. In memory: a restart refills every bucket, and a deleted template's buckets go (`template.removed`). */
 
 import type { PackPaceRule } from '@browserhive/contracts/site-packs';
 import {
@@ -13,11 +13,13 @@ import { rampedLimit, rampFactor, strategyOf } from '../../domain/site-packs/str
 import { assertNever } from '../../kernel/errors/app-error.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { Clock } from '../../ports/clock.ts';
+import type { EventBus } from '../../ports/event-bus.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type { TemplateRepository, TemplateSiteRepository } from '../../ports/persistence/index.ts';
 import type { GuardRuleDescriber } from '../../ports/site-guards.ts';
 import type { SitePackLookup } from '../../ports/site-packs.ts';
 import type { WritePaceRequest, WritePaceVerdict, WritePacing } from '../../ports/write-pacing.ts';
+import type { DomainEvents } from '../events/catalog.ts';
 import { templateStrategies } from './strategy-scope.ts';
 
 /** Collaborators of {@link WritePacer}. */
@@ -31,6 +33,8 @@ export interface WritePacerDeps {
   readonly clock: Clock;
   /** Uniform in `[0, 1)` (the hold's jitter). */
   readonly random: () => number;
+  /** `template.removed`: a deleted template's buckets go. */
+  readonly bus: Pick<EventBus<DomainEvents>, 'subscribe'>;
   readonly logger: Logger;
 }
 
@@ -41,10 +45,22 @@ export class WritePacer implements WritePacing {
   readonly #deps: WritePacerDeps;
   readonly #log: Logger;
   readonly #buckets = new Map<string, PaceBucket>();
+  readonly #off: () => void;
 
   constructor(deps: WritePacerDeps) {
     this.#deps = deps;
     this.#log = deps.logger.child({ module: 'site-packs.pacer' });
+    this.#off = deps.bus.subscribe('template.removed', ({ payload }) => {
+      const prefix = `${payload.template_id}\u0000`;
+      for (const key of [...this.#buckets.keys()]) {
+        if (key.startsWith(prefix)) this.#buckets.delete(key);
+      }
+    });
+  }
+
+  /** Unsubscribes from the bus. */
+  stop(): void {
+    this.#off();
   }
 
   async pace(request: WritePaceRequest): Promise<WritePaceVerdict> {
