@@ -1,7 +1,8 @@
 /** @module features/site-packs/UpdatesSection — "Updates available" on top of `/site-packs` (spec 13 §10.6, §11.4): one card per pending version of a followed, unpinned pack and per local file that needs approval, from the unfiltered catalog so filters never hide a decision */
 import type { SitePackView } from '@browserhive/contracts/http';
 import { Section } from '@/components/shared/Section.tsx';
-import { LocalApprovalCard, PendingUpdateCard } from './UpdateCards.tsx';
+import { LocalApprovalCard } from './LocalApprovalCard.tsx';
+import { PendingUpdateCard } from './UpdateCards.tsx';
 
 /** The decisions waiting, in pack order. */
 export function pendingDecisions(packs: readonly SitePackView[]): readonly {

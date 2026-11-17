@@ -1,194 +1,36 @@
 /** @module features/attention/HistoryTable — settled requests: FilterBar (search, Mode and Outcome chips with API facet counts, session token, time range) + DataTable whose rows expand on click into the full decision record (reason, message, page, tool, resolution, options) (spec 04 §12.4) */
-import type { Facet, OperatorRequestRow } from '@browserhive/contracts/http';
+import type { OperatorRequestRow } from '@browserhive/contracts/http';
 import { useState } from 'react';
 import { DataPanel } from '@/components/shared/DataPanel.tsx';
 import { DataTable } from '@/components/shared/DataTable.tsx';
-import { isPlainClick, useHrefNavigate } from '@/components/shared/DataTableBody.tsx';
 import { EmptyState } from '@/components/shared/EmptyState.tsx';
 import { FilterBar } from '@/components/shared/FilterBar.tsx';
-import { JsonView } from '@/components/shared/JsonView.tsx';
-import { KeyValue } from '@/components/shared/KeyValue.tsx';
 import { RelativeTime } from '@/components/shared/RelativeTime.tsx';
 import { SkeletonTable } from '@/components/shared/Skeletons.tsx';
 import { StatusBadge } from '@/components/shared/StatusBadge.tsx';
 import { TimeRangeControl } from '@/components/shared/time-range-control.tsx';
-import { UrlCell } from '@/components/shared/url-cell.tsx';
 import { useCursorPager } from '@/components/shared/use-cursor-pages.ts';
 import type { DataTableColumn } from '@/components/shared/use-data-table.ts';
-import { buttonVariants } from '@/components/ui/button.tsx';
-import { formatAbsolute, formatDuration } from '@/lib/format/time.ts';
-import { ICONS } from '@/lib/icons.ts';
+import { formatDuration } from '@/lib/format/time.ts';
 import { useSearchState } from '@/lib/search/use-search-state.ts';
-import { cn } from '@/lib/utils.ts';
 import { useAttentionHistory } from './api.ts';
-import { interceptBadge, interceptOf } from './SecurityIntercept.tsx';
+import {
+  facetOptions,
+  HistoryCard,
+  interceptLabel,
+  MODE_LABEL,
+  RowDetail,
+  SessionLink,
+  STATUS_LABEL,
+} from './history-parts.tsx';
 import {
   ATTENTION_SORT_KEYS,
   type AttentionSearch,
   hasHistoryFilters,
   SETTLED_STATUSES,
 } from './search.ts';
-import { sessionHref } from './session-link.ts';
 
-/** "Site check" / "Write approval" for a site pack's request, else `null`. */
-function interceptLabel(row: OperatorRequestRow): string | null {
-  const options = interceptOf(row);
-  return options === null ? null : interceptBadge(options).label;
-}
-
-const MODE_LABEL: Record<string, string> = { takeover: 'Take over', notify: 'Notify' };
-const STATUS_LABEL: Record<string, string> = {
-  resolved: 'Resolved',
-  rejected: 'Rejected',
-  timeout: 'Timed out',
-  cancelled: 'Cancelled',
-};
-
-/**
- * Chip options for a facet dimension: every known value in `values` order, with the API count
- * (the server omits zero counts, so missing values read 0).
- */
-export function facetOptions(
-  facets: readonly Facet[] | undefined,
-  values: readonly string[],
-): Facet[] {
-  return values.map((value) => ({
-    value,
-    count: facets?.find((f) => f.value === value)?.count ?? 0,
-  }));
-}
-
-/** Expanded row: the full decision record. */
-function RowDetail({ row }: { readonly row: OperatorRequestRow }) {
-  const go = useHrefNavigate();
-  const href = sessionHref(row.session_id);
-  const Arrow = ICONS.arrowRight;
-  const hasOptions =
-    row.options !== null &&
-    row.options !== undefined &&
-    (typeof row.options !== 'object' || Object.keys(row.options).length > 0);
-  return (
-    <div className="flex flex-col gap-4 py-2 text-base">
-      <p className="font-medium text-pretty break-words">{row.reason}</p>
-      <KeyValue
-        columns={2}
-        items={[
-          {
-            key: 'Message to agent',
-            value: row.message !== null && row.message !== '' ? row.message : '—',
-          },
-          { key: 'Resolution', value: row.resolution_reason ?? '—' },
-          { key: 'Page', value: <UrlCell url={row.page_url} head={40} tail={20} /> },
-          { key: 'Tool', value: row.tool ?? '—', mono: true },
-          { key: 'Requested', value: formatAbsolute(row.created_at) },
-          {
-            key: 'Settled',
-            value:
-              row.resolved_at === null
-                ? '—'
-                : `${formatAbsolute(row.resolved_at)}${row.resolved_by !== null ? ` by ${row.resolved_by}` : ''}`,
-          },
-        ]}
-      />
-      {hasOptions ? (
-        <div className="flex flex-col gap-1.5">
-          <span className="section-label">Options from the agent</span>
-          <JsonView value={row.options} />
-        </div>
-      ) : null}
-      <div>
-        <a
-          href={href}
-          className={buttonVariants({ variant: 'outline', size: 'sm' })}
-          onClick={(event) => {
-            if (!isPlainClick(event)) return;
-            event.preventDefault();
-            go(href);
-          }}
-        >
-          Open session
-          <Arrow aria-hidden="true" />
-        </a>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Phone card: outcome and mode, the reason over three lines, then session · waited ·
- * requested. Tapping the card expands the full decision record in place.
- */
-function HistoryCard({
-  row,
-  expanded,
-}: {
-  readonly row: OperatorRequestRow;
-  readonly expanded: boolean;
-}) {
-  const Chevron = ICONS.chevronDown;
-  return (
-    <div className="flex min-w-0 flex-col gap-1.5">
-      <div className="flex min-w-0 items-center justify-between gap-3">
-        <span className="flex min-w-0 items-center gap-2 text-sm">
-          <StatusBadge domain="request" value={row.status} />
-          {row.mode !== null ? (
-            <>
-              <span aria-hidden="true" className="text-muted-foreground">
-                ·
-              </span>
-              <span className="text-muted-foreground">{MODE_LABEL[row.mode] ?? row.mode}</span>
-            </>
-          ) : null}
-        </span>
-        <Chevron
-          aria-hidden="true"
-          className={cn(
-            'size-4 shrink-0 text-muted-foreground transition-transform duration-(--duration-fast)',
-            expanded && 'rotate-180',
-          )}
-        />
-      </div>
-      {expanded ? (
-        <RowDetail row={row} />
-      ) : (
-        <>
-          <p className="line-clamp-3 break-words">{row.reason}</p>
-          {row.message !== null && row.message !== '' ? (
-            <p className="truncate text-sm text-muted-foreground">“{row.message}”</p>
-          ) : null}
-          <p className="flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground">
-            <span className="min-w-0 truncate">{row.session_slug}</span>
-            <span aria-hidden="true">·</span>
-            <span className="shrink-0 tabular-nums">
-              waited {formatDuration(row.waited_ms ?? 0)}
-            </span>
-            <span aria-hidden="true">·</span>
-            <RelativeTime at={row.created_at} className="shrink-0" />
-          </p>
-        </>
-      )}
-    </div>
-  );
-}
-
-/** A session link inside an expandable row (a real link; clicks never toggle the row). */
-function SessionLink({ id, slug }: { readonly id: string; readonly slug: string }) {
-  const go = useHrefNavigate();
-  const href = sessionHref(id);
-  return (
-    <a
-      href={href}
-      className="block truncate font-medium text-foreground decoration-muted-foreground/60 underline-offset-4 hover:underline"
-      onClick={(event) => {
-        if (!isPlainClick(event)) return;
-        event.preventDefault();
-        go(href);
-      }}
-    >
-      {slug}
-    </a>
-  );
-}
+export { facetOptions } from './history-parts.tsx';
 
 /** History table. */
 export function HistoryTable() {

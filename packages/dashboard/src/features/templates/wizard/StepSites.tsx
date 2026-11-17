@@ -4,24 +4,13 @@ import { type FormEvent, useId, useState } from 'react';
 import { Button } from '@/components/ui/button.tsx';
 import { Input } from '@/components/ui/input.tsx';
 import { useSitePackCatalog } from '@/features/site-packs/api.ts';
-import { approvalSentence, packChoice, packForHost } from '@/features/site-packs/model.ts';
+import { packChoice, packNote } from '@/features/site-packs/model.ts';
 import { ICONS } from '@/lib/icons.ts';
 import { Field } from '../fields.tsx';
 import { hostOf } from '../model.ts';
+import { ChosenSite } from './ChosenSite.tsx';
 import { addSite, removeSite, SITES_MAX, type TemplateDraft } from './draft.ts';
 import { SiteCatalog } from './SiteCatalog.tsx';
-
-/** The pack and the sentence to show for a host, when a pack with a version on offer owns it. */
-export function packNote(
-  packs: readonly SitePackView[],
-  host: string | null,
-): { readonly pack: SitePackView; readonly sha256: string; readonly text: string } | null {
-  if (host === null) return null;
-  const pack = packForHost(packs, host);
-  const choice = pack === null ? null : packChoice(pack);
-  if (pack === null || choice === null) return null;
-  return { pack, sha256: choice.sha256, text: approvalSentence(pack, choice) };
-}
 
 /** Step 2. */
 export function StepSites({
@@ -39,10 +28,7 @@ export function StepSites({
   const catalog = useSitePackCatalog();
   const packs = catalog.data?.status.enabled === true ? catalog.data.data : [];
   const typed = packNote(packs, hostOf(text));
-  const Globe = ICONS.globe;
-  const Package = ICONS.sitePacks;
   const Plus = ICONS.plus;
-  const X = ICONS.close;
   const add = (input: string, sha?: string) => {
     const result = addSite(draft, input, sha);
     setError(result.error);
@@ -110,40 +96,15 @@ export function StepSites({
           </p>
         ) : (
           <ul className="grid grid-cols-1 gap-2 @3xl:grid-cols-2">
-            {draft.sites.map((site) => {
-              const sha = draft.packs[site];
-              const note = sha === undefined ? null : packNote(packs, site);
-              const Icon = sha === undefined ? Globe : Package;
-              return (
-                <li
-                  key={site}
-                  className="flex min-w-0 items-start gap-3 rounded-lg border bg-surface-inset p-3"
-                >
-                  <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                    <Icon aria-hidden="true" className="size-4" />
-                  </span>
-                  <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate font-mono text-base">
-                      {note !== null ? `${note.pack.title} · ${site}` : site}
-                    </span>
-                    <span className="text-sm text-pretty text-muted-foreground [overflow-wrap:anywhere]">
-                      {sha === undefined
-                        ? 'BrowserHive learns its sign-in when you confirm it'
-                        : (note?.text ?? `Adds its site pack (SHA-256 ${sha.slice(0, 12)}…)`)}
-                    </span>
-                  </span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={`Remove ${site}`}
-                    onClick={() => onDraft((d) => removeSite(d, site))}
-                  >
-                    <X aria-hidden="true" />
-                  </Button>
-                </li>
-              );
-            })}
+            {draft.sites.map((site) => (
+              <ChosenSite
+                key={site}
+                site={site}
+                sha256={draft.packs[site]}
+                packs={packs}
+                onRemove={() => onDraft((d) => removeSite(d, site))}
+              />
+            ))}
           </ul>
         )}
       </section>

@@ -3,13 +3,7 @@ import type { SitePackView } from '@browserhive/contracts/http';
 import { Chip } from '@/components/shared/Chip.tsx';
 import { RelativeTime } from '@/components/shared/RelativeTime.tsx';
 import type { DataTableColumn } from '@/components/shared/use-data-table.ts';
-import {
-  FOLLOW_LABEL,
-  provenanceText,
-  SKIP_REASON_TEXT,
-  shortPath,
-  shortProvenance,
-} from './model.ts';
+import { FOLLOW_LABEL, provenanceText, shortPath, shortProvenance, skippedText } from './model.ts';
 import { LocalOverrideBadge, LocalStatePill, ShaText } from './PackBits.tsx';
 import { EnabledSwitch, FollowToggle, PackMenu } from './PackControls.tsx';
 
@@ -19,7 +13,7 @@ export function PackTitleCell({ pack }: { readonly pack: SitePackView }) {
     <span className="flex min-w-0 flex-col gap-1">
       <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
         <span className="truncate text-base leading-5 font-medium text-foreground decoration-muted-foreground/60 underline-offset-4 group-hover/row:underline">
-          {pack.title}
+          <bdi>{pack.title}</bdi>
         </span>
         {!pack.enabled ? <Chip tone="muted">Turned off</Chip> : null}
         {pack.local_override ? (
@@ -40,12 +34,11 @@ export function PackTitleCell({ pack }: { readonly pack: SitePackView }) {
         ) : null}
       </span>
       <span className="font-mono text-sm leading-5 text-muted-foreground [overflow-wrap:anywhere]">
-        {pack.domains.join(', ')}
+        <bdi>{pack.domains.join(', ')}</bdi>
       </span>
       {pack.skipped !== undefined ? (
         <span className="text-sm text-warn-text text-pretty">
-          {pack.skipped.version === null ? 'A version' : `v${pack.skipped.version}`} skipped:{' '}
-          {SKIP_REASON_TEXT[pack.skipped.reason]}
+          <bdi>{skippedText(pack.skipped)}</bdi>
         </span>
       ) : null}
     </span>

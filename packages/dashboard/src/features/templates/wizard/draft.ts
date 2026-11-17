@@ -194,8 +194,15 @@ export function removeSite(draft: TemplateDraft, site: string): TemplateDraft {
   return { ...draft, sites: draft.sites.filter((s) => s !== site), packs };
 }
 
-/** The `POST /templates` body. */
-export function toTemplateInput(draft: TemplateDraft): TemplateInput {
+/**
+ * The `POST /templates` body. `catalogShas`: site → the SHA-256 the catalog offers for it now; a site
+ * added before the catalog loaded (or restored from an older draft) still sends the version its
+ * card shows (review S-M4). A hash chosen when the site was added wins.
+ */
+export function toTemplateInput(
+  draft: TemplateDraft,
+  catalogShas: Readonly<Record<string, string>> = {},
+): TemplateInput {
   const trim = (s: string) => s.trim();
   const proxy = draft.proxy;
   const unsealOn = UNSEAL_FLAGS.some((f) => draft.unseal[f]);
@@ -204,7 +211,7 @@ export function toTemplateInput(draft: TemplateDraft): TemplateInput {
     ...(trim(draft.displayName).length > 0 && { display_name: trim(draft.displayName) }),
     ...(draft.description.trim().length > 0 && { description: draft.description.trim() }),
     sites: draft.sites.map((site_id) => {
-      const sha = draft.packs[site_id];
+      const sha = draft.packs[site_id] ?? catalogShas[site_id];
       return sha === undefined ? { site_id } : { site_id, pack_sha256: sha };
     }),
     ...(draft.channel !== null && { channel: draft.channel }),

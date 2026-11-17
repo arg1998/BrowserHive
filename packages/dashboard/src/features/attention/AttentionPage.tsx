@@ -62,7 +62,7 @@ export function AttentionPage() {
             <TonePill entry={{ label: `${formatNumber(openCount)} open`, tone: 'warn' }} pulse />
           ) : undefined
         }
-        description="Agents that called request_attention wait here, their lease frozen, until you decide."
+        description="Agents that asked for help, and the site checks and write approvals of site packs, wait here until you decide."
         learnMore={<ModeExplainer mode={null} />}
         learnMoreDocs="attention"
         actions={<SoundToggle enabled={sound} onChange={setSound} />}

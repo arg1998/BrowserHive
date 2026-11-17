@@ -1,4 +1,4 @@
-/** @module features/attention/SecurityIntercept — `security_intercept` requests on `/attention` (spec 13 §9.3, §9.5, §11.4 UI vocabulary): "Site check" (a challenge) or "Write approval" (a write a site pack holds), their facts as plain text (site, guard and its kind, the challenge, method and sanitized URL, the tool), never as markup or a link; options are parsed with `SecurityInterceptOptions`, never cast */
+/** @module features/attention/SecurityIntercept — `security_intercept` requests on `/attention` (spec 13 §9.3, §9.5, §11.4 UI vocabulary): "Site check" (a challenge) or "Write approval" (a write a site pack holds), their facts as plain text (site, guard and its kind, the challenge, method and sanitized URL, the tool), never as markup or a link, each pack-derived string bidi-isolated (`<bdi>`, review S-H4); options are parsed with `SecurityInterceptOptions`, never cast */
 import { type OperatorRequestRow, SecurityInterceptOptions } from '@browserhive/contracts/http';
 import type { StatusEntry } from '@/lib/status-registry.ts';
 
@@ -70,16 +70,19 @@ export function InterceptFacts({
     <>
       <dt className="text-muted-foreground">Site</dt>
       <dd className="min-w-0 [overflow-wrap:anywhere]">
-        {options.site_title}
+        <bdi>{options.site_title}</bdi>
         {options.site_title !== options.site ? (
-          <span className="text-muted-foreground"> · {options.site}</span>
+          <span className="text-muted-foreground">
+            {' '}
+            · <bdi>{options.site}</bdi>
+          </span>
         ) : null}
       </dd>
       {options.guard !== undefined ? (
         <>
           <dt className="text-muted-foreground">Guard</dt>
           <dd className="min-w-0 [overflow-wrap:anywhere]">
-            <span className="font-mono text-sm">{options.guard.id}</span>
+            <bdi className="font-mono text-sm">{options.guard.id}</bdi>
             <span className="text-muted-foreground"> · {GUARD_KIND[options.guard.kind]}</span>
           </dd>
         </>
@@ -102,14 +105,16 @@ export function InterceptFacts({
             {options.method !== undefined ? (
               <span className="font-semibold">{options.method} </span>
             ) : null}
-            {options.url}
+            <bdi>{options.url}</bdi>
           </dd>
         </>
       ) : null}
       {options.tool !== undefined ? (
         <>
           <dt className="text-muted-foreground">Tool</dt>
-          <dd className="min-w-0 font-mono text-sm">{options.tool}</dd>
+          <dd className="min-w-0 font-mono text-sm">
+            <bdi>{options.tool}</bdi>
+          </dd>
         </>
       ) : null}
     </>

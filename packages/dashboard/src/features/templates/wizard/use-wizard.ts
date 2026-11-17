@@ -1,6 +1,8 @@
-/** @module features/templates/wizard/use-wizard — the wizard's state (spec 13 §7.1): the step from the URL (`?step=`, `?template=`, `?again=`), the per-device draft, per-step problems shown once Next was tried plus the server's field issues, focus on the step heading (on Next for steps 3 and 4), deep links past an unfinished step (or to step 5 without a template) sent back, and creating the template on leaving step 4 */
+/** @module features/templates/wizard/use-wizard — the wizard's state (spec 13 §7.1): the step from the URL (`?step=`, `?template=`, `?again=`), the per-device draft, per-step problems shown once Next was tried plus the server's field issues, focus on the step heading (on Next for steps 3 and 4), deep links past an unfinished step (or to step 5 without a template) sent back, and creating the template on leaving step 4, once the site catalog has loaded, with the pack hash of every site a pack covers */
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSitePackCatalog } from '@/features/site-packs/api.ts';
+import { packNote } from '@/features/site-packs/model.ts';
 import { useSystem } from '@/features/system/api.ts';
 import { isAppError, toAppError } from '@/lib/api/errors.ts';
 import { useCreateTemplate } from '../api.ts';
@@ -45,6 +47,11 @@ export function useWizard() {
   const navigate = useNavigate();
   const system = useSystem();
   const create = useCreateTemplate();
+  const catalog = useSitePackCatalog();
+  // Create waits for the catalog: every site a pack covers is sent with the hash its card shows
+  // (review S-M4; the server refuses a pack site without one).
+  const catalogLoading = catalog.isPending;
+  const catalogPacks = catalog.data?.status.enabled === true ? catalog.data.data : [];
   const authToken = system.data?.auth_mode === 'token';
   const templateId = search.template;
   const step = stepOf(search);
@@ -102,8 +109,15 @@ export function useWizard() {
 
   const submit = async () => {
     setFailure(null);
+    if (catalogLoading) return;
+    const catalogShas = Object.fromEntries(
+      draft.sites.flatMap((site) => {
+        const note = packNote(catalogPacks, site);
+        return note === null ? [] : [[site, note.sha256] as const];
+      }),
+    );
     try {
-      const { template } = await create.mutateAsync(toTemplateInput(draft));
+      const { template } = await create.mutateAsync(toTemplateInput(draft, catalogShas));
       // The saved draft goes; the URL now names the template, so the earlier steps no longer show.
       clearDraft();
       goTo(5, { template: template.template_id }, true);
@@ -158,6 +172,7 @@ export function useWizard() {
     errors,
     failure,
     creating: create.isPending,
+    catalogLoading,
     system: system.data,
     headingRef,
     nextRef,

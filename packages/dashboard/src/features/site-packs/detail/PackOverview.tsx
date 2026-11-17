@@ -8,7 +8,7 @@ import { Panel } from '@/components/shared/Section.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { ICONS } from '@/lib/icons.ts';
 import { useSitePackActions } from '../api.ts';
-import { provenanceText, SKIP_REASON_TEXT, SOURCE_LABEL } from '../model.ts';
+import { iso, provenanceText, SOURCE_LABEL, skippedText } from '../model.ts';
 import { LocalOverrideBadge, LocalStatePill, ShaText } from '../PackBits.tsx';
 import { EnabledSwitch, FollowToggle, RevertButton } from '../PackControls.tsx';
 
@@ -37,12 +37,16 @@ function InForce({ view }: { readonly view: SitePackView }) {
             <span className="text-muted-foreground">
               Adding one of its sites to a template approves v{view.offer.version}:
             </span>
-            <span>{provenanceText(view.offer.provenance, view.offer.source)}</span>
+            <bdi>{provenanceText(view.offer.provenance, view.offer.source)}</bdi>
             <ShaText sha256={view.offer.sha256} />
           </>
         ) : (
           <span className="text-muted-foreground">
-            Nothing is on offer until its local file is approved.
+            {view.local !== null
+              ? 'Nothing is on offer until its local file is approved.'
+              : view.skipped !== undefined
+                ? 'Not in force: no version of it can apply.'
+                : 'Nothing is on offer.'}
           </span>
         )}
       </div>
@@ -55,9 +59,9 @@ function InForce({ view }: { readonly view: SitePackView }) {
         <Chip>{SOURCE_LABEL[approved.source]}</Chip>
         {view.local_override ? <LocalOverrideBadge version={approved.version} /> : null}
       </span>
-      <span className="[overflow-wrap:anywhere]">
+      <bdi className="[overflow-wrap:anywhere]">
         {provenanceText(approved.provenance, approved.source)}
-      </span>
+      </bdi>
       <ShaText sha256={approved.sha256} />
       {approved.at !== null ? (
         <span className="text-muted-foreground">
@@ -75,7 +79,7 @@ function InForce({ view }: { readonly view: SitePackView }) {
             disabled={actions.pin.isPending}
             onClick={() =>
               actions.pin.mutate(null, {
-                onSuccess: () => toast.success({ title: `${view.title} unpinned` }),
+                onSuccess: () => toast.success({ title: `${iso(view.title)} unpinned` }),
               })
             }
           >
@@ -100,7 +104,7 @@ export function PackOverview({ detail }: { readonly detail: SitePackDetailRespon
           {view.local !== null ? (
             <div className="flex flex-col gap-1.5 border-t pt-4 text-sm">
               <span className="font-medium">Local file</span>
-              <span className="font-mono text-xs [overflow-wrap:anywhere]">{view.local.path}</span>
+              <bdi className="font-mono text-xs [overflow-wrap:anywhere]">{view.local.path}</bdi>
               <LocalStatePill local={view.local} />
               {view.local.problem !== null ? (
                 <span className="text-warn-text text-pretty">{view.local.problem}</span>
@@ -109,8 +113,7 @@ export function PackOverview({ detail }: { readonly detail: SitePackDetailRespon
           ) : null}
           {view.skipped !== undefined ? (
             <p className="border-t pt-4 text-sm text-warn-text text-pretty">
-              {view.skipped.version === null ? 'A version' : `v${view.skipped.version}`} was
-              skipped: {SKIP_REASON_TEXT[view.skipped.reason]}.
+              <bdi>{skippedText(view.skipped)}</bdi>
             </p>
           ) : null}
         </div>

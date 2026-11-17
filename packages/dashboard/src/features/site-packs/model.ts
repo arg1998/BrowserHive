@@ -13,6 +13,19 @@ export type Stance = SitePackView['stance'];
 /** A write policy. */
 export type WritePolicy = SitePackView['write_policy_default'];
 
+/**
+ * A pack-derived string isolated for plain-text surfaces (toasts, dialog copy): wrapped in Unicode
+ * FIRST STRONG ISOLATE / POP DIRECTIONAL ISOLATE, so bidi controls inside it cannot reorder the text
+ * around it (review S-H4; markup uses `<bdi>`). `refinePack` refuses such controls too.
+ */
+export function iso(text: string): string {
+  return `\u2068${text}\u2069`;
+}
+
+/** What the UI says when a pack has no `write` guards (review S-H3): its write policy has nothing to act on. */
+export const NO_WRITE_GUARDS =
+  'This pack guards no writes yet, so its write policy has no effect: agents post and send without asking.';
+
 /** The first 12 hex digits, enough to tell versions apart at a glance. */
 export function shortSha(sha256: string): string {
   return sha256.slice(0, 12);
@@ -115,6 +128,18 @@ export const SKIP_REASON_TEXT: { readonly [K in SitePackSkipReason]: string } = 
   unreadable: 'The file couldn’t be read',
 };
 
+/**
+ * Why a version was skipped, in words; a domain overlap names the pack that owns the domain (the
+ * server's detail, review S-M1).
+ */
+export function skippedText(skipped: NonNullable<SitePackView['skipped']>): string {
+  const which = skipped.version === null ? 'A version' : `v${skipped.version}`;
+  const why = SKIP_REASON_TEXT[skipped.reason];
+  return skipped.reason === 'domain_overlap' && skipped.detail !== ''
+    ? `${which} was skipped: ${why} (${skipped.detail}).`
+    : `${which} was skipped: ${why}.`;
+}
+
 /** A follow setting in words. */
 export const FOLLOW_LABEL: { readonly [K in SitePackView['follow']['setting']]: string } = {
   auto: 'Auto',
@@ -183,7 +208,7 @@ export function packChoice(view: SitePackView): PackChoice | null {
 
 /** The sentence shown before a site is added with a pack (spec 13 §9.6 "First use"). */
 export function approvalSentence(view: SitePackView, choice: PackChoice): string {
-  const what = `${view.title} v${choice.version} (${choice.provenance}, SHA-256 ${shortSha(choice.sha256)}…)`;
+  const what = `${iso(view.title)} v${choice.version} (${iso(choice.provenance)}, SHA-256 ${shortSha(choice.sha256)}…)`;
   return choice.approved
     ? `Uses ${what}, already approved for another template.`
     : `Adding this site approves ${what}.`;
@@ -202,4 +227,16 @@ export function needsReview(view: SitePackView): boolean {
     (view.follow.effective && view.pinned_version === null && view.pending.length > 0) ||
     (view.local !== null && view.local.state !== 'approved' && view.local.problem === null)
   );
+}
+
+/** The pack and the sentence to show for a host, when a pack with a version on offer owns it. */
+export function packNote(
+  packs: readonly SitePackView[],
+  host: string | null,
+): { readonly pack: SitePackView; readonly sha256: string; readonly text: string } | null {
+  if (host === null) return null;
+  const pack = packForHost(packs, host);
+  const choice = pack === null ? null : packChoice(pack);
+  if (pack === null || choice === null) return null;
+  return { pack, sha256: choice.sha256, text: approvalSentence(pack, choice) };
 }

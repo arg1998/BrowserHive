@@ -5,6 +5,7 @@ import { envelope, renderPage } from '../../../test/helpers/page-harness.tsx';
 import { act, fireEvent, screen, waitFor, within } from '../../../test/helpers/render.tsx';
 import { AttentionPage } from './AttentionPage.tsx';
 import { requestRow } from './fixtures.ts';
+import { rejectCopy } from './LiveBoard.tsx';
 import { interceptOf } from './SecurityIntercept.tsx';
 import { attentionSearch } from './search.ts';
 
@@ -49,7 +50,7 @@ const MALFORMED = requestRow({
   options: { reason: 'something else' },
 });
 
-function setup() {
+function setup(extra: readonly Record<string, unknown>[] = []) {
   return renderPage({
     path: '/attention',
     component: AttentionPage,
@@ -60,13 +61,14 @@ function setup() {
       'GET /me/preferences': { preferences: {}, updated_at: null },
       'GET /attention': (req: { query: URLSearchParams }) =>
         req.query.get('status') === 'pending'
-          ? envelope([WRITE, CHECK, MALFORMED], { open_count: 3 })
+          ? envelope([WRITE, CHECK, MALFORMED, ...extra], { open_count: 3 + extra.length })
           : envelope([{ ...WRITE, status: 'resolved', request_id: 'a-HHHHHHHHHHHH' }], {
               open_count: 3,
               facets: { status: [], mode: [] },
             }),
       'GET /sessions/shop-ab12cd34/screenshots': envelope([]),
       'POST /attention/a-WWWWWWWWWWWW/resolve': { ok: true, status: 'resolved' },
+      'POST /attention/bulk': { results: [] },
     },
   });
 }
@@ -117,6 +119,41 @@ describe('security intercepts on /attention', () => {
     await waitFor(() =>
       expect(view.requests.some((r) => r.path.endsWith('/a-WWWWWWWWWWWW/resolve'))).toBe(true),
     );
+  });
+
+  it('Resolve all settles agent requests only: site checks and write approvals stay open (review S-H2)', async () => {
+    const view = setup([
+      requestRow({ request_id: 'a-AGENTAGENT01', reason: 'Pick a plan', mode: 'notify' }),
+      requestRow({ request_id: 'a-AGENTAGENT02', reason: 'Solve the puzzle' }),
+    ]);
+    await screen.findByRole('article', { name: 'Pick a plan' });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Resolve all' }));
+    });
+    const dialog = await screen.findByRole('alertdialog');
+    expect(within(dialog).getByText('Resolve all 2 agent requests?')).toBeDefined();
+    expect(within(dialog).getByText(/3 site checks and write approvals stay open/)).toBeDefined();
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Resolve all' }));
+    });
+    await waitFor(() => {
+      const bulk = view.requests.find((r) => r.path.endsWith('/attention/bulk'));
+      const ids = (bulk?.body as { request_ids: string[] } | undefined)?.request_ids ?? [];
+      expect([...ids].sort()).toEqual(['a-AGENTAGENT01', 'a-AGENTAGENT02']);
+    });
+  });
+
+  it('offers no bulk action when only site checks and write approvals are open', async () => {
+    setup();
+    await screen.findByRole('article', { name: 'LinkedIn security check' });
+    expect(screen.queryByRole('button', { name: 'Resolve all' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Reject all' })).toBeNull();
+  });
+
+  it('Deny asks with the held request named, isolated from bidi controls', () => {
+    const copy = rejectCopy(WRITE as never);
+    expect(copy.title).toBe('Deny this request?');
+    expect(copy.description).toContain('POST request to LinkedIn');
   });
 
   it('parses options and ignores other kinds', () => {

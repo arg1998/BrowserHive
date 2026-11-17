@@ -106,6 +106,25 @@ export function DiffView({ diff }: { readonly diff: SitePackDiffResponse }) {
   );
 }
 
+/** A diff query's states: loading, error, the diff. */
+export function DiffPanel({ query }: { readonly query: ReturnType<typeof useSitePackDiff> }) {
+  if (query.isPending)
+    return (
+      <div role="status" aria-busy="true" aria-label="Loading the changes">
+        <Skeleton className="h-20 rounded-lg" />
+      </div>
+    );
+  if (query.isError)
+    return (
+      <ErrorState
+        tier="region"
+        error={toAppError(query.error)}
+        onRetry={() => void query.refetch()}
+      />
+    );
+  return <DiffView diff={query.data} />;
+}
+
 /** Fetch and show the diff to a pending version or the local file. */
 export function DiffLoader({
   packId,
@@ -114,20 +133,5 @@ export function DiffLoader({
   readonly packId: string;
   readonly to: number | 'local';
 }) {
-  const diff = useSitePackDiff(packId, to);
-  if (diff.isPending)
-    return (
-      <div role="status" aria-busy="true" aria-label="Loading the changes">
-        <Skeleton className="h-20 rounded-lg" />
-      </div>
-    );
-  if (diff.isError)
-    return (
-      <ErrorState
-        tier="region"
-        error={toAppError(diff.error)}
-        onRetry={() => void diff.refetch()}
-      />
-    );
-  return <DiffView diff={diff.data} />;
+  return <DiffPanel query={useSitePackDiff(packId, to)} />;
 }

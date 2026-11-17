@@ -50,7 +50,7 @@ export function TermsClause({
   return (
     <figure className="flex min-w-0 flex-col gap-1.5">
       <blockquote className="border-l-2 border-border pl-3 text-base text-pretty italic [overflow-wrap:anywhere]">
-        “{clause.quote}”
+        “<bdi>{clause.quote}</bdi>”
       </blockquote>
       <figcaption className="flex min-w-0 flex-col gap-0.5 text-sm text-muted-foreground">
         <span>Checked {clause.checked}</span>
