@@ -10,7 +10,7 @@ import {
 import { isAnchoredChallenge } from './challenges.ts';
 import { checkPackSelector } from './css-selector.ts';
 import { scopedUrl, scopeOfGlob } from './glob-scope.ts';
-import { strategyParamIssues } from './strategy-specs.ts';
+import { strategyParamIssues } from './strategy-params.ts';
 import { unsafeTextIssues } from './text-safety.ts';
 
 /** One refinement failure: a JSON path into the pack and why. */

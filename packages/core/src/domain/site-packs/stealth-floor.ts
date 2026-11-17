@@ -1,7 +1,7 @@
 /** @module domain/site-packs/stealth-floor — the `stealth-profile` floor (spec 13 §9.4): what a template's stealth settings must be for a site whose pack selects it. Checked at template creation, site add, template edits and pack approval. */
 
 import type { SitePackV1 } from '@browserhive/contracts/site-packs';
-import { type StrategyParams, strategyOf } from './strategy-specs.ts';
+import { type StrategyParams, strategyOf } from './strategy-params.ts';
 
 /** The template settings the floor reads. */
 export interface StealthSettings {

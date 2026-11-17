@@ -1,7 +1,7 @@
 /** @module app/templates/admission-strategies — the template-scoped strategies of `TemplateAdmission` (spec 13 §3.7, §6.3, §9.4, §9.6 "Admission of a virtual session"): the pack `concurrency.max_sessions` and `ramp-up` lower the cap; `active-hours` and `launch-spacing` refuse or space a launch. They come from the template's enabled sites' approved packs, the strictest site wins, and nothing applies under `sitePacks=false` (no lookup). Spacing state is in memory per process and per template: a restart resets it. Agents only ever see `TEMPLATE_BUSY` `capacity` with `retry_after_ms`. */
 
 import { msUntilActive } from '../../domain/site-packs/active-hours.ts';
-import { rampFactor } from '../../domain/site-packs/strategy-specs.ts';
+import { rampFactor } from '../../domain/site-packs/strategy-params.ts';
 import { type CapLimits, NO_CAP_LIMITS } from '../../domain/templates/model.ts';
 import type { Clock } from '../../ports/clock.ts';
 import type { Logger } from '../../ports/logger.ts';

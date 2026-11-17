@@ -243,10 +243,7 @@ export class SitePackRegistry implements SitePackLookup {
     });
   }
 
-  /**
-   * Re-reads which templates use each pack (`used_by`, automatic Follow) and re-classifies pending
-   * versions with the templates' settings (§9.7) after template or site changes.
-   */
+  /** After template or site changes: re-reads `used_by` and re-classifies pending versions (§9.7). */
   refreshUsage(): Promise<void> {
     return this.#serial(async () => {
       const next = await withFreshUsage(this.#deps.repos, this.#snapshot);
@@ -272,9 +269,8 @@ export class SitePackRegistry implements SitePackLookup {
   /** A publisher revoked `version` (§9.7, `registry-revoke.ts`); for the T4b registry client. */
   async revoke(packId: string, version: number, by: string): Promise<RevokeResult> {
     let outcome: RevocationOutcome = { outcome: 'not_in_force' };
-    const view = await this.#act(packId, async () => {
-      outcome = await revokeVersion(this.#core(), packId, version, by);
-    });
+    const run = async () => void (outcome = await revokeVersion(this.#core(), packId, version, by));
+    const view = await this.#act(packId, run);
     return { ...outcome, view };
   }
 

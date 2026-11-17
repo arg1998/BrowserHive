@@ -7,11 +7,10 @@ import {
   activeWindowHours,
   rampedLimit,
   rampFactor,
-  STRATEGY_SPEC_LIST,
-  STRATEGY_SPECS,
   strategyOf,
   strategyParamIssues,
-} from './strategy-specs.ts';
+} from './strategy-params.ts';
+import { STRATEGY_SPEC_LIST, STRATEGY_SPECS } from './strategy-specs.ts';
 import { basePack } from './test-fixtures.ts';
 
 const DAY = 86_400_000;

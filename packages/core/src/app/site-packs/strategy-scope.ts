@@ -2,7 +2,7 @@
 
 import type { StrategyId } from '@browserhive/contracts/site-packs';
 import { hostOf } from '../../domain/site-packs/site-of-url.ts';
-import { type StrategyParams, strategyOf } from '../../domain/site-packs/strategy-specs.ts';
+import { type StrategyParams, strategyOf } from '../../domain/site-packs/strategy-params.ts';
 import type { TemplateSiteRecord } from '../../ports/persistence/index.ts';
 import type { EffectivePack, SitePackLookup } from '../../ports/site-packs.ts';
 

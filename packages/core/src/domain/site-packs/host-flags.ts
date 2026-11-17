@@ -1,6 +1,6 @@
 /** @module domain/site-packs/host-flags — the Chromium switches a pack strategy may add to a template host's command line (spec 13 §9.4 `webrtc-policy`, §9.10): only from this compiled-in table, never from pack data. */
 
-import type { WebRtcPolicy } from './strategy-specs.ts';
+import type { WebRtcPolicy } from './strategy-params.ts';
 
 /** The switch of each WebRTC IP handling policy. */
 export const WEBRTC_POLICY_FLAGS: { readonly [P in WebRtcPolicy]: string } = Object.freeze({

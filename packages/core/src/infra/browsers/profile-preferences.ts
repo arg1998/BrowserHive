@@ -3,7 +3,7 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { WEBRTC_POLICY_PREFERENCE } from '../../domain/site-packs/host-flags.ts';
-import type { WebRtcPolicy } from '../../domain/site-packs/strategy-specs.ts';
+import type { WebRtcPolicy } from '../../domain/site-packs/strategy-params.ts';
 
 /** A nested JSON object. */
 type JsonObject = { [key: string]: unknown };

@@ -1,6 +1,6 @@
 /** @module domain/site-packs/active-hours — the `active-hours` window arithmetic (spec 13 §9.4): whether an instant is inside every window of a template's sites in the template's pinned timezone, and how long until it is. Wall-clock time in an IANA zone comes from `Intl.DateTimeFormat`; the instant is always given (the caller's clock). */
 
-import type { StrategyParams } from './strategy-specs.ts';
+import type { StrategyParams } from './strategy-params.ts';
 
 /** One `active-hours` window (start inclusive, end exclusive; wraps past midnight when start > end). */
 export type ActiveWindow = StrategyParams['active-hours'];

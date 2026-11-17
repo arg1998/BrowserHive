@@ -1,7 +1,7 @@
 /** @module app/site-packs/device-binding — `device-bound-session` (spec 13 §9.4): a response of a template host whose URL belongs to an approved pack selecting the strategy and that carries `Sec-Session-Registration` or `Sec-Session-Id` (Device Bound Session Credentials) marks the template site of that URL `device_bound` once, and the template's views are refreshed. Observation only: no request is ever changed, and a failure is logged (fail-open). */
 
 import { hostOf, templateSiteOf } from '../../domain/site-packs/site-of-url.ts';
-import { strategyOf } from '../../domain/site-packs/strategy-specs.ts';
+import { strategyOf } from '../../domain/site-packs/strategy-params.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type { UnitOfWork } from '../../ports/persistence/index.ts';

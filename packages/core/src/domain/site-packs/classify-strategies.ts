@@ -4,13 +4,8 @@ import { type SitePackV1, STRATEGY_IDS, type StrategyId } from '@browserhive/con
 import { assertNever } from '../../kernel/errors/app-error.ts';
 import type { ChangeClass, ClassifyInput } from './classify-types.ts';
 import { packFloorIssues } from './stealth-floor.ts';
-import {
-  activeWindowHours,
-  paramsOf,
-  STRATEGY_SPECS,
-  type StrategyParamSpec,
-  type StrategyParams,
-} from './strategy-specs.ts';
+import { activeWindowHours, paramsOf, type StrategyParams } from './strategy-params.ts';
+import { STRATEGY_SPECS, type StrategyParamSpec } from './strategy-specs.ts';
 
 type StrategyEntry = SitePackV1['strategies'][number];
 

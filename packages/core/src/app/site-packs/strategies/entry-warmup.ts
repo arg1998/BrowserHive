@@ -3,7 +3,7 @@
 import type { SitePackV1 } from '@browserhive/contracts/site-packs';
 import type { Route } from 'patchright';
 import { inPackDomains } from '../../../domain/site-packs/probe-classify.ts';
-import type { StrategyParams } from '../../../domain/site-packs/strategy-specs.ts';
+import type { StrategyParams } from '../../../domain/site-packs/strategy-params.ts';
 import { assertNever } from '../../../kernel/errors/app-error.ts';
 import { serializeError } from '../../../kernel/errors/serialize-error.ts';
 import type { Clock } from '../../../ports/clock.ts';

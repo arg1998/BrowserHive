@@ -1,6 +1,6 @@
 /** @module app/site-packs/strategies/dwell — `human-dwell` (spec 13 §9.4): before an action on a site's pages, a session waits until a random dwell in `[min_ms, max_ms]` has passed since its previous action on that site; its first action there does not wait. In memory, per process. */
 
-import type { StrategyParams } from '../../../domain/site-packs/strategy-specs.ts';
+import type { StrategyParams } from '../../../domain/site-packs/strategy-params.ts';
 
 /** The last action of each (session, pack). */
 export class SiteDwell {

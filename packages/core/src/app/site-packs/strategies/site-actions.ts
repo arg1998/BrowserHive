@@ -3,7 +3,7 @@
 import type { Session } from '../../../domain/session/session.ts';
 import type { SessionTemplate } from '../../../domain/session/session-template.ts';
 import { hostOf, templateSiteOf } from '../../../domain/site-packs/site-of-url.ts';
-import { strategyOf } from '../../../domain/site-packs/strategy-specs.ts';
+import { strategyOf } from '../../../domain/site-packs/strategy-params.ts';
 import { registrableDomain } from '../../../kernel/url.ts';
 import type { Clock } from '../../../ports/clock.ts';
 import type { Logger } from '../../../ports/logger.ts';

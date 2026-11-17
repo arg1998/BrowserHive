@@ -9,7 +9,7 @@ import {
   planWrite,
   refund,
 } from '../../domain/site-packs/pace.ts';
-import { rampedLimit, rampFactor, strategyOf } from '../../domain/site-packs/strategy-specs.ts';
+import { rampedLimit, rampFactor, strategyOf } from '../../domain/site-packs/strategy-params.ts';
 import { assertNever } from '../../kernel/errors/app-error.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { Clock } from '../../ports/clock.ts';
