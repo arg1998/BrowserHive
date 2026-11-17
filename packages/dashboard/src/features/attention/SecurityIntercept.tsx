@@ -58,7 +58,14 @@ export function onlyDecidedHere(options: SecurityInterceptOptions): boolean {
 }
 
 /** The facts rows (inside the card's `<dl>`). */
-export function InterceptFacts({ options }: { readonly options: SecurityInterceptOptions }) {
+export function InterceptFacts({
+  options,
+  pageUrl = null,
+}: {
+  readonly options: SecurityInterceptOptions;
+  /** The request's page: a site check's address equal to it is not repeated. */
+  readonly pageUrl?: string | null;
+}) {
   return (
     <>
       <dt className="text-muted-foreground">Site</dt>
@@ -88,7 +95,7 @@ export function InterceptFacts({ options }: { readonly options: SecurityIntercep
           </dd>
         </>
       ) : null}
-      {options.url !== undefined ? (
+      {options.url !== undefined && !(options.method === undefined && options.url === pageUrl) ? (
         <>
           <dt className="text-muted-foreground">Request</dt>
           <dd className="min-w-0 font-mono text-xs [overflow-wrap:anywhere]">

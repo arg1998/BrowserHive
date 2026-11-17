@@ -156,14 +156,15 @@ export function SitePacksPage() {
         title="Site packs"
         description="Per-site knowledge that keeps templates signed in and well-behaved."
         learnMore="A pack tells BrowserHive how a site signs in, how to tell the sign-in still holds, which requests sign out or change the account, and what the site’s terms say. Nothing in a pack applies until you approve it."
-        learnMoreDocs="dashboardSitePacks"
-        {...(lastLoad !== null && {
-          meta: (
-            <span className="text-sm text-muted-foreground">
-              Loaded <RelativeTime at={lastLoad} className="text-sm" />
-            </span>
-          ),
-        })}
+        learnMoreDocs="sitePacks"
+        {...(lastLoad !== null &&
+          !off && {
+            meta: (
+              <span className="text-sm text-muted-foreground">
+                Loaded <RelativeTime at={lastLoad} className="text-sm" />
+              </span>
+            ),
+          })}
         {...(!off && {
           actions: (
             <>

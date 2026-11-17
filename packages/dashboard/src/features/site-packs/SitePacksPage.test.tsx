@@ -99,7 +99,7 @@ describe('SitePacksPage', () => {
     expect(within(table).getAllByText('Bundled with BrowserHive 0.3.0').length).toBeGreaterThan(0);
     expect(within(table).getByText('v3')).toBeDefined();
     expect(within(table).getByText(`${sha('a').slice(0, 12)}…`, { exact: false })).toBeDefined();
-    expect(within(table).getByText('v2 is approved when a template adds the site')).toBeDefined();
+    expect(within(table).getAllByText('v2 on first use').length).toBeGreaterThan(0);
     expect(screen.getByText('/data/site-packs/local')).toBeDefined();
     await expectNoA11yViolations(view.container, AXE);
   });

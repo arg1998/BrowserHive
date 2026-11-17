@@ -18,7 +18,7 @@ export function ShaText({
 }) {
   return (
     <span data-reveal-scope="" className={cn('inline-flex min-w-0 items-center gap-1', className)}>
-      <span className="font-mono text-sm tabular-nums" title={sha256}>
+      <span className="font-mono text-sm whitespace-nowrap tabular-nums" title={sha256}>
         <span className="sr-only">SHA-256 </span>
         {shortSha(sha256)}…
       </span>
@@ -35,7 +35,7 @@ export function StanceLabel({ stance }: { readonly stance: Stance }) {
     <TonePill
       entry={{ label: STANCE_TEXT[stance], tone: STANCE_TONE[stance] }}
       iconless
-      className="h-auto min-h-5.5 py-0.5 whitespace-normal"
+      className="h-auto min-h-5.5 w-fit self-start py-0.5 whitespace-normal"
     />
   );
 }

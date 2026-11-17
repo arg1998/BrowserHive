@@ -110,7 +110,7 @@ export function CheckSection({ pack }: { readonly pack: SitePackV1 }) {
 export function TermsSection({ pack }: { readonly pack: SitePackV1 }) {
   const policy = pack.write_policy;
   return (
-    <PackSection title="Writes and the site’s terms">
+    <PackSection title="Writes and the site’s terms" docs="sitePacksWritePolicies">
       <Facts
         rows={[
           [

@@ -3,7 +3,7 @@ import type { SitePackRegistryStatus } from '@browserhive/contracts/http';
 import type { ReactNode } from 'react';
 import { RelativeTime } from '@/components/shared/RelativeTime.tsx';
 import { Panel } from '@/components/shared/Section.tsx';
-import { configKeyDocsUrl } from '@/lib/links.ts';
+import { configKeyDocsUrl, docsUrl } from '@/lib/links.ts';
 import { SKIP_REASON_TEXT, SOURCE_LABEL } from './model.ts';
 
 function Fact({ label, children }: { readonly label: string; readonly children: ReactNode }) {
@@ -28,7 +28,7 @@ export function RegistryCard({ status }: { readonly status: SitePackRegistryStat
           content.
         </p>
       }
-      infoDocs="dashboardSitePacks"
+      infoDocs="sitePacksLocal"
     >
       <dl className="grid min-w-0 gap-x-8 gap-y-4 sm:grid-cols-2 xl:grid-cols-4">
         <Fact label="Bundled">
@@ -57,6 +57,14 @@ export function RegistryCard({ status }: { readonly status: SitePackRegistryStat
             Updates from browserhive.ai arrive with a later release. Until then a new BrowserHive
             brings new bundled versions, and you can import a file.
           </span>
+          <a
+            href={docsUrl('sitePacksWriting')}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-1 block text-sm text-link underline decoration-link/40 underline-offset-2 hover:decoration-link"
+          >
+            Write a local pack
+          </a>
           <a
             href={configKeyDocsUrl('sitePacksDir')}
             target="_blank"

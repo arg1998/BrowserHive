@@ -35,7 +35,7 @@ export function approveLocalConfirm(
       `BrowserHive keeps a copy of exactly this content and applies it in place of any other version. ` +
       `${usedByText(pack)} Later edits to the file change nothing until you approve them again.`,
     confirmLabel: 'Approve this content',
-    items: [path, `SHA-256 ${sha256}`],
+    items: [`SHA-256 ${sha256}`, path],
     itemsLabel: 'The content you reviewed',
   };
 }
@@ -63,7 +63,7 @@ export function attachPackConfirm(
       'The site gets the pack’s sign-in check, guards and write policy. ' +
       'Adding it approves exactly the version below.',
     confirmLabel: 'Use the pack',
-    items: [`v${choice.version} · ${choice.provenance}`, `SHA-256 ${choice.sha256}`],
+    items: [`SHA-256 ${choice.sha256}`, `v${choice.version} · ${choice.provenance}`],
     itemsLabel: 'The version you approve',
   };
 }

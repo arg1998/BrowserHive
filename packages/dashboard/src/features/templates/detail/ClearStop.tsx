@@ -49,9 +49,16 @@ export function ClearStop({
         </Button>
       }
     >
-      The site showed a page where trying again makes things worse, like a suspended account or a
-      refused sign-in (<RelativeTime at={site.stopped_at} className="text-sm" />
-      ). Open the site in the template’s browser and sort it out, then clear the stop.
+      <span className="flex flex-col gap-1">
+        <span>
+          The site showed a page where trying again makes things worse, like a suspended account or
+          a refused sign-in. Open the site in the template’s browser and sort it out, then clear the
+          stop.
+        </span>
+        <span className="text-sm opacity-80">
+          Stopped <RelativeTime at={site.stopped_at} className="text-sm" />
+        </span>
+      </span>
     </Callout>
   );
 }

@@ -8,11 +8,17 @@ import { StanceLabel } from '@/features/site-packs/PackBits.tsx';
 import { ICONS } from '@/lib/icons.ts';
 import { cn } from '@/lib/utils.ts';
 
-/** Packs whose title, id or domains contain `q`. */
+/** A pack worth a card: one with a version on offer, or a local file waiting for approval (not one that failed validation). */
+function listable(pack: SitePackView): boolean {
+  return packChoice(pack) !== null || (pack.local !== null && pack.local.problem === null);
+}
+
+/** Listable packs whose title, id or domains contain `q`. */
 export function filterCatalog(packs: readonly SitePackView[], q: string): readonly SitePackView[] {
   const needle = q.trim().toLowerCase();
-  if (needle === '') return packs;
-  return packs.filter(
+  const usable = packs.filter(listable);
+  if (needle === '') return usable;
+  return usable.filter(
     (p) =>
       p.title.toLowerCase().includes(needle) ||
       p.pack_id.includes(needle) ||
@@ -72,7 +78,7 @@ function PackCard({
         <span className="mt-auto text-sm text-muted-foreground [overflow-wrap:anywhere]">
           {choice === null
             ? 'Approve its local file on Site packs first.'
-            : `v${choice.version} · ${choice.provenance} · SHA-256 ${shortSha(choice.sha256)}…`}
+            : `v${choice.version} · ${choice.provenanceShort} · SHA-256 ${shortSha(choice.sha256)}…`}
         </span>
       </button>
     </li>

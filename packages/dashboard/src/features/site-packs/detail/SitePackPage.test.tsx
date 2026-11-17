@@ -61,7 +61,7 @@ describe('SitePackPage', () => {
     expect(screen.getAllByText('Bundled with BrowserHive 0.3.0').length).toBeGreaterThan(0);
     expect(screen.getAllByText(`${sha('a').slice(0, 12)}…`, { exact: false }).length).toBe(2);
     expect(screen.getByRole('heading', { name: 'In force' })).toBeDefined();
-    expect(screen.getByRole('link', { name: 'tp-0000000001' })).toBeDefined();
+    expect(screen.getByRole('link', { name: 'tp-0000000001' })).toBeDefined(); // no template list in this test: the id stands in
     await expectNoA11yViolations(view.container, AXE);
   });
 
