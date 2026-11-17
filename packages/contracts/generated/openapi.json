@@ -29253,6 +29253,12 @@
                           "null"
                         ]
                       },
+                      "min_from": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
                       "max": {
                         "type": [
                           "number",
@@ -29292,6 +29298,7 @@
                       "default_from",
                       "fallback",
                       "min",
+                      "min_from",
                       "max",
                       "values",
                       "safe_direction",

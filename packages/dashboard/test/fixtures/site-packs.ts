@@ -251,6 +251,7 @@ export function strategiesResponse(): SiteStrategiesResponse {
     default_from: null,
     fallback: null,
     min: null,
+    min_from: null,
     max: null,
     values: null,
     safe_direction: 'up' as const,
@@ -268,7 +269,14 @@ export function strategiesResponse(): SiteStrategiesResponse {
         hooks: ['before_action'],
         params: [
           param({ name: 'min_ms', type: 'integer', default: 600, min: 0, max: 10_000 }),
-          param({ name: 'max_ms', type: 'integer', default: 2500, min: 0, max: 20_000 }),
+          param({
+            name: 'max_ms',
+            type: 'integer',
+            default: 2500,
+            min: 0,
+            min_from: 'min_ms',
+            max: 20_000,
+          }),
         ],
       },
       {

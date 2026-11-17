@@ -42,6 +42,7 @@ const STRATEGIES: SiteStrategiesResponse = {
           default_from: null,
           fallback: null,
           min: 0,
+          min_from: null,
           max: 10_000,
           values: null,
           safe_direction: 'up',
@@ -54,6 +55,7 @@ const STRATEGIES: SiteStrategiesResponse = {
           default_from: null,
           fallback: null,
           min: 0,
+          min_from: 'min_ms',
           max: 20_000,
           values: null,
           safe_direction: 'up',
@@ -117,7 +119,7 @@ describe('sitepacks list and show', () => {
     expect(result.stdout).toContain('Strategies:');
     expect(result.stdout).toContain('human-dwell — Human dwell time (behaviour)');
     expect(result.stdout).toContain('min_ms 800 (default 600, 0–10000)');
-    expect(result.stdout).toContain('max_ms 20000, asked 50000 (default 2500, 0–20000)');
+    expect(result.stdout).toContain('max_ms 20000, asked 50000 (default 2500, min_ms–20000)');
     expect(result.stdout).toMatch(/single-focus\n\s+no parameters/);
   });
 });

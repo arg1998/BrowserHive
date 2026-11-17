@@ -69,7 +69,7 @@ describe('SitePackPage', () => {
     // Strategies as readable text: the title from the binary's table, the pack's value and the default.
     const strategies = await screen.findByRole('list', { name: 'Human dwell time parameters' });
     expect(within(strategies).getByText('800')).toBeDefined();
-    expect(within(strategies).getByText(/Default 2500 · Allowed 0–20000/)).toBeDefined();
+    expect(within(strategies).getByText(/Default 2500 · Allowed min_ms–20000/)).toBeDefined();
     // Provenance, SHA-256, versions.
     expect(screen.getAllByText('Bundled with BrowserHive 0.3.0').length).toBeGreaterThan(0);
     expect(screen.getAllByText(`${sha('a').slice(0, 12)}…`, { exact: false }).length).toBe(2);

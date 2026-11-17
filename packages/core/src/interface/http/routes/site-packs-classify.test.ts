@@ -42,6 +42,7 @@ describe('GET /site-packs/strategies', () => {
       default_from: 'pacing.min_launch_gap_s',
       fallback: 0,
       min: 0,
+      min_from: null,
       max: 3600,
       values: null,
       safe_direction: 'up',
@@ -53,6 +54,8 @@ describe('GET /site-packs/strategies', () => {
       safe_direction: 'toward',
       safe_value: 'disable_non_proxied_udp',
     });
+    const dwellMax = body.data.find((s) => s.id === 'human-dwell')?.params[1];
+    expect(dwellMax).toMatchObject({ name: 'max_ms', min: 0, min_from: 'min_ms', max: 20_000 });
     const warmup = body.data.find((s) => s.id === 'entry-warmup')?.params[0];
     expect(warmup).toMatchObject({ name: 'path', type: 'path', safe_direction: 'none' });
   });

@@ -71,11 +71,14 @@ function valueText(value: Raw | null): string {
   return typeof value === 'boolean' ? (value ? 'on' : 'off') : String(value);
 }
 
-/** One parameter: "min_ms 800 (default 600, 0–10000)", clamped values marked. */
-function paramText(param: SiteStrategyParam, raw: Raw): string {
+/**
+ * One parameter: "min_ms 800 (default 600, 0–10000)", clamped values marked; `lower` is the value
+ * in force of the parameter `min_from` names ("max_ms … min_ms–20000", review #84 L3).
+ */
+function paramText(param: SiteStrategyParam, raw: Raw, lower?: number): string {
   const bounds =
     param.min !== null && param.max !== null
-      ? `, ${param.min}–${param.max}`
+      ? `, ${param.min_from ?? param.min}–${param.max}`
       : param.values !== null
         ? `, ${param.values.join('|')}`
         : '';
@@ -85,7 +88,7 @@ function paramText(param: SiteStrategyParam, raw: Raw): string {
       : `${param.default_from ?? '—'}${param.fallback === null ? '' : ` else ${param.fallback}`}`;
   if (raw === undefined) return `${param.name} default (${fallback}${bounds})`;
   if (typeof raw === 'number' && param.min !== null && param.max !== null) {
-    const kept = Math.min(param.max, Math.max(param.min, raw));
+    const kept = Math.min(param.max, Math.max(param.min, lower ?? param.min, raw));
     if (kept !== raw) return `${param.name} ${kept}, asked ${raw} (default ${fallback}${bounds})`;
   }
   return `${param.name} ${valueText(raw)} (default ${fallback}${bounds})`;
@@ -136,6 +139,19 @@ export function printDiff(
   out.line(`${diff.changes.length} field(s) changed${counts === '' ? '' : `: ${counts}`}.`);
 }
 
+/** A numeric parameter's value in force: the pack's, clamped to its bounds, else its default. */
+function inForce(
+  params: readonly SiteStrategyParam[],
+  values: Readonly<Record<string, Raw>>,
+  name: string,
+): number | undefined {
+  const param = params.find((p) => p.name === name);
+  if (param === undefined) return undefined;
+  const raw = values[name];
+  if (typeof raw !== 'number') return typeof param.default === 'number' ? param.default : undefined;
+  return Math.min(param.max ?? raw, Math.max(param.min ?? raw, raw));
+}
+
 /** Prints a pack's strategies, one block each: id and title, then its parameters. */
 export function printStrategies(
   context: CommandContext,
@@ -151,7 +167,11 @@ export function printStrategies(
     const title = spec === undefined ? '' : ` — ${spec.title} (${spec.kind})`;
     out.line(`  ${out.style.bold(selected.id)}${title}`);
     const params = spec?.params ?? [];
-    for (const param of params) out.line(`    ${paramText(param, selected.params[param.name])}`);
+    for (const param of params) {
+      const lower =
+        param.min_from === null ? undefined : inForce(params, selected.params, param.min_from);
+      out.line(`    ${paramText(param, selected.params[param.name], lower)}`);
+    }
     for (const [name, value] of Object.entries(selected.params)) {
       if (!params.some((p) => p.name === name)) out.line(`    ${name} ${valueText(value)}`);
     }
