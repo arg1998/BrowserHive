@@ -2,21 +2,9 @@
 
 import type { Session } from '../../domain/session/session.ts';
 import { AppError } from '../../kernel/errors/app-error.ts';
-import type { SiteHold } from '../../ports/security-intercepts.ts';
+import { SITE_HOLD_EXEMPT_TOOLS, type SiteHold } from '../../ports/security-intercepts.ts';
 
-/** Tools a held template session may still call (spec 13 §9.5 "Outcome"). */
-export const SITE_HOLD_EXEMPT_TOOLS: ReadonlySet<string> = new Set([
-  'close_session',
-  'list_sessions',
-  'server_status',
-  'session_info',
-  'list_tabs',
-  'screenshot',
-  'list_templates',
-  'get_attention_result',
-  'list_saved_auths',
-  'vault_list_available',
-]);
+export { SITE_HOLD_EXEMPT_TOOLS } from '../../ports/security-intercepts.ts';
 
 /** What the dispatcher asks: the open intercept holding a session, or `null`. */
 export interface SiteHolds {

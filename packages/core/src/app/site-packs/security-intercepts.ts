@@ -15,6 +15,7 @@ import type {
 } from '../../ports/security-intercepts.ts';
 import type { GuardRuleInfo } from '../../ports/site-guards.ts';
 import { markChallenged, openSiteCheck } from './security-intercepts-checks.ts';
+import { PassBook, type ToolPassKey } from './security-intercepts-passes.ts';
 import { InterceptBook } from './security-intercepts-state.ts';
 import type { InterceptContext, SecurityInterceptsDeps } from './security-intercepts-types.ts';
 import {
@@ -58,7 +59,7 @@ export class SecurityInterceptService implements SecurityIntercepts {
 
   constructor(deps: SecurityInterceptsDeps) {
     const log: Logger = deps.logger.child({ module: 'site-packs.intercepts' });
-    this.#ctx = { deps, book: new InterceptBook(), log };
+    this.#ctx = { deps, book: new InterceptBook(), passes: new PassBook(), log };
     this.confirmer =
       deps.config.transport === 'stdio' ? null : { confirm: (request) => this.#confirm(request) };
     this.#off = deps.bus.subscribe('session.closed', ({ payload }) =>
@@ -77,27 +78,36 @@ export class SecurityInterceptService implements SecurityIntercepts {
 
   async requestWriteApproval(input: WriteApprovalInput): Promise<WriteApprovalResult> {
     if (this.confirmer === null) return { kind: 'blocked', reason: 'no_operator' };
-    const { deps, book } = this.#ctx;
+    const { deps, book, passes } = this.#ctx;
     const now = deps.clock.now();
     const guard = `${input.packId}#${input.guardId}`;
-    const pass = book.takeToolPass(input.sessionId, guard, input.url, now);
+    const key = toolPassKey(input, guard);
+    const pass = passes.takeTool(key, now);
     if (pass !== null) {
-      // The approved action now runs; the write it sends needs no second approval.
+      // The approved action now runs; the write it sends (to the same site) needs no second
+      // approval.
       const ruleGuard =
         input.source === 'element'
           ? (deps.requestGuardOf?.(input.packId, input.guardId) ?? null)
           : input.guardId;
       if (ruleGuard !== null) {
-        book.grantNetworkPass(input.sessionId, `${input.packId}#${ruleGuard}`, pass, now);
+        passes.grantNetwork(input.sessionId, `${input.packId}#${ruleGuard}`, input.site, pass, now);
       }
       return { kind: 'pass' };
     }
+    // From here to the reservation in `openWriteConfirmation` nothing awaits (M3).
     const open = book.writeOf(input.sessionId);
-    if (open !== undefined) return { kind: 'pending', requestId: open.requestId };
-    if (book.atBound(input.templateId, input.sessionId))
-      return { kind: 'blocked', reason: 'bounds' };
+    if (open !== undefined) {
+      const id = open.requestId ?? (await open.ready);
+      return id === null
+        ? { kind: 'blocked', reason: 'bounds' }
+        : { kind: 'pending', requestId: id };
+    }
     const session = deps.sessions.peek(input.sessionId);
     if (session === undefined) return { kind: 'blocked', reason: 'no_operator' };
+    if (book.atBound(input.templateId, session.owner, input.sessionId)) {
+      return { kind: 'blocked', reason: 'bounds' };
+    }
     const facts: WriteFacts = {
       sessionId: input.sessionId,
       templateId: input.templateId,
@@ -113,7 +123,7 @@ export class SecurityInterceptService implements SecurityIntercepts {
     };
     const opened = await openWriteConfirmation(this.#ctx, facts, undefined);
     if (opened === null) return { kind: 'blocked', reason: 'bounds' };
-    void opened.promise.then((outcome) => this.#toolSettled(facts, guard, opened.id, outcome));
+    void opened.promise.then((outcome) => this.#toolSettled(facts, key, opened.id, outcome));
     return { kind: 'pending', requestId: opened.id };
   }
 
@@ -133,20 +143,24 @@ export class SecurityInterceptService implements SecurityIntercepts {
     const session = deps.sessions.peek(sessionId);
     const template = session?.template;
     if (session === undefined || template == null) return NOT_CONFIRMABLE;
+    // A maintenance session (a probe, a re-login window) is BrowserHive's own: nobody waits on it,
+    // so its request is refused like a host-owned one (review I4).
+    if (template.mode === 'maintenance') return NOT_CONFIRMABLE;
+    const { passes } = this.#ctx;
     const now = deps.clock.now();
-    const pass =
-      book.takeNetworkPass(sessionId, request.ruleId, now) ??
-      book.takeToolPass(sessionId, request.ruleId, request.url, now);
+    const site = siteOf(request.url);
+    const pass = passes.takeNetwork(sessionId, request.ruleId, site, now);
     if (pass !== null) {
       return { outcome: 'approved', decidedBy: pass.decidedBy, requestId: pass.requestId };
     }
-    // One open write confirmation per session: a further write is aborted (spec 13 §9.3).
+    // One open write confirmation per session: a further write is aborted (spec 13 §9.3). From
+    // here to the reservation in `openWriteConfirmation` nothing awaits (M3).
     const open = book.writeOf(sessionId);
     if (open !== undefined) {
-      return { outcome: 'cancelled', decidedBy: null, requestId: open.requestId };
+      const id = open.requestId ?? (await open.ready);
+      return { outcome: 'cancelled', decidedBy: null, requestId: id };
     }
-    if (book.atBound(template.templateId, sessionId)) return NOT_CONFIRMABLE;
-    const site = siteOf(request.url);
+    if (book.atBound(template.templateId, session.owner, sessionId)) return NOT_CONFIRMABLE;
     const facts: WriteFacts = {
       sessionId,
       templateId: template.templateId,
@@ -168,21 +182,15 @@ export class SecurityInterceptService implements SecurityIntercepts {
   /** A tool-path write confirmation settled: an approval grants the pass; the decision is audited. */
   #toolSettled(
     facts: WriteFacts,
-    guard: string,
+    key: ToolPassKey,
     requestId: string,
     outcome: Parameters<typeof toConfirmResult>[0],
   ): void {
-    const { deps, book } = this.#ctx;
+    const { deps, passes } = this.#ctx;
     const result = toConfirmResult(outcome);
     const now = deps.clock.now();
     if (result.outcome === 'approved') {
-      book.grantToolPass(
-        facts.sessionId,
-        guard,
-        facts.url,
-        { requestId, decidedBy: result.decidedBy },
-        now,
-      );
+      passes.grantTool(key, { requestId, decidedBy: result.decidedBy }, now);
     }
     deps.hits.write({
       sessionId: facts.sessionId,
@@ -235,12 +243,26 @@ export class SecurityInterceptService implements SecurityIntercepts {
 
   /** The session's passes go; its open intercepts are cancelled (the broker settles them too). */
   #sessionClosed(sessionId: string): void {
-    const { deps, book } = this.#ctx;
+    const { deps, book, passes } = this.#ctx;
     const open = [book.writeOf(sessionId), book.challengeOf(sessionId)];
     book.forgetSession(sessionId);
+    passes.forgetSession(sessionId);
     for (const intercept of open) {
       if (intercept === undefined) continue;
-      void deps.broker.cancel(intercept.requestId).catch(() => undefined);
+      void intercept.ready
+        .then((id) => (id === null ? false : deps.broker.cancel(id)))
+        .catch(() => undefined);
     }
   }
+}
+
+/** What a tool-path pass covers: the same guard, page, tool and control (review L6). */
+function toolPassKey(input: WriteApprovalInput, guard: string): ToolPassKey {
+  return {
+    sessionId: input.sessionId,
+    guard,
+    url: input.url,
+    tool: input.tool,
+    target: input.target ?? null,
+  };
 }

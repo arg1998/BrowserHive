@@ -20,7 +20,7 @@ import type {
 } from '../../ports/template-host.ts';
 import { clearProfileSecrets } from '../persistence/profile-secrets.ts';
 import { ATTR, SPAN, withSpan } from '../telemetry/spans.ts';
-import { channelExecutable, playwrightChannelExecutable } from './browser-detection.ts';
+import { playwrightChannelExecutable } from './browser-detection.ts';
 import { PlaywrightBrowserHost } from './browser-host.ts';
 import { launchKwargsForChannel, withExtraArgs } from './channel.ts';
 import {
@@ -29,7 +29,12 @@ import {
   type ChromiumResolverDeps,
 } from './chromium-resolver.ts';
 import { DRIVER_NAME, driverChromium, suppressInjectRoute } from './driver.ts';
-import { capabilitiesFor, defaultSandboxPolicy, displayFor } from './driver-support.ts';
+import {
+  capabilitiesFor,
+  defaultSandboxPolicy,
+  displayFor,
+  executableOf,
+} from './driver-support.ts';
 import { contextOptionsFor, scriptPayloadFor } from './fingerprint.ts';
 import type { HostFacts } from './host-facts.ts';
 import { IdentityApplier } from './identity-applier.ts';
@@ -65,9 +70,8 @@ export interface PlaywrightBrowserDriverDeps {
 }
 
 /**
- * Production driver: spawns a real Patchright Chromium per session via `browserType.launch(...)`
- * (every session, whatever its stealth level; D-65). One browser subprocess + one context per session is the isolation
- * primitive; nothing here is shared between launches.
+ * Production driver: a real Patchright Chromium per session (`browserType.launch`, every stealth
+ * level, D-65); one browser subprocess and one context per session, nothing shared between them.
  */
 export class PlaywrightBrowserDriver implements BrowserDriver, TemplateHostLauncher {
   private readonly logger: Logger;
@@ -99,10 +103,7 @@ export class PlaywrightBrowserDriver implements BrowserDriver, TemplateHostLaunc
     this.templatePages = watcher;
   }
 
-  /**
-   * The site-pack request guard every template host started from now on carries (spec 13 §9.3).
-   * Set by composition once the guard's collaborators exist, before any host starts.
-   */
+  /** The site-pack request guard of every template host started from now on (spec 13 §9.3). */
   setTemplateRequestGuard(guard: TemplateRequestGuard | null): void {
     this.templateRequestGuard = guard;
   }
@@ -117,7 +118,7 @@ export class PlaywrightBrowserDriver implements BrowserDriver, TemplateHostLaunc
         sandbox: this.sandbox,
         sandboxTarget: {
           channel: spec.channel,
-          executablePath: this.executableFor(this.browserType, spec.channel),
+          executablePath: executableOf(this.browserType, spec.channel, this.locateChannel),
         },
         chromium: this.chromiumDeps,
         host: this.host,
@@ -133,22 +134,6 @@ export class PlaywrightBrowserDriver implements BrowserDriver, TemplateHostLaunc
 
   /** Empties saved passwords and autofill of a stopped template profile (spec 13 §3.1). */
   readonly clearProfileSecrets = async (dir: string): Promise<void> => clearProfileSecrets(dir);
-
-  /** The executable a channel launches, the sandbox policy's cache key (null when unknown). */
-  private executableFor(browserType: BrowserType, channel: LaunchSpec['channel']): string | null {
-    return channelExecutable(
-      channel,
-      () => {
-        try {
-          const path = browserType.executablePath();
-          return path === '' ? null : path;
-        } catch {
-          return null;
-        }
-      },
-      this.locateChannel,
-    );
-  }
 
   stealthDriverName(): 'patchright' {
     return DRIVER_NAME;
@@ -291,7 +276,8 @@ export class PlaywrightBrowserDriver implements BrowserDriver, TemplateHostLaunc
     try {
       const target = {
         channel: spec.channel,
-        executablePath: executablePath ?? this.executableFor(browserType, spec.channel),
+        executablePath:
+          executablePath ?? executableOf(browserType, spec.channel, this.locateChannel),
       };
       const opened = await this.sandbox.launch(
         target,

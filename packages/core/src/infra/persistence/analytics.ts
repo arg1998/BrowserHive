@@ -13,7 +13,6 @@ import type {
   ReportWindow,
   SeenHarnessRow,
   TimelineItem,
-  TimelineKind,
   TimelineQuery,
   ToolLatencyRow,
   ToolMetricsQuery,
@@ -23,12 +22,14 @@ import type {
 } from '../../ports/persistence/analytics.ts';
 import type { DomainCount } from '../../ports/persistence/pages.ts';
 import type { Page, TopDomainsQuery } from '../../ports/persistence/queries.ts';
-import type { SiteGuardHitRecord } from '../../ports/persistence/site-packs.ts';
 import type { Repositories } from '../../ports/persistence/unit-of-work.ts';
 import type { WriteQueue } from '../../ports/persistence/write-queue.ts';
+import { sessionTimeline } from './analytics-timeline.ts';
 import type { DB } from './generated/db.d.ts';
-import { asNumber, clampLimit, decodeCursor, encodeCursor } from './repositories/common.ts';
+import { asNumber } from './repositories/common.ts';
 import { TOOL_CALL_HARNESS } from './repositories/tool-calls.ts';
+
+export { timelineId } from './analytics-timeline.ts';
 
 /** Smallest bucket of `GET /activity`. */
 export const MIN_BUCKET_MS = 60_000;
@@ -36,21 +37,6 @@ export const MIN_BUCKET_MS = 60_000;
 export const MAX_BUCKET_MS = 86_400_000;
 /** Most buckets returned. */
 export const MAX_BUCKETS = 720;
-
-const TIMELINE = 'timeline';
-const ALL_KINDS: readonly TimelineKind[] = [
-  'tool',
-  'page',
-  'attention',
-  'vault',
-  'blocked',
-  'guard',
-];
-
-/** Unique row identity of a timeline item: `<kind>:<event_id | request_id>`. */
-export function timelineId(kind: TimelineKind, rowId: string): string {
-  return `${kind}:${rowId}`;
-}
 
 type BucketField =
   | 'toolCalls'
@@ -261,101 +247,7 @@ export class SqliteAnalyticsQueries implements AnalyticsQueries {
 
   async timeline(sessionId: string, query: TimelineQuery): Promise<Page<TimelineItem>> {
     await this.#drain();
-    const limit = clampLimit(query.limit);
-    const cursor = decodeCursor(TIMELINE, query.cursor);
-    const kinds = new Set(
-      query.kinds !== undefined && query.kinds.length > 0 ? query.kinds : ALL_KINDS,
-    );
-    const errorsOnly = query.errorsOnly === true;
-    const cursorTs = cursor === null ? undefined : asNumber(cursor.key);
-    const until =
-      cursorTs === undefined
-        ? query.until
-        : Math.min(query.until ?? Number.MAX_SAFE_INTEGER, cursorTs);
-    const sub = {
-      limit: limit + 1,
-      sessionId,
-      dir: 'desc' as const,
-      ...(query.since !== undefined && { since: query.since }),
-      ...(until !== undefined && { until }),
-      ...(query.q !== undefined && query.q !== '' && { q: query.q }),
-    };
-    const items: TimelineItem[] = [];
-    if (kinds.has('tool')) {
-      const page = await this.#repos.toolCalls.listBySession(sessionId, {
-        ...sub,
-        ...(errorsOnly && { hasError: true }),
-      });
-      for (const item of page.items)
-        items.push({ kind: 'tool', ts: item.ts, id: timelineId('tool', item.eventId), item });
-    }
-    if (kinds.has('page') && !errorsOnly) {
-      const page = await this.#repos.pages.list(sub);
-      for (const item of page.items)
-        items.push({ kind: 'page', ts: item.ts, id: timelineId('page', item.eventId), item });
-    }
-    if (kinds.has('attention')) {
-      // Security intercepts (site checks, write approvals) are listed beside attention requests.
-      const page = await this.#repos.operatorRequests.listHistory({
-        ...sub,
-        kinds: ['attention', 'security_intercept'],
-        ...(errorsOnly && { statuses: ['rejected', 'timeout', 'cancelled'] as const }),
-      });
-      for (const item of page.items)
-        items.push({
-          kind: 'attention',
-          ts: item.createdAt,
-          id: timelineId('attention', item.requestId),
-          item,
-        });
-    }
-    if (kinds.has('vault')) {
-      const page = await this.#repos.vaultAudit.list({
-        ...sub,
-        ...(errorsOnly && {
-          results: ['origin_mismatch', 'auth_failed', 'blocked', 'denied'] as const,
-        }),
-      });
-      for (const item of page.items)
-        items.push({ kind: 'vault', ts: item.ts, id: timelineId('vault', item.eventId), item });
-    }
-    if (kinds.has('blocked')) {
-      const page = await this.#repos.blocklistAudit.list(sub);
-      for (const item of page.items)
-        items.push({ kind: 'blocked', ts: item.ts, id: timelineId('blocked', item.eventId), item });
-    }
-    if (kinds.has('guard')) {
-      const page = await this.#repos.siteGuardHits.list({
-        limit: limit + 1,
-        sessionId,
-        ...(errorsOnly && { actions: ['block', 'confirm', 'held'] as const }),
-        ...((query.since !== undefined || until !== undefined) && {
-          window: {
-            ...(query.since !== undefined && { since: query.since }),
-            ...(until !== undefined && { until }),
-          },
-        }),
-      });
-      const q = query.q?.toLowerCase();
-      for (const item of page.items) {
-        if (errorsOnly && item.outcome === 'approved') continue;
-        if (q !== undefined && q !== '' && !guardMatches(item, q)) continue;
-        items.push({ kind: 'guard', ts: item.ts, id: timelineId('guard', item.eventId), item });
-      }
-    }
-    // Ties on `ts` break on the kind-qualified id, so a navigate call and the page row it produced
-    // (same event id) stay distinct and keep a stable order across pages.
-    items.sort((a, b) => b.ts - a.ts || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
-    const after =
-      cursor === null || cursorTs === undefined
-        ? items
-        : items.filter((i) => i.ts < cursorTs || (i.ts === cursorTs && i.id < cursor.id));
-    const slice = after.slice(0, limit);
-    const last = after.length > limit ? slice[slice.length - 1] : undefined;
-    return {
-      items: slice,
-      nextCursor: last === undefined ? null : encodeCursor(TIMELINE, { key: last.ts, id: last.id }),
-    };
+    return sessionTimeline(this.#repos, sessionId, query);
   }
 
   async harnessMetrics(window: {
@@ -635,9 +527,4 @@ export class SqliteAnalyticsQueries implements AnalyticsQueries {
       sessions: asNumber(r.sessions),
     }));
   }
-}
-
-/** The timeline's free text over a guard hit: its URL, pack and guard id. */
-function guardMatches(item: SiteGuardHitRecord, q: string): boolean {
-  return [item.url, item.packId, item.guardId].some((v) => v.toLowerCase().includes(q));
 }

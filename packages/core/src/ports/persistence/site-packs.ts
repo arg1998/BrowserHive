@@ -228,7 +228,12 @@ export interface SiteGuardHitQuery extends PageQuery {
   readonly sessionId?: string;
   readonly packId?: string;
   readonly actions?: readonly SiteGuardActionValue[];
+  /** `since <= ts <= until` (inclusive, like every timeline source). */
   readonly window?: TimeWindow;
+  /** Free text over the URL, pack id and guard id. */
+  readonly q?: string;
+  /** Leave out approved confirmations (the timeline's `errors_only`). */
+  readonly excludeApproved?: boolean;
 }
 
 /** Repository over `site_guard_hits`. */

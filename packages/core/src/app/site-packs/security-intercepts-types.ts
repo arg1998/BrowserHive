@@ -9,6 +9,7 @@ import type { GuardRuleDescriber, SiteGuardHitSink } from '../../ports/site-guar
 import type { DomainEvents } from '../events/catalog.ts';
 import type { SessionService } from '../sessions/session-service.ts';
 import type { TemplateHealthService } from '../templates/template-health.ts';
+import type { PassBook } from './security-intercepts-passes.ts';
 import type { InterceptBook } from './security-intercepts-state.ts';
 
 /** The config keys the intercepts read (already in ms). */
@@ -44,6 +45,7 @@ export interface SecurityInterceptsDeps {
 export interface InterceptContext {
   readonly deps: SecurityInterceptsDeps;
   readonly book: InterceptBook;
+  readonly passes: PassBook;
   readonly log: Logger;
 }
 

@@ -170,7 +170,13 @@ export class InMemorySiteGuardHitRepository implements SiteGuardHitRepository {
             query.actions.length === 0 ||
             query.actions.includes(r.action)) &&
           (since === undefined || r.ts >= since) &&
-          (until === undefined || r.ts < until),
+          (until === undefined || r.ts <= until) &&
+          (query.excludeApproved !== true || r.outcome !== 'approved') &&
+          (query.q === undefined ||
+            query.q === '' ||
+            [r.url, r.packId, r.guardId].some((v) =>
+              v.toLowerCase().includes((query.q ?? '').toLowerCase()),
+            )),
       )
       .sort((a, b) => b.ts - a.ts || (a.eventId < b.eventId ? 1 : -1))
       .filter(

@@ -3,6 +3,23 @@
 import type { PackChallengeKind, PackGuardKind } from '@browserhive/contracts/site-packs';
 import type { RequestConfirmer } from './request-guard.ts';
 
+/**
+ * Tools a held or stopped template session may still call (spec 13 §9.5): they end or only
+ * inspect a session, or wait for the operator. The dispatcher's hold and the tool gate share it.
+ */
+export const SITE_HOLD_EXEMPT_TOOLS: ReadonlySet<string> = new Set([
+  'close_session',
+  'list_sessions',
+  'server_status',
+  'session_info',
+  'list_tabs',
+  'screenshot',
+  'list_templates',
+  'get_attention_result',
+  'list_saved_auths',
+  'vault_list_available',
+]);
+
 /** Why a session is held (`SITE_OPERATOR_PENDING.details.reason`). */
 export type SiteHoldReason = 'challenge' | 'write_confirm';
 
@@ -28,6 +45,11 @@ export interface WriteApprovalInput {
   readonly url: string;
   readonly tool: string;
   readonly source: 'element' | 'request';
+  /**
+   * The control the agent named (its selector, or role and name), so an approval's one-time pass
+   * covers that control only, not another control of the same guard on the page (review L6).
+   */
+  readonly target?: string;
 }
 
 /** The tool layer's answer for a `confirm` action. */

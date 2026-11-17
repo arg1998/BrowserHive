@@ -1,143 +1,14 @@
 /** @module app/site-packs/security-intercepts.test — the security-intercept state machine over the real broker and a fake clock: held writes (approve, deny, timeout, abort, close), one write per session, ten intercepts per template, host-owned and stdio refusals, the one-time passes, site checks with their bounds and health, and the tool hold. */
 
 import { describe, expect, it } from 'bun:test';
-import { FakeClock } from '../../../test/helpers/fake-clock.ts';
-import { FakeIdGenerator } from '../../../test/helpers/fake-id-generator.ts';
-import { createVaultRepos } from '../../../test/helpers/in-memory-vault-repos.ts';
-import { RecordingEventBus } from '../../../test/helpers/recording-event-bus.ts';
-import { createCollectingLogger } from '../../../test/helpers/test-logger.ts';
-import { templateRecord, templateSiteRecord } from '../../../test/persistence/helpers.ts';
-import { OperatorRequestBroker } from '../../domain/operator-requests/broker.ts';
-import type { Session } from '../../domain/session/session.ts';
-import type { SessionWarning } from '../../domain/session/warnings.ts';
-import type { ProbeVerdict } from '../../domain/templates/probe.ts';
-import type { TemplateSiteRecord } from '../../ports/persistence/index.ts';
-import type { RequestConfirmation, RequestOwner } from '../../ports/request-guard.ts';
+import {
+  TEMPLATE,
+  TIMEOUT,
+  interceptsWorld as world,
+} from '../../../test/helpers/intercepts-world.ts';
 import type { ChallengeInput, WriteApprovalInput } from '../../ports/security-intercepts.ts';
-import type { GuardRuleInfo, SiteGuardHitInput } from '../../ports/site-guards.ts';
 import type { DomainEvents } from '../events/catalog.ts';
-import { SecurityInterceptService } from './security-intercepts.ts';
 import { MAX_OPEN_INTERCEPTS_PER_TEMPLATE } from './security-intercepts-state.ts';
-
-const TEMPLATE = templateRecord({ templateId: 'tp-aaaaaaaaaa', displayName: 'Job Hunt' });
-const TIMEOUT = 60_000;
-
-function fakeSession(id: string, mode: 'live' | 'maintenance' = 'live'): Session {
-  const session = {
-    id,
-    slug: id.split('-')[0] ?? id,
-    owner: 'agent-1',
-    template: { templateId: TEMPLATE.templateId, name: 'job-hunt', mode },
-  };
-  return session as unknown as Session;
-}
-
-const INFO: Record<string, GuardRuleInfo> = {
-  'site-a.test#invite': {
-    ruleId: 'site-a.test#invite',
-    packId: 'site-a.test',
-    guardId: 'invite',
-    guardKind: 'write',
-    siteTitle: 'Site A',
-  },
-};
-
-function world(options: { transport?: 'http' | 'stdio'; minWait?: number } = {}) {
-  const clock = new FakeClock(1_000_000);
-  const ids = new FakeIdGenerator();
-  const repos = createVaultRepos();
-  const bus = new RecordingEventBus<DomainEvents>();
-  const broker = new OperatorRequestBroker({
-    requests: repos.requests,
-    actions: repos.actions,
-    leases: { pause: () => undefined, resume: () => undefined },
-    events: bus,
-    clock,
-    ids,
-    logger: createCollectingLogger(),
-    limits: { perSession: 8, global: 256 },
-  });
-  const sessions = new Map<string, Session>();
-  const warnings: SessionWarning[] = [];
-  const hits: SiteGuardHitInput[] = [];
-  const health: { site: string; verdict: ProbeVerdict }[] = [];
-  const probes: string[] = [];
-  const sites: TemplateSiteRecord[] = [
-    templateSiteRecord({ templateId: TEMPLATE.templateId, siteId: 'site-a.test' }),
-  ];
-  const intercepts = new SecurityInterceptService({
-    broker,
-    sessions: {
-      peek: (id) => sessions.get(id),
-      warn: (_s, w) => {
-        warnings.push(w);
-      },
-    },
-    templates: { get: async (id) => (id === TEMPLATE.templateId ? TEMPLATE : null) },
-    templateSites: {
-      list: async () => sites,
-      upsert: async (record) => {
-        const i = sites.findIndex((s) => s.siteId === record.siteId);
-        sites[i] = record;
-      },
-    },
-    health: {
-      record: async (_t, site, verdict) => {
-        health.push({ site, verdict });
-      },
-      probe: async (_t, o) => {
-        probes.push(...(o.siteIds ?? []));
-        return [];
-      },
-    },
-    describe: (id) => INFO[id] ?? null,
-    requestGuardOf: (_p, g) => (g === 'invite-button' ? 'invite' : null),
-    packTitle: () => 'Site A',
-    hits: { write: (h) => hits.push(h) },
-    bus,
-    clock,
-    logger: createCollectingLogger(),
-    config: {
-      transport: options.transport ?? 'http',
-      attentionTimeoutMs: TIMEOUT,
-      minAttentionWaitMs: options.minWait ?? 0,
-    },
-  });
-  const add = (id: string, mode: 'live' | 'maintenance' = 'live') => {
-    sessions.set(id, fakeSession(id, mode));
-    return id;
-  };
-  const write = (
-    sessionId: string | null,
-    over: Partial<RequestConfirmation> = {},
-  ): RequestConfirmation => ({
-    owner: (sessionId === null
-      ? { kind: 'host' }
-      : { kind: 'session', sessionId }) satisfies RequestOwner,
-    ruleId: 'site-a.test#invite',
-    method: 'POST',
-    resourceType: 'fetch',
-    url: 'https://www.site-a.test/api/invite',
-    signal: new AbortController().signal,
-    ...over,
-  });
-  const flush = () => new Promise((r) => setTimeout(r, 0));
-  return {
-    clock,
-    broker,
-    bus,
-    intercepts,
-    sessions,
-    warnings,
-    hits,
-    health,
-    probes,
-    sites,
-    add,
-    write,
-    flush,
-  };
-}
 
 const confirmer = (w: ReturnType<typeof world>) => {
   const c = w.intercepts.confirmer;

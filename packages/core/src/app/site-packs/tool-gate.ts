@@ -15,7 +15,13 @@ import { registrableDomain, sanitizeUrl } from '../../kernel/url.ts';
 import type { Clock } from '../../ports/clock.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type { TemplateSiteRecord } from '../../ports/persistence/index.ts';
-import type { SecurityIntercepts } from '../../ports/security-intercepts.ts';
+import {
+  type SecurityIntercepts,
+  SITE_HOLD_EXEMPT_TOOLS,
+} from '../../ports/security-intercepts.ts';
+
+export { SITE_HOLD_EXEMPT_TOOLS } from '../../ports/security-intercepts.ts';
+
 import type { WritePolicyOverrides } from '../../ports/site-guards.ts';
 import type { EffectivePack, SitePackLookup } from '../../ports/site-packs.ts';
 import type { DocumentGuardResolver } from '../../ports/site-tool-guards.ts';
@@ -28,23 +34,6 @@ import {
 } from './element-targets.ts';
 import { siteActionBlocked, siteOperatorPending, urlBlockedByGuard } from './site-errors.ts';
 import type { ToolGuardHits } from './tool-guard-hits.ts';
-
-/**
- * Tools a stopped session may still call (spec 13 §9.5): they end or only inspect a session, or
- * wait for the operator. The same list as the dispatcher's hold (`interface/mcp/site-hold.ts`).
- */
-export const SITE_HOLD_EXEMPT_TOOLS: ReadonlySet<string> = new Set([
-  'close_session',
-  'list_sessions',
-  'server_status',
-  'session_info',
-  'list_tabs',
-  'screenshot',
-  'list_templates',
-  'get_attention_result',
-  'list_saved_auths',
-  'vault_list_available',
-]);
 
 /** Tools that load an agent-given URL (`GET` document guards and the own-navigation record). */
 const NAVIGATION_TOOLS: ReadonlySet<string> = new Set(['navigate', 'new_tab']);

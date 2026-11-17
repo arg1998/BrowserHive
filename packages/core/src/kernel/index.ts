@@ -41,7 +41,17 @@ export {
   type SerializeErrorOptions,
   serializeError,
 } from './errors/index.ts';
-export { globToRegExp, hasGlobWildcard, MAX_PATTERN_LENGTH, matchesGlob } from './glob.ts';
+export {
+  type CompiledGlob,
+  compileGlob,
+  compileGlobTokens,
+  type GlobToken,
+  globTokens,
+  hasGlobWildcard,
+  MAX_PATTERN_LENGTH,
+  matchesCompiledGlob,
+  matchesGlob,
+} from './glob.ts';
 export {
   isSafeZipEntry,
   isWithin,

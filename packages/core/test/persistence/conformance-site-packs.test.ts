@@ -270,8 +270,9 @@ for (const [name, open] of IMPLEMENTATIONS) {
       expect((await repos.hits.list({ packId: 'zillow' })).items.map((r) => r.eventId)).toEqual([
         'e-hit-3',
       ]);
+      // `until` is inclusive, like every other list window (review PR #83 M7).
       const window = await repos.hits.list({ window: { since: 2_000, until: 3_000 } });
-      expect(window.items.map((r) => r.eventId)).toEqual(['e-hit-3', 'e-hit-2']);
+      expect(window.items.map((r) => r.eventId)).toEqual(['e-hit-4', 'e-hit-3', 'e-hit-2']);
       expect(await repos.hits.countByTemplate('tp-fixture001', 0)).toBe(3);
       expect(await repos.hits.countByTemplate('tp-fixture001', 2_000)).toBe(2);
       expect(await repos.hits.countByTemplate('tp-none', 0)).toBe(0);

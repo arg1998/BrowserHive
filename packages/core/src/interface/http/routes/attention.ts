@@ -104,10 +104,9 @@ export const ATTENTION_ROUTES = [
     async handler({ input, principal, services }) {
       const by = requirePrincipal(principal).subject;
       const { action, message } = input.body;
+      // Security intercepts are refused per item: each is decided on its own (S-H2).
       const body = await bulk(input.body.request_ids, (id) =>
-        action === 'resolve'
-          ? services.attention.resolve(id, by, message)
-          : services.attention.reject(id, by, message),
+        services.attention.decideInBulk(id, action, by, message),
       );
       return reply(200, body);
     },

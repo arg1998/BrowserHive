@@ -150,6 +150,39 @@ export class AttentionService {
     return this.decide(requestId, 'resolved', by, message);
   }
 
+  /**
+   * One item of `POST /attention/bulk`. Security intercepts are refused: a held sign-out, account,
+   * credential or destructive write, or a site check, is decided one at a time where its method,
+   * URL, guard and kind are shown (spec 13 §9.3; review PR #83 S-H2).
+   * @throws `VALIDATION_FAILED` for a security intercept, else as {@link resolve}/{@link reject}.
+   */
+  async decideInBulk(
+    requestId: string,
+    decision: 'resolve' | 'reject',
+    by: string,
+    message?: string,
+  ): Promise<OperatorRequestTerminalStatus> {
+    const row = await this.deps.broker.get(requestId);
+    if (row?.kind === 'security_intercept') {
+      throw new AppError(
+        'VALIDATION_FAILED',
+        {
+          issues: [
+            {
+              path: 'request_ids',
+              message: 'a site check or write approval is decided on its own, not in bulk',
+              code: 'security_intercept',
+            },
+          ],
+        },
+        { publicMessage: `Request '${requestId}' is a security intercept: decide it on its own.` },
+      );
+    }
+    return decision === 'resolve'
+      ? this.resolve(requestId, by, message)
+      : this.reject(requestId, by, message);
+  }
+
   /** Operator reject (`decision: 'reject'`). */
   reject(requestId: string, by: string, message?: string): Promise<OperatorRequestTerminalStatus> {
     return this.decide(requestId, 'rejected', by, message);
