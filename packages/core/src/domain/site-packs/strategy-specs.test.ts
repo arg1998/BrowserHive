@@ -1,3 +1,5 @@
+/** @module domain/site-packs/strategy-specs.test — the strategy table, clamped parameters, parameter checks and the ramp and window helpers (spec 13 §9.4). */
+
 import { describe, expect, test } from 'bun:test';
 import { SitePackV1, STRATEGY_IDS } from '@browserhive/contracts/site-packs';
 import { refinePack } from './refine.ts';
@@ -121,6 +123,7 @@ describe('ramp-up and active hours', () => {
     expect(rampedLimit(5, 0.3)).toBe(2);
     expect(rampedLimit(1, 0.1)).toBe(1);
     expect(rampedLimit(100, 1)).toBe(100);
+    expect(rampedLimit(10, 0.6)).toBe(6);
   });
 
   test('activeWindowHours wraps past midnight', () => {

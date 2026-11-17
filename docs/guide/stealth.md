@@ -110,6 +110,16 @@ A [session template](templates.md) is one person on one device, so its identity 
 
 See [Identity](templates.md#identity) in the templates guide.
 
+## Site pack stealth strategies
+
+A site's [pack](site-packs.md#strategies) can select three stealth strategies. They change what the site sees of the whole template, because one template is one device:
+
+- **`stealth-profile`** sets a floor for the template: a minimum stealth level (`standard` or `max`), whether fingerprint noise must be on or off (`forbidden` for sites known to flag canvas and audio noise), and whether input must be humanized. A template below the floor cannot add or enable the site: creating it, adding the site or lowering the template's stealth is refused with what to change. A new pack version that raises the floor above a template's settings cannot be applied until you change the template or disable the site there. `humanize: true` makes pointer movement and typing humanized on the site's pages for every session, whatever the session asked for.
+- **`single-focus`**: SINGLE_FOCUS_TEXT
+- **`webrtc-policy`**: WEBRTC_TEXT
+
+Canvas and audio noise cannot be switched per page inside one shared browser, so a pack expresses that need only through the floor.
+
 ## Ceilings
 
 These are known and documented, not bugs:

@@ -473,7 +473,8 @@ export function rampFactor(params: StrategyParams['ramp-up'], ageMs: number): nu
 
 /** A limit scaled by a ramp factor, rounded up, never below 1. */
 export function rampedLimit(limit: number, factor: number): number {
-  return Math.max(1, Math.ceil(limit * factor));
+  // 10 × 0.6 is 6.000000000000001 in floating point: round away the representation error first.
+  return Math.max(1, Math.ceil(limit * factor - 1e-9));
 }
 
 /** Hours in an `active-hours` window (1–23; wrapping past midnight allowed). */
