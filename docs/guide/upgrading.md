@@ -2,7 +2,7 @@
 
 BrowserHive follows semantic versioning from `0.1.0`. While the major version is `0`, breaking changes bump the minor version. Release notes are in the changelog and on GitHub Releases.
 
-> **Upgrading to the release with site packs is one-way.** Its database (schema v10) cannot be opened by an older BrowserHive. To go back to an older release afterwards, you must restore the backup written before the upgrade, and you lose what was recorded since. See [Site packs: schema v10 cannot be downgraded](#site-packs-schema-v10-cannot-be-downgraded).
+> **Upgrading to 0.3.0 (the release with session templates and site packs) is one-way.** Its database (schema v10) cannot be opened by an older BrowserHive. To go back to an older release afterwards, you must restore the backup written before the upgrade, and you lose what was recorded since. See [Site packs: schema v10 cannot be downgraded](#site-packs-schema-v10-cannot-be-downgraded).
 
 ## Upgrade
 
@@ -93,7 +93,7 @@ Nothing else changes for existing templates: their sites stay generic sites unti
 Nothing is ever migrated downward in place. Instead, each database records two numbers: its schema version, and the **oldest schema version whose code can still read it**. Purely additive migrations (new tables or columns) do not raise the second number.
 
 - **Within the compatibility window:** an older release opens a newer database normally.
-- **Outside the window:** the older release refuses to start with [`DB_NEWER_THAN_BINARY`](../reference/errors.md#DB_NEWER_THAN_BINARY) (exit code 3). The message names the backup that was written before the upgrade. Schema v10, the release with site packs, is the first such migration: [any release before it cannot open the database](#site-packs-schema-v10-cannot-be-downgraded).
+- **Outside the window:** the older release refuses to start with [`DB_NEWER_THAN_BINARY`](../reference/errors.md#DB_NEWER_THAN_BINARY) (exit code 3). The message names the backup that was written before the upgrade. Schema v10 (0.3.0, the release with site packs) is the first such migration: [any release before it cannot open the database](#site-packs-schema-v10-cannot-be-downgraded).
 
 To go back:
 

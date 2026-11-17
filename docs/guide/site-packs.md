@@ -287,7 +287,22 @@ Tips:
 
 BrowserHive ships packs for popular sites. Every field in them was checked against the live site; a field that can only be checked from a signed-in account and was not, is left out rather than guessed, and each pack's `verified` dates say what was checked and when. `browserhive sitepacks list --source bundled` lists the ones your release has.
 
-<!-- bundled packs table: lead -->
+The first bundled packs were checked on 2026-11-16 without signing in: sign-in pages and signed-out redirects were observed in a fresh browser, guards and terms come from the sites' official pages. What only a signed-in account can confirm (a signed-in landmark, write endpoints, pacing numbers) is not in them yet; later pack versions add it, and each arrives as a pending update for you to approve.
+
+| Pack | Domains | Probe (signed out → redirect) | Sign in by hand only | Terms → default write policy | Notes |
+|---|---|---|---|---|---|
+| Google | `google.com` | `myaccount.google.com/` | yes | restricted → warn | account, security, app-password, device and deletion pages blocked; device binding (DBSC on Windows) listed |
+| LinkedIn | `linkedin.com`, `licdn.com` | `www.linkedin.com/feed/` | no | prohibited → confirm | headed browser preferred |
+| Reddit | `reddit.com`, `redd.it` | `www.reddit.com/settings/account` (`either`) | no | prohibited → confirm | headed browser preferred; the redirect happens after the page loads, so checks are often "couldn't tell"; no logout guard yet |
+| Facebook | `facebook.com`, `fbcdn.net` | `www.facebook.com/settings` | no | prohibited → confirm | |
+| Instagram | `instagram.com`, `cdninstagram.com` | `www.instagram.com/accounts/edit/` | no | prohibited → confirm | |
+| X | `x.com`, `twitter.com`, `twimg.com` | `x.com/settings/account` | no | prohibited → confirm | headed browser preferred |
+| GitHub | `github.com` | `github.com/settings/profile` | no | allowed → allow | token, SSH key and OAuth app pages are `credential` guards |
+| Indeed | `indeed.com` | `myjobs.indeed.com/` | no | writes restricted → confirm | headed browser preferred |
+| Glassdoor | `glassdoor.com` | `www.glassdoor.com/member/profile` | no | prohibited → confirm | signs in through Indeed; headed browser preferred; no logout guard yet |
+| Microsoft account | `microsoft.com`, `live.com`, `microsoftonline.com` | `account.microsoft.com/` | no | restricted → warn | headed browser preferred; security pages are guarded (opening them forces a fresh sign-in) |
+
+Packs without write guards (all of these for now) leave the write policy with nothing to act on. YouTube is not bundled yet: its signed-in check could not be confirmed without an account. Besides the packs, every template browser blocks the OAuth consent screens and approvals of Google, GitHub (authorize and device approval) and Microsoft (Entra admin consent, Microsoft account consent), so an agent cannot grant a third-party app access to the account.
 
 ## Commands and API
 
