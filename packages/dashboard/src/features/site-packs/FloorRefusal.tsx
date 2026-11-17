@@ -102,7 +102,8 @@ export function FloorDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg" showCloseButton={false}>
-        <DialogHeader>
+        {/* No corner ✕ (the footer's Close is the one way out), so the header takes the full width. */}
+        <DialogHeader className="pr-0">
           <DialogTitle>
             <bdi>{TITLE[action](title, refusal.version)}</bdi>
           </DialogTitle>
