@@ -188,6 +188,19 @@ for (const [name, open] of IMPLEMENTATIONS) {
       expect(decided?.decidedAt).toBe(4_001);
     });
 
+    it('classifies a row in place: classification and the classified diff (spec 13 §9.7)', async () => {
+      repos = await open();
+      const row = await repos.changes.insert(change({ classification: 'unclassified' }));
+      const diff = [
+        { path: 'guards[logout]', from: { id: 'logout' }, to: null, class: 'loosening' as const },
+      ];
+      await repos.changes.classify(row.eventId, 'loosening', diff);
+      await repos.changes.classify('e-missing', 'neutral', null);
+      const [stored] = await repos.changes.listPending();
+      expect(stored).toMatchObject({ eventId: row.eventId, classification: 'loosening', diff });
+      expect(stored?.decision).toBe(row.decision);
+    });
+
     it('lists history newest first with filters and keyset paging', async () => {
       repos = await open();
       for (let i = 1; i <= 7; i++) {

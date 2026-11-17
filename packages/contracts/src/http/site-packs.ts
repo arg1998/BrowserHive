@@ -211,7 +211,7 @@ export const SitePackChange = z.object({
   path: z.string(),
   from: z.unknown(),
   to: z.unknown(),
-  /** `null` until T3b's classifier. */
+  /** The field's class (spec 13 §9.7); `null` for a new pack's fields and rows from before T3b. */
   class: z.enum(['tightening', 'restrictive', 'loosening', 'neutral']).nullable(),
 });
 /** One changed field. */

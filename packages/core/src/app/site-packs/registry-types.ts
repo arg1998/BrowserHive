@@ -46,7 +46,12 @@ export interface SitePackRegistryDeps {
   readonly uow: UnitOfWork;
   readonly repos: Pick<
     Repositories,
-    'sitePackState' | 'sitePackChanges' | 'siteGuardHits' | 'templateSites' | 'operatorActions'
+    | 'sitePackState'
+    | 'sitePackChanges'
+    | 'siteGuardHits'
+    | 'templateSites'
+    | 'templates'
+    | 'operatorActions'
   >;
   /** This binary's version (`min_client`/`max_client` of cached copies). */
   readonly binaryVersion: string;
@@ -144,6 +149,7 @@ export type PendingUpdate =
       readonly toVersion: number;
       readonly sha256: string;
       readonly source: SitePackSourceId;
+      readonly classification: SitePackChangeRecord['classification'];
     }
   | {
       readonly kind: 'local';

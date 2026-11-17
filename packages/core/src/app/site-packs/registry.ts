@@ -20,7 +20,7 @@ import { registrableDomain } from '../../kernel/url.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type { EffectivePack, SitePackLookup, SourceCatalog } from '../../ports/site-packs.ts';
 import * as actions from './registry-actions.ts';
-import { withUsage } from './registry-build.ts';
+import { withFreshUsage } from './registry-classify.ts';
 import { packNotFound } from './registry-errors.ts';
 import { prepareFirstUse } from './registry-first-use.ts';
 import { humanOnlyOf, importResponse } from './registry-helpers.ts';
@@ -33,6 +33,7 @@ import {
   packDetail,
   pendingOf,
 } from './registry-reads.ts';
+import { type RevocationOutcome, type RevokeResult, revokeVersion } from './registry-revoke.ts';
 import { loadCatalog, sourceStats } from './registry-sync.ts';
 import {
   emptySnapshot,
@@ -176,7 +177,7 @@ export class SitePackRegistry implements SitePackLookup {
     return packDetail(this.#entry(packId), this.#readFacts());
   }
 
-  /** `GET /site-packs/{pack_id}/diff`. @throws `SITE_PACK_NOT_FOUND`, `CONFLICT`. */
+  /** `GET /site-packs/{pack_id}/diff`, classified (§9.7). @throws `SITE_PACK_NOT_FOUND`, `CONFLICT`. */
   async diff(packId: string, query: SitePackDiffQuery): Promise<SitePackDiffResponse> {
     return diffOf(this.#entry(packId), this.#snapshot, query, this.#deps);
   }
@@ -243,12 +244,12 @@ export class SitePackRegistry implements SitePackLookup {
   }
 
   /**
-   * Re-reads which templates use each pack (`used_by`, automatic Follow) after template or site
-   * changes; the content in force is unchanged.
+   * Re-reads which templates use each pack (`used_by`, automatic Follow) and re-classifies pending
+   * versions with the templates' settings (§9.7) after template or site changes.
    */
   refreshUsage(): Promise<void> {
     return this.#serial(async () => {
-      const next = withUsage(this.#snapshot, await this.#deps.repos.templateSites.listAll());
+      const next = await withFreshUsage(this.#deps.repos, this.#snapshot);
       if (next.changed.length === 0) return;
       this.#snapshot = next.snapshot;
       for (const packId of next.changed) this.#publishPack(packId);
@@ -266,6 +267,15 @@ export class SitePackRegistry implements SitePackLookup {
   /** Reject a pending version. @throws `SITE_PACK_NOT_FOUND`, `SITE_PACK_UPDATE_NOT_PENDING`. */
   reject(packId: string, version: number, by: string): Promise<SitePackView> {
     return this.#act(packId, () => actions.rejectVersion(this.#core(), packId, version, by));
+  }
+
+  /** A publisher revoked `version` (§9.7, `registry-revoke.ts`); for the T4b registry client. */
+  async revoke(packId: string, version: number, by: string): Promise<RevokeResult> {
+    let outcome: RevocationOutcome = { outcome: 'not_in_force' };
+    const view = await this.#act(packId, async () => {
+      outcome = await revokeVersion(this.#core(), packId, version, by);
+    });
+    return { ...outcome, view };
   }
 
   /** Restore the previous approved version. @throws `SITE_PACK_NOT_FOUND`, `CONFLICT`. */
@@ -293,18 +303,12 @@ export class SitePackRegistry implements SitePackLookup {
     return this.#act(packId, () => actions.setEnabled(this.#core(), packId, enabled, by));
   }
 
-  /**
-   * `POST /site-packs/import` with one unsigned pack: stored in `sitePacksDir` as `<id>.json`, then
-   * approved like any local file. @throws `SITE_PACK_INVALID`.
-   */
+  /** `POST /site-packs/import` (`{pack}`): stored as `<id>.json`, approved like a local file. */
   importPack(raw: unknown, by: string): Promise<SitePackImportResponse> {
     return this.#imported(() => actions.importPack(this.#core(), raw, by));
   }
 
-  /**
-   * `POST /site-packs/import` with one file's exact text: validated, hashed and stored byte for
-   * byte, so the SHA-256 to approve is the file's own. @throws `SITE_PACK_INVALID`.
-   */
+  /** `POST /site-packs/import` (`{text}`): stored byte for byte; the SHA-256 is the file's own. */
   importPackText(text: string, by: string): Promise<SitePackImportResponse> {
     const bytes = new TextEncoder().encode(text);
     return this.#imported(() => actions.importPackBytes(this.#core(), bytes, by));

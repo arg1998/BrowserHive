@@ -1,4 +1,4 @@
-browserhive sitepacks show — Show a pack: approval and provenance, local file, pending versions, rules
+browserhive sitepacks show — Show a pack: approval, local file, classified pending versions, rules, strategies
 
 USAGE
   browserhive sitepacks show <pack> [flags]

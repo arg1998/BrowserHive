@@ -91,11 +91,12 @@ describe('local files', () => {
     });
     const diff = await registry.diff('site-a.test', { to: 'local' });
     expect(diff.from?.sha256).toBe(packSha(first));
+    expect(diff.classification).toBe('neutral');
     expect(diff.changes).toContainEqual({
       path: 'title',
       from: 'Local A',
       to: 'Local A edited',
-      class: null,
+      class: 'neutral',
     });
     // The hash shown before the edit no longer approves anything.
     expect((await errorOf(registry.approveLocal('site-a.test', packSha(first), 'p-op'))).code).toBe(

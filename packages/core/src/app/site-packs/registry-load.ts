@@ -4,6 +4,7 @@ import type { SitePackPendingEvent } from '@browserhive/contracts/ws';
 import type { z } from 'zod';
 import type { SourceCatalog } from '../../ports/site-packs.ts';
 import { assembleSnapshot, resolvePacks } from './registry-build.ts';
+import { readPackUsage, reclassifyPending } from './registry-classify.ts';
 import type { RegistryCore } from './registry-core.ts';
 import { syncCandidates } from './registry-sync.ts';
 import type { RegistrySnapshot } from './registry-types.ts';
@@ -44,8 +45,9 @@ export async function loadSnapshot(
   });
   const onChanges = note('site_pack_changes');
   const before = await deps.repos.sitePackChanges.listPending({ onUnreadable: onChanges });
-  const fresh = await syncCandidates(core, resolved, before, onChanges);
-  const snapshot = assembleSnapshot(resolved, {
+  const usage = await readPackUsage(deps.repos);
+  const fresh = await syncCandidates(core, resolved, before, usage, onChanges);
+  const assembled = assembleSnapshot(resolved, {
     enabled: deps.enabled,
     generation,
     bundled,
@@ -54,6 +56,8 @@ export async function loadSnapshot(
     sites: await deps.repos.templateSites.listAll(),
     loadedAt: deps.clock.now(),
   });
+  // Rows from before the classifier, and verdicts a template edit moved (spec 13 §9.7).
+  const { snapshot } = await reclassifyPending(deps.repos.sitePackChanges, assembled, usage);
   for (const [packId, { table, reason }] of corrupt) {
     deps.degradations?.report({
       code: STATE_CORRUPT,

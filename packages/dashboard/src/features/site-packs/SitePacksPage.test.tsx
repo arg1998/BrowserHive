@@ -29,7 +29,7 @@ function packsWithDecisions() {
           size: 4096,
           released: '2026-12-01',
           notes: null,
-          classification: 'unclassified',
+          classification: 'tightening',
           source: 'bundled',
           provenance: { kind: 'bundled', release: '0.3.1' },
         },
@@ -89,7 +89,8 @@ describe('SitePacksPage', () => {
     expect(await within(linkedin).findByText('guards[logout].action')).toBeDefined();
     expect(within(linkedin).getByText('confirm')).toBeDefined();
     expect(within(linkedin).getByText('block')).toBeDefined();
-    expect(within(linkedin).getByText('Unclassified')).toBeDefined();
+    // Classified: the card's chip and the field's chip, in words (never colour alone).
+    expect(within(linkedin).getAllByText('Tightens rules').length).toBe(2);
     const github = screen
       .getByRole('heading', { level: 3, name: /GitHub/ })
       .closest('article') as HTMLElement;
@@ -118,6 +119,7 @@ describe('SitePacksPage', () => {
     const dialog = await screen.findByRole('alertdialog');
     expect(within(dialog).getByText(`Apply ${iso('LinkedIn')} v4?`)).toBeDefined();
     expect(within(dialog).getByText(/v3 is kept, so Revert restores it/)).toBeDefined();
+    expect(within(dialog).getByText(/This version only tightens rules/)).toBeDefined();
     await expectNoA11yViolations(document.body, AXE);
     await click(within(dialog).getByRole('button', { name: 'Apply v4' }));
     await waitFor(() =>

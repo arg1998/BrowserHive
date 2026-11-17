@@ -1,4 +1,4 @@
-/** @module dashboard/test/e2e/site-packs.e2e — site packs in a real Chrome against the template daemon (spec 13 §11.4, §17 T3a): the Site packs page lists the bundled packs, a pack's page reads as text, and wizard step 2 shows the catalog; axe finds no serious or critical violation on them in either theme. Skips without that daemon */
+/** @module dashboard/test/e2e/site-packs.e2e — site packs in a real Chrome against the template daemon (spec 13 §11.4, §17 T3a): the Site packs page lists the bundled packs, a pack's page reads as text, and wizard step 2 shows the catalog, and (T3b) the history shows a classification chip in words; axe finds no serious or critical violation on them in either theme. Skips without that daemon */
 import { createRequire } from 'node:module';
 import { expect, type Page, test } from '@playwright/test';
 import { baseUrl, operatorCookie, seedPassword } from './template-helpers.ts';
@@ -84,4 +84,52 @@ test.describe('site packs in the dashboard', () => {
       expect(await violations(page)).toEqual([]);
     });
   }
+
+  test('a classification chip in the history, in words (T3b)', async ({ page }, info) => {
+    test.skip(info.project.name !== 'desktop', 'one browser is enough');
+    await operatorCookie(page);
+    const headers = { origin: baseUrl ?? '' };
+    const pack = {
+      schema: 1,
+      id: 'e2e-pack.test',
+      version: 1,
+      min_client: '0.1.0',
+      title: 'E2E pack',
+      domains: ['e2e-pack.test'],
+      sign_in: { url: { host: 'www.e2e-pack.test', path: '/login' }, human_only: false },
+      signed_in: {
+        probe: { host: 'www.e2e-pack.test', path: '/account' },
+        kind: 'redirect',
+        signed_out_redirects: ['www.e2e-pack.test/login*'],
+      },
+      guards: [
+        {
+          id: 'logout',
+          kind: 'logout',
+          match: { url: 'www.e2e-pack.test/logout' },
+          action: 'block',
+        },
+      ],
+      write_policy: { default: 'confirm', stance: 'prohibited' },
+    };
+    const imported = await page.request.post(`${baseUrl}/api/v1/site-packs/import`, {
+      data: { text: `${JSON.stringify(pack, null, 2)}\n` },
+      headers,
+    });
+    expect(imported.ok()).toBe(true);
+    const diff = await page.request.get(`${baseUrl}/api/v1/site-packs/e2e-pack.test/diff?to=local`);
+    const sha = ((await diff.json()) as { to: { sha256: string } }).to.sha256;
+    const approved = await page.request.post(
+      `${baseUrl}/api/v1/site-packs/e2e-pack.test/approve-local`,
+      { data: { sha256: sha }, headers },
+    );
+    expect(approved.ok()).toBe(true);
+    await page.goto(`${baseUrl}/site-packs?tab=history`);
+    const history = page.getByRole('region', { name: 'Pack history' });
+    // The approval of a local file reads "Local override": a chip with words and an icon.
+    const chip = history.locator('[data-classification="local_override"]').first();
+    await expect(chip).toHaveText('Local override');
+    await expect(chip.locator('svg')).toBeAttached();
+    expect(await violations(page)).toEqual([]);
+  });
 });

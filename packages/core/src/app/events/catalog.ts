@@ -241,6 +241,8 @@ export interface SitePackUpdatesFact {
     readonly sha256: string;
     /** Set for a local file: changed since approval, or never approved. */
     readonly local: 'changed' | 'not_approved' | null;
+    /** A candidate's classification (spec 13 §9.7; `revoked` for a revocation's fallback); `null` for a local file. */
+    readonly classification?: string | null;
   }[];
 }
 

@@ -164,7 +164,7 @@ describe('a newer bundled release', () => {
         size: expect.any(Number),
         released: null,
         notes: null,
-        classification: 'unclassified',
+        classification: 'neutral',
         new_domains: [],
         source: 'bundled',
         provenance: { kind: 'bundled', release: KIT_RELEASE },
@@ -175,7 +175,7 @@ describe('a newer bundled release', () => {
       path: 'title',
       from: 'Site site-a.test',
       to: 'Site A v2',
-      class: null,
+      class: 'neutral',
     });
     expect(bus.published.some((e) => e.name === 'site_pack.pending')).toBe(true);
     // Recorded once: another load inserts nothing.
@@ -190,6 +190,7 @@ describe('a newer bundled release', () => {
         toVersion: 2,
         sha256: packSha(v2),
         source: 'bundled',
+        classification: 'neutral',
       },
     ]);
   });

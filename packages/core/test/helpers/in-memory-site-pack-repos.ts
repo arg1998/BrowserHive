@@ -5,9 +5,11 @@ import type {
   SiteGuardHitQuery,
   SiteGuardHitRecord,
   SiteGuardHitRepository,
+  SitePackChangeFieldRecord,
   SitePackChangeQuery,
   SitePackChangeRecord,
   SitePackChangeRepository,
+  SitePackClassificationValue,
   SitePackDecisionValue,
   SitePackSourceId,
   SitePackStateRecord,
@@ -84,6 +86,16 @@ export class InMemorySitePackChangeRepository implements SitePackChangeRepositor
     const i = this.rows.findIndex((r) => r.eventId === eventId);
     const row = this.rows[i];
     if (row !== undefined) this.rows[i] = { ...row, decision, decidedBy: by, decidedAt: at };
+  }
+
+  async classify(
+    eventId: string,
+    classification: SitePackClassificationValue,
+    diff: readonly SitePackChangeFieldRecord[] | null,
+  ): Promise<void> {
+    const i = this.rows.findIndex((r) => r.eventId === eventId);
+    const row = this.rows[i];
+    if (row !== undefined) this.rows[i] = { ...row, classification, diff };
   }
 
   async findCandidate(

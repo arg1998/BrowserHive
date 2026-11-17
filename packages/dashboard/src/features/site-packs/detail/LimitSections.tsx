@@ -1,9 +1,9 @@
-/** @module features/site-packs/detail/LimitSections — the rest of a pack as readable text (spec 13 §9.2, §9.4): sessions at once and pacing with their official or vendor label and source, the browser and consistency the site expects, device binding, the strategies with their parameters listed as data (they apply from a later release), the verified dates and the sources as text with the domain shown */
+/** @module features/site-packs/detail/LimitSections — the rest of a pack as readable text (spec 13 §9.2, §9.4): sessions at once and pacing with their official or vendor label and source, the browser and consistency the site expects, device binding, the verified dates and the sources as text with the domain shown */
 import type { SitePackV1 } from '@browserhive/contracts/site-packs';
 import { Chip } from '@/components/shared/Chip.tsx';
 import { UrlText } from '../PackBits.tsx';
 import { PER_LABEL, SECTION_LABEL, SOURCE_KIND_LABEL } from './labels.ts';
-import { Code, Facts, PackSection } from './PackSection.tsx';
+import { Facts, PackSection } from './PackSection.tsx';
 
 type Source = SitePackV1['sources'][number];
 
@@ -99,39 +99,6 @@ export function BrowserSection({ pack }: { readonly pack: SitePackV1 }) {
           ),
         ]}
       />
-    </PackSection>
-  );
-}
-
-/** Strategies: listed as data; they apply from a later release (T3b). */
-export function StrategiesSection({ pack }: { readonly pack: SitePackV1 }) {
-  if (pack.strategies.length === 0) return null;
-  return (
-    <PackSection
-      title={`Strategies (${pack.strategies.length})`}
-      description="Behaviours this pack selects from the set built into BrowserHive. They are stored and shown now and applied from a later release."
-    >
-      <ul className="flex flex-col divide-y">
-        {pack.strategies.map((s) => {
-          const params = Object.entries(s.params);
-          return (
-            <li key={s.id} className="flex min-w-0 flex-col gap-1 py-2.5 first:pt-0 last:pb-0">
-              <span className="font-mono text-sm font-medium">{s.id}</span>
-              {params.length === 0 ? (
-                <span className="text-sm text-muted-foreground">Default parameters</span>
-              ) : (
-                <span className="flex flex-wrap gap-1.5">
-                  {params.map(([name, value]) => (
-                    <Code key={name}>
-                      {name} = {String(value)}
-                    </Code>
-                  ))}
-                </span>
-              )}
-            </li>
-          );
-        })}
-      </ul>
     </PackSection>
   );
 }

@@ -1,4 +1,4 @@
-browserhive sitepacks diff — Show the field changes between the approved version and a candidate
+browserhive sitepacks diff — Show the classified field changes from the approved version to a candidate
 
 USAGE
   browserhive sitepacks diff <pack> [flags]

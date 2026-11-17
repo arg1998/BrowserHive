@@ -2,7 +2,7 @@
 
 # Error reference
 
-Every error code BrowserHive can produce (144 codes), generated from `ERROR_REGISTRY` in `@browserhive/contracts/errors`. Each code has a stable anchor: `errors.md#<CODE>`, which is also the `type` URL of HTTP problem responses (`https://browserhive.ai/docs/errors#<CODE>`).
+Every error code BrowserHive can produce (145 codes), generated from `ERROR_REGISTRY` in `@browserhive/contracts/errors`. Each code has a stable anchor: `errors.md#<CODE>`, which is also the `type` URL of HTTP problem responses (`https://browserhive.ai/docs/errors#<CODE>`).
 
 ## How errors reach you
 
@@ -103,6 +103,7 @@ Returned by tools and the REST API when a request cannot be served (unknown sess
 | [`SITE_PACK_NO_PREVIOUS`](#SITE_PACK_NO_PREVIOUS) | No previous version | 409 | never |
 | [`SITE_PACK_NO_LOCAL_FILE`](#SITE_PACK_NO_LOCAL_FILE) | No local pack file | 404 | never |
 | [`SITE_PACK_APPROVAL_REQUIRED`](#SITE_PACK_APPROVAL_REQUIRED) | Site pack needs review | 409 | different_args |
+| [`SITE_PACK_BELOW_FLOOR`](#SITE_PACK_BELOW_FLOOR) | Templates below the pack's stealth floor | 409 | after_operator |
 
 <a id="SESSION_NOT_FOUND"></a>
 ### `SESSION_NOT_FOUND`
@@ -1981,6 +1982,33 @@ Details:
 | `sha256` | `string` | yes | — |
 | `source` | `string` | yes | — |
 | `release` | `string` or `null` | yes | — |
+
+<a id="SITE_PACK_BELOW_FLOOR"></a>
+### `SITE_PACK_BELOW_FLOOR`
+
+| Property | Value |
+|---|---|
+| Title | Templates below the pack's stealth floor |
+| HTTP status | 409 |
+| Category | `domain` |
+| Retryable | `after_operator` (retry after an operator acts (unlock the vault, resolve a request, change policy)) |
+
+Message: `Version {version} of site pack '{pack_id}' needs stronger stealth settings than templates using it have: {templates_text}. Change those templates or disable the site in them, then apply again.`
+
+Hint: Raise the stealth level or change fingerprint noise on the named templates (or disable the site there), then Apply.
+
+Cause: The version selects the `stealth-profile` strategy (spec 13 §9.4) with a floor (minimum stealth level, required or forbidden fingerprint noise) that templates whose enabled sites use the pack do not meet. Applying it would leave those templates running the site below the pack's floor, so Apply is refused and the approved version stays in force.
+
+Resolution: Edit each named template (Settings: stealth level, fingerprint noise) to meet the floor, or disable the site on it, then apply the version again. Rejecting the version keeps the current one.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `pack_id` | `string` | yes | — |
+| `version` | `integer` | yes | — |
+| `templates` | `object[]` | yes | each item: keys `template_id`, `name`, `issues` |
+| `templates_text` | `string` | yes | — |
 
 ## Boot errors
 

@@ -1,4 +1,4 @@
-/** @module features/site-packs/HistoryTabs — the History tab of `/site-packs` and of a pack's page (`GET /site-packs/changes`: every approval, update, rejection and revert, newest first; `packId` narrows it to one pack) and `PagedList`, the loading, error, empty and "Show older" frame it shares with the Guard hits tab (spec 13 §9.9, §11.4) */
+/** @module features/site-packs/HistoryTabs — the History tab of `/site-packs` and of a pack's page (`GET /site-packs/changes`: every approval, update, rejection and revert with its classification, newest first; `packId` narrows it to one pack) and `PagedList`, the loading, error, empty and "Show older" frame it shares with the Guard hits tab (spec 13 §9.9, §11.4) */
 import type { SitePackChangeRow } from '@browserhive/contracts/http';
 import { Link } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton.tsx';
 import { Spinner } from '@/components/ui/spinner.tsx';
 import { toAppError } from '@/lib/api/errors.ts';
 import { useSitePackChanges } from './api.ts';
+import { ClassificationChip } from './ClassificationChip.tsx';
 import { SOURCE_LABEL } from './model.ts';
 import { ShaText } from './PackBits.tsx';
 
@@ -119,6 +120,7 @@ function ChangeRow({
           <Chip tone={row.decision === 'rejected' ? 'muted' : 'neutral'}>
             {DECISION_LABEL[row.decision]}
           </Chip>
+          <ClassificationChip classification={row.classification} />
           <span className="text-sm text-muted-foreground">{SOURCE_LABEL[row.source]}</span>
         </p>
         {row.new_domains.length > 0 ? (

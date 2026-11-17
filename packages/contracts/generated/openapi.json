@@ -205,6 +205,7 @@
               "SITE_PACK_NO_PREVIOUS",
               "SITE_PACK_NO_LOCAL_FILE",
               "SITE_PACK_APPROVAL_REQUIRED",
+              "SITE_PACK_BELOW_FLOOR",
               "ADMIN_REQUIRES_HTTP",
               "INSECURE_BIND_REFUSED",
               "PORT_IN_USE",
@@ -29144,6 +29145,175 @@
           "meta"
         ]
       },
+      "SiteStrategiesResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "enum": [
+                    "pace-writes",
+                    "launch-spacing",
+                    "ramp-up",
+                    "serialize-site",
+                    "human-dwell",
+                    "humanize-input",
+                    "entry-warmup",
+                    "keep-alive",
+                    "active-hours",
+                    "device-bound-session",
+                    "stealth-profile",
+                    "single-focus",
+                    "webrtc-policy"
+                  ]
+                },
+                "title": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "behaviour",
+                    "stealth"
+                  ]
+                },
+                "hooks": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "admit",
+                      "before_action",
+                      "request_guard",
+                      "response_observer",
+                      "keeper",
+                      "host_flags",
+                      "template_requirements",
+                      "page_focus"
+                    ]
+                  }
+                },
+                "params": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "integer",
+                          "number",
+                          "boolean",
+                          "enum",
+                          "path"
+                        ]
+                      },
+                      "default": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "default_from": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "fallback": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "min": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "max": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "values": {
+                        "type": [
+                          "array",
+                          "null"
+                        ],
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "safe_direction": {
+                        "type": "string",
+                        "enum": [
+                          "up",
+                          "down",
+                          "toward",
+                          "away",
+                          "none"
+                        ]
+                      },
+                      "safe_value": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "type",
+                      "default",
+                      "default_from",
+                      "fallback",
+                      "min",
+                      "max",
+                      "values",
+                      "safe_direction",
+                      "safe_value"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "title",
+                "description",
+                "kind",
+                "hooks",
+                "params"
+              ]
+            }
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
       "SitePackReloadResponse": {
         "type": "object",
         "properties": {
@@ -50193,6 +50363,76 @@
         }
       }
     },
+    "/api/v1/site-packs/strategies": {
+      "get": {
+        "operationId": "listSiteStrategies",
+        "tags": [
+          "site-packs"
+        ],
+        "summary": "The strategies this binary implements (spec 13 §9.4): title, description, kind, hook points, and each parameter with its default, bounds and safe direction, for describing what a pack selects.",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-browserhive-scope": "sitepacks:read",
+        "responses": {
+          "200": {
+            "description": "The strategies this binary implements (spec 13 §9.4): title, description, kind, hook points, and each parameter with its default, bounds and safe direction, for describing what a pack selects.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteStrategiesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, PASSWORD_CHANGE_REQUIRED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/site-packs/reload": {
       "post": {
         "operationId": "reloadSitePacks",
@@ -50518,7 +50758,7 @@
         "tags": [
           "site-packs"
         ],
-        "summary": "The field-level diff from the approved version (or `from`) to a pending version or the current local file (`to=local`). Unclassified until a later release.",
+        "summary": "The field-level diff from the approved version (or `from`) to a pending version or the current local file (`to=local`), classified (spec 13 §9.7): each change's class and the candidate's (the strongest; `new_pack` without an approved version), with the templates' current settings.",
         "security": [
           {
             "cookieAuth": []
@@ -50570,7 +50810,7 @@
         ],
         "responses": {
           "200": {
-            "description": "The field-level diff from the approved version (or `from`) to a pending version or the current local file (`to=local`). Unclassified until a later release.",
+            "description": "The field-level diff from the approved version (or `from`) to a pending version or the current local file (`to=local`), classified (spec 13 §9.7): each change's class and the candidate's (the strongest; `new_pack` without an approved version), with the templates' current settings.",
             "content": {
               "application/json": {
                 "schema": {
@@ -50658,7 +50898,7 @@
         "tags": [
           "site-packs"
         ],
-        "summary": "Apply a pending version: it becomes the approved version for every template using the pack; the previous one is kept for Revert.",
+        "summary": "Apply a pending version: it becomes the approved version for every template using the pack; the previous one is kept for Revert. Refused (SITE_PACK_BELOW_FLOOR) while a template using the pack is below the version's stealth floor.",
         "security": [
           {
             "cookieAuth": []
@@ -50692,7 +50932,7 @@
         },
         "responses": {
           "200": {
-            "description": "Apply a pending version: it becomes the approved version for every template using the pack; the previous one is kept for Revert.",
+            "description": "Apply a pending version: it becomes the approved version for every template using the pack; the previous one is kept for Revert. Refused (SITE_PACK_BELOW_FLOOR) while a template using the pack is below the version's stealth floor.",
             "content": {
               "application/json": {
                 "schema": {
@@ -50742,7 +50982,7 @@
             }
           },
           "409": {
-            "description": "SITE_PACK_UPDATE_NOT_PENDING, SITE_PACK_DOMAIN_TAKEN",
+            "description": "SITE_PACK_UPDATE_NOT_PENDING, SITE_PACK_DOMAIN_TAKEN, SITE_PACK_BELOW_FLOOR",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -51362,7 +51602,7 @@
             }
           },
           "409": {
-            "description": "SITE_PACK_DOMAIN_TAKEN, CONFLICT",
+            "description": "SITE_PACK_DOMAIN_TAKEN, SITE_PACK_BELOW_FLOOR, CONFLICT",
             "content": {
               "application/problem+json": {
                 "schema": {

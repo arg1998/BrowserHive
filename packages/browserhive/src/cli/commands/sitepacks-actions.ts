@@ -4,13 +4,13 @@ import type { CommandContext } from '../deps.ts';
 import { EXIT, type ExitCode, type SitePacksAction } from '../invocation.ts';
 import { printableJson } from '../output/printable.ts';
 import { remoteRequest } from './admin-remote.ts';
+import { printDiff } from './sitepacks-classes.ts';
 import {
   confirmByPackId,
   fetchDetail,
   fetchDiff,
   packPath,
   pendingVersion,
-  printDiff,
   provenanceText,
   type SitePacksTarget,
   sitePackCall,

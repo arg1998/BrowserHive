@@ -1,6 +1,6 @@
 # Site packs
 
-> **In this release:** BrowserHive ships site packs for a set of popular sites and reads your own pack files from a local folder. No pack applies until you approve it. Packs from BrowserHive's online registry, signed packs you import by hand, the pack strategies (pacing, warm-up, keep-alive and the others) and the classification of changes (tightening, loosening) arrive in later releases.
+> **In this release:** BrowserHive ships site packs for a set of popular sites and reads your own pack files from a local folder. No pack applies until you approve it. Packs from BrowserHive's online registry, signed packs you import by hand, and the pack strategies (pacing, warm-up, keep-alive and the others) arrive in later releases. Every pending version is [classified](#classification): you see at a glance whether it tightens rules, relaxes them or can stop a site.
 
 A site pack tells BrowserHive how one site works, so a [session template](templates.md) behaves there the way the site expects a person to, and stays signed in. It says how to tell whether the template is signed in, which requests and buttons sign the account out or create new credentials, which pages are security checks that need a person, and what the site's terms say about automation.
 
@@ -53,11 +53,11 @@ If another version is on offer by the time you confirm, adding the site fails wi
 
 **Packs are global.** One approval covers every template. A pack another template already uses keeps its approved version when you add its site to a second template. An approved, enabled pack applies to every template browser's pages on its domains, whether or not the template lists the site. What is per template is the site's [write policy](#write-policies-and-the-stance-rule).
 
-**Later versions wait for you.** When a newer BrowserHive release ships a newer bundled version, it appears as a **pending update** with the exact field-by-field difference from the version you approved. Templates keep the approved version until you act. No release, and no automatic update, ever applies one.
+**Later versions wait for you.** When a newer BrowserHive release ships a newer bundled version, it appears as a **pending update** with the exact field-by-field difference from the version you approved, each field [classified](#classification). Templates keep the approved version until you act. No release, and no automatic update, ever applies one.
 
 | Action | Dashboard | Command line | What it does |
 |---|---|---|---|
-| Review | the pack page | `sitepacks diff <pack> [--to <version>]` | Shows each changed field, its old and new value, and any new domain. |
+| Review | the pack page | `sitepacks diff <pack> [--to <version>]` | Shows the version's classification, each changed field with its class, its old and new value, and any new domain. |
 | **Apply** | **Apply** | `sitepacks apply <pack> [version]` | The version becomes the approved one. Every template that uses the pack follows it at once. The version it replaces is kept for Revert. |
 | **Reject** | **Reject** | `sitepacks reject <pack> [version]` | Dismisses the version. A newer one is offered again. |
 | **Revert** | **Revert** | `sitepacks revert <pack>` | Goes back to the previous approved version in one step. |
@@ -74,6 +74,27 @@ Every decision is recorded with who made it and when (`GET /api/v1/site-packs/ch
 **A domain belongs to one pack.** Content that claims a domain another pack already covers is refused: approving or importing a local file that lists `github.com` while the GitHub pack covers it answers 409 [`SITE_PACK_DOMAIN_TAKEN`](../reference/errors.md#SITE_PACK_DOMAIN_TAKEN) naming that pack, and nothing of the other pack changes. A version skipped for this reason names the pack that owns the domain.
 
 **One broken pack stays alone.** If BrowserHive cannot read one pack's stored approval, only that pack is left out (its sites are generic), and the Site packs page and `browserhive doctor` say so; every other pack keeps applying.
+
+## Classification
+
+BrowserHive compares every pending version (and every local file waiting for approval) with the version you approved, field by field, and gives each changed field one of four classes. The version's class is the strongest of its fields: **Relaxes rules** beats **Can stop the site**, which beats **Tightens rules**, which beats **No rule change**.
+
+| Class | Dashboard | What it means | Examples |
+|---|---|---|---|
+| `loosening` | **Relaxes rules** (red) | Removes or weakens a protection, widens what the pack covers, or changes an address BrowserHive loads by itself. | A guard or challenge removed; a guard action made laxer (`block` → `warn`), or its match, target or `request_guard` changed; any move to or from `write_policy`; a domain added or removed; the sign-in page, the signed-in check, the keep-alive path or any strategy path changed; `identity_provider` or `shares_login_with` changed; a cap raised; a strategy removed; a strategy parameter moved against its safe direction; `browser.channel` changed. |
+| `restrictive` | **Can stop the site** (amber) | Adds a limit that can stop agents from using the site. | A guard (that blocks or asks) or a challenge added or made stricter over the pack's signed-in check page, its sign-in page or a whole host; a challenge that would match every page (landmark `body`, `html` or `:root`, a text shorter than 4 characters); one session at a time or a write budget of 1; `headed: 'required'` added (headless templates stop); `active-hours` added, or its window cut below 4 hours; a `stealth-profile` floor above a template that uses the pack. |
+| `tightening` | **Tightens rules** (green) | Adds or strengthens protections and limits; nothing is relaxed. | A guard or challenge added elsewhere; `warn` → `confirm` → `block`; `attention` → `stop`; a stricter default write policy (`allow` < `warn` < `confirm`); a cap lowered, a pacing rule added, a longer launch gap or keep-alive interval; a visible browser preferred, a proxy recommended, location, time zone or language pinned; a device binding added; `human_only` turned on; a strategy added, or a parameter moved in its safe direction (the strategy table says which way is stricter). |
+| `neutral` | **No rule change** (grey) | Only what is shown changes. | `title`, `description`, `verified` dates, `sources`, `min_client`, `max_client`, the terms' `stance`, `clause` and `exception`, the source of a cap or pacing rule; a strategy parameter written out with its default value. |
+
+Chips always carry words and an icon, never colour alone. Other labels you can meet in the history: **New pack** (the first approval of a pack), **Local override** (an approved local file), **Revoked** (see below), and **Not classified** (decisions recorded before this release).
+
+**Default deny.** A field, or a strategy parameter, that has no rule above is **loosening**. A new pack format field, a pacing rule's period or its `guard`, a challenge's `kind` and every strategy parameter without a safe direction (a path, `entry-warmup`'s `referrer`) count as relaxing rules until someone writes a rule for them. Numbers are compared as BrowserHive reads them: defaults applied and clamped to the bounds built into it, so writing out a default changes nothing.
+
+**It follows your templates.** Whether a `stealth-profile` change can stop the site depends on the templates that use the pack (their enabled sites). When you change a template's stealth or fingerprint noise, or turn a site on or off, the pending versions are classified again.
+
+**What the classification decides.** Today, nothing by itself: every version still waits for your Apply, and the class tells you how carefully to read it. When automatic updates from the online registry arrive (a later release, off by default), only **Tightens rules** and **No rule change** versions of followed registry packs will be applied automatically; versions that relax rules or can stop a site, any change of domains, bundled versions and local files will always wait for you.
+
+**Revocation.** The online registry (a later release) can mark a version it published as revoked. BrowserHive then compares the version you approved before it (the fallback) with the revoked one, like any candidate: a fallback that only tightens rules or changes nothing applies at once (recorded as "Applied automatically"); a fallback that relaxes rules or can stop the site does **not** apply by itself, the revoked version stays in force, and the fallback waits under **Updates available** marked **Revoked**, with a notification, whether or not you follow the pack or pinned it; with no fallback the revoked version stays in force and the revocation is recorded in the audit log. A revoked version is never removed silently. Bundled packs and local files cannot be revoked, and content you approved from a local file is never replaced by a revocation.
 
 ## Local packs
 
@@ -354,7 +375,8 @@ Packs without write guards (all of these for now) leave the write policy with no
 |---|---|---|
 | List packs, pending updates and local files | `sitepacks list [--source …] [--pending]` | `GET /site-packs` |
 | Show one pack | `sitepacks show <pack>` | `GET /site-packs/{pack}` |
-| Show a difference | `sitepacks diff <pack> [--to <version\|local>]` | `GET /site-packs/{pack}/diff?to=…` |
+| Show a difference, classified | `sitepacks diff <pack> [--to <version\|local>]` | `GET /site-packs/{pack}/diff?to=…` |
+| The strategies BrowserHive knows, with each parameter's default, bounds and safe direction | `sitepacks show <pack>` (the pack's strategies) | `GET /site-packs/strategies` |
 | Apply, reject, revert | `sitepacks apply\|reject\|revert <pack>` | `POST /site-packs/{pack}/apply`, `/reject`, `/revert` |
 | Pin, follow | `sitepacks pin\|unpin\|follow <pack> …` | `PUT /site-packs/{pack}/pin`, `/follow` |
 | Approve a local file | `sitepacks approve-local <pack>` | `POST /site-packs/{pack}/approve-local` `{sha256}` |

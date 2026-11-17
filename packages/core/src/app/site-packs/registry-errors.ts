@@ -104,3 +104,33 @@ export function approvalRequired(
     publicMessage: renderMessage(ERROR_REGISTRY.SITE_PACK_APPROVAL_REQUIRED.message, details),
   });
 }
+
+/**
+ * `SITE_PACK_BELOW_FLOOR`: the version's `stealth-profile` floor is above templates that use the
+ * pack (T3b lead decision 4); `templates_text` names them with what each lacks.
+ */
+export function belowFloor(
+  packId: string,
+  version: number,
+  templates: readonly {
+    readonly template_id: string;
+    readonly name: string;
+    readonly issues: readonly { readonly code: string; readonly message: string }[];
+  }[],
+): AppError<'SITE_PACK_BELOW_FLOOR'> {
+  const details = {
+    pack_id: packId,
+    version,
+    templates: templates.map((t) => ({
+      template_id: t.template_id,
+      name: t.name,
+      issues: t.issues.map((i) => ({ code: i.code, message: i.message })),
+    })),
+    templates_text: templates
+      .map((t) => `'${t.name}' ${t.issues.map((i) => i.message).join(' and ')}`)
+      .join('; '),
+  };
+  return new AppError('SITE_PACK_BELOW_FLOOR', details, {
+    publicMessage: renderMessage(ERROR_REGISTRY.SITE_PACK_BELOW_FLOOR.message, details),
+  });
+}

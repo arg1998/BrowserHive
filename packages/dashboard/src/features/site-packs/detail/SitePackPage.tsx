@@ -18,14 +18,10 @@ import { usedByText } from '../pack-columns.tsx';
 import { PendingUpdateCard } from '../UpdateCards.tsx';
 import { pendingDecisions } from '../UpdatesSection.tsx';
 import { CheckSection, SignInSection, TermsSection } from './AccessSections.tsx';
-import {
-  BrowserSection,
-  PacingSection,
-  ProvenanceSection,
-  StrategiesSection,
-} from './LimitSections.tsx';
+import { BrowserSection, PacingSection, ProvenanceSection } from './LimitSections.tsx';
 import { PackOverview } from './PackOverview.tsx';
 import { ChallengesSection, ElementGuardsSection, GuardsSection } from './RuleSections.tsx';
+import { StrategiesSection } from './StrategiesSection.tsx';
 
 /** One pack. */
 export function SitePackPage() {
