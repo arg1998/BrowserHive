@@ -23,7 +23,7 @@ A pack is one JSON file (at most 64 KiB) for one site, named by the site's regis
 | `challenges` | Pages that are security checks, CAPTCHAs, locked accounts or rejected sign-ins, and whether they need a person (`attention`) or must stop all use of the site (`stop`). |
 | `concurrency`, `pacing` | How many sessions at once and how many writes per period the site tolerates, each with its source (official or vendor guidance). |
 | `browser`, `device_binding`, `consistency` | The browser and headedness the site expects, how it binds a sign-in to a device, and whether the location, time zone and language must stay fixed. |
-| `strategies` | Behaviour selected from a fixed list built into BrowserHive (pacing, warm-up and others). Stored and shown in this release, not run yet. |
+| `strategies` | Behaviour selected from a fixed list built into BrowserHive: pacing, launch spacing, active hours, warm-up, keep-alive, a stealth floor and others ([Strategies](#strategies)). |
 | `verified`, `sources` | The date each section was last checked against the live site, and where the facts come from (shown, never fetched). |
 
 ## Where packs come from
@@ -158,6 +158,31 @@ What happens:
 - **In a health check**, a challenge only sets the result to `challenged`.
 
 Bounds: one open Site check per session (further matches join it), at most one new one per session every 5 minutes, and the template's limit of 10 open site checks and write confirmations. Neither `challenged` nor "couldn't tell" ever starts a re-login: signing in again into a security check is how accounts get locked.
+
+## Strategies
+
+A pack selects **strategies** from a fixed list built into BrowserHive; it never carries their code. Each strategy's parameters are checked and kept within bounds built into BrowserHive, so a pack can tune a strategy but not push it to a harmful extreme. `GET /api/v1/site-packs/strategies` lists every strategy with its parameters, defaults and bounds, and each pack page in the dashboard shows the strategies it selects.
+
+Strategies change how a template's sessions behave on the site, never what an agent can ask for. An agent sees a wait as an ordinary slower call, and a refusal only as `TEMPLATE_BUSY` with a retry time, the same answer as a full template. Strategies that concern the whole template (session cap, launch spacing, active hours, ramp-up, keep-alive, the stealth floor and WebRTC) come from the template's **enabled** sites; when several sites select one, the strictest wins. Strategies that concern a page (pacing, dwell, one action at a time, warm-up, humanized input, one focused tab, device binding) apply on the pages of the pack's domains. Their state (budgets, queues, last actions) is kept in memory: restarting BrowserHive resets it. With [`sitePacks`](../reference/configuration.md#sitePacks) set to `false` no strategy runs.
+
+### Sessions and launches
+
+- **Session cap (`concurrency.max_sessions`).** Not a strategy: whenever an enabled site's approved pack sets `concurrency.max_sessions`, the template runs at most that many agent sessions at once (the smallest of its sites wins, and never more than the template's own **Max sessions**). The Templates list shows the lowered cap. An agent launching beyond it gets `TEMPLATE_BUSY` ("Template 'name' is at capacity. Retry in 5 s."), the same answer as the template's own cap.
+- **Ramp up a new template (`ramp-up`).** For a template younger than `days` (14), its session cap and every write budget of `pace-writes` are scaled by `start_fraction + (1 − start_fraction) × age_days / days` (`start_fraction` 0.3), rounded up and never below one; the smallest factor of the template's sites wins. The Templates list shows the current cap.
+- **Active hours (`active-hours`).** New sessions start only inside the window (`start_hour`–`end_hour`, end exclusive, may wrap past midnight; `weekdays_only` counts the day the window opened) in the template's pinned time zone. With several sites a launch must be inside every window. Outside, `launch_session` answers `TEMPLATE_BUSY` with a retry time up to the window's start; sessions already running continue. If the sites' windows never overlap, launches are refused with a one-day retry and BrowserHive logs a warning.
+- **Space launches (`launch-spacing`).** Consecutive sessions of the template start at least `min_gap_s` apart (default: the pack's `pacing.min_launch_gap_s`; the largest of its sites), plus a random 0–`jitter_pct` % (20 %). A launch waits for its turn, up to 20 s and never beyond its launch budget, and to the agent this is a slower launch; a turn further away answers `TEMPLATE_BUSY` with the time until it. Launches queue in order; a refused launch takes no turn.
+
+### Actions on the site's pages
+
+STRATEGIES_B
+
+### Writes, responses and keeping the sign-in fresh
+
+STRATEGIES_N
+
+### Stealth
+
+`stealth-profile`, `single-focus` and `webrtc-policy` change what the site sees of the whole template: see [Site pack stealth strategies](stealth.md#site-pack-stealth-strategies).
 
 ## Navigation checks
 
