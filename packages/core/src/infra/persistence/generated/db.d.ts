@@ -474,6 +474,7 @@ export interface Templates {
   checkpoint_size_bytes: number | null;
   created_at: number;
   current_version: number | null;
+  deny_clipboard_writes: Generated<number>;
   description: Generated<string>;
   disabled_at: number | null;
   display_name: string;

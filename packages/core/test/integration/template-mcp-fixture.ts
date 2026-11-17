@@ -1,6 +1,9 @@
 /** @module test/integration/template-mcp-fixture — the real MCP stack over a real template host: the tool harness (dispatcher, policies, sealing) with a `TemplateHostSupervisor` on the driver (Patchright) and the HTTPS fixture sites. */
 
-import { TemplateHostSupervisor } from '../../src/app/templates/host-supervisor.ts';
+import {
+  type HostSupervisorDeps,
+  TemplateHostSupervisor,
+} from '../../src/app/templates/host-supervisor.ts';
 import { PlaywrightBrowserDriver } from '../../src/infra/browsers/playwright-browser-driver.ts';
 import { createSystemClock } from '../../src/infra/clock/system-clock.ts';
 import { createCollectingLogger } from '../../src/infra/logging/collecting-logger.ts';
@@ -41,7 +44,15 @@ export interface TemplateMcpOptions {
   readonly siteGuards?: ToolHarnessOptions['siteGuards'];
   /** Passed to the tool harness (the security intercepts' tool hold). */
   readonly siteHolds?: ToolHarnessOptions['siteHolds'];
+  /** Passed to the tool harness (agents wait while the operator signs in, D-60). */
+  readonly templatePause?: ToolHarnessOptions['templatePause'];
+  /** Before-action strategies of site packs (spec 13 §9.4). */
+  readonly siteActions?: ToolHarnessOptions['siteActions'];
   readonly transport?: ToolHarnessOptions['transport'];
+  /** Supervisor collaborators: the site packs of the admission strategies, the jitter source. */
+  readonly supervisor?: Pick<HostSupervisorDeps, 'sitePacks' | 'random'>;
+  /** The host spec's pack switches (`webrtc-policy`, T3b). */
+  readonly hostFlags?: (template: TemplateRecord) => Promise<readonly string[]>;
 }
 
 /** A ready template `job-hunt` on site-a.test (and the given sites) behind the real tool stack. */
@@ -67,9 +78,11 @@ export async function templateMcp(
     driver: real,
     vault: true,
     ...(options.siteHolds !== undefined && { siteHolds: options.siteHolds }),
+    ...(options.templatePause !== undefined && { templatePause: options.templatePause }),
     ...(options.transport !== undefined && { transport: options.transport }),
     selfOrigins: [SELF_ORIGIN],
     ...(options.siteGuards !== undefined && { siteGuards: options.siteGuards }),
+    ...(options.siteActions !== undefined && { siteActions: options.siteActions }),
     templateRuntime: (sessions, dataDir) => {
       const supervisor = new TemplateHostSupervisor({
         launcher: real,
@@ -87,6 +100,7 @@ export async function templateMcp(
           env: {},
           selfOrigins: () => [SELF_ORIGIN],
           testingArgs: sites.chromiumArgs,
+          ...(options.hostFlags !== undefined && { hostFlags: options.hostFlags }),
         },
         config: {
           idleTimeoutMs: 0,
@@ -95,6 +109,7 @@ export async function templateMcp(
           maxPagesPerHost: 40,
           closeTimeoutMs: 10_000,
         },
+        ...options.supervisor,
       });
       built.supervisor = supervisor;
       return supervisor;

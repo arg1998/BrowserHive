@@ -167,6 +167,7 @@ export const HTTP_ENDPOINTS: readonly HttpEndpoint[] = [
   ep('listSitePacks', 'get', '/site-packs', 'sitepacks:read'),
   ep('listSitePackChanges', 'get', '/site-packs/changes', 'sitepacks:read'),
   ep('listSiteGuardHits', 'get', '/site-packs/guard-hits', 'sitepacks:read'),
+  ep('listSiteStrategies', 'get', '/site-packs/strategies', 'sitepacks:read'),
   ep('reloadSitePacks', 'post', '/site-packs/reload', 'sitepacks:write'),
   ep('importSitePack', 'post', '/site-packs/import', 'sitepacks:write'),
   ep('getSitePack', 'get', '/site-packs/{pack_id}', 'sitepacks:read'),

@@ -143,6 +143,7 @@ export function templateRecord(overrides: Partial<TemplateRecord> = {}): Templat
     identityObserved: null,
     proxy: null,
     agentWindows: 'normal',
+    denyClipboardWrites: false,
     authorizedPrincipals: [],
     harnesses: null,
     maxConcurrent: 5,

@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "id": "google.com",
-  "version": 1,
+  "version": 2,
   "min_client": "0.2.3",
   "title": "Google Account",
   "description": "Google sign-in for a template. A person must sign in (Google blocks sign-in from automated browsers). Account security, recovery, app-password, connected-app and deletion pages are blocked for agents.",
@@ -264,6 +264,22 @@
       "source": {
         "url": "https://workspaceupdates.googleblog.com/2026/05/prevent-account-takeovers-with-DBSC-now-generally-available-in-the-Chrome-browser-for-Windows.html",
         "kind": "official"
+      }
+    }
+  ],
+  "strategies": [
+    {
+      "id": "keep-alive",
+      "params": {}
+    },
+    {
+      "id": "device-bound-session",
+      "params": {}
+    },
+    {
+      "id": "stealth-profile",
+      "params": {
+        "min_level": "standard"
       }
     }
   ],

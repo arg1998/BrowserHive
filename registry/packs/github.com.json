@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "id": "github.com",
-  "version": 1,
+  "version": 2,
   "min_client": "0.2.3",
   "title": "GitHub",
   "description": "GitHub permits machine accounts run by a responsible person. Token, SSH-key, security, OAuth-app, session, email and account-admin pages, sign-out and OAuth/device-flow approvals are blocked for agents.",
@@ -13,7 +13,11 @@
       "host": "github.com",
       "path": "/login"
     },
-    "human_only": false
+    "human_only": false,
+    "post": [
+      "github.com/session",
+      "github.com/sessions/*"
+    ]
   },
   "signed_in": {
     "probe": {
@@ -167,7 +171,7 @@
     }
   },
   "verified": {
-    "sign_in": "2026-11-16",
+    "sign_in": "2026-11-17",
     "signed_in": "2026-11-16",
     "guards": "2026-11-16",
     "write_policy": "2026-11-16"
@@ -195,6 +199,10 @@
     },
     {
       "url": "https://github.com/settings/profile",
+      "kind": "observed"
+    },
+    {
+      "url": "https://github.com/login",
       "kind": "observed"
     }
   ]

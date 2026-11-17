@@ -6,6 +6,7 @@ import { SitePackRegistry } from '../../src/app/site-packs/registry.ts';
 import { loadPackBytes } from '../../src/domain/site-packs/load.ts';
 import { ok, type Result } from '../../src/kernel/result.ts';
 import type { Clock } from '../../src/ports/clock.ts';
+import type { DegradationReporter } from '../../src/ports/degradation-reporter.ts';
 import type { EventPublisher } from '../../src/ports/event-bus.ts';
 import type { IdGenerator } from '../../src/ports/id-generator.ts';
 import type { Logger } from '../../src/ports/logger.ts';
@@ -96,6 +97,7 @@ export async function createMemorySitePacks(deps: {
   readonly ids: Pick<IdGenerator, 'eventId'>;
   readonly logger: Logger;
   readonly bus?: EventPublisher<DomainEvents>;
+  readonly degradations?: DegradationReporter;
 }): Promise<{
   readonly registry: SitePackRegistry;
   readonly bundled: InMemoryPackSource;
@@ -117,6 +119,7 @@ export async function createMemorySitePacks(deps: {
     clock: deps.clock,
     logger: deps.logger,
     ...(deps.bus !== undefined && { bus: deps.bus }),
+    ...(deps.degradations !== undefined && { degradations: deps.degradations }),
   });
   await registry.reload();
   return { registry, bundled, local };

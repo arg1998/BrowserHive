@@ -1,6 +1,6 @@
 # Site packs
 
-> **In this release:** BrowserHive ships site packs for a set of popular sites and reads your own pack files from a local folder. No pack applies until you approve it. Packs from BrowserHive's online registry, signed packs you import by hand, the pack strategies (pacing, warm-up, keep-alive and the others) and the classification of changes (tightening, loosening) arrive in later releases.
+> **In this release:** BrowserHive ships site packs for a set of popular sites and reads your own pack files from a local folder. No pack applies until you approve it. Packs select [strategies](#strategies) (pacing, launch spacing, warm-up, keep-alive and the others) that BrowserHive runs for them. Packs from BrowserHive's online registry and signed packs you import by hand arrive in a later release. Every pending version is [classified](#classification): you see at a glance whether it tightens rules, relaxes them or can stop a site.
 
 A site pack tells BrowserHive how one site works, so a [session template](templates.md) behaves there the way the site expects a person to, and stays signed in. It says how to tell whether the template is signed in, which requests and buttons sign the account out or create new credentials, which pages are security checks that need a person, and what the site's terms say about automation.
 
@@ -15,7 +15,7 @@ A pack is one JSON file (at most 64 KiB) for one site, named by the site's regis
 | `id`, `version`, `title`, `domains` | The pack's identity (`linkedin.com`), its version number (higher is newer), its name, and the registrable domains it covers (up to 8, the first is the id). A domain belongs to at most one pack. |
 | `min_client`, `max_client` | The BrowserHive versions that can use this version. |
 | `identity_provider`, `shares_login_with` | The site whose sign-in this one uses (`youtube.com` signs in through `google.com`), and sites that share its sign-in. |
-| `sign_in` | The sign-in page (an `https` address inside the pack's domains, path only) and `human_only`: when `true`, BrowserHive never fills a vault login there. |
+| `sign_in` | The sign-in page (an `https` address inside the pack's domains, path only), `human_only` (when `true`, BrowserHive never fills a vault login there) and, optionally, `post`: up to 4 addresses (guard globs inside the pack's domains, never a whole host) the sign-in form posts to, every step included. Only the [classification](#classification) reads `post`: it tells which guards can stop the sign-in. |
 | `signed_in` | How to tell that the template is signed in without reading a cookie value: a page to load (`probe`), the redirects that mean "signed out", a selector that is only there when signed in (`landmark`) or only when signed out (`signed_out_marker`), and cookie **names** whose absence means signed out. |
 | `guards` | Requests that sign the account out, change account or security settings, create credentials (tokens, keys, app passwords, OAuth consent), destroy data, or write; each with what to do: `block`, `confirm`, `warn` or follow the write policy. |
 | `element_guards` | Buttons and links an agent must not use (by CSS selector, or by role and name), with the same actions. |
@@ -23,7 +23,7 @@ A pack is one JSON file (at most 64 KiB) for one site, named by the site's regis
 | `challenges` | Pages that are security checks, CAPTCHAs, locked accounts or rejected sign-ins, and whether they need a person (`attention`) or must stop all use of the site (`stop`). |
 | `concurrency`, `pacing` | How many sessions at once and how many writes per period the site tolerates, each with its source (official or vendor guidance). |
 | `browser`, `device_binding`, `consistency` | The browser and headedness the site expects, how it binds a sign-in to a device, and whether the location, time zone and language must stay fixed. |
-| `strategies` | Behaviour selected from a fixed list built into BrowserHive (pacing, warm-up and others). Stored and shown in this release, not run yet. |
+| `strategies` | Behaviour selected from a fixed list built into BrowserHive: pacing, launch spacing, active hours, warm-up, keep-alive, a stealth floor and others ([Strategies](#strategies)). |
 | `verified`, `sources` | The date each section was last checked against the live site, and where the facts come from (shown, never fetched). |
 
 ## Where packs come from
@@ -53,14 +53,14 @@ If another version is on offer by the time you confirm, adding the site fails wi
 
 **Packs are global.** One approval covers every template. A pack another template already uses keeps its approved version when you add its site to a second template. An approved, enabled pack applies to every template browser's pages on its domains, whether or not the template lists the site. What is per template is the site's [write policy](#write-policies-and-the-stance-rule).
 
-**Later versions wait for you.** When a newer BrowserHive release ships a newer bundled version, it appears as a **pending update** with the exact field-by-field difference from the version you approved. Templates keep the approved version until you act. No release, and no automatic update, ever applies one.
+**Later versions wait for you.** When a newer BrowserHive release ships a newer bundled version, it appears as a **pending update** with the exact field-by-field difference from the version you approved, each field [classified](#classification). Templates keep the approved version until you act. No release, and no automatic update, ever applies one.
 
 | Action | Dashboard | Command line | What it does |
 |---|---|---|---|
-| Review | the pack page | `sitepacks diff <pack> [--to <version>]` | Shows each changed field, its old and new value, and any new domain. |
+| Review | the pack page | `sitepacks diff <pack> [--to <version>]` | Shows the version's classification, each changed field with its class, its old and new value, and any new domain. |
 | **Apply** | **Apply** | `sitepacks apply <pack> [version]` | The version becomes the approved one. Every template that uses the pack follows it at once. The version it replaces is kept for Revert. |
 | **Reject** | **Reject** | `sitepacks reject <pack> [version]` | Dismisses the version. A newer one is offered again. |
-| **Revert** | **Revert** | `sitepacks revert <pack>` | Goes back to the previous approved version in one step. |
+| **Revert** | **Revert** | `sitepacks revert <pack>` | Goes back to the previous approved version in one step. The dashboard and the command line show its classification first, like Apply. |
 | **Pin** | **Pin** | `sitepacks pin <pack> <version>`, `sitepacks unpin <pack>` | Keeps the approved version. Newer versions are listed as "pinned at v7, v9 available". |
 | **Follow updates** | **Follow updates** | `sitepacks follow <pack> on\|off\|auto` | Whether the pack lists pending updates, counts in the badge and sends [`site_pack.update_pending`](notifications.md#site-packs). `auto` (the default) follows a pack while a template uses it. |
 | Turn off | the **Enabled** switch | `sitepacks disable <pack>`, `sitepacks enable <pack>` | A disabled pack applies nowhere: its guards (sign-out, account and credential ones included) stop applying for every template, and its sites are generic sites until you enable it again. Turning a pack off asks for confirmation (the command line asks you to type the pack id, or takes `--yes`). |
@@ -74,6 +74,40 @@ Every decision is recorded with who made it and when (`GET /api/v1/site-packs/ch
 **A domain belongs to one pack.** Content that claims a domain another pack already covers is refused: approving or importing a local file that lists `github.com` while the GitHub pack covers it answers 409 [`SITE_PACK_DOMAIN_TAKEN`](../reference/errors.md#SITE_PACK_DOMAIN_TAKEN) naming that pack, and nothing of the other pack changes. A version skipped for this reason names the pack that owns the domain.
 
 **One broken pack stays alone.** If BrowserHive cannot read one pack's stored approval, only that pack is left out (its sites are generic), and the Site packs page and `browserhive doctor` say so; every other pack keeps applying.
+
+### When a version raises the stealth floor
+
+A pack's [`stealth-profile`](stealth.md#site-pack-stealth-strategies) sets a floor: a minimum stealth level, and fingerprint noise on or off. A template's stealth level and fingerprint noise are fixed for its life, so a template cannot be changed to meet a higher floor. A version whose floor is above a template that uses the pack (with the site turned on there) therefore cannot apply: **Apply**, **Revert** to such a version and **Approve** of such a local file are refused with [`SITE_PACK_BELOW_FLOOR`](../reference/errors.md#SITE_PACK_BELOW_FLOOR), which names each template and what it lacks, and nothing changes. The dashboard explains it in a dialog. To go ahead, for each named template:
+
+- turn the site off on that template (its **Sites** tab), so the template no longer uses the pack; or
+- create a new template with the stealth settings the pack needs, sign in to the site there, and remove the site from the old template.
+
+Or reject the version: the current one keeps applying.
+
+**When the version in force changes without you.** Deleting an approved local file cannot be refused: the approved published version applies again at once. If its floor is above a template that uses the pack (the same holds when a revoked version falls back to an earlier one), BrowserHive turns the site off on that template, records it in the audit log and tells you: the template's page says the site was turned off and why, System lists [`TEMPLATE_SITE_BELOW_FLOOR`](../reference/errors.md#TEMPLATE_SITE_BELOW_FLOOR), and you get a notification. A template never runs a site below its pack's floor. Turning the site on again is refused while the template is below the floor; the record clears once no site BrowserHive turned off is still off below its pack's floor (the site or the template removed, or a version with a lower floor applied). Sites you turned off yourself never keep it open.
+
+## Classification
+
+BrowserHive compares every pending version (and every local file waiting for approval) with the version you approved, field by field, and gives each changed field one of four classes. The version's class is the strongest of its fields: **Relaxes rules** beats **Can stop the site**, which beats **Tightens rules**, which beats **No rule change**.
+
+| Class | Dashboard | What it means | Examples |
+|---|---|---|---|
+| `loosening` | **Relaxes rules** (red) | Removes or weakens a protection, widens what the pack covers, or changes an address BrowserHive loads by itself. | A guard or challenge removed; a guard action made laxer (`block` → `warn`), or its match, target or `request_guard` changed; any move to or from `write_policy`; a domain added or removed; the sign-in page, the addresses the sign-in form posts to (`sign_in.post`: added, removed or changed), the signed-in check, the keep-alive path or any strategy path changed; `identity_provider` or `shares_login_with` changed; a cap raised; a strategy removed; a strategy parameter moved against its safe direction; `browser.channel` changed. |
+| `restrictive` | **Can stop the site** (amber) | Adds a limit that can stop agents from using the site. | A guard (that blocks or asks) added or made stricter over the pack's signed-in check page, its sign-in page or a whole host, or that can stop the sign-in form's post (it covers `POST`, or every method, at an address the pack lists in `sign_in.post`; a pack that lists none counts any such guard on the sign-in page's host); a challenge that stops the site (added with `stop`, or `attention` → `stop`); a challenge matched without an address (only by its title, a selector, text or a CAPTCHA frame: "LinkedIn" is in every LinkedIn title); a challenge over the signed-in check page, the sign-in page or a whole host, or that would match every page (landmark `body`, `html` or `:root`, a text shorter than 4 characters); one session at a time or a write budget of 1; `headed: 'required'` added (headless templates stop); `active-hours` added, or its window cut below 4 hours; a `stealth-profile` floor above a template that uses the pack. |
+| `tightening` | **Tightens rules** (green) | Adds or strengthens protections and limits; nothing is relaxed. | A guard added elsewhere (away from the sign-in form's post addresses when the pack lists them in `sign_in.post`, else on another host than the sign-in page's, or for methods other than `POST`), or made stricter there (`warn` → `confirm` → `block`); a `warn` guard anywhere; a challenge that asks for attention added at an address elsewhere; a stricter default write policy (`allow` < `warn` < `confirm`); a cap lowered, a pacing rule added, a longer launch gap or keep-alive interval; a visible browser preferred, a proxy recommended, location, time zone or language pinned; a device binding added; `human_only` turned on; a strategy added, or a parameter moved in its safe direction (the strategy table says which way is stricter). |
+| `neutral` | **No rule change** (grey) | Only what is shown changes. | `title`, `description`, `verified` dates, `sources`, `min_client`, `max_client`, the terms' `stance`, `clause` and `exception`, the source of a cap or pacing rule; a strategy parameter written out with its default value. |
+
+Chips always carry words and an icon, never colour alone. Other labels you can meet in the history: **New pack** (the first approval of a pack), **Local override** (an approved local file), **Revoked** (see below), and **Not classified** (decisions recorded before this release).
+
+**Default deny.** A field, or a strategy parameter, that has no rule above is **loosening**. A new pack format field, a pacing rule's period or its `guard`, a challenge's `kind` and every strategy parameter without a safe direction (a path, `entry-warmup`'s `referrer`) count as relaxing rules until someone writes a rule for them. Numbers are compared as BrowserHive reads them: defaults applied and clamped to the bounds built into it, so writing out a default changes nothing.
+
+**It follows your templates.** Whether a `stealth-profile` change can stop the site depends on the templates that use the pack (their enabled sites). When you create or delete a template, or add, remove, or turn a site on or off on one, the pending versions are classified again.
+
+**The sign-in form's post.** A guard that blocks or asks can stop agents from signing in when it covers the address the sign-in form posts to, which is rarely the sign-in page itself (LinkedIn's form on `/login` posts to `/checkpoint/lg/login-submit`). A pack can list those addresses in `sign_in.post` (every step: password, two-factor, device checks); then only a guard over one of them, the sign-in page or the signed-in check page classifies **Can stop the site**, and a routine guard elsewhere on the same host (a sign-out, a settings page, a write) **Tightens rules**. A pack that lists none is read conservatively: every guard that blocks or asks a `POST` on the sign-in page's host can stop the site, so on a site whose sign-in page is on its main host most such guards wait for you even once automatic updates arrive. Because a wrong list would let a guard on the real address pass as tightening, adding, removing or changing `sign_in.post` always **Relaxes rules**. Two addresses count as overlapping when any address matches both globs (with the guard grammar's sub-path and query variants; a host wildcard never reaches into the path).
+
+**What the classification decides.** Today, nothing by itself: every version still waits for your Apply, and the class tells you how carefully to read it. When automatic updates from the online registry arrive (a later release, off by default), only **Tightens rules** and **No rule change** versions of followed registry packs will be applied automatically; versions that relax rules or can stop a site, any change of domains, bundled versions and local files will always wait for you.
+
+**Revocation.** The online registry (a later release) can mark a version it published as revoked. BrowserHive then compares the version you approved before it (the fallback) with the revoked one, like any candidate: a fallback that only tightens rules or changes nothing applies at once (recorded as "Applied automatically"); a fallback that relaxes rules or can stop the site does **not** apply by itself, the revoked version stays in force, and the fallback waits under **Updates available** marked **Revoked**, with a notification, whether or not you follow the pack or pinned it; with no fallback the revoked version stays in force and the revocation is recorded in the audit log. A revoked version is never removed silently. Bundled packs and local files cannot be revoked, and content you approved from a local file is never replaced by a revocation.
 
 ## Local packs
 
@@ -159,6 +193,36 @@ What happens:
 
 Bounds: one open Site check per session (further matches join it), at most one new one per session every 5 minutes, and the template's limit of 10 open site checks and write confirmations. Neither `challenged` nor "couldn't tell" ever starts a re-login: signing in again into a security check is how accounts get locked.
 
+## Strategies
+
+A pack selects **strategies** from a fixed list built into BrowserHive; it never carries their code. Each strategy's parameters are checked and kept within bounds built into BrowserHive, so a pack can tune a strategy but not push it to a harmful extreme. `GET /api/v1/site-packs/strategies` lists every strategy with its parameters, defaults and bounds, and each pack page in the dashboard shows the strategies it selects.
+
+Strategies change how a template's sessions behave on the site, never what an agent can ask for. An agent sees a wait as an ordinary slower call, and a refusal only as `TEMPLATE_BUSY` with a retry time, the same answer as a full template. Strategies that concern the whole template (session cap, launch spacing, active hours, ramp-up, keep-alive, the stealth floor and WebRTC) come from the template's **enabled** sites; when several sites select one, the strictest wins. Strategies that concern a page (pacing, dwell, one action at a time, warm-up, humanized input, one focused tab, device binding) apply on the pages of the pack's domains. Their state (budgets, queues, last actions) is kept in memory: restarting BrowserHive resets it. With [`sitePacks`](../reference/configuration.md#sitePacks) set to `false` no strategy runs.
+
+### Sessions and launches
+
+- **Session cap (`concurrency.max_sessions`).** Not a strategy: whenever an enabled site's approved pack sets `concurrency.max_sessions`, the template runs at most that many agent sessions at once (the smallest of its sites wins, and never more than the template's own **Max sessions**). The Templates list shows the lowered cap. An agent launching beyond it gets `TEMPLATE_BUSY` ("Template 'name' is at capacity. Retry in 5 s."), the same answer as the template's own cap.
+- **Ramp up a new template (`ramp-up`).** For a template younger than `days` (14), its session cap and every write budget of `pace-writes` are scaled by `start_fraction + (1 − start_fraction) × age_days / days` (`start_fraction` 0.3), rounded up and never below one; the smallest factor of the template's sites wins. The Templates list shows the current cap.
+- **Active hours (`active-hours`).** New sessions start only inside the window (`start_hour`–`end_hour`, end exclusive, may wrap past midnight; `weekdays_only` counts the day the window opened) in the template's pinned time zone. With several sites a launch must be inside every window. Outside, `launch_session` answers `TEMPLATE_BUSY` with a retry time up to the window's start; sessions already running continue. If the sites' windows never overlap, launches are refused with a one-day retry and BrowserHive logs a warning.
+- **Space launches (`launch-spacing`).** Consecutive sessions of the template start at least `min_gap_s` apart (default: the pack's `pacing.min_launch_gap_s`; the largest of its sites), plus a random 0–`jitter_pct` % (20 %). A launch waits for its turn, up to 20 s and never beyond its launch budget, and to the agent this is a slower launch; a turn further away answers `TEMPLATE_BUSY` with the time until it. Launches queue in order; a refused launch takes no turn.
+
+### Actions on the site's pages
+
+- **One action at a time (`serialize-site`).** At most `max_parallel` (1) sessions of the template click, type, scroll, upload, download or navigate on the site at once, like one person with many tabs. The others queue in arrival order for up to 30 s; past that the action answers `TEMPLATE_BUSY` ("Actions on <site> are being paced. Retry in 5 s.") and the log records `site action paced`. Reading tools (snapshot, content, screenshots, waits) are never held, and a session's own concurrent calls share its turn. A session's own calls share its turn only while no other session is waiting; once another session is queued, the session's next call waits behind it, so a session with calls always in flight cannot keep the site to itself. An action that had to wait for its turn or its dwell time is checked again right before it runs: if a security check now holds the session, the site was stopped, or an operator sign-in started while it waited, the action does not reach the site and the agent gets the same answer as a call made at that moment (the same check runs after an entry warm-up, before the page the agent asked for).
+- **Human dwell time (`human-dwell`).** Before each action on the site, a session waits until a random time between `min_ms` (600) and `max_ms` (2500) has passed since its previous action there. Its first action does not wait. To the agent, some actions take a little longer.
+- **Warm-up entry (`entry-warmup`).** The first time a session goes straight to a deep page of the site, BrowserHive first opens the pack's entry `path` (`/`, on the `www.` host or the sign-in check host) with no referrer (`none`), the site's home page (`same-site`) or a search engine (`search`) as referrer, waits `dwell_ms` (2000) there, then opens the page the agent asked for. The warm-up uses at most half of the tool's timeout; a failed warm-up is logged (`entry warm-up failed`) and never fails the navigation. Script navigations away from the pack's domains during the warm-up are aborted; a server redirect from the entry path is followed like any redirect ([What guards cannot see](#what-guards-cannot-see)).
+- **Humanized input (`humanize-input`, and `stealth-profile` with `humanize: true`).** Clicks, hovers, typing and scrolling on the site's pages move and type like a person, even in sessions launched without `humanize`. A template with stealth `off` cannot humanize: the strategy is ignored and BrowserHive logs it once (`humanize not forced`). The template page warns about it on the site's card ("Humanized input is not applied"), and the new-template wizard lists it under **What your sites need** with a one-click **Turn stealth on**. The template is still created with stealth off; its input on the site is then native.
+
+### Writes, responses and keeping the sign-in fresh
+
+- **Pace writes (`pace-writes`).** The pack's `pacing.rules` give some `write` guards a budget (so many per minute, hour, day or week). The budget belongs to the template, the account, and every session of the template shares it; it refills continuously. A write over budget waits for the next token when that is at most a minute away (plus up to 20 %, so writes do not tick like a clock) and is then handled as usual (allowed, warned or held for confirmation by the write policy); a write further over budget is cancelled. Both appear in the guard-hit log (`held`, `paced`), and a cancelled one adds the warning "A write was paced" (`SITE_PACED`) to its session. To the agent a write may take a little longer, or fail like a request the site did not answer. A new template's budgets are scaled down by `ramp-up` (above). A write that waits for its token takes it when it starts waiting; if that write then needs the operator's confirmation and is denied, the token is not given back (the budget errs on the side of fewer writes).
+- **Detect device-bound sessions (`device-bound-session`).** When the site answers with a device-bound session header (DBSC: `Sec-Session-Registration` or `Sec-Session-Id`), the template's site is marked **Device-bound** on its Sites tab: the sign-in is tied to this machine's browser and will not survive being moved elsewhere. BrowserHive only reads the response headers; it never changes a request.
+- **Keep the sign-in fresh (`keep-alive`).** BrowserHive visits the pack's `keeper.path` (else its sign-in check page) in its own background window every `interval_h` hours (default: the pack's `keeper.interval_hours`, else 24; ± 20 %), so sign-in cookies that refresh on use stay fresh while no agent uses the template. A visit is skipped when an agent session of the template loaded the site within the interval, and for a site that is signed out or held by a security check. Like a scheduled check, a stopped browser is started for the visit when a browser slot is free (on a headed template it may briefly appear and take the focus) and stops again when idle. A visit counts as a sign-in check when it tells something (it appears in the template's checks as `schedule`). Only `GET` requests are made, and the visit cannot leave the pack's domains by script. Visits respect the template's active hours: one that falls due outside the window happens within 20 minutes after the window opens; if the sites' windows never overlap, it is retried a day later.
+
+### Stealth
+
+`stealth-profile`, `single-focus` and `webrtc-policy` change what the site sees of the whole template: see [Site pack stealth strategies](stealth.md#site-pack-stealth-strategies).
+
 ## Navigation checks
 
 For a site with an approved pack, a [health check](templates.md#health-checks) loads the pack's `probe` page in a background window of the template's browser, with `GET` only. During the check, any page load that leaves the pack's domains is aborted. First, when the pack lists sign-in cookie names and none of them is present, the site is signed out without loading anything. Otherwise the page is loaded (at most 20 seconds), and the first of these that holds decides:
@@ -167,8 +231,10 @@ For a site with an approved pack, a [health check](templates.md#health-checks) l
 |---|---|---|
 | ! check needed (`challenged`) | `challenge:<kind>` | A challenge matched. Never reported as signed out. |
 | ✗ signed out (`signed_out`) | `redirect`, `marker`, `cookies_absent` | The page redirected to a signed-out address, shows the signed-out marker, or no sign-in cookie is left. |
-| ✓ signed in (`signed_in`) | `landmark`, `no_redirect` | The signed-in landmark is on the page, or the page stayed where it was asked to load. |
+| ✓ signed in (`signed_in`) | `landmark`, `no_redirect`, `no_redirect_settled` | The signed-in landmark is on the page, or the page stayed where it was asked to load (`no_redirect_settled`: it loaded and stayed put for a few seconds, a weaker sign). |
 | ? couldn't tell (`inconclusive`) | `timeout`, `network`, `http_<status>`, `no_signal` | The page did not load in time, the network failed, the server answered an error, or nothing matched. |
+
+Some sites send a signed-out browser to their sign-in page from page script after the page loaded, not with a redirect. For packs whose check uses redirects (`redirect`, `either`), BrowserHive waits for the check page to finish loading and then up to 4 seconds for such a move before deciding. An `either` check page that loaded and stayed put counts as signed in, with its own reason `no_redirect_settled`: it is a weaker sign, because a site that signs you out later, or only shows a sign-in box without changing the address, looks the same. The template page says so under the site's sign-in. One that never finished loading is "couldn't tell". Reddit's check works this way; a signed-in landmark for Reddit is still to be verified.
 
 Selectors are only counted and texts only looked for; nothing from a pack is ever run in the page. A site without an approved pack keeps the cookie check of a generic site.
 
@@ -178,7 +244,7 @@ The request guard sees what the browser driver routes. Some traffic is not route
 
 | Not seen | What packs do about it |
 |---|---|
-| **Redirect hops.** Only the first address of a redirect chain is routed. A redirect into a guarded address (`/go?to=/logout` answering `302 /logout`) is not stopped, and because `307` and `308` keep the method, that covers `POST` too. | Packs block the site's known open redirectors. |
+| **Redirect hops.** Only the first address of a redirect chain is routed. A redirect into a guarded address (`/go?to=/logout` answering `302 /logout`) is not stopped, and because `307` and `308` keep the method, that covers `POST` too. | Packs block the site's known open redirectors. The same limit applies to the pages BrowserHive loads by itself (health checks, keep-alive visits, warm-ups): a page leaving the pack's domains by script is aborted, but a server redirect's next hop is not, so pack paths must not redirect off the pack's domains. |
 | **WebSockets.** Neither the connection nor its messages pass through BrowserHive's routing, so no guard sees them. | Element guards on the controls that send them. |
 | **`javascript:` URLs.** Requests a page makes from one. Agents cannot open them: every non-web scheme is refused at the tools ([Security](security.md#agents-open-web-urls-only)). | — |
 | **SharedWorker requests.** Dedicated workers and service workers are routed; shared workers are not. | Packs express such writes as element guards. |
@@ -194,6 +260,7 @@ Packs come from a source you trust less than yourself (a release, later a regist
 | Field | Bound |
 |---|---|
 | `sign_in.url` | `https` only, a host inside the pack's domains, a path with no query. Shown in full before a sign-in window opens. |
+| `sign_in.post` | Guard globs inside the pack's domains, never a whole host, at most 4; never loaded or sent, only read to classify a version; any change relaxes rules, so a decoy address cannot make a guard on the real one pass as tightening. |
 | `domains` | A domain another pack covers is refused, also for a local file you approve. A new domain is shown in the difference and needs your approval. |
 | Pages BrowserHive loads by itself (the probe page) | A path inside the domains, no query, and never one of the pack's own sign-out, account, credential or destructive guards. During a check, page loads that leave the domains are aborted. |
 | `guards` | The glob grammar only (`*` and `?`, at most 4 `*` and no `**` per pattern, matched without backtracking; an address over 16 384 characters is judged by its host alone, so a padded address cannot slip past a sign-out or account guard), hosts inside the pack's domains, at most 64. |
@@ -228,7 +295,8 @@ Write a pack for a site you use, or a stricter version of a bundled pack (a loca
   "domains": ["example.com", "example.net"],
   "sign_in": {
     "url": { "host": "www.example.com", "path": "/login" },
-    "human_only": false
+    "human_only": false,
+    "post": ["www.example.com/session", "www.example.com/two-factor*"]
   },
   "signed_in": {
     "probe": { "host": "www.example.com", "path": "/account/profile" },
@@ -292,6 +360,7 @@ Tips:
 - Give every element guard the request guard that enforces it on the network (`request_guard`); `verify` warns when one has none.
 - Guard the site's open redirectors (`/go*` above): a redirect into a guarded address is not seen ([above](#what-guards-cannot-see)).
 - The probe page must not be one of your own sign-out, account, credential or destructive guards.
+- List in `sign_in.post` every address the sign-in posts to (read the form's `action`, or watch DevTools › Network while signing in), later steps such as two-factor included: a guard on an address you left out classifies as tightening. Leave `post` out if you are not sure; then every blocking guard on the sign-in host waits for you. `verify` warns when one of your own `block` or `confirm` guards covers a listed address (agents would be stopped from signing in there).
 - Raise `version` with every change you want to show as a new version, and run `verify` before `reload`.
 - Record in `verified` only what you checked against the live site.
 
@@ -305,16 +374,16 @@ The first bundled packs were checked on 2026-11-16 without signing in: sign-in p
 |---|---|---|---|---|---|
 | Google | `google.com` | `myaccount.google.com/` | yes | restricted → warn | account, security, app-password, device and deletion pages blocked; device binding (DBSC on Windows) listed |
 | LinkedIn | `linkedin.com`, `licdn.com` | `www.linkedin.com/feed/` | no | prohibited → confirm | headed browser preferred |
-| Reddit | `reddit.com`, `redd.it` | `www.reddit.com/settings/account` (`either`) | no | prohibited → confirm | headed browser preferred; the redirect happens after the page loads, so checks are often "couldn't tell"; no logout guard yet |
+| Reddit | `reddit.com`, `redd.it` | `www.reddit.com/settings/account` (`either`) | no | prohibited → confirm | headed browser preferred; the redirect happens after the page loads (see [Navigation checks](#navigation-checks)); no logout guard yet |
 | Facebook | `facebook.com`, `fbcdn.net` | `www.facebook.com/settings` | no | prohibited → confirm | |
 | Instagram | `instagram.com`, `cdninstagram.com` | `www.instagram.com/accounts/edit/` | no | prohibited → confirm | |
 | X | `x.com`, `twitter.com`, `twimg.com` | `x.com/settings/account` | no | prohibited → confirm | headed browser preferred |
-| GitHub | `github.com` | `github.com/settings/profile` | no | allowed → allow | token, SSH key and OAuth app pages are `credential` guards |
+| GitHub | `github.com` | `github.com/settings/profile` | no | allowed → allow | token, SSH key and OAuth app pages are `credential` guards; the sign-in form's post addresses are listed (`/session`, `/sessions/*`), so routine guards on `github.com` tighten |
 | Indeed | `indeed.com` | `myjobs.indeed.com/` | no | writes restricted → confirm | headed browser preferred |
 | Glassdoor | `glassdoor.com` | `www.glassdoor.com/member/profile` | no | prohibited → confirm | signs in through Indeed; headed browser preferred; no logout guard yet |
 | Microsoft account | `microsoft.com`, `live.com`, `microsoftonline.com` | `account.microsoft.com/` | no | restricted → warn | headed browser preferred; security pages are guarded (opening them forces a fresh sign-in) |
 
-Packs without write guards (all of these for now) leave the write policy with nothing to act on. YouTube is not bundled yet: its signed-in check could not be confirmed without an account. Besides the packs, every template browser blocks the OAuth consent screens and approvals of Google, GitHub (authorize and device approval) and Microsoft (Entra admin consent, Microsoft account consent), so an agent cannot grant a third-party app access to the account.
+Only GitHub lists `sign_in.post` so far (its sign-in form's `action`, observed signed out on 2026-11-17); the other packs leave it out until the addresses their sign-in posts to are confirmed while signing in, so every blocking guard on their sign-in host classifies **Can stop the site**. Packs without write guards (all of these for now) leave the write policy with nothing to act on. YouTube is not bundled yet: its signed-in check could not be confirmed without an account. Besides the packs, every template browser blocks the OAuth consent screens and approvals of Google, GitHub (authorize and device approval) and Microsoft (Entra admin consent, Microsoft account consent), so an agent cannot grant a third-party app access to the account.
 
 ## Commands and API
 
@@ -322,7 +391,8 @@ Packs without write guards (all of these for now) leave the write policy with no
 |---|---|---|
 | List packs, pending updates and local files | `sitepacks list [--source …] [--pending]` | `GET /site-packs` |
 | Show one pack | `sitepacks show <pack>` | `GET /site-packs/{pack}` |
-| Show a difference | `sitepacks diff <pack> [--to <version\|local>]` | `GET /site-packs/{pack}/diff?to=…` |
+| Show a difference, classified | `sitepacks diff <pack> [--to <version\|local>]` | `GET /site-packs/{pack}/diff?to=…` |
+| The strategies BrowserHive knows, with each parameter's default, bounds and safe direction | `sitepacks show <pack>` (the pack's strategies) | `GET /site-packs/strategies` |
 | Apply, reject, revert | `sitepacks apply\|reject\|revert <pack>` | `POST /site-packs/{pack}/apply`, `/reject`, `/revert` |
 | Pin, follow | `sitepacks pin\|unpin\|follow <pack> …` | `PUT /site-packs/{pack}/pin`, `/follow` |
 | Approve a local file | `sitepacks approve-local <pack>` | `POST /site-packs/{pack}/approve-local` `{sha256}` |

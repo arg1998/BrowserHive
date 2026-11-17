@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "id": "reddit.com",
-  "version": 1,
+  "version": 2,
   "min_client": "0.2.3",
   "title": "Reddit",
   "description": "Reddit's user agreement bars accessing or collecting data by automated means. The account settings page is the probe; form posts to it need confirmation. Deactivation and session pages are blocked for agents.",
@@ -118,6 +118,12 @@
     "channel": "any",
     "headed": "preferred"
   },
+  "strategies": [
+    {
+      "id": "human-dwell",
+      "params": {}
+    }
+  ],
   "verified": {
     "sign_in": "2026-11-16",
     "signed_in": "2026-11-16",

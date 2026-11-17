@@ -1,4 +1,4 @@
-/** @module lib/api/operations-site-packs — the site-pack operations of `HTTP_ENDPOINTS` (spec 13 §11.1 "Site packs", PR T3a) and a template site's **Clear stop**, spread into `OPERATIONS` */
+/** @module lib/api/operations-site-packs — the site-pack operations of `HTTP_ENDPOINTS` (spec 13 §11.1 "Site packs", PRs T3a and T3b) and a template site's **Clear stop**, spread into `OPERATIONS` */
 import {
   SiteGuardHitsPage,
   SiteGuardHitsQuery,
@@ -18,6 +18,7 @@ import {
   SitePacksResponse,
   SitePackVersionRequest,
   SitePackViewResponse,
+  SiteStrategiesResponse,
   TemplateSiteParams,
   TemplateSiteResponse,
 } from '@browserhive/contracts/http';
@@ -30,6 +31,7 @@ export const SITE_PACK_OPERATIONS = {
   listSitePacks: { query: SitePacksQuery, response: SitePacksResponse },
   listSitePackChanges: { query: SitePackChangesQuery, response: SitePackChangesPage },
   listSiteGuardHits: { query: SiteGuardHitsQuery, response: SiteGuardHitsPage },
+  listSiteStrategies: { response: SiteStrategiesResponse },
   reloadSitePacks: { response: SitePackReloadResponse },
   importSitePack: { body: SitePackImportBody, response: SitePackImportResponse },
   getSitePack: { params: SitePackIdParams, response: SitePackDetailResponse },

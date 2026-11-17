@@ -21,6 +21,11 @@ export interface HostSpecDeps {
   /** Chromium switches from the internal testing seam (spec 13 §14). */
   readonly testingArgs: readonly string[];
   /**
+   * The switches the template's enabled sites' pack strategies add (`webrtc-policy`, spec 13 §3.1,
+   * §9.4), computed at each start from the compiled-in table; absent = none (`sitePacks=false`).
+   */
+  readonly hostFlags?: (template: TemplateRecord) => Promise<readonly string[]>;
+  /**
    * The OS BrowserHive runs on (`HostEnvironment.platform`): on `linux` a headed host needs
    * `DISPLAY` or `WAYLAND_DISPLAY` in `env` (spec 13 §3.11, D29). Absent = no display check.
    */
@@ -45,6 +50,7 @@ export async function buildHostSpec(
   assertDisplay(template, deps.platform, deps.env);
   const dir = templateDir(deps.dataDir, template.templateId);
   const identity = template.identity;
+  const hostFlags = (await deps.hostFlags?.(template)) ?? [];
   return {
     templateId: template.templateId,
     channel: template.channel,
@@ -68,6 +74,8 @@ export async function buildHostSpec(
     window: template.identityObserved?.window ?? DEFAULT_TEMPLATE_WINDOW,
     selfOrigins: deps.selfOrigins(),
     testingArgs: deps.testingArgs,
+    ...(hostFlags.length > 0 && { hostFlags }),
+    denyClipboardWrites: template.denyClipboardWrites,
   };
 }
 

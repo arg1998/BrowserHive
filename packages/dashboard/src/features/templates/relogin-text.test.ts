@@ -37,6 +37,7 @@ describe('health and re-login words', () => {
       'marker',
       'landmark',
       'no_redirect',
+      'no_redirect_settled',
       'timeout',
       'network',
       'no_signal',

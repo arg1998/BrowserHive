@@ -35,8 +35,10 @@ export const SitePackLocalState = z.enum(['approved', 'changed', 'not_approved']
 export type SitePackLocalState = z.infer<typeof SitePackLocalState>;
 
 /**
- * How a candidate compares with the approved version (spec 13 §9.7). T3a shows every diff as
- * `unclassified`; the classifier and its chips arrive with T3b.
+ * How a candidate compares with the approved version (spec 13 §9.7): the strongest of its fields
+ * (`loosening` > `restrictive` > `tightening` > `neutral`); `new_pack` and `local_override` for
+ * first approvals, `revoked` for a revocation's fallback waiting for an operator; `unclassified`
+ * only in history rows written before the classifier (T3a).
  */
 export const SitePackClassification = z.enum([
   'unclassified',

@@ -1,4 +1,4 @@
-/** @module cli/commands/sitepacks — `browserhive sitepacks list | show | diff` over a running server's REST API and the dispatcher of every `sitepacks` subcommand (spec 13 §9.6, §10.5, §10.6, §11.5); the decisions are in `sitepacks-actions.ts`, the shared reads and texts in `sitepacks-common.ts`. */
+/** @module cli/commands/sitepacks — `browserhive sitepacks list | show | diff` (pending versions with their classification, a pack's strategies with their parameters, the classified diff) over a running server's REST API and the dispatcher of every `sitepacks` subcommand (spec 13 §9.6, §10.5, §10.6, §11.5); the decisions are in `sitepacks-actions.ts`, the shared reads and texts in `sitepacks-common.ts`. */
 import { SitePacksResponse, type SitePackView } from '@browserhive/contracts/http';
 import type { CommandContext } from '../deps.ts';
 import { EXIT, type ExitCode, type Invocation, type SitePacksAction } from '../invocation.ts';
@@ -10,11 +10,11 @@ import {
   runSitePacksRevert,
   runSitePacksSetting,
 } from './sitepacks-actions.ts';
+import { CLASS_WORDS, fetchStrategies, printDiff, printStrategies } from './sitepacks-classes.ts';
 import {
   fetchDetail,
   fetchDiff,
   LOCAL_TEXT,
-  printDiff,
   printPairs,
   provenanceText,
   type SitePacksTarget,
@@ -79,8 +79,16 @@ function sourceText(view: SitePackView): string {
   return view.approved?.source ?? view.offer?.source ?? '—';
 }
 
+/** "v4 (relaxes rules)": pending versions with their classification (spec 13 §9.7). */
 function pendingText(view: SitePackView): string {
-  const versions = view.pending.map((p) => `v${p.version}`).join(', ');
+  const versions = view.pending
+    .map((p) => {
+      const cls = p.classification;
+      return cls === undefined || cls === 'unclassified'
+        ? `v${p.version}`
+        : `v${p.version} (${CLASS_WORDS[cls]})`;
+    })
+    .join(', ');
   if (view.pinned_version !== null) {
     return `pinned at v${view.pinned_version}${versions === '' ? '' : `, ${versions} available`}`;
   }
@@ -228,6 +236,10 @@ async function runSitePacksShow(
     return EXIT.ok;
   }
   const { view, pack } = detail;
+  const strategies =
+    pack === null || pack.strategies.length === 0
+      ? null
+      : await fetchStrategies(context, target.remote);
   out.line(`${out.style.bold(view.title)} (${view.pack_id})`);
   printPairs(context, viewPairs(view));
   if (pack !== null) {
@@ -246,6 +258,7 @@ async function runSitePacksShow(
     if (verified.length > 0) {
       out.line(`Verified: ${verified.map(([field, date]) => `${field} ${date}`).join(', ')}`);
     }
+    printStrategies(context, pack, strategies);
   }
   if (detail.versions.length > 0) {
     out.line();

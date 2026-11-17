@@ -227,6 +227,12 @@ export const WARNING_ERRORS = {
     "A request matched a site pack guard whose action is `warn` (or a write under a `warn` write policy) and was let through (spec 13 §9.3). The guard hit is listed on the template's Activity tab and the Site packs guard-hit log.",
     "Nothing to do unless the request should not have gone out: then set the site's write policy to `confirm` on the template's Sites tab.",
   ),
+  SITE_PACED: warning(
+    'SITE_PACED',
+    'A write was paced',
+    "A write matched a site pack write guard whose pacing budget (strategy `pace-writes`, spec 13 §9.4) was spent: it waited for the next token, or was aborted when that was more than 60 s away. The budget belongs to the template's account and is shared by its sessions; `ramp-up` lowers it for a new template.",
+    "Nothing to do: the budget refills over time. If writes are paced too often, spread the agents' work or lower their write rate.",
+  ),
   SITE_WRITE_HELD: warning(
     'SITE_WRITE_HELD',
     'A write is waiting for approval',

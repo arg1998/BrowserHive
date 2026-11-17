@@ -2,7 +2,7 @@
 
 # Error reference
 
-Every error code BrowserHive can produce (143 codes), generated from `ERROR_REGISTRY` in `@browserhive/contracts/errors`. Each code has a stable anchor: `errors.md#<CODE>`, which is also the `type` URL of HTTP problem responses (`https://browserhive.ai/docs/errors#<CODE>`).
+Every error code BrowserHive can produce (146 codes), generated from `ERROR_REGISTRY` in `@browserhive/contracts/errors`. Each code has a stable anchor: `errors.md#<CODE>`, which is also the `type` URL of HTTP problem responses (`https://browserhive.ai/docs/errors#<CODE>`).
 
 ## How errors reach you
 
@@ -103,6 +103,7 @@ Returned by tools and the REST API when a request cannot be served (unknown sess
 | [`SITE_PACK_NO_PREVIOUS`](#SITE_PACK_NO_PREVIOUS) | No previous version | 409 | never |
 | [`SITE_PACK_NO_LOCAL_FILE`](#SITE_PACK_NO_LOCAL_FILE) | No local pack file | 404 | never |
 | [`SITE_PACK_APPROVAL_REQUIRED`](#SITE_PACK_APPROVAL_REQUIRED) | Site pack needs review | 409 | different_args |
+| [`SITE_PACK_BELOW_FLOOR`](#SITE_PACK_BELOW_FLOOR) | Templates below the pack's stealth floor | 409 | after_operator |
 
 <a id="SESSION_NOT_FOUND"></a>
 ### `SESSION_NOT_FOUND`
@@ -1982,6 +1983,33 @@ Details:
 | `source` | `string` | yes | — |
 | `release` | `string` or `null` | yes | — |
 
+<a id="SITE_PACK_BELOW_FLOOR"></a>
+### `SITE_PACK_BELOW_FLOOR`
+
+| Property | Value |
+|---|---|
+| Title | Templates below the pack's stealth floor |
+| HTTP status | 409 |
+| Category | `domain` |
+| Retryable | `after_operator` (retry after an operator acts (unlock the vault, resolve a request, change policy)) |
+
+Message: `Version {version} of site pack '{pack_id}' needs stronger stealth settings than templates using it have: {templates_text}. Turn the site off on those templates, or create new templates that meet the floor, then try again.`
+
+Hint: Stealth is fixed for a template's life: turn the site off on the named templates (their Sites tab), or create a new template with the stealth the pack needs; rejecting the version keeps the current one.
+
+Cause: The version selects the `stealth-profile` strategy (spec 13 §9.4) with a floor (minimum stealth level, required or forbidden fingerprint noise) that templates whose enabled sites use the pack do not meet. Applying it (or reverting to it, or approving such a local file) would leave those templates running the site below the pack's floor (D-71), so the action is refused and the version in force stays. A template's stealth level and fingerprint noise are fixed when it is created, so the template itself cannot be changed to meet the floor.
+
+Resolution: For each named template, turn the site off on it (the template's Sites tab, or `PUT /api/v1/templates/{id}/sites/{site}` with `enabled: false`), or create a new template with the stealth level and fingerprint noise the pack needs, sign in to the site there and remove it from the old template; then try again. Rejecting the version keeps the current one.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `pack_id` | `string` | yes | — |
+| `version` | `integer` | yes | — |
+| `templates` | `object[]` | yes | each item: keys `template_id`, `name`, `issues` |
+| `templates_text` | `string` | yes | — |
+
 ## Boot errors
 
 Stop the process before it serves anything. The CLI prints `[CODE] message` and exits with the listed exit code.
@@ -2012,6 +2040,7 @@ Stop the process before it serves anything. The CLI prints `[CODE] message` and 
 | [`TEMPLATE_KEY_MISMATCH`](#TEMPLATE_KEY_MISMATCH) | Template files on another key | 500 | never |
 | [`TEMPLATE_CHECKPOINT_FAILED`](#TEMPLATE_CHECKPOINT_FAILED) | Template checkpoint failed | 500 | backoff |
 | [`TEMPLATE_CHECKPOINT_TOO_LARGE`](#TEMPLATE_CHECKPOINT_TOO_LARGE) | Template state over the size cap | 500 | never |
+| [`TEMPLATE_SITE_BELOW_FLOOR`](#TEMPLATE_SITE_BELOW_FLOOR) | A site turned off below its pack's stealth floor | 500 | never |
 | [`SITE_PACKS_STATE_CORRUPT`](#SITE_PACKS_STATE_CORRUPT) | Site pack state unreadable | 500 | never |
 | [`SITE_PACKS_LOAD_FAILED`](#SITE_PACKS_LOAD_FAILED) | Site packs not loaded | 500 | never |
 
@@ -2646,6 +2675,36 @@ Details:
 | `template_id` | `string` | yes | — |
 | `size_bytes` | `integer` | yes | ≥ 0 |
 | `dropped_origins` | `string[]` | yes | — |
+
+<a id="TEMPLATE_SITE_BELOW_FLOOR"></a>
+### `TEMPLATE_SITE_BELOW_FLOOR`
+
+| Property | Value |
+|---|---|
+| Title | A site turned off below its pack's stealth floor |
+| HTTP status | 500 |
+| Category | `boot` |
+| Retryable | `never` (do not retry; the request cannot succeed as sent) |
+| Exit code | 1 |
+
+Message: `Version {version} of site pack '{pack_id}' now applies without an Apply, and templates using it are below its stealth floor: {templates_text}. BrowserHive turned the site off on them.`
+
+Hint: Create a new template with the stealth settings the pack needs for this site, or remove the site from the named templates.
+
+Cause: The content in force of a site pack changed without an operator's Apply (the approved local file was deleted or came back, a revoked version fell back to the previous one, or a stored approval became readable again; spec 13 §9.6), and its `stealth-profile` floor is above templates whose enabled sites use the pack. A template never runs a site below its pack's floor (D-71), and a file deletion cannot be refused, so the site was turned off on those templates (`enabled=false`, an audit row by `browserhive`).
+
+Resolution: Stealth and fingerprint noise are fixed for a template's life: create a new template with the settings the pack names for this site and sign in there, or remove the site from the named templates. Turning the site on again is refused while the template is below the floor. The record resolves once no site BrowserHive turned off is still off below its pack's floor (removed, its template removed, or a version with a lower floor); a site you turned off yourself never keeps it open.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `pack_id` | `string` | yes | — |
+| `version` | `integer` | yes | — |
+| `reason` | one of `local_override_ended`, `content_changed` | yes | — |
+| `template_ids` | `string[]` | yes | — |
+| `templates` | `object[]` | yes | each item: keys `template_id`, `name`, `site_ids`, `issues` |
+| `templates_text` | `string` | yes | — |
 
 <a id="SITE_PACKS_STATE_CORRUPT"></a>
 ### `SITE_PACKS_STATE_CORRUPT`
@@ -3313,6 +3372,7 @@ Non-fatal degradations recorded on a session or in the system events list; the o
 | [`TEMPLATE_SITE_SIGNED_OUT`](#TEMPLATE_SITE_SIGNED_OUT) | Some template sites are signed out | 500 | never |
 | [`TEMPLATE_STATE_COPY`](#TEMPLATE_STATE_COPY) | Session started from a copy of a template's sign-ins | 500 | never |
 | [`SITE_GUARD_WARNED`](#SITE_GUARD_WARNED) | A guarded request went out | 500 | never |
+| [`SITE_PACED`](#SITE_PACED) | A write was paced | 500 | never |
 | [`SITE_WRITE_HELD`](#SITE_WRITE_HELD) | A write is waiting for approval | 500 | never |
 
 <a id="EXECUTABLE_PATH_OVERRIDE"></a>
@@ -3722,6 +3782,32 @@ Hint: Session warning: logged and broadcast on session:<id>, never thrown.
 Cause: A request matched a site pack guard whose action is `warn` (or a write under a `warn` write policy) and was let through (spec 13 §9.3). The guard hit is listed on the template's Activity tab and the Site packs guard-hit log.
 
 Resolution: Nothing to do unless the request should not have gone out: then set the site's write policy to `confirm` on the template's Sites tab.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `session_id` | `string` | yes | — |
+| `message` | `string` | yes | — |
+| `details` | `object` | no | additional keys allowed |
+
+<a id="SITE_PACED"></a>
+### `SITE_PACED`
+
+| Property | Value |
+|---|---|
+| Title | A write was paced |
+| HTTP status | 500 |
+| Category | `warning` |
+| Retryable | `never` (do not retry; the request cannot succeed as sent) |
+
+Message: `{message}`
+
+Hint: Session warning: logged and broadcast on session:<id>, never thrown.
+
+Cause: A write matched a site pack write guard whose pacing budget (strategy `pace-writes`, spec 13 §9.4) was spent: it waited for the next token, or was aborted when that was more than 60 s away. The budget belongs to the template's account and is shared by its sessions; `ramp-up` lowers it for a new template.
+
+Resolution: Nothing to do: the budget refills over time. If writes are paced too often, spread the agents' work or lower their write rate.
 
 Details:
 

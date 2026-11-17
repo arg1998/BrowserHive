@@ -1,4 +1,4 @@
-/** @module features/site-packs/detail/AccessSections — a pack's sign-in, signed-in check and write policy as readable text (spec 13 §9.2, §9.3, §11.4): the sign-in address in full, sign in by hand only, the identity provider, the form's selectors, the probe and how it decides, presence-only cookie names, the keeper; the default write policy, "What the site's terms say" as a label, the clause verbatim with its checked date and address as text, and the exception */
+/** @module features/site-packs/detail/AccessSections — a pack's sign-in, signed-in check and write policy as readable text (spec 13 §9.2, §9.3, §11.4): the sign-in address in full, where the sign-in form posts (`sign_in.post`, read by the classifier), sign in by hand only, the identity provider, the form's selectors, the probe and how it decides, presence-only cookie names, the keeper; the default write policy, "What the site's terms say" as a label, the clause verbatim with its checked date and address as text, and the exception */
 import type { SitePackV1 } from '@browserhive/contracts/site-packs';
 import { NO_WRITE_GUARDS, WRITE_POLICY_HINT, WRITE_POLICY_LABEL } from '../model.ts';
 import { StanceLabel, TermsClause, UrlText } from '../PackBits.tsx';
@@ -25,6 +25,18 @@ export function SignInSection({ pack }: { readonly pack: SitePackV1 }) {
             signIn.human_only
               ? 'Sign in by hand only: BrowserHive never fills it, so automatic re-login is unavailable.'
               : 'You, or a vault fill when you link a vault binding.',
+          ],
+          signIn?.post !== undefined && [
+            'Sign-in form posts to',
+            <span key="post" className="flex flex-col gap-1">
+              {signIn.post.map((glob) => (
+                <Code key={glob}>{glob}</Code>
+              ))}
+              <span className="text-sm text-muted-foreground">
+                A guard that blocks or asks there can stop the site; elsewhere on the host it only
+                tightens rules.
+              </span>
+            </span>,
           ],
           signIn?.form !== undefined && [
             'Sign-in form',

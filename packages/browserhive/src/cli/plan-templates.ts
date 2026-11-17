@@ -87,6 +87,11 @@ export function templatesInvocation(name: string, input: TemplatesPlanInput): Re
       const action = hostAction(reader, args[1] ?? '');
       return (remote) => ({ command: 'templates-host', action, ...target(remote) });
     }
+    case 'templates clipboard': {
+      const deny = clipboardMode(reader, args[1] ?? '');
+      const restart = reader.bool('restart');
+      return (remote) => ({ command: 'templates-clipboard', deny, restart, ...target(remote) });
+    }
     case 'templates login':
       return loginInvocation(reader, target);
     case 'templates probe': {
@@ -132,6 +137,17 @@ function hostAction(reader: FlagReader, raw: string): TemplateHostAction {
       : `unknown action '${raw}' for 'templates host'. Expected one of: start, stop, restart.`,
   );
   return 'start';
+}
+
+/** `deny|allow` of `templates clipboard`: whether pages may write the clipboard (D18). */
+function clipboardMode(reader: FlagReader, raw: string): boolean {
+  if (raw === 'deny' || raw === 'allow') return raw === 'deny';
+  reader.problems.push(
+    raw === ''
+      ? "'templates clipboard' requires deny or allow."
+      : `unknown value '${raw}' for 'templates clipboard'. Expected deny or allow.`,
+  );
+  return false;
 }
 
 function loginInvocation(
@@ -194,6 +210,7 @@ function createInvocation(
   const proxy = proxyInput(reader);
   const policy = policyInput(input);
   const yes = reader.bool('yes');
+  const denyClipboardWrites = reader.bool('denyClipboardWrites');
   const fromStateRaw = reader.text('fromState');
   const fromState = fromStateRaw === undefined ? null : absolutePath(input, fromStateRaw);
   if (fromState !== null && reader.bool('noLogin')) {
@@ -211,6 +228,7 @@ function createInvocation(
     ...(locale !== undefined && { locale }),
     ...(timezone !== undefined && { timezone_id: timezone }),
     ...(policy !== undefined && { policy }),
+    ...(denyClipboardWrites && { deny_clipboard_writes: true }),
   };
   return (remote) => ({
     command: 'templates-create',

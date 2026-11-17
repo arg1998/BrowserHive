@@ -77,7 +77,8 @@ function diffFromJson(text: string | null, where: string): SitePackChangeFieldRe
   }));
 }
 
-function diffToJson(diff: readonly SitePackChangeFieldRecord[] | null): string | null {
+/** `diff_json` of a classified diff (also written alone by `classify`). */
+export function diffToJson(diff: readonly SitePackChangeFieldRecord[] | null): string | null {
   if (diff === null) return null;
   return JSON.stringify(
     diff.map((f) => ({ path: f.path, from: f.from, to: f.to, class: f.class })),

@@ -41,11 +41,15 @@ const readSubcommands = [
       ...remoteJson,
     ],
   }),
-  sub(['show'], 'Show a pack: approval and provenance, local file, pending versions, rules', {
-    args: [packArg],
-    flags: remoteJson,
-  }),
-  sub(['diff'], 'Show the field changes between the approved version and a candidate', {
+  sub(
+    ['show'],
+    'Show a pack: approval, local file, classified pending versions, rules, strategies',
+    {
+      args: [packArg],
+      flags: remoteJson,
+    },
+  ),
+  sub(['diff'], 'Show the classified field changes from the approved version to a candidate', {
     args: [packArg],
     flags: [
       {

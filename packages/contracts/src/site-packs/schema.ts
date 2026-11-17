@@ -214,6 +214,13 @@ export const SitePackV1 = z.strictObject({
       url: PackScopedUrl,
       /** `true`: never filled by the vault (spec 13 §7.3). */
       human_only: z.boolean(),
+      /**
+       * Where the sign-in form posts (its `action`, or the address its script posts to), as guard
+       * globs inside the pack's domains, never a whole host (refined in core). Read only by the
+       * change classifier: a guard covering one of them can stop the site. Absent: every
+       * `POST`-capable guard on the sign-in page's host counts (spec 13 §9.7).
+       */
+      post: z.array(PackUrlGlob).min(1).max(4).optional(),
       /** Refused with `human_only` (refined in core). */
       form: z
         .strictObject({

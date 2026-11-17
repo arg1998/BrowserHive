@@ -1,4 +1,4 @@
-/** @module test/helpers/http-route-cases-site-packs — the route cases of the T3a site-pack routes (spec 13 §11.1): the kit's in-memory registry ships `pack-a.test` v1; setups approve it, put a newer bundled version or a local file, and reload. */
+/** @module test/helpers/http-route-cases-site-packs — the route cases of the T3a and T3b site-pack routes (spec 13 §11.1): the kit's in-memory registry ships `pack-a.test` v1; setups approve it, put a newer bundled version or a local file, and reload. */
 
 import type { CaseContext, RouteCase } from './http-route-case-types.ts';
 import { packSha, sitePack } from './site-pack-kit.ts';
@@ -54,6 +54,11 @@ export const SITE_PACK_CASES: readonly RouteCase[] = [
     operationId: 'listSiteGuardHits',
     success: { path: api('/site-packs/guard-hits?action=block'), status: 200 },
     invalid: { path: api('/site-packs/guard-hits?action=explode') },
+  },
+  {
+    operationId: 'listSiteStrategies',
+    success: { path: api('/site-packs/strategies'), status: 200 },
+    invalid: null,
   },
   {
     operationId: 'reloadSitePacks',

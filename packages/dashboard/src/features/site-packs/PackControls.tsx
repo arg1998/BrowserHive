@@ -1,6 +1,8 @@
-/** @module features/site-packs/PackControls — a pack's settings as controls (spec 13 §10.6, §11.4): **Follow updates** (Auto, On, Off), **Enabled** (turning it off asks first), **Revert…** behind a confirmation when a previous version exists, and the row menu that reaches all of them from the keyboard (Shift+F10 on a table row) */
+/** @module features/site-packs/PackControls — a pack's settings as controls (spec 13 §10.6, §11.4): **Follow updates** (Auto, On, Off), **Enabled** (turning it off asks first), **Revert…** behind a confirmation classified like Apply (the diff from the version in force to the previous one, review #84 L4) when a previous version exists, a below-floor refusal of Revert explained in a dialog (D-71), and the row menu that reaches all of them from the keyboard (Shift+F10 on a table row) */
 import type { SitePackView } from '@browserhive/contracts/http';
 import { useNavigate } from '@tanstack/react-router';
+import { useState } from 'react';
+import { useApi } from '@/app/providers/AuthProvider.tsx';
 import { useConfirm } from '@/app/providers/ConfirmProvider.tsx';
 import { useToast } from '@/app/providers/ToastProvider.tsx';
 import { useRowControlTabIndex } from '@/components/shared/row-context.ts';
@@ -18,9 +20,11 @@ import {
 } from '@/components/ui/dropdown-menu.tsx';
 import { Switch } from '@/components/ui/switch.tsx';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group.tsx';
+import { toAppError } from '@/lib/api/errors.ts';
 import { ICONS } from '@/lib/icons.ts';
 import { useSitePackActions } from './api.ts';
 import { disableConfirm, revertConfirm } from './confirm-copy.ts';
+import { type FloorDetails, FloorDialog, floorRefusalOf } from './FloorRefusal.tsx';
 import { FOLLOW_LABEL, iso } from './model.ts';
 
 type Follow = SitePackView['follow']['setting'];
@@ -33,8 +37,23 @@ function followBody(setting: Follow): boolean | null {
 /** The pack's actions with the toasts they end in. */
 function usePackSettings(pack: SitePackView) {
   const actions = useSitePackActions(pack.pack_id);
+  const api = useApi();
   const toast = useToast();
   const confirm = useConfirm();
+  const [revertRefusal, setRevertRefusal] = useState<FloorDetails | null>(null);
+  const [revertRefusalOpen, setRevertRefusalOpen] = useState(false);
+  // What going back changes, classified like Apply; unknown when the diff cannot be read.
+  const revertDiff = async () => {
+    if (pack.previous === null) return undefined;
+    try {
+      return await api.diffSitePack({
+        params: { pack_id: pack.pack_id },
+        query: { to: pack.previous.version },
+      });
+    } catch {
+      return undefined;
+    }
+  };
   return {
     busy: actions.follow.isPending || actions.setEnabled.isPending || actions.revert.isPending,
     follow: (setting: Follow) =>
@@ -53,12 +72,42 @@ function usePackSettings(pack: SitePackView) {
       });
     },
     revert: async () => {
-      if (!(await confirm(revertConfirm(pack)))) return;
+      if (!(await confirm(revertConfirm(pack, await revertDiff())))) return;
       actions.revert.mutate(undefined, {
         onSuccess: () => toast.success({ title: `${iso(pack.title)} reverted` }),
+        // A below-floor refusal is explained in a dialog, not a toast (D-71).
+        onError: (error: unknown) => {
+          const refusal = floorRefusalOf(toAppError(error));
+          if (refusal === null) return;
+          setRevertRefusal(refusal);
+          setRevertRefusalOpen(true);
+        },
       });
     },
+    revertRefusal,
+    revertRefusalOpen,
+    setRevertRefusalOpen,
   };
+}
+
+/** Revert refused below a template's stealth floor: the dialog, until closed. */
+function RevertRefusal({
+  pack,
+  settings,
+}: {
+  readonly pack: SitePackView;
+  readonly settings: ReturnType<typeof usePackSettings>;
+}) {
+  if (settings.revertRefusal === null) return null;
+  return (
+    <FloorDialog
+      refusal={settings.revertRefusal}
+      title={pack.title}
+      action="revert"
+      open={settings.revertRefusalOpen}
+      onOpenChange={settings.setRevertRefusalOpen}
+    />
+  );
 }
 
 /** Follow updates: Auto, On, Off; Auto says what it means right now. */
@@ -116,16 +165,19 @@ export function RevertButton({ pack }: { readonly pack: SitePackView }) {
   const settings = usePackSettings(pack);
   if (pack.previous === null) return null;
   return (
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      disabled={settings.busy}
-      onClick={() => void settings.revert()}
-    >
-      <ICONS.restore aria-hidden="true" />
-      Revert to v{pack.previous.version}…
-    </Button>
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={settings.busy}
+        onClick={() => void settings.revert()}
+      >
+        <ICONS.restore aria-hidden="true" />
+        Revert to v{pack.previous.version}…
+      </Button>
+      <RevertRefusal pack={pack} settings={settings} />
+    </>
   );
 }
 
@@ -135,56 +187,59 @@ export function PackMenu({ pack }: { readonly pack: SitePackView }) {
   const navigate = useNavigate();
   const tabIndex = useRowControlTabIndex();
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label={`Actions for ${pack.title}`}
-            tabIndex={tabIndex}
-            disabled={settings.busy}
-          />
-        }
-      >
-        <ICONS.more aria-hidden="true" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-52">
-        <DropdownMenuItem
-          onClick={() => void navigate({ to: '/site-packs/$id', params: { id: pack.pack_id } })}
+    <>
+      <RevertRefusal pack={pack} settings={settings} />
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label={`Actions for ${pack.title}`}
+              tabIndex={tabIndex}
+              disabled={settings.busy}
+            />
+          }
         >
-          <ICONS.arrowUpRight aria-hidden="true" />
-          Open
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuLabel>Follow updates</DropdownMenuLabel>
-        <DropdownMenuRadioGroup
-          value={pack.follow.setting}
-          onValueChange={(value: unknown) => {
-            if (value === 'auto' || value === 'on' || value === 'off') settings.follow(value);
-          }}
-        >
-          {FOLLOWS.map((setting) => (
-            <DropdownMenuRadioItem key={setting} value={setting}>
-              {FOLLOW_LABEL[setting]}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuCheckboxItem
-          checked={pack.enabled}
-          onCheckedChange={(checked: boolean) => void settings.setEnabled(checked)}
-        >
-          Enabled
-        </DropdownMenuCheckboxItem>
-        {pack.previous !== null ? (
-          <DropdownMenuItem variant="destructive" onClick={() => void settings.revert()}>
-            <ICONS.restore aria-hidden="true" />
-            Revert to v{pack.previous.version}…
+          <ICONS.more aria-hidden="true" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-52">
+          <DropdownMenuItem
+            onClick={() => void navigate({ to: '/site-packs/$id', params: { id: pack.pack_id } })}
+          >
+            <ICONS.arrowUpRight aria-hidden="true" />
+            Open
           </DropdownMenuItem>
-        ) : null}
-      </DropdownMenuContent>
-    </DropdownMenu>
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel>Follow updates</DropdownMenuLabel>
+          <DropdownMenuRadioGroup
+            value={pack.follow.setting}
+            onValueChange={(value: unknown) => {
+              if (value === 'auto' || value === 'on' || value === 'off') settings.follow(value);
+            }}
+          >
+            {FOLLOWS.map((setting) => (
+              <DropdownMenuRadioItem key={setting} value={setting}>
+                {FOLLOW_LABEL[setting]}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuCheckboxItem
+            checked={pack.enabled}
+            onCheckedChange={(checked: boolean) => void settings.setEnabled(checked)}
+          >
+            Enabled
+          </DropdownMenuCheckboxItem>
+          {pack.previous !== null ? (
+            <DropdownMenuItem variant="destructive" onClick={() => void settings.revert()}>
+              <ICONS.restore aria-hidden="true" />
+              Revert to v{pack.previous.version}…
+            </DropdownMenuItem>
+          ) : null}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
   );
 }

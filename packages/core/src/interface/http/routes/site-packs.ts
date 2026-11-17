@@ -1,4 +1,4 @@
-/** @module interface/http/routes/site-packs — the Site packs API (spec 13 §11.1, PR T3a): the catalog with the registry's status, one pack, its field-level diff, Apply, Reject, Revert, Pin, Follow, approving a local file, enabling, reloading, importing an unsigned pack, and the change and guard-hit histories. The registry client's check and download arrive with T4b. */
+/** @module interface/http/routes/site-packs — the Site packs API (spec 13 §11.1, PRs T3a and T3b): the catalog with the registry's status, the strategy set, one pack, its classified field-level diff, Apply, Reject, Revert, Pin, Follow, approving a local file, enabling, reloading, importing an unsigned pack, and the change and guard-hit histories. The registry client's check and download arrive with T4b. */
 
 import {
   SITE_PACK_IMPORT_MAX_BYTES,
@@ -20,8 +20,10 @@ import {
   SitePacksResponse,
   SitePackVersionRequest,
   SitePackViewResponse,
+  SiteStrategiesResponse,
 } from '@browserhive/contracts/http';
 import { packInvalid } from '../../../app/site-packs/registry-errors.ts';
+import { strategyViews } from '../../../app/site-packs/strategy-views.ts';
 import type { RequestPrincipal } from '../../../domain/auth/principal.ts';
 import { defineRoute, reply } from '../define-route.ts';
 import { requirePrincipal } from './common.ts';
@@ -62,6 +64,17 @@ export const SITE_PACK_ROUTES = [
     responses: { 200: SiteGuardHitsPage },
     async handler({ input, services }) {
       return reply(200, await services.sitePacks.guardHits(input.query));
+    },
+  }),
+  defineRoute({
+    operationId: 'listSiteStrategies',
+    tags,
+    summary:
+      'The strategies this binary implements (spec 13 §9.4): title, description, kind, hook points, and each parameter with its default, bounds and safe direction, for describing what a pack selects.',
+    request: {},
+    responses: { 200: SiteStrategiesResponse },
+    async handler() {
+      return reply(200, strategyViews());
     },
   }),
   defineRoute({
@@ -114,7 +127,7 @@ export const SITE_PACK_ROUTES = [
     operationId: 'diffSitePack',
     tags,
     summary:
-      'The field-level diff from the approved version (or `from`) to a pending version or the current local file (`to=local`). Unclassified until a later release.',
+      "The field-level diff from the approved version (or `from`) to a pending version, the previous approved version (what Revert restores) or the current local file (`to=local`), classified (spec 13 §9.7): each change's class and the candidate's (the strongest; `new_pack` without an approved version), with the templates' current settings.",
     request: { params: SitePackIdParams, query: SitePackDiffQuery },
     responses: { 200: SitePackDiffResponse },
     errors: ['SITE_PACK_NOT_FOUND', 'CONFLICT'],
@@ -126,10 +139,15 @@ export const SITE_PACK_ROUTES = [
     operationId: 'applySitePack',
     tags,
     summary:
-      'Apply a pending version: it becomes the approved version for every template using the pack; the previous one is kept for Revert.',
+      "Apply a pending version: it becomes the approved version for every template using the pack; the previous one is kept for Revert. Refused (SITE_PACK_BELOW_FLOOR) while a template using the pack is below the version's stealth floor.",
     request: { params: SitePackIdParams, body: SitePackVersionRequest },
     responses: { 200: SitePackViewResponse },
-    errors: ['SITE_PACK_NOT_FOUND', 'SITE_PACK_UPDATE_NOT_PENDING', 'SITE_PACK_DOMAIN_TAKEN'],
+    errors: [
+      'SITE_PACK_NOT_FOUND',
+      'SITE_PACK_UPDATE_NOT_PENDING',
+      'SITE_PACK_DOMAIN_TAKEN',
+      'SITE_PACK_BELOW_FLOOR',
+    ],
     async handler({ input, principal, services }) {
       const view = await services.sitePacks.apply(
         input.params.pack_id,
@@ -158,10 +176,11 @@ export const SITE_PACK_ROUTES = [
   defineRoute({
     operationId: 'revertSitePack',
     tags,
-    summary: 'Restore the previous approved version in one action.',
+    summary:
+      "Restore the previous approved version in one action. Refused (SITE_PACK_BELOW_FLOOR) while a template using the pack is below that version's stealth floor.",
     request: { params: SitePackIdParams },
     responses: { 200: SitePackViewResponse },
-    errors: ['SITE_PACK_NOT_FOUND', 'SITE_PACK_NO_PREVIOUS'],
+    errors: ['SITE_PACK_NOT_FOUND', 'SITE_PACK_NO_PREVIOUS', 'SITE_PACK_BELOW_FLOOR'],
     async handler({ input, principal, services }) {
       return reply(200, {
         view: await services.sitePacks.revert(input.params.pack_id, by(principal)),
@@ -213,6 +232,7 @@ export const SITE_PACK_ROUTES = [
       'SITE_PACK_NO_LOCAL_FILE',
       'SITE_PACK_INVALID',
       'SITE_PACK_DOMAIN_TAKEN',
+      'SITE_PACK_BELOW_FLOOR',
       'CONFLICT',
     ],
     async handler({ input, principal, services }) {

@@ -1296,3 +1296,69 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 **Deviations from spec 13 §9.8's first table** (the table now shows what ships): Indeed's probe is `myjobs.indeed.com/` and Glassdoor's `/member/profile` (the paths the old ones redirect to); Microsoft's stance is `restricted` → `warn` (its Services Agreement bans only inauthentic automation and impermissible scraping) and its signed-out redirect is `account.microsoft.com/account?silentSignInAttempt=1*`; LinkedIn drops `/authwall`; Reddit's probe is `either`; the X pack carries `twitter.com` copies of its guards; GitHub and Reddit carry the credential guards their official docs name (repository deploy keys and the GitHub and Reddit consent approval requests stay on the owner checklist); the consent globs of `DEFAULT_GUARDS` stop at the path so a query string cannot widen them.
 
 **Consequences.** Packs with no write guards make their default write policy inert (the dashboard and CLI say so: `write_guards: 0`); Reddit and Glassdoor ship without a logout guard (none could be verified); Reddit's probe is mostly inconclusive until a landmark is verified. Each signed-in check the owner completes becomes a new pack version, which reaches installs as a pending update to approve.
+
+## D-70 Pack strategies run in the services that own each hook, from one compiled-in table
+
+**Status:** Accepted (lead decision for PR T3b; the owner may veto before the final templates PR)
+
+**Implementation:** PR T3b of spec 13 §17.
+
+**Context.** Spec 13 §9.4 describes strategies as code in `infra/site-packs/strategies/` behind a `SiteStrategy` hook interface. The hooks sit in very different places (template admission, the tool dispatcher, the request guard, the host's response stream and command line, the keeper), each with state of its own (token buckets, FIFO queues, last-action times, the focused page), and the layering rules forbid `infra/` from calling `app/`.
+
+**Decision.**
+- One pure table in `domain/site-packs/strategy-specs.ts` (`STRATEGY_SPECS`, exhaustive over `StrategyId` at compile time) holds each strategy's title, kind, hooks and parameters with their defaults, bounds and safe direction; `strategyOf(pack, id)` returns typed parameters clamped to the binary's bounds, `strategyParamIssues` refuses unknown names and wrong types in `refinePack`, and `GET /site-packs/strategies` and `classifyPackChange` read the same table.
+- Each hook runs in the service that owns that point (admission, the dispatcher's before-action runner, the request guard's pacer, the host's response observer and launch flags, the keeper). Their state lives in memory per process and per template; a restart resets it.
+- Template-scoped strategies (`launch-spacing`, `active-hours`, `ramp-up`, `stealth-profile`, `webrtc-policy`, `keep-alive`, `concurrency.max_sessions`) come from the template's enabled sites' approved packs; page-scoped ones from the approved pack owning the URL (packs are global, D-67). When several sites select one template-scoped strategy the strictest wins.
+
+**Consequences.** Adding a strategy is one table row plus its hook; the classifier and the REST listing cannot drift from the runtime's bounds. A restart forgets pacing budgets and launch spacing (documented).
+
+**Alternatives considered.** *A `SiteStrategy` object per id with every hook* (the spec's sketch): the stateful parts would need back-references into five services across layers, for no gain in exhaustiveness.
+
+## D-71 The stealth floor refuses below-floor templates; Apply of a version that raises it is refused
+
+**Status:** Accepted (lead decision for PR T3b)
+
+**Context.** Spec 13 §9.4 makes `stealth-profile` a floor checked at template creation, site add and pack approval, and says that approving a version that raises the floor above a template's settings "asks the operator to change the template or disable the site".
+
+**Decision.** Creating a template, adding or enabling a site, and an edit that lowers stealth or changes fingerprint below an enabled site's floor answer `VALIDATION_FAILED` (issue codes `stealth_below_floor`, `fingerprint_required`, `fingerprint_forbidden`). Applying a pack version whose floor is above a using template's settings answers `SITE_PACK_BELOW_FLOOR` (409, naming the templates and what each must change); such a candidate classifies `restrictive`. `stealth-profile.humanize: true` is not a refusal: it forces humanized input on the site's pages at run time, as `humanize-input` does.
+
+**Consequences.** A template can never run a site below its pack's floor. Stealth and fingerprint noise are fixed for a template's life, so the operator turns the site off on the template (or creates a new template with the settings the pack needs, or rejects the version) before applying.
+
+*As built (review #84 M1).* Revert is refused with `SITE_PACK_BELOW_FLOOR` like Apply. A change of the content in force that no operator action made, and that cannot be refused (an approved local file deleted, so another approved version applies; a revocation's fallback; a stored approval readable again), turns the site off on each template below the new floor (`enabled=false`, an audit row by `browserhive`) and records the degradation `TEMPLATE_SITE_BELOW_FLOOR` (error, so it notifies) naming the templates and the reason; it resolves once no turned-off site is below its pack's floor. *Review #84 N5:* only the sites this enforcement turned off count (the latest audit row that changed the site, since it was added, is the `browserhive` row with `reason: 'below_pack_floor'`); a site the operator turned off, or changed afterwards, never keeps the record open. A revocation's fallback above a using template's floor classifies `restrictive` and therefore never applies by itself.
+
+## D-72 Bundled packs select only strategies that need no signed-in data
+
+**Status:** Accepted (lead decision for PR T3b; follows D-69)
+
+**Decision.** The bundled packs (version 2) select the §9.8 strategies except `pace-writes`: no pack has a verified `write` guard to pace (D-69), so pacing waits for the owner's signed-in checks (D43). Strategy parameters are BrowserHive's behaviour choices, not facts about the site, so `verified.strategies` is not set. LinkedIn's `launch-spacing` uses `min_gap_s: 30` (no official source; vendor guidance only recommends spacing). Each bump reaches an install as a pending bundled update with its classification.
+
+## D-73 How the pack-change classifier reads the §9.7 table
+
+**Status:** Accepted (lead decision for PR T3b)
+
+**Decision.** Default deny: an unknown field, sub-path or strategy parameter is loosening; parameters are compared after defaults and clamping, so an unchanged effective value is neutral. A `warn` guard is never restrictive (it cannot stop anything). A guard covers the probe when the request guard itself would match a `GET` document of the probe URL; element guards use their `page` glob. Challenge coverage reads the match members with OR (stricter than the run-time AND). *As built (review #84 M2):* a challenge added with `action: 'stop'`, `attention → stop`, a challenge added (or made stricter) whose match has no `url` member (only `title_contains`, `landmark`, `text` or `frame`, which the classifier cannot bound: "LinkedIn" is in every LinkedIn title, `div` on every page), and a challenge whose `url` covers a whole host are restrictive; only an `attention` challenge anchored by a `url` away from the probe and sign-in pages tightens. A `block` or `confirm` guard whose methods include `POST` (or are absent) and that can stop the sign-in form's post is restrictive (LinkedIn's form on `/login` posts to `/checkpoint/lg/login-submit`). *Review #84 N4:* a pack declares those targets in `sign_in.post` (up to 4 scoped globs, never a whole host); a guard counts when its glob overlaps one (some address matches both under the guard grammar; host and path compared apart), so routine logout, settings and write guards on the sign-in host tighten. A pack without `sign_in.post` keeps the conservative reading (any such guard whose host covers the sign-in URL's host), so most blocking guards added on a site whose sign-in is on its main host still wait for the operator; any change of `sign_in.post` is loosening, so a decoy list cannot let a guard on the real target auto-apply. Bundled packs list it only where the target was observed signed out (GitHub; D-69). Spreading many narrow guards over a host is not caught (to revisit with a per-version limit before T4b's auto-update). A session cap or pace rule *added* at 1 is restrictive like lowering to 1. `device_binding` is compared as a set keyed by platform and mechanism. A strategy added with an explicit path parameter is loosening. `active-hours` is tightening only when the new window lies inside the old one and is at least 4 h (restrictive below). `stealth-profile` is restrictive when a template whose **enabled** site uses the pack is below the candidate's floor; the class is stored on the row and recomputed at load and after template changes. Revocation of content approved from a local file never replaces it (`keep_and_report`).
+
+## D-74 "Deny clipboard writes" blocks the permission and the page's copy paths
+
+**Status:** Accepted (owner decision D18 option C, carried out in PR T3b)
+
+**Decision.** A per-template switch `deny_clipboard_writes` (default off; migration `0011-template-clipboard`, v11, compatible). When on, the host's context gets `clipboard-write` (with and without sanitization) denied through `Browser.setPermission` on a browser DevTools session kept open for the browser's life (Chromium drops an override when its session detaches), and a main-world init script makes `execCommand('copy'|'cut')` return `false` and stops page `copy`/`cut` listeners (the permission does not cover `execCommand`, and a copy listener can rewrite what the operator copies). Applied at host start and live on PATCH; a failed live apply restarts a running browser. Sites can detect it (the permission reads `denied`, `execCommand` is not native, copy buttons stop working); it is opt-in for that reason. To reach sandboxed frames, a host started with the switch on (or with stealth on, for the identity script) keeps them in their embedder's process (`IsolateSandboxedIframes` disabled, verify #84 N1): weaker isolation of sandboxed frames, a small timing tell.
+
+## D-75 Host strategies follow what Chrome honours; `either` probes wait for a late redirect
+
+**Status:** Accepted (lead decision for PR T3b)
+
+**Decision.**
+- `webrtc-policy` is applied both as `--force-webrtc-ip-handling-policy` and as the profile preference `webrtc.ip_handling_policy` (set at each start, removed when no enabled site selects a policy): full Chrome ignores the switch and honours the preference; the headless shell does the reverse (measured, Chromium 153). A change restarts a running host through the operator restart path.
+- `single-focus` turns emulated focus off through a second DevTools session per page (again after each navigation) and minimizes such a page's window on headless hosts; `visibilityState` stays `visible`, which screenshots and the live view need.
+- `redirect` and `either` probes wait for `load` and then up to 4 s for a client-side signed-out redirect; an `either` probe that loaded and stayed on its path is `signed_in` (`no_redirect`). This resolves D48 for Reddit without a signed-in landmark.
+- The keeper starts a stopped browser like a scheduled pack check and skips signed-out and challenged sites.
+
+## D-76 Strategy waits re-check the gates; a site turned off below its floor is an error degradation
+
+**Status:** Accepted (lead decision for PR T3b review fixes; the owner may veto)
+
+**Decision.**
+- After a `human-dwell` or `serialize-site` wait (and after an `entry-warmup`, before the agent's own navigation), the dispatcher runs the sign-in pause, site-hold, stop and guard checks again; a call that did not wait skips the second check (its window is the pre-T3b one). Guard decisions already acted on (a warn row, a consumed one-time pass) are not repeated. A call that meets a sign-in pause at the re-check keeps its turn while it waits (at most the pause's bound).
+- `serialize-site` is FIFO across sessions: a session's concurrent calls share its turn only while nobody else is queued.
+- A site that BrowserHive turns off because a change no operator applied (a deleted local file, a revocation fallback) put its template below the pack's stealth floor is reported as the degradation `TEMPLATE_SITE_BELOW_FLOOR` at severity `error`, like `TEMPLATE_HOST_FAILED`: it notifies, and `/health` answers `degraded` until the operator removes the site or template or a lower floor applies (sites the operator turned off themselves do not count, review #84 N5). A deployment that restarts on an unhealthy check would restart in a loop until then; the owner may prefer `warn` (no notification).

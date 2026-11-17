@@ -13,6 +13,7 @@ USAGE
   browserhive templates save <name> [flags]
   browserhive templates restore <name> <version> [flags]
   browserhive templates host <name> <action> [flags]
+  browserhive templates clipboard <name> <mode> [flags]
   browserhive templates disable <name> [flags]
   browserhive templates enable <name> [flags]
   browserhive templates rekey [flags]
@@ -39,6 +40,7 @@ COMMANDS
   save <name>               Save the running browser's sign-ins as a new version
   restore <name> <version>  Roll a template back to a saved version or its rolling checkpoint
   host <name> <action>      Start, stop or restart a template's browser
+  clipboard <name> <mode>   Deny or allow clipboard writes by the pages in a template's browser
   disable <name>            Disable a template: close its sessions and refuse new ones
   enable <name>             Enable a disabled template
   rekey                     Re-encrypt every template file with the current key (server stopped)
@@ -78,6 +80,9 @@ FLAGS — create
   --allPrincipals                   Let every agent principal use the template.
   --principal <subject>             Let this agent principal use the template (repeatable). Under
                                     auth=token one of --allPrincipals or --principal is required.
+  --denyClipboardWrites             Pages in the template's browser cannot write your clipboard
+                                    (sites can detect it). Change it later with 'templates
+                                    clipboard'.
   --noLogin                         Create the template and exit without opening a sign-in window.
   --fromState <file>                Seed the template from a Playwright storage-state file (≤ 16
                                     MiB) instead of opening a sign-in window. The file is read in
@@ -177,6 +182,15 @@ FLAGS — host
                     and port, http://127.0.0.1:9876
   --token <bearer>  Operator bearer token for --url (bh_operator_…).
   --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
+
+FLAGS — clipboard
+  --json            Print machine-readable JSON instead of text.
+  --url <url>       The running server to talk to, over its REST API. default: the configured host
+                    and port, http://127.0.0.1:9876
+  --token <bearer>  Operator bearer token for --url (bh_operator_…).
+  --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
+  --restart         Also restart the template's browser when it is running, so pages already open
+                    are covered too. Its live sessions close.
 
 FLAGS — disable
   --json            Print machine-readable JSON instead of text.

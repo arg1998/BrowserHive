@@ -27,6 +27,8 @@ export interface RecordedRequest {
   readonly path: string;
   readonly query: URLSearchParams;
   readonly body: unknown;
+  /** The request headers (`if-match`, …). */
+  readonly headers: Headers;
 }
 
 /** A scripted route: `METHOD /api/v1/path` (no query) → JSON body, status, or a function. */
@@ -80,7 +82,8 @@ export function fakeFetch(routes: Record<string, FakeRoute>, scopes?: readonly s
     const url = new URL(String(input), 'http://localhost:9876');
     const method = (init?.method ?? 'GET').toUpperCase();
     const body = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined;
-    const request = { method, path: url.pathname, query: url.searchParams, body };
+    const headers = new Headers(init?.headers);
+    const request = { method, path: url.pathname, query: url.searchParams, body, headers };
     requests.push(request);
     if (url.pathname.endsWith('/auth/me')) return json(me(scopes));
     const key = `${method} ${url.pathname.replace(/^\/api\/v1/, '')}`;

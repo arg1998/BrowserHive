@@ -1,4 +1,4 @@
-/** @module features/templates/wizard/StepIdentity — step 3 (spec 13 §7.1, §2.2): the browser channel (an uninstalled one says how to install it), stealth level, fingerprint, headless (warned), the agents' window state, an optional pinned proxy (server, user name, the NAME of the variable holding its password) and the language and time zone sites see, required with a proxy and pre-filled from the BrowserHive machine. Everything here is fixed for the template's life except the proxy and channel */
+/** @module features/templates/wizard/StepIdentity — step 3 (spec 13 §7.1, §2.2): the browser channel (an uninstalled one says how to install it), stealth level, fingerprint, headless (warned), the agents' window state, an optional pinned proxy (server, user name, the NAME of the variable holding its password) and the language and time zone sites see, required with a proxy and pre-filled from the BrowserHive machine. Everything here is fixed for the template's life except the proxy and channel. When a chosen site's pack needs other settings (a stealth floor, fingerprint noise on or off, a visible browser), a checklist with one-click fixes leads the step and each unmet need shows under its control */
 import type { Channel, StealthLevel } from '@browserhive/contracts/enums';
 import { useId } from 'react';
 import { Callout } from '@/components/shared/Callout.tsx';
@@ -10,6 +10,17 @@ import { Field, SwitchRow } from '../fields.tsx';
 import type { TemplateDraft } from './draft.ts';
 import { CHANNEL_LABEL, type IdentityDefaults, STEALTH } from './identity-defaults.ts';
 import { ProxyFields } from './ProxyFields.tsx';
+import { SiteNeedsPanel } from './SiteNeedsPanel.tsx';
+import type { NeedsSettings, SiteNeeds, UnmetNeed } from './site-needs.ts';
+
+/** A setting's problem (a site pack's need, or the server's refusal), under its control. */
+function FieldError({ message }: { readonly message: string | undefined }) {
+  return message === undefined ? null : (
+    <p className="-mt-1 text-sm text-danger-text" role="alert">
+      {message}
+    </p>
+  );
+}
 
 /** Step 3. */
 export function StepIdentity({
@@ -17,11 +28,16 @@ export function StepIdentity({
   onDraft,
   errors,
   defaults,
+  needs,
+  settings,
 }: {
   readonly draft: TemplateDraft;
   readonly onDraft: (update: (d: TemplateDraft) => TemplateDraft) => void;
   readonly errors: Readonly<Record<string, string>>;
   readonly defaults: IdentityDefaults;
+  /** What the chosen sites' packs need from these settings. */
+  readonly needs: readonly SiteNeeds[];
+  readonly settings: NeedsSettings;
 }) {
   const ids = {
     channel: useId(),
@@ -40,8 +56,17 @@ export function StepIdentity({
       locale: d.locale === '' ? defaults.locale : d.locale,
       timezoneId: d.timezoneId === '' ? (defaults.timeZone ?? '') : d.timezoneId,
     }));
+  const fix = (need: UnmetNeed) =>
+    onDraft((d) => {
+      if (need.field === 'stealth')
+        return { ...d, stealth: need.to === defaults.stealth ? null : need.to };
+      if (need.field === 'fingerprint')
+        return { ...d, fingerprint: need.to === defaults.fingerprint ? null : need.to };
+      return { ...d, headless: need.to };
+    });
   return (
     <div className="flex flex-col gap-6">
+      <SiteNeedsPanel needs={needs} settings={settings} onFix={fix} />
       <div className="grid max-w-3xl grid-cols-1 gap-5 md:grid-cols-2">
         <Field
           label="Browser"
@@ -128,6 +153,7 @@ export function StepIdentity({
               ? 'Every countermeasure on, at some cost in speed.'
               : 'Hides the usual automation signals. Right for most sites.'}
         </p>
+        <FieldError message={errors['stealth']} />
       </div>
       <div className="flex max-w-3xl flex-col gap-4">
         <SwitchRow
@@ -138,6 +164,7 @@ export function StepIdentity({
             onDraft((d) => ({ ...d, fingerprint: on === defaults.fingerprint ? null : on }))
           }
         />
+        <FieldError message={errors['fingerprint']} />
         <SwitchRow
           label="Run without a window (headless)"
           description="For servers without a screen. Sites challenge headless browsers more often, and you can’t sign in by hand: seed the template from a saved sign-in instead."
@@ -145,6 +172,7 @@ export function StepIdentity({
           checked={draft.headless}
           onChange={(on) => onDraft((d) => ({ ...d, headless: on }))}
         />
+        <FieldError message={errors['headless']} />
         <SwitchRow
           label="Use a proxy"
           description="Every session of this template goes out through it. BrowserHive never falls back to this machine’s address."

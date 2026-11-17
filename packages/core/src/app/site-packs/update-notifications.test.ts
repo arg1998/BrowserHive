@@ -93,6 +93,35 @@ describe('site_pack.update_pending', () => {
   });
 });
 
+describe('the classification of a candidate (spec 13 §9.7)', () => {
+  it('each line names what the version does in the UI words, a revoked fallback too', () => {
+    const item = (pack_id: string, classification: string | null) => ({
+      pack_id,
+      title: pack_id,
+      from_version: 1,
+      to_version: 2,
+      sha256: 'a'.repeat(64),
+      local: null,
+      classification,
+    });
+    const draft = updatesDraft(
+      status([
+        item('a.test', 'loosening'),
+        item('b.test', 'restrictive'),
+        item('c.test', 'tightening'),
+        item('d.test', 'revoked'),
+        item('e.test', 'unclassified'),
+        item('f.test', null),
+      ]),
+    );
+    expect(draft?.body).toBe(
+      'a.test v1 → v2 available (relaxes rules); b.test v1 → v2 available (can stop the site); ' +
+        'c.test v1 → v2 available (tightens rules); d.test v1 → v2 available (revoked by the publisher); ' +
+        'e.test v1 → v2 available; f.test v1 → v2 available',
+    );
+  });
+});
+
 describe('a second change of the same file is a new notification (review #83 S-M5)', () => {
   it('the dedup key follows the content, not only the version and state', () => {
     const item = (sha256: string) => ({

@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "id": "indeed.com",
-  "version": 1,
+  "version": 2,
   "min_client": "0.2.3",
   "title": "Indeed",
   "description": "Indeed's terms prohibit automating the Indeed Apply process. Glassdoor signs in with the Indeed login. Sign-out and account settings are blocked for agents.",
@@ -70,6 +70,12 @@
     "channel": "any",
     "headed": "preferred"
   },
+  "strategies": [
+    {
+      "id": "human-dwell",
+      "params": {}
+    }
+  ],
   "verified": {
     "sign_in": "2026-11-16",
     "signed_in": "2026-11-16",

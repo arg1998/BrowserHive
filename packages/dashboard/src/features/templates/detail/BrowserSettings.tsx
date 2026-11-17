@@ -1,7 +1,7 @@
 /** @module features/templates/detail/BrowserSettings — the editable part of the Settings tab (spec 13 §2.1–§2.2, §11.4): the browser (channel, headless with its warning, agent windows), the network (the pinned proxy; changing it or the channel restarts the browser and may sign the accounts out, so it is confirmed) and health checks (interval, pre-launch check) */
 
 import { Channel } from '@browserhive/contracts/enums';
-import type { Template } from '@browserhive/contracts/http';
+import type { HostView, Template } from '@browserhive/contracts/http';
 import { AgentWindows } from '@browserhive/contracts/http';
 import { useId } from 'react';
 import { Callout } from '@/components/shared/Callout.tsx';
@@ -10,6 +10,7 @@ import { SimpleSelect } from '@/components/ui/select.tsx';
 import { Switch } from '@/components/ui/switch.tsx';
 import { identityChangeConfirm } from '../confirm-copy.ts';
 import { CHANNEL_LABEL } from '../model.ts';
+import { ClipboardPanel } from './ClipboardPanel.tsx';
 import { HealthPanel } from './HealthPanel.tsx';
 import { ProxyPanel } from './ProxyPanel.tsx';
 import { Field } from './settings-field.tsx';
@@ -92,12 +93,19 @@ function BrowserPanel({ template }: { readonly template: Template }) {
   );
 }
 
-/** The editable settings. */
-export function BrowserSettings({ template }: { readonly template: Template }) {
+/** The editable settings; `host` is the template's browser now (the clipboard switch's restart). */
+export function BrowserSettings({
+  template,
+  host,
+}: {
+  readonly template: Template;
+  readonly host: HostView;
+}) {
   return (
     <>
       <BrowserPanel template={template} />
       <ProxyPanel template={template} />
+      <ClipboardPanel template={template} host={host} />
       <HealthPanel template={template} />
     </>
   );

@@ -31,7 +31,7 @@ import {
   shapeSuccess,
   toAppError,
 } from './shape.ts';
-import { assertNotSiteHeld } from './site-hold.ts';
+import { siteGate } from './site-gate.ts';
 import { classifyToolOutcome } from './tool-outcome.ts';
 import { parentContextFromMeta } from './trace-meta.ts';
 
@@ -103,20 +103,6 @@ function stringField(value: unknown, key: string): string | null {
   return typeof field === 'string' ? field : null;
 }
 
-/** Tools a template session may call while its agents are paused (D-60): they end or only inspect a session. */
-export const PAUSE_EXEMPT_TOOLS: ReadonlySet<string> = new Set([
-  'close_session',
-  'list_sessions',
-  'server_status',
-  'session_info',
-  'list_tabs',
-  'list_templates',
-  'get_attention_result',
-  'request_attention',
-  'list_saved_auths',
-  'vault_list_available',
-]);
-
 /** The dispatcher. One instance per server; stateless apart from per-session sequence numbers. */
 export class ToolDispatcher {
   private readonly deps: ToolDispatcherDeps;
@@ -130,22 +116,6 @@ export class ToolDispatcher {
     this.sealed = new SealedRedaction(deps.services.clock);
     this.tracer = deps.tracer ?? trace.getTracer('browserhive');
     this.log = deps.logger.child({ module: 'mcp.dispatcher' });
-  }
-
-  /**
-   * A call on a template session waits while the operator signs in to one of its sites (D-60);
-   * reading tools and the ones that end or inspect a session do not.
-   */
-  private async holdWhilePaused(
-    tool: string,
-    session: Session | null,
-    signal: AbortSignal,
-  ): Promise<void> {
-    const template = session?.template;
-    const pause = this.deps.services.templatePause;
-    if (template == null || template.mode !== 'live' || pause === undefined) return;
-    if (PAUSE_EXEMPT_TOOLS.has(tool)) return;
-    await pause.wait(template.templateId, template.name, signal);
   }
 
   /** The registry this dispatcher serves. */
@@ -221,7 +191,10 @@ export class ToolDispatcher {
     const registry = this.deps.registry;
     const definition = registry.get(name);
     const log = this.deps.logger.child({ module: 'mcp.tools', tool: name, eventId: ids.eventId });
-    const holder: { session: Session | null } = { session: null };
+    const holder: { session: Session | null; recheck: (() => Promise<void>) | null } = {
+      session: null,
+      recheck: null,
+    };
     let facts: ToolFacts | undefined;
     let shaped: ShapedResult;
     let ok = true;
@@ -247,6 +220,9 @@ export class ToolDispatcher {
       attachSession(resolved) {
         holder.session = resolved;
       },
+      get siteRecheck() {
+        return holder.recheck;
+      },
     };
     try {
       if (definition === undefined || !registry.isAvailable(name)) {
@@ -271,11 +247,15 @@ export class ToolDispatcher {
       const argRecord =
         typeof args === 'object' && args !== null ? Object.fromEntries(Object.entries(args)) : {};
       for (const policy of definition.policies) await policy.apply(ctx, argRecord);
-      await this.holdWhilePaused(name, holder.session, call.signal);
-      assertNotSiteHeld(name, holder.session, services.siteHolds);
       const site = holder.session;
-      if (site !== null)
-        await services.siteGuards?.beforeTool({ tool: name, args: argRecord, session: site });
+      const gate = siteGate(services, {
+        tool: name,
+        args: argRecord,
+        session: site,
+        signal: call.signal,
+      });
+      await gate();
+      if (site !== null) holder.recheck = gate;
       const handlerCtx: ToolCallContext = ctx;
       // The registry pairs each name with its own definition; the parsed args came from that
       // definition's schema, so the widened handler receives exactly its contract's input.
@@ -283,7 +263,18 @@ export class ToolDispatcher {
         c: ToolCallContext,
         a: unknown,
       ) => Promise<ToolResult<unknown>>;
-      const result = await handler(handlerCtx, args);
+      const invoke = () => handler(handlerCtx, args);
+      // Before-action strategies of site packs wrap the handler (a turn is released when it
+      // settles); a call that waited for one passes the gate again before it acts.
+      const actions = services.siteActions;
+      const result =
+        actions !== undefined && site !== null
+          ? await actions.around(
+              { tool: name, args: argRecord, session: site, signal: call.signal },
+              invoke,
+              gate,
+            )
+          : await invoke();
       facts = result.facts;
       const value = result.kind === 'json' ? result.value : result.structured;
       // Only ids of sessions that exist are recorded (tool_calls.session_id references sessions).

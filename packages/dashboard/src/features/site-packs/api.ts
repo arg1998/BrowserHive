@@ -58,6 +58,16 @@ export function useSitePackDiff(id: string, to: number | 'local', enabled = true
   });
 }
 
+/** `GET /site-packs/strategies`: the strategy table of the running binary (it changes only with a release). */
+export function useSiteStrategies() {
+  const api = useApi();
+  return useQuery({
+    queryKey: keys.sitePacks.strategies(),
+    queryFn: () => api.listSiteStrategies(),
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+}
+
 /** `GET /site-packs/changes`, newest first, paged. */
 export function useSitePackChanges(packId?: string) {
   const api = useApi();
@@ -105,7 +115,11 @@ function useSettle() {
   };
 }
 
-/** The operator actions on one pack. Errors toast; every action refreshes when it settles. */
+/**
+ * The operator actions on one pack. Errors toast, except a below-floor refusal of Apply, Approve or
+ * Revert (`SITE_PACK_BELOW_FLOOR`), which a dialog explains in place; every action refreshes when it
+ * settles.
+ */
 export function useSitePackActions(packId: string) {
   const api = useApi();
   const toast = useToast();
@@ -113,7 +127,8 @@ export function useSitePackActions(packId: string) {
   const params = { pack_id: packId } as const;
   const common = {
     onError: (error: unknown) => {
-      toast.fromError(toAppError(error));
+      const appError = toAppError(error);
+      if (appError.code !== 'SITE_PACK_BELOW_FLOOR') toast.fromError(appError);
     },
     onSettled: settle,
   } as const;

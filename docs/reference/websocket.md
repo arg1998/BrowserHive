@@ -386,7 +386,7 @@ Payloads of `kind: "event"` frames, discriminated on `type`. DTO fields (`sessio
 | Field | Type | Required | Constraints |
 |---|---|---|---|
 | `template_id` | `string` | yes | — |
-| `host` | `object` | yes | keys `state`, `since`, `started_at`, `restarts`, `last_error`, `pages`, `parked_pages`, `rss_bytes`, `recycle_at`, `sandboxed`, `profile_secrets`, `agents_paused` |
+| `host` | `object` | yes | keys `state`, `since`, `started_at`, `restarts`, `last_error`, `pages`, `parked_pages`, `rss_bytes`, `recycle_at`, `sandboxed`, `profile_secrets`, `agents_paused`, `clipboard_needs_restart` |
 
 <a id="event-template-health"></a>
 ### `template.health`
@@ -394,7 +394,7 @@ Payloads of `kind: "event"` frames, discriminated on `type`. DTO fields (`sessio
 | Field | Type | Required | Constraints |
 |---|---|---|---|
 | `template_id` | `string` | yes | — |
-| `site` | `object` | yes | keys `site_id`, `title`, `pack_id`, `pack_version`, `enabled`, `write_policy`, `vault_handle`, `auto_relogin`, `form`, `learned_cookie_names`, `auto_relogin_at`, `health`, `stopped_at`, `device_bound`, `added_at`, `pack` |
+| `site` | `object` | yes | keys `site_id`, `title`, `pack_id`, `pack_version`, `enabled`, `write_policy`, `vault_handle`, `auto_relogin`, `form`, `learned_cookie_names`, `auto_relogin_at`, `health`, `stopped_at`, `device_bound`, `added_at`, `pack`, `strategy_notes` |
 
 <a id="event-template-version"></a>
 ### `template.version`

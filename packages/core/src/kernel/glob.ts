@@ -150,3 +150,40 @@ export function matchesGlob(value: string, pattern: string): boolean {
 export function hasGlobWildcard(pattern: string): boolean {
   return pattern.includes('*') || pattern.includes('?');
 }
+
+/**
+ * True when some string matches both token lists (`*`/`?` patterns, `char` tokens literal): a
+ * search over pairs of positions, one per pattern, so O(a × b) states whatever the stars. A `*`
+ * may match nothing (a step on its own side) or one more character (staying put); a `?` and a
+ * literal each consume one character, and two literals only when they are equal. Exact for the
+ * glob languages, so a caller reading "may overlap" as "overlaps" is never wrong the lenient way.
+ */
+export function globTokensIntersect(a: readonly GlobToken[], b: readonly GlobToken[]): boolean {
+  const width = b.length + 1;
+  const seen = new Uint8Array((a.length + 1) * width);
+  const stack: number[] = [0];
+  seen[0] = 1;
+  const push = (i: number, j: number): void => {
+    const key = i * width + j;
+    if (seen[key] === 1) return;
+    seen[key] = 1;
+    stack.push(key);
+  };
+  while (stack.length > 0) {
+    const key = stack.pop() ?? 0;
+    const i = Math.floor(key / width);
+    const j = key % width;
+    if (i === a.length && j === b.length) return true;
+    const x = a[i];
+    const y = b[j];
+    if (x?.kind === 'star') push(i + 1, j);
+    if (y?.kind === 'star') push(i, j + 1);
+    if (x === undefined || y === undefined) continue;
+    if (x.kind === 'char' && y.kind === 'char' && x.char !== y.char) continue;
+    // One character consumed on both sides: a star stays where it is, anything else moves on.
+    const ni = x.kind === 'star' ? i : i + 1;
+    const nj = y.kind === 'star' ? j : j + 1;
+    if (ni !== i || nj !== j) push(ni, nj);
+  }
+  return false;
+}

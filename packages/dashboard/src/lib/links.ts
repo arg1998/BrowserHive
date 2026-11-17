@@ -57,6 +57,7 @@ export const DOCS_PAGES = {
   templatesVersions: { page: 'guide/templates', anchor: 'versions-and-the-checkpoint' },
   sitePacks: { page: 'guide/site-packs' },
   sitePacksApproval: { page: 'guide/site-packs', anchor: 'approval-and-provenance' },
+  sitePacksFloor: { page: 'guide/site-packs', anchor: 'when-a-version-raises-the-stealth-floor' },
   sitePacksLocal: { page: 'guide/site-packs', anchor: 'local-packs' },
   sitePacksWriting: { page: 'guide/site-packs', anchor: 'writing-a-local-pack' },
   sitePacksWritePolicies: {

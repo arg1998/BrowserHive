@@ -89,6 +89,11 @@ export interface ToolHarnessOptions {
   }) => NonNullable<ToolServices['siteGuards']>;
   /** The security intercepts holding template sessions (spec 13 §9.3); absent by default. */
   readonly siteHolds?: ToolServices['siteHolds'];
+  /** Before-action strategies (spec 13 §9.4), over the harness's services; absent by default. */
+  readonly siteActions?: (parts: {
+    readonly sessions: SessionService;
+    readonly templates: TemplateKit;
+  }) => NonNullable<ToolServices['siteActions']>;
 }
 
 /** A connected in-process MCP client over the real server + dispatcher. */
@@ -269,6 +274,9 @@ export async function createToolHarness(options: ToolHarnessOptions = {}): Promi
       siteGuards: options.siteGuards({ sessions, templates, broker: attentionBroker }),
     }),
     ...(options.siteHolds !== undefined && { siteHolds: options.siteHolds }),
+    ...(options.siteActions !== undefined && {
+      siteActions: options.siteActions({ sessions, templates }),
+    }),
     pageActions: options.pageActions ?? createPlaywrightPageActions(),
     fs: createNodeToolFs(),
     redaction: {

@@ -289,6 +289,7 @@ export function buildTemplate(
     identityObserved: null,
     proxy: validated.proxy,
     agentWindows: input.agent_windows ?? 'normal',
+    denyClipboardWrites: input.deny_clipboard_writes ?? false,
     authorizedPrincipals:
       input.policy?.authorized_principals === undefined
         ? facts.authMode === 'off'

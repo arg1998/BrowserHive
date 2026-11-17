@@ -163,6 +163,8 @@ export const keys = {
     diff: (id: string, to: string) => ['site-packs', 'diff', id, to] as const,
     changes: (params?: KeyParams) => ['site-packs', 'changes', stableParams(params)] as const,
     guardHits: (params?: KeyParams) => ['site-packs', 'guard-hits', stableParams(params)] as const,
+    /** The binary's strategy table (`GET /site-packs/strategies`; fixed per build). */
+    strategies: () => ['site-packs', 'strategies'] as const,
   },
   publicUrl: () => ['system', 'public-url'] as const,
   preferences: () => ['preferences'] as const,

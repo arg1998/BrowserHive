@@ -91,6 +91,12 @@ const createFlags: readonly FlagDescriptor[] = [
       'Let this agent principal use the template (repeatable). Under auth=token one of --allPrincipals or --principal is required.',
   },
   {
+    name: 'denyClipboardWrites',
+    kind: 'boolean',
+    describe:
+      "Pages in the template's browser cannot write your clipboard (sites can detect it). Change it later with 'templates clipboard'.",
+  },
+  {
     name: 'noLogin',
     kind: 'boolean',
     describe: 'Create the template and exit without opening a sign-in window.',
@@ -228,6 +234,25 @@ const operationSubcommands = [
   sub(['host'], "Start, stop or restart a template's browser", {
     args: [nameArg, { name: 'action', required: true, describe: 'start, stop or restart.' }],
     flags: remoteJson,
+  }),
+  sub(['clipboard'], "Deny or allow clipboard writes by the pages in a template's browser", {
+    args: [
+      nameArg,
+      {
+        name: 'mode',
+        required: true,
+        describe: 'deny (pages cannot write your clipboard; sites can detect it) or allow.',
+      },
+    ],
+    flags: [
+      ...remoteJson,
+      {
+        name: 'restart',
+        kind: 'boolean',
+        describe:
+          "Also restart the template's browser when it is running, so pages already open are covered too. Its live sessions close.",
+      },
+    ],
   }),
   sub(['disable'], 'Disable a template: close its sessions and refuse new ones', {
     args: [nameArg],

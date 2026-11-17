@@ -182,4 +182,31 @@ export const TEMPLATE_SERVICE_ERRORS = {
     resolution:
       "Show the offered version (provenance, version, SHA-256) to the operator and send its `sha256` as the site's `pack_sha256`.",
   }),
+  SITE_PACK_BELOW_FLOOR: defineError({
+    code: 'SITE_PACK_BELOW_FLOOR',
+    httpStatus: 409,
+    category: 'domain',
+    retryable: 'after_operator',
+    title: "Templates below the pack's stealth floor",
+    message:
+      "Version {version} of site pack '{pack_id}' needs stronger stealth settings than templates using it have: {templates_text}. Turn the site off on those templates, or create new templates that meet the floor, then try again.",
+    hint: "Stealth is fixed for a template's life: turn the site off on the named templates (their Sites tab), or create a new template with the stealth the pack needs; rejecting the version keeps the current one.",
+    details: z.object({
+      pack_id: z.string(),
+      version: z.number().int(),
+      templates: z.array(
+        z.object({
+          template_id: z.string(),
+          name: z.string(),
+          issues: z.array(z.object({ code: z.string(), message: z.string() })),
+        }),
+      ),
+      templates_text: z.string(),
+    }),
+    docs: true,
+    cause:
+      "The version selects the `stealth-profile` strategy (spec 13 §9.4) with a floor (minimum stealth level, required or forbidden fingerprint noise) that templates whose enabled sites use the pack do not meet. Applying it (or reverting to it, or approving such a local file) would leave those templates running the site below the pack's floor (D-71), so the action is refused and the version in force stays. A template's stealth level and fingerprint noise are fixed when it is created, so the template itself cannot be changed to meet the floor.",
+    resolution:
+      "For each named template, turn the site off on it (the template's Sites tab, or `PUT /api/v1/templates/{id}/sites/{site}` with `enabled: false`), or create a new template with the stealth level and fingerprint noise the pack needs, sign in to the site there and remove it from the old template; then try again. Rejecting the version keeps the current one.",
+  }),
 } as const;

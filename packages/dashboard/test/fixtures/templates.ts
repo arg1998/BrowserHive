@@ -49,6 +49,7 @@ export function templateSite(
     device_bound: false,
     added_at: TT0 - 86_400_000,
     pack: null,
+    strategy_notes: [],
     ...patch,
   };
 }
@@ -116,6 +117,7 @@ export function template(i: number, patch: Partial<Template> = {}): Template {
       prelaunch_check: true,
     },
     agent_windows: 'normal',
+    deny_clipboard_writes: false,
     current_version: null,
     checkpoint_at: null,
     checkpoint_size_bytes: null,

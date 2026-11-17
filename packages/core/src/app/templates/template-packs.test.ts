@@ -211,10 +211,7 @@ describe('packRequirementIssues', () => {
     const issues = packRequirementIssues(
       packsWith(pack('required', false)),
       ['x.com', 'linkedin.com'],
-      {
-        headless: true,
-        stealth: 'standard',
-      },
+      { headless: true, stealth: 'standard', fingerprint: false },
     );
     expect(issues.map((i) => [i.path, i.code])).toEqual([['sites[1]', 'headed_required']]);
   });
@@ -222,13 +219,25 @@ describe('packRequirementIssues', () => {
   it('refuses stealth off for a human-only pack and accepts the rest', () => {
     const p = packsWith(pack('any', true));
     expect(
-      packRequirementIssues(p, ['linkedin.com'], { headless: false, stealth: 'off' })[0]?.code,
+      packRequirementIssues(p, ['linkedin.com'], {
+        headless: false,
+        stealth: 'off',
+        fingerprint: false,
+      })[0]?.code,
     ).toBe('human_only_stealth_off');
-    expect(packRequirementIssues(p, ['linkedin.com'], { headless: true, stealth: 'max' })).toEqual(
-      [],
-    );
     expect(
-      packRequirementIssues(NO_PACKS, ['linkedin.com'], { headless: true, stealth: 'off' }),
+      packRequirementIssues(p, ['linkedin.com'], {
+        headless: true,
+        stealth: 'max',
+        fingerprint: false,
+      }),
+    ).toEqual([]);
+    expect(
+      packRequirementIssues(NO_PACKS, ['linkedin.com'], {
+        headless: true,
+        stealth: 'off',
+        fingerprint: false,
+      }),
     ).toEqual([]);
   });
 });

@@ -126,7 +126,7 @@ export function SettingsTab({ detail }: { readonly detail: TemplateDetailRespons
         </Panel>
       </div>
       <div className="flex min-w-0 flex-col gap-4">
-        <BrowserSettings template={template} />
+        <BrowserSettings template={template} host={detail.host} />
       </div>
     </div>
   );

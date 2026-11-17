@@ -61,6 +61,20 @@ export const TemplateSiteForm = z.object({
   path: z.string().optional(),
 });
 
+/**
+ * A strategy of a site's pack that this template or this machine cannot apply in full (spec 13
+ * §9.4): `humanize_needs_stealth` (the pack forces humanized input, `humanize-input` or
+ * `stealth-profile.humanize`, and the template's stealth is `off`: input stays native) and
+ * `single_focus_limited` (`single-focus` on a headless template on a macOS or Windows machine: a
+ * page that once got a click keeps real focus). `message` says it in plain words.
+ */
+export const TemplateStrategyNote = z.object({
+  code: z.enum(['humanize_needs_stealth', 'single_focus_limited']),
+  message: z.string(),
+});
+/** A strategy of a site's pack this template or machine cannot apply in full. */
+export type TemplateStrategyNote = z.infer<typeof TemplateStrategyNote>;
+
 /** A site of a template as operators see it. */
 export const TemplateSiteView = z.object({
   site_id: z.string(),
@@ -82,6 +96,8 @@ export const TemplateSiteView = z.object({
   added_at: EpochMs,
   /** The approved site pack in force for this site (spec 13 §9.6); `null` for a generic site. */
   pack: TemplateSitePack.nullable(),
+  /** What the pack in force selects that this template or machine cannot apply in full; empty for a generic site. */
+  strategy_notes: z.array(TemplateStrategyNote),
 });
 /** A site of a template. */
 export type TemplateSiteView = z.infer<typeof TemplateSiteView>;
@@ -127,6 +143,13 @@ export const Template = z.object({
   proxy: TemplateProxy.nullable(),
   policy: TemplatePolicy,
   agent_windows: AgentWindows,
+  /**
+   * "Deny clipboard writes" (spec 13 §2.1, D18): pages in the template's browser cannot put text on
+   * the operator's clipboard (`navigator.clipboard` writes and `document.execCommand('copy'|'cut')`
+   * are refused; sites can detect the refusal). Reaches a running browser at once; pages already
+   * open are fully covered after a browser restart (`HostView.clipboard_needs_restart`).
+   */
+  deny_clipboard_writes: z.boolean(),
   current_version: z.number().int().nullable(),
   checkpoint_at: EpochMs.nullable(),
   checkpoint_size_bytes: Bytes.nullable(),
@@ -159,6 +182,8 @@ export const TemplateInput = z.strictObject({
   timezone_id: TemplateTimezoneId.optional(),
   geolocation: TemplateGeolocation.optional(),
   agent_windows: AgentWindows.optional(),
+  /** "Deny clipboard writes" (spec 13 §2.1, D18); default `false`. */
+  deny_clipboard_writes: z.boolean().optional(),
   policy: TemplatePolicyInput.optional(),
 });
 /** `POST /templates` body. */
@@ -200,6 +225,13 @@ export const HostView = z.object({
    * continue (D-60). Launches and tool calls of the template's sessions wait meanwhile.
    */
   agents_paused: z.boolean(),
+  /**
+   * Present (`true`) when "Deny clipboard writes" changed while this browser ran (spec 13 §2.1,
+   * D18): the change reached every open page, but a page open at that moment may keep what it took
+   * before (turned on: it may still write the clipboard; turned off: it keeps refusing to copy until
+   * it reloads). Restarting the browser gives the switch full effect.
+   */
+  clipboard_needs_restart: z.boolean().optional(),
 });
 /** A template's browser. */
 export type HostView = z.infer<typeof HostView>;

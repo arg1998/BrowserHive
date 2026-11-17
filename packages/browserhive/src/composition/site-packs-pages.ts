@@ -56,6 +56,8 @@ export interface SitePackPagesAttachment {
 export interface SitePackPagesParts {
   readonly gate: SiteToolGate;
   readonly stops: TemplateSiteStops;
+  /** Agents' own navigations (the before-action strategies' warm-up re-arms them). */
+  readonly navigations: AgentNavigations;
   /** The watcher every template host hands its pages to (`attachTemplatePageWatcher`). */
   readonly pageWatcher: TemplatePageWatcher;
   /** The prober selector `wireTemplateHealth` takes, over the supervisor's maintenance sessions. */
@@ -105,6 +107,7 @@ export function buildSitePackPages(input: SitePackPagesInput): SitePackPagesPart
   return {
     gate,
     stops,
+    navigations,
     pageWatcher: {
       pageAttributed: (templateId, page, sessionId) => watch.watch(templateId, page, sessionId),
     },

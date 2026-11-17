@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "id": "microsoft.com",
-  "version": 1,
+  "version": 2,
   "min_client": "0.2.3",
   "title": "Microsoft account",
   "description": "Microsoft account sign-in. The account security pages force a fresh sign-in, so the probe is the account home and security, proofs, connected-app, security-info and account-closure pages are blocked for agents.",
@@ -106,6 +106,12 @@
     "channel": "any",
     "headed": "preferred"
   },
+  "strategies": [
+    {
+      "id": "keep-alive",
+      "params": {}
+    }
+  ],
   "verified": {
     "sign_in": "2026-11-16",
     "signed_in": "2026-11-16",

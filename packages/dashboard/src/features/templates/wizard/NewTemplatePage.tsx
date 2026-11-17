@@ -54,7 +54,14 @@ export function NewTemplatePage() {
         return <StepSites draft={draft} onDraft={setDraft} errors={errors} />;
       case 3:
         return (
-          <StepIdentity draft={draft} onDraft={setDraft} errors={errors} defaults={defaults} />
+          <StepIdentity
+            draft={draft}
+            onDraft={setDraft}
+            errors={errors}
+            defaults={defaults}
+            needs={w.needs}
+            settings={w.settings}
+          />
         );
       case 4:
         return (

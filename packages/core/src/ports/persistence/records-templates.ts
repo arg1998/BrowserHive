@@ -102,6 +102,11 @@ export interface TemplateRecord {
   readonly identityObserved: ObservedIdentityRecord | null;
   readonly proxy: TemplateProxyRecord | null;
   readonly agentWindows: AgentWindowState;
+  /**
+   * "Deny clipboard writes" (spec 13 §2.1, D18): pages in the template's browser cannot put text on
+   * the operator's clipboard. Off by default; v11.
+   */
+  readonly denyClipboardWrites: boolean;
   /** Empty = any principal (spec 13 §6.1). */
   readonly authorizedPrincipals: readonly string[];
   /** D-48: `null` = every harness, `[]` = none. */

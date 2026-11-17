@@ -3,6 +3,7 @@
 import { mkdir } from 'node:fs/promises';
 import { connect } from 'node:net';
 import type { BrowserContext, BrowserContextOptions, BrowserType, Page } from 'patchright';
+import { webrtcPolicyOfFlags } from '../../domain/site-packs/host-flags.ts';
 import { AppError, isAppError } from '../../kernel/errors/app-error.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { LaunchWarning } from '../../ports/browser-driver.ts';
@@ -20,6 +21,7 @@ import {
   browserNotInstalledFromLaunchError,
   type ChromiumResolverDeps,
 } from './chromium-resolver.ts';
+import { applyClipboardPolicy } from './clipboard-policy.ts';
 import { suppressInjectRoute } from './driver.ts';
 import { contextOptionsFor, deriveFingerprint, scriptPayloadFor } from './fingerprint.ts';
 import type { HostFacts } from './host-facts.ts';
@@ -30,6 +32,7 @@ import { buildLaunchOptions } from './launch-args.ts';
 import { installNativeGetters, mergeNativeGetterPayloads } from './native-getter.ts';
 import { applyTemplatePreferences } from './profile-preferences.ts';
 import type { SandboxPolicy, SandboxTarget } from './sandbox-policy.ts';
+import { sandboxedFramesArgs } from './sandboxed-frames.ts';
 import { deviceMemoryPayload } from './stealth-identity.ts';
 import { PlaywrightTemplateHost } from './template-host.ts';
 import { HostTargets } from './template-targets.ts';
@@ -91,7 +94,11 @@ export async function launchTemplateHostWith(
   if (spec.proxy !== null) await assertProxyReachable(spec.proxy.server);
   await mkdir(spec.userDataDir, { recursive: true, mode: 0o700 });
   await mkdir(spec.downloadsDir, { recursive: true, mode: 0o700 });
-  await applyTemplatePreferences(spec.userDataDir);
+  // `webrtc-policy` (spec 13 §9.4): the full browser honours only the preference, the switch below
+  // covers the headless shell; both come from the compiled-in table.
+  await applyTemplatePreferences(spec.userDataDir, {
+    webrtcPolicy: webrtcPolicyOfFlags(spec.hostFlags ?? []),
+  });
   // Read before the browser holds the files (spec 13 §3.1).
   const profileSecrets = profileHasSecrets(spec.userDataDir);
 
@@ -102,7 +109,16 @@ export async function launchTemplateHostWith(
   const launch = buildLaunchOptions({
     kwargs,
     stealth: spec.stealth,
-    launchOptions: { args: ['--disable-sync', ...spec.testingArgs] },
+    // Pack strategy switches come only from the compiled-in table (spec 13 §9.10); sandboxed
+    // frames stay in process where an init script must reach every frame (verify #84 N1).
+    launchOptions: {
+      args: [
+        '--disable-sync',
+        ...(spec.hostFlags ?? []),
+        ...sandboxedFramesArgs(spec),
+        ...spec.testingArgs,
+      ],
+    },
     proxy: spec.proxy,
     downloadsDir: spec.downloadsDir,
   });
@@ -156,6 +172,7 @@ export async function launchTemplateHostWith(
     // refuses, redirect hops included (spec 13 §3.8).
     await context.addCookies(templateHostCookies(spec.selfOrigins));
     const anchor = context.pages()[0] ?? (await context.newPage());
+    await applyClipboardPolicy(context, spec.denyClipboardWrites === true, log, 'start');
     const targets = await HostTargets.open(context, anchor, log);
     const guard = (await ctx.requestGuard?.(spec.templateId)) ?? null;
     const host = buildHost(ctx, spec, context, targets, { sandboxed, profileSecrets, guard });

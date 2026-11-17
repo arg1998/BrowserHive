@@ -119,47 +119,6 @@ export async function fetchDiff(
   return parsed.success ? parsed.data : unexpected(context, 'diff');
 }
 
-function refText(ref: SitePackDiffResponse['to']): string {
-  return `${ref.version === null ? 'local file' : `v${ref.version}`} (${ref.source}, sha-256 ${ref.sha256.slice(0, 12)}…)`;
-}
-
-/** A JSON value on one line, at most 160 characters. */
-function valueText(value: unknown): string {
-  if (value === undefined) return '(absent)';
-  const text = JSON.stringify(value);
-  return text.length > 160 ? `${text.slice(0, 157)}…` : text;
-}
-
-/** Prints a field-level diff: the two versions, new domains, then one line per changed field. */
-export function printDiff(
-  context: CommandContext,
-  packId: string,
-  diff: SitePackDiffResponse,
-): void {
-  const { out } = context;
-  const from = diff.from === null ? 'nothing approved' : refText(diff.from);
-  out.line(`${out.style.bold(packId)}: ${from} → ${refText(diff.to)}`);
-  if (diff.classification !== 'unclassified') out.line(`Change: ${diff.classification}`);
-  if (diff.new_domains.length > 0) {
-    out.status(
-      'warn',
-      `adds domain(s) ${diff.new_domains.join(', ')}`,
-      "the pack's rules would apply there too",
-    );
-  }
-  if (diff.changes.length === 0) {
-    out.line('No field changes.');
-    return;
-  }
-  for (const change of diff.changes) {
-    const tag = change.class === null ? '' : ` ${out.style.dim(`[${change.class}]`)}`;
-    out.line(`  ${change.path}${tag}`);
-    out.line(`    ${out.style.red(`- ${valueText(change.from)}`)}`);
-    out.line(`    ${out.style.green(`+ ${valueText(change.to)}`)}`);
-  }
-  out.line(`${diff.changes.length} field(s) changed.`);
-}
-
 /** Prints `label  value` pairs aligned on the label. */
 export function printPairs(context: CommandContext, pairs: readonly [string, string][]): void {
   const width = Math.max(...pairs.map(([label]) => label.length));

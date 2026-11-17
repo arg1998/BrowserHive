@@ -45,6 +45,11 @@ export interface TemplateHostView extends TemplateHostFacts {
   readonly agentsPaused: boolean;
   /** The Chrome major changed since the first start (spec 13 §2.2); absent = no drift seen. */
   readonly identityDrift?: { readonly from: string; readonly to: string };
+  /**
+   * "Deny clipboard writes" changed while this browser ran (D18): pages open at the change may keep
+   * their old state until a restart. Absent = false.
+   */
+  readonly clipboardNeedsRestart?: boolean;
 }
 
 /** The host view of a template whose host never ran in this process. */
@@ -99,6 +104,11 @@ export interface TemplateRuntime {
   host(templateId: string): TemplateHostView;
   /** Ids of the live agent virtual sessions of a template (maintenance sessions excluded). */
   liveSessions(templateId: string): readonly string[];
+  /**
+   * The effective live-session cap with the enabled sites' packs (`concurrency.max_sessions`,
+   * `ramp-up`; spec 13 §6.3); absent = `max_concurrent`.
+   */
+  cap?(template: TemplateRecord, sites: readonly TemplateSiteRecord[]): number;
   /**
    * Launches a virtual session (spec 13 §3.7 after `validate`).
    *

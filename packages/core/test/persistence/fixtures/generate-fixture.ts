@@ -113,7 +113,10 @@ export async function seedFixture(uow: SqliteUnitOfWork): Promise<void> {
       }),
     );
     // Schema v9: a session template with two sites, and a virtual session launched from it.
-    await r.templates.insert(templateRecord({ createdAt: at, updatedAt: at, lastUsedAt: at }));
+    await r.templates.insert(
+      // v11: the clipboard switch is on in the fixture, so an upgrade from v11 keeps a `1`.
+      templateRecord({ createdAt: at, updatedAt: at, lastUsedAt: at, denyClipboardWrites: true }),
+    );
     await r.templateSites.upsert(templateSiteRecord({ siteId: 'site-a.test', addedAt: at }));
     await r.templateSites.upsert(
       templateSiteRecord({

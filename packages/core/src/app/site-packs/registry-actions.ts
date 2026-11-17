@@ -1,10 +1,12 @@
 /** @module app/site-packs/registry-actions — the operator decisions of the approval model (spec 13 §9.6, §10.5, §10.6, D-67): approval on first use with its provenance, Apply, Reject, Revert, Pin, Follow, approving a local file by its SHA-256, and enabling. Each writes `site_pack_state`, a `site_pack_changes` decision and an audit row in one transaction, copying approved bytes to BrowserHive's cache first. */
 
-import { diffPacks, newDomains } from '../../domain/site-packs/diff.ts';
+import type { SitePackV1 } from '@browserhive/contracts/site-packs';
+import { newDomains } from '../../domain/site-packs/diff.ts';
 import type { RefusedPack } from '../../domain/site-packs/load.ts';
 import type { SitePackStateRecord } from '../../ports/persistence/site-packs.ts';
 import type { SkippedPackVersion } from '../../ports/site-packs.ts';
 import { readCached } from './registry-build.ts';
+import { classifyForRow, floorBlockers, usageOf } from './registry-classify.ts';
 import {
   approvedContent,
   assertDomainsFree,
@@ -15,6 +17,7 @@ import {
   syncSiteVersions,
 } from './registry-core.ts';
 import {
+  belowFloor,
   noLocalFile,
   noPrevious,
   notPending,
@@ -39,7 +42,11 @@ export function noPackToApprove(siteId: string) {
   return packConflict(`No site pack covers ${siteId} any more; review the site again.`);
 }
 
-/** Apply a pending version: it becomes the approved one; the old one is kept for Revert. */
+/**
+ * Apply a pending version: it becomes the approved one; the old one is kept for Revert. Refused
+ * with `SITE_PACK_BELOW_FLOOR` while a template using the pack is below its `stealth-profile`
+ * floor (T3b lead decision 4).
+ */
 export async function applyVersion(
   core: RegistryCore,
   packId: string,
@@ -48,12 +55,25 @@ export async function applyVersion(
 ): Promise<void> {
   const entry = core.entry(packId);
   const row = entry.pending.find((p) => p.toVersion === version);
-  const content =
+  const bundled =
     row === undefined
       ? undefined
       : core.snapshot().bundled.packs.find((p) => p.sha256 === row.toSha256);
+  // A revocation's fallback is a previous version: BrowserHive's copy when this release lacks it.
+  const content =
+    bundled ??
+    (row?.classification === 'revoked'
+      ? ((await readCached(
+          core.deps.cache,
+          row.source,
+          packId,
+          row.toSha256,
+          core.deps.binaryVersion,
+        )) ?? undefined)
+      : undefined);
   if (row === undefined || content === undefined) throw notPending(packId, version);
   assertDomainsFree(core.snapshot(), packId, content.pack.domains);
+  await assertFloorMet(core, packId, content.pack);
   const { deps } = core;
   const now = deps.clock.now();
   await deps.cache.put(row.source, packId, content.sha256, content.bytes);
@@ -67,7 +87,8 @@ export async function applyVersion(
       approvedVersion: content.pack.version,
       approvedSha256: content.sha256,
       approvedSource: row.source,
-      approvedProvenance: { kind: 'bundled', release: content.origin },
+      approvedProvenance:
+        bundled === undefined ? null : { kind: 'bundled', release: bundled.origin },
       approvedDomains: [...content.pack.domains],
       approvedBy: by,
       approvedAt: now,
@@ -108,7 +129,11 @@ export async function rejectVersion(
   await core.refresh();
 }
 
-/** Restore the previous approved version (from its source or BrowserHive's copy). */
+/**
+ * Restore the previous approved version (from its source or BrowserHive's copy). Refused with
+ * `SITE_PACK_BELOW_FLOOR` like Apply (D-71, review #84 M1): a template that added the site under
+ * the newer version may be below the previous version's `stealth-profile` floor.
+ */
 export async function revertVersion(core: RegistryCore, packId: string, by: string): Promise<void> {
   const entry = core.entry(packId);
   const state = entry.state;
@@ -133,6 +158,11 @@ export async function revertVersion(core: RegistryCore, packId: string, by: stri
           core.deps.binaryVersion,
         );
   if (content === null) throw noPrevious(packId);
+  await assertFloorMet(core, packId, content.pack);
+  const classified =
+    entry.approved === null
+      ? null
+      : classifyForRow(entry.approved.pack, content.pack, await usageOf(core.deps.repos, packId));
   const now = core.deps.clock.now();
   await core.deps.uow.transaction(async (repos) => {
     await repos.sitePackState.put({
@@ -160,10 +190,10 @@ export async function revertVersion(core: RegistryCore, packId: string, by: stri
         toVersion: previousVersion,
         toSha256: previousSha256,
         source: previousSource,
-        classification: 'unclassified',
+        classification: classified?.classification ?? 'unclassified',
         newDomains: [...newDomains(entry.approved?.pack ?? null, content.pack)],
         notes: null,
-        diff: entry.approved === null ? null : diffPacks(entry.approved.pack, content.pack),
+        diff: classified?.diff ?? null,
         decision: 'reverted',
         decidedBy: by,
       }),
@@ -255,10 +285,12 @@ export async function approveLocal(
     throw packConflict(`The local file of ${packId} changed since it was shown; review it again.`);
   }
   assertDomainsFree(core.snapshot(), packId, current.pack.domains);
+  await assertFloorMet(core, packId, current.pack);
   const { deps } = core;
   const now = deps.clock.now();
   await deps.cache.put('local', packId, sha256, current.bytes);
   const before = entry.effective?.pack ?? approvedContent(entry)?.pack ?? null;
+  const classified = classifyForRow(before, current.pack, await usageOf(deps.repos, packId));
   await deps.uow.transaction(async (repos) => {
     await repos.sitePackState.put({
       ...stateOf(entry, now),
@@ -278,7 +310,7 @@ export async function approveLocal(
         classification: 'local_override',
         newDomains: [...newDomains(before, current.pack)],
         notes: null,
-        diff: diffPacks(before, current.pack),
+        diff: classified.diff,
         decision: 'approved',
         decidedBy: by,
       }),
@@ -291,6 +323,16 @@ export async function approveLocal(
   });
   await core.refresh();
   await syncSiteVersions(core, packId);
+}
+
+/**
+ * Refuses content whose `stealth-profile` floor is above a template that uses the pack
+ * (`SITE_PACK_BELOW_FLOOR`, D-71): stealth and fingerprint noise are fixed for a template's life, so
+ * the operator turns the site off on that template (or rejects the version) first.
+ */
+async function assertFloorMet(core: RegistryCore, packId: string, pack: SitePackV1): Promise<void> {
+  const blockers = floorBlockers(await usageOf(core.deps.repos, packId), pack);
+  if (blockers.length > 0) throw belowFloor(packId, pack.version, blockers);
 }
 
 function issuesOf(problem: SkippedPackVersion | null): RefusedPack['issues'] {

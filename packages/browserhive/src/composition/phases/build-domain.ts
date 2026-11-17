@@ -34,6 +34,7 @@ import { createAuthStack } from '../auth-stack.ts';
 import { type BootContext, part, type SeedNotice } from '../context.ts';
 import { hostFactsOf } from '../host.ts';
 import { createNotificationSnapshots } from '../notification-snapshots.ts';
+import { buildSiteActions } from '../site-pack-actions.ts';
 import { attachSitePackEnforcement, buildSitePackLayer } from '../site-pack-layer.ts';
 import type { PhaseHandle } from '../unwind.ts';
 import { buildOperators } from './domain-operators.ts';
@@ -290,6 +291,7 @@ async function buildDomain(
     repeat: timers.every,
     vault: operators.vault,
     ...(layer.probers !== undefined && { probers: layer.probers }),
+    ...(layer.strategies !== undefined && { siteStrategies: layer.strategies }),
   });
   const templates = tpl.service;
   // The notification button of a sign-out only queues the re-login (spec 13 §8.4, §8.6).
@@ -330,6 +332,18 @@ async function buildDomain(
     ...(enforcement !== null && { siteHolds: enforcement.intercepts }),
     pageActions,
     ...(enforcement !== null && { siteGuards: sitePackPages.gate }),
+    ...(enforcement !== null && {
+      siteActions: buildSiteActions({
+        repos,
+        sessions,
+        lookup: sitePacks,
+        navigations: sitePackPages.navigations,
+        bus,
+        clock,
+        logger,
+        undo,
+      }),
+    }),
     redactor,
     bus,
     clock,

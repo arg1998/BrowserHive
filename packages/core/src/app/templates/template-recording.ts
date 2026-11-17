@@ -100,7 +100,7 @@ export class TemplateRecordingService {
    *   site), `VALIDATION_FAILED` (not a site of the template).
    */
   async confirm(templateId: string, siteId: string, by: string): Promise<TemplateSiteView> {
-    const { sites } = await this.#load(templateId);
+    const { template, sites } = await this.#load(templateId);
     const site = this.#site(sites, siteId);
     const baseline = this.#baselines.get(templateId);
     const jar =
@@ -128,7 +128,7 @@ export class TemplateRecordingService {
       site_id: site.siteId,
       learned_cookie_names: [...names],
     });
-    return toSiteView(updated, this.#deps.packs);
+    return toSiteView(updated, this.#deps.packs, template);
   }
 
   /**

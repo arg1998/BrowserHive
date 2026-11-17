@@ -31,6 +31,11 @@ export const TemplatePatchInput = z.strictObject({
   humanize: z.boolean().optional(),
   proxy: TemplateProxyInput.nullable().optional(),
   agent_windows: AgentWindows.optional(),
+  /**
+   * "Deny clipboard writes" (spec 13 §2.1, D18): reaches a running browser's open pages at once;
+   * full effect on pages already open needs a browser restart (`clipboard_needs_restart`).
+   */
+  deny_clipboard_writes: z.boolean().optional(),
   policy: TemplatePolicyInput.optional(),
   /** Required with `proxy` or `channel`: sites may sign the account out (spec 13 §2.2). */
   confirm_identity_change: z.boolean().optional(),
@@ -49,6 +54,12 @@ export const TemplateIfMatchHeaders = z.object({ 'if-match': IfMatchVersion.opti
 export const TemplateChangeResponse = z.object({
   template: Template,
   closed_sessions: z.array(z.string()),
+  /**
+   * On a `PATCH` that changed `deny_clipboard_writes` while the browser runs: `true` = the change
+   * reached every open page at once, but only a browser restart gives it full effect (a page open
+   * at the change may keep what it took before; `POST …/host/restart`). Absent otherwise.
+   */
+  clipboard_needs_restart: z.boolean().optional(),
 });
 /** A template change and the sessions it closed. */
 export type TemplateChangeResponse = z.infer<typeof TemplateChangeResponse>;

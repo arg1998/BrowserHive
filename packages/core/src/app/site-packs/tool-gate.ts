@@ -71,6 +71,12 @@ export interface SiteToolGateDeps {
   readonly logger: Logger;
 }
 
+/**
+ * The guard decisions one tool call acted on (opaque keys: source, rule, action and URL). A
+ * re-check after a strategy wait acts only on decisions not in it.
+ */
+export type GateDecisions = ReadonlySet<string>;
+
 /** What decided: a pack (or built-in) guard, with the facts its hit row and refusal need. */
 interface Decision {
   readonly packId: string;
@@ -93,15 +99,23 @@ export class SiteToolGate {
   }
 
   /**
-   * Runs before the handler of a tool on an agent's template session.
+   * Runs before the handler of a tool on an agent's template session, and again right before the
+   * browser acts when the call waited for a before-action strategy (spec 13 §9.4): pass the
+   * decisions the earlier run returned as `settled`. A re-check refuses on a stop or on a guard
+   * decision the earlier runs did not act on (the page or the pack changed meanwhile); a decision
+   * already acted on is not acted on twice (no second hit row, approval request or used pass).
    *
+   * @returns every guard decision acted on so far (`settled` included)
    * @throws `SITE_OPERATOR_PENDING` (`stopped`, `write_confirm`), `URL_BLOCKED`
    *   (`<pack id>#<guard id>`), `SITE_ACTION_BLOCKED`
    */
-  async beforeTool(call: SiteToolCall): Promise<void> {
+  async beforeTool(call: SiteToolCall, settled?: GateDecisions): Promise<GateDecisions> {
     const { session, tool } = call;
     const template = session.template;
-    if (template === null || template.mode !== 'live' || SITE_HOLD_EXEMPT_TOOLS.has(tool)) return;
+    const decided = new Set<string>(settled);
+    if (template === null || template.mode !== 'live' || SITE_HOLD_EXEMPT_TOOLS.has(tool)) {
+      return decided;
+    }
     const sites = await this.#deps.sites(template.templateId);
     const lookup = this.#deps.lookup();
     const packIdOf = (host: string) => lookup?.effectiveFor(host)?.packId ?? null;
@@ -114,13 +128,16 @@ export class SiteToolGate {
       if (site?.stoppedAt != null) this.#stopped(call, site, url);
     }
     if (target !== null) {
-      await this.#navigation(call, target, sites, lookup);
+      await this.#navigation(call, target, sites, lookup, decided);
+      // A re-check re-arms the page's expectation (a commit meanwhile consumed it); a new tab's
+      // is a list entry, armed once.
       if (tool === 'navigate' && page !== null) this.#deps.navigations.expectOnPage(page, target);
-      else this.#deps.navigations.expectNewTab(session.id, target);
+      else if (settled === undefined) this.#deps.navigations.expectNewTab(session.id, target);
     }
     if (page !== null && pageUrl !== null && lookup !== null && ELEMENT_GUARD_TOOLS.has(tool)) {
-      await this.#elements(call, page, pageUrl, sites, lookup);
+      await this.#elements(call, page, pageUrl, sites, lookup, decided);
     }
+    return decided;
   }
 
   #page(session: Session, tabId: unknown): Page | null {
@@ -154,6 +171,7 @@ export class SiteToolGate {
     url: string,
     sites: readonly TemplateSiteRecord[],
     lookup: SitePackLookup | null,
+    decided: Set<string>,
   ): Promise<void> {
     const host = hostOf(url);
     const templateId = call.session.template?.templateId;
@@ -170,7 +188,7 @@ export class SiteToolGate {
       method: 'GET',
       url,
     };
-    await this.#decide(call, decision, siteOf(sites, url, effective), () =>
+    await this.#decide(call, decision, siteOf(sites, url, effective), decided, () =>
       urlBlockedByGuard(url, hit.ruleId),
     );
   }
@@ -181,6 +199,7 @@ export class SiteToolGate {
     pageUrl: string,
     sites: readonly TemplateSiteRecord[],
     lookup: SitePackLookup,
+    decided: Set<string>,
   ): Promise<void> {
     const host = hostOf(pageUrl);
     const effective = host === null ? null : lookup.effectiveFor(host);
@@ -207,7 +226,7 @@ export class SiteToolGate {
       method: null,
       url: pageUrl,
     };
-    await this.#decide(call, decision, site, () =>
+    await this.#decide(call, decision, site, decided, () =>
       siteActionBlocked(call.session.id, site, ruleId),
     );
   }
@@ -235,13 +254,20 @@ export class SiteToolGate {
     return null;
   }
 
-  /** Acts on a decision (spec 13 §9.3 the tool path) and records its hit row. */
+  /**
+   * Acts on a decision (spec 13 §9.3 the tool path) and records its hit row; a decision an earlier
+   * run of the call acted on (`decided`) is left as it was.
+   */
   async #decide(
     call: SiteToolCall,
     d: Decision,
     site: string,
+    decided: Set<string>,
     blocked: () => AppError,
   ): Promise<void> {
+    const key = decisionKey(d);
+    if (decided.has(key)) return;
+    decided.add(key);
     const sessionId = call.session.id;
     const templateId = call.session.template?.templateId ?? '';
     const hit = {
@@ -295,6 +321,10 @@ export class SiteToolGate {
         return assertNever(d.action);
     }
   }
+}
+
+function decisionKey(d: Decision): string {
+  return [d.source, `${d.packId}#${d.guardId}`, d.action, d.url].join('\u0000');
 }
 
 /** The site a refusal names: the template's site of the URL, else its registrable domain. */

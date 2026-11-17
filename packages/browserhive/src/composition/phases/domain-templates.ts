@@ -14,12 +14,14 @@ import {
   serializeError,
 } from '@browserhive/core/runtime';
 import {
+  applyClipboardPolicy,
   createTemplateFiles,
   createTemplateGeoResolver,
   displayMissing,
   FileTemplateStateStore,
   type HostFacts,
   HostGeoSeedResolver,
+  hostTemplatePacks,
   PassThroughProxyResolver,
   type PlaywrightBrowserDriver,
   type ProberSelector,
@@ -40,8 +42,10 @@ import {
   UnavailableTemplateRuntime,
   unavailableHealthFacade,
   type VaultService,
+  watchClipboardOnStart,
   wireTemplateHealth,
 } from '@browserhive/core/server';
+import type { SiteStrategies } from '../site-pack-strategies.ts';
 import { wireSitePackUsage } from '../site-packs.ts';
 
 export { type MachineNames, machineNames, selfOriginsOf } from '../self-origins.ts';
@@ -77,6 +81,8 @@ export interface TemplatesInput {
   readonly sitePacks?: SitePackRegistry;
   /** The prober of each site over the supervisor (T3a: the pack prober); default generic. */
   readonly probers?: (supervisor: TemplateHostSupervisor) => ProberSelector;
+  /** The host-side pack strategies (T3b: `webrtc-policy`, `keep-alive`, `device-bound-session`). */
+  readonly siteStrategies?: SiteStrategies;
 }
 
 /** How often template hosts are checked for idleness, age and memory (spec 13 §3.2). */
@@ -163,7 +169,11 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
   const { config } = input;
   const templatesDir = templatesDirOf(config.dataDir);
   const store = await templateStateStore(input, templatesDir);
-  const packs = input.sitePacks === undefined ? {} : { packs: input.sitePacks };
+  // The sites' strategy notes read this machine's platform (D49 `single-focus`, D50 humanize).
+  const packs =
+    input.sitePacks === undefined
+      ? {}
+      : { packs: hostTemplatePacks(input.sitePacks, input.host.platform) };
   const reader = createProcessTreeReader();
   const supervisor = config.templates
     ? new TemplateHostSupervisor({
@@ -180,6 +190,7 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
           platform: input.host.platform,
           selfOrigins: () => selfOriginsOf(config),
           testingArgs: input.testingArgs ?? [],
+          ...(input.siteStrategies !== undefined && { hostFlags: input.siteStrategies.hostFlags }),
         },
         config: {
           idleTimeoutMs: config.templateHostIdleTimeout,
@@ -191,6 +202,7 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
         },
         bus: input.bus,
         onTemplateChanged: (id) => changed(id),
+        sitePacks: () => (input.sitePacks?.enabled === true ? input.sitePacks : null),
         ...(reader !== null && {
           rssOf: async (pid: number) => (await reader.rssOfTrees([pid])).get(pid) ?? null,
         }),
@@ -268,6 +280,22 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
     wireSitePackUsage(input.sitePacks, input.bus, input.logger, changed);
   }
   const common = { ids: input.ids, clock: input.clock, logger: input.logger, changed };
+  const clipboardWrites = async (id: string, deny: boolean) => {
+    const host = supervisor?.runningHost(id) ?? null;
+    if (host !== null) await applyClipboardPolicy(host.context, deny, input.logger);
+  };
+  // A clipboard change that landed while the browser started is applied once it runs (D18).
+  const offClipboard =
+    supervisor === null
+      ? () => undefined
+      : watchClipboardOnStart({
+          templates: input.uow.repos.templates,
+          runtime,
+          ops,
+          clipboardWrites,
+          bus: input.bus,
+          logger: input.logger,
+        });
   const edit = new TemplateEditService({
     repos: input.uow.repos,
     uow: input.uow,
@@ -277,6 +305,7 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
     bus: input.bus,
     ...packs,
     ...common,
+    clipboardWrites,
   });
   const actions = new TemplateActions({
     repos: input.uow.repos,
@@ -318,6 +347,9 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
           ...(input.probers !== undefined && { probers: input.probers(supervisor) }),
         });
   if (health !== null) restored = (id) => health.scheduler.restored(id);
+  if (supervisor !== null && ops instanceof TemplateHostOperations) {
+    input.siteStrategies?.attach({ supervisor, ops, health, changed, repeat: input.repeat });
+  }
   // Idle stop, age recycle, memory and checkpoints of template hosts (spec 13 §3.2, §3.9).
   const stopHostTicks =
     supervisor === null
@@ -338,6 +370,7 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
     stopHostTicks();
     stopHealthTicks();
     health?.stop();
+    offClipboard();
   };
   return {
     service,

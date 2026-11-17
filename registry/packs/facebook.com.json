@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "id": "facebook.com",
-  "version": 1,
+  "version": 2,
   "min_client": "0.2.3",
   "title": "Facebook",
   "description": "Meta's terms bar accessing or collecting data by automated means, signed in or not. Sign-out, Accounts Center and login-dialog approvals are blocked for agents.",
@@ -76,6 +76,20 @@
       "checked": "2026-11-16"
     }
   },
+  "strategies": [
+    {
+      "id": "serialize-site",
+      "params": {}
+    },
+    {
+      "id": "single-focus",
+      "params": {}
+    },
+    {
+      "id": "human-dwell",
+      "params": {}
+    }
+  ],
   "verified": {
     "sign_in": "2026-11-16",
     "signed_in": "2026-11-16",

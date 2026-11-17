@@ -17,6 +17,7 @@ import { runServe } from './commands/serve.ts';
 import { runSitePacks } from './commands/sitepacks.ts';
 import { runSitepacksVerify } from './commands/sitepacks-verify.ts';
 import { runTemplatesList, runTemplatesRm } from './commands/templates.ts';
+import { runTemplatesClipboard } from './commands/templates-clipboard.ts';
 import { runTemplatesCreate, runTemplatesFinish } from './commands/templates-create.ts';
 import { runTemplatesLogin } from './commands/templates-login.ts';
 import {
@@ -123,6 +124,8 @@ export async function runInvocation(
       return runTemplatesRestore(context, invocation);
     case 'templates-host':
       return runTemplatesHost(context, invocation);
+    case 'templates-clipboard':
+      return runTemplatesClipboard(context, invocation);
     case 'templates-disable':
     case 'templates-enable':
       return runTemplatesAvailability(context, invocation);

@@ -20,9 +20,10 @@ import { registrableDomain } from '../../kernel/url.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type { EffectivePack, SitePackLookup, SourceCatalog } from '../../ports/site-packs.ts';
 import * as actions from './registry-actions.ts';
-import { withUsage } from './registry-build.ts';
+import { withFreshUsage } from './registry-classify.ts';
 import { packNotFound } from './registry-errors.ts';
 import { prepareFirstUse } from './registry-first-use.ts';
+import { enforceFloor } from './registry-floor.ts';
 import { humanOnlyOf, importResponse } from './registry-helpers.ts';
 import { loadSnapshot } from './registry-load.ts';
 import {
@@ -33,6 +34,7 @@ import {
   packDetail,
   pendingOf,
 } from './registry-reads.ts';
+import { type RevocationOutcome, type RevokeResult, revokeVersion } from './registry-revoke.ts';
 import { loadCatalog, sourceStats } from './registry-sync.ts';
 import {
   emptySnapshot,
@@ -88,8 +90,6 @@ export class SitePackRegistry implements SitePackLookup {
     return this.#snapshot.packs.get(packId)?.effective ?? null;
   }
 
-  // --- template integration -------------------------------------------------------------------
-
   /** The pack that owns a site (registrable domain): in force or on offer; `null` when none or off. */
   packIdFor(siteId: string): string | null {
     if (!this.#deps.enabled) return null;
@@ -116,14 +116,8 @@ export class SitePackRegistry implements SitePackLookup {
     return humanOnlyOf(this, packId);
   }
 
-  /**
-   * Prepares the first-use approval of a new template site (spec 13 §9.6, D-67): the version
-   * already approved, else exactly the offer whose SHA-256 the operator reviewed. Write it with
-   * `prepared.write(repos)` in the site's own transaction, then call {@link approvalsCommitted}.
-   * `null`: no pack covers the site (generic) or `sitePacks=false`.
-   *
-   * @throws `SITE_PACK_APPROVAL_REQUIRED`, `CONFLICT`, `SITE_PACK_DOMAIN_TAKEN`.
-   */
+  /** First-use approval (§9.6, D-67): the approved version, else exactly the reviewed offer; write
+   * it in the site's transaction, then {@link approvalsCommitted}. `null`: generic or packs off. */
   async prepareSite(
     siteId: string,
     sha256: string | undefined,
@@ -158,8 +152,6 @@ export class SitePackRegistry implements SitePackLookup {
     return { packId: prepared.packId, version: prepared.version, sha256: prepared.sha256 };
   }
 
-  // --- reads ----------------------------------------------------------------------------------
-
   /** Every pack with the registry's status (`GET /site-packs`). */
   list(query: SitePacksQuery = { source: undefined }): SitePacksResponse {
     return listPacks(this.#snapshot, query, this.#readFacts());
@@ -176,7 +168,7 @@ export class SitePackRegistry implements SitePackLookup {
     return packDetail(this.#entry(packId), this.#readFacts());
   }
 
-  /** `GET /site-packs/{pack_id}/diff`. @throws `SITE_PACK_NOT_FOUND`, `CONFLICT`. */
+  /** `GET /site-packs/{pack_id}/diff`, classified (§9.7). @throws `SITE_PACK_NOT_FOUND`, `CONFLICT`. */
   async diff(packId: string, query: SitePackDiffQuery): Promise<SitePackDiffResponse> {
     return diffOf(this.#entry(packId), this.#snapshot, query, this.#deps);
   }
@@ -208,10 +200,7 @@ export class SitePackRegistry implements SitePackLookup {
 
   // --- loading --------------------------------------------------------------------------------
 
-  /**
-   * Reads both sources and swaps the snapshot (spec 13 §9.6). A source that fails to load keeps its
-   * previous catalog. `by` (an operator's reload) records `site_pack.reload`.
-   */
+  /** Reads both sources and swaps the snapshot (§9.6); a failed source keeps its catalog. */
   reload(by?: string): Promise<SitePackRegistryStats> {
     return this.#serial(async () => {
       const signal = AbortSignal.timeout(30_000);
@@ -242,13 +231,11 @@ export class SitePackRegistry implements SitePackLookup {
     });
   }
 
-  /**
-   * Re-reads which templates use each pack (`used_by`, automatic Follow) after template or site
-   * changes; the content in force is unchanged.
-   */
+  /** After template or site changes: re-reads `used_by` and re-classifies pending versions (§9.7). */
   refreshUsage(): Promise<void> {
     return this.#serial(async () => {
-      const next = withUsage(this.#snapshot, await this.#deps.repos.templateSites.listAll());
+      await this.#enforceFloor();
+      const next = await withFreshUsage(this.#deps.repos, this.#snapshot);
       if (next.changed.length === 0) return;
       this.#snapshot = next.snapshot;
       for (const packId of next.changed) this.#publishPack(packId);
@@ -268,7 +255,17 @@ export class SitePackRegistry implements SitePackLookup {
     return this.#act(packId, () => actions.rejectVersion(this.#core(), packId, version, by));
   }
 
-  /** Restore the previous approved version. @throws `SITE_PACK_NOT_FOUND`, `CONFLICT`. */
+  /** A publisher revoked `version` (§9.7, `registry-revoke.ts`); for the T4b registry client. */
+  async revoke(packId: string, version: number, by: string): Promise<RevokeResult> {
+    let outcome: RevocationOutcome = { outcome: 'not_in_force' };
+    const run = async () => {
+      outcome = await revokeVersion(this.#core(), packId, version, by);
+    };
+    const view = await this.#act(packId, run);
+    return { ...outcome, view };
+  }
+
+  /** Restore the previous approved version. @throws `SITE_PACK_NO_PREVIOUS`, `SITE_PACK_BELOW_FLOOR`. */
   revert(packId: string, by: string): Promise<SitePackView> {
     return this.#act(packId, () => actions.revertVersion(this.#core(), packId, by));
   }
@@ -293,18 +290,12 @@ export class SitePackRegistry implements SitePackLookup {
     return this.#act(packId, () => actions.setEnabled(this.#core(), packId, enabled, by));
   }
 
-  /**
-   * `POST /site-packs/import` with one unsigned pack: stored in `sitePacksDir` as `<id>.json`, then
-   * approved like any local file. @throws `SITE_PACK_INVALID`.
-   */
+  /** `POST /site-packs/import` (`{pack}`): stored as `<id>.json`, approved like a local file. */
   importPack(raw: unknown, by: string): Promise<SitePackImportResponse> {
     return this.#imported(() => actions.importPack(this.#core(), raw, by));
   }
 
-  /**
-   * `POST /site-packs/import` with one file's exact text: validated, hashed and stored byte for
-   * byte, so the SHA-256 to approve is the file's own. @throws `SITE_PACK_INVALID`.
-   */
+  /** `POST /site-packs/import` (`{text}`): stored byte for byte; the SHA-256 is the file's own. */
   importPackText(text: string, by: string): Promise<SitePackImportResponse> {
     const bytes = new TextEncoder().encode(text);
     return this.#imported(() => actions.importPackBytes(this.#core(), bytes, by));
@@ -378,6 +369,15 @@ export class SitePackRegistry implements SitePackLookup {
     const loaded = await loadSnapshot(this.#core(), bundled, local, next);
     this.#snapshot = loaded.snapshot;
     for (const event of loaded.fresh) this.#deps.bus?.publish('site_pack.pending', event);
+    await this.#enforceFloor();
+  }
+
+  /** D-71 for content in force changed without an Apply: below-floor sites off, usage re-read. */
+  async #enforceFloor(): Promise<void> {
+    const off = await enforceFloor(this.#core());
+    if (off.length === 0) return;
+    this.#snapshot = (await withFreshUsage(this.#deps.repos, this.#snapshot)).snapshot;
+    for (const templateId of off) this.#templateChanged?.(templateId);
   }
 
   #publishPack(packId: string): void {

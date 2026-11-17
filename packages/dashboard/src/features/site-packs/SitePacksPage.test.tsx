@@ -29,7 +29,7 @@ function packsWithDecisions() {
           size: 4096,
           released: '2026-12-01',
           notes: null,
-          classification: 'unclassified',
+          classification: 'tightening',
           source: 'bundled',
           provenance: { kind: 'bundled', release: '0.3.1' },
         },
@@ -89,7 +89,8 @@ describe('SitePacksPage', () => {
     expect(await within(linkedin).findByText('guards[logout].action')).toBeDefined();
     expect(within(linkedin).getByText('confirm')).toBeDefined();
     expect(within(linkedin).getByText('block')).toBeDefined();
-    expect(within(linkedin).getByText('Unclassified')).toBeDefined();
+    // Classified: the card's chip and the field's chip, in words (never colour alone).
+    expect(within(linkedin).getAllByText('Tightens rules').length).toBe(2);
     const github = screen
       .getByRole('heading', { level: 3, name: /GitHub/ })
       .closest('article') as HTMLElement;
@@ -118,6 +119,7 @@ describe('SitePacksPage', () => {
     const dialog = await screen.findByRole('alertdialog');
     expect(within(dialog).getByText(`Apply ${iso('LinkedIn')} v4?`)).toBeDefined();
     expect(within(dialog).getByText(/v3 is kept, so Revert restores it/)).toBeDefined();
+    expect(within(dialog).getByText(/This version only tightens rules/)).toBeDefined();
     await expectNoA11yViolations(document.body, AXE);
     await click(within(dialog).getByRole('button', { name: 'Apply v4' }));
     await waitFor(() =>
@@ -150,6 +152,28 @@ describe('SitePacksPage', () => {
       expect(view.requests.find((r) => r.path.endsWith('/approve-local'))?.body).toEqual({
         sha256: sha('d'),
       }),
+    );
+  });
+
+  it('Approve of a local file that relaxes rules says so and asks with care (review #84 L1)', async () => {
+    mount({
+      'GET /site-packs/github.com/diff': packDiff({
+        to: { version: 1, sha256: sha('d'), source: 'local' },
+        classification: 'loosening',
+        changes: [{ path: 'guards[logout]', from: { id: 'logout' }, to: null, class: 'loosening' }],
+      }),
+    });
+    const card = (await screen.findByRole('heading', { level: 3, name: /GitHub/ })).closest(
+      'article',
+    ) as HTMLElement;
+    await within(card).findByText('guards[logout]');
+    await click(within(card).getByRole('button', { name: 'Approve…' }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(
+      within(dialog).getByText(/This file relaxes rules: check every highlighted field/),
+    ).toBeDefined();
+    expect(within(dialog).getByRole('button', { name: 'Approve this content' }).className).toMatch(
+      /destructive/,
     );
   });
 

@@ -2,7 +2,7 @@
 
 import type { SitePackPendingEvent } from '@browserhive/contracts/ws';
 import type { z } from 'zod';
-import { diffPacks, newDomains } from '../../domain/site-packs/diff.ts';
+import { newDomains } from '../../domain/site-packs/diff.ts';
 import { loadPackBytes } from '../../domain/site-packs/load.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { Logger } from '../../ports/logger.ts';
@@ -10,6 +10,7 @@ import type { SitePackChangeRecord } from '../../ports/persistence/site-packs.ts
 import type { SitePackSource, SourceCatalog } from '../../ports/site-packs.ts';
 import type { SitePackUpdatesFact } from '../events/catalog.ts';
 import type { ResolvedPack } from './registry-build.ts';
+import { classifyForRow, type PackUsage } from './registry-classify.ts';
 import { assertDomainsFree, auditPack, type RegistryCore } from './registry-core.ts';
 import { packInvalid } from './registry-errors.ts';
 import { pendingOf } from './registry-reads.ts';
@@ -20,20 +21,22 @@ const SYSTEM = 'browserhive';
 
 /**
  * Records candidates: a bundled version newer than an approved pack's is inserted once as
- * `downloaded` (unclassified until T3b); pending rows it replaces, or that are no longer newer than
- * the approved version, or whose bytes the release no longer ships, become `superseded`. Rejected,
- * reverted and approved candidates are never inserted again. Returns the `site_pack.pending` events.
+ * `downloaded`, classified against the approved version (spec 13 §9.7); pending rows it replaces,
+ * or that are no longer newer than the approved version, or whose bytes the release no longer
+ * ships, become `superseded` (a fallback marked `revoked` stays). Rejected, reverted and approved
+ * candidates are never inserted again. Returns the `site_pack.pending` events.
  */
 export async function syncCandidates(
   core: RegistryCore,
   resolved: readonly ResolvedPack[],
   pending: readonly SitePackChangeRecord[],
+  usage: PackUsage,
   onUnreadable: (packId: string, error: unknown) => void,
 ): Promise<z.infer<typeof SitePackPendingEvent>[]> {
   const events: z.infer<typeof SitePackPendingEvent>[] = [];
   for (const r of resolved) {
     try {
-      const event = await syncOne(core, r, pending);
+      const event = await syncOne(core, r, pending, usage);
       if (event !== null) events.push(event);
     } catch (error) {
       // One pack's unreadable history never stops the others (review #83 C-M5).
@@ -47,6 +50,7 @@ async function syncOne(
   core: RegistryCore,
   r: ResolvedPack,
   pending: readonly SitePackChangeRecord[],
+  usage: PackUsage,
 ): Promise<z.infer<typeof SitePackPendingEvent> | null> {
   const { repos, clock, ids } = core.deps;
   const state = r.state;
@@ -60,7 +64,7 @@ async function syncOne(
       : null;
   const now = clock.now();
   for (const row of pending) {
-    if (row.packId !== r.packId) continue;
+    if (row.packId !== r.packId || row.classification === 'revoked') continue;
     const stale =
       (row.toVersion !== null && row.toVersion <= state.approvedVersion) ||
       (row.source === 'bundled' && row.toSha256 !== candidate?.sha256);
@@ -70,6 +74,7 @@ async function syncOne(
   if ((await repos.sitePackChanges.findCandidate(r.packId, candidate.sha256, 'bundled')) !== null) {
     return null;
   }
+  const classified = classifyForRow(approved.pack, candidate.pack, usage(r.packId));
   const record: SitePackChangeRecord = {
     seq: 0,
     eventId: ids.eventId(),
@@ -78,10 +83,10 @@ async function syncOne(
     toVersion: candidate.pack.version,
     toSha256: candidate.sha256,
     source: 'bundled',
-    classification: 'unclassified',
+    classification: classified.classification,
     newDomains: [...newDomains(approved.pack, candidate.pack)],
     notes: null,
-    diff: diffPacks(approved.pack, candidate.pack),
+    diff: classified.diff,
     decision: 'downloaded',
     decidedBy: null,
     createdAt: now,
@@ -92,12 +97,13 @@ async function syncOne(
     packId: r.packId,
     from: state.approvedVersion,
     to: candidate.pack.version,
+    classification: classified.classification,
   });
   return {
     type: 'site_pack.pending',
     pack_id: r.packId,
     to_version: candidate.pack.version,
-    classification: 'unclassified',
+    classification: classified.classification,
   };
 }
 
@@ -191,6 +197,7 @@ export function updatesFact(snapshot: RegistrySnapshot, at: number): SitePackUpd
             to_version: p.toVersion,
             sha256: p.sha256,
             local: null,
+            classification: p.classification,
           }
         : {
             pack_id: p.packId,
@@ -199,6 +206,7 @@ export function updatesFact(snapshot: RegistrySnapshot, at: number): SitePackUpd
             to_version: p.version,
             sha256: p.sha256,
             local: p.state,
+            classification: null,
           },
     ),
   };

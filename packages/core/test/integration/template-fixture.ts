@@ -37,6 +37,8 @@ export const HEADED = process.env['BROWSERHIVE_TEMPLATES_HEADED'] === '1';
 /** One test's world. */
 export interface TemplateWorld {
   readonly sites: HttpsSites;
+  /** The bus the sessions and the supervisor publish on (`template.host`). */
+  readonly bus: InProcessEventBus<DomainEvents>;
   readonly sessions: SessionService;
   readonly supervisor: TemplateHostSupervisor;
   readonly template: TemplateRecord;
@@ -56,7 +58,12 @@ export interface TemplateWorld {
 /** Builds a world for a template with `stealth`; `maxPagesPerHost` bounds agent pages. */
 export async function templateWorld(
   stealth: StealthLeg,
-  options: { readonly maxPagesPerHost?: number; readonly selfOrigins?: readonly string[] } = {},
+  options: {
+    readonly maxPagesPerHost?: number;
+    readonly selfOrigins?: readonly string[];
+    /** Template fields over the defaults (e.g. `denyClipboardWrites`). */
+    readonly template?: Partial<TemplateRecord>;
+  } = {},
 ): Promise<TemplateWorld> {
   const sites = startHttpsSites();
   const dataDir = await mkdtemp(join(tmpdir(), 'bh-tpl-'));
@@ -98,6 +105,7 @@ export async function templateWorld(
     headless: !HEADED,
     stealth,
     maxConcurrent: 5,
+    ...options.template,
   });
   const degradations = new RecordingDegradations();
   const updates: Partial<TemplateRecord>[] = [];
@@ -114,6 +122,7 @@ export async function templateWorld(
     clock,
     logger,
     degradations,
+    bus,
     spec: {
       dataDir,
       proxyResolver: { resolve: async (r) => r.requested },
@@ -132,6 +141,7 @@ export async function templateWorld(
   const site = templateSiteRecord();
   return {
     sites,
+    bus,
     sessions,
     supervisor,
     template,

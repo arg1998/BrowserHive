@@ -38,6 +38,9 @@ export { SessionService } from '../app/sessions/session-service.ts';
 export { AgentNavigations } from '../app/site-packs/agent-navigations.ts';
 export { ChallengeOutcomes } from '../app/site-packs/challenge-outcomes.ts';
 export { ChallengeWatch } from '../app/site-packs/challenge-watch.ts';
+export { DeviceBindingWatch } from '../app/site-packs/device-binding.ts';
+export { SiteKeeper } from '../app/site-packs/keeper.ts';
+export { WritePacer } from '../app/site-packs/pacer.ts';
 export { PackProber, packProberSelector } from '../app/site-packs/pack-prober.ts';
 export { maintenanceProbePages } from '../app/site-packs/probe-pages.ts';
 export { SitePackRegistry } from '../app/site-packs/registry.ts';
@@ -46,9 +49,13 @@ export type { PendingUpdate, SitePackRegistryDeps } from '../app/site-packs/regi
 // Site-pack enforcement (spec 13 §9.3, §9.5; PR T3a, WP-E1).
 export { SecurityInterceptService } from '../app/site-packs/security-intercepts.ts';
 export { TemplateSiteStops } from '../app/site-packs/site-stops.ts';
+export { AgentSiteVisits } from '../app/site-packs/site-visits.ts';
+export { SiteActionStrategies } from '../app/site-packs/strategies/site-actions.ts';
 export { SiteToolGate } from '../app/site-packs/tool-gate.ts';
 export { ToolGuardHits } from '../app/site-packs/tool-guard-hits.ts';
+export { HostFlagsWatch } from '../app/site-packs/webrtc-host-flags.ts';
 export { TemplateWritePolicies } from '../app/site-packs/write-policies.ts';
+export { watchClipboardOnStart } from '../app/templates/clipboard-switch.ts';
 export { unavailableHealthFacade } from '../app/templates/health-facade.ts';
 export {
   type TemplateHealthParts,
@@ -70,6 +77,7 @@ export { reconcileTemplateState } from '../app/templates/state-reconcile.ts';
 export { TemplateActions } from '../app/templates/template-actions.ts';
 export { TemplateEditService } from '../app/templates/template-edit.ts';
 export { TemplateOperations } from '../app/templates/template-operations.ts';
+export { hostTemplatePacks } from '../app/templates/template-packs.ts';
 export { TemplateRecordingService } from '../app/templates/template-recording.ts';
 export {
   TemplateService,
@@ -103,7 +111,9 @@ export {
 } from '../infra/browsers/browser-detection.ts';
 export { bundledChromiumVersion } from '../infra/browsers/bundled-chromium.ts';
 export { assertChromiumInstalled } from '../infra/browsers/chromium-resolver.ts';
+export { applyClipboardPolicy } from '../infra/browsers/clipboard-policy.ts';
 export { DRIVER_NAME, driverChromium, driverVersion } from '../infra/browsers/driver.ts';
+export { CdpPageFocus } from '../infra/browsers/focus-emulation.ts';
 export { HostGeoSeedResolver } from '../infra/browsers/geo-seed.ts';
 export type { HostFacts } from '../infra/browsers/host-facts.ts';
 export { createVaultHumanTyper } from '../infra/browsers/humanize/vault-typer.ts';

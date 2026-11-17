@@ -9,7 +9,7 @@ import {
 } from '../../../test/helpers/fake-transport.ts';
 import { templateUnavailable } from '../../app/templates/template-admission.ts';
 import { PAUSE_WAIT_MS } from '../../app/templates/template-pause.ts';
-import { PAUSE_EXEMPT_TOOLS } from './dispatcher.ts';
+import { PAUSE_EXEMPT_TOOLS } from './site-gate.ts';
 
 let h: ToolHarness;
 afterEach(async () => h.close());

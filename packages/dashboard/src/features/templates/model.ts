@@ -146,6 +146,8 @@ export function healthReasonText(reason: string | null): string | null {
     marker: 'The page showed a signed-out sign.',
     landmark: 'The page showed the signed-in view.',
     no_redirect: 'The signed-in page opened without a detour to sign-in.',
+    no_redirect_settled:
+      'The signed-in page loaded and stayed put for a few seconds. A weaker sign: a site that signs you out later, or only shows a sign-in box, looks the same.',
   };
   return known[reason] ?? `${reason.replaceAll('_', ' ')}.`;
 }
