@@ -94,6 +94,14 @@ export { createVaultHumanTyper } from '../infra/browsers/humanize/vault-typer.ts
 export { resolveIdentity } from '../infra/browsers/identity-resolver.ts';
 export { createPlaywrightPageActions } from '../infra/browsers/page-actions.ts';
 export { PlaywrightBrowserDriver } from '../infra/browsers/playwright-browser-driver.ts';
+export {
+  isVerifiedDriverVersion,
+  onPreflightRefusal,
+  type PreflightEnforcement,
+  preflightEnforcement,
+  VERIFIED_DRIVER_VERSIONS,
+  verifyPreflightDriver,
+} from '../infra/browsers/preflight-enforcement.ts';
 export { PassThroughProxyResolver } from '../infra/browsers/proxy.ts';
 export {
   APPARMOR_PROFILE_NAME,

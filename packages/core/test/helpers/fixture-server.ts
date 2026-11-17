@@ -88,6 +88,9 @@ export function startFixtureServer(): FixtureServer {
         'sec-ch-ua-mobile',
         'cookie',
         'x-test',
+        'origin',
+        'access-control-request-method',
+        'access-control-request-headers',
       ]) {
         const v = req.headers.get(key);
         if (v !== null) headers[key] = v;
@@ -297,6 +300,36 @@ export function startFixtureServer(): FixtureServer {
               'access-control-allow-origin': '*',
               'access-control-allow-methods': 'POST',
               'access-control-allow-headers': 'content-type, x-custom',
+            };
+            if (req.method === 'OPTIONS')
+              return new Response(null, { status: 204, headers: allow });
+            return new Response('cors write allowed', { headers: allow });
+          }
+          if (
+            url.pathname.startsWith('/cors-cached/') ||
+            url.pathname.startsWith('/cors-nocache/')
+          ) {
+            // Allows the requesting origin with credentials; the preflight answer is cacheable for
+            // ten minutes (`/cors-cached/`) or not at all (`/cors-nocache/`, max-age 0) (D-66).
+            const allow = {
+              'access-control-allow-origin': req.headers.get('origin') ?? '*',
+              'access-control-allow-credentials': 'true',
+              'access-control-allow-methods': 'POST, PUT',
+              'access-control-allow-headers': 'content-type, x-custom',
+              'access-control-max-age': url.pathname.startsWith('/cors-cached/') ? '600' : '0',
+            };
+            if (req.method === 'OPTIONS')
+              return new Response(null, { status: 204, headers: allow });
+            return new Response('cors write allowed', { headers: allow });
+          }
+          if (url.pathname.startsWith('/cors-narrow/')) {
+            // Allows the origin and `content-type` only, cacheably: a request with `x-custom` is
+            // refused at preflight, and a browser asks again every time (review F2).
+            const allow = {
+              'access-control-allow-origin': req.headers.get('origin') ?? '*',
+              'access-control-allow-methods': 'POST',
+              'access-control-allow-headers': 'content-type',
+              'access-control-max-age': '600',
             };
             if (req.method === 'OPTIONS')
               return new Response(null, { status: 204, headers: allow });

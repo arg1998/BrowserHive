@@ -63,6 +63,10 @@ function setup() {
     stealth: {
       profile: 'standard',
       driver: 'x',
+      // A getter, as composition builds it: read on every snapshot (D-66).
+      get cors_preflights() {
+        return corsPreflights;
+      },
       fingerprint: true,
       humanize: false,
       captcha: 'off',
@@ -107,6 +111,8 @@ function setup() {
   return { service, bus, timers, open };
 }
 
+let corsPreflights: 'enforced' | 'pending' | 'refused' = 'enforced';
+
 describe('SystemStatusService', () => {
   it('snapshot parses with the contracts SystemInfo schema', async () => {
     const { service, open } = setup();
@@ -129,10 +135,13 @@ describe('SystemStatusService', () => {
       capacity: { live: 3, browsers: 2, max: 8, max_source: 'derived' },
       open_attention: 1,
       storage: { db_bytes: 4096 },
-      stealth: { driver: 'patchright' },
+      stealth: { driver: 'patchright', cors_preflights: 'enforced' },
       blocklist: { patterns: 12 },
     });
     expect(info.degradations[0]?.count).toBe(2);
+    corsPreflights = 'refused';
+    expect((await service.snapshot()).stealth.cors_preflights).toBe('refused');
+    corsPreflights = 'enforced';
   });
 
   it('debounces bus-triggered publications into one', () => {

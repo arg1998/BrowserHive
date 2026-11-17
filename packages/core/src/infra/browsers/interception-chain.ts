@@ -1,10 +1,15 @@
-/** @module infra/browsers/interception-chain — one `context.route('**\/*')` per context running ordered in-process handlers: the self-origin guard (T1a), the blocklist, the request guard (spec 13 §3.8, D-22 as amended by D-54). */
+/** @module infra/browsers/interception-chain — one `context.route('**\/*')` per context running ordered in-process handlers: the self-origin guard (T1a), the blocklist, the request guard (spec 13 §3.8, D-22 as amended by D-54); CORS preflights are sent by Chromium and checked against the site's real answer (D-66). */
 
 import type { BrowserContext, Request, Route } from 'patchright';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import { err, ok, type Result } from '../../kernel/result.ts';
+import type { Clock } from '../../ports/clock.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type { RequestOwner } from '../../ports/request-guard.ts';
+import { ChainPreflights, type PreflightInstaller } from './chain-preflights.ts';
+import type { PreflightRequest, PreflightVerdict } from './driver-preflights.ts';
+import type { PreflightCache } from './preflight-cache.ts';
+import type { PreflightEnforcementState } from './preflight-enforcement.ts';
 
 /**
  * Why one route and not one per policy: Playwright runs separately registered route handlers in
@@ -17,12 +22,17 @@ import type { RequestOwner } from '../../ports/request-guard.ts';
  * - **No HTTP cache.** Chromium's cache is disabled for the whole context, so the chain is
  *   installed only when something needs it: a configured blocklist today, every template host
  *   from PR T1a. An exclusive session without a blocklist gets no route and keeps its cache.
- * - **CORS preflights are answered by Playwright.** With interception on, Playwright answers a
- *   preflight `OPTIONS` itself, allowing the requesting origin, methods and headers, and never
- *   hands it to the route. The site's own preflight answer is therefore never consulted: a
- *   cross-origin write the server would refuse at preflight is sent (measured with Playwright
- *   1.63; Patchright differs and did not send it). The guard never sees an `OPTIONS` preflight.
- *   This already holds for sessions with a blocklist; T1a makes every template host routed.
+ * - **CORS preflights stay real (D-66).** With interception on, the driver would answer a
+ *   preflight `OPTIONS` itself, allowing the requesting origin, methods and headers, so a
+ *   cross-origin write the site refuses at preflight would be sent (deferred D41). {@link install}
+ *   therefore also installs a preflight hook (`driver-preflights.ts`): a paused preflight is shown
+ *   to the handlers that declare {@link InterceptionHandler.preflight} (the self-origin guard), then
+ *   Chromium sends it to the site and checks the site's answer itself, as it does without a route.
+ *   The routed context's preflight cache is off with its HTTP cache, so the chain keeps the site's
+ *   answers (`PreflightCache`) for their `Access-Control-Max-Age`. The blocklist and the request
+ *   guard never see a preflight, only the request Chromium sends after an allowed one. When the
+ *   hook cannot be armed (an unverified driver), the chain fails every cross-origin request
+ *   Chromium preflights instead (`chain-preflights.ts`).
  *
  * What a route cannot see (spec 13 §3.8), measured on Chromium (Playwright 1.63 and Patchright 1.63):
  * - the hops of a redirect after its first URL (Playwright routes only the first URL of a
@@ -77,7 +87,18 @@ export interface InterceptionHandler {
    */
   readonly onError: 'closed' | 'open';
   handle(request: Request, context: InterceptionContext): Promise<InterceptionVerdict>;
+  /**
+   * Decides on a CORS preflight before Chromium sends it (D-66). Absent: the preflight goes on, and
+   * the handler decides on the request Chromium sends after an allowed answer, as before. Only a
+   * handler whose rule covers every request to a URL, whatever its method and type, declares it
+   * (the self-origin guard: no request of any kind may reach BrowserHive). An `abort` fails the
+   * preflight, so the page sees a CORS failure and the request is never sent. An exception fails
+   * it too for a `closed` handler, and lets it go on for an `open` one.
+   */
+  preflight?(preflight: PreflightRequest): Promise<InterceptionVerdict>;
 }
+
+export type { PreflightRequest } from './driver-preflights.ts';
 
 /** Resolves a request's owner. Exclusive sessions use {@link fixedOwner}. */
 export type OwnerResolver = (request: Request) => Promise<RequestOwner>;
@@ -94,12 +115,24 @@ export interface InterceptionChainDeps {
   readonly handlers?: readonly InterceptionHandler[];
   readonly resolveOwner: OwnerResolver;
   readonly logger: Logger;
+  /** The preflight cache's time source; the system clock when absent. */
+  readonly clock?: Pick<Clock, 'now'>;
+  /**
+   * Arms the preflight hook on the context at {@link InterceptionChain.install}; the driver's
+   * (`installPreflightHook`) when absent. Tests of the chain alone pass a fake.
+   */
+  readonly installPreflights?: PreflightInstaller;
+  /** The process's preflight enforcement state; the driver's when absent (tests pass a fake). */
+  readonly preflightState?: () => PreflightEnforcementState;
 }
 
 /** Removes a registered handler. Idempotent. */
 export type InterceptionDisposer = () => void;
 
 const SLOT: ReadonlyMap<string, number> = new Map(HANDLER_ORDER.map((id, i) => [id, i]));
+
+/** The system time, for a chain built without a clock. */
+const SYSTEM_NOW: Pick<Clock, 'now'> = { now: () => Date.now() };
 
 /**
  * Ordered in-process request handlers behind one route. Build one per context: the context's
@@ -116,14 +149,37 @@ export class InterceptionChain {
    */
   private readonly held = new Map<Request, { controller: AbortController; release: () => void }>();
   private isListening = false;
+  private readonly cors: ChainPreflights;
 
   constructor(deps: InterceptionChainDeps) {
     this.resolveOwner = deps.resolveOwner;
     this.log = deps.logger.child({ module: 'interception' });
+    this.cors = new ChainPreflights({
+      handlers: () => this.handlerList,
+      checked: checkedVerdict,
+      log: this.log,
+      clock: deps.clock ?? SYSTEM_NOW,
+      ...(deps.installPreflights !== undefined && { install: deps.installPreflights }),
+      ...(deps.preflightState !== undefined && { driverState: deps.preflightState }),
+    });
     for (const handler of deps.handlers ?? []) {
       const added = this.register(handler);
       if (!added.ok) throw added.error;
     }
+  }
+
+  /**
+   * Whether the context's CORS preflights are sent by Chromium and checked against the site's
+   * answer (D-66). `false` before {@link install}, and while the driver cannot be hooked: the chain
+   * then refuses every cross-origin request Chromium preflights (fail closed).
+   */
+  get preflightsEnforced(): boolean {
+    return this.cors.enforced;
+  }
+
+  /** The site's preflight answers this chain replays (tests). */
+  get preflights(): PreflightCache {
+    return this.cors.cache;
   }
 
   /** The handlers in force, in run order. */
@@ -158,6 +214,8 @@ export class InterceptionChain {
     if (this.installedOn === context) return ok(undefined);
     if (this.installedOn !== null)
       return err(new Error('interception chain serves another context'));
+    // The hook first: once the route is on, the driver would answer any preflight not handed to it.
+    this.cors.arm(context);
     try {
       await context.route('**/*', (route: Route) => this.handle(route));
       this.installedOn = context;
@@ -165,6 +223,14 @@ export class InterceptionChain {
     } catch (error) {
       return err(error);
     }
+  }
+
+  /**
+   * Runs the handlers that declare {@link InterceptionHandler.preflight} over a CORS preflight, in
+   * {@link HANDLER_ORDER}; the first `abort` fails it. Never throws.
+   */
+  handlePreflight(preflight: PreflightRequest): Promise<PreflightVerdict> {
+    return this.cors.decide(preflight);
   }
 
   /** Run the handlers over one routed request, then pass it on or abort it. Never throws. */
@@ -177,6 +243,8 @@ export class InterceptionChain {
       this.log.debug('routed request unreadable', { err: serializeError(error) });
       return await this.fallback(route);
     }
+    // Fail closed while preflights are not enforced: the driver answered this one's preflight.
+    if (this.cors.refuses(request)) return await this.abort(route, 'failed');
     const context = this.contextFor(request);
     try {
       for (const handler of this.handlerList) {

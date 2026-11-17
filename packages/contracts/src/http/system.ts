@@ -167,6 +167,13 @@ export const SystemInfo = z.object({
     profile: z.string(),
     /** The browser driver; always `patchright` (D-65). */
     driver: z.string(),
+    /**
+     * Real CORS preflights in routed browsers (D-66): `enforced`, `pending` (no routed browser has
+     * started yet) or `refused` (the driver cannot be hooked; routed browsers refuse cross-origin
+     * requests that need a preflight, degradation `PREFLIGHTS_NOT_ENFORCED`). Absent from servers
+     * older than this field.
+     */
+    cors_preflights: z.enum(['enforced', 'pending', 'refused']).optional(),
     fingerprint: z.boolean(),
     humanize: z.boolean(),
     captcha: z.string(),

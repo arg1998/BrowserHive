@@ -2,7 +2,7 @@
 
 # Error reference
 
-Every error code BrowserHive can produce (129 codes), generated from `ERROR_REGISTRY` in `@browserhive/contracts/errors`. Each code has a stable anchor: `errors.md#<CODE>`, which is also the `type` URL of HTTP problem responses (`https://browserhive.ai/docs/errors#<CODE>`).
+Every error code BrowserHive can produce (130 codes), generated from `ERROR_REGISTRY` in `@browserhive/contracts/errors`. Each code has a stable anchor: `errors.md#<CODE>`, which is also the `type` URL of HTTP problem responses (`https://browserhive.ai/docs/errors#<CODE>`).
 
 ## How errors reach you
 
@@ -1765,6 +1765,7 @@ Stop the process before it serves anything. The CLI prints `[CODE] message` and 
 | [`RETENTION_FAILED`](#RETENTION_FAILED) | Retention sweep failed | 500 | backoff |
 | [`STALE_BROWSER_PROCESSES`](#STALE_BROWSER_PROCESSES) | Stale browser processes found | 500 | never |
 | [`TEMPLATE_HOST_FAILED`](#TEMPLATE_HOST_FAILED) | Template browser failed | 500 | never |
+| [`PREFLIGHTS_NOT_ENFORCED`](#PREFLIGHTS_NOT_ENFORCED) | CORS preflights not enforced | 500 | never |
 | [`TEMPLATE_ROW_UNREADABLE`](#TEMPLATE_ROW_UNREADABLE) | Template row unreadable | 500 | never |
 | [`TEMPLATE_KEY_MISSING`](#TEMPLATE_KEY_MISSING) | Template key missing | 500 | never |
 | [`TEMPLATE_KEY_MISMATCH`](#TEMPLATE_KEY_MISMATCH) | Template files on another key | 500 | never |
@@ -2244,6 +2245,32 @@ Details:
 | `template_id` | `string` | yes | — |
 | `reason` | one of `host_failed`, `no_display`, `proxy_unreachable`, `sandbox_unavailable` | yes | — |
 | `attempts` | `integer` | yes | ≥ 0 |
+
+<a id="PREFLIGHTS_NOT_ENFORCED"></a>
+### `PREFLIGHTS_NOT_ENFORCED`
+
+| Property | Value |
+|---|---|
+| Title | CORS preflights not enforced |
+| HTTP status | 500 |
+| Category | `boot` |
+| Retryable | `never` (do not retry; the request cannot succeed as sent) |
+| Exit code | 1 |
+
+Message: `Routed browsers cannot send real CORS preflights ({reason}); they refuse cross-origin requests that need one.`
+
+Hint: Reinstall browserhive so its pinned browser driver is used; 'browserhive doctor' names the version.
+
+Cause: BrowserHive hands the CORS preflights of routed browsers (template browsers, sessions with a blocklist) back to Chromium by hooking its browser driver (D-66). The hook is verified against the pinned Patchright version; another version, or driver internals that differ, would let the driver answer preflights itself. Instead every routed browser refuses the cross-origin requests that need a preflight (fail closed). Recorded as a degradation; `/system` reports `stealth.cors_preflights: refused`.
+
+Resolution: Run 'browserhive doctor'; reinstall browserhive so the pinned driver version is installed (remove any override or resolution of `patchright`), then restart.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `reason` | one of `driver_version`, `driver_shape`, `driver_connection`, `unexpected_preflight` | yes | — |
+| `driver_version` | `string` or `null` | yes | — |
 
 <a id="TEMPLATE_ROW_UNREADABLE"></a>
 ### `TEMPLATE_ROW_UNREADABLE`

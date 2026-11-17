@@ -41,6 +41,7 @@ describe('doctor', () => {
       'bh',
       'config',
       'chromium (patchright)',
+      'cors preflights',
       'chrome',
       'edge',
       'default channel',
@@ -72,7 +73,7 @@ describe('doctor', () => {
     expect(run.stdout).toMatch(/^\s+CHECK\s+DETAIL/m);
     expect(run.stdout).toContain('✓  bun');
     expect(run.stdout).toContain('config: maxSessions=4 (cli) shadows env=2');
-    expect(run.stdout).toContain('21 passed, 0 warnings, 0 failed');
+    expect(run.stdout).toContain('22 passed, 0 warnings, 0 failed');
   });
 
   it.each([
@@ -96,6 +97,16 @@ describe('doctor', () => {
       },
       'chromium (patchright)',
       'fail',
+    ],
+    [
+      'a driver the preflight hook was not verified against (D-66)',
+      {
+        probes: probeState({
+          patchright: { packageVersion: '1.99.0', executablePath: '/c/chrome', installed: true },
+        }),
+      },
+      'cors preflights',
+      'warn',
     ],
     ['port busy', { probes: probeState({ portFree: false }) }, 'port', 'fail'],
     [
@@ -159,7 +170,7 @@ describe('doctor', () => {
       });
       expect(run.code).toBe(2);
       expect(run.stdout).toMatch(/!\s+bh\s+\/home\/me\/bin\/bh is not BrowserHive's/);
-      expect(run.stdout).toContain('20 passed, 1 warnings, 0 failed');
+      expect(run.stdout).toContain('21 passed, 1 warnings, 0 failed');
     });
 
     it.each([

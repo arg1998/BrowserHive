@@ -298,6 +298,31 @@ export const BOOT_ERRORS = {
     resolution:
       'Read the reason on the template page or in `doctor`; for `no_display` run under `xvfb-run -a` or set the template headless.',
   }),
+  PREFLIGHTS_NOT_ENFORCED: defineError({
+    code: 'PREFLIGHTS_NOT_ENFORCED',
+    httpStatus: 500,
+    category: 'boot',
+    retryable: 'never',
+    title: 'CORS preflights not enforced',
+    message:
+      'Routed browsers cannot send real CORS preflights ({reason}); they refuse cross-origin requests that need one.',
+    hint: "Reinstall browserhive so its pinned browser driver is used; 'browserhive doctor' names the version.",
+    details: z.object({
+      reason: z.enum([
+        'driver_version',
+        'driver_shape',
+        'driver_connection',
+        'unexpected_preflight',
+      ]),
+      driver_version: z.string().nullable(),
+    }),
+    docs: true,
+    exitCode: 1,
+    cause:
+      'BrowserHive hands the CORS preflights of routed browsers (template browsers, sessions with a blocklist) back to Chromium by hooking its browser driver (D-66). The hook is verified against the pinned Patchright version; another version, or driver internals that differ, would let the driver answer preflights itself. Instead every routed browser refuses the cross-origin requests that need a preflight (fail closed). Recorded as a degradation; `/system` reports `stealth.cors_preflights: refused`.',
+    resolution:
+      "Run 'browserhive doctor'; reinstall browserhive so the pinned driver version is installed (remove any override or resolution of `patchright`), then restart.",
+  }),
   TEMPLATE_ROW_UNREADABLE: defineError({
     code: 'TEMPLATE_ROW_UNREADABLE',
     httpStatus: 500,

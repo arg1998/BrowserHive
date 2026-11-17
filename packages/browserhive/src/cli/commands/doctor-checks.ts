@@ -21,6 +21,8 @@ import {
   findReservedSubjects,
   hasReservedSubjects,
   isInsecurePublicUrl,
+  isVerifiedDriverVersion,
+  VERIFIED_DRIVER_VERSIONS,
 } from '@browserhive/core/runtime';
 import type { CliDeps, ShorthandLookup } from '../deps.ts';
 import { databasePath, formatTimestamp, size } from './common.ts';
@@ -173,6 +175,7 @@ export async function checkBrowsers(deps: CliDeps): Promise<readonly CheckResult
       ),
     ];
   }
+  const preflights = checkCorsPreflights(patchright.packageVersion);
   if (patchright.installed) {
     return [
       result(
@@ -180,6 +183,7 @@ export async function checkBrowsers(deps: CliDeps): Promise<readonly CheckResult
         'ok',
         `patchright ${patchright.packageVersion} · ${patchright.executablePath ?? 'installed'}`,
       ),
+      preflights,
     ];
   }
   return [
@@ -188,7 +192,24 @@ export async function checkBrowsers(deps: CliDeps): Promise<readonly CheckResult
       'fail',
       `patchright ${patchright.packageVersion}: Chromium not installed${patchright.executablePath === null ? '' : ` at ${patchright.executablePath}`}; run 'browserhive init'`,
     ),
+    preflights,
   ];
+}
+
+/**
+ * Whether routed browsers can send real CORS preflights (D-66): the driver must be a version the
+ * preflight hook was verified against. Otherwise they refuse cross-origin requests that need one
+ * (degradation `PREFLIGHTS_NOT_ENFORCED`).
+ */
+export function checkCorsPreflights(version: string): CheckResult {
+  if (isVerifiedDriverVersion(version)) {
+    return result('cors preflights', 'ok', `enforced in routed browsers (patchright ${version})`);
+  }
+  return result(
+    'cors preflights',
+    'warn',
+    `patchright ${version} is not a verified driver (${VERIFIED_DRIVER_VERSIONS.join(', ')}): routed browsers refuse cross-origin requests that need a preflight; reinstall browserhive to get its pinned driver`,
+  );
 }
 
 function octal(mode: number): string {
