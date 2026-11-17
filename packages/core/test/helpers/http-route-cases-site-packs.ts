@@ -1,33 +1,37 @@
-/** @module test/helpers/http-route-cases-site-packs — the route cases of the T3a site-pack routes (spec 13 §11.1): the kit's in-memory registry ships `site-a.test` v1; setups approve it, put a newer bundled version or a local file, and reload. */
+/** @module test/helpers/http-route-cases-site-packs — the route cases of the T3a site-pack routes (spec 13 §11.1): the kit's in-memory registry ships `pack-a.test` v1; setups approve it, put a newer bundled version or a local file, and reload. */
 
 import type { CaseContext, RouteCase } from './http-route-case-types.ts';
 import { packSha, sitePack } from './site-pack-kit.ts';
 
 const api = (path: string) => `/api/v1${path}`;
-const pack = (path = '') => api(`/site-packs/site-a.test${path}`);
+const pack = (path = '') => api(`/site-packs/pack-a.test${path}`);
 
-/** Approves `site-a.test` v1 as an operator adding the site would. */
+/** Approves `pack-a.test` v1 as an operator adding the site would. */
 async function approved(ctx: CaseContext): Promise<void> {
-  await ctx.kit.sitePacks.registry.approveSite('site-a.test', undefined, 'admin');
+  await ctx.kit.sitePacks.registry.approveSite(
+    'pack-a.test',
+    packSha(sitePack('pack-a.test', 1)),
+    'admin',
+  );
 }
 
 /** v1 approved, v2 bundled by a "newer release" and pending. */
 async function pending(ctx: CaseContext): Promise<void> {
   await approved(ctx);
-  ctx.kit.sitePacks.bundled.put(sitePack('site-a.test', 2, { title: 'Site A v2' }));
+  ctx.kit.sitePacks.bundled.put(sitePack('pack-a.test', 2, { title: 'Site A v2' }));
   await ctx.kit.sitePacks.registry.reload();
 }
 
 /** v2 applied over v1 (Revert has a previous version). */
 async function applied(ctx: CaseContext): Promise<void> {
   await pending(ctx);
-  await ctx.kit.sitePacks.registry.apply('site-a.test', 2, 'admin');
+  await ctx.kit.sitePacks.registry.apply('pack-a.test', 2, 'admin');
 }
 
 /** The local file the approve-local case reviews. */
-const LOCAL = sitePack('site-a.test', 9, { title: 'Local A' });
+const LOCAL = sitePack('pack-a.test', 9, { title: 'Local A' });
 
-/** A local file for `site-a.test`, not yet approved. */
+/** A local file for `pack-a.test`, not yet approved. */
 async function localFile(ctx: CaseContext): Promise<void> {
   ctx.kit.sitePacks.local.put(LOCAL);
   await ctx.kit.sitePacks.registry.reload();

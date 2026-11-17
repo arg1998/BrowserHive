@@ -42,6 +42,7 @@ import {
   type VaultService,
   wireTemplateHealth,
 } from '@browserhive/core/server';
+import { wireSitePackUsage } from '../site-packs.ts';
 
 /** Inputs of {@link buildTemplates}. */
 export interface TemplatesInput {
@@ -197,25 +198,6 @@ export async function templateStateStore(
   return store;
 }
 
-/**
- * Keeps the registry's `used_by` (automatic Follow) current: template and site changes re-read it;
- * a pack decision publishes `template.changed` for the templates using the pack.
- */
-function wireSitePackUsage(input: TemplatesInput, changed: (templateId: string) => void): void {
-  const registry = input.sitePacks;
-  if (registry === undefined) return;
-  registry.attachTemplateChanged(changed);
-  const refresh = () => {
-    registry
-      .refreshUsage()
-      .catch((err: unknown) =>
-        input.logger.warn('pack usage failed', { err: serializeError(err) }),
-      );
-  };
-  input.bus.subscribe('template.changed', refresh);
-  input.bus.subscribe('template.removed', refresh);
-}
-
 /** Builds the template service. */
 export async function buildTemplates(input: TemplatesInput): Promise<TemplatesParts> {
   const { config } = input;
@@ -322,7 +304,9 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
     },
   });
   changed = (id) => service.publishChanged(id);
-  wireSitePackUsage(input, changed);
+  if (input.sitePacks !== undefined) {
+    wireSitePackUsage(input.sitePacks, input.bus, input.logger, changed);
+  }
   const common = { ids: input.ids, clock: input.clock, logger: input.logger, changed };
   const edit = new TemplateEditService({
     repos: input.uow.repos,

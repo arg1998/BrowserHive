@@ -89,7 +89,7 @@ export function inMemoryLocalWriter(local: InMemoryPackSource): LocalPackWriter 
   };
 }
 
-/** The registry of the HTTP kit: bundled `site-a.test` v1, nothing local; in memory. */
+/** The registry of the HTTP kit: bundled `pack-a.test` v1 (template route cases use generic `site-a.test`), nothing local; in memory. */
 export async function createMemorySitePacks(deps: {
   readonly repos: Repositories;
   readonly clock: Clock;
@@ -103,7 +103,7 @@ export async function createMemorySitePacks(deps: {
 }> {
   const bundled = new InMemoryPackSource('bundled', MEMORY_RELEASE);
   const local = new InMemoryPackSource('local', MEMORY_RELEASE);
-  bundled.put(sitePack('site-a.test', 1));
+  bundled.put(sitePack('pack-a.test', 1));
   const registry = new SitePackRegistry({
     enabled: true,
     bundled,

@@ -20,8 +20,10 @@ import { registrableDomain } from '../../kernel/url.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type { EffectivePack, SitePackLookup, SourceCatalog } from '../../ports/site-packs.ts';
 import * as actions from './registry-actions.ts';
-import { assembleSnapshot, resolvePacks, withUsage } from './registry-build.ts';
+import { withUsage } from './registry-build.ts';
 import { packNotFound } from './registry-errors.ts';
+import { prepareFirstUse } from './registry-first-use.ts';
+import { loadSnapshot } from './registry-load.ts';
 import {
   diffOf,
   listChanges,
@@ -35,8 +37,8 @@ import {
   emptySnapshot,
   type PackEntry,
   type PendingUpdate,
+  type PreparedApproval,
   type RegistrySnapshot,
-  type SiteApproval,
   type SitePackRegistryDeps,
   type SourceStats,
 } from './registry-types.ts';
@@ -121,32 +123,45 @@ export class SitePackRegistry implements SitePackLookup {
   }
 
   /**
-   * Approves the pack a new template site uses (spec 13 §9.6 "First use", D-67): the version
-   * already approved, else the offer. `sha256` is what the operator reviewed; a mismatch is
-   * `CONFLICT`. `null` when no pack covers the site (it stays generic) or `sitePacks=false`.
+   * Prepares the first-use approval of a new template site (spec 13 §9.6, D-67): the version
+   * already approved, else exactly the offer whose SHA-256 the operator reviewed. Write it with
+   * `prepared.write(repos)` in the site's own transaction, then call {@link approvalsCommitted}.
+   * `null`: no pack covers the site (generic) or `sitePacks=false`.
+   *
+   * @throws `SITE_PACK_APPROVAL_REQUIRED`, `CONFLICT`, `SITE_PACK_DOMAIN_TAKEN`.
    */
-  approveSite(
+  async prepareSite(
     siteId: string,
     sha256: string | undefined,
     by: string,
-  ): Promise<SiteApproval | null> {
+  ): Promise<PreparedApproval | null> {
+    if (!this.#deps.enabled) return null;
     const packId = this.packIdFor(siteId);
     if (packId === null) {
-      return sha256 === undefined
-        ? Promise.resolve(null)
-        : Promise.reject(actions.noPackToApprove(siteId));
+      if (sha256 !== undefined) throw actions.noPackToApprove(siteId);
+      return null;
     }
-    return this.approveOnFirstUse(packId, sha256, by);
+    return prepareFirstUse(this.#core(), siteId, packId, sha256, by);
   }
 
-  /** {@link approveSite} by pack id. @throws `SITE_PACK_NOT_FOUND`, `CONFLICT`. */
-  approveOnFirstUse(
-    packId: string,
-    sha256: string | undefined,
-    by: string,
-  ): Promise<SiteApproval | null> {
-    if (!this.#deps.enabled) return Promise.resolve(null);
-    return this.#serial(() => actions.approveFirstUse(this.#core(), packId, sha256, by));
+  /** After a transaction wrote prepared approvals: the snapshot and the feed follow. */
+  approvalsCommitted(): Promise<void> {
+    return this.#serial(async () => {
+      await this.#core().refresh();
+      for (const packId of this.#snapshot.packs.keys()) this.#publishPack(packId);
+      this.#publishStatus();
+    });
+  }
+
+  /** {@link prepareSite}, written in its own transaction (the CLI-less paths and tests). */
+  async approveSite(siteId: string, sha256: string | undefined, by: string) {
+    const prepared = await this.prepareSite(siteId, sha256, by);
+    if (prepared === null) return null;
+    if (prepared.approves) {
+      await this.#deps.uow.transaction((repos) => prepared.write(repos));
+      await this.approvalsCommitted();
+    }
+    return { packId: prepared.packId, version: prepared.version, sha256: prepared.sha256 };
   }
 
   // --- reads ----------------------------------------------------------------------------------
@@ -360,20 +375,10 @@ export class SitePackRegistry implements SitePackLookup {
 
   /** Re-derives the snapshot from the catalogs and the stored state, then swaps it. */
   async #rebuild(bundled: SourceCatalog, local: SourceCatalog): Promise<void> {
-    const { repos, cache, binaryVersion } = this.#deps;
-    const input = { bundled, local, localDir: this.#deps.local.dir, cache, binaryVersion };
-    const resolved = await resolvePacks({ ...input, states: await repos.sitePackState.list() });
-    const fresh = await actions.syncCandidates(this.#core(), resolved, bundled);
-    this.#snapshot = assembleSnapshot(resolved, {
-      enabled: this.#deps.enabled,
-      generation: this.#snapshot.generation + 1,
-      bundled,
-      local,
-      pending: await repos.sitePackChanges.listPending(),
-      sites: await repos.templateSites.listAll(),
-      loadedAt: this.#deps.clock.now(),
-    });
-    for (const event of fresh) this.#deps.bus?.publish('site_pack.pending', event);
+    const next = this.#snapshot.generation + 1;
+    const loaded = await loadSnapshot(this.#core(), bundled, local, next);
+    this.#snapshot = loaded.snapshot;
+    for (const event of loaded.fresh) this.#deps.bus?.publish('site_pack.pending', event);
   }
 
   #publishPack(packId: string): void {

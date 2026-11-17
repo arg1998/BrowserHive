@@ -13,12 +13,7 @@ import type { SessionClientInfo } from '../../domain/session/client-info.ts';
 import type { CreateSessionInput } from '../../domain/session/create-request.ts';
 import type { SessionPrincipal } from '../../domain/session/principal.ts';
 import type { Session } from '../../domain/session/session.ts';
-import {
-  buildTemplate,
-  pinnedIdentity,
-  type TemplateDefaults,
-  validateTemplateInput,
-} from '../../domain/templates/create.ts';
+import type { TemplateDefaults } from '../../domain/templates/create.ts';
 import { applyTemplateLaunchOptions } from '../../domain/templates/launch-options.ts';
 import {
   availabilityOf,
@@ -46,29 +41,22 @@ import type { TemplateHostOps, TemplateRuntime } from '../../ports/template-runt
 import type { DomainEvents } from '../events/catalog.ts';
 import { launchDeclaredHarnessOf, launchHarnessOf } from '../sessions/metadata.ts';
 import { launchWithRecheck } from './launch-recheck.ts';
+import { createTemplate } from './template-create.ts';
 import { readTemplateDetail, type TemplateServiceHooks } from './template-detail.ts';
 import {
   deleteRunning,
   disabled,
   inUse,
   invalidArguments,
-  nameTaken,
   notFoundForAgent,
   notFoundForOperator,
   operationRunning,
-  validationFailed,
 } from './template-errors.ts';
 import { pageTemplates } from './template-list.ts';
 import { TemplateLocks } from './template-locks.ts';
-import {
-  attachPacks,
-  NO_PACKS,
-  packRequirementIssues,
-  reviewedHashes,
-  type TemplatePacks,
-} from './template-packs.ts';
+import type { TemplatePacks } from './template-packs.ts';
 import { publishTemplateChanged, readTemplates, removeTemplateFiles } from './template-reads.ts';
-import { toAgentTemplate, toTemplateSummary, toTemplateView } from './views.ts';
+import { toAgentTemplate, toTemplateSummary } from './views.ts';
 
 /** Server configuration the service reads. */
 export interface TemplateServiceConfig {
@@ -111,11 +99,6 @@ export interface TemplateCaller {
   readonly client: SessionClientInfo | null;
 }
 
-/** Characters of the seed that feeds the template's fingerprint for its life (spec 13 §2.2). */
-const SEED_LENGTH = 21;
-/** Characters after `tp-` (D-05). */
-const TEMPLATE_ID_LENGTH = 10;
-
 /** Session templates: the operator's CRUD and the agent's list and launch gate. */
 export class TemplateService {
   readonly #deps: TemplateServiceDeps;
@@ -147,58 +130,18 @@ export class TemplateService {
   /**
    * `POST /templates`: a new template in `recording`, with its sites and pinned identity.
    *
-   * @throws AppError `VALIDATION_FAILED`, `TEMPLATE_NAME_TAKEN`.
+   * @throws AppError `VALIDATION_FAILED`, `TEMPLATE_NAME_TAKEN`, and the first-use approval's
+   *   `SITE_PACK_APPROVAL_REQUIRED`, `CONFLICT`, `SITE_PACK_DOMAIN_TAKEN`.
    */
   async create(input: TemplateInput, owner: string): Promise<Template> {
-    const { config, ids, clock, geo } = this.#deps;
-    const validated = validateTemplateInput(input, { authMode: config.authMode });
-    if (!validated.ok) throw validationFailed(validated.issues);
-    if ((await this.#deps.repos.templates.getByName(input.name)) !== null) {
-      throw nameTaken(input.name);
-    }
-    const resolved = await geo.resolve({
-      ...(input.locale !== undefined && { locale: input.locale }),
-      ...(input.timezone_id !== undefined && { timezoneId: input.timezone_id }),
-    });
-    const identity = pinnedIdentity(ids.opaque(SEED_LENGTH), resolved, input.geolocation);
-    const now = clock.now();
-    const built = buildTemplate(input, validated.value, {
-      templateId: `tp-${ids.opaque(TEMPLATE_ID_LENGTH)}`,
-      owner,
-      now,
-      identity,
-      defaults: config.defaults,
-      authMode: config.authMode,
-    });
-    const { template } = built;
-    const packs = this.#deps.packs ?? NO_PACKS;
-    const packIssues = packRequirementIssues(
-      packs,
-      built.sites.map((s) => s.siteId),
-      template,
-    );
-    if (packIssues.length > 0) throw validationFailed(packIssues);
-    const sites = await attachPacks(packs, built.sites, reviewedHashes(input.sites), owner);
-    await this.#deps.uow.transaction(async (repos) => {
-      await repos.templates.insert(template);
-      for (const site of sites) await repos.templateSites.upsert(site);
-      await repos.operatorActions.append({
-        eventId: ids.eventId(),
-        principalId: owner,
-        action: 'template.create',
-        resourceKind: 'template',
-        resourceId: template.templateId,
-        details: { name: template.name, sites: sites.map((s) => s.siteId) },
-        occurredAt: now,
-      });
-    });
+    const template = await createTemplate(this.#deps, input, owner);
     this.#log.info('template created', {
-      templateId: template.templateId,
+      templateId: template.template_id,
       name: template.name,
-      sites: sites.length,
+      sites: template.sites.length,
     });
-    this.publishChanged(template.templateId);
-    return toTemplateView(template, sites, packs);
+    this.publishChanged(template.template_id);
+    return template;
   }
 
   /** `GET /templates`: every template as a summary, filtered, sorted and paged (spec 13 §11.1). */

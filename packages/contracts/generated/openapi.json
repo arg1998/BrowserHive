@@ -201,6 +201,10 @@
               "SITE_PACK_NOT_FOUND",
               "SITE_PACK_INVALID",
               "SITE_PACK_UPDATE_NOT_PENDING",
+              "SITE_PACK_DOMAIN_TAKEN",
+              "SITE_PACK_NO_PREVIOUS",
+              "SITE_PACK_NO_LOCAL_FILE",
+              "SITE_PACK_APPROVAL_REQUIRED",
               "ADMIN_REQUIRES_HTTP",
               "INSECURE_BIND_REFUSED",
               "PORT_IN_USE",
@@ -225,6 +229,8 @@
               "TEMPLATE_KEY_MISMATCH",
               "TEMPLATE_CHECKPOINT_FAILED",
               "TEMPLATE_CHECKPOINT_TOO_LARGE",
+              "SITE_PACKS_STATE_CORRUPT",
+              "SITE_PACKS_LOAD_FAILED",
               "UNAUTHORIZED",
               "INVALID_CREDENTIALS",
               "FORBIDDEN",
@@ -46113,7 +46119,7 @@
             }
           },
           "409": {
-            "description": "CONFLICT",
+            "description": "CONFLICT, SITE_PACK_APPROVAL_REQUIRED, SITE_PACK_DOMAIN_TAKEN",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -47880,7 +47886,7 @@
             }
           },
           "409": {
-            "description": "TEMPLATE_NAME_TAKEN, CONFLICT",
+            "description": "TEMPLATE_NAME_TAKEN, CONFLICT, SITE_PACK_APPROVAL_REQUIRED, SITE_PACK_DOMAIN_TAKEN",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -50324,6 +50330,16 @@
               }
             }
           },
+          "409": {
+            "description": "SITE_PACK_DOMAIN_TAKEN",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
           "413": {
             "description": "PAYLOAD_TOO_LARGE",
             "content": {
@@ -50689,7 +50705,7 @@
             }
           },
           "409": {
-            "description": "SITE_PACK_UPDATE_NOT_PENDING",
+            "description": "SITE_PACK_UPDATE_NOT_PENDING, SITE_PACK_DOMAIN_TAKEN",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -50943,7 +50959,7 @@
             }
           },
           "409": {
-            "description": "CONFLICT",
+            "description": "SITE_PACK_NO_PREVIOUS",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -51299,7 +51315,7 @@
             }
           },
           "404": {
-            "description": "SITE_PACK_NOT_FOUND",
+            "description": "SITE_PACK_NOT_FOUND, SITE_PACK_NO_LOCAL_FILE",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -51309,7 +51325,7 @@
             }
           },
           "409": {
-            "description": "CONFLICT",
+            "description": "SITE_PACK_DOMAIN_TAKEN, CONFLICT",
             "content": {
               "application/problem+json": {
                 "schema": {

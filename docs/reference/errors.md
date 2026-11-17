@@ -2,7 +2,7 @@
 
 # Error reference
 
-Every error code BrowserHive can produce (137 codes), generated from `ERROR_REGISTRY` in `@browserhive/contracts/errors`. Each code has a stable anchor: `errors.md#<CODE>`, which is also the `type` URL of HTTP problem responses (`https://browserhive.ai/docs/errors#<CODE>`).
+Every error code BrowserHive can produce (143 codes), generated from `ERROR_REGISTRY` in `@browserhive/contracts/errors`. Each code has a stable anchor: `errors.md#<CODE>`, which is also the `type` URL of HTTP problem responses (`https://browserhive.ai/docs/errors#<CODE>`).
 
 ## How errors reach you
 
@@ -99,6 +99,10 @@ Returned by tools and the REST API when a request cannot be served (unknown sess
 | [`SITE_PACK_NOT_FOUND`](#SITE_PACK_NOT_FOUND) | Site pack not found | 404 | never |
 | [`SITE_PACK_INVALID`](#SITE_PACK_INVALID) | Site pack invalid | 400 | different_args |
 | [`SITE_PACK_UPDATE_NOT_PENDING`](#SITE_PACK_UPDATE_NOT_PENDING) | No such pending version | 409 | never |
+| [`SITE_PACK_DOMAIN_TAKEN`](#SITE_PACK_DOMAIN_TAKEN) | Domain covered by another pack | 409 | never |
+| [`SITE_PACK_NO_PREVIOUS`](#SITE_PACK_NO_PREVIOUS) | No previous version | 409 | never |
+| [`SITE_PACK_NO_LOCAL_FILE`](#SITE_PACK_NO_LOCAL_FILE) | No local pack file | 404 | never |
+| [`SITE_PACK_APPROVAL_REQUIRED`](#SITE_PACK_APPROVAL_REQUIRED) | Site pack needs review | 409 | different_args |
 
 <a id="SESSION_NOT_FOUND"></a>
 ### `SESSION_NOT_FOUND`
@@ -1875,6 +1879,109 @@ Details:
 | `pack_id` | `string` | yes | — |
 | `version` | `integer` | yes | — |
 
+<a id="SITE_PACK_DOMAIN_TAKEN"></a>
+### `SITE_PACK_DOMAIN_TAKEN`
+
+| Property | Value |
+|---|---|
+| Title | Domain covered by another pack |
+| HTTP status | 409 |
+| Category | `domain` |
+| Retryable | `never` (do not retry; the request cannot succeed as sent) |
+
+Message: `Site pack '{pack_id}' claims {domain}, which the site pack '{owner}' covers.`
+
+Hint: Remove the domain from this pack, or disable or change the pack that covers it first.
+
+Cause: A registrable domain belongs to at most one site pack (spec 13 §9.6, §9.10). Approving, applying or importing content that claims a domain another pack already covers is refused, so one pack can never switch off another pack's guards.
+
+Resolution: Edit the pack so its `domains` no longer name the other pack's domain, or remove the other pack's local file or approval first.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `pack_id` | `string` | yes | — |
+| `domain` | `string` | yes | — |
+| `owner` | `string` | yes | — |
+
+<a id="SITE_PACK_NO_PREVIOUS"></a>
+### `SITE_PACK_NO_PREVIOUS`
+
+| Property | Value |
+|---|---|
+| Title | No previous version |
+| HTTP status | 409 |
+| Category | `domain` |
+| Retryable | `never` (do not retry; the request cannot succeed as sent) |
+
+Message: `Site pack '{pack_id}' has no previous approved version to revert to.`
+
+Hint: Revert is possible once after an Apply; the Site packs page shows when it is.
+
+Cause: Revert restores the version approved before the last Apply (spec 13 §10.6). The pack was never updated, was already reverted, or BrowserHive's copy of that version is missing.
+
+Resolution: Nothing to undo; apply or reject the pending versions instead.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `pack_id` | `string` | yes | — |
+
+<a id="SITE_PACK_NO_LOCAL_FILE"></a>
+### `SITE_PACK_NO_LOCAL_FILE`
+
+| Property | Value |
+|---|---|
+| Title | No local pack file |
+| HTTP status | 404 |
+| Category | `domain` |
+| Retryable | `never` (do not retry; the request cannot succeed as sent) |
+
+Message: `Site pack '{pack_id}' has no local file to approve.`
+
+Hint: Put the file in sitePacksDir as <pack id>.json (or import it), reload, then approve it.
+
+Cause: approve-local approves the content of `<sitePacksDir>/<pack id>.json` (spec 13 §10.5); no such file was loaded.
+
+Resolution: Add the file and reload the local packs (`POST /site-packs/reload`).
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `pack_id` | `string` | yes | — |
+
+<a id="SITE_PACK_APPROVAL_REQUIRED"></a>
+### `SITE_PACK_APPROVAL_REQUIRED`
+
+| Property | Value |
+|---|---|
+| Title | Site pack needs review |
+| HTTP status | 409 |
+| Category | `domain` |
+| Retryable | `different_args` (retry only with different arguments) |
+
+Message: `Adding {site_id} approves the site pack '{pack_id}' v{version}; review it and send its SHA-256 as pack_sha256.`
+
+Hint: Read the offer in the error details (or GET /api/v1/site-packs/{pack_id}) and repeat the request with pack_sha256.
+
+Cause: No version of this pack is approved yet, and adding a site approves exactly the version the operator reviewed (spec 13 §9.6 "First use"). A request without `pack_sha256` would approve a version nobody was shown.
+
+Resolution: Show the offered version (provenance, version, SHA-256) to the operator and send its `sha256` as the site's `pack_sha256`.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `site_id` | `string` | yes | — |
+| `pack_id` | `string` | yes | — |
+| `version` | `integer` | yes | — |
+| `sha256` | `string` | yes | — |
+| `source` | `string` | yes | — |
+| `release` | `string` or `null` | yes | — |
+
 ## Boot errors
 
 Stop the process before it serves anything. The CLI prints `[CODE] message` and exits with the listed exit code.
@@ -1905,6 +2012,8 @@ Stop the process before it serves anything. The CLI prints `[CODE] message` and 
 | [`TEMPLATE_KEY_MISMATCH`](#TEMPLATE_KEY_MISMATCH) | Template files on another key | 500 | never |
 | [`TEMPLATE_CHECKPOINT_FAILED`](#TEMPLATE_CHECKPOINT_FAILED) | Template checkpoint failed | 500 | backoff |
 | [`TEMPLATE_CHECKPOINT_TOO_LARGE`](#TEMPLATE_CHECKPOINT_TOO_LARGE) | Template state over the size cap | 500 | never |
+| [`SITE_PACKS_STATE_CORRUPT`](#SITE_PACKS_STATE_CORRUPT) | Site pack state unreadable | 500 | never |
+| [`SITE_PACKS_LOAD_FAILED`](#SITE_PACKS_LOAD_FAILED) | Site packs not loaded | 500 | never |
 
 <a id="ADMIN_REQUIRES_HTTP"></a>
 ### `ADMIN_REQUIRES_HTTP`
@@ -2537,6 +2646,58 @@ Details:
 | `template_id` | `string` | yes | — |
 | `size_bytes` | `integer` | yes | ≥ 0 |
 | `dropped_origins` | `string[]` | yes | — |
+
+<a id="SITE_PACKS_STATE_CORRUPT"></a>
+### `SITE_PACKS_STATE_CORRUPT`
+
+| Property | Value |
+|---|---|
+| Title | Site pack state unreadable |
+| HTTP status | 500 |
+| Category | `boot` |
+| Retryable | `never` (do not retry; the request cannot succeed as sent) |
+| Exit code | 1 |
+
+Message: `The stored approval of site pack '{pack_id}' cannot be read; the pack does not apply.`
+
+Hint: Run browserhive doctor; approve the pack again from the Site packs page.
+
+Cause: A `site_pack_state` or `site_pack_changes` row holds a value this binary cannot read (a hand edit, a corrupt JSON column). Only that pack is affected: it is treated as not approved (its guards do not apply) and every other pack keeps working. Recorded as a degradation; it resolves on the next clean load.
+
+Resolution: Approve the pack again (adding a site or approve-local rewrites the row), or restore the database from a backup.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `pack_id` | `string` | yes | — |
+| `table` | `string` | yes | — |
+| `reason` | `string` | yes | — |
+
+<a id="SITE_PACKS_LOAD_FAILED"></a>
+### `SITE_PACKS_LOAD_FAILED`
+
+| Property | Value |
+|---|---|
+| Title | Site packs not loaded |
+| HTTP status | 500 |
+| Category | `boot` |
+| Retryable | `never` (do not retry; the request cannot succeed as sent) |
+| Exit code | 1 |
+
+Message: `Site packs could not be loaded ({reason}); no pack applies until a reload succeeds.`
+
+Hint: Check the log, then POST /api/v1/site-packs/reload or restart.
+
+Cause: The registry's load failed as a whole (the database could not be read). Template sites behave as generic sites and only BrowserHive's default guards apply.
+
+Resolution: Fix the cause named in the log and reload the site packs.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `reason` | `string` | yes | — |
 
 ## Authentication errors
 

@@ -2,16 +2,27 @@
 
 import { diffPacks, newDomains } from '../../domain/site-packs/diff.ts';
 import type { RefusedPack } from '../../domain/site-packs/load.ts';
-import {
-  emptySitePackState,
-  type SitePackChangeRecord,
-  type SitePackStateRecord,
-} from '../../ports/persistence/site-packs.ts';
-import type { SkippedPackVersion, SourcePackVersion } from '../../ports/site-packs.ts';
+import type { SitePackStateRecord } from '../../ports/persistence/site-packs.ts';
+import type { SkippedPackVersion } from '../../ports/site-packs.ts';
 import { readCached } from './registry-build.ts';
-import { auditPack, type RegistryCore, syncSiteVersions } from './registry-core.ts';
-import { notPending, packConflict, packInvalid, packValidation } from './registry-errors.ts';
-import type { PackEntry, SiteApproval } from './registry-types.ts';
+import {
+  approvedContent,
+  assertDomainsFree,
+  auditPack,
+  decidedChange as change,
+  type RegistryCore,
+  stateOf,
+  syncSiteVersions,
+} from './registry-core.ts';
+import {
+  noLocalFile,
+  noPrevious,
+  notPending,
+  packConflict,
+  packInvalid,
+  packValidation,
+} from './registry-errors.ts';
+import type { PackEntry } from './registry-types.ts';
 
 export type { RegistryCore } from './registry-core.ts';
 export {
@@ -25,100 +36,6 @@ export {
 /** `CONFLICT` for a reviewed hash naming a site no pack covers. */
 export function noPackToApprove(siteId: string) {
   return packConflict(`No site pack covers ${siteId} any more; review the site again.`);
-}
-
-function stateOf(entry: PackEntry, now: number): SitePackStateRecord {
-  return entry.state ?? emptySitePackState(entry.packId, now);
-}
-
-function change(
-  core: RegistryCore,
-  fields: Omit<SitePackChangeRecord, 'seq' | 'eventId' | 'createdAt' | 'decidedAt'>,
-): SitePackChangeRecord {
-  const now = core.deps.clock.now();
-  return { seq: 0, eventId: core.deps.ids.eventId(), createdAt: now, decidedAt: now, ...fields };
-}
-
-/** The content in force, else the approved one (a disabled pack keeps its approval). */
-function approvedContent(entry: PackEntry): SourcePackVersion | null {
-  return entry.local?.approved ?? entry.approved;
-}
-
-/** Approval on first use (spec 13 §9.6): keeps an approved version, else approves the offer. */
-export async function approveFirstUse(
-  core: RegistryCore,
-  packId: string,
-  sha256: string | undefined,
-  by: string,
-): Promise<SiteApproval | null> {
-  const entry = core.entry(packId);
-  const inForce = approvedContent(entry);
-  if (inForce !== null) {
-    const known = [inForce.sha256, entry.state?.approvedSha256, entry.state?.localApprovedSha256];
-    if (sha256 !== undefined && !known.includes(sha256)) {
-      throw packConflict(
-        `The approved version of ${packId} is not the one reviewed (SHA-256 ${inForce.sha256.slice(0, 12)}…); review it again.`,
-      );
-    }
-    return { packId, version: inForce.pack.version, sha256: inForce.sha256 };
-  }
-  const offer = entry.offer;
-  if (offer === null) {
-    if (sha256 !== undefined) throw packConflict(`${packId} has no version to approve.`);
-    return null;
-  }
-  if (sha256 !== undefined && sha256 !== offer.sha256) {
-    throw packConflict(
-      `The offered version of ${packId} changed since it was shown (SHA-256 ${offer.sha256.slice(0, 12)}…); review it again.`,
-    );
-  }
-  const { deps } = core;
-  const now = deps.clock.now();
-  await deps.cache.put('bundled', packId, offer.sha256, offer.bytes);
-  const provenance = { kind: 'bundled' as const, release: offer.origin };
-  await deps.uow.transaction(async (repos) => {
-    await repos.sitePackState.put({
-      ...stateOf(entry, now),
-      approvedVersion: offer.pack.version,
-      approvedSha256: offer.sha256,
-      approvedSource: 'bundled',
-      approvedProvenance: provenance,
-      approvedDomains: [...offer.pack.domains],
-      approvedBy: by,
-      approvedAt: now,
-      updatedAt: now,
-    });
-    await repos.sitePackChanges.insert(
-      change(core, {
-        packId,
-        fromVersion: null,
-        toVersion: offer.pack.version,
-        toSha256: offer.sha256,
-        source: 'bundled',
-        classification: 'new_pack',
-        newDomains: [...offer.pack.domains],
-        notes: null,
-        diff: diffPacks(null, offer.pack),
-        decision: 'approved',
-        decidedBy: by,
-      }),
-    );
-    await auditPack(repos, core, by, 'site_pack.approve', packId, {
-      version: offer.pack.version,
-      sha256: offer.sha256,
-      source: 'bundled',
-      provenance,
-      domains: [...offer.pack.domains],
-    });
-  });
-  await core.refresh();
-  core.log.info('site pack approved', { packId, version: offer.pack.version, by });
-  const effective = core.snapshot().packs.get(packId)?.effective;
-  return {
-    packId,
-    version: effective?.version ?? offer.pack.version,
-    sha256: effective?.sha256 ?? offer.sha256,
-  };
 }
 
 /** Apply a pending version: it becomes the approved one; the old one is kept for Revert. */
@@ -135,6 +52,7 @@ export async function applyVersion(
       ? undefined
       : core.snapshot().bundled.packs.find((p) => p.sha256 === row.toSha256);
   if (row === undefined || content === undefined) throw notPending(packId, version);
+  assertDomainsFree(core.snapshot(), packId, content.pack.domains);
   const { deps } = core;
   const now = deps.clock.now();
   await deps.cache.put(row.source, packId, content.sha256, content.bytes);
@@ -156,7 +74,7 @@ export async function applyVersion(
       pinnedVersion: null,
       updatedAt: now,
     });
-    await repos.sitePackChanges.decide(row.seq, 'approved', by, now);
+    await repos.sitePackChanges.decide(row.eventId, 'approved', by, now);
     await auditPack(repos, core, by, 'site_pack.apply', packId, {
       from_version: state.approvedVersion,
       version: content.pack.version,
@@ -180,7 +98,7 @@ export async function rejectVersion(
   if (row === undefined) throw notPending(packId, version);
   const now = core.deps.clock.now();
   await core.deps.uow.transaction(async (repos) => {
-    await repos.sitePackChanges.decide(row.seq, 'rejected', by, now);
+    await repos.sitePackChanges.decide(row.eventId, 'rejected', by, now);
     await auditPack(repos, core, by, 'site_pack.reject', packId, {
       version,
       sha256: row.toSha256,
@@ -199,7 +117,7 @@ export async function revertVersion(core: RegistryCore, packId: string, by: stri
     state.previousSha256 === null ||
     state.previousSource === null
   ) {
-    throw packConflict(`${packId} has no previous version to revert to.`);
+    throw noPrevious(packId);
   }
   const { previousVersion, previousSha256, previousSource } = state;
   const bundled = core.snapshot().bundled.packs.find((p) => p.sha256 === previousSha256);
@@ -213,9 +131,7 @@ export async function revertVersion(core: RegistryCore, packId: string, by: stri
           previousSha256,
           core.deps.binaryVersion,
         );
-  if (content === null) {
-    throw packConflict(`BrowserHive's copy of version ${previousVersion} of ${packId} is missing.`);
-  }
+  if (content === null) throw noPrevious(packId);
   const now = core.deps.clock.now();
   await core.deps.uow.transaction(async (repos) => {
     await repos.sitePackState.put({
@@ -329,7 +245,7 @@ export async function approveLocal(
 ): Promise<void> {
   const entry = core.entry(packId);
   const local = entry.local;
-  if (local === null) throw packConflict(`${packId} has no local file.`);
+  if (local === null) throw noLocalFile(packId);
   const current = local.current;
   if (current === null) {
     throw packInvalid('local', issuesOf(local.problem));
@@ -337,6 +253,7 @@ export async function approveLocal(
   if (current.sha256 !== sha256) {
     throw packConflict(`The local file of ${packId} changed since it was shown; review it again.`);
   }
+  assertDomainsFree(core.snapshot(), packId, current.pack.domains);
   const { deps } = core;
   const now = deps.clock.now();
   await deps.cache.put('local', packId, sha256, current.bytes);

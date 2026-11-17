@@ -37,6 +37,8 @@ export interface ResolveInput {
   readonly states: readonly SitePackStateRecord[];
   readonly cache: SitePackCache;
   readonly binaryVersion: string;
+  /** Packs whose stored state cannot be read (review #83 C-M5): treated as not approved. */
+  readonly corrupt?: ReadonlySet<string>;
 }
 
 /** Reads a cached copy and checks it like any pack; `null` when missing, altered or refused. */
@@ -71,6 +73,7 @@ export async function resolvePacks(input: ResolveInput): Promise<readonly Resolv
     ...bundled.keys(),
     ...localFiles.keys(),
     ...localProblems.keys(),
+    ...(input.corrupt ?? []),
     ...input.states
       .filter((s) => s.approvedSha256 !== null || s.localApprovedSha256 !== null)
       .map((s) => s.packId),
@@ -79,7 +82,7 @@ export async function resolvePacks(input: ResolveInput): Promise<readonly Resolv
   for (const packId of [...ids].sort()) {
     const state = states.get(packId) ?? null;
     const current = bundled.get(packId) ?? null;
-    let skipped: SkippedPackVersion | null = null;
+    let skipped: SkippedPackVersion | null = input.corrupt?.has(packId) ? unreadable(packId) : null;
     const approved = await resolveApproved(input, packId, state, current);
     if (approved === 'missing') {
       skipped = missingCopy(packId, state?.approvedVersion ?? null);
@@ -102,6 +105,15 @@ export async function resolvePacks(input: ResolveInput): Promise<readonly Resolv
     });
   }
   return out;
+}
+
+function unreadable(packId: string): SkippedPackVersion {
+  return {
+    packId,
+    version: null,
+    reason: 'unreadable',
+    detail: 'its stored approval cannot be read (SITE_PACKS_STATE_CORRUPT); approve it again',
+  };
 }
 
 function missingCopy(packId: string, version: number | null): SkippedPackVersion {
@@ -169,39 +181,61 @@ export interface AssembleInput {
   readonly loadedAt: number | null;
 }
 
-/** Assigns domains by precedence and freezes the snapshot. */
+/** When the content in force was approved (older approvals keep contested domains). */
+function approvedAtOf(r: ResolvedPack): number {
+  const at = r.local?.approved != null ? r.state?.localApprovedAt : r.state?.approvedAt;
+  return at ?? Number.MAX_SAFE_INTEGER;
+}
+
+/**
+ * Assigns domains and freezes the snapshot. Approved content claims first (oldest approval first),
+ * then offers. A domain another pack already holds is never taken from it (spec 13 §9.10, review
+ * #83 C-M1): an approved newcomer keeps its other domains and is reported `domain_overlap` naming
+ * the owner; an overlapping offer is not offered.
+ */
 export function assembleSnapshot(
   resolved: readonly ResolvedPack[],
   input: AssembleInput,
 ): RegistrySnapshot {
-  const tier = (r: ResolvedPack) =>
-    r.local?.approved != null ? 0 : r.approved !== null ? 1 : r.offer !== null ? 2 : 3;
+  const approved = (r: ResolvedPack) => r.local?.approved != null || r.approved !== null;
+  const tier = (r: ResolvedPack) => (approved(r) ? 0 : r.offer !== null ? 1 : 2);
   const ordered = [...resolved].sort(
-    (a, b) => tier(a) - tier(b) || (a.packId < b.packId ? -1 : a.packId > b.packId ? 1 : 0),
+    (a, b) =>
+      tier(a) - tier(b) ||
+      approvedAtOf(a) - approvedAtOf(b) ||
+      (a.packId < b.packId ? -1 : a.packId > b.packId ? 1 : 0),
   );
   const byDomain = new Map<string, string>();
   const packs = new Map<string, PackEntry>();
   const resolveSkips: RegistrySnapshot['resolveSkips'][number][] = [];
   for (const r of ordered) {
     const content = r.local?.approved ?? r.approved ?? r.offer;
-    let overlap: SkippedPackVersion | null = null;
-    if (content !== null) {
-      const taken = content.pack.domains.find((d) => {
-        const owner = byDomain.get(d);
-        return owner !== undefined && owner !== r.packId;
-      });
-      if (taken === undefined) {
-        for (const d of content.pack.domains) byDomain.set(d, r.packId);
-      } else {
-        overlap = {
-          packId: r.packId,
-          version: content.pack.version,
-          reason: 'domain_overlap',
-          detail: `${taken} belongs to the pack ${byDomain.get(taken) ?? ''}`,
-        };
+    const taken = (content?.pack.domains ?? []).filter((d) => {
+      const owner = byDomain.get(d);
+      return owner !== undefined && owner !== r.packId;
+    });
+    const first = taken[0];
+    const overlap =
+      first === undefined ? null : { domain: first, owner: byDomain.get(first) ?? '' };
+    const isApproved = approved(r);
+    let claimed = 0;
+    if (content !== null && (overlap === null || isApproved)) {
+      for (const d of content.pack.domains) {
+        if (taken.includes(d)) continue;
+        byDomain.set(d, r.packId);
+        claimed += 1;
       }
     }
-    const skipped = overlap ?? r.skipped;
+    const overlapSkip =
+      overlap === null || content === null
+        ? null
+        : {
+            packId: r.packId,
+            version: content.pack.version,
+            reason: 'domain_overlap' as const,
+            detail: `${taken.join(', ')} ${taken.length === 1 ? 'is' : 'are'} covered by the pack ${overlap.owner}${isApproved ? '; its other domains still apply' : ''}`,
+          };
+    const skipped = overlapSkip ?? r.skipped;
     if (skipped !== null && skipped !== r.local?.problem) {
       resolveSkips.push({ ...skipped, source: sourceOfSkip(r, skipped) });
     }
@@ -211,7 +245,7 @@ export function assembleSnapshot(
       approved: r.approved,
       local: r.local,
       offer: overlap === null ? r.offer : null,
-      effective: overlap === null ? effectiveOf(r, input.enabled) : null,
+      effective: claimed > 0 ? effectiveOf(r, input.enabled) : null,
       display: (content ?? r.local?.current ?? null)?.pack ?? null,
       pending: input.pending
         .filter((p) => p.packId === r.packId)
@@ -220,6 +254,7 @@ export function assembleSnapshot(
         ...new Set(input.sites.filter((s) => s.packId === r.packId).map((s) => s.templateId)),
       ],
       skipped,
+      overlap,
     });
   }
   return {
