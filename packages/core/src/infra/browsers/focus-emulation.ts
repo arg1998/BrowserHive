@@ -29,6 +29,24 @@ import type { PageFocusControl } from '../../ports/page-focus.ts';
 
 const WindowForTarget = z.object({ windowId: z.number().int() });
 
+/** Every call this control makes is bounded: a stuck call must never hold an agent's tool. */
+export const FOCUS_CALL_MS = 2_000;
+
+/**
+ * Minimizing to release a headless window's real focus was measured on Linux only; on macOS the
+ * call stalled and on Windows it did not release the focus (T3b CI), so it is skipped there.
+ */
+export const MINIMIZE_RELEASES_FOCUS = process.platform === 'linux';
+
+/** `promise`, or a rejection after {@link FOCUS_CALL_MS}. */
+function bounded<T>(promise: Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('focus call timed out')), FOCUS_CALL_MS);
+  });
+  return Promise.race([promise, late]).finally(() => clearTimeout(timer));
+}
+
 interface Entry {
   readonly session: Promise<CDPSession | null>;
   emulated: boolean;
@@ -40,9 +58,12 @@ interface Entry {
 export class CdpPageFocus implements PageFocusControl {
   readonly #entries = new Map<Page, Entry>();
   readonly #log: Logger;
+  readonly #minimizes: boolean;
 
-  constructor(logger: Logger) {
+  /** `minimizes`: release a headless window's real focus by minimizing it (Linux, measured). */
+  constructor(logger: Logger, minimizes: boolean = MINIMIZE_RELEASES_FOCUS) {
     this.#log = logger.child({ module: 'browsers.focus' });
+    this.#minimizes = minimizes;
   }
 
   isUnfocused(page: Page): boolean {
@@ -61,14 +82,14 @@ export class CdpPageFocus implements PageFocusControl {
     }
     entry.emulated = emulated;
     await this.#send(entry, emulated);
-    if (!emulated && headless) await this.#minimize(entry);
+    if (!emulated && headless && this.#minimizes) await this.#minimize(entry);
     if (emulated) await this.#restore(entry);
   }
 
   async #attach(page: Page): Promise<CDPSession | null> {
     if (page.isClosed()) return null;
     try {
-      const session = await page.context().newCDPSession(page);
+      const session = await bounded(page.context().newCDPSession(page));
       // A new document is focused again (see above): the off state is sent once more.
       page.on('framenavigated', (frame) => {
         const entry = this.#entries.get(page);
@@ -93,7 +114,7 @@ export class CdpPageFocus implements PageFocusControl {
     const session = await entry.session;
     if (session === null) return;
     try {
-      await session.send('Emulation.setFocusEmulationEnabled', { enabled });
+      await bounded(session.send('Emulation.setFocusEmulationEnabled', { enabled }));
     } catch (err) {
       // The page closed or crashed meanwhile.
       this.#log.debug('focus emulation not set', { enabled, err: serializeError(err) });
@@ -105,11 +126,12 @@ export class CdpPageFocus implements PageFocusControl {
     const session = await entry.session;
     if (session === null || entry.minimized !== null) return;
     try {
-      const { windowId } = WindowForTarget.parse(await session.send('Browser.getWindowForTarget'));
-      await session.send('Browser.setWindowBounds', {
-        windowId,
-        bounds: { windowState: 'minimized' },
-      });
+      const { windowId } = WindowForTarget.parse(
+        await bounded(session.send('Browser.getWindowForTarget')),
+      );
+      await bounded(
+        session.send('Browser.setWindowBounds', { windowId, bounds: { windowState: 'minimized' } }),
+      );
       entry.minimized = windowId;
     } catch (err) {
       this.#log.debug('window not minimized', { err: serializeError(err) });
@@ -127,10 +149,9 @@ export class CdpPageFocus implements PageFocusControl {
     const session = await entry.session;
     if (session === null) return;
     try {
-      await session.send('Browser.setWindowBounds', {
-        windowId,
-        bounds: { windowState: 'normal' },
-      });
+      await bounded(
+        session.send('Browser.setWindowBounds', { windowId, bounds: { windowState: 'normal' } }),
+      );
     } catch (err) {
       this.#log.debug('window not restored', { err: serializeError(err) });
     }

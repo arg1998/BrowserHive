@@ -173,7 +173,13 @@ for (const stealth of STEALTH_LEGS) {
       ok(await b.call('navigate', { url: 'https://site-b.test/landing' }));
       expect(await hasFocus(b.page())).toBe(true);
       ok(await b.call('navigate', { url: url('/strategy/input') }));
-      expect([await hasFocus(a.page()), await hasFocus(b.page())]).toEqual([false, true]);
+      // A was clicked: headless, its window holds real focus. Minimizing releases it on Linux only
+      // (macOS and Windows keep it; deferred D49), so A's real focus is asserted on Linux.
+      if (process.platform === 'linux') {
+        expect([await hasFocus(a.page()), await hasFocus(b.page())]).toEqual([false, true]);
+      } else {
+        expect(await hasFocus(b.page())).toBe(true);
+      }
       // The pack stops selecting the strategy: every page is focused again.
       p.lookup.swap(fixturePack('/pack/probe/in'));
       await p.runner.reconcile();

@@ -59,7 +59,7 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('CdpPageFocus', () => {
   it('leaves an untouched page to the driver default', async () => {
-    const focus = new CdpPageFocus(createCollectingLogger());
+    const focus = new CdpPageFocus(createCollectingLogger(), true);
     const page = new ScriptedPage();
     await focus.setEmulated(asPage(page), true, false);
     expect(page.sessions).toBe(0);
@@ -67,7 +67,7 @@ describe('CdpPageFocus', () => {
   });
 
   it('turns focus off once, re-sends it after main-frame navigations, and back on', async () => {
-    const focus = new CdpPageFocus(createCollectingLogger());
+    const focus = new CdpPageFocus(createCollectingLogger(), true);
     const page = new ScriptedPage();
     await focus.setEmulated(asPage(page), false, false);
     await focus.setEmulated(asPage(page), false, false);
@@ -86,7 +86,7 @@ describe('CdpPageFocus', () => {
   });
 
   it('headless: minimizes the window of an unfocused page and restores it with its focus', async () => {
-    const focus = new CdpPageFocus(createCollectingLogger());
+    const focus = new CdpPageFocus(createCollectingLogger(), true);
     const page = new ScriptedPage();
     await focus.setEmulated(asPage(page), false, true);
     expect(page.windows).toEqual(['7:minimized']);
@@ -100,7 +100,7 @@ describe('CdpPageFocus', () => {
   });
 
   it('keeps a shared window minimized while another unfocused page is in it', async () => {
-    const focus = new CdpPageFocus(createCollectingLogger());
+    const focus = new CdpPageFocus(createCollectingLogger(), true);
     const one = new ScriptedPage();
     const two = new ScriptedPage();
     await focus.setEmulated(asPage(one), false, true);
@@ -112,7 +112,7 @@ describe('CdpPageFocus', () => {
   });
 
   it('forgets a closed page and never throws', async () => {
-    const focus = new CdpPageFocus(createCollectingLogger());
+    const focus = new CdpPageFocus(createCollectingLogger(), true);
     const page = new ScriptedPage();
     await focus.setEmulated(asPage(page), false, false);
     page.emit('close', undefined);
