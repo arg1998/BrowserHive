@@ -47,7 +47,7 @@ With [`sitePacks`](../reference/configuration.md#sitePacks) set to `false`, Brow
 
 - **The dashboard** waits until the catalog of packs has loaded before it lets you create the template, and sends the hash of each pack it showed you.
 - **`browserhive templates create --sites`** prints each site's pack (version, provenance, SHA-256, the site's terms, whether writes need confirmation) before it creates anything, asks you to type `yes` on a terminal, and refuses without one unless `--yes`. A pack that is already approved is listed and needs no answer.
-- **The REST API** takes the hash as `pack_sha256` on each site (`POST /templates`, `PUT /templates/{id}/sites/{site}`). A site whose pack still needs approval is refused without it, so nothing is approved that you were not shown.
+- **The REST API** takes the hash as `pack_sha256` on each site (`POST /templates`, `PUT /templates/{id}/sites/{site}`). A site whose pack still needs approval is refused without it ([`SITE_PACK_APPROVAL_REQUIRED`](../reference/errors.md#SITE_PACK_APPROVAL_REQUIRED), 409, with the offer's version, SHA-256 and provenance in its details), so nothing is approved that you were not shown.
 
 If another version is on offer by the time you confirm, adding the site fails with `409 CONFLICT`, and you review the pack again.
 
@@ -71,7 +71,7 @@ Every decision is recorded with who made it and when (`GET /api/v1/site-packs/ch
 
 **Precedence.** For one pack id, approved local content wins over every other source; otherwise the approved version applies. A pack whose content comes from a local file says "Local file overrides v9" wherever it is shown.
 
-**A domain belongs to one pack.** Content that claims a domain another pack already covers is refused: approving or importing a local file that lists `github.com` while the GitHub pack covers it answers `409 CONFLICT` naming that pack, and nothing of the other pack changes. A version skipped for this reason names the pack that owns the domain.
+**A domain belongs to one pack.** Content that claims a domain another pack already covers is refused: approving or importing a local file that lists `github.com` while the GitHub pack covers it answers 409 [`SITE_PACK_DOMAIN_TAKEN`](../reference/errors.md#SITE_PACK_DOMAIN_TAKEN) naming that pack, and nothing of the other pack changes. A version skipped for this reason names the pack that owns the domain.
 
 **One broken pack stays alone.** If BrowserHive cannot read one pack's stored approval, only that pack is left out (its sites are generic), and the Site packs page and `browserhive doctor` say so; every other pack keeps applying.
 
