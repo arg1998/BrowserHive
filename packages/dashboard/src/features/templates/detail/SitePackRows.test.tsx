@@ -1,5 +1,6 @@
 /** @module features/templates/detail/SitePackRows.test — a site's pack on the Sites tab (spec 13 §9.3, §9.6, §11.4, T3a): title, version and source, Sign in by hand only, the terms' stance as a label with the clause, its date and address as text (never a link), the write policy select with "Pack default: Confirm" sending `write_policy`, rule counts linking to the pack, a stopped site's Clear stop, a generic site offered "Use the … site pack" with a confirmation naming the SHA-256 and the new health reasons; axe clean */
 import { describe, expect, it } from 'bun:test';
+import { iso } from '@/features/site-packs/model.ts';
 import {
   offeredPack,
   packsResponse,
@@ -72,6 +73,31 @@ async function click(element: HTMLElement) {
 }
 
 describe('Sites tab: site packs', () => {
+  it('a pack without write guards says the write policy has no effect and turns the select off (review S-H3)', async () => {
+    renderPage({
+      path: '/templates/$id',
+      component: TemplatePage,
+      validateSearch: (s) => templatePageSearch.parse(s),
+      routes: {
+        'GET /system': { vault: { enabled: false, backend: null } },
+        'GET /sessions': { data: [], page: { next_cursor: null, limit: 100 } },
+        'GET /site-packs': packsResponse([]),
+        [`GET /templates/${ID}`]: templateDetail({
+          sites: [{ ...LINKEDIN, stopped_at: null, pack: templateSitePack({ write_guards: 0 }) }],
+        }),
+      },
+      url: `/templates/${ID}`,
+    });
+    const linkedin = await card('LinkedIn');
+    expect(within(linkedin).getByText(/This pack guards no writes yet/)).toBeDefined();
+    expect(within(linkedin).queryByText(/Each write waits until you approve it/)).toBeNull();
+    expect(
+      within(linkedin).getByRole('combobox').hasAttribute('disabled') ||
+        within(linkedin).getByRole('combobox').getAttribute('aria-disabled') === 'true' ||
+        within(linkedin).getByRole('combobox').hasAttribute('data-disabled'),
+    ).toBe(true);
+  });
+
   it('shows the pack, the terms as text and the rule counts; axe clean', async () => {
     const view = mount();
     const linkedin = await card('LinkedIn');
@@ -129,7 +155,7 @@ describe('Sites tab: site packs', () => {
     await click(await within(github).findByRole('button', { name: 'Use the GitHub site pack…' }));
     const dialog = await screen.findByRole('alertdialog');
     expect(within(dialog).getByText(`SHA-256 ${sha('b')}`)).toBeDefined();
-    expect(within(dialog).getByText('v2 · Bundled with BrowserHive 0.3.0')).toBeDefined();
+    expect(within(dialog).getByText(`v2 · ${iso('Bundled with BrowserHive 0.3.0')}`)).toBeDefined();
     await click(within(dialog).getByRole('button', { name: 'Use the pack' }));
     await waitFor(() =>
       expect(view.requests.find((r) => r.path.endsWith('/sites/github.com'))?.body).toEqual({

@@ -128,7 +128,9 @@ export function SiteCard({
         </Row>
         <Row label="Detected by">
           {site.pack !== null ? (
-            <p>The {site.pack.title} site pack’s signed-in check</p>
+            <p>
+              The <bdi>{site.pack.title}</bdi> site pack’s signed-in check
+            </p>
           ) : cookies.length > 0 ? (
             <p>
               {cookies.length} {cookies.length === 1 ? 'cookie' : 'cookies'} BrowserHive learned:{' '}

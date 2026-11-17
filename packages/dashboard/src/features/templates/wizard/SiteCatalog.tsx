@@ -1,9 +1,14 @@
-/** @module features/templates/wizard/SiteCatalog — the site catalog of wizard step 2 (spec 13 §7.1, §9.6, §11.4): a searchable grid of pack cards (title, domains, "Sign in by hand only", the default write policy, what the site's terms say, and the version adding it approves with its provenance and short SHA-256); the whole card adds the site */
+/** @module features/templates/wizard/SiteCatalog — the site catalog of wizard step 2 (spec 13 §7.1, §9.6, §11.4): a searchable grid of pack cards (title, domains, "Sign in by hand only", the default write policy (or that the pack guards no writes yet), what the site's terms say, and the version adding it approves with its provenance and short SHA-256); the whole card adds the site */
 import type { SitePackView } from '@browserhive/contracts/http';
 import { useId, useState } from 'react';
 import { Chip } from '@/components/shared/Chip.tsx';
 import { Input } from '@/components/ui/input.tsx';
-import { packChoice, shortSha, WRITE_POLICY_LABEL } from '@/features/site-packs/model.ts';
+import {
+  NO_WRITE_GUARDS,
+  packChoice,
+  shortSha,
+  WRITE_POLICY_LABEL,
+} from '@/features/site-packs/model.ts';
 import { StanceLabel } from '@/features/site-packs/PackBits.tsx';
 import { ICONS } from '@/lib/icons.ts';
 import { cn } from '@/lib/utils.ts';
@@ -54,10 +59,10 @@ function PackCard({
       >
         <span className="flex min-w-0 items-start justify-between gap-2">
           <span className="flex min-w-0 flex-col">
-            <span className="truncate text-base font-semibold">{pack.title}</span>
-            <span className="truncate font-mono text-sm text-muted-foreground">
+            <bdi className="truncate text-base font-semibold">{pack.title}</bdi>
+            <bdi className="truncate font-mono text-sm text-muted-foreground">
               {pack.domains.join(', ')}
-            </span>
+            </bdi>
           </span>
           <span
             aria-hidden="true"
@@ -71,7 +76,13 @@ function PackCard({
         </span>
         <span className="flex flex-wrap gap-1.5">
           {pack.human_only ? <Chip tone="warn">Sign in by hand only</Chip> : null}
-          <Chip tone="neutral">Writes: {WRITE_POLICY_LABEL[pack.write_policy_default]}</Chip>
+          {pack.write_guards === 0 ? (
+            <Chip tone="muted" title={NO_WRITE_GUARDS}>
+              Writes not guarded yet
+            </Chip>
+          ) : (
+            <Chip tone="neutral">Writes: {WRITE_POLICY_LABEL[pack.write_policy_default]}</Chip>
+          )}
           {!pack.enabled ? <Chip tone="muted">Turned off</Chip> : null}
         </span>
         <StanceLabel stance={pack.stance} />

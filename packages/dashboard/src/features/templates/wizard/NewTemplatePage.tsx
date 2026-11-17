@@ -131,6 +131,7 @@ export function NewTemplatePage() {
             <WizardFooter
               step={step}
               busy={w.creating}
+              waitingFor={w.catalogLoading ? 'Loading the site catalog…' : null}
               nextRef={w.nextRef}
               onBack={() => w.goTo((step - 1) as 1 | 2 | 3 | 4)}
               onSkip={w.skip}

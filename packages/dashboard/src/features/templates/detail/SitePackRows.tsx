@@ -1,4 +1,4 @@
-/** @module features/templates/detail/SitePackRows — a site's pack on its Sites-tab card (spec 13 §9.3, §9.6, §11.4): the pack's title, version and source ("Local file overrides vN"), sign in by hand only, "What the site's terms say" as a label with the clause quoted verbatim (checked date, address as text) and the exception, the write policy select ("Pack default: Confirm"), the guard, guarded-control and security-check counts linking to the pack page; for a generic site whose domain now has a pack, **Use the … site pack** (`PUT` with the `pack_sha256` the confirmation names) */
+/** @module features/templates/detail/SitePackRows — a site's pack on its Sites-tab card (spec 13 §9.3, §9.6, §11.4): the pack's title, version and source ("Local file overrides vN"), sign in by hand only, "What the site's terms say" as a label with the clause quoted verbatim (checked date, address as text) and the exception, the write policy select ("Pack default: Confirm"; off with a note when the pack guards no writes yet), the guard, guarded-control and security-check counts linking to the pack page; for a generic site whose domain now has a pack, **Use the … site pack** (`PUT` with the `pack_sha256` the confirmation names) */
 import type { TemplateSitePack, TemplateSiteView } from '@browserhive/contracts/http';
 import { Link } from '@tanstack/react-router';
 import { useId } from 'react';
@@ -16,6 +16,8 @@ import {
 import { useSitePackCatalog } from '@/features/site-packs/api.ts';
 import { attachPackConfirm } from '@/features/site-packs/confirm-copy.ts';
 import {
+  iso,
+  NO_WRITE_GUARDS,
   packChoice,
   packForHost,
   SOURCE_LABEL,
@@ -55,6 +57,9 @@ function WritePolicySelect({
     })),
   ];
   const effective: WritePolicy = site.write_policy ?? pack.write_policy_default;
+  // A pack without write guards has nothing for the policy to act on (review S-H3): say so instead
+  // of promising that writes wait for approval.
+  const inert = pack.write_guards === 0;
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
       <span id={labelId} className="sr-only">
@@ -71,16 +76,16 @@ function WritePolicySelect({
             {
               onSuccess: () =>
                 toast.success({
-                  title: `${site.title}: writes ${WRITE_POLICY_LABEL[write_policy ?? pack.write_policy_default].toLowerCase()}`,
+                  title: `${iso(site.title)}: writes ${WRITE_POLICY_LABEL[write_policy ?? pack.write_policy_default].toLowerCase()}`,
                 }),
             },
           );
         }}
       >
         <SelectTrigger
+          disabled={ops.putSite.isPending || inert}
           aria-labelledby={labelId}
           className="w-full sm:w-64"
-          disabled={ops.putSite.isPending}
         >
           <SelectValue className="truncate" />
         </SelectTrigger>
@@ -92,7 +97,9 @@ function WritePolicySelect({
           ))}
         </SelectContent>
       </Select>
-      <span className="text-sm text-muted-foreground">{WRITE_POLICY_HINT[effective]}</span>
+      <span className="text-sm text-muted-foreground">
+        {inert ? NO_WRITE_GUARDS : WRITE_POLICY_HINT[effective]}
+      </span>
     </div>
   );
 }
@@ -119,13 +126,17 @@ function UsePack({
     if (!(await confirm(attachPackConfirm(pack, choice, site.site_id)))) return;
     ops.putSite.mutate(
       { site: site.site_id, body: { pack_sha256: choice.sha256 } },
-      { onSuccess: () => toast.success({ title: `${site.site_id} uses the ${pack.title} pack` }) },
+      {
+        onSuccess: () =>
+          toast.success({ title: `${site.site_id} uses the ${iso(pack.title)} pack` }),
+      },
     );
   };
   return (
     <div className="flex flex-col items-start gap-2">
       <p className="text-muted-foreground">
-        None yet. BrowserHive has a {pack.title} pack (v{choice.version}, {choice.provenanceShort}).
+        None yet. BrowserHive has a <bdi>{pack.title}</bdi> pack (v{choice.version},{' '}
+        <bdi>{choice.provenanceShort}</bdi>).
       </p>
       <Button
         type="button"
@@ -134,7 +145,7 @@ function UsePack({
         disabled={ops.putSite.isPending}
         onClick={() => void onUse()}
       >
-        Use the {pack.title} site pack…
+        Use the <bdi>{pack.title}</bdi> site pack…
       </Button>
     </div>
   );
@@ -175,7 +186,7 @@ export function SitePackRows({
               params={{ id: pack.pack_id }}
               className="font-medium text-link underline decoration-link/40 underline-offset-2 hover:decoration-link"
             >
-              {pack.title}
+              <bdi>{pack.title}</bdi>
             </Link>
             <span className="tabular-nums">v{pack.version}</span>
             <Chip tone="neutral">{SOURCE_LABEL[pack.source]}</Chip>
@@ -201,7 +212,8 @@ export function SitePackRows({
           {pack.clause !== null ? <TermsClause clause={pack.clause} /> : null}
           {pack.exception !== null ? (
             <p className="text-sm text-pretty">
-              <span className="font-medium">Why the pack’s default differs:</span> {pack.exception}
+              <span className="font-medium">Why the pack’s default differs:</span>{' '}
+              <bdi>{pack.exception}</bdi>
             </p>
           ) : null}
         </div>
