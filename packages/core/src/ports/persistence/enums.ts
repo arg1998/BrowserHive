@@ -233,6 +233,30 @@ export const TEMPLATE_HEALTH_STATES = [
 /** Element of {@link TEMPLATE_HEALTH_STATES}. */
 export type TemplateHealthState = (typeof TEMPLATE_HEALTH_STATES)[number];
 
+/** What one probe found (spec 13 §8.1; `template_probes.outcome`). */
+export const TEMPLATE_PROBE_OUTCOMES = [
+  'signed_in',
+  'signed_out',
+  'challenged',
+  'inconclusive',
+] as const;
+/** Element of {@link TEMPLATE_PROBE_OUTCOMES}. */
+export type TemplateProbeOutcome = (typeof TEMPLATE_PROBE_OUTCOMES)[number];
+
+/** Why a probe ran (spec 13 §8.2, §8.3; `template_probes.trigger`). */
+export const TEMPLATE_PROBE_TRIGGERS = [
+  'schedule',
+  'prelaunch',
+  'recording',
+  'relogin',
+  'manual',
+  'host_start',
+  'attention',
+  'restore',
+] as const;
+/** Element of {@link TEMPLATE_PROBE_TRIGGERS}. */
+export type TemplateProbeTrigger = (typeof TEMPLATE_PROBE_TRIGGERS)[number];
+
 /** Why a template version was written (spec 13 §3.9; `template_versions.reason`). */
 export const TEMPLATE_VERSION_REASONS = [
   'recording',

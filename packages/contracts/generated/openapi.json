@@ -148,6 +148,7 @@
               "TEMPLATE_NOT_FOUND",
               "TEMPLATE_BUSY",
               "TEMPLATE_UNAVAILABLE",
+              "TEMPLATE_NEEDS_LOGIN",
               "TEMPLATE_DISABLED",
               "SESSION_SEALED",
               "EVALUATE_DISABLED",
@@ -255,6 +256,7 @@
               "SESSION_PAGE_LIMIT",
               "SCREENSHOT_ARCHIVE_FAILED",
               "SESSION_RESOURCE_LIMIT",
+              "TEMPLATE_SITE_SIGNED_OUT",
               "TEMPLATE_STATE_COPY"
             ]
           },
@@ -9194,7 +9196,11 @@
                         "digest.daily",
                         "digest.weekly",
                         "report.anomaly",
-                        "test"
+                        "test",
+                        "template.signed_out",
+                        "template.challenged",
+                        "template.relogin_failed",
+                        "template.host_failed"
                       ]
                     },
                     "category": {
@@ -9574,7 +9580,11 @@
                       "digest.daily",
                       "digest.weekly",
                       "report.anomaly",
-                      "test"
+                      "test",
+                      "template.signed_out",
+                      "template.challenged",
+                      "template.relogin_failed",
+                      "template.host_failed"
                     ]
                   },
                   "category": {
@@ -9770,7 +9780,11 @@
                   "digest.daily",
                   "digest.weekly",
                   "report.anomaly",
-                  "test"
+                  "test",
+                  "template.signed_out",
+                  "template.challenged",
+                  "template.relogin_failed",
+                  "template.host_failed"
                 ]
               },
               "category": {
@@ -10986,7 +11000,8 @@
                                 "attention.resolve",
                                 "vault.confirm.resolve",
                                 "session.extend_lease",
-                                "session.close"
+                                "session.close",
+                                "template.relogin"
                               ]
                             },
                             "args": {
@@ -11126,6 +11141,14 @@
                     "maxLength": 253
                   },
                   "request_id": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "template_id": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "template_name": {
                     "type": "string",
                     "maxLength": 64
                   }
@@ -11651,7 +11674,11 @@
                     "digest.daily",
                     "digest.weekly",
                     "report.anomaly",
-                    "test"
+                    "test",
+                    "template.signed_out",
+                    "template.challenged",
+                    "template.relogin_failed",
+                    "template.host_failed"
                   ]
                 },
                 "category": {
@@ -13853,7 +13880,11 @@
                   "digest.daily",
                   "digest.weekly",
                   "report.anomaly",
-                  "test"
+                  "test",
+                  "template.signed_out",
+                  "template.challenged",
+                  "template.relogin_failed",
+                  "template.host_failed"
                 ]
               },
               "category": {
@@ -15069,7 +15100,8 @@
                                 "attention.resolve",
                                 "vault.confirm.resolve",
                                 "session.extend_lease",
-                                "session.close"
+                                "session.close",
+                                "template.relogin"
                               ]
                             },
                             "args": {
@@ -15209,6 +15241,14 @@
                     "maxLength": 253
                   },
                   "request_id": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "template_id": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "template_name": {
                     "type": "string",
                     "maxLength": 64
                   }
@@ -15722,6 +15762,10 @@
                     "digest.weekly",
                     "report.anomaly",
                     "test",
+                    "template.signed_out",
+                    "template.challenged",
+                    "template.relogin_failed",
+                    "template.host_failed",
                     null
                   ]
                 },
@@ -16044,6 +16088,10 @@
                   "digest.weekly",
                   "report.anomaly",
                   "test",
+                  "template.signed_out",
+                  "template.challenged",
+                  "template.relogin_failed",
+                  "template.host_failed",
                   null
                 ]
               },
@@ -16241,7 +16289,11 @@
                   "digest.daily",
                   "digest.weekly",
                   "report.anomaly",
-                  "test"
+                  "test",
+                  "template.signed_out",
+                  "template.challenged",
+                  "template.relogin_failed",
+                  "template.host_failed"
                 ]
               },
               "category": {
@@ -17457,7 +17509,8 @@
                                 "attention.resolve",
                                 "vault.confirm.resolve",
                                 "session.extend_lease",
-                                "session.close"
+                                "session.close",
+                                "template.relogin"
                               ]
                             },
                             "args": {
@@ -17597,6 +17650,14 @@
                     "maxLength": 253
                   },
                   "request_id": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "template_id": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "template_name": {
                     "type": "string",
                     "maxLength": 64
                   }
@@ -18574,6 +18635,10 @@
                   "digest.weekly",
                   "report.anomaly",
                   "test",
+                  "template.signed_out",
+                  "template.challenged",
+                  "template.relogin_failed",
+                  "template.host_failed",
                   null
                 ]
               },
@@ -18894,7 +18959,11 @@
                       "digest.daily",
                       "digest.weekly",
                       "report.anomaly",
-                      "test"
+                      "test",
+                      "template.signed_out",
+                      "template.challenged",
+                      "template.relogin_failed",
+                      "template.host_failed"
                     ]
                   },
                   "category": {
@@ -20110,7 +20179,8 @@
                                     "attention.resolve",
                                     "vault.confirm.resolve",
                                     "session.extend_lease",
-                                    "session.close"
+                                    "session.close",
+                                    "template.relogin"
                                   ]
                                 },
                                 "args": {
@@ -20250,6 +20320,14 @@
                         "maxLength": 253
                       },
                       "request_id": {
+                        "type": "string",
+                        "maxLength": 64
+                      },
+                      "template_id": {
+                        "type": "string",
+                        "maxLength": 64
+                      },
+                      "template_name": {
                         "type": "string",
                         "maxLength": 64
                       }
@@ -20492,6 +20570,10 @@
                   "digest.weekly",
                   "report.anomaly",
                   "test",
+                  "template.signed_out",
+                  "template.challenged",
+                  "template.relogin_failed",
+                  "template.host_failed",
                   null
                 ]
               },
@@ -20935,6 +21017,9 @@
                         },
                         "next": {
                           "type": "string"
+                        },
+                        "path": {
+                          "type": "string"
                         }
                       },
                       "required": [
@@ -20947,6 +21032,13 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "auto_relogin_at": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0
                     },
                     "health": {
                       "type": "object",
@@ -21020,6 +21112,7 @@
                     "auto_relogin",
                     "form",
                     "learned_cookie_names",
+                    "auto_relogin_at",
                     "health",
                     "stopped_at",
                     "device_bound",
@@ -21641,6 +21734,9 @@
                   },
                   "next": {
                     "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -21653,6 +21749,13 @@
                 "items": {
                   "type": "string"
                 }
+              },
+              "auto_relogin_at": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
               },
               "health": {
                 "type": "object",
@@ -21726,6 +21829,7 @@
               "auto_relogin",
               "form",
               "learned_cookie_names",
+              "auto_relogin_at",
               "health",
               "stopped_at",
               "device_bound",
@@ -21950,6 +22054,9 @@
               },
               "profile_secrets": {
                 "type": "boolean"
+              },
+              "agents_paused": {
+                "type": "boolean"
               }
             },
             "required": [
@@ -21960,7 +22067,8 @@
               "pages",
               "parked_pages",
               "sandboxed",
-              "profile_secrets"
+              "profile_secrets",
+              "agents_paused"
             ]
           }
         },
@@ -22974,6 +23082,9 @@
                         },
                         "next": {
                           "type": "string"
+                        },
+                        "path": {
+                          "type": "string"
                         }
                       },
                       "required": [
@@ -22986,6 +23097,13 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "auto_relogin_at": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0
                     },
                     "health": {
                       "type": "object",
@@ -23059,6 +23177,7 @@
                     "auto_relogin",
                     "form",
                     "learned_cookie_names",
+                    "auto_relogin_at",
                     "health",
                     "stopped_at",
                     "device_bound",
@@ -23773,6 +23892,9 @@
                         },
                         "next": {
                           "type": "string"
+                        },
+                        "path": {
+                          "type": "string"
                         }
                       },
                       "required": [
@@ -23785,6 +23907,13 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "auto_relogin_at": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0
                     },
                     "health": {
                       "type": "object",
@@ -23858,6 +23987,7 @@
                     "auto_relogin",
                     "form",
                     "learned_cookie_names",
+                    "auto_relogin_at",
                     "health",
                     "stopped_at",
                     "device_bound",
@@ -24310,6 +24440,9 @@
               },
               "profile_secrets": {
                 "type": "boolean"
+              },
+              "agents_paused": {
+                "type": "boolean"
               }
             },
             "required": [
@@ -24320,7 +24453,8 @@
               "pages",
               "parked_pages",
               "sandboxed",
-              "profile_secrets"
+              "profile_secrets",
+              "agents_paused"
             ]
           },
           "sites": {
@@ -24387,6 +24521,9 @@
                     },
                     "next": {
                       "type": "string"
+                    },
+                    "path": {
+                      "type": "string"
                     }
                   },
                   "required": [
@@ -24399,6 +24536,13 @@
                   "items": {
                     "type": "string"
                   }
+                },
+                "auto_relogin_at": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0
                 },
                 "health": {
                   "type": "object",
@@ -24472,6 +24616,7 @@
                 "auto_relogin",
                 "form",
                 "learned_cookie_names",
+                "auto_relogin_at",
                 "health",
                 "stopped_at",
                 "device_bound",
@@ -24537,6 +24682,126 @@
               "type": "string"
             }
           },
+          "relogin": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "site_id": {
+                "type": "string"
+              },
+              "method": {
+                "type": "string",
+                "enum": [
+                  "window",
+                  "vault"
+                ]
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "queued",
+                  "open",
+                  "filling",
+                  "signed_in",
+                  "failed",
+                  "timed_out",
+                  "cancelled"
+                ]
+              },
+              "session_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "requested_by": {
+                "type": "string"
+              },
+              "requested_at": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "deadline_at": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "finished_at": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "agents_paused": {
+                "type": "boolean"
+              },
+              "sign_in_via": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "window",
+                  "live_view",
+                  null
+                ]
+              },
+              "confirm_required": {
+                "type": "boolean"
+              },
+              "version": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "exclusiveMinimum": 0
+              },
+              "unlisted_domains": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "error": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "site_id",
+              "method",
+              "state",
+              "session_id",
+              "requested_by",
+              "requested_at",
+              "deadline_at",
+              "finished_at",
+              "agents_paused",
+              "sign_in_via",
+              "confirm_required",
+              "version",
+              "unlisted_domains",
+              "error"
+            ]
+          },
+          "machine": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ]
+          },
           "now": {
             "type": "integer",
             "minimum": 0
@@ -24550,6 +24815,8 @@
           "parked_pages",
           "shared_windows",
           "unlisted_domains",
+          "relogin",
+          "machine",
           "now"
         ]
       },
@@ -24677,6 +24944,9 @@
               },
               "profile_secrets": {
                 "type": "boolean"
+              },
+              "agents_paused": {
+                "type": "boolean"
               }
             },
             "required": [
@@ -24687,7 +24957,8 @@
               "pages",
               "parked_pages",
               "sandboxed",
-              "profile_secrets"
+              "profile_secrets",
+              "agents_paused"
             ]
           }
         },
@@ -24778,6 +25049,9 @@
                   },
                   "next": {
                     "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -24790,6 +25064,13 @@
                 "items": {
                   "type": "string"
                 }
+              },
+              "auto_relogin_at": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
               },
               "health": {
                 "type": "object",
@@ -24863,6 +25144,7 @@
               "auto_relogin",
               "form",
               "learned_cookie_names",
+              "auto_relogin_at",
               "health",
               "stopped_at",
               "device_bound",
@@ -24983,6 +25265,9 @@
                         },
                         "next": {
                           "type": "string"
+                        },
+                        "path": {
+                          "type": "string"
                         }
                       },
                       "required": [
@@ -24995,6 +25280,13 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "auto_relogin_at": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0
                     },
                     "health": {
                       "type": "object",
@@ -25068,6 +25360,7 @@
                     "auto_relogin",
                     "form",
                     "learned_cookie_names",
+                    "auto_relogin_at",
                     "health",
                     "stopped_at",
                     "device_bound",
@@ -25522,6 +25815,709 @@
             "maxItems": 64
           }
         },
+        "additionalProperties": false
+      },
+      "ProbeTemplateResponse": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "site_id": {
+                  "type": "string"
+                },
+                "outcome": {
+                  "type": "string",
+                  "enum": [
+                    "signed_in",
+                    "signed_out",
+                    "challenged",
+                    "inconclusive"
+                  ]
+                },
+                "reason": {
+                  "type": "string"
+                },
+                "duration_ms": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "site_id",
+                "outcome",
+                "reason",
+                "duration_ms"
+              ]
+            }
+          }
+        },
+        "required": [
+          "results"
+        ]
+      },
+      "ProbeTemplateRequest": {
+        "type": "object",
+        "properties": {
+          "site_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 253,
+              "pattern": "^[a-z0-9.-]+$"
+            },
+            "minItems": 1,
+            "maxItems": 16
+          }
+        },
+        "additionalProperties": false
+      },
+      "TemplateProbesPage": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "seq": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                "site_id": {
+                  "type": "string"
+                },
+                "outcome": {
+                  "type": "string",
+                  "enum": [
+                    "signed_in",
+                    "signed_out",
+                    "challenged",
+                    "inconclusive"
+                  ]
+                },
+                "reason": {
+                  "type": "string"
+                },
+                "trigger": {
+                  "type": "string",
+                  "enum": [
+                    "schedule",
+                    "prelaunch",
+                    "recording",
+                    "relogin",
+                    "manual",
+                    "host_start",
+                    "attention",
+                    "restore"
+                  ]
+                },
+                "final_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "duration_ms": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "at": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "seq",
+                "site_id",
+                "outcome",
+                "reason",
+                "trigger",
+                "final_url",
+                "duration_ms",
+                "at"
+              ]
+            }
+          },
+          "page": {
+            "type": "object",
+            "properties": {
+              "next_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "prev_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "limit": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "total": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "next_cursor",
+              "limit"
+            ]
+          },
+          "facets": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "value": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "count": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "value",
+                  "count"
+                ]
+              }
+            }
+          },
+          "applied": {
+            "type": "object",
+            "properties": {
+              "filters": {
+                "type": "object",
+                "additionalProperties": {}
+              },
+              "sort": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  },
+                  "dir": {
+                    "type": "string",
+                    "enum": [
+                      "asc",
+                      "desc"
+                    ]
+                  }
+                },
+                "required": [
+                  "key",
+                  "dir"
+                ]
+              }
+            },
+            "required": [
+              "filters",
+              "sort"
+            ]
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "now": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "now"
+            ]
+          }
+        },
+        "required": [
+          "data",
+          "page",
+          "applied",
+          "meta"
+        ]
+      },
+      "ReloginResponse": {
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "relogin": {
+            "type": "object",
+            "properties": {
+              "site_id": {
+                "type": "string"
+              },
+              "method": {
+                "type": "string",
+                "enum": [
+                  "window",
+                  "vault"
+                ]
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "queued",
+                  "open",
+                  "filling",
+                  "signed_in",
+                  "failed",
+                  "timed_out",
+                  "cancelled"
+                ]
+              },
+              "session_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "requested_by": {
+                "type": "string"
+              },
+              "requested_at": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "deadline_at": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "finished_at": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "agents_paused": {
+                "type": "boolean"
+              },
+              "sign_in_via": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "window",
+                  "live_view",
+                  null
+                ]
+              },
+              "confirm_required": {
+                "type": "boolean"
+              },
+              "version": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "exclusiveMinimum": 0
+              },
+              "unlisted_domains": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "error": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "site_id",
+              "method",
+              "state",
+              "session_id",
+              "requested_by",
+              "requested_at",
+              "deadline_at",
+              "finished_at",
+              "agents_paused",
+              "sign_in_via",
+              "confirm_required",
+              "version",
+              "unlisted_domains",
+              "error"
+            ]
+          }
+        },
+        "required": [
+          "session_id",
+          "relogin"
+        ]
+      },
+      "StartReloginRequest": {
+        "type": "object",
+        "properties": {
+          "site_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 253,
+            "pattern": "^[a-z0-9.-]+$"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "window",
+              "vault"
+            ],
+            "default": "window"
+          },
+          "let_agents_continue": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "additionalProperties": false
+      },
+      "ConfirmReloginRequest": {
+        "type": "object",
+        "properties": {
+          "site_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 253,
+            "pattern": "^[a-z0-9.-]+$"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "additionalProperties": false
+      },
+      "ShowTemplateWindowResponse": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "window": {
+            "type": "string",
+            "enum": [
+              "relogin",
+              "recording"
+            ]
+          },
+          "session_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok",
+          "window",
+          "session_id"
+        ]
+      },
+      "ContinueAgentsResponse": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "agents_paused": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          }
+        },
+        "required": [
+          "ok",
+          "agents_paused"
+        ]
+      },
+      "PutReloginLinkResponse": {
+        "type": "object",
+        "properties": {
+          "site": {
+            "type": "object",
+            "properties": {
+              "site_id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "pack_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "pack_version": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "enabled": {
+                "type": "boolean"
+              },
+              "write_policy": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "allow",
+                  "warn",
+                  "confirm",
+                  null
+                ]
+              },
+              "vault_handle": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "auto_relogin": {
+                "type": "boolean"
+              },
+              "form": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "username": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  },
+                  "submit": {
+                    "type": "string"
+                  },
+                  "next": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "username",
+                  "password"
+                ]
+              },
+              "learned_cookie_names": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "auto_relogin_at": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "health": {
+                "type": "object",
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "unknown",
+                      "signed_in",
+                      "signed_out",
+                      "challenged",
+                      "inconclusive"
+                    ]
+                  },
+                  "checked_at": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0
+                  },
+                  "changed_at": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0
+                  },
+                  "reason": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "consecutive_inconclusive": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "state",
+                  "checked_at",
+                  "changed_at",
+                  "reason",
+                  "consecutive_inconclusive"
+                ]
+              },
+              "stopped_at": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "device_bound": {
+                "type": "boolean"
+              },
+              "added_at": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "site_id",
+              "title",
+              "pack_id",
+              "pack_version",
+              "enabled",
+              "write_policy",
+              "vault_handle",
+              "auto_relogin",
+              "form",
+              "learned_cookie_names",
+              "auto_relogin_at",
+              "health",
+              "stopped_at",
+              "device_bound",
+              "added_at"
+            ]
+          },
+          "binding_allows_template": {
+            "type": "boolean"
+          },
+          "binding_problems": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "binding_not_found",
+                "principals_open",
+                "principal_not_listed",
+                "slug_not_allowed",
+                "harness_list"
+              ]
+            }
+          }
+        },
+        "required": [
+          "site",
+          "binding_allows_template",
+          "binding_problems"
+        ]
+      },
+      "PutReloginLinkRequest": {
+        "type": "object",
+        "properties": {
+          "vault_handle": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "auto_relogin": {
+            "type": "boolean"
+          },
+          "form": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "username": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "password": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "submit": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "next": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "path": {
+                "type": "string",
+                "maxLength": 200,
+                "pattern": "^\\/[A-Za-z0-9\\-._~/%]*$"
+              }
+            },
+            "required": [
+              "username",
+              "password"
+            ],
+            "additionalProperties": false
+          },
+          "allow_template": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "required": [
+          "vault_handle"
+        ],
         "additionalProperties": false
       }
     },
@@ -37181,7 +38177,11 @@
                   "digest.daily",
                   "digest.weekly",
                   "report.anomaly",
-                  "test"
+                  "test",
+                  "template.signed_out",
+                  "template.challenged",
+                  "template.relogin_failed",
+                  "template.host_failed"
                 ]
               },
               "minItems": 1
@@ -42464,6 +43464,1076 @@
           },
           "404": {
             "description": "TEMPLATE_NOT_FOUND",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/templates/{template_id}/probe": {
+      "post": {
+        "operationId": "probeTemplate",
+        "tags": [
+          "templates"
+        ],
+        "summary": "Check now: probe the template's sites (every enabled site, or the ones given), starting its browser when it is stopped; waits at most 120 s.",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-browserhive-scope": "templates:write",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^tp-[A-Za-z0-9_-]{10}$"
+            },
+            "required": true,
+            "name": "template_id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProbeTemplateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Check now: probe the template's sites (every enabled site, or the ones given), starting its browser when it is stopped; waits at most 120 s.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProbeTemplateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, PASSWORD_CHANGE_REQUIRED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "TEMPLATE_NOT_FOUND",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "TEMPLATE_DISABLED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "PAYLOAD_TOO_LARGE",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED, SESSION_LIMIT_REACHED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/templates/{template_id}/probes": {
+      "get": {
+        "operationId": "listTemplateProbes",
+        "tags": [
+          "templates"
+        ],
+        "summary": "The template's probe history, newest first, filterable by site, outcome, trigger and time.",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-browserhive-scope": "templates:read",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^tp-[A-Za-z0-9_-]{10}$"
+            },
+            "required": true,
+            "name": "template_id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 253,
+              "pattern": "^[a-z0-9.-]+$"
+            },
+            "required": false,
+            "name": "site_id",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "string",
+                "enum": [
+                  "signed_in",
+                  "signed_out",
+                  "challenged",
+                  "inconclusive"
+                ]
+              },
+              "minItems": 1
+            },
+            "required": false,
+            "name": "outcome",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "string",
+                "enum": [
+                  "schedule",
+                  "prelaunch",
+                  "recording",
+                  "relogin",
+                  "manual",
+                  "host_start",
+                  "attention",
+                  "restore"
+                ]
+              },
+              "minItems": 1
+            },
+            "required": false,
+            "name": "trigger",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "required": false,
+            "name": "since",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "required": false,
+            "name": "until",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The template's probe history, newest first, filterable by site, outcome, trigger and time.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateProbesPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, PASSWORD_CHANGE_REQUIRED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "TEMPLATE_NOT_FOUND",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/templates/{template_id}/relogin": {
+      "post": {
+        "operationId": "startTemplateRelogin",
+        "tags": [
+          "templates"
+        ],
+        "summary": "Re-login a site: `window` opens a window at the site on the machine running BrowserHive (the template's agents wait meanwhile unless let_agents_continue); `vault` fills the linked vault binding in the background as template:<id>.",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-browserhive-scope": "templates:login",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^tp-[A-Za-z0-9_-]{10}$"
+            },
+            "required": true,
+            "name": "template_id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartReloginRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Re-login a site: `window` opens a window at the site on the machine running BrowserHive (the template's agents wait meanwhile unless let_agents_continue); `vault` fills the linked vault binding in the background as template:<id>.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReloginResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, PASSWORD_CHANGE_REQUIRED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "TEMPLATE_NOT_FOUND",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "TEMPLATE_DISABLED, CONFLICT",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "PAYLOAD_TOO_LARGE",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED, SESSION_LIMIT_REACHED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "cancelTemplateRelogin",
+        "tags": [
+          "templates"
+        ],
+        "summary": "Cancel the queued or open re-login: its window closes and agents continue.",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-browserhive-scope": "templates:login",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^tp-[A-Za-z0-9_-]{10}$"
+            },
+            "required": true,
+            "name": "template_id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cancel the queued or open re-login: its window closes and agents continue.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReloginResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, PASSWORD_CHANGE_REQUIRED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "TEMPLATE_NOT_FOUND",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "CONFLICT",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/templates/{template_id}/relogin/confirm": {
+      "post": {
+        "operationId": "confirmTemplateRelogin",
+        "tags": [
+          "templates"
+        ],
+        "summary": "I'm signed in, for a site without a pack: the cookie names that appeared on it since the re-login window opened become its learned sign-in cookies, and the re-login finishes.",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-browserhive-scope": "templates:login",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^tp-[A-Za-z0-9_-]{10}$"
+            },
+            "required": true,
+            "name": "template_id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmReloginRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "I'm signed in, for a site without a pack: the cookie names that appeared on it since the re-login window opened become its learned sign-in cookies, and the re-login finishes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReloginResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, PASSWORD_CHANGE_REQUIRED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "TEMPLATE_NOT_FOUND",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "CONFLICT",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "PAYLOAD_TOO_LARGE",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/templates/{template_id}/host/show": {
+      "post": {
+        "operationId": "showTemplateWindow",
+        "tags": [
+          "templates"
+        ],
+        "summary": "Show window: open the re-login window a notification button queued, or raise the open re-login or recording window, on the machine running BrowserHive.",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-browserhive-scope": "templates:login",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^tp-[A-Za-z0-9_-]{10}$"
+            },
+            "required": true,
+            "name": "template_id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Show window: open the re-login window a notification button queued, or raise the open re-login or recording window, on the machine running BrowserHive.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShowTemplateWindowResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, PASSWORD_CHANGE_REQUIRED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "TEMPLATE_NOT_FOUND",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "CONFLICT",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED, SESSION_LIMIT_REACHED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/templates/{template_id}/agents/continue": {
+      "post": {
+        "operationId": "continueTemplateAgents",
+        "tags": [
+          "templates"
+        ],
+        "summary": "Let agents continue: the template's launches and tool calls stop waiting for the open sign-in window (D-60).",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-browserhive-scope": "templates:login",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^tp-[A-Za-z0-9_-]{10}$"
+            },
+            "required": true,
+            "name": "template_id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Let agents continue: the template's launches and tool calls stop waiting for the open sign-in window (D-60).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinueAgentsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, PASSWORD_CHANGE_REQUIRED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "TEMPLATE_NOT_FOUND",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "CONFLICT",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/templates/{template_id}/sites/{site_id}/relogin": {
+      "put": {
+        "operationId": "putTemplateReloginLink",
+        "tags": [
+          "templates"
+        ],
+        "summary": "Link a vault binding to a site for auto-relogin (also needs vault:write): the binding, the auto-relogin switch, the sign-in form, and Allow this template (adds template:<id> to the binding's principals, widening who can use the credential).",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-browserhive-scope": "templates:login",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^tp-[A-Za-z0-9_-]{10}$"
+            },
+            "required": true,
+            "name": "template_id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 253,
+              "pattern": "^[a-z0-9.-]+$"
+            },
+            "required": true,
+            "name": "site_id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutReloginLinkRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Link a vault binding to a site for auto-relogin (also needs vault:write): the binding, the auto-relogin switch, the sign-in form, and Allow this template (adds template:<id> to the binding's principals, widening who can use the credential).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PutReloginLinkResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, PASSWORD_CHANGE_REQUIRED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "TEMPLATE_NOT_FOUND, VAULT_NOT_CONFIGURED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "CONFLICT",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "PAYLOAD_TOO_LARGE",
             "content": {
               "application/problem+json": {
                 "schema": {

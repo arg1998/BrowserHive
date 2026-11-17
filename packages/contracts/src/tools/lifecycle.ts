@@ -110,6 +110,7 @@ export const LAUNCH_SESSION = defineTool({
     'TEMPLATE_BUSY',
     'TEMPLATE_UNAVAILABLE',
     'TEMPLATE_DISABLED',
+    'TEMPLATE_NEEDS_LOGIN',
   ],
   since: SINCE,
 });

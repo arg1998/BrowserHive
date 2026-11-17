@@ -55,6 +55,7 @@ class Sweep {
       | 'events'
       | 'resource_samples'
       | 'logs'
+      | 'template_probes'
       | 'vault_access'
       | 'blocked_requests'
       | 'auth_events'
@@ -109,6 +110,8 @@ class Sweep {
     await this.step('events', () => this.deleteWhere('events', 'occurred_at', cutoff));
     await this.step('resource_samples', () => this.deleteWhere('resource_samples', 'ts', cutoff));
     await this.step('logs', () => this.deleteWhere('logs', 'ts', cutoff));
+    // Template probes are telemetry (spec 13 §11.10).
+    await this.step('template_probes', () => this.deleteWhere('template_probes', 'at', cutoff));
   }
 
   async pruneAudit(cutoff: number): Promise<void> {

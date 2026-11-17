@@ -115,8 +115,10 @@ export class SqliteNotificationRepository implements NotificationRepository {
   async findLatestByThread(
     principalId: string | null,
     thread: string,
+    kinds?: readonly string[],
   ): Promise<NotificationRecord | null> {
     let qb = this.#db.selectFrom('notifications').selectAll().where('thread', '=', thread);
+    if (kinds !== undefined && kinds.length > 0) qb = qb.where('kind', 'in', [...kinds]);
     qb =
       principalId === null
         ? qb.where('principal_id', 'is', null)

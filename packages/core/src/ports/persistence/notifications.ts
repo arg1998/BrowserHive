@@ -29,10 +29,14 @@ export interface NotificationRepository {
     notificationId: string,
     patch: NotificationGroupPatch,
   ): Promise<NotificationRecord | null>;
-  /** Newest row of a thread in one inbox (`attention:<request_id>`), or `null`. */
+  /**
+   * Newest row of a thread in one inbox (`attention:<request_id>`), or `null`; with `kinds`, the
+   * newest row of one of those kinds (a thread shared by several kinds, spec 13 §8.6).
+   */
   findLatestByThread(
     principalId: string | null,
     thread: string,
+    kinds?: readonly string[],
   ): Promise<NotificationRecord | null>;
   /**
    * Applies a lifecycle revision (state, severity, revision, message). Unlike `updateGroup` it

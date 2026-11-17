@@ -314,6 +314,23 @@ export {
   TemplateSiteResponse,
 } from './template-edit.ts';
 export {
+  BindingProblem,
+  ConfirmReloginRequest,
+  ContinueAgentsResponse,
+  ProbeResult,
+  ProbeTemplateRequest,
+  ProbeTemplateResponse,
+  PutReloginLinkRequest,
+  PutReloginLinkResponse,
+  ReloginResponse,
+  ShowTemplateWindowResponse,
+  StartReloginRequest,
+  TemplateProbeRow,
+  TemplateProbesPage,
+  TemplateProbesQuery,
+  TemplateReloginSiteParams,
+} from './template-health.ts';
+export {
   ObservedIdentity,
   PinnedIdentity,
   TEMPLATE_HEALTH_INTERVAL_MS,
@@ -344,6 +361,7 @@ export {
   TemplateDomainParams,
   TemplateOkResponse,
 } from './template-recording.ts';
+export { ReloginView, TemplateMachine } from './template-relogin-view.ts';
 export {
   PatchTemplateVersionRequest,
   RestoreTemplateVersionRequest,

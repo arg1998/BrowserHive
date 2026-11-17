@@ -32,6 +32,7 @@ import {
   InMemoryNotificationChannelRepository,
   InMemoryNotificationDeliveryRepository,
 } from './in-memory-notification-repos.ts';
+import { InMemoryTemplateProbeRepository } from './in-memory-probe-repo.ts';
 import {
   InMemoryNotificationRepository,
   InMemorySystemEventRepository,
@@ -350,6 +351,7 @@ export class InMemoryRepositories implements Repositories {
   readonly schemaMigrations = notImplemented<Repositories['schemaMigrations']>('schemaMigrations');
   readonly templateSites = new InMemoryTemplateSiteRepository();
   readonly templateVersions = new InMemoryTemplateVersionRepository();
+  readonly templateProbes = new InMemoryTemplateProbeRepository();
   readonly templates = new InMemoryTemplateRepository(this.templateSites, this.templateVersions);
 
   constructor() {

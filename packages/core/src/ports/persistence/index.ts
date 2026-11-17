@@ -49,6 +49,8 @@ export type {
   SystemEventSeverity,
   TemplateHealthState,
   TemplateMode,
+  TemplateProbeOutcome,
+  TemplateProbeTrigger,
   TemplateStatus,
   TemplateStealthLevel,
   TemplateVersionReason,
@@ -87,6 +89,8 @@ export {
   SYSTEM_EVENT_SEVERITIES,
   TEMPLATE_HEALTH_STATES,
   TEMPLATE_MODES,
+  TEMPLATE_PROBE_OUTCOMES,
+  TEMPLATE_PROBE_TRIGGERS,
   TEMPLATE_STATUSES,
   TEMPLATE_STEALTH_LEVELS,
   VAULT_ACCESS_MODES,
@@ -223,6 +227,7 @@ export type {
   SessionTemplateRecord,
   TemplateGeolocationRecord,
   TemplatePatch,
+  TemplateProbeRecord,
   TemplateProxyRecord,
   TemplateRecord,
   TemplateSiteFormRecord,
@@ -239,6 +244,8 @@ export { UNKNOWN_SITE_HEALTH } from './records-templates.ts';
 export type { ScreenshotListRow, ScreenshotRepository } from './screenshots.ts';
 export type { SessionDeleteResult, SessionRepository } from './sessions.ts';
 export type {
+  TemplateProbeQuery,
+  TemplateProbeRepository,
   TemplateRepository,
   TemplateSiteRepository,
   TemplateStateFacts,

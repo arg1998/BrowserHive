@@ -1,7 +1,10 @@
 /** @module ports/persistence/templates — repositories over `templates` and `template_sites` (spec 13 §2.6). */
 
+import type { TemplateProbeOutcome, TemplateProbeTrigger } from './enums.ts';
+import type { Page, PageQuery, TimeWindow } from './queries.ts';
 import type {
   TemplatePatch,
+  TemplateProbeRecord,
   TemplateRecord,
   TemplateSiteHealthRecord,
   TemplateSiteRecord,
@@ -88,4 +91,23 @@ export interface TemplateVersionRepository {
   updateFile(templateId: string, version: number, file: TemplateStateFileRecord): Promise<boolean>;
   /** Deletes one version row; true when a row went. */
   remove(templateId: string, version: number): Promise<boolean>;
+}
+
+/** Filters of {@link TemplateProbeRepository.list}: newest first. */
+export interface TemplateProbeQuery extends Pick<PageQuery, 'limit' | 'cursor'>, TimeWindow {
+  readonly siteId?: string;
+  readonly outcomes?: readonly TemplateProbeOutcome[];
+  readonly triggers?: readonly TemplateProbeTrigger[];
+}
+
+/** Repository over `template_probes` (spec 13 §2.6, §8). */
+export interface TemplateProbeRepository {
+  /** Inserts one probe; returns its `seq`. */
+  insert(record: TemplateProbeRecord): Promise<number>;
+  /** One template's probes, newest first (`at`, then `seq`). */
+  list(templateId: string, query: TemplateProbeQuery): Promise<Page<TemplateProbeRecord>>;
+  /** Probes of every template since `since` (digests), oldest first. */
+  since(since: number, until: number): Promise<readonly TemplateProbeRecord[]>;
+  /** Deletes probes older than `before`; returns the number deleted. */
+  prune(before: number): Promise<number>;
 }

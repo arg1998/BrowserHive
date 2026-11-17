@@ -3163,7 +3163,11 @@
                           "digest.daily",
                           "digest.weekly",
                           "report.anomaly",
-                          "test"
+                          "test",
+                          "template.signed_out",
+                          "template.challenged",
+                          "template.relogin_failed",
+                          "template.host_failed"
                         ]
                       },
                       "category": {
@@ -3357,7 +3361,11 @@
                           "digest.daily",
                           "digest.weekly",
                           "report.anomaly",
-                          "test"
+                          "test",
+                          "template.signed_out",
+                          "template.challenged",
+                          "template.relogin_failed",
+                          "template.host_failed"
                         ]
                       },
                       "category": {
@@ -4260,7 +4268,11 @@
                               "digest.daily",
                               "digest.weekly",
                               "report.anomaly",
-                              "test"
+                              "test",
+                              "template.signed_out",
+                              "template.challenged",
+                              "template.relogin_failed",
+                              "template.host_failed"
                             ]
                           },
                           {
@@ -4881,6 +4893,9 @@
                       },
                       "profile_secrets": {
                         "type": "boolean"
+                      },
+                      "agents_paused": {
+                        "type": "boolean"
                       }
                     },
                     "required": [
@@ -4891,7 +4906,8 @@
                       "pages",
                       "parked_pages",
                       "sandboxed",
-                      "profile_secrets"
+                      "profile_secrets",
+                      "agents_paused"
                     ],
                     "additionalProperties": false
                   }
@@ -4983,6 +4999,9 @@
                               },
                               "next": {
                                 "type": "string"
+                              },
+                              "path": {
+                                "type": "string"
                               }
                             },
                             "required": [
@@ -5001,6 +5020,18 @@
                         "items": {
                           "type": "string"
                         }
+                      },
+                      "auto_relogin_at": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       },
                       "health": {
                         "type": "object",
@@ -5092,6 +5123,7 @@
                       "auto_relogin",
                       "form",
                       "learned_cookie_names",
+                      "auto_relogin_at",
                       "health",
                       "stopped_at",
                       "device_bound",
@@ -5351,6 +5383,233 @@
                   "kind",
                   "state",
                   "template_id"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "template.relogin"
+                  },
+                  "template_id": {
+                    "type": "string"
+                  },
+                  "relogin": {
+                    "type": "object",
+                    "properties": {
+                      "site_id": {
+                        "type": "string"
+                      },
+                      "method": {
+                        "type": "string",
+                        "enum": [
+                          "window",
+                          "vault"
+                        ]
+                      },
+                      "state": {
+                        "type": "string",
+                        "enum": [
+                          "queued",
+                          "open",
+                          "filling",
+                          "signed_in",
+                          "failed",
+                          "timed_out",
+                          "cancelled"
+                        ]
+                      },
+                      "session_id": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "requested_by": {
+                        "type": "string"
+                      },
+                      "requested_at": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "deadline_at": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "finished_at": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "agents_paused": {
+                        "type": "boolean"
+                      },
+                      "sign_in_via": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "window",
+                              "live_view"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "confirm_required": {
+                        "type": "boolean"
+                      },
+                      "version": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "unlisted_domains": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "error": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "site_id",
+                      "method",
+                      "state",
+                      "session_id",
+                      "requested_by",
+                      "requested_at",
+                      "deadline_at",
+                      "finished_at",
+                      "agents_paused",
+                      "sign_in_via",
+                      "confirm_required",
+                      "version",
+                      "unlisted_domains",
+                      "error"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "type",
+                  "template_id",
+                  "relogin"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "template.probe"
+                  },
+                  "template_id": {
+                    "type": "string"
+                  },
+                  "probe": {
+                    "type": "object",
+                    "properties": {
+                      "seq": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "site_id": {
+                        "type": "string"
+                      },
+                      "outcome": {
+                        "type": "string",
+                        "enum": [
+                          "signed_in",
+                          "signed_out",
+                          "challenged",
+                          "inconclusive"
+                        ]
+                      },
+                      "reason": {
+                        "type": "string"
+                      },
+                      "trigger": {
+                        "type": "string",
+                        "enum": [
+                          "schedule",
+                          "prelaunch",
+                          "recording",
+                          "relogin",
+                          "manual",
+                          "host_start",
+                          "attention",
+                          "restore"
+                        ]
+                      },
+                      "final_url": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "duration_ms": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "at": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "required": [
+                      "seq",
+                      "site_id",
+                      "outcome",
+                      "reason",
+                      "trigger",
+                      "final_url",
+                      "duration_ms",
+                      "at"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "type",
+                  "template_id",
+                  "probe"
                 ],
                 "additionalProperties": false
               },
@@ -8557,7 +8816,11 @@
                   "digest.daily",
                   "digest.weekly",
                   "report.anomaly",
-                  "test"
+                  "test",
+                  "template.signed_out",
+                  "template.challenged",
+                  "template.relogin_failed",
+                  "template.host_failed"
                 ]
               },
               "category": {
@@ -8751,7 +9014,11 @@
                   "digest.daily",
                   "digest.weekly",
                   "report.anomaly",
-                  "test"
+                  "test",
+                  "template.signed_out",
+                  "template.challenged",
+                  "template.relogin_failed",
+                  "template.host_failed"
                 ]
               },
               "category": {
@@ -9654,7 +9921,11 @@
                       "digest.daily",
                       "digest.weekly",
                       "report.anomaly",
-                      "test"
+                      "test",
+                      "template.signed_out",
+                      "template.challenged",
+                      "template.relogin_failed",
+                      "template.host_failed"
                     ]
                   },
                   {
@@ -10275,6 +10546,9 @@
               },
               "profile_secrets": {
                 "type": "boolean"
+              },
+              "agents_paused": {
+                "type": "boolean"
               }
             },
             "required": [
@@ -10285,7 +10559,8 @@
               "pages",
               "parked_pages",
               "sandboxed",
-              "profile_secrets"
+              "profile_secrets",
+              "agents_paused"
             ],
             "additionalProperties": false
           }
@@ -10377,6 +10652,9 @@
                       },
                       "next": {
                         "type": "string"
+                      },
+                      "path": {
+                        "type": "string"
                       }
                     },
                     "required": [
@@ -10395,6 +10673,18 @@
                 "items": {
                   "type": "string"
                 }
+              },
+              "auto_relogin_at": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               },
               "health": {
                 "type": "object",
@@ -10486,6 +10776,7 @@
               "auto_relogin",
               "form",
               "learned_cookie_names",
+              "auto_relogin_at",
               "health",
               "stopped_at",
               "device_bound",
@@ -10745,6 +11036,233 @@
           "kind",
           "state",
           "template_id"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "template.relogin"
+          },
+          "template_id": {
+            "type": "string"
+          },
+          "relogin": {
+            "type": "object",
+            "properties": {
+              "site_id": {
+                "type": "string"
+              },
+              "method": {
+                "type": "string",
+                "enum": [
+                  "window",
+                  "vault"
+                ]
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "queued",
+                  "open",
+                  "filling",
+                  "signed_in",
+                  "failed",
+                  "timed_out",
+                  "cancelled"
+                ]
+              },
+              "session_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "requested_by": {
+                "type": "string"
+              },
+              "requested_at": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "deadline_at": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "finished_at": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "agents_paused": {
+                "type": "boolean"
+              },
+              "sign_in_via": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "window",
+                      "live_view"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "confirm_required": {
+                "type": "boolean"
+              },
+              "version": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "unlisted_domains": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "error": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "site_id",
+              "method",
+              "state",
+              "session_id",
+              "requested_by",
+              "requested_at",
+              "deadline_at",
+              "finished_at",
+              "agents_paused",
+              "sign_in_via",
+              "confirm_required",
+              "version",
+              "unlisted_domains",
+              "error"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "type",
+          "template_id",
+          "relogin"
+        ],
+        "additionalProperties": false
+      },
+      {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "template.probe"
+          },
+          "template_id": {
+            "type": "string"
+          },
+          "probe": {
+            "type": "object",
+            "properties": {
+              "seq": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "site_id": {
+                "type": "string"
+              },
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "signed_in",
+                  "signed_out",
+                  "challenged",
+                  "inconclusive"
+                ]
+              },
+              "reason": {
+                "type": "string"
+              },
+              "trigger": {
+                "type": "string",
+                "enum": [
+                  "schedule",
+                  "prelaunch",
+                  "recording",
+                  "relogin",
+                  "manual",
+                  "host_start",
+                  "attention",
+                  "restore"
+                ]
+              },
+              "final_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "duration_ms": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "at": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "seq",
+              "site_id",
+              "outcome",
+              "reason",
+              "trigger",
+              "final_url",
+              "duration_ms",
+              "at"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "type",
+          "template_id",
+          "probe"
         ],
         "additionalProperties": false
       },

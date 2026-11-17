@@ -209,6 +209,12 @@ export const WARNING_ERRORS = {
     "A template's browser used more memory than `templateRecycleRss` (spec 13 §3.2): the largest page of the session using the most JavaScript memory was closed. When the browser is still above the limit five minutes later it is drained and restarted.",
     'Close pages the session no longer needs; raise templateRecycleRss on a machine with more memory.',
   ),
+  TEMPLATE_SITE_SIGNED_OUT: warning(
+    'TEMPLATE_SITE_SIGNED_OUT',
+    'Some template sites are signed out',
+    'The pre-launch check (spec 13 §8.2) found at least one enabled site of the template signed out or held by a security check while others were signed in, so the session started; its `template.sites` list each site’s status. The message names the sites.',
+    'Re-login the sites on the template page; the session sees the sign-in once it is restored.',
+  ),
   TEMPLATE_STATE_COPY: warning(
     'TEMPLATE_STATE_COPY',
     "Session started from a copy of a template's sign-ins",

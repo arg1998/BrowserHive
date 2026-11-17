@@ -4893,13 +4893,31 @@
           "cid": 8,
           "dflt_value": null,
           "hidden": 0,
-          "name": "form_json",
+          "name": "vault_linked_by",
           "notnull": 0,
           "pk": 0,
           "type": "TEXT"
         },
         {
           "cid": 9,
+          "dflt_value": null,
+          "hidden": 0,
+          "name": "auto_relogin_at",
+          "notnull": 0,
+          "pk": 0,
+          "type": "INTEGER"
+        },
+        {
+          "cid": 10,
+          "dflt_value": null,
+          "hidden": 0,
+          "name": "form_json",
+          "notnull": 0,
+          "pk": 0,
+          "type": "TEXT"
+        },
+        {
+          "cid": 11,
           "dflt_value": "'[]'",
           "hidden": 0,
           "name": "learned_cookie_names_json",
@@ -4908,7 +4926,7 @@
           "type": "TEXT"
         },
         {
-          "cid": 10,
+          "cid": 12,
           "dflt_value": "'unknown'",
           "hidden": 0,
           "name": "health_state",
@@ -4917,7 +4935,7 @@
           "type": "TEXT"
         },
         {
-          "cid": 11,
+          "cid": 13,
           "dflt_value": null,
           "hidden": 0,
           "name": "health_reason",
@@ -4926,7 +4944,7 @@
           "type": "TEXT"
         },
         {
-          "cid": 12,
+          "cid": 14,
           "dflt_value": null,
           "hidden": 0,
           "name": "health_checked_at",
@@ -4935,7 +4953,7 @@
           "type": "INTEGER"
         },
         {
-          "cid": 13,
+          "cid": 15,
           "dflt_value": null,
           "hidden": 0,
           "name": "health_changed_at",
@@ -4944,7 +4962,7 @@
           "type": "INTEGER"
         },
         {
-          "cid": 14,
+          "cid": 16,
           "dflt_value": "0",
           "hidden": 0,
           "name": "consecutive_inconclusive",
@@ -4953,7 +4971,7 @@
           "type": "INTEGER"
         },
         {
-          "cid": 15,
+          "cid": 17,
           "dflt_value": null,
           "hidden": 0,
           "name": "stopped_at",
@@ -4962,7 +4980,7 @@
           "type": "INTEGER"
         },
         {
-          "cid": 16,
+          "cid": 18,
           "dflt_value": "0",
           "hidden": 0,
           "name": "device_bound",
@@ -4971,7 +4989,7 @@
           "type": "INTEGER"
         },
         {
-          "cid": 17,
+          "cid": 19,
           "dflt_value": null,
           "hidden": 0,
           "name": "added_at",

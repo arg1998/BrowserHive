@@ -23,6 +23,7 @@ const formJson = z.object({
   password: z.string(),
   submit: z.string().optional(),
   next: z.string().optional(),
+  path: z.string().optional(),
 });
 
 function formFromJson(text: string | null, where: string): TemplateSiteFormRecord | null {
@@ -33,6 +34,7 @@ function formFromJson(text: string | null, where: string): TemplateSiteFormRecor
     password: j.password,
     ...(j.submit !== undefined && { submit: j.submit }),
     ...(j.next !== undefined && { next: j.next }),
+    ...(j.path !== undefined && { path: j.path }),
   };
 }
 
@@ -48,6 +50,8 @@ export function templateSiteFromRow(row: Selectable<TemplateSites>): TemplateSit
     writePolicy: parseEnumOrNull(SITE_WRITE_POLICIES, row.write_policy, where),
     vaultHandle: row.vault_handle,
     autoRelogin: intToBool(row.auto_relogin),
+    vaultLinkedBy: row.vault_linked_by,
+    autoReloginAt: row.auto_relogin_at,
     form: formFromJson(row.form_json, where),
     learnedCookieNames: parseStringArray(row.learned_cookie_names_json, where),
     health: {
@@ -74,6 +78,8 @@ export function templateSiteToRow(record: TemplateSiteRecord): Insertable<Templa
     write_policy: record.writePolicy,
     vault_handle: record.vaultHandle,
     auto_relogin: boolToInt(record.autoRelogin),
+    vault_linked_by: record.vaultLinkedBy,
+    auto_relogin_at: record.autoReloginAt,
     form_json: record.form === null ? null : toJson(record.form),
     learned_cookie_names_json: toJson(record.learnedCookieNames),
     health_state: record.health.state,

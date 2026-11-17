@@ -34,6 +34,7 @@ import type { PageRepository } from './pages.ts';
 import type { ScreenshotRepository } from './screenshots.ts';
 import type { SessionRepository } from './sessions.ts';
 import type {
+  TemplateProbeRepository,
   TemplateRepository,
   TemplateSiteRepository,
   TemplateVersionRepository,
@@ -77,6 +78,7 @@ export interface Repositories {
   readonly templates: TemplateRepository;
   readonly templateSites: TemplateSiteRepository;
   readonly templateVersions: TemplateVersionRepository;
+  readonly templateProbes: TemplateProbeRepository;
 }
 
 /**
