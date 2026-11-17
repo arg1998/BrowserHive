@@ -31,10 +31,12 @@ import {
   fixedOwner,
   InterceptionChain,
   type InterceptionHandler,
+  PASS,
 } from '../../src/infra/browsers/interception-chain.ts';
 import { requestGuardHandler } from '../../src/infra/browsers/request-guard-route.ts';
 import { createSystemClock } from '../../src/infra/clock/system-clock.ts';
 import { createCollectingLogger } from '../../src/infra/logging/collecting-logger.ts';
+import { err } from '../../src/kernel/result.ts';
 import { type FixtureServer, startFixtureServer } from '../helpers/fixture-server.ts';
 import { integrationChannel } from '../helpers/integration-channel.ts';
 import { type LaunchedSession, useDriverFixtures } from './driver-fixture.ts';
@@ -321,6 +323,127 @@ describe('real CORS preflights under a BrowserHive route (D-66, real Chromium)',
         expect(self.requests).toEqual([]);
       } finally {
         self.stop();
+      }
+    });
+
+    it(`[${label}] Chromium re-checks a replayed answer: a kept wildcard answer still refuses a credentialed write`, async () => {
+      const other = startFixtureServer();
+      try {
+        const session = await state.launch({ slug: `cors-recheck-${label}`, stealth });
+        await routes.guard(session);
+        await session.page.goto(state.fixture.url('/'));
+        // `/cors-allowed/` answers `Access-Control-Allow-Origin: *` without max-age (kept 5 s).
+        expect(await pageFetch(session.page, other.url('/cors-allowed/x'))).toBe('ok:200');
+        expect(
+          await pageFetch(session.page, other.url('/cors-allowed/x'), { credentials: 'include' }),
+        ).toBe('err:TypeError');
+        // The second write got the kept answer (no second OPTIONS) and Chromium refused it.
+        expect(methods(other, '/cors-allowed/x')).toEqual(['OPTIONS', 'POST']);
+      } finally {
+        other.stop();
+      }
+    });
+
+    it(`[${label}] an answer that refuses an asked header is not kept: the site is asked every time`, async () => {
+      const other = startFixtureServer();
+      try {
+        const session = await state.launch({ slug: `cors-narrow-${label}`, stealth });
+        const { chain } = await guardChain(session.handle.context, session.view.sessionId);
+        await session.page.goto(state.fixture.url('/'));
+        for (let i = 0; i < 2; i++) {
+          expect(await pageFetch(session.page, other.url('/cors-narrow/a'))).toBe('err:TypeError');
+        }
+        expect(methods(other, '/cors-narrow/a')).toEqual(['OPTIONS', 'OPTIONS']);
+        expect(chain.preflights.size).toBe(0);
+      } finally {
+        other.stop();
+      }
+    });
+
+    it(`[${label}] a page's own OPTIONS request is routed to the guard, never taken as a preflight`, async () => {
+      const session = await state.launch({ slug: `cors-own-${label}`, stealth });
+      const hits = new InMemoryRequestGuardHits();
+      const logger = createCollectingLogger();
+      const preflights: string[] = [];
+      const counting: InterceptionHandler = {
+        id: 'self-origin',
+        onError: 'open',
+        handle: async () => PASS,
+        preflight: async (preflight) => {
+          preflights.push(preflight.url);
+          return PASS;
+        },
+      };
+      const chain = new InterceptionChain({
+        handlers: [
+          counting,
+          requestGuardHandler({
+            rules: ruleSet({
+              id: 'api',
+              url: `127.0.0.1:${state.fixture.port}/api/*`,
+              action: 'block',
+            }),
+            hits,
+            confirmer: null,
+            clock,
+            logger,
+          }),
+        ],
+        resolveOwner: fixedOwner(session.view.sessionId),
+        clock,
+        logger,
+      });
+      expect((await chain.install(session.handle.context)).ok).toBe(true);
+      await session.page.goto(state.fixture.url('/'));
+      expect(
+        await pageFetch(session.page, state.fixture.url('/api/own'), {
+          method: 'OPTIONS',
+          preflighted: false,
+        }),
+      ).toBe('err:TypeError');
+      await Bun.sleep(100);
+      expect(state.fixture.requests.filter((r) => r.path === '/api/own')).toEqual([]);
+      expect(hits.list().map((h) => `${h.action} ${h.method} ${h.resourceType}`)).toEqual([
+        'block OPTIONS fetch',
+      ]);
+      expect(preflights).toEqual([]);
+    });
+
+    it(`[${label}] without an armed hook the chain fails closed: preflighted requests never leave`, async () => {
+      const other = startFixtureServer();
+      try {
+        const session = await state.launch({ slug: `cors-closed-${label}`, stealth });
+        const logger = createCollectingLogger();
+        const chain = new InterceptionChain({
+          handlers: [],
+          resolveOwner: fixedOwner(session.view.sessionId),
+          clock,
+          logger,
+          // As when the driver is not a verified version: the driver answers every preflight.
+          installPreflights: () => err(new Error('cors preflights not enforced: driver_version')),
+        });
+        expect((await chain.install(session.handle.context)).ok).toBe(true);
+        expect(chain.preflightsEnforced).toBe(false);
+        await session.page.goto(state.fixture.url('/'));
+        // Refused and allowed alike: the driver answered the preflight, so the chain refuses.
+        expect(await pageFetch(session.page, other.url('/cors/write'))).toBe('err:TypeError');
+        expect(await pageFetch(session.page, other.url('/cors-allowed/write'))).toBe(
+          'err:TypeError',
+        );
+        expect(other.requests).toEqual([]);
+        // Simple and same-origin requests still work.
+        expect(
+          await pageFetch(session.page, other.url('/cors-allowed/read'), {
+            method: 'GET',
+            preflighted: false,
+          }),
+        ).toBe('ok:200');
+        expect(
+          await pageFetch(session.page, state.fixture.url('/api/same'), { method: 'PUT' }),
+        ).toBe('ok:200');
+        expect(logger.has('cors request refused')).toBe(true);
+      } finally {
+        other.stop();
       }
     });
   }

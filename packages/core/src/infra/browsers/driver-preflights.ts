@@ -2,7 +2,23 @@
 
 import type { BrowserContext } from 'patchright';
 import { err, ok, type Result } from '../../kernel/result.ts';
-import { type PreflightCache, preflightKey } from './preflight-cache.ts';
+import {
+  driverCoreVersion,
+  isVerifiedDriverVersion,
+  markPreflightsEnforced,
+  type PreflightRefusal,
+  refusePreflights,
+  sharedPreflightState,
+} from './preflight-enforcement.ts';
+import {
+  FAIL_REASON,
+  field,
+  headerMap,
+  isDriverSession,
+  isRecord,
+  type PreflightHook,
+  relayPreflight,
+} from './preflight-relay.ts';
 
 /**
  * The problem (measured on Patchright 1.63, `coreBundle.js` `CRNetworkManager._onRequest`, the same
@@ -31,87 +47,62 @@ import { type PreflightCache, preflightKey } from './preflight-cache.ts';
  * connection's client-to-server lookup), the server `Page.delegate._networkManager`,
  * `CRNetworkManager.prototype._onRequest(requestWillBeSentSessionInfo, requestWillBeSentEvent,
  * requestPausedSessionInfo, requestPausedEvent)`, its `_page`/`_serviceWorker`/
- * `_alreadyTrackedNetworkIds`, and `CRSession._sendMayFail`/`on`. When one is missing the hook is
- * not installed and the driver keeps answering preflights (the caller logs it).
+ * `_alreadyTrackedNetworkIds`, and `CRSession._sendMayFail`/`on`.
+ *
+ * Fail closed (review F1). The hook is armed only for a `patchright-core` version in
+ * `VERIFIED_DRIVER_VERSIONS` whose `_onRequest` source still holds the preflight branch it replaces
+ * ({@link PREFLIGHT_BRANCH_MARKERS}). Anything else refuses enforcement for the process
+ * (`preflight-enforcement.ts`): the interception chain then refuses cross-origin requests that
+ * need a preflight (the driver would have answered it), and the refusal is reported as the
+ * `PREFLIGHTS_NOT_ENFORCED` degradation, on `/system` and by `doctor`. Once a paused request is
+ * known to be a preflight of a hooked context, a shape the hook cannot read fails it
+ * (`Fetch.failRequest`) and refuses enforcement; it is never handed back to the driver.
+ *
+ * Monkey-patching a third-party prototype is the exception spec 05 allows here (D-66): the
+ * published package cannot patch its dependency at install time, and the driver has no API for it.
  */
 
-/** A CORS preflight about to be sent, as the chain's handlers see it. */
-export interface PreflightRequest {
-  /** The URL of the preflight, which is the URL of the request it asks for. */
-  readonly url: string;
-  /** `Origin`: the origin asking. */
-  readonly origin: string | null;
-  /** `Access-Control-Request-Method`: the method of the request waiting for the answer. */
-  readonly requestMethod: string | null;
-  /** `Access-Control-Request-Headers`: its non-safelisted header names. */
-  readonly requestHeaders: string | null;
-}
+export type { PreflightHook, PreflightRequest, PreflightVerdict } from './preflight-relay.ts';
 
-/** What happens to a preflight: it goes on (to the site, or its cached answer), or it is failed. */
-export type PreflightVerdict =
-  | { readonly kind: 'continue' }
-  | { readonly kind: 'abort'; readonly reason: 'blockedbyclient' | 'failed' };
-
-/** One context's preflight policy and cache. */
-export interface PreflightHook {
-  /** Decides on a preflight; a rejection fails it (`failed`). */
-  decide(preflight: PreflightRequest): Promise<PreflightVerdict>;
-  readonly cache: PreflightCache;
-  /** Called when the hook could only be armed for a later first page and that page's driver internals were not as expected. */
-  unavailable?(error: Error): void;
-}
-
+/** Marks a wrapped `CRNetworkManager` prototype (per prototype, so a second driver copy is wrapped too). */
 const PATCHED = Symbol.for('browserhive.realPreflights');
 
-/** Server-side browser contexts with a hook. Weak: a closed context's hook goes with it. */
-const hooks = new WeakMap<object, PreflightHook>();
+/**
+ * What the verified `_onRequest` source contains: the preflight test, the `OPTIONS` method, the
+ * route check and both answers it chooses between. A driver whose `_onRequest` lacks one of them
+ * handles preflights elsewhere, so wrapping it would enforce nothing while reporting it does.
+ */
+export const PREFLIGHT_BRANCH_MARKERS: readonly string[] = Object.freeze([
+  '"preflight"',
+  '"OPTIONS"',
+  'needsRequestInterception',
+  'Fetch.fulfillRequest',
+  'Fetch.continueRequest',
+]);
 
-/** Questions sent to the network whose answer is awaited, per hook (request id → cache key). */
-const pendingOf = new WeakMap<PreflightHook, Map<string, { key: string; origin: string }>>();
+/** Whether `fn` is the verified `_onRequest`: four parameters and every marker in its source. */
+export function isVerifiedOnRequest(fn: unknown): boolean {
+  if (typeof fn !== 'function' || fn.length !== 4) return false;
+  let source: string;
+  try {
+    source = Function.prototype.toString.call(fn);
+  } catch {
+    return false;
+  }
+  return PREFLIGHT_BRANCH_MARKERS.every((marker) => source.includes(marker));
+}
 
-/** CDP sessions whose responses a hook already listens to. */
-const watchedOf = new WeakMap<PreflightHook, WeakSet<object>>();
+/** The hook of a server-side context, from the registry every module copy shares. */
+function hookOf(context: object): PreflightHook | undefined {
+  const hook = sharedPreflightState().hooks.get(context);
+  return isHook(hook) ? hook : undefined;
+}
 
-/** At most this many questions await an answer per hook (a session that dies leaves none behind). */
-const PENDING_LIMIT = 256;
+function isHook(value: unknown): value is PreflightHook {
+  return typeof field(value, 'decide') === 'function' && isRecord(field(value, 'cache'));
+}
 
 type Fn = (...args: unknown[]) => unknown;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-/** `value[key]` when `value` is an object. */
-function field(value: unknown, key: string): unknown {
-  return isRecord(value) ? value[key] : undefined;
-}
-
-/** A CDP session of the driver: `_sendMayFail` (never rejects) and event subscription. */
-interface DriverSession {
-  _sendMayFail(method: string, params: Record<string, unknown>): Promise<unknown>;
-  on(event: string, listener: (event: unknown) => void): unknown;
-}
-
-function isDriverSession(value: unknown): value is DriverSession {
-  return (
-    typeof field(value, '_sendMayFail') === 'function' && typeof field(value, 'on') === 'function'
-  );
-}
-
-/** A string-valued header map (CDP's `Headers`); anything else is dropped. */
-function headerMap(value: unknown): Record<string, string> {
-  const out: Record<string, string> = {};
-  if (!isRecord(value)) return out;
-  for (const [name, v] of Object.entries(value)) if (typeof v === 'string') out[name] = v;
-  return out;
-}
-
-function header(headers: Readonly<Record<string, string>>, name: string): string | null {
-  for (const [key, value] of Object.entries(headers)) {
-    if (key.toLowerCase() === name) return value;
-  }
-  return null;
-}
 
 /** The server-side object of a client-side driver object, through the in-process connection. */
 function serverObjectOf(client: object): object | null {
@@ -127,19 +118,28 @@ function serverObjectOf(client: object): object | null {
 }
 
 /**
- * Wraps `CRNetworkManager.prototype._onRequest`, found through a server page; once per process.
+ * Wraps `CRNetworkManager.prototype._onRequest`, found through a server page; once per prototype.
+ * Refuses enforcement for the process when the driver is not the verified one.
  *
  * @returns Whether the prototype is (now) wrapped.
  */
 function patchFrom(serverPage: unknown): boolean {
+  const refuse = (reason: PreflightRefusal): boolean => {
+    refusePreflights(reason);
+    return false;
+  };
+  if (!isVerifiedDriverVersion(driverCoreVersion())) return refuse('driver_version');
   const manager = field(field(serverPage, 'delegate'), '_networkManager');
-  if (!isRecord(manager)) return false;
+  if (!isRecord(manager)) return refuse('driver_shape');
   const proto: unknown = Object.getPrototypeOf(manager);
-  if (!isRecord(proto)) return false;
-  if (Reflect.get(proto, PATCHED) === true) return true;
+  if (!isRecord(proto)) return refuse('driver_shape');
+  if (Reflect.get(proto, PATCHED) === true) {
+    markPreflightsEnforced();
+    return true;
+  }
   const original = proto['_onRequest'];
-  if (typeof original !== 'function' || original.length !== 4) return false;
-  if (!(field(manager, '_alreadyTrackedNetworkIds') instanceof Set)) return false;
+  if (!isVerifiedOnRequest(original)) return refuse('driver_shape');
+  if (!(field(manager, '_alreadyTrackedNetworkIds') instanceof Set)) return refuse('driver_shape');
   const wrapped = function (this: unknown, ...args: unknown[]): unknown {
     if (takeOver(this, args)) return undefined;
     return Reflect.apply(original as Fn, this, args);
@@ -150,17 +150,24 @@ function patchFrom(serverPage: unknown): boolean {
     configurable: true,
   });
   Object.defineProperty(proto, PATCHED, { value: true });
+  markPreflightsEnforced();
   return true;
 }
 
 /**
  * Takes an intercepted preflight away from the driver when its context has a hook.
  *
- * @returns `false` (the driver handles it) for anything else, or when a shape is not as expected.
+ * @returns `false` (the driver handles it) for anything that is not a preflight of a hooked
+ *   context. A preflight of a hooked context is never handed back: when its shape cannot be read,
+ *   it is failed and enforcement is refused (fail closed).
  */
-function takeOver(manager: unknown, args: readonly unknown[]): boolean {
+export function takeOver(manager: unknown, args: readonly unknown[]): boolean {
+  let paused: unknown;
+  let pausedInfo: unknown;
   try {
-    const [sentInfo, sent, pausedInfo, paused] = args;
+    const [sentInfo, sent, pausedInfoArg, pausedArg] = args;
+    paused = pausedArg;
+    pausedInfo = pausedInfoArg;
     if (paused === undefined || paused === null) return false;
     const request = field(paused, 'request');
     if (field(request, 'method') !== 'OPTIONS') return false;
@@ -168,18 +175,27 @@ function takeOver(manager: unknown, args: readonly unknown[]): boolean {
     const owner = field(manager, '_page') ?? field(manager, '_serviceWorker');
     const context = field(owner, 'browserContext');
     if (!isRecord(context)) return false;
-    const hook = hooks.get(context);
+    const hook = hookOf(context);
     if (hook === undefined) return false;
+    // From here on the request is a preflight of a hooked context.
     const sentId = field(sent, 'requestId');
     const tracked = field(manager, '_alreadyTrackedNetworkIds');
-    if (typeof sentId !== 'string' || (tracked instanceof Set && tracked.has(sentId))) return false;
+    // The driver's own early return (a request it already tracks): nothing to answer.
+    if (typeof sentId === 'string' && tracked instanceof Set && tracked.has(sentId)) return false;
     const pausedSession = field(pausedInfo, 'session');
     const sentSession = field(sentInfo, 'session');
     const pausedId = field(paused, 'requestId');
     const url = field(request, 'url');
-    if (!isDriverSession(pausedSession) || !isDriverSession(sentSession)) return false;
-    if (typeof pausedId !== 'string' || typeof url !== 'string') return false;
-    handle(hook, {
+    if (
+      typeof sentId !== 'string' ||
+      !isDriverSession(pausedSession) ||
+      !isDriverSession(sentSession) ||
+      typeof pausedId !== 'string' ||
+      typeof url !== 'string'
+    ) {
+      return failUnexpected(pausedInfo, paused);
+    }
+    relayPreflight(hook, {
       url,
       headers: headerMap(field(request, 'headers')),
       topOrigin: topOriginOf(field(manager, '_page')),
@@ -196,9 +212,24 @@ function takeOver(manager: unknown, args: readonly unknown[]): boolean {
     );
     return true;
   } catch {
-    // An unexpected shape: the driver's own code handles the request.
-    return false;
+    return failUnexpected(pausedInfo, paused);
   }
+}
+
+/**
+ * A preflight of a hooked context the hook cannot read: fail it when its session allows, and
+ * refuse enforcement so the chain fails closed for what the driver would answer.
+ *
+ * @returns Whether the request was failed here (else the driver gets it, and the chain refuses
+ *   the request that follows).
+ */
+function failUnexpected(pausedInfo: unknown, paused: unknown): boolean {
+  refusePreflights('unexpected_preflight');
+  const session = field(pausedInfo, 'session');
+  const requestId = field(paused, 'requestId');
+  if (!isDriverSession(session) || typeof requestId !== 'string') return false;
+  void session._sendMayFail('Fetch.failRequest', { requestId, errorReason: FAIL_REASON.failed });
+  return true;
 }
 
 /** The origin of the page's top frame; `''` for a service worker or a page without one. */
@@ -216,135 +247,50 @@ function topOriginOf(page: unknown): string {
   }
 }
 
-interface PausedPreflight {
-  readonly url: string;
-  readonly headers: Readonly<Record<string, string>>;
-  readonly topOrigin: string;
-  readonly pausedSession: DriverSession;
-  readonly pausedId: string;
-  readonly sentSession: DriverSession;
-  readonly sentId: string;
-}
-
-const FAIL_REASON = { blockedbyclient: 'BlockedByClient', failed: 'Failed' } as const;
-
-async function handle(hook: PreflightHook, preflight: PausedPreflight): Promise<void> {
-  const { headers, pausedSession, pausedId } = preflight;
-  let verdict: PreflightVerdict;
-  try {
-    verdict = await hook.decide({
-      url: preflight.url,
-      origin: header(headers, 'origin'),
-      requestMethod: header(headers, 'access-control-request-method'),
-      requestHeaders: header(headers, 'access-control-request-headers'),
-    });
-  } catch {
-    verdict = { kind: 'abort', reason: 'failed' };
-  }
-  if (verdict.kind === 'abort') {
-    await pausedSession._sendMayFail('Fetch.failRequest', {
-      requestId: pausedId,
-      errorReason: FAIL_REASON[verdict.reason],
-    });
-    return;
-  }
-  const key = preflightKey({ url: preflight.url, topOrigin: preflight.topOrigin, headers });
-  const cached = hook.cache.get(key);
-  if (cached !== null) {
-    await pausedSession._sendMayFail('Fetch.fulfillRequest', {
-      requestId: pausedId,
-      responseCode: cached.status,
-      responseHeaders: cached.headers,
-      body: '',
-    });
-    return;
-  }
-  awaitAnswer(hook, preflight.sentSession, preflight.sentId, key, header(headers, 'origin') ?? '');
-  await pausedSession._sendMayFail('Fetch.continueRequest', { requestId: pausedId });
-}
-
-/** Records the site's answer to the preflight `requestId` in the hook's cache when it arrives. */
-function awaitAnswer(
-  hook: PreflightHook,
-  session: DriverSession,
-  requestId: string,
-  key: string,
-  origin: string,
-): void {
-  let pending = pendingOf.get(hook);
-  if (pending === undefined) {
-    pending = new Map();
-    pendingOf.set(hook, pending);
-  }
-  pending.set(requestId, { key, origin });
-  while (pending.size > PENDING_LIMIT) {
-    const oldest = pending.keys().next();
-    if (oldest.done === true) break;
-    pending.delete(oldest.value);
-  }
-  let watched = watchedOf.get(hook);
-  if (watched === undefined) {
-    watched = new WeakSet();
-    watchedOf.set(hook, watched);
-  }
-  if (watched.has(session)) return;
-  watched.add(session);
-  const waiting = pending;
-  session.on('Network.responseReceived', (event) => {
-    const id = field(event, 'requestId');
-    if (typeof id !== 'string') return;
-    const question = waiting.get(id);
-    if (question === undefined) return;
-    waiting.delete(id);
-    const response = field(event, 'response');
-    const status = field(response, 'status');
-    if (typeof status !== 'number') return;
-    hook.cache.store(question.key, question.origin, status, headerMap(field(response, 'headers')));
-  });
-  session.on('Network.loadingFailed', (event) => {
-    const id = field(event, 'requestId');
-    if (typeof id === 'string') waiting.delete(id);
-  });
-}
-
 /**
  * Hands the intercepted preflights of `context` to `hook` from now on (see the module doc).
  * Idempotent per context: a second hook replaces the first.
  *
- * @returns An error when the driver's internals are not as expected; the driver then keeps
- *   answering preflights itself.
+ * @returns `armed` when the driver's preflight code is wrapped; `pending` when the context has no
+ *   page yet (the code is wrapped when its first page appears; until then the chain fails closed);
+ *   an error when enforcement is refused (the driver is not the verified one).
  */
 export function installPreflightHook(
   context: BrowserContext,
   hook: PreflightHook,
-): Result<void, Error> {
+): Result<'armed' | 'pending', Error> {
+  const refused = (reason: PreflightRefusal): Result<'armed' | 'pending', Error> => {
+    refusePreflights(reason);
+    return err(new Error(`cors preflights not enforced: ${reason}`));
+  };
+  if (!isVerifiedDriverVersion(driverCoreVersion())) return refused('driver_version');
   const server = serverObjectOf(context);
-  if (server === null) return err(new Error('no in-process driver connection'));
+  // Not a driver context (only a test's fake): this chain fails closed, the process is not refused.
+  if (server === null) return err(new Error('cors preflights not enforced: driver_connection'));
   const pages = field(server, 'pages');
-  if (typeof pages !== 'function' || typeof field(server, 'on') !== 'function') {
-    return err(new Error('unexpected driver browser context'));
-  }
+  const on = field(server, 'on');
+  if (typeof pages !== 'function' || typeof on !== 'function') return refused('driver_shape');
   const existing: unknown = Reflect.apply(pages, server, []);
-  if (!Array.isArray(existing)) return err(new Error('unexpected driver browser context'));
+  if (!Array.isArray(existing)) return refused('driver_shape');
+  sharedPreflightState().hooks.set(server, hook);
   if (existing.length > 0) {
-    if (!patchFrom(existing[0])) return err(new Error('unexpected driver network manager'));
-  } else {
-    // No page yet: wrap on the first one, which the server reports before its target resumes,
-    // so before it can load anything.
-    const on = field(server, 'on') as Fn;
-    const off = field(server, 'off');
-    const onPage = (page: unknown): void => {
-      if (!patchFrom(page)) hook.unavailable?.(new Error('unexpected driver network manager'));
-      if (typeof off === 'function') Reflect.apply(off, server, ['page', onPage]);
-    };
-    Reflect.apply(on, server, ['page', onPage]);
+    return patchFrom(existing[0]) ? ok('armed') : refused('driver_shape');
   }
-  hooks.set(server, hook);
-  return ok(undefined);
+  // No page yet. The server reports a page after its target has resumed and committed its first
+  // navigation (Patchright 1.63 `CRPage` → `_initialize` → `reportAsNew`), so a first page opened
+  // with a URL could send a preflight before this wraps the driver; the chain refuses such
+  // requests while the state is `pending` (fail closed). BrowserHive opens every first page blank.
+  const off = field(server, 'off');
+  const onPage = (page: unknown): void => {
+    patchFrom(page);
+    if (typeof off === 'function') Reflect.apply(off, server, ['page', onPage]);
+  };
+  Reflect.apply(on, server, ['page', onPage]);
+  return ok('pending');
 }
 
 /** Whether `context` has a hook (tests). */
 export function hasPreflightHook(context: BrowserContext): boolean {
   const server = serverObjectOf(context);
-  return server !== null && hooks.has(server);
+  return server !== null && hookOf(server) !== undefined;
 }

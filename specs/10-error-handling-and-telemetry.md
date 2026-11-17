@@ -157,6 +157,7 @@ Decisions: D-07 (error model), D-08 (telemetry), D-20 (privacy).
 | SITE_ACTION_BLOCKED | 403 | domain | never | `{session_id, site, guard}` |
 | TEMPLATE_NAME_TAKEN, TEMPLATE_IN_USE, TEMPLATE_VERSION_NOT_FOUND, TEMPLATE_VERSION_UNREADABLE, SITE_PACK_NOT_FOUND, SITE_PACK_INVALID, SITE_PACK_UPDATE_NOT_PENDING | 409, 409, 404, 409, 404, 400, 409 | domain | different_args, different_args, never, after_operator, never, different_args, never | REST only (spec 13 §12) |
 | TEMPLATE_HOST_FAILED, TEMPLATE_KEY_MISSING, TEMPLATE_KEY_MISMATCH, TEMPLATE_CHECKPOINT_FAILED, TEMPLATE_CHECKPOINT_TOO_LARGE, SITE_PACKS_STALE, SITE_PACKS_FETCH_FAILED | — | boot | never, never, never, backoff, never, never, backoff | degradation records (§3) |
+| PREFLIGHTS_NOT_ENFORCED | — | boot | never | `{reason:'driver_version'\|'driver_shape'\|'driver_connection'\|'unexpected_preflight', driver_version:string\|null}` (degradation record, §3; D-66: routed browsers refuse cross-origin requests that need a preflight) |
 | TEMPLATE_SITE_SIGNED_OUT, SESSION_RESOURCE_LIMIT, TEMPLATE_STATE_COPY, SITE_GUARD_WARNED, SITE_PACED, SITE_WRITE_HELD | — | warning | — | `{session_id, message, details}` |
 
 There is one listener (D-02), so bind failures are reported by exactly two codes: `PORT_IN_USE` when the address is taken (a policy-style refusal the operator fixes with `--port`) and `BIND_FAILED` for every other errno.

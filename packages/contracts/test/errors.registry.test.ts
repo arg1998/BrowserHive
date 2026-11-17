@@ -156,6 +156,8 @@ const SPEC_CODES = [
   'TEMPLATE_STATE_COPY',
   'TEMPLATE_NEEDS_LOGIN',
   'TEMPLATE_SITE_SIGNED_OUT',
+  // Real CORS preflights in routed browsers (spec 13 §3.8, D-66).
+  'PREFLIGHTS_NOT_ENFORCED',
 ] as const;
 
 describe('ERROR_REGISTRY completeness', () => {

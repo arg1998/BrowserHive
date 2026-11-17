@@ -31,6 +31,10 @@ export { createLogPersistSink, LogPersistSink } from '../app/observability/log-p
 export { createBunPasswordHasher } from '../infra/auth/bun-password-hasher.ts';
 export { createCredentialsFile } from '../infra/auth/credentials-file.ts';
 export { createWebCryptoRandom } from '../infra/auth/web-crypto-random.ts';
+export {
+  isVerifiedDriverVersion,
+  VERIFIED_DRIVER_VERSIONS,
+} from '../infra/browsers/preflight-enforcement.ts';
 export { createSystemClock } from '../infra/clock/system-clock.ts';
 export { createNodeFileSystem } from '../infra/fs/node-file-system.ts';
 export { type EventLoopLagMonitor, startEventLoopLagMonitor } from '../infra/host/event-loop.ts';

@@ -2,6 +2,7 @@
 
 import { describe, expect, it } from 'bun:test';
 import {
+  answerAllows,
   DEFAULT_PREFLIGHT_MAX_AGE_S,
   MAX_PREFLIGHT_MAX_AGE_S,
   PreflightCache,
@@ -14,6 +15,9 @@ const ORIGIN = 'https://site-a.test';
 function question(headers: Record<string, string>, url = 'https://api.test/w', top = ORIGIN) {
   return preflightKey({ url, topOrigin: top, headers });
 }
+
+/** The question `ASKED` asks. */
+const Q = { origin: ORIGIN, method: 'POST', headers: 'content-type,x-custom' };
 
 const ASKED = {
   Origin: ORIGIN,
@@ -70,6 +74,7 @@ describe('PreflightCache', () => {
   const allow = {
     'Access-Control-Allow-Origin': ORIGIN,
     'Access-Control-Allow-Methods': 'POST',
+    'Access-Control-Allow-Headers': 'Content-Type, X-Custom',
     'Access-Control-Max-Age': '600',
     'Content-Type': 'text/plain',
     Date: 'x',
@@ -79,12 +84,13 @@ describe('PreflightCache', () => {
     const { cache, advance } = cacheAt();
     const key = question(ASKED);
     expect(cache.get(key)).toBeNull();
-    expect(cache.store(key, ORIGIN, 204, allow)).toBe(true);
+    expect(cache.store(key, Q, 204, allow)).toBe(true);
     expect(cache.get(key)).toEqual({
       status: 204,
       headers: [
         { name: 'Access-Control-Allow-Origin', value: ORIGIN },
         { name: 'Access-Control-Allow-Methods', value: 'POST' },
+        { name: 'Access-Control-Allow-Headers', value: 'Content-Type, X-Custom' },
         { name: 'Access-Control-Max-Age', value: '600' },
       ],
     });
@@ -99,7 +105,7 @@ describe('PreflightCache', () => {
     const { cache, advance } = cacheAt();
     const key = question(ASKED);
     const { 'Access-Control-Max-Age': _, ...noMaxAge } = allow;
-    expect(cache.store(key, ORIGIN, 200, noMaxAge)).toBe(true);
+    expect(cache.store(key, Q, 200, noMaxAge)).toBe(true);
     advance(4_999);
     expect(cache.get(key)).not.toBeNull();
     advance(1);
@@ -109,27 +115,82 @@ describe('PreflightCache', () => {
   it('never keeps a refusal, a foreign origin, a missing allow-origin or max-age 0', () => {
     const { cache } = cacheAt();
     const key = question(ASKED);
-    expect(cache.store(key, ORIGIN, 403, allow)).toBe(false);
-    expect(cache.store(key, ORIGIN, 302, allow)).toBe(false);
+    expect(cache.store(key, Q, 403, allow)).toBe(false);
+    expect(cache.store(key, Q, 302, allow)).toBe(false);
     expect(
-      cache.store(key, ORIGIN, 204, { ...allow, 'Access-Control-Allow-Origin': 'https://x.test' }),
+      cache.store(key, Q, 204, { ...allow, 'Access-Control-Allow-Origin': 'https://x.test' }),
     ).toBe(false);
-    expect(cache.store(key, ORIGIN, 204, { 'Access-Control-Max-Age': '600' })).toBe(false);
-    expect(cache.store(key, ORIGIN, 204, { ...allow, 'Access-Control-Max-Age': '0' })).toBe(false);
+    expect(cache.store(key, Q, 204, { 'Access-Control-Max-Age': '600' })).toBe(false);
+    expect(cache.store(key, Q, 204, { ...allow, 'Access-Control-Max-Age': '0' })).toBe(false);
     expect(cache.size).toBe(0);
     // `*` is kept: Chromium decides against the waiting request's credentials mode.
-    expect(cache.store(key, ORIGIN, 204, { ...allow, 'access-control-allow-origin': ' * ' })).toBe(
-      true,
-    );
+    expect(cache.store(key, Q, 204, { ...allow, 'access-control-allow-origin': ' * ' })).toBe(true);
   });
 
   it('drops the oldest answer beyond its limit; storing again refreshes', () => {
     const { cache } = cacheAt();
     const keys = ['a', 'b', 'c', 'd'].map((p) => question(ASKED, `https://api.test/${p}`));
-    for (const key of keys.slice(0, 3)) cache.store(key, ORIGIN, 204, allow);
-    cache.store(keys[0] ?? '', ORIGIN, 204, allow);
-    cache.store(keys[3] ?? '', ORIGIN, 204, allow);
+    for (const key of keys.slice(0, 3)) cache.store(key, Q, 204, allow);
+    cache.store(keys[0] ?? '', Q, 204, allow);
+    cache.store(keys[3] ?? '', Q, 204, allow);
     expect(cache.size).toBe(3);
     expect(keys.map((k) => cache.get(k) !== null)).toEqual([true, false, true, true]);
+  });
+});
+
+describe('answerAllows (review F2: only answers that pass, as Chromium caches)', () => {
+  const ok = { 'access-control-allow-origin': ORIGIN };
+  const ask = (method: string, headers = '') => ({ origin: ORIGIN, method, headers });
+
+  it('the method must be safelisted, listed (case-sensitively) or *', () => {
+    expect(answerAllows(ask('POST'), 204, ok)).toBe(true);
+    expect(answerAllows(ask('PUT'), 204, ok)).toBe(false);
+    expect(
+      answerAllows(ask('PUT'), 204, { ...ok, 'access-control-allow-methods': 'GET, PUT' }),
+    ).toBe(true);
+    expect(answerAllows(ask('PUT'), 204, { ...ok, 'access-control-allow-methods': 'put' })).toBe(
+      false,
+    );
+    expect(answerAllows(ask('PATCH'), 204, { ...ok, 'access-control-allow-methods': '*' })).toBe(
+      true,
+    );
+  });
+
+  it('every asked header must be listed (case-insensitively) or covered by *, never authorization', () => {
+    expect(answerAllows(ask('POST', 'x-custom'), 204, ok)).toBe(false);
+    expect(
+      answerAllows(ask('POST', 'content-type,x-custom'), 204, {
+        ...ok,
+        'access-control-allow-headers': 'Content-Type',
+      }),
+    ).toBe(false);
+    expect(
+      answerAllows(ask('POST', 'content-type,x-custom'), 204, {
+        ...ok,
+        'access-control-allow-headers': 'X-CUSTOM, content-type',
+      }),
+    ).toBe(true);
+    expect(
+      answerAllows(ask('POST', 'x-custom'), 204, { ...ok, 'access-control-allow-headers': '*' }),
+    ).toBe(true);
+    expect(
+      answerAllows(ask('POST', 'authorization'), 204, {
+        ...ok,
+        'access-control-allow-headers': '*',
+      }),
+    ).toBe(false);
+  });
+
+  it('a refusal of the method or a header is never kept, so the site is asked again', () => {
+    const { cache } = cacheAt();
+    const key = question(ASKED);
+    expect(
+      cache.store(key, Q, 204, {
+        'access-control-allow-origin': ORIGIN,
+        'access-control-allow-headers': 'content-type',
+        'access-control-max-age': '600',
+      }),
+    ).toBe(false);
+    expect(cache.get(key)).toBeNull();
   });
 });

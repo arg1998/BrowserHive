@@ -112,6 +112,7 @@ browserhive doctor
 - Bun version is at least 1.4.
 - The first `bh` on `PATH` is BrowserHive's [shorthand](#the-bh-shorthand) (a warning when it is another program; fine when there is none).
 - Patchright and its Chromium are installed, with exact versions (row `chromium (patchright)`; a failure when either is missing).
+- Patchright is the version BrowserHive's CORS preflight handling was verified against (row `cors preflights`; a warning otherwise: template browsers and sessions with a blocklist then refuse cross-origin requests that need a preflight).
 - Google Chrome and Microsoft Edge: version and path, or "not installed" (fine).
 - The configured `defaultChannel` is installed (a failure otherwise, with the install command).
 - The browser in use is not more than one major version ahead of the tested build (a warning).

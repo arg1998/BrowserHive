@@ -8,15 +8,17 @@
  * `Access-Control-Max-Age: 600` (an unrouted context sends one). This cache replays the site's
  * answer to the same question for as long as Chromium would have kept it.
  *
- * It only ever replays what the site itself answered; Chromium still runs its CORS check on the
+ * It only ever replays what the site itself answered, and only an answer that passes Chromium's
+ * preflight checks for the question asked (status, allowed origin, method and headers), so a site
+ * that refuses is asked again every time, as Chromium does. Chromium still runs its CORS check on a
  * replayed answer against the request that waits for it, so a replay can never allow what the
- * site's answer did not. It is stricter than Chromium's cache in what counts as the same question
- * (an exact match of the URL, the requesting origin, the top frame's origin and every
- * `Access-Control-Request-*` header), so it can send a preflight Chromium would have skipped, never
- * skip one Chromium would have sent for a different question. It cannot see a request's
- * credentials mode (a preflight never carries credentials and the site answers it without knowing
- * the mode), which Chromium's cache also keys on: Chromium re-checks the replayed answer against
- * the waiting request's mode, so the outcome is the same, only one round trip fewer.
+ * site's answer did not (`cors-preflights.test.ts` pins this). What counts as the same question
+ * differs from Chromium's cache: here an exact match of the URL, the requesting origin, the top
+ * frame's origin and every `Access-Control-Request-*` header (stricter, so more preflights), but
+ * without the request's credentials mode, which a preflight does not carry and Chromium keys on
+ * (so, for example, a credentialed request after an uncredentialed one to the same URL gets the
+ * kept answer, which Chromium re-checks, where Chromium would ask again). A site can therefore see
+ * a different number of preflights than Chrome would send, never a different outcome.
  */
 
 /** Chromium's default lifetime of a preflight answer without (or with an unreadable) `Access-Control-Max-Age`, in seconds. */
@@ -85,10 +87,67 @@ function headerOf(headers: Readonly<Record<string, string>>, name: string): stri
   return undefined;
 }
 
+/** The question a preflight asked: its `Origin`, `Access-Control-Request-Method` and `-Headers`. */
+export interface PreflightAsked {
+  readonly origin: string;
+  readonly method: string;
+  /** Comma-separated header names, as Chromium sent them (`''` when none). */
+  readonly headers: string;
+}
+
+const SAFELISTED_METHODS: ReadonlySet<string> = new Set(['GET', 'HEAD', 'POST']);
+
+/** A comma-separated header value as trimmed, non-empty items. */
+function listOf(value: string | undefined): string[] {
+  if (value === undefined) return [];
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter((item) => item !== '');
+}
+
 /**
- * The per-context cache. Only answers a browser could accept are kept: a `2xx` status and an
- * `Access-Control-Allow-Origin` of `*` or the requesting origin (a refusal is never kept, so a site
- * that fixes its answer is asked again at once, as Chromium would).
+ * Whether an answer passes Chromium's preflight checks for `asked`, as far as a preflight shows
+ * them (Fetch standard "CORS-preflight fetch", steps 7.3–7.7): a `2xx` status; an
+ * `Access-Control-Allow-Origin` of `*` or the asking origin; the asked method safelisted, listed
+ * (case-sensitively) or `*`; every asked header listed (case-insensitively) or covered by `*`,
+ * except `authorization`, which `*` never covers. A `*` holds only for requests without
+ * credentials; Chromium re-checks the waiting request's mode on a replay.
+ */
+export function answerAllows(
+  asked: PreflightAsked,
+  status: number,
+  headers: Readonly<Record<string, string>>,
+): boolean {
+  if (status < 200 || status > 299) return false;
+  const allowOrigin = headerOf(headers, 'access-control-allow-origin')?.trim();
+  if (allowOrigin === undefined || (allowOrigin !== '*' && allowOrigin !== asked.origin)) {
+    return false;
+  }
+  const methods = listOf(headerOf(headers, 'access-control-allow-methods'));
+  if (
+    asked.method !== '' &&
+    !SAFELISTED_METHODS.has(asked.method) &&
+    !methods.includes(asked.method) &&
+    !methods.includes('*')
+  ) {
+    return false;
+  }
+  const allowed = new Set(
+    listOf(headerOf(headers, 'access-control-allow-headers')).map((h) => h.toLowerCase()),
+  );
+  for (const name of listOf(asked.headers).map((h) => h.toLowerCase())) {
+    if (allowed.has(name)) continue;
+    if (allowed.has('*') && name !== 'authorization') continue;
+    return false;
+  }
+  return true;
+}
+
+/**
+ * The per-context cache. Only answers that pass {@link answerAllows} are kept: a refusal (of the
+ * origin, the method or a header) is never kept, so a site that fixes its answer is asked again at
+ * once, as Chromium would.
  */
 export class PreflightCache {
   private readonly entries = new Map<string, { answer: PreflightAnswer; until: number }>();
@@ -117,21 +176,18 @@ export class PreflightCache {
   }
 
   /**
-   * Keeps the site's answer to `key` when a browser could accept it.
+   * Keeps the site's answer to `key` when it passes {@link answerAllows} for `asked`.
    *
-   * @param origin The question's `Origin` header.
    * @param headers The answer's response headers.
    * @returns Whether it was kept.
    */
   store(
     key: string,
-    origin: string,
+    asked: PreflightAsked,
     status: number,
     headers: Readonly<Record<string, string>>,
   ): boolean {
-    if (status < 200 || status > 299) return false;
-    const allowOrigin = headerOf(headers, 'access-control-allow-origin')?.trim();
-    if (allowOrigin === undefined || (allowOrigin !== '*' && allowOrigin !== origin)) return false;
+    if (!answerAllows(asked, status, headers)) return false;
     const seconds = preflightMaxAge(headerOf(headers, 'access-control-max-age'));
     if (seconds === 0) return false;
     const kept: PreflightHeader[] = [];

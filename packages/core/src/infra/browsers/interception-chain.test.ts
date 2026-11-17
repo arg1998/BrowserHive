@@ -1,10 +1,9 @@
-/** @module infra/browsers/interception-chain.test — one route per context, ordered handlers, first abort wins, fail-closed and fail-open handler errors, lazy memoized owner (spec 13 §3.8); the preflight hook and preflight decisions (D-66). */
+/** @module infra/browsers/interception-chain.test — one route per context, ordered handlers, first abort wins, fail-closed and fail-open handler errors, lazy memoized owner (spec 13 §3.8). The preflight side (D-66) is `chain-preflights.test.ts`. */
 
 import { describe, expect, it } from 'bun:test';
 import type { BrowserContext, Request, Route } from 'patchright';
-import { err, ok } from '../../kernel/result.ts';
+import { ok } from '../../kernel/result.ts';
 import { createCollectingLogger } from '../logging/collecting-logger.ts';
-import type { PreflightHook, PreflightRequest } from './driver-preflights.ts';
 import {
   fixedOwner,
   InterceptionChain,
@@ -33,6 +32,7 @@ function fakeRoute(resourceType: string | (() => string), options: { noRequest?:
   const request: unknown = {
     url: () => 'https://site.test/x',
     method: () => 'POST',
+    headers: () => ({}),
     resourceType: typeof resourceType === 'function' ? resourceType : () => resourceType,
   };
   const route: unknown = {
@@ -66,8 +66,19 @@ function handler(
 
 const ABORT: InterceptionVerdict = { kind: 'abort', reason: 'blockedbyclient' };
 
+/** Preflights enforced (D-66 has its own suite): the driver hook is faked as armed. */
+const ENFORCED = {
+  installPreflights: () => ok('armed' as const),
+  preflightState: () => 'enforced' as const,
+};
+
 function chainOf(handlers: InterceptionHandler[], logger = createCollectingLogger()) {
-  return new InterceptionChain({ handlers, resolveOwner: fixedOwner('sess-1'), logger });
+  return new InterceptionChain({
+    handlers,
+    resolveOwner: fixedOwner('sess-1'),
+    logger,
+    ...ENFORCED,
+  });
 }
 
 describe('InterceptionChain', () => {
@@ -308,157 +319,5 @@ describe('InterceptionChain', () => {
   it('fixedOwner gives every request the one session', async () => {
     const { request } = fakeRoute('fetch');
     expect(await fixedOwner('sess-2')(request)).toEqual({ kind: 'session', sessionId: 'sess-2' });
-  });
-});
-
-const PREFLIGHT: PreflightRequest = {
-  url: 'https://api.site.test/write',
-  origin: 'https://site.test',
-  requestMethod: 'POST',
-  requestHeaders: 'content-type',
-};
-
-/** A handler deciding preflights only (its `handle` passes). */
-function preflightHandler(
-  id: InterceptionHandler['id'],
-  calls: string[],
-  verdict: InterceptionVerdict | Error,
-  onError: InterceptionHandler['onError'] = 'closed',
-): InterceptionHandler {
-  return {
-    id,
-    onError,
-    handle: async () => PASS,
-    preflight: async (preflight) => {
-      calls.push(`${id}:${preflight.url}`);
-      if (verdict instanceof Error) throw verdict;
-      return verdict;
-    },
-  };
-}
-
-describe('InterceptionChain preflights (D-66)', () => {
-  it('arms the preflight hook before the route, with its own decision and cache', async () => {
-    const order: string[] = [];
-    let hook: PreflightHook | null = null;
-    const context: unknown = {
-      route: async () => void order.push('route'),
-    };
-    const chain = new InterceptionChain({
-      handlers: [],
-      resolveOwner: fixedOwner('sess-1'),
-      logger: createCollectingLogger(),
-      installPreflights: (_context, given) => {
-        order.push('preflights');
-        hook = given;
-        return ok(undefined);
-      },
-    });
-    expect(chain.preflightsEnforced).toBe(false);
-    expect((await chain.install(context as BrowserContext)).ok).toBe(true);
-    expect(order).toEqual(['preflights', 'route']);
-    expect(chain.preflightsEnforced).toBe(true);
-    const armed = hook as PreflightHook | null;
-    expect(armed?.cache).toBe(chain.preflights);
-    expect(await armed?.decide(PREFLIGHT)).toEqual({ kind: 'continue' });
-  });
-
-  it('a hook the driver cannot take is logged; the route still stands', async () => {
-    const logger = createCollectingLogger();
-    const { context, routes } = fakeContext();
-    const chain = new InterceptionChain({
-      handlers: [],
-      resolveOwner: fixedOwner('sess-1'),
-      logger,
-      installPreflights: () => err(new Error('unexpected driver network manager')),
-    });
-    expect((await chain.install(context)).ok).toBe(true);
-    expect(routes).toHaveLength(1);
-    expect(chain.preflightsEnforced).toBe(false);
-    expect(logger.find('preflight hook unavailable')[0]?.level).toBe('error');
-
-    const throwing = new InterceptionChain({
-      handlers: [],
-      resolveOwner: fixedOwner('sess-1'),
-      logger,
-      installPreflights: () => {
-        throw new Error('boom');
-      },
-    });
-    expect((await throwing.install(fakeContext().context)).ok).toBe(true);
-    expect(throwing.preflightsEnforced).toBe(false);
-  });
-
-  it('a hook armed for a later first page reports a failure there', async () => {
-    const logger = createCollectingLogger();
-    let hook: PreflightHook | null = null;
-    const chain = new InterceptionChain({
-      handlers: [],
-      resolveOwner: fixedOwner('sess-1'),
-      logger,
-      installPreflights: (_context, given) => {
-        hook = given;
-        return ok(undefined);
-      },
-    });
-    await chain.install(fakeContext().context);
-    expect(chain.preflightsEnforced).toBe(true);
-    (hook as PreflightHook | null)?.unavailable?.(new Error('unexpected driver network manager'));
-    expect(chain.preflightsEnforced).toBe(false);
-    expect(logger.has('preflight hook unavailable')).toBe(true);
-  });
-
-  it('runs only the handlers that decide preflights, in slot order; the first abort wins', async () => {
-    const calls: string[] = [];
-    const chain = chainOf([
-      handler('request-guard', calls, ABORT),
-      preflightHandler('blocklist', calls, PASS),
-      preflightHandler('self-origin', calls, PASS),
-    ]);
-    expect(await chain.handlePreflight(PREFLIGHT)).toEqual({ kind: 'continue' });
-    expect(calls).toEqual([`self-origin:${PREFLIGHT.url}`, `blocklist:${PREFLIGHT.url}`]);
-
-    calls.length = 0;
-    const aborting = chainOf([
-      preflightHandler('self-origin', calls, ABORT),
-      preflightHandler('blocklist', calls, PASS),
-    ]);
-    expect(await aborting.handlePreflight(PREFLIGHT)).toEqual(ABORT);
-    expect(calls).toEqual([`self-origin:${PREFLIGHT.url}`]);
-  });
-
-  it('a throwing or malformed preflight decision fails the preflight for a closed handler only', async () => {
-    const logger = createCollectingLogger();
-    const closed = chainOf([preflightHandler('self-origin', [], new Error('boom'))], logger);
-    expect(await closed.handlePreflight(PREFLIGHT)).toEqual({ kind: 'abort', reason: 'failed' });
-    expect(logger.has('interception handler threw')).toBe(true);
-
-    const calls: string[] = [];
-    const open = chainOf([
-      preflightHandler('self-origin', calls, new Error('boom'), 'open'),
-      preflightHandler('blocklist', calls, PASS),
-    ]);
-    expect(await open.handlePreflight(PREFLIGHT)).toEqual({ kind: 'continue' });
-    expect(calls).toHaveLength(2);
-
-    const malformed: InterceptionHandler = {
-      id: 'self-origin',
-      onError: 'closed',
-      handle: async () => PASS,
-      preflight: async () => ({ kind: 'continue' }) as unknown as InterceptionVerdict,
-    };
-    expect(await chainOf([malformed]).handlePreflight(PREFLIGHT)).toEqual({
-      kind: 'abort',
-      reason: 'failed',
-    });
-  });
-
-  it('a plain fake context gets no hook (no in-process driver), and the route still installs', async () => {
-    const logger = createCollectingLogger();
-    const { context, routes } = fakeContext();
-    const chain = chainOf([], logger);
-    expect((await chain.install(context)).ok).toBe(true);
-    expect(routes).toHaveLength(1);
-    expect(chain.preflightsEnforced).toBe(false);
   });
 });

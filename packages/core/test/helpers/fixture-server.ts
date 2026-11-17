@@ -322,6 +322,19 @@ export function startFixtureServer(): FixtureServer {
               return new Response(null, { status: 204, headers: allow });
             return new Response('cors write allowed', { headers: allow });
           }
+          if (url.pathname.startsWith('/cors-narrow/')) {
+            // Allows the origin and `content-type` only, cacheably: a request with `x-custom` is
+            // refused at preflight, and a browser asks again every time (review F2).
+            const allow = {
+              'access-control-allow-origin': req.headers.get('origin') ?? '*',
+              'access-control-allow-methods': 'POST',
+              'access-control-allow-headers': 'content-type',
+              'access-control-max-age': '600',
+            };
+            if (req.method === 'OPTIONS')
+              return new Response(null, { status: 204, headers: allow });
+            return new Response('cors write allowed', { headers: allow });
+          }
           if (url.pathname.startsWith('/cors/')) {
             // A cross-origin endpoint whose preflight refuses: an unrouted browser never sends
             // the write itself.
