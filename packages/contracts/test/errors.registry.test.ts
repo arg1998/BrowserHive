@@ -169,6 +169,8 @@ const SPEC_CODES = [
   'SITE_PACKS_LOAD_FAILED',
   'SITE_GUARD_WARNED',
   'SITE_WRITE_HELD',
+  // Site pack strategies (spec 13 §9.4, PR T3b).
+  'SITE_PACED',
   // Real CORS preflights in routed browsers (spec 13 §3.8, D-66).
   'PREFLIGHTS_NOT_ENFORCED',
 ] as const;
@@ -236,7 +238,7 @@ describe('ERROR_REGISTRY completeness', () => {
   it('categories partition the codes; audit and warning codes are never thrown', () => {
     const total = ErrorCategory.options.reduce((n: number, c) => n + codesInCategory(c).length, 0);
     expect(total).toBe(ERROR_CODES.length);
-    expect(codesInCategory('warning')).toHaveLength(17);
+    expect(codesInCategory('warning')).toHaveLength(18);
     expect(codesInCategory('audit')).toContain('ORIGIN_MISMATCH');
     expect(codesInCategory('boot')).toContain('PORT_IN_USE');
   });
