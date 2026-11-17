@@ -90,8 +90,6 @@ export class SitePackRegistry implements SitePackLookup {
     return this.#snapshot.packs.get(packId)?.effective ?? null;
   }
 
-  // --- template integration -------------------------------------------------------------------
-
   /** The pack that owns a site (registrable domain): in force or on offer; `null` when none or off. */
   packIdFor(siteId: string): string | null {
     if (!this.#deps.enabled) return null;
@@ -118,12 +116,8 @@ export class SitePackRegistry implements SitePackLookup {
     return humanOnlyOf(this, packId);
   }
 
-  /**
-   * Prepares the first-use approval of a new template site (spec 13 §9.6, D-67): the version
-   * already approved, else exactly the offer whose SHA-256 the operator reviewed. Write it with
-   * `prepared.write(repos)` in the site's own transaction, then call {@link approvalsCommitted}.
-   * `null`: no pack covers the site (generic) or `sitePacks=false`. @throws `SITE_PACK_APPROVAL_REQUIRED`, `CONFLICT`, `SITE_PACK_DOMAIN_TAKEN`.
-   */
+  /** First-use approval (§9.6, D-67): the approved version, else exactly the reviewed offer; write
+   * it in the site's transaction, then {@link approvalsCommitted}. `null`: generic or packs off. */
   async prepareSite(
     siteId: string,
     sha256: string | undefined,
@@ -157,8 +151,6 @@ export class SitePackRegistry implements SitePackLookup {
     }
     return { packId: prepared.packId, version: prepared.version, sha256: prepared.sha256 };
   }
-
-  // --- reads ----------------------------------------------------------------------------------
 
   /** Every pack with the registry's status (`GET /site-packs`). */
   list(query: SitePacksQuery = { source: undefined }): SitePacksResponse {
@@ -242,7 +234,6 @@ export class SitePackRegistry implements SitePackLookup {
   /** After template or site changes: re-reads `used_by` and re-classifies pending versions (§9.7). */
   refreshUsage(): Promise<void> {
     return this.#serial(async () => {
-      // A removed site or template may end a below-floor record (D-71, `registry-floor.ts`).
       await this.#enforceFloor();
       const next = await withFreshUsage(this.#deps.repos, this.#snapshot);
       if (next.changed.length === 0) return;
@@ -274,10 +265,7 @@ export class SitePackRegistry implements SitePackLookup {
     return { ...outcome, view };
   }
 
-  /**
-   * Restore the previous approved version.
-   * @throws `SITE_PACK_NOT_FOUND`, `SITE_PACK_NO_PREVIOUS`, `SITE_PACK_BELOW_FLOOR`.
-   */
+  /** Restore the previous approved version. @throws `SITE_PACK_NO_PREVIOUS`, `SITE_PACK_BELOW_FLOOR`. */
   revert(packId: string, by: string): Promise<SitePackView> {
     return this.#act(packId, () => actions.revertVersion(this.#core(), packId, by));
   }
@@ -384,10 +372,7 @@ export class SitePackRegistry implements SitePackLookup {
     await this.#enforceFloor();
   }
 
-  /**
-   * D-71 for content in force that changed without an Apply (a local file deleted, a revocation's
-   * fallback): sites below the new floor are turned off; usage and verdicts are re-read after.
-   */
+  /** D-71 for content in force changed without an Apply: below-floor sites off, usage re-read. */
   async #enforceFloor(): Promise<void> {
     const off = await enforceFloor(this.#core());
     if (off.length === 0) return;
