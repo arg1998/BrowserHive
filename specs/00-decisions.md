@@ -1296,3 +1296,36 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 **Deviations from spec 13 §9.8's first table** (the table now shows what ships): Indeed's probe is `myjobs.indeed.com/` and Glassdoor's `/member/profile` (the paths the old ones redirect to); Microsoft's stance is `restricted` → `warn` (its Services Agreement bans only inauthentic automation and impermissible scraping) and its signed-out redirect is `account.microsoft.com/account?silentSignInAttempt=1*`; LinkedIn drops `/authwall`; Reddit's probe is `either`; the X pack carries `twitter.com` copies of its guards; GitHub and Reddit carry the credential guards their official docs name (repository deploy keys and the GitHub and Reddit consent approval requests stay on the owner checklist); the consent globs of `DEFAULT_GUARDS` stop at the path so a query string cannot widen them.
 
 **Consequences.** Packs with no write guards make their default write policy inert (the dashboard and CLI say so: `write_guards: 0`); Reddit and Glassdoor ship without a logout guard (none could be verified); Reddit's probe is mostly inconclusive until a landmark is verified. Each signed-in check the owner completes becomes a new pack version, which reaches installs as a pending update to approve.
+
+## D-70 Pack strategies run in the services that own each hook, from one compiled-in table
+
+**Status:** Accepted (lead decision for PR T3b; the owner may veto before the final templates PR)
+
+**Implementation:** PR T3b of spec 13 §17.
+
+**Context.** Spec 13 §9.4 describes strategies as code in `infra/site-packs/strategies/` behind a `SiteStrategy` hook interface. The hooks sit in very different places (template admission, the tool dispatcher, the request guard, the host's response stream and command line, the keeper), each with state of its own (token buckets, FIFO queues, last-action times, the focused page), and the layering rules forbid `infra/` from calling `app/`.
+
+**Decision.**
+- One pure table in `domain/site-packs/strategy-specs.ts` (`STRATEGY_SPECS`, exhaustive over `StrategyId` at compile time) holds each strategy's title, kind, hooks and parameters with their defaults, bounds and safe direction; `strategyOf(pack, id)` returns typed parameters clamped to the binary's bounds, `strategyParamIssues` refuses unknown names and wrong types in `refinePack`, and `GET /site-packs/strategies` and `classifyPackChange` read the same table.
+- Each hook runs in the service that owns that point (admission, the dispatcher's before-action runner, the request guard's pacer, the host's response observer and launch flags, the keeper). Their state lives in memory per process and per template; a restart resets it.
+- Template-scoped strategies (`launch-spacing`, `active-hours`, `ramp-up`, `stealth-profile`, `webrtc-policy`, `keep-alive`, `concurrency.max_sessions`) come from the template's enabled sites' approved packs; page-scoped ones from the approved pack owning the URL (packs are global, D-67). When several sites select one template-scoped strategy the strictest wins.
+
+**Consequences.** Adding a strategy is one table row plus its hook; the classifier and the REST listing cannot drift from the runtime's bounds. A restart forgets pacing budgets and launch spacing (documented).
+
+**Alternatives considered.** *A `SiteStrategy` object per id with every hook* (the spec's sketch): the stateful parts would need back-references into five services across layers, for no gain in exhaustiveness.
+
+## D-71 The stealth floor refuses below-floor templates; Apply of a version that raises it is refused
+
+**Status:** Accepted (lead decision for PR T3b)
+
+**Context.** Spec 13 §9.4 makes `stealth-profile` a floor checked at template creation, site add and pack approval, and says that approving a version that raises the floor above a template's settings "asks the operator to change the template or disable the site".
+
+**Decision.** Creating a template, adding or enabling a site, and an edit that lowers stealth or changes fingerprint below an enabled site's floor answer `VALIDATION_FAILED` (issue codes `stealth_below_floor`, `fingerprint_required`, `fingerprint_forbidden`). Applying a pack version whose floor is above a using template's settings answers `SITE_PACK_BELOW_FLOOR` (409, naming the templates and what each must change); such a candidate classifies `restrictive`. `stealth-profile.humanize: true` is not a refusal: it forces humanized input on the site's pages at run time, as `humanize-input` does.
+
+**Consequences.** A template can never run a site below its pack's floor; the operator fixes the template (or disables the site) before applying.
+
+## D-72 Bundled packs select only strategies that need no signed-in data
+
+**Status:** Accepted (lead decision for PR T3b; follows D-69)
+
+**Decision.** The bundled packs (version 2) select the §9.8 strategies except `pace-writes`: no pack has a verified `write` guard to pace (D-69), so pacing waits for the owner's signed-in checks (D43). Strategy parameters are BrowserHive's behaviour choices, not facts about the site, so `verified.strategies` is not set. LinkedIn's `launch-spacing` uses `min_gap_s: 30` (no official source; vendor guidance only recommends spacing). Each bump reaches an install as a pending bundled update with its classification.
