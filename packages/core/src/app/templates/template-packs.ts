@@ -1,6 +1,7 @@
 /** @module app/templates/template-packs — what the template services need from the site-pack registry (spec 13 §9.6, T3a): approval on first use when a site is added, the pack in force for a site's view, its identity provider (notification threads) and `human_only` (no vault re-login). `NO_PACKS` is the answer when packs are off or not wired. */
 
 import type { TemplateSitePack } from '@browserhive/contracts/http';
+import type { SitePackV1 } from '@browserhive/contracts/site-packs';
 import { registrableDomain } from '../../kernel/url.ts';
 import type { TemplateSiteRecord } from '../../ports/persistence/index.ts';
 import type { SiteApproval } from '../site-packs/registry-types.ts';
@@ -18,6 +19,55 @@ export interface TemplatePacks {
   providerOf(packId: string | null): string | null;
   /** Whether the pack's sign-in is human only (never filled by the vault). */
   humanOnly(packId: string | null): boolean;
+  /** The pack that owns a site, in force or on offer (creation checks, spec 13 §11.1). */
+  packIdFor?(siteId: string): string | null;
+  /** The content in force, else the offered one. */
+  detail?(packId: string): { readonly pack: SitePackV1 | null };
+}
+
+/** A creation refusal a site's pack causes (spec 13 §11.1 `POST /templates` 400 cases). */
+export interface PackRequirementIssue {
+  readonly path: string;
+  readonly message: string;
+  readonly code: 'headed_required' | 'human_only_stealth_off';
+}
+
+/**
+ * The refusals of spec 13 §11.1 that depend on a site's pack: a headless template with a pack whose
+ * `browser.headed` is `required`, and stealth `off` with a `human_only` pack.
+ */
+export function packRequirementIssues(
+  packs: TemplatePacks,
+  siteIds: readonly string[],
+  template: { readonly headless: boolean; readonly stealth: string },
+): PackRequirementIssue[] {
+  const issues: PackRequirementIssue[] = [];
+  for (const [i, siteId] of siteIds.entries()) {
+    const packId = packs.packIdFor?.(siteId) ?? null;
+    if (packId === null || packs.detail === undefined) continue;
+    let pack: SitePackV1 | null;
+    try {
+      pack = packs.detail(packId).pack;
+    } catch {
+      continue;
+    }
+    if (pack === null) continue;
+    if (template.headless && pack.browser.headed === 'required') {
+      issues.push({
+        path: `sites[${i}]`,
+        code: 'headed_required',
+        message: `${pack.title} needs a visible (headed) browser; turn headless off.`,
+      });
+    }
+    if (template.stealth === 'off' && pack.sign_in?.human_only === true) {
+      issues.push({
+        path: `sites[${i}]`,
+        code: 'human_only_stealth_off',
+        message: `${pack.title} is signed in by hand only and needs stealth; choose standard or max.`,
+      });
+    }
+  }
+  return issues;
 }
 
 /** No packs: every site is generic. */

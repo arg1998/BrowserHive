@@ -1,6 +1,7 @@
 /** @module app/templates/template-packs.test — templates with site packs (spec 13 §9.6, §11.1, T3a): creating a template or adding a site approves the pack on first use (the reviewed SHA-256 must match), the site records `pack_id`/`pack_version`, its view shows the pack in force and its title. */
 
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
+import { SitePackV1 } from '@browserhive/contracts/site-packs';
 import { CollectingLogger } from '../../../test/helpers/collecting-logger.ts';
 import { FakeTemplateHostOps } from '../../../test/helpers/fake-host-ops.ts';
 import { InMemoryUnitOfWork } from '../../../test/helpers/in-memory-repos.ts';
@@ -20,10 +21,12 @@ import {
   FakeTemplateRuntime,
   RecordingDegradations,
 } from '../../../test/helpers/template-kit.ts';
+import { basePack } from '../../domain/site-packs/test-fixtures.ts';
 import { isAppError } from '../../kernel/errors/app-error.ts';
 import type { Repositories } from '../../ports/persistence/index.ts';
 import { ReloginLinks } from './relogin-link.ts';
 import { TemplateEditService } from './template-edit.ts';
+import { NO_PACKS, packRequirementIssues, type TemplatePacks } from './template-packs.ts';
 import { TemplateService } from './template-service.ts';
 
 let dirs: SitePackDirs;
@@ -177,5 +180,44 @@ describe('human_only packs', () => {
       'p-op',
     );
     expect(await codeOf(put)).toBe('VALIDATION_FAILED');
+  });
+});
+
+describe('packRequirementIssues', () => {
+  const pack = (headed: 'required' | 'any', humanOnly: boolean) =>
+    SitePackV1.parse({
+      ...basePack(),
+      browser: { headed },
+      sign_in: { url: { host: 'www.linkedin.com', path: '/login' }, human_only: humanOnly },
+    });
+  const packsWith = (p: SitePackV1): TemplatePacks => ({
+    ...NO_PACKS,
+    packIdFor: (site) => (site === 'linkedin.com' ? 'linkedin.com' : null),
+    detail: () => ({ pack: p }),
+  });
+
+  it('refuses a headless template for a pack that needs a headed browser', () => {
+    const issues = packRequirementIssues(
+      packsWith(pack('required', false)),
+      ['x.com', 'linkedin.com'],
+      {
+        headless: true,
+        stealth: 'standard',
+      },
+    );
+    expect(issues.map((i) => [i.path, i.code])).toEqual([['sites[1]', 'headed_required']]);
+  });
+
+  it('refuses stealth off for a human-only pack and accepts the rest', () => {
+    const p = packsWith(pack('any', true));
+    expect(
+      packRequirementIssues(p, ['linkedin.com'], { headless: false, stealth: 'off' })[0]?.code,
+    ).toBe('human_only_stealth_off');
+    expect(packRequirementIssues(p, ['linkedin.com'], { headless: true, stealth: 'max' })).toEqual(
+      [],
+    );
+    expect(
+      packRequirementIssues(NO_PACKS, ['linkedin.com'], { headless: true, stealth: 'off' }),
+    ).toEqual([]);
   });
 });

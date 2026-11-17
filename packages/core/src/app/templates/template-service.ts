@@ -60,7 +60,13 @@ import {
 } from './template-errors.ts';
 import { pageTemplates } from './template-list.ts';
 import { TemplateLocks } from './template-locks.ts';
-import { attachPacks, NO_PACKS, reviewedHashes, type TemplatePacks } from './template-packs.ts';
+import {
+  attachPacks,
+  NO_PACKS,
+  packRequirementIssues,
+  reviewedHashes,
+  type TemplatePacks,
+} from './template-packs.ts';
 import { publishTemplateChanged, readTemplates, removeTemplateFiles } from './template-reads.ts';
 import { toAgentTemplate, toTemplateSummary, toTemplateView } from './views.ts';
 
@@ -166,6 +172,12 @@ export class TemplateService {
     });
     const { template } = built;
     const packs = this.#deps.packs ?? NO_PACKS;
+    const packIssues = packRequirementIssues(
+      packs,
+      built.sites.map((s) => s.siteId),
+      template,
+    );
+    if (packIssues.length > 0) throw validationFailed(packIssues);
     const sites = await attachPacks(packs, built.sites, reviewedHashes(input.sites), owner);
     await this.#deps.uow.transaction(async (repos) => {
       await repos.templates.insert(template);
