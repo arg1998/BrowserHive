@@ -4,15 +4,22 @@ import type { TemplateSitePack } from '@browserhive/contracts/http';
 import type { SitePackV1 } from '@browserhive/contracts/site-packs';
 import { registrableDomain } from '../../kernel/url.ts';
 import type { TemplateSiteRecord } from '../../ports/persistence/index.ts';
-import type { SiteApproval } from '../site-packs/registry-types.ts';
+import type { PreparedApproval } from '../site-packs/registry-types.ts';
 
 /** The registry as the template services see it (`SitePackRegistry` fits). */
 export interface TemplatePacks {
   /**
-   * Approves the pack a site uses on first use; `sha256` is the version the operator reviewed
-   * (`CONFLICT` on mismatch). `null` when no pack covers the site.
+   * Prepares the first-use approval of a new site; `sha256` is the version the operator reviewed
+   * (`SITE_PACK_APPROVAL_REQUIRED` without it when one is needed, `CONFLICT` on mismatch). Its
+   * `write` runs in the site's transaction. `null` when no pack covers the site.
    */
-  approveSite(siteId: string, sha256: string | undefined, by: string): Promise<SiteApproval | null>;
+  prepareSite(
+    siteId: string,
+    sha256: string | undefined,
+    by: string,
+  ): Promise<PreparedApproval | null>;
+  /** After the approvals' transaction committed. */
+  approvalsCommitted(): Promise<void>;
   /** The pack in force for a site's `pack_id`, or `null`. */
   sitePackOf(packId: string | null): TemplateSitePack | null;
   /** The pack's identity provider, or `null`. */
@@ -72,7 +79,8 @@ export function packRequirementIssues(
 
 /** No packs: every site is generic. */
 export const NO_PACKS: TemplatePacks = {
-  approveSite: () => Promise.resolve(null),
+  prepareSite: () => Promise.resolve(null),
+  approvalsCommitted: () => Promise.resolve(),
   sitePackOf: () => null,
   providerOf: () => null,
   humanOnly: () => false,
@@ -96,25 +104,25 @@ export function providerLookup(packs: TemplatePacks): (packId: string) => string
 }
 
 /**
- * Approves the pack of each new site on first use (spec 13 §9.6) and records it on the site
- * (`pack_id`, `pack_version`). `shaOf` gives the SHA-256 the operator reviewed for a site.
- *
- * @throws AppError `CONFLICT` (a reviewed version that is not the one approved or on offer).
+ * Prepares the first-use approval of each new site (spec 13 §9.6) and records the pack on the site
+ * (`pack_id`, `pack_version`). The approvals are written by the caller in the sites' transaction.
  */
-export async function attachPacks(
+export async function prepareSiteApprovals(
   packs: TemplatePacks,
   sites: readonly TemplateSiteRecord[],
   shaOf: (siteId: string) => string | undefined,
   by: string,
-): Promise<TemplateSiteRecord[]> {
+): Promise<{ sites: TemplateSiteRecord[]; approvals: PreparedApproval[] }> {
   const out: TemplateSiteRecord[] = [];
+  const approvals: PreparedApproval[] = [];
   for (const site of sites) {
-    const approval = await packs.approveSite(site.siteId, shaOf(site.siteId), by);
+    const approval = await packs.prepareSite(site.siteId, shaOf(site.siteId), by);
+    if (approval !== null) approvals.push(approval);
     out.push(
       approval === null
         ? site
         : { ...site, packId: approval.packId, packVersion: approval.version },
     );
   }
-  return out;
+  return { sites: out, approvals };
 }

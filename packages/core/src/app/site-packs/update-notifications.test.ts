@@ -27,8 +27,22 @@ describe('site_pack.update_pending', () => {
   it('opens one thread with a one-line summary', () => {
     const draft = updatesDraft(
       status([
-        { pack_id: 'linkedin.com', title: 'LinkedIn', from_version: 7, to_version: 8, local: null },
-        { pack_id: 'x.com', title: 'X', from_version: null, to_version: 3, local: 'changed' },
+        {
+          pack_id: 'linkedin.com',
+          title: 'LinkedIn',
+          from_version: 7,
+          to_version: 8,
+          sha256: 'a'.repeat(64),
+          local: null,
+        },
+        {
+          pack_id: 'x.com',
+          title: 'X',
+          from_version: null,
+          to_version: 3,
+          sha256: 'a'.repeat(64),
+          local: 'changed',
+        },
       ]),
     );
     expect(draft).toMatchObject({
@@ -46,7 +60,16 @@ describe('site_pack.update_pending', () => {
 
   it('is info for a bundled candidate alone, and resolves when nothing waits', () => {
     const one = updatesDraft(
-      status([{ pack_id: 'a.test', title: 'A', from_version: 1, to_version: 2, local: null }]),
+      status([
+        {
+          pack_id: 'a.test',
+          title: 'A',
+          from_version: 1,
+          to_version: 2,
+          sha256: 'a'.repeat(64),
+          local: null,
+        },
+      ]),
     );
     expect(one?.severity).toBe('info');
     expect(updatesRevision(status([]))).toMatchObject({
@@ -56,9 +79,33 @@ describe('site_pack.update_pending', () => {
     expect(updatesDraft(status([]))).toBeNull();
     expect(
       updatesRevision(
-        status([{ ...{ pack_id: 'a', title: 'A' }, from_version: 1, to_version: 2, local: null }]),
+        status([
+          {
+            ...{ pack_id: 'a', title: 'A' },
+            from_version: 1,
+            to_version: 2,
+            sha256: 'a'.repeat(64),
+            local: null,
+          },
+        ]),
       ),
     ).toBeNull();
+  });
+});
+
+describe('a second change of the same file is a new notification (review #83 S-M5)', () => {
+  it('the dedup key follows the content, not only the version and state', () => {
+    const item = (sha256: string) => ({
+      pack_id: 'example.com',
+      title: 'Example',
+      from_version: null,
+      to_version: 1,
+      sha256,
+      local: 'changed' as const,
+    });
+    const first = updatesDraft(status([item('a'.repeat(64))]));
+    const second = updatesDraft(status([item('b'.repeat(64))]));
+    expect(first?.dedupKey).not.toBe(second?.dedupKey);
   });
 });
 

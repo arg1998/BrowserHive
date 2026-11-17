@@ -13,6 +13,7 @@ import type {
   SitePackSourceId,
   SitePackStateRecord,
   SitePackStateRepository,
+  UnreadableRowOptions,
 } from '../../../ports/persistence/site-packs.ts';
 import type { DB } from '../generated/db.d.ts';
 import {
@@ -25,6 +26,28 @@ import {
 } from '../mappers/site-packs.ts';
 import { asNumber, clampLimit, decodeCursor, toPage } from './common.ts';
 
+/** Maps rows one by one; with `onUnreadable` a row that fails is reported and left out. */
+function mapRows<R, T>(
+  rows: readonly R[],
+  map: (row: R) => T,
+  keyOf: (row: R) => string,
+  options: UnreadableRowOptions,
+): T[] {
+  const out: T[] = [];
+  for (const row of rows) {
+    if (options.onUnreadable === undefined) {
+      out.push(map(row));
+      continue;
+    }
+    try {
+      out.push(map(row));
+    } catch (error) {
+      options.onUnreadable(keyOf(row), error);
+    }
+  }
+  return out;
+}
+
 /** Decisions that leave a candidate open (`idx_site_pack_changes_pending`). */
 const PENDING: readonly SitePackDecisionValue[] = ['available', 'downloaded'];
 
@@ -36,13 +59,13 @@ export class SqliteSitePackStateRepository implements SitePackStateRepository {
     this.#db = db;
   }
 
-  async list(): Promise<readonly SitePackStateRecord[]> {
+  async list(options: UnreadableRowOptions = {}): Promise<readonly SitePackStateRecord[]> {
     const rows = await this.#db
       .selectFrom('site_pack_state')
       .selectAll()
       .orderBy('pack_id', 'asc')
       .execute();
-    return rows.map(sitePackStateFromRow);
+    return mapRows(rows, sitePackStateFromRow, (r) => r.pack_id, options);
   }
 
   async get(packId: string): Promise<SitePackStateRecord | null> {
@@ -85,7 +108,7 @@ export class SqliteSitePackChangeRepository implements SitePackChangeRepository 
   }
 
   async decide(
-    seq: number,
+    eventId: string,
     decision: SitePackDecisionValue,
     by: string | null,
     at: number,
@@ -93,7 +116,7 @@ export class SqliteSitePackChangeRepository implements SitePackChangeRepository 
     await this.#db
       .updateTable('site_pack_changes')
       .set({ decision, decided_by: by, decided_at: at })
-      .where('seq', '=', seq)
+      .where('event_id', '=', eventId)
       .execute();
   }
 
@@ -114,7 +137,7 @@ export class SqliteSitePackChangeRepository implements SitePackChangeRepository 
     return row === undefined ? null : sitePackChangeFromRow(row);
   }
 
-  async listPending(): Promise<readonly SitePackChangeRecord[]> {
+  async listPending(options: UnreadableRowOptions = {}): Promise<readonly SitePackChangeRecord[]> {
     const rows = await this.#db
       .selectFrom('site_pack_changes')
       .selectAll()
@@ -122,7 +145,7 @@ export class SqliteSitePackChangeRepository implements SitePackChangeRepository 
       .orderBy('created_at', 'asc')
       .orderBy('seq', 'asc')
       .execute();
-    return rows.map(sitePackChangeFromRow);
+    return mapRows(rows, sitePackChangeFromRow, (r) => r.pack_id, options);
   }
 
   async list(query: SitePackChangeQuery): Promise<Page<SitePackChangeRecord>> {

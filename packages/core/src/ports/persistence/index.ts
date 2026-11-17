@@ -261,6 +261,7 @@ export type {
   SitePackSourceId,
   SitePackStateRecord,
   SitePackStateRepository,
+  UnreadableRowOptions,
 } from './site-packs.ts';
 export {
   emptySitePackState,

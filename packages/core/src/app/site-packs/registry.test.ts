@@ -90,13 +90,28 @@ describe('approval on first use', () => {
     expect(await codeOf(registry.approveSite('site-a.test', 'f'.repeat(64), 'p-op'))).toBe(
       'CONFLICT',
     );
-    await registry.approveSite('site-a.test', undefined, 'p-op');
+    await registry.approveSite('site-a.test', packSha(sitePack('site-a.test', 1)), 'p-op');
     const again = await registry.approveSite('site-a.test', undefined, 'p-other');
     expect(again?.version).toBe(1);
     expect(actions.rows.filter((r) => r.action === 'site_pack.approve')).toHaveLength(1);
     expect(await codeOf(registry.approveSite('site-a.test', 'f'.repeat(64), 'p-op'))).toBe(
       'CONFLICT',
     );
+  });
+
+  it('without a reviewed hash it refuses and names the offer (review #83 S-M4)', async () => {
+    const { registry, repos } = await loaded();
+    const error = await registry.approveSite('site-a.test', undefined, 'p-op').catch((e) => e);
+    expect(isAppError(error) && error.code).toBe('SITE_PACK_APPROVAL_REQUIRED');
+    expect(isAppError(error) && error.details).toEqual({
+      site_id: 'site-a.test',
+      pack_id: 'site-a.test',
+      version: 1,
+      sha256: packSha(sitePack('site-a.test', 1)),
+      source: 'bundled',
+      release: KIT_RELEASE,
+    });
+    expect(await repos.sitePackState.get('site-a.test')).toBeNull();
   });
 
   it('leaves a site no pack covers generic, and refuses a hash for it', async () => {
@@ -119,7 +134,7 @@ describe('a newer bundled release', () => {
   /** Approves v1 with release 1, then boots release 2 (bundled v2) on the same state. */
   async function upgraded() {
     const first = await loaded();
-    await first.registry.approveSite('site-a.test', undefined, 'p-op');
+    await first.registry.approveSite('site-a.test', packSha(sitePack('site-a.test', 1)), 'p-op');
     await first.repos.templateSites.upsert(
       templateSiteRecord({ packId: 'site-a.test', packVersion: 1 }),
     );
@@ -200,7 +215,7 @@ describe('a newer bundled release', () => {
     // The reverted version does not come back as pending.
     await registry.reload();
     expect(registry.get('site-a.test')?.pending).toEqual([]);
-    expect(await codeOf(registry.revert('site-a.test', 'p-op'))).toBe('CONFLICT');
+    expect(await codeOf(registry.revert('site-a.test', 'p-op'))).toBe('SITE_PACK_NO_PREVIOUS');
     expect(actions.rows.map((r) => r.action)).toEqual([
       'site_pack.approve',
       'site_pack.apply',
@@ -240,7 +255,7 @@ describe('pin, follow, enable', () => {
   it('pins only the approved version', async () => {
     const { registry } = await loaded();
     expect(await codeOf(registry.pin('site-a.test', 1, 'p-op'))).toBe('VALIDATION_FAILED');
-    await registry.approveSite('site-a.test', undefined, 'p-op');
+    await registry.approveSite('site-a.test', packSha(sitePack('site-a.test', 1)), 'p-op');
     expect(await codeOf(registry.pin('site-a.test', 2, 'p-op'))).toBe('VALIDATION_FAILED');
     expect((await registry.pin('site-a.test', 1, 'p-op')).pinned_version).toBe(1);
     expect((await registry.pin('site-a.test', null, 'p-op')).pinned_version).toBeNull();
@@ -262,7 +277,7 @@ describe('pin, follow, enable', () => {
 
   it('a disabled pack applies nothing and keeps its approval', async () => {
     const { registry, actions } = await loaded();
-    await registry.approveSite('site-a.test', undefined, 'p-op');
+    await registry.approveSite('site-a.test', packSha(sitePack('site-a.test', 1)), 'p-op');
     expect((await registry.setEnabled('site-a.test', false, 'p-op')).enabled).toBe(false);
     expect(registry.effectiveFor('site-a.test')).toBeNull();
     expect((await registry.approveSite('site-a.test', undefined, 'p-op'))?.version).toBe(1);
@@ -277,13 +292,16 @@ describe('pin, follow, enable', () => {
   });
 });
 
+/** `site-a.test` claiming a second domain, like linkedin.com and licdn.com. */
+const WIDE = sitePack('site-a.test', 1, { domains: ['site-a.test', 'cdn-a.test'] });
+
 describe('domains', () => {
   it('an approved pack keeps a domain another pack also claims (domain_overlap)', async () => {
     dirs = makeDirs();
-    writePack(dirs.bundled, sitePack('site-a.test', 1, { domains: ['site-a.test', 'cdn-a.test'] }));
+    writePack(dirs.bundled, WIDE);
     const { registry } = createSitePackKit({ dirs });
     await registry.reload();
-    await registry.approveSite('site-a.test', undefined, 'p-op');
+    await registry.approveSite('site-a.test', packSha(WIDE), 'p-op');
     writePack(dirs.bundled, sitePack('cdn-a.test', 1));
     await registry.reload();
     expect(registry.packIdFor('cdn-a.test')).toBe('site-a.test');

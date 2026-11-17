@@ -237,6 +237,8 @@ export interface SitePackUpdatesFact {
     readonly from_version: number | null;
     /** The candidate's version, or the local file's. */
     readonly to_version: number;
+    /** The candidate's or the local file's SHA-256 (a new content is a new notification). */
+    readonly sha256: string;
     /** Set for a local file: changed since approval, or never approved. */
     readonly local: 'changed' | 'not_approved' | null;
   }[];

@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import type { SitePackV1Input } from '@browserhive/contracts/site-packs';
 import type { DomainEvents } from '../../src/app/events/catalog.ts';
 import { SitePackRegistry } from '../../src/app/site-packs/registry.ts';
+import type { SitePackRegistryDeps } from '../../src/app/site-packs/registry-types.ts';
 import { sha256Hex } from '../../src/domain/site-packs/load.ts';
 import { BundledPackSource } from '../../src/infra/site-packs/bundled-source.ts';
 import { LocalPackSource } from '../../src/infra/site-packs/local-source.ts';
@@ -13,6 +14,7 @@ import {
   createLocalPackWriter,
   createSitePackCache,
 } from '../../src/infra/site-packs/pack-cache.ts';
+import type { DegradationReporter } from '../../src/ports/degradation-reporter.ts';
 import type { Repositories } from '../../src/ports/persistence/index.ts';
 import { FakeClock } from './fake-clock.ts';
 import { FakeIdGenerator } from './fake-id-generator.ts';
@@ -98,6 +100,7 @@ export interface SitePackKitOptions {
   readonly clock?: FakeClock;
   /** Shared across "releases" so event ids stay unique. */
   readonly ids?: FakeIdGenerator;
+  readonly degradations?: DegradationReporter;
 }
 
 /** A registry with its collaborators. */
@@ -139,6 +142,29 @@ export function createSitePackKit(options: SitePackKitOptions = {}): SitePackKit
     logger: createCollectingLogger(),
     bus,
     templateChanged: (id) => templatesChanged.push(id),
+    ...(options.degradations !== undefined && { degradations: options.degradations }),
   });
   return { registry, repos, actions, bus, clock, ids, dirs, templatesChanged };
+}
+
+/** A registry over `dirs` with the given storage (SQLite tests); not yet loaded. */
+export function createDirRegistry(
+  dirs: SitePackDirs,
+  storage: {
+    readonly uow: SitePackRegistryDeps['uow'];
+    readonly repos: SitePackRegistryDeps['repos'];
+    readonly ids: SitePackRegistryDeps['ids'];
+    readonly clock: SitePackRegistryDeps['clock'];
+  },
+): SitePackRegistry {
+  return new SitePackRegistry({
+    enabled: true,
+    bundled: new BundledPackSource({ dir: dirs.bundled, release: KIT_RELEASE }),
+    local: new LocalPackSource({ dir: dirs.local, binaryVersion: KIT_RELEASE }),
+    cache: createSitePackCache(dirs.cache),
+    localWriter: createLocalPackWriter(dirs.local),
+    binaryVersion: KIT_RELEASE,
+    logger: createCollectingLogger(),
+    ...storage,
+  });
 }

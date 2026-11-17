@@ -125,7 +125,13 @@ describe('first use from a template', () => {
   it('adding a site approves on first use; pack_sha256 attaches a pack to a generic site', async () => {
     const template = await service.create({ name: 'jobs', sites: [{ site_id: 'x.test' }] }, 'p-op');
     const id = template.template_id;
-    const added = await edit.putSite(id, 'site-b.test', {}, 'p-op');
+    // Without the reviewed hash the pack is not approved behind the operator's back (S-M4).
+    expect(await codeOf(edit.putSite(id, 'site-b.test', {}, 'p-op'))).toBe(
+      'SITE_PACK_APPROVAL_REQUIRED',
+    );
+    expect((await kit.repos.templateSites.list(id)).map((s) => s.siteId)).toEqual(['x.test']);
+    const sha = packSha(sitePack('site-b.test', 4));
+    const added = await edit.putSite(id, 'site-b.test', { pack_sha256: sha }, 'p-op');
     expect(added).toMatchObject({ pack_id: 'site-b.test', pack_version: 4 });
     expect(
       await codeOf(edit.putSite(id, 'site-b.test', { pack_sha256: 'b'.repeat(64) }, 'p-op')),
@@ -152,8 +158,13 @@ describe('human_only packs', () => {
       }),
     );
     await kit.registry.reload();
+    const sha = packSha(
+      sitePack('site-h.test', 1, {
+        sign_in: { url: { host: 'www.site-h.test', path: '/login' }, human_only: true },
+      }),
+    );
     const template = await service.create(
-      { name: 'h', sites: [{ site_id: 'site-h.test' }] },
+      { name: 'h', sites: [{ site_id: 'site-h.test', pack_sha256: sha }] },
       'p-op',
     );
     expect(template.sites[0]?.pack?.human_only).toBe(true);

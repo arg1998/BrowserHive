@@ -198,13 +198,16 @@ export async function openCliStorage(
         });
     },
     templateRows: async () => readTemplateRows(storage),
-    sitePackLocalApprovals: async () => {
+    sitePackStates: async () => {
+      const unreadable: string[] = [];
       try {
-        const rows = await storage.repos.sitePackState.list();
-        return rows.map((r) => ({ packId: r.packId, sha256: r.localApprovedSha256 }));
+        const rows = await storage.repos.sitePackState.list({
+          onUnreadable: (packId) => unreadable.push(packId),
+        });
+        return { rows, unreadable };
       } catch {
         // A database from before schema v10 has no site_pack_state table.
-        return [];
+        return { rows: [], unreadable: [] };
       }
     },
     updateTemplateVersionFile: (templateId, version, file) =>

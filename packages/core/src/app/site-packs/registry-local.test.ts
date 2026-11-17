@@ -107,7 +107,7 @@ describe('local files', () => {
 
   it('approved local content overrides the approved bundled version, audited on load', async () => {
     const { registry, actions, repos, ids } = await withLocal(true);
-    await registry.approveSite('site-a.test', undefined, 'p-op');
+    await registry.approveSite('site-a.test', packSha(sitePack('site-a.test', 1)), 'p-op');
     expect(registry.effectiveFor('site-a.test')?.source).toBe('bundled');
     const local = sitePack('site-a.test', 7, { title: 'Local A' });
     await registry.approveLocal('site-a.test', packSha(local), 'p-op');

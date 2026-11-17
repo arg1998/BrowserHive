@@ -57,3 +57,50 @@ export function packValidation(
     { publicMessage: message },
   );
 }
+
+/** `SITE_PACK_DOMAIN_TAKEN`: content claims a domain another pack covers (spec 13 §9.10). */
+export function domainTaken(
+  packId: string,
+  domain: string,
+  owner: string,
+): AppError<'SITE_PACK_DOMAIN_TAKEN'> {
+  const details = { pack_id: packId, domain, owner };
+  return new AppError('SITE_PACK_DOMAIN_TAKEN', details, {
+    publicMessage: renderMessage(ERROR_REGISTRY.SITE_PACK_DOMAIN_TAKEN.message, details),
+  });
+}
+
+/** `SITE_PACK_NO_PREVIOUS`. */
+export function noPrevious(packId: string): AppError<'SITE_PACK_NO_PREVIOUS'> {
+  const details = { pack_id: packId };
+  return new AppError('SITE_PACK_NO_PREVIOUS', details, {
+    publicMessage: renderMessage(ERROR_REGISTRY.SITE_PACK_NO_PREVIOUS.message, details),
+  });
+}
+
+/** `SITE_PACK_NO_LOCAL_FILE`. */
+export function noLocalFile(packId: string): AppError<'SITE_PACK_NO_LOCAL_FILE'> {
+  const details = { pack_id: packId };
+  return new AppError('SITE_PACK_NO_LOCAL_FILE', details, {
+    publicMessage: renderMessage(ERROR_REGISTRY.SITE_PACK_NO_LOCAL_FILE.message, details),
+  });
+}
+
+/** `SITE_PACK_APPROVAL_REQUIRED` with the offer the operator must review (spec 13 §9.6). */
+export function approvalRequired(
+  siteId: string,
+  packId: string,
+  offer: { readonly version: number; readonly sha256: string; readonly release: string | null },
+): AppError<'SITE_PACK_APPROVAL_REQUIRED'> {
+  const details = {
+    site_id: siteId,
+    pack_id: packId,
+    version: offer.version,
+    sha256: offer.sha256,
+    source: 'bundled',
+    release: offer.release,
+  };
+  return new AppError('SITE_PACK_APPROVAL_REQUIRED', details, {
+    publicMessage: renderMessage(ERROR_REGISTRY.SITE_PACK_APPROVAL_REQUIRED.message, details),
+  });
+}

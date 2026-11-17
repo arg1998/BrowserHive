@@ -46,7 +46,7 @@ export function updatesDraft(payload: DomainEvents['site_pack.status']): Notific
     target: UPDATES_PATH,
     sourceEventId: null,
     dedupKey: `sp-upd:${items
-      .map((i) => `${i.pack_id}@${i.to_version}:${i.local ?? 'c'}`)
+      .map((i) => `${i.pack_id}@${i.to_version}:${i.local ?? 'c'}:${i.sha256}`)
       .sort()
       .join(',')}`,
     once: { kinds: ['site_pack.update_pending'] },

@@ -8,6 +8,7 @@ import type { Repositories, UnitOfWork } from '@browserhive/core/ports/persisten
 import type { DomainEvents, EventBus } from '@browserhive/core/runtime';
 import {
   type Clock,
+  type DegradationReporter,
   type IdGenerator,
   type Logger,
   serializeError,
@@ -65,6 +66,8 @@ export interface SitePacksInput {
   readonly ids: Pick<IdGenerator, 'eventId'>;
   readonly logger: Logger;
   readonly bus: EventBus<DomainEvents>;
+  /** `SITE_PACKS_STATE_CORRUPT`, `SITE_PACKS_LOAD_FAILED` (review #83 C-M5). */
+  readonly degradations?: DegradationReporter;
   /** Overrides the bundled folder (tests). */
   readonly bundledDir?: string;
 }
@@ -90,11 +93,43 @@ export async function buildSitePacks(input: SitePacksInput): Promise<SitePackReg
     clock: input.clock,
     logger: input.logger,
     bus: input.bus,
+    ...(input.degradations !== undefined && { degradations: input.degradations }),
   });
   try {
     await registry.reload();
+    input.degradations?.recovered(LOAD_FAILED);
   } catch (err) {
+    // Visible, not only a log line: no pack applies until a reload succeeds (review #83 C-M5).
     input.logger.warn('site packs not loaded', { err: serializeError(err) });
+    input.degradations?.report({
+      code: LOAD_FAILED,
+      severity: 'warn',
+      message: 'Site packs could not be loaded; no pack applies until a reload succeeds.',
+      details: { reason: serializeError(err).message },
+    });
   }
   return registry;
+}
+
+/** The degradation of a failed boot load. */
+const LOAD_FAILED = 'SITE_PACKS_LOAD_FAILED';
+
+/**
+ * Keeps the registry's `used_by` (automatic Follow) current: template and site changes re-read it;
+ * a pack decision publishes `template.changed` for the templates using the pack.
+ */
+export function wireSitePackUsage(
+  registry: SitePackRegistry,
+  bus: EventBus<DomainEvents>,
+  logger: Logger,
+  changed: (templateId: string) => void,
+): void {
+  registry.attachTemplateChanged(changed);
+  const refresh = () => {
+    registry
+      .refreshUsage()
+      .catch((err: unknown) => logger.warn('pack usage failed', { err: serializeError(err) }));
+  };
+  bus.subscribe('template.changed', refresh);
+  bus.subscribe('template.removed', refresh);
 }

@@ -10,7 +10,7 @@ import type { SitePackChangeRecord } from '../../ports/persistence/site-packs.ts
 import type { SitePackSource, SourceCatalog } from '../../ports/site-packs.ts';
 import type { SitePackUpdatesFact } from '../events/catalog.ts';
 import type { ResolvedPack } from './registry-build.ts';
-import { auditPack, type RegistryCore } from './registry-core.ts';
+import { assertDomainsFree, auditPack, type RegistryCore } from './registry-core.ts';
 import { packInvalid } from './registry-errors.ts';
 import { pendingOf } from './registry-reads.ts';
 import type { RegistrySnapshot, SourceStats } from './registry-types.ts';
@@ -27,66 +27,78 @@ const SYSTEM = 'browserhive';
 export async function syncCandidates(
   core: RegistryCore,
   resolved: readonly ResolvedPack[],
-  _bundled: SourceCatalog,
+  pending: readonly SitePackChangeRecord[],
+  onUnreadable: (packId: string, error: unknown) => void,
 ): Promise<z.infer<typeof SitePackPendingEvent>[]> {
-  const { repos, clock, ids } = core.deps;
-  const pending = await repos.sitePackChanges.listPending();
   const events: z.infer<typeof SitePackPendingEvent>[] = [];
   for (const r of resolved) {
-    const state = r.state;
-    const approved = r.approved;
-    if (state === null || approved === null || state.approvedVersion === null) continue;
-    const candidate =
-      r.bundled !== null &&
-      r.bundled.sha256 !== state.approvedSha256 &&
-      r.bundled.pack.version > state.approvedVersion
-        ? r.bundled
-        : null;
-    const now = clock.now();
-    for (const row of pending) {
-      if (row.packId !== r.packId) continue;
-      const stale =
-        (row.toVersion !== null && row.toVersion <= state.approvedVersion) ||
-        (row.source === 'bundled' && row.toSha256 !== candidate?.sha256);
-      if (stale) await repos.sitePackChanges.decide(row.seq, 'superseded', SYSTEM, now);
+    try {
+      const event = await syncOne(core, r, pending);
+      if (event !== null) events.push(event);
+    } catch (error) {
+      // One pack's unreadable history never stops the others (review #83 C-M5).
+      onUnreadable(r.packId, error);
     }
-    if (candidate === null) continue;
-    if (
-      (await repos.sitePackChanges.findCandidate(r.packId, candidate.sha256, 'bundled')) !== null
-    ) {
-      continue;
-    }
-    const record: SitePackChangeRecord = {
-      seq: 0,
-      eventId: ids.eventId(),
-      packId: r.packId,
-      fromVersion: state.approvedVersion,
-      toVersion: candidate.pack.version,
-      toSha256: candidate.sha256,
-      source: 'bundled',
-      classification: 'unclassified',
-      newDomains: [...newDomains(approved.pack, candidate.pack)],
-      notes: null,
-      diff: diffPacks(approved.pack, candidate.pack),
-      decision: 'downloaded',
-      decidedBy: null,
-      createdAt: now,
-      decidedAt: null,
-    };
-    await repos.sitePackChanges.insert(record);
-    core.log.info('site pack update pending', {
-      packId: r.packId,
-      from: state.approvedVersion,
-      to: candidate.pack.version,
-    });
-    events.push({
-      type: 'site_pack.pending',
-      pack_id: r.packId,
-      to_version: candidate.pack.version,
-      classification: 'unclassified',
-    });
   }
   return events;
+}
+
+async function syncOne(
+  core: RegistryCore,
+  r: ResolvedPack,
+  pending: readonly SitePackChangeRecord[],
+): Promise<z.infer<typeof SitePackPendingEvent> | null> {
+  const { repos, clock, ids } = core.deps;
+  const state = r.state;
+  const approved = r.approved;
+  if (state === null || approved === null || state.approvedVersion === null) return null;
+  const candidate =
+    r.bundled !== null &&
+    r.bundled.sha256 !== state.approvedSha256 &&
+    r.bundled.pack.version > state.approvedVersion
+      ? r.bundled
+      : null;
+  const now = clock.now();
+  for (const row of pending) {
+    if (row.packId !== r.packId) continue;
+    const stale =
+      (row.toVersion !== null && row.toVersion <= state.approvedVersion) ||
+      (row.source === 'bundled' && row.toSha256 !== candidate?.sha256);
+    if (stale) await repos.sitePackChanges.decide(row.eventId, 'superseded', SYSTEM, now);
+  }
+  if (candidate === null) return null;
+  if ((await repos.sitePackChanges.findCandidate(r.packId, candidate.sha256, 'bundled')) !== null) {
+    return null;
+  }
+  const record: SitePackChangeRecord = {
+    seq: 0,
+    eventId: ids.eventId(),
+    packId: r.packId,
+    fromVersion: state.approvedVersion,
+    toVersion: candidate.pack.version,
+    toSha256: candidate.sha256,
+    source: 'bundled',
+    classification: 'unclassified',
+    newDomains: [...newDomains(approved.pack, candidate.pack)],
+    notes: null,
+    diff: diffPacks(approved.pack, candidate.pack),
+    decision: 'downloaded',
+    decidedBy: null,
+    createdAt: now,
+    decidedAt: null,
+  };
+  await repos.sitePackChanges.insert(record);
+  core.log.info('site pack update pending', {
+    packId: r.packId,
+    from: state.approvedVersion,
+    to: candidate.pack.version,
+  });
+  return {
+    type: 'site_pack.pending',
+    pack_id: r.packId,
+    to_version: candidate.pack.version,
+    classification: 'unclassified',
+  };
 }
 
 /** `site_pack.local_override` (on load) for every pack whose local content in force changed. */
@@ -155,6 +167,7 @@ export async function importPackBytes(
   });
   if (!loaded.ok) throw packInvalid('import', loaded.error.issues);
   const { pack, sha256 } = loaded.value;
+  assertDomainsFree(core.snapshot(), pack.id, pack.domains);
   const path = await core.deps.localWriter.write(pack.id, bytes);
   await auditPack(core.deps.repos, core, by, 'site_pack.import', pack.id, {
     version: pack.version,
@@ -176,6 +189,7 @@ export function updatesFact(snapshot: RegistrySnapshot, at: number): SitePackUpd
             title: p.title,
             from_version: p.fromVersion,
             to_version: p.toVersion,
+            sha256: p.sha256,
             local: null,
           }
         : {
@@ -183,6 +197,7 @@ export function updatesFact(snapshot: RegistrySnapshot, at: number): SitePackUpd
             title: p.title,
             from_version: null,
             to_version: p.version,
+            sha256: p.sha256,
             local: p.state,
           },
     ),

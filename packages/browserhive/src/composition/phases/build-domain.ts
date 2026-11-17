@@ -269,6 +269,7 @@ async function buildDomain(
     ids,
     logger,
     bus,
+    degradations,
   });
   // `sitePacks=false` (or `templates=false`) turns the whole layer off (spec 13 §9.6).
   const sitePacksOn = config.templates && config.sitePacks;

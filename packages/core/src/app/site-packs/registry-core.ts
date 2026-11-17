@@ -2,7 +2,14 @@
 
 import type { Logger } from '../../ports/logger.ts';
 import type { JsonObject } from '../../ports/persistence/json.ts';
+import {
+  emptySitePackState,
+  type SitePackChangeRecord,
+  type SitePackStateRecord,
+} from '../../ports/persistence/site-packs.ts';
 import type { Repositories } from '../../ports/persistence/unit-of-work.ts';
+import type { SourcePackVersion } from '../../ports/site-packs.ts';
+import { domainTaken } from './registry-errors.ts';
 import type { PackEntry, RegistrySnapshot, SitePackRegistryDeps } from './registry-types.ts';
 
 /** The registry as its decision functions see it. */
@@ -51,4 +58,42 @@ export async function syncSiteVersions(core: RegistryCore, packId: string): Prom
     touched.add(site.templateId);
   }
   return [...touched];
+}
+
+/** The pack's state row, or a fresh one. */
+export function stateOf(entry: PackEntry, now: number): SitePackStateRecord {
+  return entry.state ?? emptySitePackState(entry.packId, now);
+}
+
+/** A decided change row (`seq` and `event_id` filled in). */
+export function decidedChange(
+  core: RegistryCore,
+  fields: Omit<SitePackChangeRecord, 'seq' | 'eventId' | 'createdAt' | 'decidedAt'>,
+): SitePackChangeRecord {
+  const now = core.deps.clock.now();
+  return { seq: 0, eventId: core.deps.ids.eventId(), createdAt: now, decidedAt: now, ...fields };
+}
+
+/** The content in force, else the approved one (a disabled pack keeps its approval). */
+export function approvedContent(entry: PackEntry): SourcePackVersion | null {
+  return entry.local?.approved ?? entry.approved;
+}
+
+/**
+ * Refuses content of `packId` that claims a domain an approved other pack covers (spec 13 §9.10,
+ * review #83 C-M1): `SITE_PACK_DOMAIN_TAKEN` naming that pack. Offers never own a domain here.
+ */
+export function assertDomainsFree(
+  snapshot: RegistrySnapshot,
+  packId: string,
+  domains: readonly string[],
+): void {
+  for (const domain of domains) {
+    const owner = snapshot.byDomain.get(domain);
+    if (owner === undefined || owner === packId) continue;
+    const entry = snapshot.packs.get(owner);
+    if (entry !== undefined && approvedContent(entry) !== null) {
+      throw domainTaken(packId, domain, owner);
+    }
+  }
 }

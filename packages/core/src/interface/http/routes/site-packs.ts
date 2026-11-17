@@ -82,7 +82,7 @@ export const SITE_PACK_ROUTES = [
       "Import one unsigned pack ({text}: the file's exact text, stored byte for byte; or {pack}: a parsed pack, stored re-serialized): it is validated, stored in the local folder as <id>.json and applies only after approve-local. Signed layouts ({files}) arrive with a later release.",
     request: { body: SitePackImportRequest },
     responses: { 200: SitePackImportResponse },
-    errors: ['SITE_PACK_INVALID', 'PAYLOAD_TOO_LARGE'],
+    errors: ['SITE_PACK_INVALID', 'SITE_PACK_DOMAIN_TAKEN', 'PAYLOAD_TOO_LARGE'],
     bodyLimitBytes: SITE_PACK_IMPORT_MAX_BYTES,
     async handler({ input, principal, services }) {
       const body = input.body;
@@ -129,7 +129,7 @@ export const SITE_PACK_ROUTES = [
       'Apply a pending version: it becomes the approved version for every template using the pack; the previous one is kept for Revert.',
     request: { params: SitePackIdParams, body: SitePackVersionRequest },
     responses: { 200: SitePackViewResponse },
-    errors: ['SITE_PACK_NOT_FOUND', 'SITE_PACK_UPDATE_NOT_PENDING'],
+    errors: ['SITE_PACK_NOT_FOUND', 'SITE_PACK_UPDATE_NOT_PENDING', 'SITE_PACK_DOMAIN_TAKEN'],
     async handler({ input, principal, services }) {
       const view = await services.sitePacks.apply(
         input.params.pack_id,
@@ -161,7 +161,7 @@ export const SITE_PACK_ROUTES = [
     summary: 'Restore the previous approved version in one action.',
     request: { params: SitePackIdParams },
     responses: { 200: SitePackViewResponse },
-    errors: ['SITE_PACK_NOT_FOUND', 'CONFLICT'],
+    errors: ['SITE_PACK_NOT_FOUND', 'SITE_PACK_NO_PREVIOUS'],
     async handler({ input, principal, services }) {
       return reply(200, {
         view: await services.sitePacks.revert(input.params.pack_id, by(principal)),
@@ -208,7 +208,13 @@ export const SITE_PACK_ROUTES = [
       "Approve the local file's current content by the SHA-256 reviewed; a file that changed since it was shown is 409. Later edits apply only after another approval.",
     request: { params: SitePackIdParams, body: SitePackApproveLocalRequest },
     responses: { 200: SitePackViewResponse },
-    errors: ['SITE_PACK_NOT_FOUND', 'SITE_PACK_INVALID', 'CONFLICT'],
+    errors: [
+      'SITE_PACK_NOT_FOUND',
+      'SITE_PACK_NO_LOCAL_FILE',
+      'SITE_PACK_INVALID',
+      'SITE_PACK_DOMAIN_TAKEN',
+      'CONFLICT',
+    ],
     async handler({ input, principal, services }) {
       const view = await services.sitePacks.approveLocal(
         input.params.pack_id,

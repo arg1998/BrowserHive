@@ -180,8 +180,8 @@ for (const [name, open] of IMPLEMENTATIONS) {
         'e-change-2',
         'e-change-3',
       ]);
-      await repos.changes.decide(a.seq, 'approved', 'local', 4_000);
-      await repos.changes.decide(c.seq, 'superseded', 'browserhive', 4_001);
+      await repos.changes.decide(a.eventId, 'approved', 'local', 4_000);
+      await repos.changes.decide(c.eventId, 'superseded', 'browserhive', 4_001);
       expect((await repos.changes.listPending()).map((r) => r.eventId)).toEqual(['e-change-2']);
       const decided = await repos.changes.findCandidate('linkedin', 'a'.repeat(64), 'bundled');
       expect(decided).toMatchObject({ decision: 'superseded', decidedBy: 'browserhive' });
@@ -224,7 +224,7 @@ for (const [name, open] of IMPLEMENTATIONS) {
     it('prunes decided candidates before the cutoff and keeps pending ones', async () => {
       repos = await open();
       const old = await repos.changes.insert(change({ eventId: 'e-old', createdAt: 100 }));
-      await repos.changes.decide(old.seq, 'approved', 'local', 150);
+      await repos.changes.decide(old.eventId, 'approved', 'local', 150);
       await repos.changes.insert(change({ eventId: 'e-old-pending', createdAt: 100 }));
       await repos.changes.insert(change({ eventId: 'e-new', decision: 'auto', createdAt: 900 }));
       expect(await repos.changes.pruneBefore(500)).toBe(1);

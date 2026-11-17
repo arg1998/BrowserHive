@@ -12,19 +12,39 @@ import type {
   SitePackSourceId,
   SitePackStateRecord,
   SitePackStateRepository,
+  UnreadableRowOptions,
 } from '../../src/ports/persistence/site-packs.ts';
 
 const PENDING: readonly SitePackDecisionValue[] = ['available', 'downloaded'];
+
+/** Like the SQLite mapping: a corrupt row throws, or is reported and left out. */
+function readable(
+  corrupt: ReadonlySet<string>,
+  packId: string,
+  options: UnreadableRowOptions,
+): boolean {
+  if (!corrupt.has(packId)) return true;
+  const error = new Error(`corrupt site-pack row ${packId}`);
+  if (options.onUnreadable === undefined) throw error;
+  options.onUnreadable(packId, error);
+  return false;
+}
 
 /** `site_pack_state` in memory. */
 export class InMemorySitePackStateRepository implements SitePackStateRepository {
   readonly rows = new Map<string, SitePackStateRecord>();
 
-  async list(): Promise<readonly SitePackStateRecord[]> {
-    return [...this.rows.values()].sort((a, b) => (a.packId < b.packId ? -1 : 1));
+  /** Packs whose rows read as corrupt (tests of unreadable rows). */
+  readonly corrupt = new Set<string>();
+
+  async list(options: UnreadableRowOptions = {}): Promise<readonly SitePackStateRecord[]> {
+    return [...this.rows.values()]
+      .filter((r) => readable(this.corrupt, r.packId, options))
+      .sort((a, b) => (a.packId < b.packId ? -1 : 1));
   }
 
   async get(packId: string): Promise<SitePackStateRecord | null> {
+    if (this.corrupt.has(packId)) throw new Error(`corrupt site_pack_state row ${packId}`);
     return this.rows.get(packId) ?? null;
   }
 
@@ -56,12 +76,12 @@ export class InMemorySitePackChangeRepository implements SitePackChangeRepositor
   }
 
   async decide(
-    seq: number,
+    eventId: string,
     decision: SitePackDecisionValue,
     by: string | null,
     at: number,
   ): Promise<void> {
-    const i = this.rows.findIndex((r) => r.seq === seq);
+    const i = this.rows.findIndex((r) => r.eventId === eventId);
     const row = this.rows[i];
     if (row !== undefined) this.rows[i] = { ...row, decision, decidedBy: by, decidedAt: at };
   }
@@ -77,9 +97,13 @@ export class InMemorySitePackChangeRepository implements SitePackChangeRepositor
     return matches.sort((a, b) => b.seq - a.seq)[0] ?? null;
   }
 
-  async listPending(): Promise<readonly SitePackChangeRecord[]> {
+  /** Packs whose rows read as corrupt (tests of unreadable rows). */
+  readonly corrupt = new Set<string>();
+
+  async listPending(options: UnreadableRowOptions = {}): Promise<readonly SitePackChangeRecord[]> {
     return this.rows
       .filter((r) => PENDING.includes(r.decision))
+      .filter((r) => readable(this.corrupt, r.packId, options))
       .sort((a, b) => a.createdAt - b.createdAt || a.seq - b.seq);
   }
 

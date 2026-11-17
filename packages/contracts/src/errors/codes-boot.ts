@@ -421,4 +421,36 @@ export const BOOT_ERRORS = {
     resolution:
       'Remove the sign-in of the named origins if the template does not need them (**Remove sign-in**), or accept that restores omit their IndexedDB data.',
   }),
+  SITE_PACKS_STATE_CORRUPT: defineError({
+    code: 'SITE_PACKS_STATE_CORRUPT',
+    httpStatus: 500,
+    category: 'boot',
+    retryable: 'never',
+    title: 'Site pack state unreadable',
+    message:
+      "The stored approval of site pack '{pack_id}' cannot be read; the pack does not apply.",
+    hint: 'Run browserhive doctor; approve the pack again from the Site packs page.',
+    details: z.object({ pack_id: z.string(), table: z.string(), reason: z.string() }),
+    docs: true,
+    exitCode: 1,
+    cause:
+      'A `site_pack_state` or `site_pack_changes` row holds a value this binary cannot read (a hand edit, a corrupt JSON column). Only that pack is affected: it is treated as not approved (its guards do not apply) and every other pack keeps working. Recorded as a degradation; it resolves on the next clean load.',
+    resolution:
+      'Approve the pack again (adding a site or approve-local rewrites the row), or restore the database from a backup.',
+  }),
+  SITE_PACKS_LOAD_FAILED: defineError({
+    code: 'SITE_PACKS_LOAD_FAILED',
+    httpStatus: 500,
+    category: 'boot',
+    retryable: 'never',
+    title: 'Site packs not loaded',
+    message: 'Site packs could not be loaded ({reason}); no pack applies until a reload succeeds.',
+    hint: 'Check the log, then POST /api/v1/site-packs/reload or restart.',
+    details: z.object({ reason: z.string() }),
+    docs: true,
+    exitCode: 1,
+    cause:
+      "The registry's load failed as a whole (the database could not be read). Template sites behave as generic sites and only BrowserHive's default guards apply.",
+    resolution: 'Fix the cause named in the log and reload the site packs.',
+  }),
 } as const;

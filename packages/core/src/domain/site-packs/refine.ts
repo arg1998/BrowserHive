@@ -10,6 +10,7 @@ import {
 import { isAnchoredChallenge } from './challenges.ts';
 import { checkPackSelector } from './css-selector.ts';
 import { scopedUrl, scopeOfGlob } from './glob-scope.ts';
+import { unsafeTextIssues } from './text-safety.ts';
 
 /** One refinement failure: a JSON path into the pack and why. */
 export interface PackIssue {
@@ -48,6 +49,8 @@ export function refinePack(pack: SitePackV1): RefineResult {
   const warnings: string[] = [];
   const fail = (path: string, message: string) => issues.push({ path, message });
   const domains = pack.domains;
+  // Plain text only (spec 13 §9.10): no terminal escapes or bidi tricks in anything shown.
+  issues.push(...unsafeTextIssues(pack));
 
   // Identity and scope.
   const isRegistrable = (d: string) => registrableDomain(d) === d;

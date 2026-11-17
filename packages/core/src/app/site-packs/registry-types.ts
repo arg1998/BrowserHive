@@ -2,6 +2,7 @@
 
 import type { SitePackV1 } from '@browserhive/contracts/site-packs';
 import type { Clock } from '../../ports/clock.ts';
+import type { DegradationReporter } from '../../ports/degradation-reporter.ts';
 import type { EventPublisher } from '../../ports/event-bus.ts';
 import type { IdGenerator } from '../../ports/id-generator.ts';
 import type { Logger } from '../../ports/logger.ts';
@@ -54,6 +55,8 @@ export interface SitePackRegistryDeps {
   readonly logger: Logger;
   /** The `site-packs` topic and the update notification. */
   readonly bus?: EventPublisher<DomainEvents>;
+  /** `SITE_PACKS_STATE_CORRUPT` for unreadable rows (review #83 C-M5). */
+  readonly degradations?: DegradationReporter;
   /** A template whose sites use a pack whose content in force changed (`template.changed`). */
   readonly templateChanged?: (templateId: string) => void;
 }
@@ -87,6 +90,8 @@ export interface PackEntry {
   readonly pending: readonly SitePackChangeRecord[];
   readonly usedBy: readonly string[];
   readonly skipped: SkippedPackVersion | null;
+  /** The first domain this pack's content claims that another pack covers (`domain_overlap`). */
+  readonly overlap: { readonly domain: string; readonly owner: string } | null;
 }
 
 /** What one load found per source. */
@@ -155,4 +160,16 @@ export interface SiteApproval {
   /** The version in force for the site (the local file's when a local override applies). */
   readonly version: number;
   readonly sha256: string;
+}
+
+/**
+ * A first-use approval prepared outside any transaction (cache copy done, conflicts checked) and
+ * written in the caller's: a template's or site's rows commit with the approval or not at all
+ * (review #83 C-L9).
+ */
+export interface PreparedApproval extends SiteApproval {
+  /** `true` when this approves a version; `false` when an approval already existed. */
+  readonly approves: boolean;
+  /** The approval's rows (`site_pack_state`, a change row, `site_pack.approve`); idempotent. */
+  write(repos: Repositories): Promise<void>;
 }

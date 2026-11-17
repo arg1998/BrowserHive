@@ -1,92 +1,39 @@
 /** @module contracts/http/site-packs — site-pack REST DTOs (spec 13 §11.1 "Site packs", PR T3a): the catalog with each pack's approval, provenance, local-file state and pending versions; the field-level diff; Apply, Reject, Revert, Pin, Follow, approving a local file by its SHA-256, enabling; reload and import of unsigned files; the change history and guard hits. Registry fields (`update_check`, index versions) are filled by T4b and are `false`/`null` until then. */
 import { z } from 'zod';
 import { SitePackV1 } from '../site-packs/schema.ts';
+import { Bytes, Count, csv, EpochMs, QueryBool, QueryText } from './common.ts';
 import {
-  Bytes,
-  Count,
-  Cursor,
-  csv,
-  EpochMs,
-  limitQuery,
-  page,
-  QueryBool,
-  QueryText,
-  windowQuery,
-} from './common.ts';
+  Sha256Hex,
+  SitePackClassification,
+  SitePackLocalState,
+  SitePackProvenance,
+  SitePackSkipReason,
+  SitePackSourceFilter,
+  SitePackSourceKind,
+  SitePackVersionRef,
+} from './site-packs-vocabulary.ts';
 
-// ------------------------------------------------------------------------------------------------
-// Vocabulary.
-// ------------------------------------------------------------------------------------------------
-
-/** Where a pack version came from (spec 13 §9.6 `SitePackSource.id`). */
-export const SitePackSourceKind = z.enum(['bundled', 'remote', 'import', 'local']);
-/** A pack version's source. */
-export type SitePackSourceKind = z.infer<typeof SitePackSourceKind>;
-
-/** The `?source=` filter: `registry` is the remote source. */
-export const SitePackSourceFilter = z.enum(['local', 'registry', 'bundled', 'import']);
-
-/**
- * What the operator was shown when approving: the release a bundled version shipped with, the
- * registry key and index (T4b), the imported file's name, or a local file's path.
- */
-export const SitePackProvenance = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('bundled'), release: z.string() }),
-  z.object({ kind: z.literal('remote'), key_id: z.string(), index_version: z.number().int() }),
-  z.object({ kind: z.literal('import'), file: z.string() }),
-  z.object({ kind: z.literal('local'), path: z.string() }),
-]);
-/** A provenance. */
-export type SitePackProvenance = z.infer<typeof SitePackProvenance>;
-
-/** A lowercase hex SHA-256. */
-export const Sha256Hex = z.string().regex(/^[0-9a-f]{64}$/);
-
-/** A local file's state (spec 13 §10.5). */
-export const SitePackLocalState = z.enum(['approved', 'changed', 'not_approved']);
-/** A local file's state. */
-export type SitePackLocalState = z.infer<typeof SitePackLocalState>;
-
-/**
- * How a candidate compares with the approved version (spec 13 §9.7). T3a shows every diff as
- * `unclassified`; the classifier and its chips arrive with T3b.
- */
-export const SitePackClassification = z.enum([
-  'unclassified',
-  'tightening',
-  'restrictive',
-  'loosening',
-  'neutral',
-  'new_pack',
-  'revoked',
-  'local_override',
-]);
-/** A classification. */
-export type SitePackClassification = z.infer<typeof SitePackClassification>;
-
-/** Why a pack version was not loaded. */
-export const SitePackSkipReason = z.enum([
-  'invalid',
-  'too_large',
-  'unknown_strategy',
-  'min_client',
-  'domain_overlap',
-  'not_found',
-  'id_mismatch',
-  'signed_layout_unsupported',
-  'unreadable',
-]);
-/** A skip reason. */
-export type SitePackSkipReason = z.infer<typeof SitePackSkipReason>;
-
-/** One version a pack id was offered or decided at. */
-export const SitePackVersionRef = z.object({
-  version: z.number().int().nullable(),
-  sha256: Sha256Hex,
-  source: SitePackSourceKind,
-});
-/** A version reference. */
-export type SitePackVersionRef = z.infer<typeof SitePackVersionRef>;
+export {
+  SiteGuardHitAction,
+  SiteGuardHitKind,
+  SiteGuardHitRow,
+  SiteGuardHitsPage,
+  SiteGuardHitsQuery,
+  SitePackChangeRow,
+  SitePackChangesPage,
+  SitePackChangesQuery,
+  SitePackDecision,
+} from './site-packs-history.ts';
+export {
+  Sha256Hex,
+  SitePackClassification,
+  SitePackLocalState,
+  SitePackProvenance,
+  SitePackSkipReason,
+  SitePackSourceFilter,
+  SitePackSourceKind,
+  SitePackVersionRef,
+} from './site-packs-vocabulary.ts';
 
 // ------------------------------------------------------------------------------------------------
 // The pack as operators see it.
@@ -216,7 +163,7 @@ export type SitePackRegistryStatus = z.infer<typeof SitePackRegistryStatus>;
 export const SitePackIdParams = z.object({ pack_id: z.string().min(1).max(253) });
 
 /** `GET /site-packs` query. */
-export const SitePacksQuery = z.object({
+export const SitePacksQuery = z.strictObject({
   q: QueryText.optional(),
   source: csv(SitePackSourceFilter),
   pending: QueryBool.optional(),
@@ -252,7 +199,7 @@ export const SitePackDetailResponse = z.object({
 export type SitePackDetailResponse = z.infer<typeof SitePackDetailResponse>;
 
 /** `GET /site-packs/{pack_id}/diff` query: `to` a pending version or `local`; `from` defaults to the approved version. */
-export const SitePackDiffQuery = z.object({
+export const SitePackDiffQuery = z.strictObject({
   to: z.union([z.literal('local'), z.coerce.number().int().min(1)]),
   from: z.coerce.number().int().min(1).optional(),
 });
@@ -360,105 +307,6 @@ export const SitePackImportResponse = z.object({
 });
 /** `POST /site-packs/import` response. */
 export type SitePackImportResponse = z.infer<typeof SitePackImportResponse>;
-
-/** Decisions recorded per candidate (spec 13 §9.9 `site_pack_changes.decision`). */
-export const SitePackDecision = z.enum([
-  'available',
-  'downloaded',
-  'auto',
-  'approved',
-  'rejected',
-  'superseded',
-  'reverted',
-]);
-
-/** One `site_pack_changes` row. */
-export const SitePackChangeRow = z.object({
-  seq: z.number().int(),
-  event_id: z.string(),
-  pack_id: z.string(),
-  from_version: z.number().int().nullable(),
-  to_version: z.number().int().nullable(),
-  to_sha256: Sha256Hex,
-  source: SitePackSourceKind,
-  classification: SitePackClassification,
-  new_domains: z.array(z.string()),
-  notes: z.string().nullable(),
-  decision: SitePackDecision,
-  decided_by: z.string().nullable(),
-  created_at: EpochMs,
-  decided_at: EpochMs.nullable(),
-});
-/** One change row. */
-export type SitePackChangeRow = z.infer<typeof SitePackChangeRow>;
-
-/** `GET /site-packs/changes` query. */
-export const SitePackChangesQuery = z.object({
-  pack_id: z.string().max(253).optional(),
-  decision: csv(SitePackDecision),
-  ...windowQuery,
-  cursor: Cursor.optional(),
-  limit: limitQuery(),
-});
-/** `GET /site-packs/changes` query. */
-export type SitePackChangesQuery = z.infer<typeof SitePackChangesQuery>;
-
-/** `GET /site-packs/changes` body. */
-export const SitePackChangesPage = page(SitePackChangeRow);
-/** `GET /site-packs/changes` body. */
-export type SitePackChangesPage = z.infer<typeof SitePackChangesPage>;
-
-/** What a guard decision did (spec 13 §9.9 `site_guard_hits.action`). */
-export const SiteGuardHitAction = z.enum(['block', 'confirm', 'warn', 'paced', 'held']);
-/** A guard kind as recorded (`stop` for a stopped site). */
-export const SiteGuardHitKind = z.enum([
-  'logout',
-  'account',
-  'credential',
-  'destructive',
-  'write',
-  'stop',
-]);
-
-/** One `site_guard_hits` row. */
-export const SiteGuardHitRow = z.object({
-  event_id: z.string(),
-  session_id: z.string().nullable(),
-  template_id: z.string().nullable(),
-  pack_id: z.string(),
-  guard_id: z.string(),
-  guard_kind: SiteGuardHitKind,
-  action: SiteGuardHitAction,
-  outcome: z.enum(['approved', 'denied', 'timeout', 'cancelled']).nullable(),
-  decided_by: z.string().nullable(),
-  source: z.enum(['tool', 'request', 'element']),
-  method: z.string().nullable(),
-  /** Sanitized (D-20). */
-  url: z.string(),
-  request_id: z.string().nullable(),
-  tool: z.string().nullable(),
-  ts: EpochMs,
-});
-/** One guard hit. */
-export type SiteGuardHitRow = z.infer<typeof SiteGuardHitRow>;
-
-/** `GET /site-packs/guard-hits` query. */
-export const SiteGuardHitsQuery = z.object({
-  template_id: z.string().max(64).optional(),
-  session_id: z.string().max(128).optional(),
-  pack_id: z.string().max(253).optional(),
-  action: csv(SiteGuardHitAction),
-  ...windowQuery,
-  cursor: Cursor.optional(),
-  limit: limitQuery(),
-});
-/** `GET /site-packs/guard-hits` query. */
-export type SiteGuardHitsQuery = z.infer<typeof SiteGuardHitsQuery>;
-
-/** `GET /site-packs/guard-hits` body. */
-export const SiteGuardHitsPage = page(SiteGuardHitRow);
-/** `GET /site-packs/guard-hits` body. */
-export type SiteGuardHitsPage = z.infer<typeof SiteGuardHitsPage>;
 
 // ------------------------------------------------------------------------------------------------
 // A template site's pack, as the template page and the wizard show it (spec 13 §11.4).

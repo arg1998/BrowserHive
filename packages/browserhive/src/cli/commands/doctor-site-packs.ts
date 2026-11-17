@@ -2,10 +2,12 @@
 import { join } from 'node:path';
 import type { ServerConfig } from '@browserhive/contracts/config';
 import { SITE_PACK_MAX_BYTES } from '@browserhive/contracts/site-packs';
+import type { SourcePackVersion } from '@browserhive/core/ports/site-packs';
 import { BundledIndex, loadPackBytes, sha256Hex } from '@browserhive/core/server';
 import type { CliDeps } from '../deps.ts';
 import { databasePath } from './common.ts';
 import type { CheckResult } from './doctor-checks.ts';
+import { resolvedProblems } from './doctor-site-pack-state.ts';
 
 const CHECK = 'site packs';
 /** Entries a detail names before "and N more". */
@@ -33,7 +35,12 @@ type Deps = Pick<CliDeps, 'fs' | 'openStorage'>;
 
 /** One file checked. */
 type Checked =
-  | { readonly kind: 'ok'; readonly id: string; readonly sha256: string }
+  | {
+      readonly kind: 'ok';
+      readonly id: string;
+      readonly sha256: string;
+      readonly version: SourcePackVersion;
+    }
   | { readonly kind: 'newer'; readonly id: string }
   | { readonly kind: 'bad'; readonly id: string; readonly detail: string };
 
@@ -75,7 +82,7 @@ async function checkFile(
       ? { kind: 'newer', id }
       : { kind: 'bad', id, detail: loaded.error.reason };
   }
-  return { kind: 'ok', id, sha256: loaded.value.sha256 };
+  return { kind: 'ok', id, sha256: loaded.value.sha256, version: loaded.value };
 }
 
 async function jsonNames(deps: Deps, dir: string): Promise<readonly string[]> {
@@ -105,8 +112,12 @@ async function checkBundled(deps: Deps, dir: string, binary: string): Promise<re
   return out;
 }
 
-async function localApprovals(deps: Deps, dataDir: string): Promise<ReadonlyMap<string, string>> {
-  if ((await deps.fs.stat(databasePath(dataDir))) === null) return new Map();
+type States = Awaited<ReturnType<Awaited<ReturnType<Deps['openStorage']>>['sitePackStates']>>;
+
+const NO_STATES: States = { rows: [], unreadable: [] };
+
+async function storedStates(deps: Deps, dataDir: string): Promise<States> {
+  if ((await deps.fs.stat(databasePath(dataDir))) === null) return NO_STATES;
   try {
     const storage = await deps.openStorage({
       dataDir,
@@ -115,14 +126,13 @@ async function localApprovals(deps: Deps, dataDir: string): Promise<ReadonlyMap<
       owner: 'doctor',
     });
     try {
-      const rows = await storage.sitePackLocalApprovals();
-      return new Map(rows.flatMap((r) => (r.sha256 === null ? [] : [[r.packId, r.sha256]])));
+      return await storage.sitePackStates();
     } finally {
       await storage.close();
     }
   } catch {
     // The database row reports a database that cannot be opened.
-    return new Map();
+    return NO_STATES;
   }
 }
 
@@ -144,13 +154,16 @@ export async function checkSitePacks(deps: Deps, input: SitePackCheckInput): Pro
   const notes: string[] = [];
   // Bundled packs.
   const bundledDir = input.bundledDir;
+  const bundledOk: SourcePackVersion[] = [];
+  const localOk: SourcePackVersion[] = [];
   if (bundledDir === undefined || (await deps.fs.stat(bundledDir)) === null) {
     warnings.push('no bundled site packs found (the installation is incomplete; reinstall)');
   } else {
     const bundled = await checkBundled(deps, bundledDir, input.binaryVersion);
     const bad = bundled.flatMap((c) => (c.kind === 'bad' ? [`${c.id} (${c.detail})`] : []));
     if (bad.length > 0) failures.push(`bundled packs do not verify: ${listText(bad)}`);
-    const ok = bundled.filter((c) => c.kind === 'ok').length;
+    for (const c of bundled) if (c.kind === 'ok') bundledOk.push(c.version);
+    const ok = bundledOk.length;
     const newer = bundled.filter((c) => c.kind === 'newer').length;
     notes.push(
       `${ok} bundled pack${ok === 1 ? '' : 's'}${newer > 0 ? ` (${newer} need a newer BrowserHive)` : ''}`,
@@ -159,7 +172,12 @@ export async function checkSitePacks(deps: Deps, input: SitePackCheckInput): Pro
   // Local files.
   const localDir = input.config?.sitePacksDir ?? join(input.dataDir, 'site-packs', 'local');
   const names = await deps.fs.readdir(localDir).catch(() => []);
-  const approvals = await localApprovals(deps, input.dataDir);
+  const states = await storedStates(deps, input.dataDir);
+  const approvals = new Map(
+    states.rows.flatMap((r) =>
+      r.localApprovedSha256 === null ? [] : [[r.packId, r.localApprovedSha256] as const],
+    ),
+  );
   const notApproved: string[] = [];
   const changed: string[] = [];
   const invalid: string[] = [];
@@ -184,6 +202,7 @@ export async function checkSitePacks(deps: Deps, input: SitePackCheckInput): Pro
       invalid.push(checked.kind === 'bad' ? `${checked.id} (${checked.detail})` : checked.id);
       continue;
     }
+    localOk.push(checked.version);
     const sha = approvals.get(checked.id);
     if (sha === undefined) notApproved.push(checked.id);
     else if (sha !== checked.sha256) changed.push(checked.id);
@@ -199,6 +218,17 @@ export async function checkSitePacks(deps: Deps, input: SitePackCheckInput): Pro
       `${layouts} signed layout${layouts === 1 ? '' : 's'} in ${localDir} not read yet`,
     );
   }
+  // Approved packs that do not apply after all (review #83 S-M8, C-M5).
+  const notInForce = await resolvedProblems(deps, {
+    dataDir: input.dataDir,
+    localDir,
+    binaryVersion: input.binaryVersion,
+    bundled: bundledOk,
+    local: localOk,
+    states: states.rows,
+    unreadable: states.unreadable,
+  });
+  if (notInForce.length > 0) warnings.push(`packs not in force: ${listText(notInForce)}`);
   if (approved > 0) notes.push(`${approved} approved local file${approved === 1 ? '' : 's'}`);
   if (failures.length > 0) {
     return { check: CHECK, status: 'fail', detail: [...failures, ...warnings].join('; ') };

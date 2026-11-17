@@ -41,6 +41,7 @@ export { ChallengeWatch } from '../app/site-packs/challenge-watch.ts';
 export { PackProber, packProberSelector } from '../app/site-packs/pack-prober.ts';
 export { maintenanceProbePages } from '../app/site-packs/probe-pages.ts';
 export { SitePackRegistry } from '../app/site-packs/registry.ts';
+export { assembleSnapshot, resolvePacks } from '../app/site-packs/registry-build.ts';
 export type { PendingUpdate, SitePackRegistryDeps } from '../app/site-packs/registry-types.ts';
 // Site-pack enforcement (spec 13 §9.3, §9.5; PR T3a, WP-E1).
 export { SecurityInterceptService } from '../app/site-packs/security-intercepts.ts';

@@ -3,6 +3,10 @@ import { describe, expect, it } from 'bun:test';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import {
+  emptySitePackState,
+  type SitePackStateRecord,
+} from '@browserhive/core/ports/persistence/site-packs';
 import { z } from 'zod';
 import { resolveBundledPacksDir } from '../../src/composition/site-packs.ts';
 import { cliHarness, DATA_DIR, MemoryFs, storageState } from './helpers.ts';
@@ -20,14 +24,28 @@ function sha(text: string): string {
 
 async function row(
   files: Record<string, string>,
-  options: { argv?: string[]; approvals?: { packId: string; sha256: string | null }[] } = {},
+  options: {
+    argv?: string[];
+    approvals?: { packId: string; sha256: string | null }[];
+    states?: SitePackStateRecord[];
+    unreadable?: string[];
+  } = {},
 ) {
   const fs = new MemoryFs({ [`${DATA_DIR}/browserhive.db`]: 'db', ...files });
   fs.ensureDir(BUNDLED);
   const run = await cliHarness({
     argv: ['doctor', '--json', ...(options.argv ?? [])],
     fs,
-    storage: storageState({ sitePackApprovals: options.approvals ?? [] }),
+    storage: storageState({
+      sitePackStates: [
+        ...(options.approvals ?? []).map((a) => ({
+          ...emptySitePackState(a.packId, 0),
+          localApprovedSha256: a.sha256,
+        })),
+        ...(options.states ?? []),
+      ],
+      sitePackUnreadable: options.unreadable ?? [],
+    }),
   });
   const rows = z.array(Row).parse(JSON.parse(run.stdout));
   return rows.find((r) => r.check === 'site packs');
@@ -114,5 +132,71 @@ describe('doctor: site packs', () => {
       status: 'ok',
       detail: expect.stringContaining('sitePacks=false'),
     });
+  });
+
+  it('approved packs that do not apply are warnings (review #83 S-M8, C-M5)', async () => {
+    const pack = z.record(z.string(), z.unknown()).parse(JSON.parse(GITHUB));
+    const current = `${JSON.stringify({ ...pack, min_client: '0.0.1' }, null, 2)}\n`;
+    // Approved at a version whose copy is gone, and a pack whose row cannot be read.
+    const found = await row(
+      { [`${BUNDLED}/github.com.json`]: current },
+      {
+        states: [
+          {
+            ...emptySitePackState('github.com', 0),
+            approvedVersion: 0,
+            approvedSha256: 'f'.repeat(64),
+            approvedSource: 'bundled',
+          },
+        ],
+        unreadable: ['linkedin.com'],
+      },
+    );
+    expect(found?.status).toBe('warn');
+    expect(found?.detail).toContain('packs not in force: github.com (not_found');
+    expect(found?.detail).toContain('linkedin.com (unreadable');
+  });
+
+  it('a domain covered by two approved packs is named with its owner', async () => {
+    const pack = z.record(z.string(), z.unknown()).parse(JSON.parse(GITHUB));
+    const github = `${JSON.stringify({ ...pack, min_client: '0.0.1' }, null, 2)}\n`;
+    const other = `${JSON.stringify(
+      {
+        ...pack,
+        id: 'gist.test',
+        domains: ['gist.test', 'github.com'],
+        min_client: '0.0.1',
+        guards: [],
+        element_guards: [],
+        challenges: [],
+        sign_in: undefined,
+        identity_provider: 'github.com',
+        signed_in: { probe: { host: 'gist.test', path: '/' }, kind: 'landmark', landmark: 'body' },
+      },
+      null,
+      2,
+    )}\n`;
+    const found = await row(
+      { [`${BUNDLED}/github.com.json`]: github, [`${LOCAL}/gist.test.json`]: other },
+      {
+        states: [
+          {
+            ...emptySitePackState('github.com', 0),
+            approvedVersion: 1,
+            approvedSha256: sha(github),
+            approvedSource: 'bundled',
+            approvedAt: 1,
+          },
+          {
+            ...emptySitePackState('gist.test', 0),
+            localApprovedSha256: sha(other),
+            localApprovedAt: 2,
+          },
+        ],
+      },
+    );
+    expect(found?.detail).toContain(
+      'gist.test (domain_overlap: github.com is covered by the pack github.com',
+    );
   });
 });

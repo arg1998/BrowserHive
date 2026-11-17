@@ -205,7 +205,7 @@ export class TemplateEditService {
     // First use (spec 13 §9.6): a new site, or a reviewed pack attached to an existing one.
     const approval =
       existing === undefined || body.pack_sha256 !== undefined
-        ? await packs.approveSite(siteId, body.pack_sha256, by)
+        ? await packs.prepareSite(siteId, body.pack_sha256, by)
         : null;
     const base: TemplateSiteRecord =
       existing === undefined
@@ -238,6 +238,7 @@ export class TemplateEditService {
         : { ...base, packId: approval.packId, packVersion: approval.version };
     await this.#deps.uow.transaction(async (repos) => {
       await repos.templateSites.upsert(site);
+      await approval?.write(repos);
       await this.#audit(repos, by, 'template.update', templateId, {
         changed: [`sites.${siteId}`],
         site: {
@@ -249,6 +250,7 @@ export class TemplateEditService {
         },
       });
     });
+    if (approval?.approves === true) await packs.approvalsCommitted();
     const after = await this.#deps.repos.templateSites.list(templateId);
     await this.#reach(template, after);
     const view = toSiteView(site, packs);
