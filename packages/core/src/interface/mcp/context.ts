@@ -33,6 +33,12 @@ export interface ToolCallContext {
   readonly services: ToolServices;
   /** The session resolved by the ownership policy, or `null` for tools that name none. */
   readonly session: Session | null;
+  /**
+   * Runs the site gate of a template session's call again (the sign-in pause, the security hold,
+   * the pack's stops and guards) right before the browser acts after a wait inside the handler
+   * (`entry-warmup`, spec 13 §9.4); `null` before the gate ran or for a call on no session.
+   */
+  readonly siteRecheck: (() => Promise<void>) | null;
 }
 
 /** The session the ownership policy resolved. @throws `INTERNAL_ERROR` when the policy did not run. */

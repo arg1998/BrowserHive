@@ -36,6 +36,8 @@ export interface SiteGotoCall {
   /** The tool's timeout (`0`: none). */
   readonly timeoutMs: number;
   readonly signal: AbortSignal;
+  /** The call's site gate; after a warm-up it runs again before the agent's own navigation. */
+  readonly recheck?: (() => Promise<void>) | null;
 }
 
 /** Collaborators of {@link SiteActionStrategies}. */
@@ -96,12 +98,18 @@ export class SiteActionStrategies {
   /**
    * Runs `run` (the tool's handler) with the before-action strategies of the page it acts on:
    * `human-dwell` and `serialize-site` before it (the turn is released when it settles), and the
-   * `single-focus` arbitration before and after it.
+   * `single-focus` arbitration before and after it. A call that waited (a dwell, or a queue for its
+   * turn) runs `recheck` (the dispatcher's site gate) after the wait and before anything acts: a
+   * hold, stop, sign-in pause or guard that arrived meanwhile refuses it, and its turn is released.
    *
    * @throws `TEMPLATE_BUSY` (`pace`) when the turn did not come within 30 s; the signal's reason
-   *   when the call is aborted while waiting
+   *   when the call is aborted while waiting; what `recheck` throws
    */
-  async around<T>(call: SiteActionCall, run: () => Promise<T>): Promise<T> {
+  async around<T>(
+    call: SiteActionCall,
+    run: () => Promise<T>,
+    recheck: () => Promise<void> = async () => undefined,
+  ): Promise<T> {
     const template = liveTemplate(call.session);
     const kind = template === null ? null : actionKindOf(call.tool, call.args);
     if (template === null || kind === null) return await run();
@@ -115,8 +123,16 @@ export class SiteActionStrategies {
     let turn: SlotTurn | null = null;
     if (pack !== null && url !== null) {
       if (kind === 'interaction') this.#visited.add(pairKey(call.session.id, pack.packId));
-      await this.#dwellBefore(call, pack);
+      const dwelt = await this.#dwellBefore(call, pack);
       turn = await this.#serialize(call, template, pack, url);
+      if (dwelt || turn?.queued === true) {
+        try {
+          await recheck();
+        } catch (err) {
+          turn?.release();
+          throw err;
+        }
+      }
     }
     try {
       if (page !== null && kind !== 'focus') {
@@ -164,6 +180,8 @@ export class SiteActionStrategies {
     await this.#warmup.run(call.page, pack.pack, plan, budget, call.signal);
     // The warm-up's commit consumed the expectation; the agent's own navigation is next.
     if (call.tool === 'navigate') this.#deps.navigations.expectOnPage(call.page, call.url);
+    // A hold, stop or sign-in pause that arrived during the warm-up stops the agent's navigation.
+    await call.recheck?.();
     const usedMs = this.#deps.clock.now() - startedAt;
     this.#log.info('entry warm-up', {
       templateId: template.templateId,
@@ -228,11 +246,14 @@ export class SiteActionStrategies {
     this.#focus?.retain(live);
   }
 
-  async #dwellBefore(call: SiteActionCall, pack: EffectivePack): Promise<void> {
+  /** The `human-dwell` wait; true when the call waited. */
+  async #dwellBefore(call: SiteActionCall, pack: EffectivePack): Promise<boolean> {
     const params = strategyOf(pack.pack, 'human-dwell');
-    if (params === null) return;
+    if (params === null) return false;
     const ms = this.#dwell.waitMs(call.session.id, pack.packId, params, this.#deps.clock.now());
-    if (ms > 0) await this.#deps.clock.sleep(ms, call.signal);
+    if (ms <= 0) return false;
+    await this.#deps.clock.sleep(ms, call.signal);
+    return true;
   }
 
   async #serialize(

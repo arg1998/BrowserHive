@@ -1,4 +1,4 @@
-/** @module interface/mcp/site-actions-hook.test — the dispatcher's hooks for the before-action strategies (spec 13 §9.4, §9.6): `around` wraps the handler of tools on a session with the parsed arguments, after the policies; a refusal it throws is the call's result and the handler does not run; `navigate` asks for the warm-up and shrinks its timeout by the time used; a site forcing humanized input takes the humanized path for a session without `humanize`. */
+/** @module interface/mcp/site-actions-hook.test — the dispatcher's hooks for the before-action strategies (spec 13 §9.4, §9.6): `around` wraps the handler of tools on a session with the parsed arguments, after the policies; a refusal it throws is the call's result and the handler does not run; `navigate` asks for the warm-up and shrinks its timeout by the time used; a site forcing humanized input takes the humanized path for a session without `humanize`; the site gate is handed over as the re-check after a strategy wait (`around`, and `beforeGoto` for the warm-up), each run getting the decisions of the earlier ones (review PR #84 H2). */
 
 import { afterEach, describe, expect, it } from 'bun:test';
 import {
@@ -92,5 +92,34 @@ describe('dispatcher hooks of the before-action strategies', () => {
     await executeTool(h, 'hover', { session_id: id, selector: '#go' });
     await executeTool(h, 'fill', { session_id: id, selector: '#name', value: 'x' });
     expect(spy.calls).toEqual(['humanClick', 'humanHover']);
+  });
+
+  it('hands the site gate over as the re-check; each run gets the earlier decisions', async () => {
+    const runs: string[] = [];
+    const rechecks: ((() => Promise<void>) | null | undefined)[] = [];
+    const guards = {
+      async beforeTool(call: { tool: string }, settled?: ReadonlySet<string>) {
+        runs.push(`${call.tool}:${[...(settled ?? [])].join(',')}`);
+        return new Set([...(settled ?? []), `d${runs.length}`]);
+      },
+    };
+    const actions: SiteActionsLike = {
+      async around(_call, run, recheck) {
+        await recheck?.();
+        return await run();
+      },
+      async beforeGoto(call) {
+        rechecks.push(call.recheck);
+        await call.recheck?.();
+        return 0;
+      },
+      forcesHumanize: () => false,
+    };
+    h = await createToolHarness({ siteActions: () => actions, siteGuards: () => guards });
+    const id = await h.launch();
+    await executeTool(h, 'click', { session_id: id, selector: '#go' });
+    await executeTool(h, 'navigate', { session_id: id, url: 'https://site-a.test/deep' });
+    expect(runs).toEqual(['click:', 'click:d1', 'navigate:', 'navigate:d3', 'navigate:d3,d4']);
+    expect(rechecks).toHaveLength(1);
   });
 });

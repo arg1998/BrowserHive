@@ -22,6 +22,8 @@ interface Slot {
 export interface SlotTurn {
   /** How long the action waited for its turn. */
   readonly waitedMs: number;
+  /** The action queued for its turn (it did not get it at once). */
+  readonly queued: boolean;
   release(): void;
 }
 
@@ -55,7 +57,7 @@ export class SiteSlots {
     const own = slot.holders.get(sessionId);
     if (own !== undefined || (slot.holders.size < slot.max && slot.queue.length === 0)) {
       slot.holders.set(sessionId, (own ?? 0) + 1);
-      return this.#turn(key, sessionId, 0);
+      return this.#turn(key, sessionId, 0, false);
     }
     let grant: () => void = () => undefined;
     const granted = new Promise<void>((resolve) => {
@@ -86,7 +88,7 @@ export class SiteSlots {
           this.#release(key, sessionId);
           throw signal.reason;
         }
-        return this.#turn(key, sessionId, this.#clock.now() - startedAt);
+        return this.#turn(key, sessionId, this.#clock.now() - startedAt, true);
       }
       this.#dequeue(key, waiter);
       if (outcome === 'aborted') throw signal.reason;
@@ -118,10 +120,11 @@ export class SiteSlots {
     return slot;
   }
 
-  #turn(key: string, sessionId: string, waitedMs: number): SlotTurn {
+  #turn(key: string, sessionId: string, waitedMs: number, queued: boolean): SlotTurn {
     let released = false;
     return {
       waitedMs,
+      queued,
       release: () => {
         if (released) return;
         released = true;
