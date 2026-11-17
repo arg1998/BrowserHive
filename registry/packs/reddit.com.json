@@ -1,0 +1,110 @@
+{
+  "schema": 1,
+  "id": "reddit.com",
+  "version": 1,
+  "min_client": "0.3.0",
+  "title": "Reddit",
+  "description": "Reddit's user agreement bars accessing or collecting data by automated means. The account settings page is the probe; form posts to it need confirmation. Deactivation and session pages are blocked for agents.",
+  "domains": [
+    "reddit.com",
+    "redd.it"
+  ],
+  "sign_in": {
+    "url": {
+      "host": "www.reddit.com",
+      "path": "/login/"
+    },
+    "human_only": false
+  },
+  "signed_in": {
+    "probe": {
+      "host": "www.reddit.com",
+      "path": "/settings/account"
+    },
+    "kind": "either",
+    "signed_out_redirects": [
+      "www.reddit.com/login*"
+    ]
+  },
+  "guards": [
+    {
+      "id": "account-settings-writes",
+      "kind": "account",
+      "match": {
+        "url": "www.reddit.com/settings/account",
+        "methods": [
+          "POST",
+          "PUT",
+          "PATCH",
+          "DELETE"
+        ]
+      },
+      "action": "confirm"
+    },
+    {
+      "id": "account-activity",
+      "kind": "account",
+      "match": {
+        "url": "www.reddit.com/account-activity"
+      },
+      "action": "block"
+    },
+    {
+      "id": "deactivate",
+      "kind": "destructive",
+      "match": {
+        "url": "old.reddit.com/prefs/deactivate"
+      },
+      "action": "block"
+    }
+  ],
+  "write_policy": {
+    "default": "confirm",
+    "stance": "prohibited",
+    "clause": {
+      "quote": "Access, search, or collect data from the Services by any means (automated or otherwise) except as permitted in these Terms or in a separate agreement with Reddit",
+      "url": "https://redditinc.com/policies/user-agreement",
+      "checked": "2026-11-16"
+    }
+  },
+  "challenges": [
+    {
+      "id": "network-block",
+      "kind": "rejected",
+      "match": {
+        "text": "You've been blocked by network security"
+      },
+      "action": "attention"
+    }
+  ],
+  "browser": {
+    "channel": "any",
+    "headed": "preferred"
+  },
+  "verified": {
+    "sign_in": "2026-11-16",
+    "signed_in": "2026-11-16",
+    "guards": "2026-11-16",
+    "write_policy": "2026-11-16",
+    "challenges": "2026-11-16",
+    "browser": "2026-11-16"
+  },
+  "sources": [
+    {
+      "url": "https://redditinc.com/policies/user-agreement",
+      "kind": "official"
+    },
+    {
+      "url": "https://support.reddithelp.com/hc/en-us/articles/204579509-How-do-I-delete-my-account",
+      "kind": "official"
+    },
+    {
+      "url": "https://support.reddithelp.com/hc/en-us/articles/360045768792-I-need-help-with-a-hacked-or-compromised-account",
+      "kind": "official"
+    },
+    {
+      "url": "https://www.reddit.com/settings/account",
+      "kind": "observed"
+    }
+  ]
+}
