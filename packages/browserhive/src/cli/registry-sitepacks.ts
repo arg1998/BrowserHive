@@ -1,6 +1,6 @@
 /** @module cli/registry-sitepacks — the `sitepacks` command as registry data: list, show, diff, apply, reject, revert, pin, unpin, follow, approve-local, enable, disable, reload and import over a running server's REST API (spec 13 §9.6, §10.5, §10.6, §11.5) */
 
-import { jsonFlag, remoteFlags, sub } from './registry-parts.ts';
+import { jsonFlag, serverFlags, sub } from './registry-parts.ts';
 import type { ArgumentDescriptor, CommandDescriptor, FlagDescriptor } from './registry-types.ts';
 
 const packArg: ArgumentDescriptor = {
@@ -19,7 +19,7 @@ const yesFlag: FlagDescriptor = {
   kind: 'boolean',
   describe: 'Skip the confirmation prompt (required without a terminal).',
 };
-const remoteJson: readonly FlagDescriptor[] = [jsonFlag, ...remoteFlags];
+const remoteJson: readonly FlagDescriptor[] = [jsonFlag, ...serverFlags];
 
 /** `list | show | diff`: reading the catalog. */
 const readSubcommands = [
@@ -97,7 +97,7 @@ const decisionSubcommands = [
   sub(['enable'], 'Enable a disabled pack', { args: [packArg], flags: remoteJson }),
   sub(['disable'], 'Disable a pack: its sites become generic, its rules stop applying', {
     args: [packArg],
-    flags: remoteJson,
+    flags: [...remoteJson, yesFlag],
   }),
 ];
 
@@ -106,16 +106,20 @@ const localSubcommands = [
   sub(['reload'], 'Read the bundled packs and the local folder (sitePacksDir) again', {
     flags: remoteJson,
   }),
-  sub(['import'], 'Copy an unsigned pack file into the local folder; approve it afterwards', {
-    args: [
-      {
-        name: 'file',
-        required: true,
-        describe: 'One pack JSON file (≤ 1 MiB). Signed layouts arrive with a later release.',
-      },
-    ],
-    flags: remoteJson,
-  }),
+  sub(
+    ['import'],
+    'Send an unsigned pack file, byte for byte, to the local folder; approve it afterwards',
+    {
+      args: [
+        {
+          name: 'file',
+          required: true,
+          describe: 'One pack JSON file (≤ 1 MiB). Signed layouts arrive with a later release.',
+        },
+      ],
+      flags: remoteJson,
+    },
+  ),
   sub(['verify'], 'Check a site pack file offline (schema, refinements, size)', {
     args: [{ name: 'path', required: true, describe: 'The pack file (<pack id>.json).' }],
     flags: [jsonFlag],
@@ -127,7 +131,7 @@ export const SITEPACKS_COMMAND: CommandDescriptor = {
   name: 'sitepacks',
   summary: 'List, review, approve and manage site packs',
   description:
-    'Talks to a running server over its REST API (--url, default the configured host and port) with an operator bearer (--token) or the dashboard cookie (--cookie). A pack applies only once an operator approved its version: adding a site to a template approves what it shows; later versions wait as pending updates until you apply them. Local files in sitePacksDir need approval once per content (SHA-256). apply, revert and approve-local ask for confirmation on a terminal and refuse without one unless --yes. list --pending exits 2 when an update or a local file waits for you.',
+    'Talks to a running server over its REST API (--url, default the configured host and port) with an operator bearer (--token) or the dashboard cookie (--cookie). A pack applies only once an operator approved its version: adding a site to a template approves what it shows; later versions wait as pending updates until you apply them. Local files in sitePacksDir need approval once per content (SHA-256). apply, revert, approve-local and disable ask for confirmation on a terminal and refuse without one unless --yes. list --pending exits 2 when an update or a local file waits for you.',
   flags: [],
   configKeys: ['host', 'port', 'config', 'color'],
   subcommands: [...readSubcommands, ...decisionSubcommands, ...localSubcommands],

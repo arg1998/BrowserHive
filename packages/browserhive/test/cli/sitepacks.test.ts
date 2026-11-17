@@ -177,6 +177,37 @@ describe('sitepacks diff', () => {
   });
 });
 
+describe('pack strings cannot drive the terminal (review S-H4)', () => {
+  const hostile = packView({
+    title: 'Esc\u001b[31mRED\u001b]8;;https://evil.example\u0007click\u001b]8;;\u0007',
+    domains: ['linkedin.com', 'moc\u202enideknil.com'],
+  });
+
+  const commands: readonly (readonly string[])[] = [
+    ['list'],
+    ['show', 'linkedin.com'],
+    ['list', '--json'],
+  ];
+  it.each(commands.map((argv) => [argv.join(' '), argv] as const))('%s', async (_name, argv) => {
+    const result = await run(fakePackServer(hostile), [...argv, ...URL_FLAGS]);
+    expect(result.code).toBe(0);
+    // Control and format characters, except the newlines that end each line.
+    const unprintable = [...(result.stdout + result.stderr)].filter(
+      (ch) => ch !== '\n' && /[\p{Cc}\p{Cf}]/u.test(ch),
+    );
+    expect(unprintable).toEqual([]);
+    if (argv[0] === 'show') expect(result.stdout).toContain('Esc\ufffd[31mRED');
+  });
+
+  it('a server refusal that quotes a pack is printed without its control characters', async () => {
+    const server = fakePackServer();
+    server.routes = () => [400, problem(400, 'SITE_PACK_INVALID', 'bad title \u001b[2J\u202eevil')];
+    const result = await run(server, ['show', 'linkedin.com', ...URL_FLAGS]);
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('bad title \ufffd[2J\ufffdevil');
+  });
+});
+
 describe('sitepacks usage errors (64)', () => {
   it.each([
     [['show', 'not a domain'], "invalid pack id 'not a domain'"],
@@ -187,6 +218,11 @@ describe('sitepacks usage errors (64)', () => {
     [['apply', 'linkedin.com', 'v4'], "invalid version 'v4'"],
     [['list', '--source', 'web'], "invalid value for --source: 'web'"],
     [['list', '--token', 'x'], '--token requires --url.'],
+    [
+      ['apply', 'linkedin.com', '--version', '2'],
+      "--version prints BrowserHive's version and is not a pack version. Pass the pack version as an argument: browserhive sitepacks apply <pack> <version>.",
+    ],
+    [['reject', 'linkedin.com', '-v'], 'browserhive sitepacks reject <pack> <version>'],
   ])('%p', async (argv, message) => {
     const result = await run(fakePackServer(), argv);
     expect(result.code).toBe(64);

@@ -1,16 +1,8 @@
-/** @module cli/commands/sitepacks-actions — `browserhive sitepacks apply | reject | revert | approve-local | pin | unpin | follow | enable | disable | reload | import` over a running server's REST API (spec 13 §9.6, §10.5, §10.6, §11.5) */
-import { basename } from 'node:path';
-import {
-  SITE_PACK_IMPORT_MAX_BYTES,
-  SitePackImportResponse,
-  SitePackReloadResponse,
-  type SitePackView,
-  SitePackViewResponse,
-} from '@browserhive/contracts/http';
+import { type SitePackView, SitePackViewResponse } from '@browserhive/contracts/http';
 import type { CommandContext } from '../deps.ts';
 import { EXIT, type ExitCode, type SitePacksAction } from '../invocation.ts';
-import { remoteCall, remoteRequest } from './admin-remote.ts';
-import { size } from './common.ts';
+import { printableJson } from '../output/printable.ts';
+import { remoteRequest } from './admin-remote.ts';
 import {
   confirmByPackId,
   fetchDetail,
@@ -20,6 +12,7 @@ import {
   printDiff,
   provenanceText,
   type SitePacksTarget,
+  sitePackCall,
   unexpected,
 } from './sitepacks-common.ts';
 
@@ -31,7 +24,7 @@ async function sendAction(
   target: SitePacksTarget,
   request: { readonly method: string; readonly path: string; readonly body: unknown },
 ): Promise<SitePackView | ExitCode> {
-  const result = await remoteCall(
+  const result = await sitePackCall(
     context,
     target.remote,
     request.method,
@@ -195,9 +188,16 @@ export async function runSitePacksApproveLocal(
     else out.status('ok', `the local file of ${packId} is already approved`, local.sha256);
     return EXIT.ok;
   }
-  const sha256 = local.sha256;
   const diff = await fetchDiff(context, target.remote, packId, 'local');
   if (typeof diff === 'number') return diff;
+  // Approve exactly the content whose difference is printed, never a hash read separately.
+  const sha256 = diff.to.sha256;
+  if (sha256 !== local.sha256) {
+    out.diagnostic(
+      `browserhive: the local file of ${packId} changed while it was read. Run approve-local again to review the new content.`,
+    );
+    return EXIT.fatal;
+  }
   if (!target.json) {
     printDiff(context, packId, diff);
     out.line();
@@ -231,7 +231,7 @@ export async function runSitePacksApproveLocal(
     }
     return answer.code;
   }
-  const parsed = SitePackViewResponse.safeParse(answer.json);
+  const parsed = SitePackViewResponse.safeParse(printableJson(answer.json));
   if (!parsed.success) return unexpected(context, 'site pack');
   return done(context, target, parsed.data.view, `approved the local file of ${packId}`, sha256);
 }
@@ -277,113 +277,64 @@ export async function runSitePacksSetting(
       const now = view.follow.effective ? 'followed' : 'not followed';
       return done(context, target, view, `follow updates of ${packId}: ${setting}`, `now ${now}`);
     }
-    case 'enable':
-    case 'disable': {
+    case 'enable': {
       const view = await sendAction(context, target, {
         method: 'POST',
-        path: packPath(packId, `/${action.kind}`),
+        path: packPath(packId, '/enable'),
         body: {},
       });
       if (typeof view === 'number') return view;
-      return done(
-        context,
-        target,
-        view,
-        `${action.kind === 'enable' ? 'enabled' : 'disabled'} ${packId}`,
-      );
+      return done(context, target, view, `enabled ${packId}`);
     }
+    case 'disable':
+      return runSitePacksDisable(context, target, action);
   }
 }
 
 /**
- * `sitepacks reload`: reads the bundled packs and the local folder again.
+ * `sitepacks disable <id> [--yes]`: says what stops applying, confirms, then disables the pack.
  *
- * @returns 0, or 1 on a failure.
+ * @returns 0, or 1 on a failure or refusal.
  */
-export async function runSitePacksReload(
+async function runSitePacksDisable(
   context: CommandContext,
   target: SitePacksTarget,
+  action: Of<'disable'>,
 ): Promise<ExitCode> {
-  const { out } = context;
-  const result = await remoteCall(context, target.remote, 'POST', '/site-packs/reload', {});
-  if (!result.ok) return result.code;
-  const parsed = SitePackReloadResponse.safeParse(result.json);
-  if (!parsed.success) return unexpected(context, 'reload result');
-  if (target.json) {
-    out.json(parsed.data);
+  const { packId } = action;
+  const detail = await fetchDetail(context, target.remote, packId);
+  if (typeof detail === 'number') return detail;
+  const { view, pack } = detail;
+  if (!view.enabled) {
+    if (target.json) context.out.json({ view });
+    else context.out.status('ok', `${packId} is already disabled`);
     return EXIT.ok;
   }
-  for (const source of parsed.data.stats.sources) {
-    const skipped = source.skipped.length;
-    out.status(
-      skipped === 0 ? 'ok' : 'warn',
-      `${source.source}: ${source.loaded} loaded`,
-      skipped === 0 ? undefined : `${skipped} skipped`,
-    );
-    for (const s of source.skipped) {
-      const version = s.version === null ? '' : ` v${s.version}`;
-      out.line(`  ${out.style.dim(`${s.pack_id}${version}:`)} ${s.reason} ${s.detail}`);
-    }
-  }
-  return EXIT.ok;
-}
-
-/** Files of a signed layout (spec 13 §10.1). */
-function isSignedLayoutFile(path: string): boolean {
-  const name = basename(path);
-  return name === 'keys.json' || name === 'index.json' || name.endsWith('.sig');
-}
-
-/**
- * `sitepacks import <file>`: sends one unsigned pack file; the server stores it in the local
- * folder, where it waits for approval. Signed layouts are refused here (a later release).
- *
- * @returns 0, or 1 on a failure.
- */
-export async function runSitePacksImport(
-  context: CommandContext,
-  target: SitePacksTarget,
-  action: Of<'import'>,
-): Promise<ExitCode> {
-  const { out, deps } = context;
-  const { path } = action;
-  const refuse = (why: string): ExitCode => {
-    out.diagnostic(`browserhive: ${path} ${why}`);
-    return EXIT.fatal;
-  };
-  const info = await deps.fs.stat(path);
-  if (info === null) return refuse('does not exist.');
-  if (info.isDirectory || isSignedLayoutFile(path)) {
-    return refuse(
-      'looks like a signed layout (keys.json, index.json, packs/). Signed layouts arrive with a later release; import one pack file (<pack id>.json) instead.',
-    );
-  }
-  if (!info.isFile) return refuse('is not a file.');
-  if (info.sizeBytes > SITE_PACK_IMPORT_MAX_BYTES) {
-    return refuse(
-      `is ${size(info.sizeBytes)}; an import may be at most ${size(SITE_PACK_IMPORT_MAX_BYTES)}.`,
-    );
-  }
-  let pack: unknown;
-  try {
-    pack = JSON.parse(await deps.fs.readFile(path));
-  } catch {
-    return refuse('is not JSON. Expected one site pack (schema 1).');
-  }
-  const result = await remoteCall(context, target.remote, 'POST', '/site-packs/import', { pack });
-  if (!result.ok) return result.code;
-  const parsed = SitePackImportResponse.safeParse(result.json);
-  if (!parsed.success) return unexpected(context, 'import result');
-  if (target.json) {
-    out.json(parsed.data);
-    return EXIT.ok;
-  }
-  for (const item of parsed.data.imported) {
-    const state = item.state === 'approved' ? 'approved' : 'waiting for approval';
-    out.status('ok', `imported ${item.pack_id} v${item.version} into the local folder`, state);
-    if (item.state !== 'approved') {
-      out.line(`  Review and approve it: browserhive sitepacks approve-local ${item.pack_id}`);
-    }
-  }
-  return EXIT.ok;
+  const templates = view.used_by.length;
+  const rules =
+    pack === null
+      ? 'its rules stop applying'
+      : `its ${pack.guards.length} guard(s), ${pack.element_guards.length} element guard(s) and ${pack.challenges.length} challenge(s) stop applying`;
+  const confirmed = await confirmByPackId(
+    context,
+    { packId, command: 'disable', yes: action.yes },
+    [
+      `This turns off ${view.title} (${packId}) for every template (${templates} use it): ${rules}, including its sign-out, account and credential guards.`,
+      'Its sites become generic sites until you enable it again.',
+    ],
+  );
+  if (confirmed !== true) return confirmed;
+  const disabled = await sendAction(context, target, {
+    method: 'POST',
+    path: packPath(packId, '/disable'),
+    body: {},
+  });
+  if (typeof disabled === 'number') return disabled;
+  return done(
+    context,
+    target,
+    disabled,
+    `disabled ${packId}`,
+    `enable it again with browserhive sitepacks enable ${packId}`,
+  );
 }

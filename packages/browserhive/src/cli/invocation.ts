@@ -146,6 +146,8 @@ export type Invocation =
       readonly timeoutMs: number;
       /** `--fromState <file>` (absolute): seed from a storage state instead of a sign-in window. */
       readonly fromState: string | null;
+      /** `--yes`: approve the sites' site packs without asking (spec 13 §9.6 first use). */
+      readonly yes: boolean;
       readonly json: boolean;
       readonly remote: RemoteTarget;
     }
@@ -254,7 +256,8 @@ export type SitePacksAction =
   | { readonly kind: 'unpin'; readonly packId: string }
   | { readonly kind: 'follow'; readonly packId: string; readonly follow: boolean | null }
   | { readonly kind: 'approve-local'; readonly packId: string; readonly yes: boolean }
-  | { readonly kind: 'enable' | 'disable'; readonly packId: string }
+  | { readonly kind: 'enable'; readonly packId: string }
+  | { readonly kind: 'disable'; readonly packId: string; readonly yes: boolean }
   | { readonly kind: 'reload' }
   | {
       readonly kind: 'import';

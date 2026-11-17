@@ -21,8 +21,8 @@ Talks to a running server over its REST API (--url, default the configured host 
 operator bearer (--token) or the dashboard cookie (--cookie). A pack applies only once an operator
 approved its version: adding a site to a template approves what it shows; later versions wait as
 pending updates until you apply them. Local files in sitePacksDir need approval once per content
-(SHA-256). apply, revert and approve-local ask for confirmation on a terminal and refuse without one
-unless --yes. list --pending exits 2 when an update or a local file waits for you.
+(SHA-256). apply, revert, approve-local and disable ask for confirmation on a terminal and refuse
+without one unless --yes. list --pending exits 2 when an update or a local file waits for you.
 
 COMMANDS
   list                     List site packs with their approved version, local file and pending
@@ -40,7 +40,8 @@ COMMANDS
   enable <pack>            Enable a disabled pack
   disable <pack>           Disable a pack: its sites become generic, its rules stop applying
   reload                   Read the bundled packs and the local folder (sitePacksDir) again
-  import <file>            Copy an unsigned pack file into the local folder; approve it afterwards
+  import <file>            Send an unsigned pack file, byte for byte, to the local folder; approve
+                           it afterwards
   verify <path>            Check a site pack file offline (schema, refinements, size)
 
 FLAGS
@@ -59,15 +60,15 @@ FLAGS — list
   --pending                         Only packs with a pending update or a local file waiting for
                                     approval. Exits 2 when there is one.
   --json                            Print machine-readable JSON instead of text.
-  --url <url>                       Talk to a running server over its REST API instead of opening
-                                    the database (http://127.0.0.1:9876).
+  --url <url>                       The running server to talk to, over its REST API. default: the
+                                    configured host and port, http://127.0.0.1:9876
   --token <bearer>                  Operator bearer token for --url (bh_operator_…).
   --cookie <value>                  Dashboard session cookie value for --url (browserhive_session).
 
 FLAGS — show
   --json            Print machine-readable JSON instead of text.
-  --url <url>       Talk to a running server over its REST API instead of opening the database
-                    (http://127.0.0.1:9876).
+  --url <url>       The running server to talk to, over its REST API. default: the configured host
+                    and port, http://127.0.0.1:9876
   --token <bearer>  Operator bearer token for --url (bh_operator_…).
   --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
 
@@ -75,88 +76,89 @@ FLAGS — diff
   --to <version|local>  A pending version number, or local for the local file. default: the only
                         pending version or local file waiting for approval
   --json                Print machine-readable JSON instead of text.
-  --url <url>           Talk to a running server over its REST API instead of opening the database
-                        (http://127.0.0.1:9876).
+  --url <url>           The running server to talk to, over its REST API. default: the configured
+                        host and port, http://127.0.0.1:9876
   --token <bearer>      Operator bearer token for --url (bh_operator_…).
   --cookie <value>      Dashboard session cookie value for --url (browserhive_session).
 
 FLAGS — apply
   --json            Print machine-readable JSON instead of text.
-  --url <url>       Talk to a running server over its REST API instead of opening the database
-                    (http://127.0.0.1:9876).
+  --url <url>       The running server to talk to, over its REST API. default: the configured host
+                    and port, http://127.0.0.1:9876
   --token <bearer>  Operator bearer token for --url (bh_operator_…).
   --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
   --yes             Skip the confirmation prompt (required without a terminal).
 
 FLAGS — reject
   --json            Print machine-readable JSON instead of text.
-  --url <url>       Talk to a running server over its REST API instead of opening the database
-                    (http://127.0.0.1:9876).
+  --url <url>       The running server to talk to, over its REST API. default: the configured host
+                    and port, http://127.0.0.1:9876
   --token <bearer>  Operator bearer token for --url (bh_operator_…).
   --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
 
 FLAGS — revert
   --json            Print machine-readable JSON instead of text.
-  --url <url>       Talk to a running server over its REST API instead of opening the database
-                    (http://127.0.0.1:9876).
+  --url <url>       The running server to talk to, over its REST API. default: the configured host
+                    and port, http://127.0.0.1:9876
   --token <bearer>  Operator bearer token for --url (bh_operator_…).
   --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
   --yes             Skip the confirmation prompt (required without a terminal).
 
 FLAGS — pin
   --json            Print machine-readable JSON instead of text.
-  --url <url>       Talk to a running server over its REST API instead of opening the database
-                    (http://127.0.0.1:9876).
+  --url <url>       The running server to talk to, over its REST API. default: the configured host
+                    and port, http://127.0.0.1:9876
   --token <bearer>  Operator bearer token for --url (bh_operator_…).
   --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
 
 FLAGS — unpin
   --json            Print machine-readable JSON instead of text.
-  --url <url>       Talk to a running server over its REST API instead of opening the database
-                    (http://127.0.0.1:9876).
+  --url <url>       The running server to talk to, over its REST API. default: the configured host
+                    and port, http://127.0.0.1:9876
   --token <bearer>  Operator bearer token for --url (bh_operator_…).
   --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
 
 FLAGS — follow
   --json            Print machine-readable JSON instead of text.
-  --url <url>       Talk to a running server over its REST API instead of opening the database
-                    (http://127.0.0.1:9876).
+  --url <url>       The running server to talk to, over its REST API. default: the configured host
+                    and port, http://127.0.0.1:9876
   --token <bearer>  Operator bearer token for --url (bh_operator_…).
   --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
 
 FLAGS — approve-local
   --json            Print machine-readable JSON instead of text.
-  --url <url>       Talk to a running server over its REST API instead of opening the database
-                    (http://127.0.0.1:9876).
+  --url <url>       The running server to talk to, over its REST API. default: the configured host
+                    and port, http://127.0.0.1:9876
   --token <bearer>  Operator bearer token for --url (bh_operator_…).
   --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
   --yes             Skip the confirmation prompt (required without a terminal).
 
 FLAGS — enable
   --json            Print machine-readable JSON instead of text.
-  --url <url>       Talk to a running server over its REST API instead of opening the database
-                    (http://127.0.0.1:9876).
+  --url <url>       The running server to talk to, over its REST API. default: the configured host
+                    and port, http://127.0.0.1:9876
   --token <bearer>  Operator bearer token for --url (bh_operator_…).
   --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
 
 FLAGS — disable
   --json            Print machine-readable JSON instead of text.
-  --url <url>       Talk to a running server over its REST API instead of opening the database
-                    (http://127.0.0.1:9876).
+  --url <url>       The running server to talk to, over its REST API. default: the configured host
+                    and port, http://127.0.0.1:9876
   --token <bearer>  Operator bearer token for --url (bh_operator_…).
   --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
+  --yes             Skip the confirmation prompt (required without a terminal).
 
 FLAGS — reload
   --json            Print machine-readable JSON instead of text.
-  --url <url>       Talk to a running server over its REST API instead of opening the database
-                    (http://127.0.0.1:9876).
+  --url <url>       The running server to talk to, over its REST API. default: the configured host
+                    and port, http://127.0.0.1:9876
   --token <bearer>  Operator bearer token for --url (bh_operator_…).
   --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
 
 FLAGS — import
   --json            Print machine-readable JSON instead of text.
-  --url <url>       Talk to a running server over its REST API instead of opening the database
-                    (http://127.0.0.1:9876).
+  --url <url>       The running server to talk to, over its REST API. default: the configured host
+                    and port, http://127.0.0.1:9876
   --token <bearer>  Operator bearer token for --url (bh_operator_…).
   --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
 

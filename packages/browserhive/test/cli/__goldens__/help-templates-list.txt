@@ -13,8 +13,8 @@ stopped.
 
 FLAGS
   --json                       Print machine-readable JSON instead of text.
-  --url <url>                  Talk to a running server over its REST API instead of opening the
-                               database (http://127.0.0.1:9876).
+  --url <url>                  The running server to talk to, over its REST API. default: the
+                               configured host and port, http://127.0.0.1:9876
   --token <bearer>             Operator bearer token for --url (bh_operator_…).
   --cookie <value>             Dashboard session cookie value for --url (browserhive_session).
   --host <address>             Bind address. A non-loopback host requires auth=token or

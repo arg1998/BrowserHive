@@ -1,6 +1,6 @@
 /** @module cli/registry-templates — the `templates` command as registry data: list, show, create, finish, login, probe, seed, versions, save, restore, host, disable, enable and rm over a running server's REST API, and the local rekey (spec 13 §7.2, §8, §11.5) */
 
-import { jsonFlag, remoteFlags, sub } from './registry-parts.ts';
+import { jsonFlag, serverFlags, sub } from './registry-parts.ts';
 import type { CommandDescriptor, FlagDescriptor } from './registry-types.ts';
 
 /** Default of `templates create --timeout` (spec 13 §11.5). */
@@ -110,8 +110,14 @@ const createFlags: readonly FlagDescriptor[] = [
       "How long to wait for the sign-ins. The template then stays in setup; 'templates finish' completes it.",
     defaultText: TEMPLATE_CREATE_TIMEOUT_TEXT,
   },
+  {
+    name: 'yes',
+    kind: 'boolean',
+    describe:
+      'Approve the site packs of the sites without asking (each is printed with its version and SHA-256 first). Required without a terminal when a site has a pack to approve.',
+  },
   jsonFlag,
-  ...remoteFlags,
+  ...serverFlags,
 ];
 
 const nameArg = { name: 'name', required: true, describe: 'Template name.' } as const;
@@ -120,7 +126,7 @@ const yesFlag: FlagDescriptor = {
   kind: 'boolean',
   describe: 'Skip the confirmation prompt.',
 };
-const remoteJson: readonly FlagDescriptor[] = [jsonFlag, ...remoteFlags];
+const remoteJson: readonly FlagDescriptor[] = [jsonFlag, ...serverFlags];
 
 /** `templates login | probe` (T2): sign a site in again, and check the sites now. */
 const healthSubcommands = [
@@ -253,7 +259,7 @@ export const TEMPLATES_COMMAND: CommandDescriptor = {
   configKeys: ['host', 'port', 'config', 'color'],
   subcommands: [
     sub(['list'], 'List templates with their sites, status, browser state and sessions', {
-      flags: [jsonFlag, ...remoteFlags],
+      flags: [jsonFlag, ...serverFlags],
     }),
     sub(['create'], 'Create a template and sign in to its sites in a window on the server', {
       args: [
@@ -267,7 +273,7 @@ export const TEMPLATES_COMMAND: CommandDescriptor = {
     }),
     sub(['finish'], 'Complete a template left in setup: check its sign-ins and set it ready', {
       args: [{ name: 'name', required: true, describe: 'Template name.' }],
-      flags: [jsonFlag, ...remoteFlags],
+      flags: [jsonFlag, ...serverFlags],
     }),
     sub(['rm'], 'Delete a template and its browser profile (does not sign out at the sites)', {
       args: [{ name: 'name', required: true, describe: 'Template name.' }],
@@ -279,7 +285,7 @@ export const TEMPLATES_COMMAND: CommandDescriptor = {
           describe: 'Close the sessions launched from the template first.',
         },
         yesFlag,
-        ...remoteFlags,
+        ...serverFlags,
       ],
     }),
     ...healthSubcommands,

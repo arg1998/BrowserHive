@@ -7,8 +7,8 @@ Talks to a running server over its REST API (--url, default the configured host 
 operator bearer (--token) or the dashboard cookie (--cookie). A pack applies only once an operator
 approved its version: adding a site to a template approves what it shows; later versions wait as
 pending updates until you apply them. Local files in sitePacksDir need approval once per content
-(SHA-256). apply, revert and approve-local ask for confirmation on a terminal and refuse without one
-unless --yes. list --pending exits 2 when an update or a local file waits for you.
+(SHA-256). apply, revert, approve-local and disable ask for confirmation on a terminal and refuse
+without one unless --yes. list --pending exits 2 when an update or a local file waits for you.
 
 ARGUMENTS
   <path>  The pack file (<pack id>.json).

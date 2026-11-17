@@ -71,8 +71,12 @@ export function planCli(
     }
     return helpPlan(command, tokens.positionals, color);
   }
-  // 2. version
-  if (tokens.flags.has('version') || tokens.shortFlags.includes('-v')) {
+  // 2. version (a `sitepacks` subcommand never takes it: its versions are arguments)
+  const versionFlag = tokens.flags.has('version') || tokens.shortFlags.includes('-v');
+  if (versionFlag && command === 'sitepacks' && tokens.positionals.length > 0) {
+    return usage([sitePackVersionFlagMessage(tokens.positionals[0] ?? '')]);
+  }
+  if (versionFlag) {
     return { kind: 'version', json: tokens.flags.has('json'), color };
   }
 
@@ -353,6 +357,18 @@ function planDataDirCommand(name: string, input: PlanInput): CliPlan {
   const resolved = resolveDataDir(input);
   if (!resolved.ok) return failurePlan(resolved.error);
   return run(invocation(resolved.value.config.dataDir), colorOf(resolved.value, color));
+}
+
+/**
+ * `sitepacks apply x.com --version 2` would print BrowserHive's version and do nothing: the pack
+ * version is a positional argument (spec 13 §11.5).
+ */
+function sitePackVersionFlagMessage(subcommand: string): string {
+  const form =
+    subcommand === 'apply' || subcommand === 'reject' || subcommand === 'pin'
+      ? `browserhive sitepacks ${subcommand} <pack> <version>`
+      : `browserhive sitepacks ${subcommand} <pack> …`;
+  return `--version prints BrowserHive's version and is not a pack version. Pass the pack version as an argument: ${form}.`;
 }
 
 const BOOLEAN_WORDS = /^(true|false|1|0|yes|no|on|off)$/i;

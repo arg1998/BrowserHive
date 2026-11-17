@@ -122,12 +122,16 @@ export function problem(status: number, code: string, detail: string): unknown {
 }
 
 function listBody(server: FakePackServer): SitePacksResponse {
-  const view = server.view;
-  const needing = view.local !== null && view.local.state !== 'approved' ? 1 : 0;
+  return catalogBody([server.view]);
+}
+
+/** A `GET /site-packs` answer listing these packs. */
+export function catalogBody(views: readonly SitePackView[], enabled = true): SitePacksResponse {
+  const needing = views.filter((v) => v.local !== null && v.local.state !== 'approved').length;
   return {
-    data: [view],
+    data: [...views],
     status: {
-      enabled: true,
+      enabled,
       update_check: false,
       auto_update: false,
       url: null,
@@ -148,7 +152,7 @@ function listBody(server: FakePackServer): SitePacksResponse {
       skipped: [],
       last_load_at: 1,
     },
-    pending_count: view.pending.length,
+    pending_count: views.reduce((n, v) => n + v.pending.length, 0),
     local_needing_approval: needing,
     now: 2,
   };
