@@ -6,6 +6,7 @@ import {
   type ChallengeProvider,
   challengeRulesFor,
   firstChallenge,
+  isBadgeFrame,
   isChallengePath,
   isVisibleSurface,
   providerOfFrameUrl,
@@ -51,6 +52,8 @@ export interface PackProberDeps {
     signal: AbortSignal,
   ) => Promise<ProbePage>;
   readonly logger: Logger;
+  /** The navigation's timeout (default {@link PROBE_NAVIGATION_MS}; a test seam). */
+  readonly navigationMs?: number;
 }
 
 /** The pack prober (`needsBrowser`: a stopped browser is started for it). */
@@ -97,7 +100,7 @@ export class PackProber implements SiteProber {
     try {
       const response = await page.goto(probeUrlOf(pack), {
         waitUntil: 'domcontentloaded',
-        timeout: PROBE_NAVIGATION_MS,
+        timeout: this.#deps.navigationMs ?? PROBE_NAVIGATION_MS,
       });
       status = response?.status() ?? null;
     } catch (err) {
@@ -165,6 +168,7 @@ async function surfacesOf(page: Page): Promise<ReadonlySet<ChallengeProvider>> {
       found.add(provider);
       continue;
     }
+    if (isBadgeFrame(provider, frame.url())) continue;
     try {
       const element = await frame.frameElement();
       const visible = await element.isVisible();

@@ -81,6 +81,12 @@ export interface ToolHarnessOptions {
     | ((sessions: SessionService, dataDir: string) => TemplateRuntime);
   /** BrowserHive's own origins (template sessions' `#browserhive` refusal, spec 13 §3.8). */
   readonly selfOrigins?: readonly string[];
+  /** Site pack enforcement on the tool path (spec 13 §9.3, §9.5), over the harness's services. */
+  readonly siteGuards?: (parts: {
+    readonly sessions: SessionService;
+    readonly templates: TemplateKit;
+    readonly broker: OperatorRequestBroker;
+  }) => NonNullable<ToolServices['siteGuards']>;
 }
 
 /** A connected in-process MCP client over the real server + dispatcher. */
@@ -257,6 +263,9 @@ export async function createToolHarness(options: ToolHarnessOptions = {}): Promi
     blocklist,
     templates: templates.service,
     ...(options.templatePause !== undefined && { templatePause: options.templatePause }),
+    ...(options.siteGuards !== undefined && {
+      siteGuards: options.siteGuards({ sessions, templates, broker: attentionBroker }),
+    }),
     pageActions: options.pageActions ?? createPlaywrightPageActions(),
     fs: createNodeToolFs(),
     redaction: {

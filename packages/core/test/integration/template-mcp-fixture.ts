@@ -9,7 +9,8 @@ import type {
   TemplateSiteRecord,
   TemplateUnsealRecord,
 } from '../../src/ports/persistence/index.ts';
-import type { ToolHarness } from '../helpers/fake-transport.ts';
+import type { TemplatePageWatcher } from '../../src/ports/template-host.ts';
+import type { ToolHarness, ToolHarnessOptions } from '../helpers/fake-transport.ts';
 import { type HttpsSites, startHttpsSites } from '../helpers/https-sites.ts';
 import { RecordingDegradations } from '../helpers/template-kit.ts';
 import { templateRecord, templateSiteRecord } from '../persistence/helpers.ts';
@@ -33,6 +34,12 @@ export interface TemplateMcp {
 export interface TemplateMcpOptions {
   readonly unseal?: Partial<TemplateUnsealRecord>;
   readonly sites?: readonly Partial<TemplateSiteRecord>[];
+  /** Map the challenge providers' hosts to the fixture (site pack challenges). */
+  readonly providers?: boolean;
+  /** Site pack enforcement on the tool path. */
+  readonly siteGuards?: ToolHarnessOptions['siteGuards'];
+  /** The watcher of the host's pages (site pack challenge detection). */
+  readonly pageWatcher?: TemplatePageWatcher;
 }
 
 /** A ready template `job-hunt` on site-a.test (and the given sites) behind the real tool stack. */
@@ -40,7 +47,7 @@ export async function templateMcp(
   stealth: StealthLeg,
   options: TemplateMcpOptions = {},
 ): Promise<TemplateMcp> {
-  const sites = startHttpsSites();
+  const sites = startHttpsSites({ providers: options.providers === true });
   const clock = createSystemClock();
   const real = new PlaywrightBrowserDriver({
     logger: createCollectingLogger(),
@@ -48,6 +55,7 @@ export async function templateMcp(
     host: HOST,
     testingArgs: sites.chromiumArgs,
   });
+  if (options.pageWatcher !== undefined) real.attachTemplatePageWatcher(options.pageWatcher);
   let harness: ToolHarness | null = null;
   const repos = () => {
     if (harness === null) throw new Error('harness not ready');
@@ -58,6 +66,7 @@ export async function templateMcp(
     driver: real,
     vault: true,
     selfOrigins: [SELF_ORIGIN],
+    ...(options.siteGuards !== undefined && { siteGuards: options.siteGuards }),
     templateRuntime: (sessions, dataDir) => {
       const supervisor = new TemplateHostSupervisor({
         launcher: real,

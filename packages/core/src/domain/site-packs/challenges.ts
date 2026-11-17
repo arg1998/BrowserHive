@@ -133,6 +133,16 @@ export function isChallengePath(provider: ChallengeProvider, url: string): boole
   }
 }
 
+/**
+ * A badge-only frame that is never a challenge surface, whatever its box (spec 13 §9.5): the
+ * reCAPTCHA v3 and Enterprise anchors rendered with `size=invisible` (the corner badge).
+ */
+export function isBadgeFrame(provider: ChallengeProvider, url: string): boolean {
+  if (provider !== 'recaptcha') return false;
+  const parsed = parse(url);
+  return parsed !== null && parsed.searchParams.get('size') === 'invisible';
+}
+
 /** A frame element's box in CSS pixels (Playwright's `boundingBox()`). */
 export interface FrameBox {
   readonly x: number;

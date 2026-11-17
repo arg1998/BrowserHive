@@ -7,6 +7,7 @@ import {
   type ChallengeRule,
   challengeRulesFor,
   firstChallenge,
+  isBadgeFrame,
   isChallengePath,
   isVisibleSurface,
   providerOfFrameUrl,
@@ -108,6 +109,7 @@ class PageWatch {
       this.#surface(provider, seq);
       return;
     }
+    if (isBadgeFrame(provider, url)) return;
     const check = () => this.#visibility(frame, provider, seq);
     void frame
       .waitForLoadState('load', { timeout: SURFACE_LOAD_MS })
