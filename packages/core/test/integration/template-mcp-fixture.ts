@@ -9,7 +9,7 @@ import type {
   TemplateSiteRecord,
   TemplateUnsealRecord,
 } from '../../src/ports/persistence/index.ts';
-import type { ToolHarness } from '../helpers/fake-transport.ts';
+import type { ToolHarness, ToolHarnessOptions } from '../helpers/fake-transport.ts';
 import { type HttpsSites, startHttpsSites } from '../helpers/https-sites.ts';
 import { RecordingDegradations } from '../helpers/template-kit.ts';
 import { templateRecord, templateSiteRecord } from '../persistence/helpers.ts';
@@ -26,6 +26,8 @@ export interface TemplateMcp {
   readonly sites: HttpsSites;
   readonly supervisor: TemplateHostSupervisor;
   readonly template: TemplateRecord;
+  /** The real driver (site-pack enforcement arms its template hosts). */
+  readonly driver: PlaywrightBrowserDriver;
   stop(): Promise<void>;
 }
 
@@ -33,6 +35,9 @@ export interface TemplateMcp {
 export interface TemplateMcpOptions {
   readonly unseal?: Partial<TemplateUnsealRecord>;
   readonly sites?: readonly Partial<TemplateSiteRecord>[];
+  /** Passed to the tool harness (the security intercepts' tool hold). */
+  readonly siteHolds?: ToolHarnessOptions['siteHolds'];
+  readonly transport?: ToolHarnessOptions['transport'];
 }
 
 /** A ready template `job-hunt` on site-a.test (and the given sites) behind the real tool stack. */
@@ -57,6 +62,8 @@ export async function templateMcp(
   harness = await createRealHarness({
     driver: real,
     vault: true,
+    ...(options.siteHolds !== undefined && { siteHolds: options.siteHolds }),
+    ...(options.transport !== undefined && { transport: options.transport }),
     selfOrigins: [SELF_ORIGIN],
     templateRuntime: (sessions, dataDir) => {
       const supervisor = new TemplateHostSupervisor({
@@ -114,6 +121,7 @@ export async function templateMcp(
     sites,
     supervisor,
     template,
+    driver: real,
     async stop() {
       try {
         await ready.close({ beforeRemove: () => supervisor.stopAll() });

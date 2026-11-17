@@ -247,7 +247,8 @@ export class InMemoryOperatorRequestRepository implements OperatorRequestReposit
     const items = [...this.rows.values()]
       .filter((r) => query.kind === undefined || r.kind === query.kind)
       .filter(
-        (r) => query.kinds === undefined || query.kinds.length === 0 || query.kinds.includes(r.kind),
+        (r) =>
+          query.kinds === undefined || query.kinds.length === 0 || query.kinds.includes(r.kind),
       )
       .filter((r) => query.statuses === undefined || query.statuses.includes(r.status))
       .filter((r) => query.modes === undefined || (r.mode !== null && query.modes.includes(r.mode)))
