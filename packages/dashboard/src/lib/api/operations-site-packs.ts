@@ -1,6 +1,5 @@
 /** @module lib/api/operations-site-packs — the site-pack operations of `HTTP_ENDPOINTS` (spec 13 §11.1 "Site packs", PR T3a) and a template site's **Clear stop**, spread into `OPERATIONS` */
 import {
-  SITE_PACK_IMPORT_MAX_BYTES,
   SiteGuardHitsPage,
   SiteGuardHitsQuery,
   SitePackApproveLocalRequest,
@@ -22,7 +21,6 @@ import {
   TemplateSiteParams,
   TemplateSiteResponse,
 } from '@browserhive/contracts/http';
-import { z } from 'zod';
 
 /** `POST /site-packs/import` body: `{text}` (the file's exact UTF-8 text, hashed and stored verbatim), `{pack}` or `{files}`. */
 export const SitePackImportBody = SitePackImportRequest;
