@@ -174,7 +174,10 @@ Strategies change how a template's sessions behave on the site, never what an ag
 
 ### Actions on the site's pages
 
-STRATEGIES_B
+- **One action at a time (`serialize-site`).** At most `max_parallel` (1) sessions of the template click, type, scroll, upload, download or navigate on the site at once, like one person with many tabs. The others queue in arrival order for up to 30 s; past that the action answers `TEMPLATE_BUSY` ("Actions on <site> are being paced. Retry in 5 s.") and the log records `site action paced`. Reading tools (snapshot, content, screenshots, waits) are never held, and a session's own concurrent calls share its turn.
+- **Human dwell time (`human-dwell`).** Before each action on the site, a session waits until a random time between `min_ms` (600) and `max_ms` (2500) has passed since its previous action there. Its first action does not wait. To the agent, some actions take a little longer.
+- **Warm-up entry (`entry-warmup`).** The first time a session goes straight to a deep page of the site, BrowserHive first opens the pack's entry `path` (`/`, on the `www.` host or the sign-in check host) with no referrer (`none`), the site's home page (`same-site`) or a search engine (`search`) as referrer, waits `dwell_ms` (2000) there, then opens the page the agent asked for. The warm-up uses at most half of the tool's timeout; a failed warm-up is logged (`entry warm-up failed`) and never fails the navigation. Script navigations away from the pack's domains during the warm-up are aborted; a server redirect from the entry path is followed like any redirect ([What guards cannot see](#what-guards-cannot-see)).
+- **Humanized input (`humanize-input`, and `stealth-profile` with `humanize: true`).** Clicks, hovers, typing and scrolling on the site's pages move and type like a person, even in sessions launched without `humanize`. A template with stealth `off` cannot humanize: the strategy is ignored and BrowserHive logs it once (`humanize not forced`).
 
 ### Writes, responses and keeping the sign-in fresh
 
@@ -203,7 +206,7 @@ The request guard sees what the browser driver routes. Some traffic is not route
 
 | Not seen | What packs do about it |
 |---|---|
-| **Redirect hops.** Only the first address of a redirect chain is routed. A redirect into a guarded address (`/go?to=/logout` answering `302 /logout`) is not stopped, and because `307` and `308` keep the method, that covers `POST` too. | Packs block the site's known open redirectors. |
+| **Redirect hops.** Only the first address of a redirect chain is routed. A redirect into a guarded address (`/go?to=/logout` answering `302 /logout`) is not stopped, and because `307` and `308` keep the method, that covers `POST` too. | Packs block the site's known open redirectors. The same limit applies to the pages BrowserHive loads by itself (health checks, keep-alive visits, warm-ups): a page leaving the pack's domains by script is aborted, but a server redirect's next hop is not, so pack paths must not redirect off the pack's domains. |
 | **WebSockets.** Neither the connection nor its messages pass through BrowserHive's routing, so no guard sees them. | Element guards on the controls that send them. |
 | **`javascript:` URLs.** Requests a page makes from one. Agents cannot open them: every non-web scheme is refused at the tools ([Security](security.md#agents-open-web-urls-only)). | — |
 | **SharedWorker requests.** Dedicated workers and service workers are routed; shared workers are not. | Packs express such writes as element guards. |
