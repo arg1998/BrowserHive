@@ -17,6 +17,7 @@ export type { RegistryCore } from './registry-core.ts';
 export {
   auditReload,
   importPack,
+  importPackBytes,
   recordLocalOverrides,
   syncCandidates,
   updatesFact,

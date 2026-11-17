@@ -79,7 +79,7 @@ export const SITE_PACK_ROUTES = [
     operationId: 'importSitePack',
     tags,
     summary:
-      'Import one unsigned pack ({pack}): it is validated, stored in the local folder as <id>.json and applies only after approve-local. Signed layouts ({files}) arrive with a later release.',
+      "Import one unsigned pack ({text}: the file's exact text, stored byte for byte; or {pack}: a parsed pack, stored re-serialized): it is validated, stored in the local folder as <id>.json and applies only after approve-local. Signed layouts ({files}) arrive with a later release.",
     request: { body: SitePackImportRequest },
     responses: { 200: SitePackImportResponse },
     errors: ['SITE_PACK_INVALID', 'PAYLOAD_TOO_LARGE'],
@@ -91,7 +91,11 @@ export const SITE_PACK_ROUTES = [
           { path: 'files', message: 'signed layouts arrive with a later release' },
         ]);
       }
-      return reply(200, await services.sitePacks.importPack(body.pack, by(principal)));
+      const imported =
+        'text' in body
+          ? await services.sitePacks.importPackText(body.text, by(principal))
+          : await services.sitePacks.importPack(body.pack, by(principal));
+      return reply(200, imported);
     },
   }),
   defineRoute({
