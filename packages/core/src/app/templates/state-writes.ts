@@ -27,6 +27,7 @@ import type {
 import type { TemplateHost } from '../../ports/template-host.ts';
 import type { StateSlot, TemplateState, TemplateStateStore } from '../../ports/template-state.ts';
 import type { DomainEvents } from '../events/catalog.ts';
+import { packSignInOf, type TemplatePacks } from './template-packs.ts';
 import { toVersionRow } from './version-views.ts';
 
 /** Settings (spec 08 §5.9). */
@@ -50,6 +51,8 @@ export interface TemplateStateDeps {
   readonly degradations: DegradationReporter;
   readonly bus?: EventPublisher<DomainEvents>;
   readonly config: TemplateStateConfig;
+  /** Site packs: their `cookie_names` in the versions' per-domain summary. */
+  readonly packs?: TemplatePacks;
 }
 
 /** Who writes a version and why. */
@@ -149,7 +152,7 @@ export async function writeVersion(
   const templateId = template.templateId;
   const version = Math.max(template.currentVersion ?? 0, existing[0]?.version ?? 0) + 1;
   const file = await store.write(templateId, version, state);
-  const summary = summarize(state, signInNamesOf(sites));
+  const summary = summarize(state, signInNamesOf(sites, deps.packs));
   const record: TemplateVersionRecord = {
     templateId,
     version,
@@ -249,9 +252,22 @@ export async function versionRows(
   );
 }
 
-/** The sign-in cookie names of each site (learned names; packs' `cookie_names` from T3a). */
-export function signInNamesOf(sites: readonly TemplateSiteRecord[]): SignInNames {
-  return new Map(sites.map((s) => [s.siteId, s.learnedCookieNames]));
+/**
+ * The sign-in cookie names of each domain: a site's learned names, else the `cookie_names` of the
+ * pack that covers the domain (sites and unlisted sign-ins alike).
+ */
+export function signInNamesOf(
+  sites: readonly TemplateSiteRecord[],
+  packs?: TemplatePacks,
+): SignInNames {
+  const learned = new Map(
+    sites
+      .filter((s) => s.learnedCookieNames.length > 0)
+      .map((s) => [s.siteId, s.learnedCookieNames]),
+  );
+  return {
+    get: (domain) => learned.get(domain) ?? packSignInOf(packs, domain)?.cookieNames,
+  };
 }
 
 /** `TEMPLATE_VERSION_NOT_FOUND`. */

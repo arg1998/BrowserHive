@@ -1,15 +1,18 @@
-/** @module features/templates/wizard/use-wizard — the wizard's state (spec 13 §7.1): the step from the URL (`?step=`, `?template=`, `?again=`), the per-device draft, per-step problems shown once Next was tried plus the server's field issues, focus on the step heading (on Next for steps 3 and 4), deep links past an unfinished step (or to step 5 without a template) sent back, and creating the template on leaving step 4, once the site catalog has loaded, with the pack hash of every site a pack covers */
+/** @module features/templates/wizard/use-wizard — the wizard's state (spec 13 §7.1): the step from the URL only (`?step=`, `?template=`, `?again=`; no `?step` is step 1, whatever the draft holds), the draft kept in this tab, Cancel (asks before discarding a draft with content, then forgets it and goes to the list), per-step problems shown once Next was tried plus the server's field issues, focus on the step heading (on Next for steps 3 and 4), deep links past an unfinished step (or to step 5 without a template) sent back, and creating the template on leaving step 4, once the site catalog has loaded, with the pack hash of every site a pack covers */
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useConfirm } from '@/app/providers/ConfirmProvider.tsx';
 import { useSitePackCatalog } from '@/features/site-packs/api.ts';
 import { packNote } from '@/features/site-packs/model.ts';
 import { useSystem } from '@/features/system/api.ts';
 import { isAppError, toAppError } from '@/lib/api/errors.ts';
 import { useCreateTemplate } from '../api.ts';
+import { discardDraftConfirm } from '../confirm-copy.ts';
 import type { WizardSearch, WizardStep } from '../search.ts';
 import {
   clearDraft,
   type DraftProblem,
+  draftHasContent,
   EMPTY_DRAFT,
   firstProblemStep,
   issuesOf,
@@ -48,6 +51,7 @@ export function stepOf(search: WizardSearch): WizardStep {
 export function useWizard() {
   const search = useSearch({ strict: false }) as WizardSearch;
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const system = useSystem();
   const create = useCreateTemplate();
   const catalog = useSitePackCatalog();
@@ -169,6 +173,12 @@ export function useWizard() {
     }
     void submit();
   };
+  /** Leave the wizard; a draft with content is discarded only after the operator says so. */
+  const cancel = async () => {
+    if (draftHasContent(draft) && !(await confirm(discardDraftConfirm()))) return;
+    clearDraft();
+    void navigate({ to: '/templates' });
+  };
   const reachable = (s: WizardStep) =>
     templateId === undefined &&
     s < 5 &&
@@ -194,6 +204,7 @@ export function useWizard() {
     setAgain,
     next,
     skip,
+    cancel,
     reachable,
     done,
   };

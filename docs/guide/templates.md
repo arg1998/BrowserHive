@@ -62,7 +62,9 @@ Options worth knowing (all in [the CLI guide](cli.md#templates)):
 
 ### How BrowserHive knows you signed in
 
-When the window opens, BrowserHive notes the names of the cookies already in the template's browser. When you confirm a site ("I'm signed in", or Enter on the command line), it looks at the cookies that appeared since then on that site's registrable domain, leaves out analytics cookies (`_ga*`, `_gid`, `_gat*`, `_fbp`, `_fbc`, `__cf_bm`, `_cfuvid`, `__utm*`, `_hj*`, `_uetsid`, `_uetvid`, `ajs_*`), and remembers up to 16 of their names as that site's sign-in cookies. It never stores a value.
+A site with a [site pack](site-packs.md) that names its sign-in cookies (LinkedIn's `li_at` and `liap`, for example) needs no confirmation: while the window is open, BrowserHive checks every few seconds, and once more at Finish, whether all of them are in the template's browser, and the site reads signed in as soon as they are. The dashboard shows it beside the site ("Signed in: BrowserHive found its sign-in").
+
+For any other site, you confirm the sign-in. When the window opens, BrowserHive notes the names of the cookies already in the template's browser. When you confirm a site ("I'm signed in", or Enter on the command line), it looks at the cookies that appeared since then on that site's registrable domain, leaves out analytics, advertising and anti-bot cookies (`_ga*`, `_gid`, `_gat*`, `_fbp`, `_fbc`, `__cf_bm`, `_cfuvid`, `__utm*`, `_hj*`, `_uetsid`, `_uetvid`, `ajs_*`, `IDE`, `DSID`, `test_cookie`, `fr`, `_GRECAPTCHA`, `NID`, `AEC`, `__Secure-ENID`, `ar_debug`, `receive-cookie-deprecation`, `_gcl_*`, `MUID`, `_clck`, `_clsk`, `uuid2`, `anj`), and remembers up to 16 of their names as that site's sign-in cookies. It never stores a value.
 
 If no new cookie appeared on the site, the confirmation is refused (`409 CONFLICT`) and the site stays signed out. That usually means the sign-in did not finish, or happened on another domain (a single sign-on provider); finish it in the site's own tab and confirm again.
 
@@ -70,7 +72,12 @@ If no new cookie appeared on the site, the confirmation is refused (`409 CONFLIC
 
 The template's browser keeps every sign-in that happens in it, including ones on domains that are not its sites: if you open your webmail in the sign-in window to read a code, the template is now signed in to your webmail too, and **agents can use that sign-in**.
 
-BrowserHive lists such domains as "Also signed in to: … — agents can use this": every registrable domain that holds a persistent `HttpOnly` and `Secure` cookie and is not a site of the template. The command line removes them at Finish unless you answer no. Removing a sign-in clears that domain's cookies and the site data (local and session storage, IndexedDB, service workers, Cache Storage) of every origin under it that the template's browser has visited or holds data for, subdomains included. The result lists the origins it cleared and any it could not clear (`uncleared_origins`, also logged as a warning); a sign-in may survive on an origin listed there. It does not sign you out at the site. The sign-in window closes before the removal, so none of its tabs writes the sign-in back.
+BrowserHive lists such domains as "Also signed in to: … — agents can use this". A domain that is not a site of the template is listed when:
+
+- a site pack covers it and all of that pack's sign-in cookies are there (Google's `SID` and `HSID`, Facebook's `c_user` and `xs`), or
+- no pack covers it, a window of the template's browser opened it as a page (not just an embedded frame or a tracking pixel of another site), and it holds a persistent `HttpOnly` and `Secure` cookie that is not one of the analytics, advertising or anti-bot names above.
+
+Ad and tracking domains (`doubleclick.net`, `googlesyndication.com`, `googleadservices.com`, `adnxs.com`, `clarity.ms`, `bing.com` and others) are never listed: the cookies the pages of a site leave through embedded ads, sign-in widgets and pixels are not sign-ins you made. While the template's browser is stopped, the list comes from its newest [version](#versions-and-the-checkpoint) and includes only domains a pack covers. The command line removes them at Finish unless you answer no. Removing a sign-in clears that domain's cookies and the site data (local and session storage, IndexedDB, service workers, Cache Storage) of every origin under it that the template's browser has visited or holds data for, subdomains included. The result lists the origins it cleared and any it could not clear (`uncleared_origins`, also logged as a warning); a sign-in may survive on an origin listed there. It does not sign you out at the site. The sign-in window closes before the removal, so none of its tabs writes the sign-in back.
 
 ### Finish, cancel and finish later
 

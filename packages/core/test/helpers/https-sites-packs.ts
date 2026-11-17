@@ -1,4 +1,4 @@
-/** @module test/helpers/https-sites-packs — the site pack pages of the HTTPS fixture sites (spec 13 §9.3, §9.5, §8.1, §14): a page with guarded controls, a logout, challenge pages (a pack checkpoint, a redirect into it, a terminal stop page, a Cloudflare-style interstitial), pages with an invisible reCAPTCHA v3 anchor and an invisible Turnstile-style frame, the probe pages, and the fake provider frames served for `challenges.cloudflare.com` and `www.google.com` (mapped to the fixture by the resolver rule of `startHttpsSites({ providers: true })`; no real provider script is ever loaded). */
+/** @module test/helpers/https-sites-packs — the site pack pages of the HTTPS fixture sites (spec 13 §9.3, §9.5, §8.1, §14): a page with guarded controls, a logout, challenge pages (a pack checkpoint, a redirect into it, a terminal stop page, a Cloudflare-style interstitial), probe pages that move a signed-in visit below the probe path or elsewhere on the site (setting a sign-in cookie), pages with an invisible reCAPTCHA v3 anchor and an invisible Turnstile-style frame, the probe pages, and the fake provider frames served for `challenges.cloudflare.com` and `www.google.com` (mapped to the fixture by the resolver rule of `startHttpsSites({ providers: true })`; no real provider script is ever loaded). */
 
 import { strategyRoute } from './https-sites-strategies.ts';
 
@@ -79,6 +79,23 @@ export function packRoute(path: string): Response | null {
       return html('feed', '<div id="feed">feed</div>');
     case '/pack/probe/out':
       return redirect('/login?next=/pack/probe/out');
+    case '/pack/probe/feed/':
+      // Signed in, the site moves its probe page one level down (LinkedIn's `/feed/` →
+      // `/feed/foryou/`, owner 2026-11-17).
+      return redirect('/pack/probe/feed/foryou/');
+    case '/pack/probe/feed/foryou/':
+      return html('for you', '<p id="for-you">for you</p>');
+    case '/pack/probe/moved':
+      // A signed-in page that moved elsewhere on the site; sets the pack's sign-in cookie.
+      return new Response(null, {
+        status: 302,
+        headers: {
+          location: '/pack/moved-home',
+          'set-cookie': 'sid=1; Path=/; Max-Age=3600; Secure; HttpOnly; SameSite=Lax',
+        },
+      });
+    case '/pack/moved-home':
+      return html('home', '<p id="home">home</p>');
     case '/pack/probe/cf':
       return html('Just a moment...', TURNSTILE_FRAME);
     case '/pack/probe/slow':

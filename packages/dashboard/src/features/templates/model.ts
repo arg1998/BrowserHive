@@ -131,6 +131,7 @@ export function healthReasonText(reason: string | null): string | null {
   if (http !== null) return `The site answered with an error (HTTP ${http[1]}).`;
   const known: Readonly<Record<string, string>> = {
     confirmed_by_operator: 'You confirmed the sign-in.',
+    detected_by_pack_cookies: 'Its sign-in cookies appeared while you signed in.',
     not_confirmed: 'Not confirmed when the sign-in finished.',
     relogin: 'Signed in again with Re-login.',
     cookies_absent: 'Its sign-in cookies are gone.',
@@ -148,6 +149,8 @@ export function healthReasonText(reason: string | null): string | null {
     no_redirect: 'The signed-in page opened without a detour to sign-in.',
     no_redirect_settled:
       'The signed-in page loaded and stayed put for a few seconds. A weaker sign: a site that signs you out later, or only shows a sign-in box, looks the same.',
+    cookies_present:
+      'Its sign-in cookies are there and the site didn’t send the check to sign in, but the page showed no signed-in sign. The weakest sign: Check now again, or open a session and look.',
   };
   return known[reason] ?? `${reason.replaceAll('_', ' ')}.`;
 }

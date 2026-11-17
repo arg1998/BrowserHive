@@ -61,7 +61,7 @@ test.describe('templates pages pass axe in Chrome', () => {
       await page.addInitScript((t) => {
         localStorage.setItem('bh.theme', t);
         // A draft that reaches every step (the wizard sends deep links back to an unfinished step).
-        localStorage.setItem(
+        sessionStorage.setItem(
           'bh.templateDraft',
           JSON.stringify({ name: 'axe-draft', sites: ['shop.test'], access: 'all' }),
         );

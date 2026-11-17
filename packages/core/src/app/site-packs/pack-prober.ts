@@ -1,4 +1,4 @@
-/** @module app/site-packs/pack-prober — the pack prober of spec 13 §8.1 through T2's probe seam: the cookie pre-check with the pack's `cookie_names`, then one `GET` navigation to `https://<probe.host><probe.path>` in a page of BrowserHive's own maintenance session (minimized, never an agent's window), with a guard that aborts every main-frame document request leaving the pack's domains (fail-closed), a bounded wait after `load` for a client-side signed-out redirect (D48), classified by `classifyPackProbe`. The keeper (`keep-alive`) visits its own path through {@link PackProber.visit}. */
+/** @module app/site-packs/pack-prober — the pack prober of spec 13 §8.1 through T2's probe seam: the cookie pre-check with the pack's `cookie_names` (and whether every one is present, for `cookies_present`), then one `GET` navigation to `https://<probe.host><probe.path>` in a page of BrowserHive's own maintenance session (minimized, never an agent's window), with a guard that aborts every main-frame document request leaving the pack's domains (fail-closed), a bounded wait after `load` for a client-side signed-out redirect (D48), classified by `classifyPackProbe`. The keeper (`keep-alive`) visits its own path through {@link PackProber.visit}. */
 
 import type { SitePackV1 } from '@browserhive/contracts/site-packs';
 import type { Page, Route } from 'patchright';
@@ -19,6 +19,7 @@ import {
   PROBE_NAVIGATION_MS,
   PROBE_REDIRECT_WINDOW_MS,
   packCookiePrecheck,
+  packCookiesAllPresent,
   probeUrlOf,
 } from '../../domain/site-packs/probe-classify.ts';
 import { hostOf } from '../../domain/site-packs/site-of-url.ts';
@@ -86,21 +87,33 @@ export class PackProber implements SiteProber {
     // The pack went away (disabled, `sitePacks=false`) since the selection: the generic probe.
     if (effective === null) return await GENERIC_PROBER.probe(ctx);
     const pack = effective.pack;
-    const precheck = packCookiePrecheck(pack, await ctx.jar(), ctx.now);
+    const jar = await ctx.jar();
+    const precheck = packCookiePrecheck(pack, jar, ctx.now);
     if (precheck !== null) return precheck;
+    const cookiesPresent = packCookiesAllPresent(pack, jar, ctx.now);
     if (ctx.signal.aborted) return inconclusive(PACK_PROBE_REASONS.timeout);
     const opened = await this.#deps.openPage(ctx.template, ctx.site, ctx.signal);
     const onAbort = () => void opened.close().catch(() => undefined);
     ctx.signal.addEventListener('abort', onAbort, { once: true });
     try {
-      return await this.#navigate(pack, opened.page, path ?? pack.signed_in.probe.path);
+      return await this.#navigate(
+        pack,
+        opened.page,
+        path ?? pack.signed_in.probe.path,
+        cookiesPresent,
+      );
     } finally {
       ctx.signal.removeEventListener('abort', onAbort);
       await opened.close().catch(() => undefined);
     }
   }
 
-  async #navigate(pack: SitePackV1, page: Page, path: string): Promise<ProbeVerdict> {
+  async #navigate(
+    pack: SitePackV1,
+    page: Page,
+    path: string,
+    cookiesPresent: boolean,
+  ): Promise<ProbeVerdict> {
     try {
       await page.route('**/*', (route) => guardDocument(pack, page, route));
     } catch (err) {
@@ -129,6 +142,7 @@ export class PackProber implements SiteProber {
       challenge,
       settled,
       path,
+      cookiesPresent,
       hasSelector: async (selector) => (await page.locator(`css=${selector}`).count()) > 0,
     });
   }

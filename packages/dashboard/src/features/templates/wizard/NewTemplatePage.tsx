@@ -141,6 +141,7 @@ export function NewTemplatePage() {
               waitingFor={w.catalogLoading ? 'Loading the site catalog…' : null}
               nextRef={w.nextRef}
               onBack={() => w.goTo((step - 1) as 1 | 2 | 3 | 4)}
+              onCancel={() => void w.cancel()}
               onSkip={w.skip}
               onNext={w.next}
             />

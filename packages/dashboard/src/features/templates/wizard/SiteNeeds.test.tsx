@@ -37,7 +37,7 @@ function mount(
     readonly github?: Partial<SitePackV1Input>;
   } = {},
 ) {
-  localStorage.setItem(
+  sessionStorage.setItem(
     DRAFT_KEY,
     JSON.stringify({
       ...EMPTY_DRAFT,
@@ -104,7 +104,7 @@ async function click(element: HTMLElement) {
   });
 }
 
-beforeEach(() => localStorage.removeItem(DRAFT_KEY));
+beforeEach(() => sessionStorage.removeItem(DRAFT_KEY));
 
 describe('site pack needs in the wizard', () => {
   it('the chosen-site cards show each pack floor; axe clean', async () => {

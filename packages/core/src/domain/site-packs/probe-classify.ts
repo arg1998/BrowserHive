@@ -1,4 +1,4 @@
-/** @module domain/site-packs/probe-classify — the pack probe's decision (spec 13 §8.1 steps 1–2): the cookie pre-check over the pack's `cookie_names` (names and expiry only), then the navigation's signals in their fixed order. Pure; the page is read through {@link PackProbeFacts}. */
+/** @module domain/site-packs/probe-classify — the pack probe's decision (spec 13 §8.1 steps 1–2): the cookie pre-check over the pack's `cookie_names` (names and expiry only), then the navigation's signals in their fixed order (the probe path or below it counts as staying; every sign-in cookie present with no other signal is the weakest `signed_in`). Pure; the page is read through {@link PackProbeFacts}. */
 
 import type { PackChallengeKind, SitePackV1 } from '@browserhive/contracts/site-packs';
 import { registrableDomain, sanitizeUrl } from '../../kernel/url.ts';
@@ -19,6 +19,11 @@ export const PACK_PROBE_REASONS = {
   timeout: 'timeout',
   network: 'network',
   noSignal: 'no_signal',
+  /**
+   * Every sign-in cookie of the pack is present and the probe path stayed on the pack's domains
+   * without a signed-out signal, but nothing on the page confirmed it: the weakest `signed_in`.
+   */
+  cookiesPresent: 'cookies_present',
 } as const;
 
 /** How long the probe's navigation may take (`domcontentloaded`, spec 13 §8.1). */
@@ -55,6 +60,27 @@ export function packCookiePrecheck(
     : { outcome: 'signed_out', reason: PACK_PROBE_REASONS.cookiesAbsent, finalUrl: null };
 }
 
+/**
+ * True when the pack names sign-in cookies and every one of them is present and unexpired on the
+ * pack's domains (the strong half of the pre-check: what `cookies_present` needs).
+ */
+export function packCookiesAllPresent(
+  pack: SitePackV1,
+  jar: readonly Pick<JarCookie, 'name' | 'domain' | 'expires'>[],
+  now: number,
+): boolean {
+  const names = pack.signed_in.cookie_names;
+  if (names.length === 0) return false;
+  const seconds = now / 1000;
+  const domains = new Set(pack.domains);
+  return names.every((name) =>
+    jar.some(
+      (c) =>
+        c.name === name && domains.has(cookieSite(c)) && (c.expires <= 0 || c.expires > seconds),
+    ),
+  );
+}
+
 /** `https://<probe.host><probe.path>`, or another path on the probe host (the keeper's). */
 export function probeUrlOf(pack: SitePackV1, path = pack.signed_in.probe.path): string {
   return `https://${pack.signed_in.probe.host}${path}`;
@@ -89,18 +115,26 @@ export interface PackProbeFacts {
   readonly settled: boolean;
   /** The path the navigation visited on the probe host (the keeper's path); default the probe's. */
   readonly path?: string;
+  /** Every pack sign-in cookie was present before the navigation ({@link packCookiesAllPresent}). */
+  readonly cookiesPresent?: boolean;
   /** A selector is present (`locator('css=…').count() > 0`, queried, never evaluated). */
   hasSelector(selector: string): Promise<boolean>;
 }
 
-function samePlace(pack: SitePackV1, url: string, path: string): boolean {
+/**
+ * True when `url` is on the probe host at `path` or below it at a segment boundary (`/feed/` covers
+ * `/feed/foryou/`, `/feed` covers `/feed/x` but not `/feedback`): a signed-in site that moves its
+ * home page one level down (LinkedIn's `/feed/` → `/feed/foryou/`) has still stayed put. A root
+ * probe path (`/`) covers only itself, so the rule never widens to the whole host.
+ */
+export function samePlace(pack: SitePackV1, url: string, path: string): boolean {
   try {
     const parsed = new URL(url);
     const probe = pack.signed_in.probe;
-    return (
-      parsed.hostname.toLowerCase() === probe.host.toLowerCase() &&
-      parsed.pathname.replace(/\/+$/, '') === path.replace(/\/+$/, '')
-    );
+    if (parsed.hostname.toLowerCase() !== probe.host.toLowerCase()) return false;
+    const base = path.replace(/\/+$/, '');
+    const final = parsed.pathname.replace(/\/+$/, '');
+    return final === base || (base !== '' && final.startsWith(`${base}/`));
   } catch {
     return false;
   }
@@ -110,12 +144,15 @@ function samePlace(pack: SitePackV1, url: string, path: string): boolean {
  * Step 2, in order (spec 13 §8.1): a challenge → `challenged`; the final URL (inside the pack's
  * domains) matches a `signed_out_redirects` glob → `signed_out` `redirect`; the signed-out marker →
  * `signed_out` `marker`; the landmark → `signed_in` `landmark`; a `redirect` pack still on the
- * probe host and path (and not a 4xx/5xx) → `signed_in` `no_redirect`, and an `either` pack only
- * once the page `settled` (loaded, then no signed-out redirect within the post-load window, D48),
- * as `no_redirect_settled` (lower confidence: a later redirect or a sign-in modal reads the same);
- * otherwise `inconclusive` (`timeout`, `network`, `http_<status>` ≥ 400, `no_signal`). A challenge
- * is never `signed_out`. A visit of another path (the keeper's) never answers `no_redirect`: only
- * the probe path's staying put means signed in.
+ * probe host at the probe path or below it ({@link samePlace}; not a 4xx/5xx) → `signed_in`
+ * `no_redirect`, and an `either` pack only once the page `settled` (loaded, then no signed-out
+ * redirect within the post-load window, D48), as `no_redirect_settled` (lower confidence: a later
+ * redirect or a sign-in modal reads the same); a probe-path visit that found every sign-in cookie
+ * before it and ended on the pack's domains with no other signal (an `either` pack once settled) →
+ * `signed_in` `cookies_present` (the weakest sign in); otherwise `inconclusive` (`timeout`,
+ * `network`, `http_<status>` ≥ 400, `no_signal`). A challenge is never `signed_out`. A visit of
+ * another path (the keeper's) never answers `no_redirect` or `cookies_present`: only the probe
+ * path's staying put means signed in.
  */
 export async function classifyPackProbe(
   pack: SitePackV1,
@@ -157,6 +194,16 @@ export async function classifyPackProbe(
         ? PACK_PROBE_REASONS.noRedirectSettled
         : PACK_PROBE_REASONS.noRedirect,
     );
+  }
+  // The cookies were all there and the site neither redirected to a sign-in nor showed one: a
+  // signed-in page that moved elsewhere (a new home path) reads signed in, at the lowest confidence.
+  if (
+    facts.cookiesPresent === true &&
+    onProbePath &&
+    (signals.kind !== 'either' || facts.settled) &&
+    inPackDomains(pack, facts.finalUrl)
+  ) {
+    return verdict('signed_in', PACK_PROBE_REASONS.cookiesPresent);
   }
   return verdict('inconclusive', PACK_PROBE_REASONS.noSignal);
 }

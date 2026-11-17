@@ -16,7 +16,10 @@ export function SignInDone({
   readonly template: Template;
   readonly onSignInAgain: () => void;
 }) {
-  const out = template.sites.filter((s) => s.health.state !== 'signed_in');
+  // "Couldn't tell" is not "signed out": only sites known to be out (or never checked) warn.
+  const out = template.sites.filter(
+    (s) => s.health.state !== 'signed_in' && s.health.state !== 'inconclusive',
+  );
   const warn = out.length > 0;
   const Icon = warn ? ICONS.warn : ICONS.success;
   const snippet = `launch_session({ "slug": "agent", "template": "${template.name}" })`;
@@ -53,6 +56,7 @@ export function SignInDone({
               {site.health.state === 'unknown'
                 ? 'Not signed in'
                 : SITE_HEALTH[site.health.state].label}
+              {site.health.state === 'inconclusive' ? ' (Check now on the template’s page)' : ''}
             </span>
           </li>
         ))}

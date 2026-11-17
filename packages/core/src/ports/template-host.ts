@@ -187,6 +187,12 @@ export interface TemplateHost extends BrowserHost {
    * authoritative, so the checkpoint never carries them forward (spec 13 §3.9).
    */
   visitedOrigins(): ReadonlySet<string>;
+  /**
+   * Registrable domains a window of this browser process opened as a page (a main-frame
+   * navigation, never an embedded frame): an unlisted sign-in to a domain without a site pack
+   * counts only for these (spec 13 §2.3). Absent = none.
+   */
+  pageSites?(): ReadonlySet<string>;
   /** `JSHeapTotalSize` of every agent page (spec 13 §3.2 memory). */
   pageHeaps(): Promise<readonly PageHeap[]>;
   /**

@@ -127,8 +127,14 @@ export function structureHash(state: TemplateState): string {
     .digest('hex');
 }
 
-/** The sign-in cookie names of each site (learned names; a pack's `cookie_names` from T3a). */
-export type SignInNames = ReadonlyMap<string, readonly string[]>;
+/**
+ * The sign-in cookie names of a registrable domain: a site's learned names, or the `cookie_names`
+ * of the pack that covers the domain (T3a; also a domain that is not a site, so a stopped browser's
+ * newest version still says which unlisted sign-ins it holds, spec 13 §2.3).
+ */
+export interface SignInNames {
+  get(domain: string): readonly string[] | undefined;
+}
 
 /** The per-domain `summary` of a version (spec 13 §2.4): counts and cookie NAMES only (D-20). */
 export function summarize(state: TemplateState, signIn: SignInNames): TemplateVersionSummaryRecord {

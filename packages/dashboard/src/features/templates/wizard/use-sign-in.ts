@@ -1,4 +1,4 @@
-/** @module features/templates/wizard/use-sign-in — the sign-in step's state and actions (spec 13 §7.1): the template and its recording window kept current (the `templates` topic plus a slow poll), opening the window (restarting a failed browser first), **I'm signed in** per site, Finish, closing the window, and the error state the step is in */
+/** @module features/templates/wizard/use-sign-in — the sign-in step's state and actions (spec 13 §7.1): the template and its recording window kept current (the `templates` topic plus a slow poll), opening the window (restarting a failed browser first), **I'm signed in** per site, Finish, closing the window, **Cancel setup** (deletes the template still being set up, closing its window), and the error state the step is in */
 import { useEffect, useState } from 'react';
 import { useApi } from '@/app/providers/AuthProvider.tsx';
 import { useToast } from '@/app/providers/ToastProvider.tsx';
@@ -87,6 +87,17 @@ export function useSignIn(templateId: string) {
       return false;
     }
   };
+  /** Delete the template still being set up (its window closes with it); `true` once deleted. */
+  const cancelSetup = async (): Promise<boolean> => {
+    try {
+      // `force`: the sign-in window is the only session a template being set up can have.
+      await m.remove.mutateAsync(true);
+      return true;
+    } catch {
+      // The mutation's toast says why; the step stays.
+      return false;
+    }
+  };
   const confirmingSite = m.confirm.isPending ? (m.confirm.variables ?? null) : null;
   return {
     detail,
@@ -98,9 +109,11 @@ export function useSignIn(templateId: string) {
     opening: m.startRecording.isPending,
     finishing: m.finish.isPending,
     closing: m.cancel.isPending,
+    cancelling: m.remove.isPending,
     open,
     confirmSite,
     finish,
     closeWindow,
+    cancelSetup,
   };
 }

@@ -109,6 +109,8 @@ export interface TemplatesParts {
 
 /** How often the probe schedule looks for due templates (spec 13 §8.3). */
 export const TEMPLATE_HEALTH_TICK_MS = 60_000;
+/** How often open sign-in windows are checked for pack sites' sign-in cookies (spec 13 §7.1). */
+export const TEMPLATE_RECORDING_TICK_MS = 5_000;
 
 /** `<data-dir>/templates` (spec 13 §2.4). */
 export function templatesDirOf(dataDir: string): string {
@@ -221,6 +223,7 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
       checkpointIntervalMs: config.templateCheckpointInterval,
       versionsKeep: config.templateVersionsKeep,
     },
+    ...packs,
   });
   supervisor?.attachCheckpoints(state);
   let changed: (templateId: string) => void = () => undefined;
@@ -248,6 +251,8 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
     changed: (id) => changed(id),
     ...packs,
   });
+  // Pack sites read signed in from their sign-in cookies while a sign-in window is open (§7.1).
+  const stopRecordingTicks = input.repeat(() => void recording.tick(), TEMPLATE_RECORDING_TICK_MS);
   const files = createTemplateFiles(templatesDir);
   const service = new TemplateService({
     repos: input.uow.repos,
@@ -346,7 +351,10 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
           ...packs,
           ...(input.probers !== undefined && { probers: input.probers(supervisor) }),
         });
-  if (health !== null) restored = (id) => health.scheduler.restored(id);
+  if (health !== null) {
+    restored = (id) => health.scheduler.restored(id);
+    recording.attachHealth(health.health);
+  }
   if (supervisor !== null && ops instanceof TemplateHostOperations) {
     input.siteStrategies?.attach({ supervisor, ops, health, changed, repeat: input.repeat });
   }
@@ -369,6 +377,7 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
   const stopTicks = () => {
     stopHostTicks();
     stopHealthTicks();
+    stopRecordingTicks();
     health?.stop();
     offClipboard();
   };

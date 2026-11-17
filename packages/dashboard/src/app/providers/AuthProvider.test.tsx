@@ -1,4 +1,4 @@
-/** @module app/providers/AuthProvider.test — provider wiring: probe on mount, 401 interceptor clears the cache, transient failures keep checking with backoff, a cached operator survives a rate-limited reload */
+/** @module app/providers/AuthProvider.test — provider wiring: probe on mount, 401 interceptor clears the cache, a 401 or Log out forgets the tab's work in progress (the template wizard's draft), transient failures keep checking with backoff, a cached operator survives a rate-limited reload */
 
 import { beforeEach, describe, expect, it } from 'bun:test';
 import type { FetchLike } from '@/lib/api/http.ts';
@@ -14,7 +14,7 @@ const PRINCIPAL = {
 };
 
 function Probe() {
-  const { state } = useAuth();
+  const { state, logout } = useAuth();
   const api = useApi();
   return (
     <>
@@ -23,6 +23,9 @@ function Probe() {
       </output>
       <button type="button" onClick={() => void api.getSystem().catch(() => undefined)}>
         call
+      </button>
+      <button type="button" onClick={() => void logout().catch(() => undefined)}>
+        log out
       </button>
     </>
   );
@@ -36,7 +39,10 @@ function jsonResponse(status: number, body: unknown): Response {
 }
 
 describe('AuthProvider', () => {
-  beforeEach(() => localStorage.clear());
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
 
   it('goes ready after a successful probe and back to login when any call answers 401', async () => {
     let status = 200;
@@ -69,6 +75,57 @@ describe('AuthProvider', () => {
       fireEvent.click(screen.getByRole('button', { name: 'call' }));
     });
     await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('login:0'));
+  });
+
+  it('forgets the tab’s work in progress when a call answers 401 or the operator logs out', async () => {
+    let status = 200;
+    const fetchImpl: FetchLike = async (input) => {
+      if (String(input).endsWith('/auth/logout')) return jsonResponse(200, { ok: true });
+      return status === 200
+        ? jsonResponse(200, { principal: PRINCIPAL })
+        : jsonResponse(401, {
+            type: 'x',
+            title: 'Unauthorized',
+            status: 401,
+            code: 'UNAUTHORIZED',
+            retryable: 'never',
+          });
+    };
+    const seed = () => {
+      sessionStorage.setItem('bh.templateDraft', JSON.stringify({ name: 'half-done' }));
+      sessionStorage.setItem('other.key', 'kept');
+    };
+    const view = render(
+      <AuthProvider fetch={fetchImpl}>
+        <Probe />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('ready:0'));
+    seed();
+    status = 401;
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'call' }));
+    });
+    await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('login:0'));
+    expect(sessionStorage.getItem('bh.templateDraft')).toBeNull();
+    expect(sessionStorage.getItem('other.key')).toBe('kept');
+    view.unmount();
+
+    // Log out.
+    status = 200;
+    render(
+      <AuthProvider fetch={fetchImpl}>
+        <Probe />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('ready:0'));
+    seed();
+    expect(sessionStorage.getItem('bh.templateDraft')).not.toBeNull();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'log out' }));
+    });
+    await waitFor(() => expect(screen.getByTestId('status').textContent).toBe('login:0'));
+    expect(sessionStorage.getItem('bh.templateDraft')).toBeNull();
   });
 
   it('goes to change when a call answers 403 PASSWORD_CHANGE_REQUIRED', async () => {

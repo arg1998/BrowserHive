@@ -69,6 +69,8 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
   private readonly waiters: PageWaiters;
   private readonly parked: ParkedPages;
   private readonly origins = new Set<string>();
+  /** Registrable domains a window opened as a page (main frame). */
+  private readonly topSites = new Set<string>();
   /** Origins whose data a sign-in removal cleared: never carried forward (spec 13 §3.9). */
   private readonly cleared = new Set<string>();
   private readonly userDataDir: string | null;
@@ -272,6 +274,10 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
     for (const origin of state.origins) this.origins.add(origin.origin);
   }
 
+  pageSites(): ReadonlySet<string> {
+    return this.topSites;
+  }
+
   visitedOrigins(): ReadonlySet<string> {
     return new Set([...this.origins, ...this.cleared]);
   }
@@ -366,7 +372,7 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
       ops.watchPage(this.pageWatcher?.() ?? null, this.hostId, page, owner.sessionId, this.log);
     }
     ops.deleteUnclaimedDownloads(page);
-    ops.watchOrigins(page, this.origins);
+    ops.watchOrigins(page, this.origins, this.topSites);
     if (this.waiters.committed(page, owner, facts)) return;
     if (owner.kind !== 'parked' || page === this.keeper.page) return;
     this.parked.add(page, facts.targetId);

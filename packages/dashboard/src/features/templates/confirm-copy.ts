@@ -1,5 +1,30 @@
-/** @module features/templates/confirm-copy — confirmation copy of the template actions (spec 13 §11.4 Confirmations, spec 04 §11): delete (typed name), disable and access changes that close sessions (listing them), restore, seeding over a ready template, removing a site, unseal flags, identity changes */
+/** @module features/templates/confirm-copy — confirmation copy of the template actions (spec 13 §11.4 Confirmations, spec 04 §11): discarding the wizard's draft, cancelling a setup (deletes the template), delete (typed name), disable and access changes that close sessions (listing them), restore, seeding over a ready template, removing a site, unseal flags, identity changes */
 import type { ConfirmOptions } from '@/components/shared/ConfirmDialog.tsx';
+
+/** Cancel in the wizard (steps 1–4): nothing exists on the server yet; the draft is forgotten. */
+export function discardDraftConfirm(): ConfirmOptions {
+  return {
+    title: 'Discard this template setup?',
+    description:
+      'Nothing has been created yet. What you entered is cleared from this browser, and the wizard starts empty next time.',
+    confirmLabel: 'Discard',
+    cancelLabel: 'Keep editing',
+    danger: true,
+  };
+}
+
+/** **Cancel setup** on the sign-in step: the template exists (Setting up) and is deleted. */
+export function cancelSetupConfirm(displayName: string): ConfirmOptions {
+  return {
+    title: `Cancel setting up ${displayName}?`,
+    description:
+      'The template and its browser profile are deleted from this machine, with any sign-ins made in its window. ' +
+      'Deleting does not sign you out at the sites.',
+    confirmLabel: 'Delete template',
+    cancelLabel: 'Keep setting up',
+    danger: true,
+  };
+}
 
 /** Delete: typed name; says that deleting does not sign out at the sites. */
 export function deleteTemplateConfirm(

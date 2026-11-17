@@ -1,4 +1,4 @@
-/** @module features/templates/wizard/FinishDialog — Finish (spec 13 §7.1): warns when a site is not signed in (agents would get signed-out pages there; **Keep signing in** is then the primary action), lists the **unlisted sign-ins** of the window ("Also signed in to: google.com — agents can use this") with Remove sign-in preselected, then finishes */
+/** @module features/templates/wizard/FinishDialog — Finish (spec 13 §7.1): warns when a site is not signed in yet, saying what is missing (a site without a pack not confirmed with **I'm signed in**; a pack site whose sign-in BrowserHive has not found yet, checked once more at Finish), and that agents would get signed-out pages there (**Keep signing in** is then the primary action), lists the **unlisted sign-ins** of the window ("Also signed in to: google.com — agents can use this") with Remove sign-in preselected, then finishes */
 import type { TemplateSiteView } from '@browserhive/contracts/http';
 import { useEffect, useRef, useState } from 'react';
 import { Callout } from '@/components/shared/Callout.tsx';
@@ -46,7 +46,9 @@ export function FinishDialog({
   }, [open, unlisted]);
   const notSignedIn = sites.filter((s) => s.health.state !== 'signed_in');
   const warn = notSignedIn.length > 0;
-  const names = notSignedIn.map((s) => s.site_id).join(', ');
+  const unconfirmed = notSignedIn.filter((s) => s.pack_id === null).map((s) => s.site_id);
+  const notFound = notSignedIn.filter((s) => s.pack_id !== null).map((s) => s.site_id);
+  const what = unconfirmed.length === notSignedIn.length ? 'confirmed' : 'signed in';
   const chosen = unlisted.filter((d) => remove.has(d));
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -64,13 +66,29 @@ export function FinishDialog({
             <Callout
               tone="warn"
               title={
-                notSignedIn.length === sites.length
-                  ? 'No site is signed in'
-                  : `${notSignedIn.length} of ${sites.length} sites aren’t signed in`
+                notSignedIn.length === 1
+                  ? `${notSignedIn[0]?.site_id} isn’t ${what} yet`
+                  : `${notSignedIn.length} of ${sites.length} sites aren’t ${what} yet`
               }
             >
-              Agents will get signed-out pages on {names}. Sign in there and press I’m signed in, or
-              finish now and sign in again later from the template’s page.
+              <span className="flex flex-col gap-1.5">
+                {unconfirmed.length > 0 ? (
+                  <span>
+                    You haven’t confirmed {unconfirmed.join(', ')} yet: sign in there, then press
+                    I’m signed in.
+                  </span>
+                ) : null}
+                {notFound.length > 0 ? (
+                  <span>
+                    BrowserHive hasn’t found a sign-in on {notFound.join(', ')} yet; it checks once
+                    more when you finish.
+                  </span>
+                ) : null}
+                <span>
+                  A site still not signed in after Finish gives agents signed-out pages until you
+                  sign in again from the template’s page.
+                </span>
+              </span>
             </Callout>
           ) : (
             <p className="text-sm text-muted-foreground">Every site is signed in.</p>

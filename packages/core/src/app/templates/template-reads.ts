@@ -1,5 +1,6 @@
 /** @module app/templates/template-reads — reading every template with its sites, optionally skipping rows this binary cannot read so one bad row never hides every template from agents (spec 13 §5.1). */
 
+import { TRACKER_DOMAINS } from '../../domain/templates/sign-ins.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { DegradationReporter } from '../../ports/degradation-reporter.ts';
 import type { EventPublisher } from '../../ports/event-bus.ts';
@@ -13,6 +14,7 @@ import type {
 import type { TemplateFiles } from '../../ports/template-files.ts';
 import type { TemplateRuntime } from '../../ports/template-runtime.ts';
 import type { DomainEvents } from '../events/catalog.ts';
+import { packSignInOf, type TemplatePacks } from './template-packs.ts';
 import { type SitePackReader, toTemplateSummary } from './views.ts';
 
 /** The degradation code of a template row `list_templates` had to skip. */
@@ -102,18 +104,31 @@ export function publishTemplateChanged(
 }
 
 /**
- * Unlisted sign-ins of a stopped browser (spec 13 §2.3): domains of the newest version that are not
- * sites and hold a persistent cookie (the live jar answers precisely while the browser runs).
+ * The unlisted sign-ins of a stopped browser, from its newest version (spec 13 §2.3): domains that
+ * are not sites, whose pack's sign-in cookies the version holds (every name of the pack, on its
+ * domains), and that are not ad or tracking domains. A domain without a pack is listed only while
+ * the browser runs (whether a window opened it is not kept in a version).
  */
 export async function storedUnlisted(
   versions: Pick<TemplateVersionRepository, 'list'> | undefined,
   templateId: string,
   own: ReadonlySet<string>,
+  packs?: TemplatePacks,
 ): Promise<string[]> {
   const newest = (await versions?.list(templateId))?.[0];
   if (newest === undefined) return [];
-  return newest.summary.domains
-    .filter((d) => !own.has(d.domain) && d.earliestExpiry !== null)
+  const domains = newest.summary.domains;
+  return domains
+    .filter((d) => {
+      if (own.has(d.domain) || TRACKER_DOMAINS.has(d.domain) || d.signInCookies.length === 0)
+        return false;
+      const pack = packSignInOf(packs, d.domain);
+      if (pack === null || pack.domains.some((x) => own.has(x))) return false;
+      const present = new Set(
+        domains.filter((x) => pack.domains.includes(x.domain)).flatMap((x) => x.signInCookies),
+      );
+      return pack.cookieNames.every((name) => present.has(name));
+    })
     .map((d) => d.domain);
 }
 

@@ -1,17 +1,23 @@
-/** @module features/templates/wizard/draft.test — the wizard's draft rules: per-step problems (name grammar, sites, proxy and its explicit language and time zone, access under auth=token), adding sites as typed, the `POST /templates` body, server issues mapped to steps; and the sign-in step's error states */
-import { describe, expect, it } from 'bun:test';
+/** @module features/templates/wizard/draft.test — the wizard's draft rules: per-step problems (name grammar, sites, proxy and its explicit language and time zone, access under auth=token), adding sites as typed, the `POST /templates` body, server issues mapped to steps; where the draft is kept (this tab's `sessionStorage`, an old `localStorage` copy dropped, retired keys removed at start) and when it has content; and the sign-in step's error states */
+import { beforeEach, describe, expect, it } from 'bun:test';
 import { AppError } from '@/lib/api/errors.ts';
+import { dropRetiredStorage } from '@/lib/storage.ts';
 import { hostView, template } from '../../../../test/fixtures/templates.ts';
 import { hostOf, nameProblem, remoteHost, suggestName } from '../model.ts';
 import {
   addSite,
+  clearDraft,
+  DRAFT_KEY,
+  draftHasContent,
   EMPTY_DRAFT,
   firstProblemStep,
   issuesOf,
+  readDraft,
   stepOfIssue,
   stepProblems,
   type TemplateDraft,
   toTemplateInput,
+  writeDraft,
 } from './draft.ts';
 import { recordingSessionOf, signInProblem } from './sign-in-model.ts';
 
@@ -214,5 +220,44 @@ describe('sign-in error states', () => {
     expect(recordingSessionOf([base as never])).not.toBeNull();
     expect(recordingSessionOf([{ ...base, slug: 'maintenance' } as never])).toBeNull();
     expect(recordingSessionOf([{ ...base, live: false } as never])).toBeNull();
+  });
+});
+
+describe('where the draft is kept', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    localStorage.removeItem(DRAFT_KEY);
+  });
+
+  it('keeps it in this tab’s sessionStorage, never in localStorage', () => {
+    writeDraft(READY);
+    expect(sessionStorage.getItem(DRAFT_KEY)).not.toBeNull();
+    expect(localStorage.getItem(DRAFT_KEY)).toBeNull();
+    expect(readDraft()).toMatchObject({ name: 'job-hunt', sites: ['linkedin.com'] });
+    clearDraft();
+    expect(readDraft()).toBeNull();
+  });
+
+  it('drops an older build’s localStorage copy without reading it', () => {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(READY));
+    expect(readDraft()).toBeNull();
+    expect(localStorage.getItem(DRAFT_KEY)).toBeNull();
+  });
+
+  it('removes the retired localStorage key at start', () => {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(READY));
+    localStorage.setItem('bh.theme', 'dark');
+    dropRetiredStorage();
+    expect(localStorage.getItem(DRAFT_KEY)).toBeNull();
+    expect(localStorage.getItem('bh.theme')).toBe('dark');
+    localStorage.removeItem('bh.theme');
+  });
+
+  it('has content once anything is entered (a touched, emptied name alone is not)', () => {
+    expect(draftHasContent(EMPTY_DRAFT)).toBe(false);
+    expect(draftHasContent({ ...EMPTY_DRAFT, nameTouched: true })).toBe(false);
+    expect(draftHasContent({ ...EMPTY_DRAFT, description: 'x' })).toBe(true);
+    expect(draftHasContent({ ...EMPTY_DRAFT, sites: ['linkedin.com'] })).toBe(true);
+    expect(draftHasContent({ ...EMPTY_DRAFT, maxConcurrent: 3 })).toBe(true);
   });
 });

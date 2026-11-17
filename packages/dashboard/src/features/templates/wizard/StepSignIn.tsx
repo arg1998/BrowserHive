@@ -1,11 +1,14 @@
-/** @module features/templates/wizard/StepSignIn — step 5 (spec 13 §7.1, §3.11): open the sign-in window on the machine running BrowserHive (the remote-operator notice when that is not this device), confirm each site with **I'm signed in**, watch the window from here, Finish (warned when a site is not signed in; unlisted sign-ins offered for removal) or close the window (the template stays Setting up); on a ready template, `again` signs in again to a signed-out site. Every error state has its copy and action, and a reload resumes where it was */
+/** @module features/templates/wizard/StepSignIn — step 5 (spec 13 §7.1, §3.11): open the sign-in window on the machine running BrowserHive (the remote-operator notice when that is not this device), confirm each site with **I'm signed in**, watch the window from here, Finish (warned when a site is not signed in; unlisted sign-ins offered for removal), close the window or Finish later (the template stays Setting up), or **Cancel setup** (after a confirmation, deletes the template and its browser profile and returns to the list); on a ready template, `again` signs in again to a signed-out site. Every error state has its copy and action, and a reload resumes where it was */
 import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
+import { useConfirm } from '@/app/providers/ConfirmProvider.tsx';
+import { useToast } from '@/app/providers/ToastProvider.tsx';
 import { Callout } from '@/components/shared/Callout.tsx';
 import { ErrorState } from '@/components/shared/ErrorState.tsx';
 import { SkeletonCard } from '@/components/shared/Skeletons.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { toAppError } from '@/lib/api/errors.ts';
+import { cancelSetupConfirm } from '../confirm-copy.ts';
 import { RemoteOperatorBanner, useRemoteHost } from '../RemoteOperatorBanner.tsx';
 import { FinishDialog } from './FinishDialog.tsx';
 import { SignInDone } from './SignInDone.tsx';
@@ -27,6 +30,8 @@ export function StepSignIn({
   readonly onAgain: (on: boolean) => void;
 }) {
   const navigate = useNavigate();
+  const confirm = useConfirm();
+  const toast = useToast();
   const remote = useRemoteHost();
   const s = useSignIn(templateId);
   const [finishOpen, setFinishOpen] = useState(false);
@@ -60,6 +65,13 @@ export function StepSignIn({
     if (!(await s.closeWindow())) return;
     if (ready) onAgain(false);
     else void navigate({ to: '/templates' });
+  };
+
+  const cancelSetup = async () => {
+    if (!(await confirm(cancelSetupConfirm(template.display_name)))) return;
+    if (!(await s.cancelSetup())) return;
+    toast.success({ title: `Deleted ${template.display_name}` });
+    void navigate({ to: '/templates' });
   };
 
   return (
@@ -115,13 +127,26 @@ export function StepSignIn({
           </Button>
         ) : (
           <>
-            <Button type="button" variant="ghost" disabled={s.closing} onClick={() => void leave()}>
+            <Button
+              type="button"
+              variant="destructive-ghost"
+              disabled={s.closing || s.cancelling || s.finishing}
+              onClick={() => void cancelSetup()}
+            >
+              Cancel setup
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={s.closing || s.cancelling}
+              onClick={() => void leave()}
+            >
               {windowOpen ? 'Close the window, finish later' : 'Finish later'}
             </Button>
             <Button
               type="button"
               className="ml-auto"
-              disabled={s.finishing}
+              disabled={s.finishing || s.cancelling}
               onClick={() => {
                 void s.detail.refetch();
                 setFinishOpen(true);
