@@ -1,6 +1,6 @@
 # Site packs
 
-> **In this release:** BrowserHive ships site packs for a set of popular sites and reads your own pack files from a local folder. No pack applies until you approve it. Packs from BrowserHive's online registry, signed packs you import by hand, and the pack strategies (pacing, warm-up, keep-alive and the others) arrive in later releases. Every pending version is [classified](#classification): you see at a glance whether it tightens rules, relaxes them or can stop a site.
+> **In this release:** BrowserHive ships site packs for a set of popular sites and reads your own pack files from a local folder. No pack applies until you approve it. Packs select [strategies](#strategies) (pacing, launch spacing, warm-up, keep-alive and the others) that BrowserHive runs for them. Packs from BrowserHive's online registry and signed packs you import by hand arrive in a later release. Every pending version is [classified](#classification): you see at a glance whether it tightens rules, relaxes them or can stop a site.
 
 A site pack tells BrowserHive how one site works, so a [session template](templates.md) behaves there the way the site expects a person to, and stays signed in. It says how to tell whether the template is signed in, which requests and buttons sign the account out or create new credentials, which pages are security checks that need a person, and what the site's terms say about automation.
 
