@@ -49,12 +49,8 @@ export type { PendingUpdate, SitePackRegistryDeps } from '../app/site-packs/regi
 // Site-pack enforcement (spec 13 §9.3, §9.5; PR T3a, WP-E1).
 export { SecurityInterceptService } from '../app/site-packs/security-intercepts.ts';
 export { TemplateSiteStops } from '../app/site-packs/site-stops.ts';
-<<<<<<< HEAD
-export { SiteActionStrategies } from '../app/site-packs/strategies/site-actions.ts';
-||||||| 2d2f5e9
-=======
 export { AgentSiteVisits } from '../app/site-packs/site-visits.ts';
->>>>>>> feat/t3b-n
+export { SiteActionStrategies } from '../app/site-packs/strategies/site-actions.ts';
 export { SiteToolGate } from '../app/site-packs/tool-gate.ts';
 export { ToolGuardHits } from '../app/site-packs/tool-guard-hits.ts';
 export { HostFlagsWatch } from '../app/site-packs/webrtc-host-flags.ts';
