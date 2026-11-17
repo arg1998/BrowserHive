@@ -1,3 +1,4 @@
+/** @module cli/commands/sitepacks-actions — `browserhive sitepacks apply | reject | revert | approve-local | pin | unpin | follow | enable | disable` over a running server's REST API; apply, revert, approve-local and disable confirm on a terminal or with `--yes`, and approve-local approves the SHA-256 of the difference it printed (spec 13 §9.6, §10.5, §10.6, §11.5); reload and import are in `sitepacks-local.ts`. */
 import { type SitePackView, SitePackViewResponse } from '@browserhive/contracts/http';
 import type { CommandContext } from '../deps.ts';
 import { EXIT, type ExitCode, type SitePacksAction } from '../invocation.ts';
