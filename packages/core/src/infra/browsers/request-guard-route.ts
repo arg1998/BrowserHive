@@ -58,6 +58,7 @@ const ABORT_FAILED: InterceptionVerdict = Object.freeze({ kind: 'abort', reason:
  * | `block` | aborted `blockedbyclient` at once | `block`, recorded once the owner resolves |
  * | `confirm` | **held** until the confirmer answers; `approved` passes, anything else is aborted | `confirm` with the outcome |
  * | `confirm`, no confirmer | aborted `blockedbyclient` at once | `block` (rule action `confirm`) |
+ * | `confirm`, answered `asBlock` | aborted `blockedbyclient` | `block` (rule action `confirm`) |
  *
  * Only `confirm` waits for the owner before deciding (the operator request goes to the owning
  * session); a resolver that holds a frameless popup navigation (PR T1a) delays nothing else. A
@@ -148,6 +149,11 @@ export function requestGuardHandler(deps: RequestGuardHandlerDeps): Interception
           url: facts.url,
           signal: context.signal(),
         });
+        if (answer.asBlock === true) {
+          record(hit({ ruleAction: 'confirm', action: 'block' })(sessionOf(owner)));
+          log.info('guarded request blocked', { ...fields, reason: 'not_confirmable' });
+          return ABORT_BLOCKED;
+        }
         record({
           ...hit({ ruleAction: 'confirm', action: 'confirm' })(sessionOf(owner)),
           outcome: answer.outcome,

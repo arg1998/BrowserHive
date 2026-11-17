@@ -3980,6 +3980,151 @@
                     "seq",
                     "row"
                   ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "guard"
+                      ]
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "ts": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "seq": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "row": {
+                      "type": "object",
+                      "properties": {
+                        "event_id": {
+                          "type": "string"
+                        },
+                        "session_id": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "template_id": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "pack_id": {
+                          "type": "string"
+                        },
+                        "guard_id": {
+                          "type": "string"
+                        },
+                        "guard_kind": {
+                          "type": "string",
+                          "enum": [
+                            "logout",
+                            "account",
+                            "credential",
+                            "destructive",
+                            "write",
+                            "stop"
+                          ]
+                        },
+                        "action": {
+                          "type": "string",
+                          "enum": [
+                            "block",
+                            "confirm",
+                            "warn",
+                            "paced",
+                            "held"
+                          ]
+                        },
+                        "outcome": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "enum": [
+                            "approved",
+                            "denied",
+                            "timeout",
+                            "cancelled",
+                            null
+                          ]
+                        },
+                        "decided_by": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "source": {
+                          "type": "string",
+                          "enum": [
+                            "tool",
+                            "request",
+                            "element"
+                          ]
+                        },
+                        "method": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "url": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "tool": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "ts": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "event_id",
+                        "session_id",
+                        "template_id",
+                        "pack_id",
+                        "guard_id",
+                        "guard_kind",
+                        "action",
+                        "outcome",
+                        "decided_by",
+                        "source",
+                        "method",
+                        "url",
+                        "request_id",
+                        "tool",
+                        "ts"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "id",
+                    "ts",
+                    "seq",
+                    "row"
+                  ]
                 }
               ]
             }
@@ -31210,7 +31355,8 @@
                   "page",
                   "attention",
                   "vault",
-                  "blocked"
+                  "blocked",
+                  "guard"
                 ]
               },
               "minItems": 1
@@ -31950,7 +32096,8 @@
                   "page",
                   "attention",
                   "vault",
-                  "blocked"
+                  "blocked",
+                  "guard"
                 ]
               },
               "minItems": 1

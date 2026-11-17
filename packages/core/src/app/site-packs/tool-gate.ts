@@ -3,14 +3,11 @@
 import type { PackElementGuard, PackGuardKind } from '@browserhive/contracts/site-packs';
 import type { Page } from 'patchright';
 import type { Session } from '../../domain/session/session.ts';
-import { BUILTIN_PACK_ID } from '../../domain/site-packs/challenges.ts';
 import { hostOf, templateSiteOf } from '../../domain/site-packs/site-of-url.ts';
 import {
-  type BuiltinGuard,
   effectiveAction,
   effectiveWritePolicy,
   elementGuardsFor,
-  matchDocumentGuard,
 } from '../../domain/site-packs/tool-guards.ts';
 import { type AppError, assertNever } from '../../kernel/errors/app-error.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
@@ -19,7 +16,9 @@ import type { Clock } from '../../ports/clock.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type { TemplateSiteRecord } from '../../ports/persistence/index.ts';
 import type { SecurityIntercepts } from '../../ports/security-intercepts.ts';
+import type { WritePolicyOverrides } from '../../ports/site-guards.ts';
 import type { EffectivePack, SitePackLookup } from '../../ports/site-packs.ts';
+import type { DocumentGuardResolver } from '../../ports/site-tool-guards.ts';
 import type { AgentNavigations } from './agent-navigations.ts';
 import {
   ELEMENT_GUARD_TOOLS,
@@ -31,8 +30,8 @@ import { siteActionBlocked, siteOperatorPending, urlBlockedByGuard } from './sit
 import type { ToolGuardHits } from './tool-guard-hits.ts';
 
 /**
- * Tools a held or stopped session may still call (spec 13 §9.5): they end or only inspect a
- * session, or wait for the operator.
+ * Tools a stopped session may still call (spec 13 §9.5): they end or only inspect a session, or
+ * wait for the operator. The same list as the dispatcher's hold (`interface/mcp/site-hold.ts`).
  */
 export const SITE_HOLD_EXEMPT_TOOLS: ReadonlySet<string> = new Set([
   'close_session',
@@ -68,8 +67,13 @@ export interface SiteToolGateDeps {
   readonly lookup: () => SitePackLookup | null;
   /** `null` when no operator can answer (stdio) or until wired: `confirm` acts as `block`. */
   readonly intercepts: () => SecurityIntercepts | null;
-  /** `DEFAULT_GUARDS` (owned by the network enforcement); none when absent. */
-  readonly defaultGuards?: () => readonly BuiltinGuard[];
+  /**
+   * The `GET` document guard of a navigation: the host's own rule source (WP-E1: the owning pack's
+   * guards with the write policy resolved, then `DEFAULT_GUARDS`); `null` until wired.
+   */
+  readonly documentGuard: () => DocumentGuardResolver | null;
+  /** The template sites' write-policy overrides (WP-E1's `TemplateWritePolicies`); `null` until wired. */
+  readonly overrides: () => WritePolicyOverrides | null;
   readonly hits: ToolGuardHits;
   readonly navigations: AgentNavigations;
   /** The tab's page (`SessionService.page`). @throws `TAB_NOT_FOUND` */
@@ -163,20 +167,10 @@ export class SiteToolGate {
     lookup: SitePackLookup | null,
   ): Promise<void> {
     const host = hostOf(url);
-    if (host === null) return;
+    const templateId = call.session.template?.templateId;
+    if (host === null || templateId === undefined) return;
     const effective = lookup?.effectiveFor(host) ?? null;
-    const defaults = this.#deps.defaultGuards?.() ?? [];
-    const policy =
-      effective === null
-        ? 'allow'
-        : effectiveWritePolicy(effective.pack, overrideOf(sites, effective));
-    const hit = matchDocumentGuard({
-      pack: effective?.pack ?? null,
-      cacheKey: effective?.sha256 ?? BUILTIN_PACK_ID,
-      policy,
-      defaults,
-      url,
-    });
+    const hit = this.#deps.documentGuard()?.(templateId, url) ?? null;
     if (hit === null) return;
     const decision: Decision = {
       packId: hit.packId,
@@ -208,7 +202,11 @@ export class SiteToolGate {
     if (targets.length === 0) return;
     const guard = await this.#firstGuarded(page, guards, targets);
     if (guard === null) return;
-    const policy = effectiveWritePolicy(effective.pack, overrideOf(sites, effective));
+    const override = this.#deps.overrides()?.overrideFor(call.session.template?.templateId ?? '', {
+      id: effective.packId,
+      domains: effective.pack.domains,
+    });
+    const policy = effectiveWritePolicy(effective.pack, override ?? null);
     const ruleId = `${effective.packId}#${guard.id}`;
     const site = siteOf(sites, pageUrl, effective);
     const decision: Decision = {
@@ -294,12 +292,10 @@ export class SiteToolGate {
                 tool: call.tool,
                 source: d.source === 'element' ? 'element' : 'request',
               });
-        if (result.kind === 'pass') {
-          this.#deps.hits.record({ ...hit, action: 'confirm', outcome: 'approved' });
-          return;
-        }
+        // A pass and a pending confirmation are recorded by the security intercepts (the row of
+        // the settled confirmation); only a refusal acting as `block` is this path's row.
+        if (result.kind === 'pass') return;
         if (result.kind === 'pending') {
-          this.#deps.hits.record({ ...hit, action: 'confirm', requestId: result.requestId });
           throw siteOperatorPending(sessionId, site, result.requestId, 'write_confirm');
         }
         this.#deps.hits.record({ ...hit, action: 'block' });
@@ -309,14 +305,6 @@ export class SiteToolGate {
         return assertNever(d.action);
     }
   }
-}
-
-/** The template site's write policy override for the pack's site (spec 13 §9.3, lead decision 6). */
-function overrideOf(
-  sites: readonly TemplateSiteRecord[],
-  effective: EffectivePack,
-): TemplateSiteRecord['writePolicy'] {
-  return sites.find((s) => s.packId === effective.packId)?.writePolicy ?? null;
 }
 
 /** The site a refusal names: the template's site of the URL, else its registrable domain. */

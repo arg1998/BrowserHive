@@ -1,4 +1,4 @@
-/** @module app/site-packs/challenge-outcomes — what a challenge seen on a host page does (spec 13 §9.5 "Outcome"): on an agent's virtual session an `attention`/`stop` match opens a `security_intercept` (through `SecurityIntercepts`), `stop` also stops the site, every match marks the site `challenged`; maintenance sessions and probes are the prober's (no request); `notify` is health only; under stdio health only. Never throws. */
+/** @module app/site-packs/challenge-outcomes — what a challenge seen on a host page does (spec 13 §9.5 "Outcome"): on an agent's virtual session an `attention`/`stop` match goes to `SecurityIntercepts.raiseChallenge` (which marks the site `challenged`, stops it for `stop` and opens the `security_intercept` unless under stdio); `notify` only marks the site `challenged`; maintenance sessions and probes are the prober's (no request). Never throws. */
 
 import {
   BUILTIN_PACK_ID,
@@ -112,11 +112,13 @@ export class ChallengeOutcomes {
       action: rule.action,
     });
     const action = rule.action;
-    if (action !== 'notify' && this.#deps.transport === 'http') {
-      const intercepts = this.#deps.intercepts();
+    const intercepts = this.#deps.intercepts();
+    if (action !== 'notify' && intercepts !== null) {
+      // The intercepts record the health, set `stopped_at` for `stop` and, unless no operator can
+      // answer (stdio), open the session's site check (WP-E1).
       const packId = rule.packId === BUILTIN_PACK_ID ? null : rule.packId;
       const title = (packId === null ? null : lookup?.effectiveById(packId)?.pack.title) ?? siteId;
-      await intercepts?.raiseChallenge({
+      await intercepts.raiseChallenge({
         sessionId,
         templateId,
         site: siteId,
@@ -125,9 +127,13 @@ export class ChallengeOutcomes {
         challenge: { id: rule.id, kind: rule.kind, action },
         pageUrl,
       });
-      if (action === 'stop' && site !== null) await this.#deps.stops.stop(templateId, site.siteId);
+      return;
     }
+    // `notify`, or no intercepts wired: health here (and the stop, unless under stdio).
     if (site === null) return;
+    if (action === 'stop' && this.#deps.transport === 'http') {
+      await this.#deps.stops.stop(templateId, site.siteId);
+    }
     const verdict: ProbeVerdict = {
       outcome: 'challenged',
       reason: challengeReason(rule.kind),

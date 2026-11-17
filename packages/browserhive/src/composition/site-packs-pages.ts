@@ -1,6 +1,5 @@
-/** @module composition/site-packs-pages — site pack enforcement on pages and tools (spec 13 §9.3 the tool layer, §9.5 challenges and `stop`, §8.1 the pack prober; T3a WP-E2): the tool gate, the challenge watch on template hosts' pages, the stops, the tool-path hit rows and the prober selector. The registry's lookup and the security intercepts are attached later (`attach`), so this wires before them. */
+/** @module composition/site-packs-pages — site pack enforcement on pages and tools (spec 13 §9.3 the tool layer, §9.5 challenges and `stop`, §8.1 the pack prober; T3a WP-E2): the tool gate, the challenge watch on template hosts' pages, the stops and the prober selector. Built before the templates (the prober goes into the health wiring); the network enforcement (WP-E1: intercepts, hit writer, rule catalog, write policies) and the registry's lookup attach once built. */
 
-import type { SecurityIntercepts } from '@browserhive/core/ports/security-intercepts';
 import type { SitePackLookup } from '@browserhive/core/ports/site-packs';
 import type { TemplatePageWatcher } from '@browserhive/core/ports/template-host';
 import type {
@@ -10,14 +9,14 @@ import type {
   IdGenerator,
   Logger,
   Repositories,
-  WriteQueue,
 } from '@browserhive/core/runtime';
 import {
   AgentNavigations,
-  type BuiltinGuard,
   ChallengeOutcomes,
   ChallengeWatch,
+  documentGuardResolver,
   maintenanceProbePages,
+  NO_SITE_PACKS,
   PackProber,
   type ProberSelector,
   packProberSelector,
@@ -28,12 +27,11 @@ import {
   TemplateSiteStops,
   ToolGuardHits,
 } from '@browserhive/core/server';
+import type { SitePackEnforcement } from './site-pack-enforcement.ts';
 
 /** Inputs of {@link buildSitePackPages}. */
 export interface SitePackPagesInput {
   readonly repos: Pick<Repositories, 'templates' | 'templateSites' | 'operatorActions'>;
-  /** The recorder's write queue (`site_guard_hits` rows of the tool path). */
-  readonly queue: Pick<WriteQueue, 'enqueue'>;
   readonly sessions: SessionService;
   readonly transport: 'http' | 'stdio';
   readonly bus: EventBus<DomainEvents>;
@@ -42,27 +40,27 @@ export interface SitePackPagesInput {
   readonly logger: Logger;
 }
 
+/** What is attached once built. */
+export interface SitePackPagesAttachment {
+  /** WP-E1's network enforcement (`null` under `templates=false` or `sitePacks=false`). */
+  readonly enforcement: Pick<
+    SitePackEnforcement,
+    'intercepts' | 'hits' | 'catalog' | 'policies'
+  > | null;
+  /** The registry's read side (WP-R); `null` until wired: only the compiled-in defaults apply. */
+  readonly lookup: SitePackLookup | null;
+  readonly health: TemplateHealthParts['health'] | null;
+}
+
 /** What the composition keeps and hands on. */
 export interface SitePackPagesParts {
   readonly gate: SiteToolGate;
   readonly stops: TemplateSiteStops;
-  readonly navigations: AgentNavigations;
   /** The watcher every template host hands its pages to (`attachTemplatePageWatcher`). */
   readonly pageWatcher: TemplatePageWatcher;
   /** The prober selector `wireTemplateHealth` takes, over the supervisor's maintenance sessions. */
   probers(supervisor: TemplateHostSupervisor, fallback: ProberSelector): ProberSelector;
-  /**
-   * Attaches what is built later: the registry (WP-R), the security intercepts (WP-E1), the health
-   * service (T2) and `DEFAULT_GUARDS`. Each is optional; absent ones keep enforcement to stops and
-   * `DEFAULT_CHALLENGES` (health only).
-   */
-  attach(parts: {
-    readonly lookup?: SitePackLookup | null;
-    readonly intercepts?: SecurityIntercepts | null;
-    readonly health?: TemplateHealthParts['health'] | null;
-    /** `DEFAULT_GUARDS` (WP-E1's `domain/site-packs/default-guards.ts`). */
-    readonly defaultGuards?: readonly BuiltinGuard[];
-  }): void;
+  attach(parts: SitePackPagesAttachment): void;
   /** Unsubscribes the bus hooks. */
   readonly stop: () => void;
 }
@@ -70,29 +68,20 @@ export interface SitePackPagesParts {
 /** Builds the page enforcement of site packs. */
 export function buildSitePackPages(input: SitePackPagesInput): SitePackPagesParts {
   const { repos, sessions, clock, logger, bus } = input;
-  const late: {
-    lookup: SitePackLookup | null;
-    intercepts: SecurityIntercepts | null;
-    health: TemplateHealthParts['health'] | null;
-    defaultGuards: readonly BuiltinGuard[];
-  } = { lookup: null, intercepts: null, health: null, defaultGuards: [] };
-  const lookup = () => late.lookup;
+  let attached: SitePackPagesAttachment = { enforcement: null, lookup: null, health: null };
+  let documentGuard: ReturnType<typeof documentGuardResolver> | null = null;
+  const lookup = () => attached.lookup;
+  const intercepts = () => attached.enforcement?.intercepts ?? null;
   const navigations = new AgentNavigations(clock);
-  const hits = new ToolGuardHits({
-    sink: (record) => {
-      input.queue.enqueue('site_guard_hits.insert', (r) => r.siteGuardHits.insert(record));
-    },
-    ids: input.ids,
-    clock,
-  });
   const stops = new TemplateSiteStops({ repos, ids: input.ids, clock, logger, bus });
   const gate = new SiteToolGate({
     sites: (templateId) => repos.templateSites.list(templateId),
     lookup,
-    // Under stdio no operator can answer: `confirm` acts as `block` (spec 13 §9.3).
-    intercepts: () => (input.transport === 'stdio' ? null : late.intercepts),
-    defaultGuards: () => late.defaultGuards,
-    hits,
+    // Under stdio the intercepts answer `blocked`: `confirm` acts as `block` (spec 13 §9.3).
+    intercepts,
+    documentGuard: () => documentGuard,
+    overrides: () => attached.enforcement?.policies ?? null,
+    hits: new ToolGuardHits({ sink: () => attached.enforcement?.hits ?? null, clock }),
     navigations,
     pageOf: (session, tabId) => sessions.page(session, tabId),
     clock,
@@ -101,9 +90,9 @@ export function buildSitePackPages(input: SitePackPagesInput): SitePackPagesPart
   const outcomes = new ChallengeOutcomes({
     modeOf: (sessionId) => sessions.peek(sessionId)?.template?.mode,
     repos,
-    health: () => late.health,
+    health: () => attached.health,
     stops,
-    intercepts: () => late.intercepts,
+    intercepts,
     lookup,
     transport: input.transport,
     bus,
@@ -116,7 +105,6 @@ export function buildSitePackPages(input: SitePackPagesInput): SitePackPagesPart
   return {
     gate,
     stops,
-    navigations,
     pageWatcher: {
       pageAttributed: (templateId, page, sessionId) => watch.watch(templateId, page, sessionId),
     },
@@ -132,10 +120,17 @@ export function buildSitePackPages(input: SitePackPagesInput): SitePackPagesPart
       return packProberSelector(prober, lookup, fallback);
     },
     attach(parts) {
-      if (parts.lookup !== undefined) late.lookup = parts.lookup;
-      if (parts.intercepts !== undefined) late.intercepts = parts.intercepts;
-      if (parts.health !== undefined) late.health = parts.health;
-      if (parts.defaultGuards !== undefined) late.defaultGuards = parts.defaultGuards;
+      attached = parts;
+      const enforcement = parts.enforcement;
+      documentGuard =
+        enforcement === null
+          ? null
+          : documentGuardResolver({
+              lookup: parts.lookup ?? NO_SITE_PACKS,
+              overrides: enforcement.policies,
+              catalog: enforcement.catalog,
+              logger,
+            });
     },
     stop: off,
   };

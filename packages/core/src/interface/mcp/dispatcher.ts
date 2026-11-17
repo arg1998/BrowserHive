@@ -31,6 +31,7 @@ import {
   shapeSuccess,
   toAppError,
 } from './shape.ts';
+import { assertNotSiteHeld } from './site-hold.ts';
 import { classifyToolOutcome } from './tool-outcome.ts';
 import { parentContextFromMeta } from './trace-meta.ts';
 
@@ -271,6 +272,7 @@ export class ToolDispatcher {
         typeof args === 'object' && args !== null ? Object.fromEntries(Object.entries(args)) : {};
       for (const policy of definition.policies) await policy.apply(ctx, argRecord);
       await this.holdWhilePaused(name, holder.session, call.signal);
+      assertNotSiteHeld(name, holder.session, services.siteHolds);
       const site = holder.session;
       if (site !== null)
         await services.siteGuards?.beforeTool({ tool: name, args: argRecord, session: site });

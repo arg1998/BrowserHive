@@ -40,9 +40,12 @@ export { ChallengeOutcomes } from '../app/site-packs/challenge-outcomes.ts';
 export { ChallengeWatch } from '../app/site-packs/challenge-watch.ts';
 export { PackProber, packProberSelector } from '../app/site-packs/pack-prober.ts';
 export { maintenanceProbePages } from '../app/site-packs/probe-pages.ts';
+// Site-pack enforcement (spec 13 §9.3, §9.5; PR T3a, WP-E1).
+export { SecurityInterceptService } from '../app/site-packs/security-intercepts.ts';
 export { TemplateSiteStops } from '../app/site-packs/site-stops.ts';
 export { SiteToolGate } from '../app/site-packs/tool-gate.ts';
-export { type SiteGuardHitSink, ToolGuardHits } from '../app/site-packs/tool-guard-hits.ts';
+export { ToolGuardHits } from '../app/site-packs/tool-guard-hits.ts';
+export { TemplateWritePolicies } from '../app/site-packs/write-policies.ts';
 export { unavailableHealthFacade } from '../app/templates/health-facade.ts';
 export {
   type TemplateHealthParts,
@@ -76,7 +79,6 @@ export {
 } from '../app/templates/unavailable-runtime.ts';
 export { VaultService } from '../app/vault/vault-service.ts';
 export { OperatorRequestBroker } from '../domain/operator-requests/broker.ts';
-export type { BuiltinGuard } from '../domain/site-packs/tool-guards.ts';
 export {
   type TemplateKey,
   templateKeyId,
@@ -132,6 +134,7 @@ export {
   type SandboxUnavailableFactory,
 } from '../infra/browsers/sandbox-policy.ts';
 export { createTemplateGeoResolver } from '../infra/browsers/template-geo.ts';
+export type { TemplateRequestGuard } from '../infra/browsers/template-launch.ts';
 export { createBunDesktop } from '../infra/desktop/bun-desktop.ts';
 export { createTemplateFiles } from '../infra/fs/template-files.ts';
 export {
@@ -146,6 +149,10 @@ export { type RekeyResult, rekeyTemplateFiles } from '../infra/fs/template-rekey
 export { FileTemplateStateStore } from '../infra/fs/template-state-store.ts';
 export { sweepStaleTemplateBrowsers } from '../infra/host/stale-template-browsers.ts';
 export { profileHasSecrets } from '../infra/persistence/profile-secrets.ts';
+export { documentGuardResolver } from '../infra/site-packs/document-guard.ts';
+export { SiteGuardHitsWriter } from '../infra/site-packs/guard-hits-writer.ts';
+export { GuardRuleCatalog, PackGuardRuleSource } from '../infra/site-packs/guard-rules.ts';
+export { NO_SITE_PACKS, templateRequestGuard } from '../infra/site-packs/template-guard.ts';
 export { createArtifactFiles } from '../infra/static/artifact-files.ts';
 export { createBunStaticAssets } from '../infra/static/bun-static-assets.ts';
 export { createTraceViewerAssets } from '../infra/static/playwright-trace-viewer.ts';

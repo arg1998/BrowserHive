@@ -2,8 +2,8 @@
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-
-import { FIXTURE_PROVIDER_HOSTS, packRoute } from './https-sites-packs.ts';
+import { guardRoute } from './https-sites-guards.ts';
+import { FIXTURE_PROVIDER_HOSTS } from './https-sites-packs.ts';
 import { signInRoute } from './https-sites-signin.ts';
 
 const TLS_DIR = join(import.meta.dir, '..', 'fixtures', 'tls');
@@ -149,7 +149,7 @@ export function startHttpsSites(options: HttpsSitesOptions = {}): HttpsSites {
       const site = host.split(':')[0] ?? host;
       return (
         (await signInRoute(req, site, url.pathname)) ??
-        (await packRoute(url.pathname)) ??
+        guardRoute(site, url.pathname) ??
         route(host, url.pathname, req.method, url.search)
       );
     },

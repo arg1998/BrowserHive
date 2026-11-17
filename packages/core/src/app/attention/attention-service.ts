@@ -17,7 +17,7 @@ import type {
 import { AppError } from '../../kernel/errors/app-error.ts';
 import type { Clock } from '../../ports/clock.ts';
 import type { Logger } from '../../ports/logger.ts';
-import type { AttentionMode } from '../../ports/persistence/enums.ts';
+import type { AttentionMode, OperatorRequestKind } from '../../ports/persistence/enums.ts';
 import type {
   OperatorRequestFacets,
   OperatorRequestListRow,
@@ -62,6 +62,15 @@ export interface AttentionCallContext {
   readonly reportProgress?: (report: ProgressReport) => Promise<void>;
   readonly signal?: AbortSignal;
 }
+
+/**
+ * The kinds `/attention` lists and decides: agents' attention requests and the security intercepts
+ * of template sessions (site checks and write approvals, spec 13 §9.3, §9.5, §11.1).
+ */
+export const ATTENTION_QUEUE_KINDS: readonly OperatorRequestKind[] = [
+  'attention',
+  'security_intercept',
+];
 
 /** The two commands the live-view input gate distinguishes. */
 export type LiveViewCommand = 'input' | 'session.set_viewport';
@@ -111,7 +120,8 @@ export class AttentionService {
   }
 
   /**
-   * Re-attaches to a request by id (same principal). Settled ⇒ immediate; pending ⇒ blocks with
+   * Re-attaches to a request by id (same principal): an attention request, or a security intercept
+   * of the principal's template session (spec 13 §9.5). Settled ⇒ immediate; pending ⇒ blocks with
    * heartbeats; unknown or another principal's ⇒ `rejected` with the unknown-request message.
    * @throws `ATTENTION_REQUIRES_HTTP` under stdio.
    */
@@ -119,7 +129,7 @@ export class AttentionService {
     assertAttentionTransport(this.deps.config.transport, 'get_attention_result');
     const row = await this.deps.broker.get(requestId);
     const outcome =
-      row === null || row.owner !== ctx.principal || row.kind !== 'attention'
+      row === null || row.owner !== ctx.principal || !ATTENTION_QUEUE_KINDS.includes(row.kind)
         ? null
         : await this.deps.broker.result(requestId);
     if (outcome === null) {
@@ -145,24 +155,26 @@ export class AttentionService {
     return this.decide(requestId, 'rejected', by, message);
   }
 
-  /** Open attention requests, oldest first (dashboard queue). */
+  /** Open attention requests and security intercepts, oldest first (dashboard queue). */
   listOpen(): readonly OperatorRequestRecord[] {
-    return this.deps.broker.listOpen('attention');
+    return this.deps.broker.listOpen(ATTENTION_QUEUE_KINDS);
   }
 
-  /** Number of open attention requests (`open_count`). */
+  /** Number of open attention requests and security intercepts (`open_count`). */
   openCount(): number {
-    return this.deps.broker.openCount('attention');
+    return this.deps.broker.openCount(ATTENTION_QUEUE_KINDS);
   }
 
-  /** `GET /attention` / `GET /sessions/{id}/attention`. */
+  /** `GET /attention` / `GET /sessions/{id}/attention`: attention requests and security intercepts. */
   history(query: OperatorRequestListQuery): Promise<Page<OperatorRequestListRow>> {
-    return this.deps.broker.history({ ...query, kind: 'attention' });
+    const { kind: _kind, ...rest } = query;
+    return this.deps.broker.history({ ...rest, kinds: ATTENTION_QUEUE_KINDS });
   }
 
   /** Status/mode facet counts of `GET /attention` (disjunctive per dimension). */
   facets(query: OperatorRequestListQuery): Promise<OperatorRequestFacets> {
-    return this.deps.broker.facets({ ...query, kind: 'attention' });
+    const { kind: _kind, ...rest } = query;
+    return this.deps.broker.facets({ ...rest, kinds: ATTENTION_QUEUE_KINDS });
   }
 
   /** Any open attention request for the session, optionally of one mode. */
@@ -174,12 +186,16 @@ export class AttentionService {
   }
 
   /**
-   * Live-view input rule (spec 03 §6.3, D-10): `input` is accepted only while a `takeover`
-   * attention request is open; `session.set_viewport` is never gated.
+   * Live-view input rule (spec 03 §6.3, D-10, amended by spec 13 §9.5): `input` is accepted only
+   * while a `takeover` attention request or a `takeover` security intercept (a site check) is open;
+   * `session.set_viewport` is never gated.
    */
   isInputPermitted(sessionId: string, command: LiveViewCommand): boolean {
     if (command === 'session.set_viewport') return true;
-    return this.hasOpenAttention(sessionId, 'takeover');
+    return this.deps.broker.hasOpen(
+      sessionId,
+      (r) => ATTENTION_QUEUE_KINDS.includes(r.kind) && r.mode === 'takeover',
+    );
   }
 
   /** @throws `INPUT_NOT_PERMITTED` when {@link isInputPermitted} is false. */

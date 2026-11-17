@@ -464,4 +464,64 @@ describe('AnalyticsQueries', () => {
       (await t.analytics.timeline('shop-a1b2c3d4', { q: 'not_actionable' })).items.map((i) => i.id),
     ).toEqual(['tool:e-soft']);
   });
+  it('lists the session guard hits (kind guard) and its security intercepts beside attention', async () => {
+    const hit = (eventId: string, ts: number, over: Record<string, unknown> = {}) => ({
+      eventId,
+      sessionId: 'shop-a1b2c3d4',
+      templateId: 'tp-aaaaaaaaaa',
+      packId: 'site-a.test',
+      guardId: 'logout',
+      guardKind: 'logout' as const,
+      action: 'block' as const,
+      outcome: null,
+      decidedBy: null,
+      source: 'request' as const,
+      method: 'POST',
+      url: 'https://www.site-a.test/logout',
+      requestId: null,
+      tool: null,
+      ts,
+      ...over,
+    });
+    await t.repos.siteGuardHits.insert(hit('g-1', 1_000));
+    await t.repos.siteGuardHits.insert(hit('g-2', 2_000, { action: 'warn', guardId: 'feed' }));
+    await t.repos.siteGuardHits.insert(
+      hit('g-3', 3_000, { action: 'confirm', outcome: 'approved', guardId: 'invite' }),
+    );
+    await t.repos.siteGuardHits.insert(hit('g-x', 4_000, { sessionId: null }));
+    await t.repos.operatorRequests.insert({
+      requestId: 'a-000000000001',
+      kind: 'security_intercept',
+      sessionId: 'shop-a1b2c3d4',
+      owner: 'agent-1',
+      reason: 'Site A security check',
+      mode: 'takeover',
+      entryName: null,
+      tool: null,
+      toolEventId: null,
+      pageUrl: null,
+      options: null,
+      idempotencyKey: null,
+      createdAt: 5_000,
+      deadlineAt: null,
+      templateId: 'tp-aaaaaaaaaa',
+    });
+    const all = await t.analytics.timeline('shop-a1b2c3d4', {});
+    expect(all.items.map((i) => i.id)).toEqual([
+      'attention:a-000000000001',
+      'guard:g-3',
+      'guard:g-2',
+      'guard:g-1',
+    ]);
+    expect(
+      (
+        await t.analytics.timeline('shop-a1b2c3d4', { kinds: ['guard'], errorsOnly: true })
+      ).items.map((i) => i.id),
+    ).toEqual(['guard:g-1']);
+    expect(
+      (await t.analytics.timeline('shop-a1b2c3d4', { kinds: ['guard'], q: 'invite' })).items.map(
+        (i) => i.id,
+      ),
+    ).toEqual(['guard:g-3']);
+  });
 });

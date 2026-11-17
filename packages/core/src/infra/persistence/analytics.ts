@@ -23,6 +23,7 @@ import type {
 } from '../../ports/persistence/analytics.ts';
 import type { DomainCount } from '../../ports/persistence/pages.ts';
 import type { Page, TopDomainsQuery } from '../../ports/persistence/queries.ts';
+import type { SiteGuardHitRecord } from '../../ports/persistence/site-packs.ts';
 import type { Repositories } from '../../ports/persistence/unit-of-work.ts';
 import type { WriteQueue } from '../../ports/persistence/write-queue.ts';
 import type { DB } from './generated/db.d.ts';
@@ -37,7 +38,14 @@ export const MAX_BUCKET_MS = 86_400_000;
 export const MAX_BUCKETS = 720;
 
 const TIMELINE = 'timeline';
-const ALL_KINDS: readonly TimelineKind[] = ['tool', 'page', 'attention', 'vault', 'blocked'];
+const ALL_KINDS: readonly TimelineKind[] = [
+  'tool',
+  'page',
+  'attention',
+  'vault',
+  'blocked',
+  'guard',
+];
 
 /** Unique row identity of a timeline item: `<kind>:<event_id | request_id>`. */
 export function timelineId(kind: TimelineKind, rowId: string): string {
@@ -287,9 +295,10 @@ export class SqliteAnalyticsQueries implements AnalyticsQueries {
         items.push({ kind: 'page', ts: item.ts, id: timelineId('page', item.eventId), item });
     }
     if (kinds.has('attention')) {
+      // Security intercepts (site checks, write approvals) are listed beside attention requests.
       const page = await this.#repos.operatorRequests.listHistory({
         ...sub,
-        kind: 'attention',
+        kinds: ['attention', 'security_intercept'],
         ...(errorsOnly && { statuses: ['rejected', 'timeout', 'cancelled'] as const }),
       });
       for (const item of page.items)
@@ -314,6 +323,25 @@ export class SqliteAnalyticsQueries implements AnalyticsQueries {
       const page = await this.#repos.blocklistAudit.list(sub);
       for (const item of page.items)
         items.push({ kind: 'blocked', ts: item.ts, id: timelineId('blocked', item.eventId), item });
+    }
+    if (kinds.has('guard')) {
+      const page = await this.#repos.siteGuardHits.list({
+        limit: limit + 1,
+        sessionId,
+        ...(errorsOnly && { actions: ['block', 'confirm', 'held'] as const }),
+        ...((query.since !== undefined || until !== undefined) && {
+          window: {
+            ...(query.since !== undefined && { since: query.since }),
+            ...(until !== undefined && { until }),
+          },
+        }),
+      });
+      const q = query.q?.toLowerCase();
+      for (const item of page.items) {
+        if (errorsOnly && item.outcome === 'approved') continue;
+        if (q !== undefined && q !== '' && !guardMatches(item, q)) continue;
+        items.push({ kind: 'guard', ts: item.ts, id: timelineId('guard', item.eventId), item });
+      }
     }
     // Ties on `ts` break on the kind-qualified id, so a navigate call and the page row it produced
     // (same event id) stay distinct and keep a stable order across pages.
@@ -607,4 +635,9 @@ export class SqliteAnalyticsQueries implements AnalyticsQueries {
       sessions: asNumber(r.sessions),
     }));
   }
+}
+
+/** The timeline's free text over a guard hit: its URL, pack and guard id. */
+function guardMatches(item: SiteGuardHitRecord, q: string): boolean {
+  return [item.url, item.packId, item.guardId].some((v) => v.toLowerCase().includes(q));
 }

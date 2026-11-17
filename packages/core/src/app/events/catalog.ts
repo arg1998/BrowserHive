@@ -45,6 +45,7 @@ import type { z } from 'zod';
 import type { DomainEvent } from '../../ports/event-bus.ts';
 import type { TemplateHealthState, TemplateVersionReason } from '../../ports/persistence/enums.ts';
 import type { JsonObject, SessionPatch, SessionRecord } from '../../ports/persistence/records.ts';
+import type { SiteConfirmEvent, SiteGuardHitEvent } from '../../ports/site-guards.ts';
 import type { AuthEvents } from '../auth/events.ts';
 
 /*
@@ -208,6 +209,11 @@ export type DomainEvents = {
   };
   /** A challenge seen on an agent's page (internal: `browserhive.site_pack.challenges{kind,action}`). */
   readonly 'site_pack.challenge': SitePackChallengeEvent;
+  // site packs (spec 13 §11.3; internal, not on the feed)
+  /** One `site_guard_hits` row (the recorder writes it; `browserhive.site_pack.guard_hits` counts it). */
+  readonly 'site_pack.guard_hit': SiteGuardHitEvent;
+  /** A template site's write confirmation opened or settled (the `site_pack.write_confirm` notification). */
+  readonly 'site_pack.confirm': SiteConfirmEvent;
   // logs
   readonly 'log.record': z.infer<typeof LogRecordEvent>;
 } & AuthEvents; // auth (audit; never on the public feed): `auth.<auth_events.type>`

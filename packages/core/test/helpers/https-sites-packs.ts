@@ -19,8 +19,20 @@ const redirect = (to: string): Response =>
 const TURNSTILE_FRAME =
   '<iframe id="cf" src="https://challenges.cloudflare.com/cdn-cgi/challenge-platform/turnstile" style="width:300px;height:65px;border:0"></iframe>';
 
-/** The site pack pages, or `null` for any other path. */
-export async function packRoute(path: string): Promise<Response | null> {
+/** A page whose body arrives after {@link SLOW_PROBE_MS} (`domcontentloaded` waits for it). */
+function slowPage(): Response {
+  const body = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      await Bun.sleep(SLOW_PROBE_MS);
+      controller.enqueue(new TextEncoder().encode('<!doctype html><title>slow</title><p>slow</p>'));
+      controller.close();
+    },
+  });
+  return new Response(body, { headers: { 'content-type': 'text/html; charset=utf-8' } });
+}
+
+/** The site pack pages, or `null` for any other path (reached through `guardRoute`). */
+export function packRoute(path: string): Response | null {
   switch (path) {
     case '/pack/guarded':
       return html(
@@ -68,8 +80,7 @@ export async function packRoute(path: string): Promise<Response | null> {
     case '/pack/probe/cf':
       return html('Just a moment...', TURNSTILE_FRAME);
     case '/pack/probe/slow':
-      await Bun.sleep(SLOW_PROBE_MS);
-      return html('slow', '<p>slow</p>');
+      return slowPage();
     case '/pack/probe/broken':
       return new Response('down', { status: 503 });
     // The fake provider frames (served for the provider hosts mapped to the fixture).

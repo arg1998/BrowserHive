@@ -1,31 +1,30 @@
-/** @module test/integration/site-pack-fixture — a fixture pack for `site-a.test` over the real MCP stack and a real template host (spec 13 §9.3, §9.5, §8.1, §14): the tool gate, the challenge watch on the host's pages, the stops, the pack prober and a minimal in-test `SecurityIntercepts` over the real operator-request broker (WP-E1 ships the real one; the lead re-runs these suites with it). */
+/** @module test/integration/site-pack-fixture — a fixture pack for `site-a.test` over the real MCP stack and a real template host (spec 13 §9.3, §9.5, §8.1, §14): the tool gate, the challenge watch on the host's pages, the stops and the pack prober, with WP-E1's security intercepts, hit writer, rule catalog, write policies and the dispatcher's tool hold. */
 
+import { SiteGuardHitRow } from '@browserhive/contracts/http';
 import { SitePackV1, type SitePackV1Input } from '@browserhive/contracts/site-packs';
 import { AgentNavigations } from '../../src/app/site-packs/agent-navigations.ts';
 import { ChallengeOutcomes } from '../../src/app/site-packs/challenge-outcomes.ts';
 import { ChallengeWatch } from '../../src/app/site-packs/challenge-watch.ts';
 import { PackProber, packProberSelector } from '../../src/app/site-packs/pack-prober.ts';
 import { maintenanceProbePages } from '../../src/app/site-packs/probe-pages.ts';
-import { siteOperatorPending } from '../../src/app/site-packs/site-errors.ts';
+import { SecurityInterceptService } from '../../src/app/site-packs/security-intercepts.ts';
 import { TemplateSiteStops } from '../../src/app/site-packs/site-stops.ts';
-import { SITE_HOLD_EXEMPT_TOOLS, SiteToolGate } from '../../src/app/site-packs/tool-gate.ts';
+import { SiteToolGate } from '../../src/app/site-packs/tool-gate.ts';
 import { ToolGuardHits } from '../../src/app/site-packs/tool-guard-hits.ts';
+import { TemplateWritePolicies } from '../../src/app/site-packs/write-policies.ts';
 import { TemplateHostOperations } from '../../src/app/templates/host-operations.ts';
 import { selectGenericProber } from '../../src/app/templates/site-prober.ts';
 import { TemplateHealthService } from '../../src/app/templates/template-health.ts';
-import type { OperatorRequestBroker } from '../../src/domain/operator-requests/broker.ts';
 import { createSystemClock } from '../../src/infra/clock/system-clock.ts';
 import { createNanoidIdGenerator } from '../../src/infra/ids/nanoid-id-generator.ts';
 import { createCollectingLogger } from '../../src/infra/logging/collecting-logger.ts';
+import { documentGuardResolver } from '../../src/infra/site-packs/document-guard.ts';
+import { SiteGuardHitsWriter } from '../../src/infra/site-packs/guard-hits-writer.ts';
+import { GuardRuleCatalog } from '../../src/infra/site-packs/guard-rules.ts';
 import { registrableDomain } from '../../src/kernel/url.ts';
-import type { SiteGuardHitRecord } from '../../src/ports/persistence/site-packs.ts';
-import type {
-  ChallengeInput,
-  SecurityIntercepts,
-  SiteHold,
-  WriteApprovalResult,
-} from '../../src/ports/security-intercepts.ts';
+import type { ChallengeInput, SecurityIntercepts } from '../../src/ports/security-intercepts.ts';
 import type { EffectivePack, SitePackLookup } from '../../src/ports/site-packs.ts';
+import type { DocumentGuardResolver } from '../../src/ports/site-tool-guards.ts';
 import { type TemplateMcp, templateMcp } from './template-mcp-fixture.ts';
 
 /** The fixture pack (LinkedIn-shaped, on `site-a.test`); `probe` names the probe path. */
@@ -116,97 +115,74 @@ export class FixtureLookup implements SitePackLookup {
   }
 }
 
-/** A minimal `SecurityIntercepts` over the broker: site checks only (one open per session). */
-export class TestIntercepts implements SecurityIntercepts {
-  readonly confirmer = null;
-  readonly raised: ChallengeInput[] = [];
-  readonly #open = new Map<string, { requestId: string; site: string }>();
-
-  constructor(
-    private readonly broker: OperatorRequestBroker,
-    private readonly ownerOf: (sessionId: string) => string,
-  ) {}
-
-  holdOf(sessionId: string): SiteHold | null {
-    const open = this.#open.get(sessionId);
-    if (open === undefined) return null;
-    if (!this.broker.hasOpen(sessionId, (r) => r.requestId === open.requestId)) return null;
-    return { requestId: open.requestId, site: open.site, reason: 'challenge' };
-  }
-
-  async requestWriteApproval(): Promise<WriteApprovalResult> {
-    return { kind: 'blocked', reason: 'no_operator' };
-  }
-
-  async raiseChallenge(input: ChallengeInput): Promise<string | null> {
-    const held = this.holdOf(input.sessionId);
-    if (held !== null) return held.requestId;
-    this.raised.push(input);
-    const handle = await this.broker.open({
-      kind: 'security_intercept',
-      sessionId: input.sessionId,
-      owner: this.ownerOf(input.sessionId),
-      reason: `${input.siteTitle} security check`,
-      mode: 'takeover',
-      pageUrl: input.pageUrl,
-      options: {
-        reason: 'challenge',
-        site: input.site,
-        challenge: input.challenge.id,
-        kind: input.challenge.kind,
-        action: input.challenge.action,
-        page_url: input.pageUrl,
-      },
-    });
-    this.#open.set(input.sessionId, { requestId: handle.id, site: input.site });
-    return handle.id;
-  }
-}
-
 /** One test's world. */
 export interface PackWorld {
   readonly w: TemplateMcp;
   readonly lookup: FixtureLookup;
-  readonly intercepts: TestIntercepts | null;
+  readonly intercepts: SecurityInterceptService;
   readonly stops: TemplateSiteStops;
   readonly health: TemplateHealthService;
-  readonly hits: readonly SiteGuardHitRecord[];
+  /** The `site_guard_hits` rows written so far (through WP-E1's writer). */
+  hits(): SiteGuardHitRow[];
+  /** Every `raiseChallenge` the page watch made. */
+  readonly raised: readonly ChallengeInput[];
   stop(): Promise<void>;
 }
 
-/** The fixture pack's world; `intercepts: false` leaves the session without requests (health only). */
+/**
+ * The fixture pack's world over WP-E1's real security intercepts, hit writer, rule catalog and
+ * write policies (the dispatcher's tool hold included); the request guard is not installed (the
+ * network path is `site-pack-guards.test.ts`).
+ */
 export async function packWorld(
   pack: SitePackV1 = fixturePack(),
-  options: { readonly intercepts?: boolean; readonly probeTimeoutMs?: number } = {},
+  options: { readonly probeTimeoutMs?: number } = {},
 ): Promise<PackWorld> {
   const clock = createSystemClock();
   const logger = createCollectingLogger();
-  const ids = createNanoidIdGenerator({ clock });
   const lookup = new FixtureLookup(pack);
-  const hits: SiteGuardHitRecord[] = [];
-  const late: {
-    watch: ChallengeWatch | null;
+  const ref: {
+    intercepts: SecurityInterceptService | null;
+    hits: SiteGuardHitsWriter | null;
+    policies: TemplateWritePolicies | null;
+    documentGuard: DocumentGuardResolver | null;
     health: TemplateHealthService | null;
-    intercepts: TestIntercepts | null;
-    stops: TemplateSiteStops | null;
-  } = { watch: null, health: null, intercepts: null, stops: null };
+  } = { intercepts: null, hits: null, policies: null, documentGuard: null, health: null };
+  const raised: ChallengeInput[] = [];
+  // The page watch's view of the intercepts: every challenge it raises is recorded.
+  const watched = (): SecurityIntercepts | null => {
+    const real = ref.intercepts;
+    if (real === null) return null;
+    return {
+      confirmer: real.confirmer,
+      holdOf: (id) => real.holdOf(id),
+      requestWriteApproval: (input) => real.requestWriteApproval(input),
+      raiseChallenge: (input) => {
+        raised.push(input);
+        return real.raiseChallenge(input);
+      },
+    };
+  };
+  const built: { watch: ChallengeWatch | null; stops: TemplateSiteStops | null } = {
+    watch: null,
+    stops: null,
+  };
   const w = await templateMcp('standard', {
     providers: true,
     sites: [{ siteId: 'site-a.test', packId: 'site-a.test', packVersion: 1 }],
-    pageWatcher: { pageAttributed: (t, page, s) => late.watch?.watch(t, page, s) },
-    siteGuards: ({ sessions, templates, broker }) => {
+    siteHolds: { holdOf: (id) => ref.intercepts?.holdOf(id) ?? null },
+    siteGuards: ({ sessions, templates }) => {
       const repos = { ...templates.repos, operatorActions: templates.actions };
-      const intercepts =
-        options.intercepts === false
-          ? null
-          : new TestIntercepts(broker, (id) => sessions.peek(id)?.owner ?? 'local');
+      const ids = createNanoidIdGenerator({ clock });
       const stops = new TemplateSiteStops({ repos, ids, clock, logger });
       const navigations = new AgentNavigations(clock);
       const gate = new SiteToolGate({
         sites: (id) => repos.templateSites.list(id),
         lookup: () => lookup,
-        intercepts: () => intercepts,
-        hits: new ToolGuardHits({ sink: (r) => hits.push(r), ids, clock }),
+        intercepts: () => ref.intercepts,
+        documentGuard: () => ref.documentGuard,
+        overrides: () => ref.policies,
+        hits: new ToolGuardHits({ sink: () => ref.hits, clock }),
         navigations,
         pageOf: (session, tab) => sessions.page(session, tab),
         clock,
@@ -215,40 +191,35 @@ export async function packWorld(
       const outcomes = new ChallengeOutcomes({
         modeOf: (id) => sessions.peek(id)?.template?.mode,
         repos,
-        health: () => late.health,
+        health: () => ref.health,
         stops,
-        intercepts: () => intercepts,
+        intercepts: watched,
         lookup: () => lookup,
         transport: 'http',
         logger,
       });
-      late.watch = new ChallengeWatch({
+      built.watch = new ChallengeWatch({
         lookup: () => lookup,
         navigations,
         outcomes,
         clock,
         logger,
       });
-      late.intercepts = intercepts;
-      late.stops = stops;
-      return {
-        // The tool hold is WP-E1's dispatcher policy; simulated here over the same port.
-        async beforeTool(call) {
-          const hold = intercepts?.holdOf(call.session.id) ?? null;
-          if (hold !== null && !SITE_HOLD_EXEMPT_TOOLS.has(call.tool)) {
-            throw siteOperatorPending(call.session.id, hold.site, hold.requestId, 'challenge');
-          }
-          await gate.beforeTool(call);
-        },
-      };
+      built.stops = stops;
+      return gate;
     },
   });
-  const sessions = w.harness.services.sessions;
+  const { harness } = w;
+  const sessions = harness.services.sessions;
+  const repos = harness.templates.repos;
+  w.driver.attachTemplatePageWatcher({
+    pageAttributed: (t, page, s) => built.watch?.watch(t, page, s),
+  });
   const ops = new TemplateHostOperations({
     supervisor: w.supervisor,
     sessions,
     launcher: {},
-    dataDir: w.harness.dataDir,
+    dataDir: harness.dataDir,
     logger,
     clock,
     drainTimeoutMs: 10_000,
@@ -263,7 +234,7 @@ export async function packWorld(
     ...(options.probeTimeoutMs !== undefined && { navigationMs: options.probeTimeoutMs }),
   });
   const health = new TemplateHealthService({
-    repos: w.harness.templates.repos,
+    repos,
     hosts: {
       runningHost: (id) => w.supervisor.runningHost(id),
       withHost: (t, fn) => ops.withHost(t, fn),
@@ -271,19 +242,62 @@ export async function packWorld(
     },
     clock,
     logger,
+    bus: harness.bus,
     machine: 'hive-box',
     probers: packProberSelector(prober, () => lookup, selectGenericProber),
   });
-  late.health = health;
-  const stops = late.stops;
+  const catalog = new GuardRuleCatalog();
+  const hits = new SiteGuardHitsWriter({
+    describe: catalog.describe,
+    bus: harness.bus,
+    ids: harness.services.ids,
+    warn: () => undefined,
+    logger,
+  });
+  const intercepts = new SecurityInterceptService({
+    broker: harness.attentionBroker,
+    sessions,
+    templates: repos.templates,
+    templateSites: repos.templateSites,
+    health,
+    describe: catalog.describe,
+    packTitle: (id) => lookup.effectiveById(id)?.pack.title ?? null,
+    hits,
+    bus: harness.bus,
+    clock,
+    logger,
+    config: { transport: 'http', attentionTimeoutMs: 120_000, minAttentionWaitMs: 0 },
+  });
+  const policies = new TemplateWritePolicies({
+    sites: repos.templateSites,
+    bus: harness.bus,
+    logger,
+  });
+  await policies.load(w.template.templateId);
+  Object.assign(ref, {
+    intercepts,
+    hits,
+    policies,
+    health,
+    documentGuard: documentGuardResolver({ lookup, overrides: policies, catalog, logger }),
+  });
+  const stops = built.stops;
   if (stops === null) throw new Error('site guards not built');
   return {
     w,
     lookup,
-    intercepts: late.intercepts,
+    intercepts,
     stops,
     health,
-    hits,
-    stop: () => w.stop(),
+    hits: () =>
+      harness.bus.published
+        .filter((p) => p.name === 'site_pack.guard_hit')
+        .map((p) => SiteGuardHitRow.parse((p.payload as { row: unknown }).row)),
+    raised,
+    stop: async () => {
+      intercepts.stop();
+      policies.stop();
+      await w.stop();
+    },
   };
 }

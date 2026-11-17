@@ -29,6 +29,7 @@ import type { EventBus } from '../../ports/event-bus.ts';
 import type { IdGenerator } from '../../ports/id-generator.ts';
 import type { PageActions } from '../../ports/page-actions.ts';
 import type { RuntimeFacts } from './runtime.ts';
+import type { SiteHolds } from './site-hold.ts';
 
 /** The attention surface the two attention tools use (`AttentionService` satisfies it). */
 export interface AttentionLike {
@@ -136,6 +137,11 @@ export interface ToolServices {
   };
   /** Site pack enforcement (spec 13 §9.3, §9.5); absent when templates or site packs are off. */
   readonly siteGuards?: SiteGuardsLike;
+  /**
+   * The security intercepts holding template sessions (spec 13 §9.3, §9.5): a held session's tools
+   * answer `SITE_OPERATOR_PENDING`. Absent when templates or site packs are off.
+   */
+  readonly siteHolds?: SiteHolds;
   readonly pageActions: PageActions;
   readonly fs: ToolFs;
   readonly redaction: ToolRedaction;

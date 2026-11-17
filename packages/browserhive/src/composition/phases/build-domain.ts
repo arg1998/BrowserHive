@@ -35,6 +35,7 @@ import { createAuthStack } from '../auth-stack.ts';
 import { type BootContext, part, type SeedNotice } from '../context.ts';
 import { hostFactsOf } from '../host.ts';
 import { createNotificationSnapshots } from '../notification-snapshots.ts';
+import { buildSitePackEnforcement } from '../site-pack-enforcement.ts';
 import { buildSitePackPages } from '../site-packs-pages.ts';
 import type { PhaseHandle } from '../unwind.ts';
 import { buildOperators } from './domain-operators.ts';
@@ -258,11 +259,12 @@ async function buildDomain(
     .reconcileRequests(repos.operatorRequests)
     .catch((err: unknown) => logger.warn('catch-up failed', { err: serializeError(err) }));
 
+  // `sitePacks=false` (or `templates=false`) turns the whole layer off (spec 13 §9.6).
+  const sitePacksOn = config.templates && config.sitePacks;
   // Site pack enforcement on pages and tools (spec 13 §9.3, §9.5); the registry and the intercepts
   // attach once built.
   const sitePackPages = buildSitePackPages({
     repos,
-    queue: storage.queue,
     sessions,
     transport,
     bus,
@@ -286,10 +288,10 @@ async function buildDomain(
     driver: sessionParts.driver,
     repeat: timers.every,
     vault: operators.vault,
-    probers: (supervisor) => sitePackPages.probers(supervisor, selectGenericProber),
+    ...(sitePacksOn && {
+      probers: (supervisor) => sitePackPages.probers(supervisor, selectGenericProber),
+    }),
   });
-  sitePackPages.attach({ health: tpl.health?.health ?? null });
-  if (config.templates) sessionParts.driver.attachTemplatePageWatcher(sitePackPages.pageWatcher);
   const templates = tpl.service;
   // The notification button of a sign-out only queues the re-login (spec 13 §8.4, §8.6).
   const relogin = tpl.health?.relogin;
@@ -297,6 +299,27 @@ async function buildDomain(
     actionExecutors.set('template.relogin', reloginActionExecutor(relogin));
   }
 
+  // Site-pack enforcement: the request guard on every template host, security intercepts (T3a).
+  const enforcement = buildSitePackEnforcement({
+    config,
+    transport,
+    driver: sessionParts.driver,
+    broker: operators.broker,
+    sessions,
+    uow: storage.uow,
+    health: tpl.health,
+    lookup: null,
+    bus,
+    ids,
+    clock,
+    logger,
+  });
+  if (enforcement !== null) {
+    undo.push(enforcement.stop);
+    // The registry's lookup (WP-R) joins here and in `buildSitePackEnforcement`.
+    sitePackPages.attach({ enforcement, lookup: null, health: tpl.health?.health ?? null });
+    sessionParts.driver.attachTemplatePageWatcher(sitePackPages.pageWatcher);
+  }
   const tools = buildTools({
     config,
     transport,
@@ -311,8 +334,9 @@ async function buildDomain(
     blocklist: sessionParts.blocklist,
     templates,
     ...(tpl.supervisor !== null && { templatePause: tpl.supervisor.pause }),
+    ...(enforcement !== null && { siteHolds: enforcement.intercepts }),
     pageActions,
-    ...(config.templates && { siteGuards: sitePackPages.gate }),
+    ...(enforcement !== null && { siteGuards: sitePackPages.gate }),
     redactor,
     bus,
     clock,

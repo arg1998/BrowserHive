@@ -69,7 +69,7 @@ describe('site pack page enforcement', () => {
     expect(paths(p)).not.toContain('/logout');
     ok(await call('click', { selector: '#safe' }));
     expect(await page().title()).toBe('safe clicked');
-    expect(p.hits.map((h) => [h.source, h.guardId, h.action, h.tool])).toEqual([
+    expect(p.hits().map((h) => [h.source, h.guard_id, h.action, h.tool])).toEqual([
       ['element', 'signout', 'block', 'click'],
       ['element', 'signout', 'block', 'hover'],
       ['element', 'delete', 'block', 'click'],
@@ -110,7 +110,7 @@ describe('site pack page enforcement', () => {
       'URL_BLOCKED',
     );
     expect(paths(p).some((path) => path.startsWith('/logout'))).toBe(false);
-    expect(p.hits.map((h) => [h.source, h.guardId, h.method, h.url])).toEqual([
+    expect(p.hits().map((h) => [h.source, h.guard_id, h.method, h.url])).toEqual([
       ['tool', 'logout', 'GET', 'https://site-a.test/logout'],
       ['tool', 'logout', 'GET', 'https://site-a.test/logout'],
     ]);
@@ -119,19 +119,17 @@ describe('site pack page enforcement', () => {
   it('a Cloudflare-style interstitial raises one security_intercept that holds the tools until resolved', async () => {
     world = await packWorld();
     const p = world;
-    const intercepts = p.intercepts;
-    if (intercepts === null) throw new Error('no intercepts');
     const { id, call } = await session(p);
     ok(await call('navigate', { url: p.w.sites.url(SITE, '/pack/cf') }));
-    await until(() => intercepts.raised.length > 0, 10_000, 'the site check');
-    expect(intercepts.raised[0]).toMatchObject({
+    await until(() => p.raised.length > 0, 10_000, 'the site check');
+    expect(p.raised[0]).toMatchObject({
       sessionId: id,
       site: SITE,
       packId: null,
       challenge: { id: 'cloudflare-interstitial', kind: 'captcha', action: 'attention' },
       pageUrl: 'https://site-a.test/pack/cf',
     });
-    const hold = intercepts.holdOf(id);
+    const hold = p.intercepts.holdOf(id);
     if (hold === null) throw new Error('not held');
     const held = refusal(await call('get_content', {}));
     expect(held).toEqual({
@@ -143,26 +141,22 @@ describe('site pack page enforcement', () => {
     ok(await call('session_info'));
     const open = p.w.harness.attentionBroker.listOpen('security_intercept');
     expect(open.map((r) => [r.requestId, r.mode])).toEqual([[hold.requestId, 'takeover']]);
-    expect((await siteRow(p))?.health).toMatchObject({
-      state: 'challenged',
-      reason: 'challenge:captcha',
-    });
+    // WP-E1 records the health (`challenge:<challenge id>`).
+    expect((await siteRow(p))?.health.state).toBe('challenged');
     await p.w.harness.attentionBroker.resolve(hold.requestId, { status: 'resolved' }, 'admin');
     ok(await call('get_content', {}));
-    expect(intercepts.raised).toHaveLength(1);
+    expect(p.raised).toHaveLength(1);
   });
 
   it('an invisible reCAPTCHA v3 anchor and an invisible Turnstile frame raise nothing; a visible widget only marks health', async () => {
     world = await packWorld();
     const p = world;
-    const intercepts = p.intercepts;
-    if (intercepts === null) throw new Error('no intercepts');
     const { call } = await session(p);
     for (const path of ['/pack/recaptcha-v3', '/pack/turnstile-invisible']) {
       ok(await call('navigate', { url: p.w.sites.url(SITE, path) }));
       // The frame's `load` plus the 2 s second look, on this document.
       await Bun.sleep(3_500);
-      expect(intercepts.raised).toEqual([]);
+      expect(p.raised).toEqual([]);
       expect((await siteRow(p))?.health.state).toBe('unknown');
     }
     // The fake provider frames did load (the resolver rule maps the provider hosts).
@@ -174,23 +168,21 @@ describe('site pack page enforcement', () => {
       'the health row',
     );
     expect((await siteRow(p))?.health.state).toBe('challenged');
-    expect(intercepts.raised).toEqual([]);
+    expect(p.raised).toEqual([]);
     ok(await call('get_content', {}));
   });
 
   it("an agent's own navigate to a challenge URL changes nothing; a redirect into it does", async () => {
     world = await packWorld();
     const p = world;
-    const intercepts = p.intercepts;
-    if (intercepts === null) throw new Error('no intercepts');
     const { call } = await session(p);
     ok(await call('navigate', { url: p.w.sites.url(SITE, '/pack/checkpoint') }));
     await Bun.sleep(1_000);
-    expect(intercepts.raised).toEqual([]);
+    expect(p.raised).toEqual([]);
     expect((await siteRow(p))?.health.state).toBe('unknown');
     ok(await call('navigate', { url: p.w.sites.url(SITE, '/pack/go-checkpoint') }));
-    await until(() => intercepts.raised.length > 0, 10_000, 'the site check');
-    expect(intercepts.raised[0]?.challenge).toEqual({
+    await until(() => p.raised.length > 0, 10_000, 'the site check');
+    expect(p.raised[0]?.challenge).toEqual({
       id: 'checkpoint',
       kind: 'checkpoint',
       action: 'attention',
@@ -198,16 +190,18 @@ describe('site pack page enforcement', () => {
   });
 
   it('stop holds the site until Clear stop', async () => {
-    world = await packWorld(undefined, { intercepts: false });
+    world = await packWorld();
     const p = world;
-    const { call } = await session(p);
+    const { id, call } = await session(p);
     ok(await call('navigate', { url: p.w.sites.url(SITE, '/pack/go-suspended') }));
-    await until(
-      () => p.w.harness.templates.repos.templateProbes.rows.length > 0,
-      10_000,
-      'the stop',
-    );
+    await until(() => p.intercepts.holdOf(id) !== null, 10_000, 'the site check');
+    expect(p.raised[0]?.challenge).toEqual({ id: 'suspended', kind: 'locked', action: 'stop' });
     expect((await siteRow(p))?.stoppedAt).not.toBeNull();
+    // The site check holds first; once it settles, the stop still holds the site.
+    expect(refusal(await call('get_content', {})).details['reason']).toBe('challenge');
+    const hold = p.intercepts.holdOf(id);
+    if (hold === null) throw new Error('not held');
+    await p.w.harness.attentionBroker.resolve(hold.requestId, { status: 'resolved' }, 'admin');
     const stopped = refusal(await call('navigate', { url: p.w.sites.url(SITE, '/') }));
     expect(stopped).toEqual({
       code: 'SITE_OPERATOR_PENDING',
