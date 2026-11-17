@@ -231,7 +231,7 @@ describe('network strategies (template stealth standard)', () => {
         },
       }),
     );
-    expect(await probe()).toMatchObject({ outcome: 'signed_in', reason: 'no_redirect' });
+    expect(await probe()).toMatchObject({ outcome: 'signed_in', reason: 'no_redirect_settled' });
   });
 
   it('sitePacks=false: no pacing, no device binding, no switches, no keeper visit', async () => {

@@ -21452,6 +21452,28 @@
                         "challenges",
                         "enabled"
                       ]
+                    },
+                    "strategy_notes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string",
+                            "enum": [
+                              "humanize_needs_stealth",
+                              "single_focus_limited"
+                            ]
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "message"
+                        ]
+                      }
                     }
                   },
                   "required": [
@@ -21470,7 +21492,8 @@
                     "stopped_at",
                     "device_bound",
                     "added_at",
-                    "pack"
+                    "pack",
+                    "strategy_notes"
                   ]
                 }
               },
@@ -22309,6 +22332,28 @@
                   "challenges",
                   "enabled"
                 ]
+              },
+              "strategy_notes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "humanize_needs_stealth",
+                        "single_focus_limited"
+                      ]
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
               }
             },
             "required": [
@@ -22327,7 +22372,8 @@
               "stopped_at",
               "device_bound",
               "added_at",
-              "pack"
+              "pack",
+              "strategy_notes"
             ]
           }
         },
@@ -23794,6 +23840,28 @@
                         "challenges",
                         "enabled"
                       ]
+                    },
+                    "strategy_notes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string",
+                            "enum": [
+                              "humanize_needs_stealth",
+                              "single_focus_limited"
+                            ]
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "message"
+                        ]
+                      }
                     }
                   },
                   "required": [
@@ -23812,7 +23880,8 @@
                     "stopped_at",
                     "device_bound",
                     "added_at",
-                    "pack"
+                    "pack",
+                    "strategy_notes"
                   ]
                 }
               },
@@ -24748,6 +24817,28 @@
                         "challenges",
                         "enabled"
                       ]
+                    },
+                    "strategy_notes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string",
+                            "enum": [
+                              "humanize_needs_stealth",
+                              "single_focus_limited"
+                            ]
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "message"
+                        ]
+                      }
                     }
                   },
                   "required": [
@@ -24766,7 +24857,8 @@
                     "stopped_at",
                     "device_bound",
                     "added_at",
-                    "pack"
+                    "pack",
+                    "strategy_notes"
                   ]
                 }
               },
@@ -25514,6 +25606,28 @@
                     "challenges",
                     "enabled"
                   ]
+                },
+                "strategy_notes": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string",
+                        "enum": [
+                          "humanize_needs_stealth",
+                          "single_focus_limited"
+                        ]
+                      },
+                      "message": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "message"
+                    ]
+                  }
                 }
               },
               "required": [
@@ -25532,7 +25646,8 @@
                 "stopped_at",
                 "device_bound",
                 "added_at",
-                "pack"
+                "pack",
+                "strategy_notes"
               ]
             }
           },
@@ -26175,6 +26290,28 @@
                   "challenges",
                   "enabled"
                 ]
+              },
+              "strategy_notes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "humanize_needs_stealth",
+                        "single_focus_limited"
+                      ]
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
               }
             },
             "required": [
@@ -26193,7 +26330,8 @@
               "stopped_at",
               "device_bound",
               "added_at",
-              "pack"
+              "pack",
+              "strategy_notes"
             ]
           }
         },
@@ -26524,6 +26662,28 @@
                         "challenges",
                         "enabled"
                       ]
+                    },
+                    "strategy_notes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string",
+                            "enum": [
+                              "humanize_needs_stealth",
+                              "single_focus_limited"
+                            ]
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "code",
+                          "message"
+                        ]
+                      }
                     }
                   },
                   "required": [
@@ -26542,7 +26702,8 @@
                     "stopped_at",
                     "device_bound",
                     "added_at",
-                    "pack"
+                    "pack",
+                    "strategy_notes"
                   ]
                 }
               },
@@ -27729,6 +27890,28 @@
                   "challenges",
                   "enabled"
                 ]
+              },
+              "strategy_notes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "humanize_needs_stealth",
+                        "single_focus_limited"
+                      ]
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ]
+                }
               }
             },
             "required": [
@@ -27747,7 +27930,8 @@
               "stopped_at",
               "device_bound",
               "added_at",
-              "pack"
+              "pack",
+              "strategy_notes"
             ]
           },
           "binding_allows_template": {

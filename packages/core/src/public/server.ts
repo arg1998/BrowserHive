@@ -76,6 +76,7 @@ export { reconcileTemplateState } from '../app/templates/state-reconcile.ts';
 export { TemplateActions } from '../app/templates/template-actions.ts';
 export { TemplateEditService } from '../app/templates/template-edit.ts';
 export { TemplateOperations } from '../app/templates/template-operations.ts';
+export { hostTemplatePacks } from '../app/templates/template-packs.ts';
 export { TemplateRecordingService } from '../app/templates/template-recording.ts';
 export {
   TemplateService,

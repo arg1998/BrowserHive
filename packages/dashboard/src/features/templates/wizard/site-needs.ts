@@ -1,4 +1,4 @@
-/** @module features/templates/wizard/site-needs — what a chosen site's pack needs from the template's settings (spec 13 §9.4 `stealth-profile`, §11.1 `POST /templates` refusals), read from the pack's content: a stealth floor (`min_level`), fingerprint noise required or forbidden, a visible browser, and stealth on for a site signed in by hand only. Gives the chosen-site chips, the step 3 checklist with its one-click fixes, the step 3 problems that keep Next from a refusal, and the field each server issue code belongs to */
+/** @module features/templates/wizard/site-needs — what a chosen site's pack needs from the template's settings (spec 13 §9.4 `stealth-profile`, §11.1 `POST /templates` refusals), read from the pack's content: a stealth floor (`min_level`), fingerprint noise required or forbidden, a visible browser, stealth on for a site signed in by hand only, and (advisory: stealth off is not refused, input just stays native) stealth on for forced humanized input. Gives the chosen-site chips, the step 3 checklist with its one-click fixes, the step 3 problems that keep Next from a refusal, and the field each server issue code belongs to */
 import type { StealthLevel } from '@browserhive/contracts/enums';
 import type { SitePackV1Input } from '@browserhive/contracts/site-packs';
 
@@ -14,6 +14,11 @@ export interface SiteNeeds {
   readonly fingerprint: 'required' | 'forbidden' | null;
   /** The site needs a visible (headed) browser. */
   readonly headed: boolean;
+  /**
+   * The pack forces humanized input (`humanize-input`, or `stealth-profile.humanize`). Stealth `off`
+   * ignores it (input stays native) but is not refused: an advisory need, never a step 3 problem.
+   */
+  readonly humanize: boolean;
 }
 
 /** The settings the needs are checked against (the draft's, or the server default it falls back to). */
@@ -40,6 +45,8 @@ export function siteNeedsOf(site: string, title: string, pack: PackContent): Sit
   const params = profile?.params ?? {};
   const fingerprint = params['fingerprint'];
   const humanOnly = pack.sign_in?.human_only === true;
+  const humanize =
+    pack.strategies?.some((s) => s.id === 'humanize-input') === true || params['humanize'] === true;
   const minStealth =
     profile === undefined
       ? humanOnly
@@ -57,8 +64,30 @@ export function siteNeedsOf(site: string, title: string, pack: PackContent): Sit
         ? fingerprint
         : null,
     headed: pack.browser?.headed === 'required',
+    humanize,
   };
-  return needs.minStealth === null && needs.fingerprint === null && !needs.headed ? null : needs;
+  return needs.minStealth === null && needs.fingerprint === null && !needs.headed && !humanize
+    ? null
+    : needs;
+}
+
+/**
+ * Whether the humanized-input need gets its own row and chip: a stealth floor already asks for
+ * stealth on (and blocks creation below it), so only a site without one needs the advisory.
+ */
+export function humanizeAdvisory(needs: SiteNeeds): boolean {
+  return needs.humanize && needs.minStealth === null;
+}
+
+/** The advisory the settings leave unmet: humanized input with stealth off (the template is still created). */
+export function humanizeUnmet(needs: SiteNeeds, s: NeedsSettings): UnmetNeed | null {
+  return humanizeAdvisory(needs) && s.stealth === 'off'
+    ? {
+        field: 'stealth',
+        to: 'standard',
+        message: `${needs.title} asks for humanized input, which needs Hide automation on.`,
+      }
+    : null;
 }
 
 /** Short labels for a chosen-site card. */
@@ -69,6 +98,7 @@ export function needChips(needs: SiteNeeds): string[] {
   if (needs.fingerprint === 'required') out.push('Needs fingerprint on');
   if (needs.fingerprint === 'forbidden') out.push('Fingerprint noise must be off');
   if (needs.headed) out.push('Needs a visible browser');
+  if (humanizeAdvisory(needs)) out.push('Humanized input needs stealth on');
   return out;
 }
 

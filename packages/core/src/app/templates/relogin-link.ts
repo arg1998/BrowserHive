@@ -125,7 +125,7 @@ export class ReloginLinks {
       },
       occurredAt: this.#deps.clock.now(),
     });
-    const view = toSiteView(updated, this.#deps.packs);
+    const view = toSiteView(updated, this.#deps.packs, template);
     this.#deps.bus?.publish('template.health', {
       type: 'template.health',
       template_id: templateId,

@@ -51,6 +51,7 @@ function siteView(siteId = 'site-a.test'): TemplateSiteView {
     device_bound: false,
     added_at: 1,
     pack: null,
+    strategy_notes: [],
   };
 }
 

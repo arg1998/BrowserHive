@@ -48,6 +48,7 @@ function defaultSite(): TemplateSiteView {
     device_bound: false,
     added_at: 1_700_000_000_000,
     pack: null,
+    strategy_notes: [],
   };
 }
 

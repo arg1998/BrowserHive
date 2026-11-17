@@ -456,6 +456,7 @@ export {
   TemplateSiteSummary,
   TemplateSiteView,
   TemplateSortKey,
+  TemplateStrategyNote,
   TemplateSummary,
   TemplatesPage,
   TemplatesQuery,

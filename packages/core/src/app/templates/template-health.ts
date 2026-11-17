@@ -296,7 +296,7 @@ export class TemplateHealthService {
       },
     });
     const changed = site.health.state !== health.state;
-    const view: TemplateSiteView = toSiteView(updated, this.#deps.packs);
+    const view: TemplateSiteView = toSiteView(updated, this.#deps.packs, template);
     bus?.publish('template.health', {
       type: 'template.health',
       template_id: template.templateId,

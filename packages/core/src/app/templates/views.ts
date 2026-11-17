@@ -9,25 +9,40 @@ import type {
   TemplateSummary,
 } from '@browserhive/contracts/http';
 import type { AgentTemplate } from '@browserhive/contracts/tools';
+import type { StrategyNoteSettings } from '../../domain/site-packs/strategy-notes.ts';
 import { type Availability, effectiveCap, isTemplateSealed } from '../../domain/templates/model.ts';
 import type { TemplateRecord, TemplateSiteRecord } from '../../ports/persistence/index.ts';
 import type { TemplateHostView } from '../../ports/template-runtime.ts';
 import { NO_PACKS, type TemplatePacks } from './template-packs.ts';
 
-/** The pack lookup the views use (the pack in force for a site's `pack_id`). */
-export type SitePackReader = Pick<TemplatePacks, 'sitePackOf'>;
+/** The pack lookup the views use (the pack in force for a site's `pack_id`, and its strategy notes). */
+export type SitePackReader = Pick<TemplatePacks, 'sitePackOf' | 'strategyNotes'>;
+
+/** The template settings a site's strategy notes read (`TemplateRecord` fits). */
+export type SiteViewTemplate = StrategyNoteSettings;
 
 /** A site's display title: its pack's title when a pack applies (T3a), else the domain. */
 export function siteTitle(site: TemplateSiteRecord, packs: SitePackReader = NO_PACKS): string {
   return packs.sitePackOf(site.packId)?.title ?? site.siteId;
 }
 
-/** One site for operators, with the pack in force (spec 13 §11.4). */
+/**
+ * One site for operators, with the pack in force (spec 13 §11.4) and, given its template's
+ * settings, what the pack selects that the template or this machine cannot apply in full.
+ */
 export function toSiteView(
   site: TemplateSiteRecord,
   packs: SitePackReader = NO_PACKS,
+  template: SiteViewTemplate | null = null,
 ): TemplateSiteView {
   const pack = packs.sitePackOf(site.packId);
+  const notes =
+    template === null || packs.strategyNotes === undefined
+      ? []
+      : packs.strategyNotes(site.packId, {
+          stealth: template.stealth,
+          headless: template.headless,
+        });
   return {
     site_id: site.siteId,
     title: pack?.title ?? site.siteId,
@@ -51,6 +66,7 @@ export function toSiteView(
     device_bound: site.deviceBound,
     added_at: site.addedAt,
     pack,
+    strategy_notes: notes,
   };
 }
 
@@ -69,7 +85,7 @@ export function toTemplateView(
     description: template.description,
     status: template.status,
     owner: template.owner,
-    sites: sites.map((s) => toSiteView(s, packs)),
+    sites: sites.map((s) => toSiteView(s, packs, template)),
     identity: {
       seed: id.seed,
       locale: id.locale,
@@ -179,7 +195,7 @@ export function toTemplateDetail(
   return {
     template: toTemplateView(template, sites, packs),
     host: toHostView(host),
-    sites: sites.map((s) => toSiteView(s, packs)),
+    sites: sites.map((s) => toSiteView(s, packs, template)),
     sessions_live: sessionsLive,
     parked_pages: host.parkedPages.map((p) => ({
       target_id: p.targetId,

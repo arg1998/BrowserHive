@@ -41,6 +41,7 @@ function siteView(siteId: string, state: TemplateHealthState): TemplateSiteView 
     device_bound: false,
     added_at: 1,
     pack: null,
+    strategy_notes: [],
   };
 }
 

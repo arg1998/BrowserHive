@@ -1,5 +1,6 @@
-/** @module features/templates/wizard/SiteNeeds.test — a site pack's needs in the wizard (spec 13 §9.4 `stealth-profile`, §11.1, T3b): the chosen-site card shows the floor ("Needs stealth Max", "Fingerprint noise must be off"); step 3 leads with what the sites need, keeps Next from a refusal with the need under its control, fixes it in one click, and `POST /templates` then carries the setting; a server refusal for a floor the dashboard did not know shows under the setting on step 3; axe clean */
+/** @module features/templates/wizard/SiteNeeds.test — a site pack's needs in the wizard (spec 13 §9.4 `stealth-profile`, §11.1, T3b): the chosen-site card shows the floor ("Needs stealth Max", "Fingerprint noise must be off"); step 3 leads with what the sites need, keeps Next from a refusal with the need under its control, fixes it in one click, and `POST /templates` then carries the setting; a server refusal for a floor the dashboard did not know shows under the setting on step 3; forced humanized input with stealth off is an advisory row (what is not applied, **Turn stealth on**) that never blocks Next; axe clean */
 import { beforeEach, describe, expect, it } from 'bun:test';
+import type { SitePackV1Input } from '@browserhive/contracts/site-packs';
 import { systemInfo } from '../../../../test/fixtures/ops.ts';
 import {
   offeredPack,
@@ -31,6 +32,9 @@ function mount(
     readonly step?: number;
     readonly refuse?: boolean;
     readonly fingerprint?: boolean | null;
+    readonly stealth?: 'off' | 'standard' | 'max' | null;
+    /** GitHub's pack content (default: fingerprint noise forbidden). */
+    readonly github?: Partial<SitePackV1Input>;
   } = {},
 ) {
   localStorage.setItem(
@@ -40,6 +44,7 @@ function mount(
       name: 'job-hunt',
       sites: options.sites ?? [],
       fingerprint: options.fingerprint ?? null,
+      stealth: options.stealth ?? null,
       access: 'all',
     }),
   );
@@ -52,7 +57,10 @@ function mount(
       'GET /notifications/report-settings': { host_time_zone: 'America/Toronto' },
       'GET /site-packs': packsResponse([packView(), offeredPack()]),
       'GET /site-packs/linkedin.com': { ...packDetail(packView()), pack: packContent(FLOOR) },
-      'GET /site-packs/github.com': { ...packDetail(offeredPack()), pack: packContent(NO_NOISE) },
+      'GET /site-packs/github.com': {
+        ...packDetail(offeredPack()),
+        pack: packContent(options.github ?? NO_NOISE),
+      },
       'POST /templates': (req: RecordedRequest) => {
         if (options.refuse === true) {
           return {
@@ -146,6 +154,43 @@ describe('site pack needs in the wizard', () => {
     // `false` is the server default (fixture): the draft leaves it out.
     expect(post?.body).toMatchObject({ stealth: 'max' });
     expect(post?.body).not.toHaveProperty('fingerprint');
+  }, 20_000);
+
+  it('forced humanized input with stealth off: an advisory need with Turn stealth on; Next is not blocked; axe clean', async () => {
+    const humanize = { ...NO_NOISE, strategies: [{ id: 'humanize-input' as const, params: {} }] };
+    const view = mount({ sites: ['github.com'], step: 3, stealth: 'off', github: humanize });
+    const panel = (await screen.findByRole('heading', { name: 'What your sites need' })).closest(
+      'section',
+    ) as HTMLElement;
+    await within(panel).findByText('Humanized input: needs Hide automation on (Standard or Max)');
+    expect(within(panel).getByText(/Not applied with stealth off/)).toBeDefined();
+    expect(
+      within(panel).getByText(
+        'A site pack asks for a setting that’s off here. You can still create the template; that part of the pack won’t apply.',
+      ),
+    ).toBeDefined();
+    await expectNoA11yViolations(view.container);
+    await click(within(panel).getByRole('button', { name: 'Turn stealth on for GitHub' }));
+    expect(within(panel).getByText('Met')).toBeDefined();
+    expect(within(panel).queryByText(/Not applied with stealth off/)).toBeNull();
+    expect(within(panel).getByText('These settings meet every site pack’s needs.')).toBeDefined();
+    await expectNoA11yViolations(view.container);
+  });
+
+  it('the humanize advisory never keeps Next: the template is created with stealth off', async () => {
+    const humanize = { ...NO_NOISE, strategies: [{ id: 'humanize-input' as const, params: {} }] };
+    const view = mount({ sites: ['github.com'], step: 3, stealth: 'off', github: humanize });
+    await screen.findByText('Humanized input: needs Hide automation on (Standard or Max)');
+    await click(screen.getByRole('button', { name: /Next/ }));
+    await screen.findByRole('heading', { level: 2, name: 'Access' });
+    await click(screen.getByRole('button', { name: 'Create and sign in' }));
+    await waitFor(() =>
+      expect(view.requests.some((r) => r.method === 'POST' && r.path === '/api/v1/templates')).toBe(
+        true,
+      ),
+    );
+    const post = view.requests.find((r) => r.method === 'POST' && r.path === '/api/v1/templates');
+    expect(post?.body).toMatchObject({ stealth: 'off' });
   }, 20_000);
 
   it('a floor refusal from the server lands on step 3 under Hide automation', async () => {

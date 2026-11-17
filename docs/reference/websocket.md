@@ -394,7 +394,7 @@ Payloads of `kind: "event"` frames, discriminated on `type`. DTO fields (`sessio
 | Field | Type | Required | Constraints |
 |---|---|---|---|
 | `template_id` | `string` | yes | — |
-| `site` | `object` | yes | keys `site_id`, `title`, `pack_id`, `pack_version`, `enabled`, `write_policy`, `vault_handle`, `auto_relogin`, `form`, `learned_cookie_names`, `auto_relogin_at`, `health`, `stopped_at`, `device_bound`, `added_at`, `pack` |
+| `site` | `object` | yes | keys `site_id`, `title`, `pack_id`, `pack_version`, `enabled`, `write_policy`, `vault_handle`, `auto_relogin`, `form`, `learned_cookie_names`, `auto_relogin_at`, `health`, `stopped_at`, `device_bound`, `added_at`, `pack`, `strategy_notes` |
 
 <a id="event-template-version"></a>
 ### `template.version`

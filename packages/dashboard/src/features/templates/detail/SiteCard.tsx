@@ -1,4 +1,4 @@
-/** @module features/templates/detail/SiteCard — one site of the Sites tab (spec 13 §11.4): its sign-in (state, why, last check, **Check now**, the couldn't-tell warning), its re-login in progress, the cookies that detect it, whether agents are offered it, automatic re-login with the vault, its site pack (version and source, the terms, the write policy, rule counts; or "Use the … site pack" for a generic site), **Clear stop** for a stopped site, **Re-login…** and Remove site… */
+/** @module features/templates/detail/SiteCard — one site of the Sites tab (spec 13 §11.4): its sign-in (state, why, last check, **Check now**, the couldn't-tell warning), its re-login in progress, the cookies that detect it, whether agents are offered it, automatic re-login with the vault, its site pack (version and source, the terms, the write policy, rule counts; or "Use the … site pack" for a generic site), what the pack asks for that the template or machine cannot apply (`SiteStrategyNotes`), **Clear stop** for a stopped site, **Re-login…** and Remove site… */
 import type { ReloginView, TemplateSiteView } from '@browserhive/contracts/http';
 import { useEffect, useId, useRef } from 'react';
 import { useConfirm } from '@/app/providers/ConfirmProvider.tsx';
@@ -18,6 +18,7 @@ import { DeviceBoundBadge } from './DeviceBoundBadge.tsx';
 import { ReloginProgress } from './ReloginProgress.tsx';
 import { CheckNowButton, SiteHealth, useCheckNow } from './SiteHealth.tsx';
 import { SitePackRows } from './SitePackRows.tsx';
+import { SiteStrategyNotes } from './SiteStrategyNotes.tsx';
 import { Row } from './site-row.tsx';
 import { VaultRelogin } from './VaultRelogin.tsx';
 
@@ -124,6 +125,7 @@ export function SiteCard({
           />
         </div>
       ) : null}
+      <SiteStrategyNotes notes={site.strategy_notes} />
       <div className="flex flex-col divide-y px-5 py-4">
         <Row label="Sign-in">
           <SiteHealth site={site} settingUp={settingUp} checking={check.mine} />

@@ -5292,6 +5292,29 @@
                             "type": "null"
                           }
                         ]
+                      },
+                      "strategy_notes": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string",
+                              "enum": [
+                                "humanize_needs_stealth",
+                                "single_focus_limited"
+                              ]
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ],
+                          "additionalProperties": false
+                        }
                       }
                     },
                     "required": [
@@ -5310,7 +5333,8 @@
                       "stopped_at",
                       "device_bound",
                       "added_at",
-                      "pack"
+                      "pack",
+                      "strategy_notes"
                     ],
                     "additionalProperties": false
                   }
@@ -12142,6 +12166,29 @@
                     "type": "null"
                   }
                 ]
+              },
+              "strategy_notes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "humanize_needs_stealth",
+                        "single_focus_limited"
+                      ]
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
               }
             },
             "required": [
@@ -12160,7 +12207,8 @@
               "stopped_at",
               "device_bound",
               "added_at",
-              "pack"
+              "pack",
+              "strategy_notes"
             ],
             "additionalProperties": false
           }

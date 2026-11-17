@@ -1,4 +1,4 @@
-/** @module domain/site-packs/probe-classify.test — the pack probe's decision table (spec 13 §8.1): the cookie pre-check, then challenge → `challenged`, a `signed_out_redirects` final URL inside the pack's domains → `signed_out` `redirect`, the marker, the landmark, `no_redirect`, and every `inconclusive` reason; a challenge is never `signed_out`. */
+/** @module domain/site-packs/probe-classify.test — the pack probe's decision table (spec 13 §8.1): the cookie pre-check, then challenge → `challenged`, a `signed_out_redirects` final URL inside the pack's domains → `signed_out` `redirect`, the marker, the landmark, `no_redirect` (`no_redirect_settled` for an `either` probe), and every `inconclusive` reason; a challenge is never `signed_out`. */
 
 import { describe, expect, it } from 'bun:test';
 import { SitePackV1 } from '@browserhive/contracts/site-packs';
@@ -77,7 +77,7 @@ describe('classifyPackProbe', () => {
     ],
     ['the marker', facts({ selectors: ['form#login', '#global-nav'] }), 'signed_out', 'marker'],
     ['the landmark', facts({ selectors: ['#global-nav'] }), 'signed_in', 'landmark'],
-    ['still on the probe path', facts(), 'signed_in', 'no_redirect'],
+    ['still on the probe path (`either`: settled)', facts(), 'signed_in', 'no_redirect_settled'],
     ['a timeout', facts({ failure: 'timeout' }), 'inconclusive', 'timeout'],
     ['a network failure', facts({ failure: 'network' }), 'inconclusive', 'network'],
     ['a server error on the probe path', facts({ status: 503 }), 'inconclusive', 'http_503'],
@@ -124,9 +124,10 @@ describe('classifyPackProbe', () => {
       outcome: 'inconclusive',
       reason: 'no_signal',
     });
+    // Lower confidence than a `redirect` probe's `no_redirect` (review #84 L1): its own reason.
     expect(await classifyPackProbe(pack, facts({ settled: true }))).toMatchObject({
       outcome: 'signed_in',
-      reason: 'no_redirect',
+      reason: 'no_redirect_settled',
     });
     // A redirect that landed during the post-load window wins whatever `settled` says.
     const out = facts({ settled: false, finalUrl: 'https://www.linkedin.com/uas/login?x=1' });
@@ -163,7 +164,7 @@ describe('classifyPackProbe', () => {
         throw new Error('closed');
       },
     };
-    expect(await classifyPackProbe(pack, broken)).toMatchObject({ reason: 'no_redirect' });
+    expect(await classifyPackProbe(pack, broken)).toMatchObject({ reason: 'no_redirect_settled' });
   });
 
   it('helpers', () => {

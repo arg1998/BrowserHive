@@ -259,7 +259,7 @@ export class TemplateEditService {
     if (approval?.approves === true) await packs.approvalsCommitted();
     const after = await this.#deps.repos.templateSites.list(templateId);
     await this.#reach(template, after);
-    const view = toSiteView(site, packs);
+    const view = toSiteView(site, packs, template);
     this.#deps.bus?.publish('template.health', {
       type: 'template.health',
       template_id: templateId,

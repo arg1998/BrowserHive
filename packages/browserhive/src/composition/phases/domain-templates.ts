@@ -21,6 +21,7 @@ import {
   FileTemplateStateStore,
   type HostFacts,
   HostGeoSeedResolver,
+  hostTemplatePacks,
   PassThroughProxyResolver,
   type PlaywrightBrowserDriver,
   type ProberSelector,
@@ -167,7 +168,11 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
   const { config } = input;
   const templatesDir = templatesDirOf(config.dataDir);
   const store = await templateStateStore(input, templatesDir);
-  const packs = input.sitePacks === undefined ? {} : { packs: input.sitePacks };
+  // The sites' strategy notes read this machine's platform (D49 `single-focus`, D50 humanize).
+  const packs =
+    input.sitePacks === undefined
+      ? {}
+      : { packs: hostTemplatePacks(input.sitePacks, input.host.platform) };
   const reader = createProcessTreeReader();
   const supervisor = config.templates
     ? new TemplateHostSupervisor({
