@@ -13,6 +13,7 @@ import type {
   SiteGuardHitInput,
   SiteGuardHitSink,
 } from '../../ports/site-guards.ts';
+import { HitThrottle } from './hit-throttle.ts';
 
 /** Collaborators of {@link SiteGuardHitsWriter}. */
 export interface SiteGuardHitsWriterDeps {
@@ -28,6 +29,7 @@ export interface SiteGuardHitsWriterDeps {
 export class SiteGuardHitsWriter implements SiteGuardHitSink {
   readonly #deps: SiteGuardHitsWriterDeps;
   readonly #log: Logger;
+  readonly #throttle = new HitThrottle();
 
   constructor(deps: SiteGuardHitsWriterDeps) {
     this.#deps = deps;
@@ -73,6 +75,22 @@ export class SiteGuardHitsWriter implements SiteGuardHitSink {
   }
 
   #fromRequest(templateId: string, hit: RequestGuardHit): void {
+    // A page looping the same blocked or warned request writes one row per second (L3); a confirmation's
+    // decision is always written.
+    if (hit.action !== 'confirm') {
+      const key = [
+        hit.sessionId ?? '',
+        hit.ruleId,
+        hit.method,
+        hit.resourceType,
+        hit.url,
+        hit.action,
+      ].join('\u0000');
+      const admitted = this.#throttle.admit(key, hit.ts, (dropped) =>
+        this.#log.info('guard hits coalesced', { ruleId: hit.ruleId, url: hit.url, dropped }),
+      );
+      if (!admitted) return;
+    }
     const info = this.#deps.describe(hit.ruleId);
     const [packPart, guardPart] = splitRuleId(hit.ruleId);
     this.write({

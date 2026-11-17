@@ -120,3 +120,22 @@ describe('SiteGuardHitsWriter', () => {
     expect(w.logger.records.some((r) => r.msg === 'guard hit not written')).toBe(true);
   });
 });
+
+describe('SiteGuardHitsWriter throttle (review PR #83 L3)', () => {
+  it('writes one row per identical hit per second, logs what it left out, never drops a decision', () => {
+    const w = world();
+    const sink = w.writer.forTemplate('tp-aaaaaaaaaa');
+    for (let i = 0; i < 50; i += 1) sink.record(hit({ ts: 1_000 + i }));
+    sink.record(hit({ ts: 1_100, method: 'GET' }));
+    expect(w.rows()).toHaveLength(2);
+    sink.record(hit({ ts: 2_100 }));
+    expect(w.rows()).toHaveLength(3);
+    expect(w.logger.records.find((r) => r.msg === 'guard hits coalesced')?.all).toMatchObject({
+      dropped: 49,
+    });
+    for (let i = 0; i < 3; i += 1) {
+      sink.record(hit({ ts: 3_000, ruleAction: 'confirm', action: 'confirm', outcome: 'denied' }));
+    }
+    expect(w.rows()).toHaveLength(6);
+  });
+});

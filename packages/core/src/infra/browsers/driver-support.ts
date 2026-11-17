@@ -1,8 +1,10 @@
 /** @module infra/browsers/driver-support — pieces of the browser driver that need no browser: the default sandbox policy, the display half recorded on metadata, and a Chromium session's engine capabilities (spec 11 §2.1, §4.1). */
 
+import type { BrowserType } from 'patchright';
 import type { AppliedDisplay, EngineCapabilities, LaunchSpec } from '../../ports/browser-driver.ts';
 import type { Clock } from '../../ports/clock.ts';
 import type { Logger } from '../../ports/logger.ts';
+import { channelExecutable } from './browser-detection.ts';
 import { sandboxUnavailable } from './sandbox-error.ts';
 import { SandboxPolicy } from './sandbox-policy.ts';
 
@@ -58,4 +60,24 @@ export function capabilitiesFor(spec: Pick<LaunchSpec, 'headless'>): EngineCapab
     // Patchright's isolated-world `evaluate` needs the `isolatedContext: false` argument.
     isolatedEvaluate: true,
   };
+}
+
+/** The executable `channel` launches on this host (the sandbox policy's cache key), or `null`. */
+export function executableOf(
+  browserType: Pick<BrowserType, 'executablePath'>,
+  channel: LaunchSpec['channel'],
+  locate: (playwrightChannel: 'chrome' | 'msedge') => string | null,
+): string | null {
+  return channelExecutable(
+    channel,
+    () => {
+      try {
+        const path = browserType.executablePath();
+        return path === '' ? null : path;
+      } catch {
+        return null;
+      }
+    },
+    locate,
+  );
 }
