@@ -1,0 +1,77 @@
+{
+  "schema": 1,
+  "id": "glassdoor.com",
+  "version": 1,
+  "min_client": "0.3.0",
+  "title": "Glassdoor",
+  "description": "Glassdoor's terms bar software or automated agents. Glassdoor uses the Indeed login (a Connected Profile). Account settings are blocked for agents.",
+  "domains": [
+    "glassdoor.com"
+  ],
+  "identity_provider": "indeed.com",
+  "sign_in": {
+    "url": {
+      "host": "www.glassdoor.com",
+      "path": "/member/profile/login"
+    },
+    "human_only": false
+  },
+  "signed_in": {
+    "probe": {
+      "host": "www.glassdoor.com",
+      "path": "/member/profile"
+    },
+    "kind": "redirect",
+    "signed_out_redirects": [
+      "www.glassdoor.com/member/profile/login*"
+    ]
+  },
+  "guards": [
+    {
+      "id": "account-settings",
+      "kind": "account",
+      "match": {
+        "url": "www.glassdoor.com/member/profile/accountSettings"
+      },
+      "action": "block"
+    },
+    {
+      "id": "account-settings-legacy",
+      "kind": "account",
+      "match": {
+        "url": "www.glassdoor.com/member/account/settings_input.htm"
+      },
+      "action": "block"
+    }
+  ],
+  "write_policy": {
+    "default": "confirm",
+    "stance": "prohibited",
+    "clause": {
+      "quote": "Introduce software or automated agents to the services, or access the services so as to produce multiple accounts, generate automated messages, or to scrape, strip, or mine data from the services without our express written permission;",
+      "url": "https://www.glassdoor.com/about/terms/",
+      "checked": "2026-11-16"
+    }
+  },
+  "browser": {
+    "channel": "any",
+    "headed": "preferred"
+  },
+  "verified": {
+    "sign_in": "2026-11-16",
+    "signed_in": "2026-11-16",
+    "guards": "2026-11-16",
+    "write_policy": "2026-11-16",
+    "browser": "2026-11-16"
+  },
+  "sources": [
+    {
+      "url": "https://www.glassdoor.com/about/terms/",
+      "kind": "official"
+    },
+    {
+      "url": "https://www.glassdoor.com/member/profile/login",
+      "kind": "observed"
+    }
+  ]
+}

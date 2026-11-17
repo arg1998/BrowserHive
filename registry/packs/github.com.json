@@ -1,0 +1,169 @@
+{
+  "schema": 1,
+  "id": "github.com",
+  "version": 1,
+  "min_client": "0.3.0",
+  "title": "GitHub",
+  "description": "GitHub permits machine accounts run by a responsible person. Token, SSH-key, security, OAuth-app, session, email and account-admin pages, sign-out and OAuth/device-flow approvals are blocked for agents.",
+  "domains": [
+    "github.com"
+  ],
+  "sign_in": {
+    "url": {
+      "host": "github.com",
+      "path": "/login"
+    },
+    "human_only": false
+  },
+  "signed_in": {
+    "probe": {
+      "host": "github.com",
+      "path": "/settings/profile"
+    },
+    "kind": "redirect",
+    "signed_out_redirects": [
+      "github.com/login*"
+    ],
+    "cookie_names": [
+      "user_session",
+      "__Host-user_session_same_site"
+    ]
+  },
+  "guards": [
+    {
+      "id": "logout",
+      "kind": "logout",
+      "match": {
+        "url": "github.com/logout"
+      },
+      "action": "block"
+    },
+    {
+      "id": "oauth-approve",
+      "kind": "credential",
+      "match": {
+        "url": "github.com/login/oauth/authorize*",
+        "methods": [
+          "POST"
+        ]
+      },
+      "action": "block"
+    },
+    {
+      "id": "device-approve",
+      "kind": "credential",
+      "match": {
+        "url": "github.com/login/device*",
+        "methods": [
+          "POST"
+        ]
+      },
+      "action": "block"
+    },
+    {
+      "id": "tokens-classic",
+      "kind": "credential",
+      "match": {
+        "url": "github.com/settings/tokens"
+      },
+      "action": "block"
+    },
+    {
+      "id": "tokens-fine-grained",
+      "kind": "credential",
+      "match": {
+        "url": "github.com/settings/personal-access-tokens"
+      },
+      "action": "block"
+    },
+    {
+      "id": "ssh-gpg-keys",
+      "kind": "credential",
+      "match": {
+        "url": "github.com/settings/keys"
+      },
+      "action": "block"
+    },
+    {
+      "id": "security",
+      "kind": "credential",
+      "match": {
+        "url": "github.com/settings/security"
+      },
+      "action": "block"
+    },
+    {
+      "id": "oauth-apps",
+      "kind": "credential",
+      "match": {
+        "url": "github.com/settings/applications"
+      },
+      "action": "block"
+    },
+    {
+      "id": "sessions",
+      "kind": "account",
+      "match": {
+        "url": "github.com/settings/sessions"
+      },
+      "action": "block"
+    },
+    {
+      "id": "emails",
+      "kind": "account",
+      "match": {
+        "url": "github.com/settings/emails"
+      },
+      "action": "block"
+    },
+    {
+      "id": "account-admin",
+      "kind": "destructive",
+      "match": {
+        "url": "github.com/settings/admin"
+      },
+      "action": "block"
+    }
+  ],
+  "write_policy": {
+    "default": "allow",
+    "stance": "allowed",
+    "clause": {
+      "quote": "We do permit machine accounts: A machine account is an Account set up by an individual human who accepts the Terms on behalf of the Account, provides a valid email address, and is responsible for its actions.",
+      "url": "https://docs.github.com/en/site-policy/github-terms/github-terms-of-service",
+      "checked": "2026-11-16"
+    }
+  },
+  "verified": {
+    "sign_in": "2026-11-16",
+    "signed_in": "2026-11-16",
+    "guards": "2026-11-16",
+    "write_policy": "2026-11-16"
+  },
+  "sources": [
+    {
+      "url": "https://docs.github.com/en/site-policy/github-terms/github-terms-of-service",
+      "kind": "official"
+    },
+    {
+      "url": "https://docs.github.com/en/site-policy/privacy-policies/github-cookies",
+      "kind": "official"
+    },
+    {
+      "url": "https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens",
+      "kind": "official"
+    },
+    {
+      "url": "https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/viewing-and-managing-your-sessions",
+      "kind": "official"
+    },
+    {
+      "url": "https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps",
+      "kind": "official"
+    },
+    {
+      "url": "https://github.com/settings/profile",
+      "kind": "observed"
+    }
+  ]
+}

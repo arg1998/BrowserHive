@@ -1,0 +1,311 @@
+{
+  "schema": 1,
+  "id": "google.com",
+  "version": 1,
+  "min_client": "0.3.0",
+  "title": "Google Account",
+  "description": "Google sign-in for a template. A person must sign in (Google blocks sign-in from automated browsers). Account security, recovery, app-password, connected-app and deletion pages are blocked for agents.",
+  "domains": [
+    "google.com"
+  ],
+  "sign_in": {
+    "url": {
+      "host": "accounts.google.com",
+      "path": "/ServiceLogin"
+    },
+    "human_only": true
+  },
+  "signed_in": {
+    "probe": {
+      "host": "myaccount.google.com",
+      "path": "/"
+    },
+    "kind": "redirect",
+    "signed_out_redirects": [
+      "www.google.com/account/about*"
+    ],
+    "cookie_names": [
+      "SID",
+      "HSID"
+    ]
+  },
+  "guards": [
+    {
+      "id": "logout",
+      "kind": "logout",
+      "match": {
+        "url": "accounts.google.com/Logout"
+      },
+      "action": "block"
+    },
+    {
+      "id": "logout-www",
+      "kind": "logout",
+      "match": {
+        "url": "www.google.com/accounts/Logout"
+      },
+      "action": "block"
+    },
+    {
+      "id": "oauth-consent",
+      "kind": "credential",
+      "match": {
+        "url": "accounts.google.com/signin/oauth/*consent*"
+      },
+      "action": "block"
+    },
+    {
+      "id": "account-recovery",
+      "kind": "credential",
+      "match": {
+        "url": "accounts.google.com/signin/recovery"
+      },
+      "action": "block"
+    },
+    {
+      "id": "app-passwords",
+      "kind": "credential",
+      "match": {
+        "url": "myaccount.google.com/apppasswords"
+      },
+      "action": "block"
+    },
+    {
+      "id": "app-passwords-u",
+      "kind": "credential",
+      "match": {
+        "url": "myaccount.google.com/u/*/apppasswords"
+      },
+      "action": "block"
+    },
+    {
+      "id": "signin-options",
+      "kind": "credential",
+      "match": {
+        "url": "myaccount.google.com/signinoptions"
+      },
+      "action": "block"
+    },
+    {
+      "id": "signin-options-u",
+      "kind": "credential",
+      "match": {
+        "url": "myaccount.google.com/u/*/signinoptions"
+      },
+      "action": "block"
+    },
+    {
+      "id": "recovery-email",
+      "kind": "credential",
+      "match": {
+        "url": "myaccount.google.com/recovery"
+      },
+      "action": "block"
+    },
+    {
+      "id": "recovery-email-u",
+      "kind": "credential",
+      "match": {
+        "url": "myaccount.google.com/u/*/recovery"
+      },
+      "action": "block"
+    },
+    {
+      "id": "phone-numbers",
+      "kind": "credential",
+      "match": {
+        "url": "myaccount.google.com/phone"
+      },
+      "action": "block"
+    },
+    {
+      "id": "phone-numbers-u",
+      "kind": "credential",
+      "match": {
+        "url": "myaccount.google.com/u/*/phone"
+      },
+      "action": "block"
+    },
+    {
+      "id": "linked-apps",
+      "kind": "credential",
+      "match": {
+        "url": "myaccount.google.com/linkedapps"
+      },
+      "action": "block"
+    },
+    {
+      "id": "linked-apps-u",
+      "kind": "credential",
+      "match": {
+        "url": "myaccount.google.com/u/*/linkedapps"
+      },
+      "action": "block"
+    },
+    {
+      "id": "security",
+      "kind": "account",
+      "match": {
+        "url": "myaccount.google.com/security"
+      },
+      "action": "block"
+    },
+    {
+      "id": "security-u",
+      "kind": "account",
+      "match": {
+        "url": "myaccount.google.com/u/*/security"
+      },
+      "action": "block"
+    },
+    {
+      "id": "secure-account",
+      "kind": "account",
+      "match": {
+        "url": "myaccount.google.com/secure-account"
+      },
+      "action": "block"
+    },
+    {
+      "id": "secure-account-u",
+      "kind": "account",
+      "match": {
+        "url": "myaccount.google.com/u/*/secure-account"
+      },
+      "action": "block"
+    },
+    {
+      "id": "device-activity",
+      "kind": "account",
+      "match": {
+        "url": "myaccount.google.com/device-activity"
+      },
+      "action": "block"
+    },
+    {
+      "id": "device-activity-u",
+      "kind": "account",
+      "match": {
+        "url": "myaccount.google.com/u/*/device-activity"
+      },
+      "action": "block"
+    },
+    {
+      "id": "devices-short",
+      "kind": "account",
+      "match": {
+        "url": "www.google.com/devices"
+      },
+      "action": "block"
+    },
+    {
+      "id": "takeout",
+      "kind": "account",
+      "match": {
+        "url": "takeout.google.com"
+      },
+      "action": "block"
+    },
+    {
+      "id": "delete-account",
+      "kind": "destructive",
+      "match": {
+        "url": "myaccount.google.com/deleteaccount"
+      },
+      "action": "block"
+    },
+    {
+      "id": "delete-account-u",
+      "kind": "destructive",
+      "match": {
+        "url": "myaccount.google.com/u/*/deleteaccount"
+      },
+      "action": "block"
+    },
+    {
+      "id": "delete-services",
+      "kind": "destructive",
+      "match": {
+        "url": "myaccount.google.com/deleteservices"
+      },
+      "action": "block"
+    },
+    {
+      "id": "delete-services-u",
+      "kind": "destructive",
+      "match": {
+        "url": "myaccount.google.com/u/*/deleteservices"
+      },
+      "action": "block"
+    }
+  ],
+  "write_policy": {
+    "default": "warn",
+    "stance": "restricted",
+    "clause": {
+      "quote": "using automated means to access content from any of our services in violation of the machine-readable instructions on our web pages (for example, robots.txt files that disallow crawling, training, or other activities)",
+      "url": "https://policies.google.com/terms",
+      "checked": "2026-11-16"
+    }
+  },
+  "device_binding": [
+    {
+      "platform": "windows",
+      "mechanism": "dbsc",
+      "since": "2026-05-25",
+      "source": {
+        "url": "https://workspaceupdates.googleblog.com/2026/05/prevent-account-takeovers-with-DBSC-now-generally-available-in-the-Chrome-browser-for-Windows.html",
+        "kind": "official"
+      }
+    }
+  ],
+  "verified": {
+    "sign_in": "2026-11-16",
+    "signed_in": "2026-11-16",
+    "guards": "2026-11-16",
+    "write_policy": "2026-11-16",
+    "device_binding": "2026-11-16"
+  },
+  "sources": [
+    {
+      "url": "https://policies.google.com/terms",
+      "kind": "official"
+    },
+    {
+      "url": "https://policies.google.com/technologies/cookies",
+      "kind": "official"
+    },
+    {
+      "url": "https://support.google.com/accounts/answer/7675428",
+      "kind": "official"
+    },
+    {
+      "url": "https://support.google.com/accounts/answer/185833",
+      "kind": "official"
+    },
+    {
+      "url": "https://support.google.com/accounts/answer/13548313",
+      "kind": "official"
+    },
+    {
+      "url": "https://support.google.com/accounts/answer/183723",
+      "kind": "official"
+    },
+    {
+      "url": "https://support.google.com/accounts/answer/32046",
+      "kind": "official"
+    },
+    {
+      "url": "https://support.google.com/accounts/answer/13533235",
+      "kind": "official"
+    },
+    {
+      "url": "https://workspaceupdates.googleblog.com/2026/05/prevent-account-takeovers-with-DBSC-now-generally-available-in-the-Chrome-browser-for-Windows.html",
+      "kind": "official"
+    },
+    {
+      "url": "https://myaccount.google.com/",
+      "kind": "observed"
+    }
+  ]
+}
