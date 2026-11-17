@@ -27,7 +27,6 @@ const SYSTEM = 'browserhive';
 export async function syncCandidates(
   core: RegistryCore,
   resolved: readonly ResolvedPack[],
-  _bundled: SourceCatalog,
 ): Promise<z.infer<typeof SitePackPendingEvent>[]> {
   const { repos, clock, ids } = core.deps;
   const pending = await repos.sitePackChanges.listPending();

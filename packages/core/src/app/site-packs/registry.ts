@@ -363,7 +363,7 @@ export class SitePackRegistry implements SitePackLookup {
     const { repos, cache, binaryVersion } = this.#deps;
     const input = { bundled, local, localDir: this.#deps.local.dir, cache, binaryVersion };
     const resolved = await resolvePacks({ ...input, states: await repos.sitePackState.list() });
-    const fresh = await actions.syncCandidates(this.#core(), resolved, bundled);
+    const fresh = await actions.syncCandidates(this.#core(), resolved);
     this.#snapshot = assembleSnapshot(resolved, {
       enabled: this.#deps.enabled,
       generation: this.#snapshot.generation + 1,

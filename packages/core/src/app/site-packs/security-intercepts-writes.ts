@@ -41,13 +41,32 @@ export const NOT_CONFIRMABLE: RequestConfirmResult = Object.freeze({
   asBlock: true,
 });
 
-/** Opens a write confirmation and holds the session on it; `null` when the broker refused. */
+/**
+ * Opens a write confirmation and holds the session on it; `null` when the broker refused. Its slot
+ * is reserved synchronously, before the first await (review PR #83 M3): callers run their bound
+ * checks and call this without awaiting in between.
+ */
 export async function openWriteConfirmation(
   ctx: InterceptContext,
   facts: WriteFacts,
   signal: AbortSignal | undefined,
 ): Promise<OpenedWrite | null> {
   const { deps, book } = ctx;
+  const reservation = book.reserve(
+    {
+      sessionId: facts.sessionId,
+      owner: facts.owner,
+      templateId: facts.templateId,
+      site: facts.site,
+      siteTitle: facts.guard.siteTitle,
+      reason: 'write_confirm',
+      guard: { packId: facts.guard.packId, id: facts.guard.guardId, kind: facts.guard.guardKind },
+      method: facts.method,
+      url: facts.url,
+      tool: facts.tool,
+    },
+    deps.clock.now(),
+  );
   const options: SecurityInterceptOptions = {
     reason: 'write_confirm',
     site: facts.site,
@@ -79,23 +98,11 @@ export async function openWriteConfirmation(
     });
   } catch (error) {
     // The broker's own queue bounds (RATE_LIMITED): nobody can be asked, so it is refused.
+    reservation.cancel();
     ctx.log.warn('write confirm not opened', { err: serializeError(error) });
     return null;
   }
-  const intercept: OpenIntercept = {
-    requestId: handle.id,
-    sessionId: facts.sessionId,
-    templateId: facts.templateId,
-    site: facts.site,
-    siteTitle: facts.guard.siteTitle,
-    reason: 'write_confirm',
-    createdAt: handle.createdAt,
-    guard: { packId: facts.guard.packId, id: facts.guard.guardId, kind: facts.guard.guardKind },
-    method: facts.method,
-    url: facts.url,
-    tool: facts.tool,
-  };
-  book.add(intercept);
+  const intercept = reservation.commit(handle.id, handle.createdAt);
   warnHeld(ctx, facts, handle.id);
   void publishConfirm(ctx, 'opened', intercept, undefined);
   const promise = handle.promise.then((outcome) => {
@@ -152,7 +159,7 @@ async function publishConfirm(
       site: intercept.site,
       site_title: intercept.siteTitle,
       open,
-      request_id: intercept.requestId,
+      request_id: intercept.requestId ?? '',
       session_id: intercept.sessionId,
       guard: { pack_id: guard.packId, id: guard.id, kind: guard.kind },
       method: intercept.method ?? null,

@@ -1,29 +1,25 @@
-/** @module app/site-packs/security-intercepts-state — the bookkeeping of open security intercepts (spec 13 §9.3, §9.5): which request holds which session, the per-session and per-template bounds, the one-time passes and the challenge rate. Pure state over a clock reading; no I/O. */
+/** @module app/site-packs/security-intercepts-state — the bookkeeping of open security intercepts (spec 13 §9.3, §9.5): which request holds which session, the per-session bound and the per-template bound counted per session owner, the challenge rate, and the reservations that make every check-then-open atomic (review PR #83 M3, M4). Pure state over a clock reading; no I/O. */
 
 import type { PackGuardKind } from '@browserhive/contracts/site-packs';
 import type { SiteHold, SiteHoldReason } from '../../ports/security-intercepts.ts';
 
-/** At most this many security intercepts (write confirmations and site checks) open per template. */
-export const MAX_OPEN_INTERCEPTS_PER_TEMPLATE = 10;
-/** An approval on the tool path grants a one-time pass for the same guard and URL this long. */
-export const WRITE_PASS_MS = 10 * 60_000;
 /**
- * A tool-path pass that was used grants the network guard one pass for the request guard behind it
- * this long (the click that the approval covered sends its write within it).
+ * At most this many security intercepts (write confirmations and site checks) open per template
+ * and session owner: one principal's sessions cannot use up the slots of another's (M4).
  */
-export const NETWORK_PASS_MS = 60_000;
+export const MAX_OPEN_INTERCEPTS_PER_TEMPLATE = 10;
 /** At most one new site check per session in this window. */
 export const CHALLENGE_SPACING_MS = 5 * 60_000;
 
-/** One open intercept. */
-export interface OpenIntercept {
-  readonly requestId: string;
+/** What an intercept is about (known before its request exists). */
+export interface InterceptFacts {
   readonly sessionId: string;
+  /** The session's owner principal (the bound is counted per owner). */
+  readonly owner: string;
   readonly templateId: string;
   readonly site: string;
   readonly siteTitle: string;
   readonly reason: SiteHoldReason;
-  readonly createdAt: number;
   /** Write confirmations: the guard. */
   readonly guard?: { readonly packId: string; readonly id: string; readonly kind: PackGuardKind };
   readonly method?: string | null;
@@ -31,71 +27,87 @@ export interface OpenIntercept {
   readonly tool?: string | null;
 }
 
-/** Who approved the write a pass stands for. */
-export interface PassGrant {
-  readonly requestId: string;
-  readonly decidedBy: string | null;
+/** One open intercept, or a reserved one whose request is being opened. */
+export interface OpenIntercept extends InterceptFacts {
+  /** `null` while reserved. */
+  readonly requestId: string | null;
+  readonly createdAt: number;
+  /** Resolves to the request id once opened, `null` when the open failed. */
+  readonly ready: Promise<string | null>;
 }
 
-interface Pass extends PassGrant {
-  readonly expiresAt: number;
+/** A slot taken synchronously before the request is opened. */
+export interface Reservation {
+  /** The request is open: the slot now holds it. */
+  commit(requestId: string, createdAt: number): OpenIntercept;
+  /** The open failed: the slot is free again. */
+  cancel(): void;
 }
 
-/** The open intercepts and passes of every template session. */
+interface Entry {
+  current: OpenIntercept;
+}
+
+/** The open intercepts of every template session. */
 export class InterceptBook {
-  readonly #open = new Map<string, OpenIntercept>();
-  readonly #write = new Map<string, string>();
-  readonly #challenge = new Map<string, string>();
-  /** Sessions held on another session's request (the per-template bound, spec 13 §9.3). */
-  readonly #borrowed = new Map<string, string>();
+  readonly #entries = new Set<Entry>();
+  readonly #write = new Map<string, Entry>();
+  readonly #challenge = new Map<string, Entry>();
+  /** Sessions held on another session's request (the bound, spec 13 §9.3). */
+  readonly #borrowed = new Map<string, Entry>();
   readonly #lastChallengeAt = new Map<string, number>();
-  readonly #toolPasses = new Map<string, Pass>();
-  readonly #networkPasses = new Map<string, Pass>();
 
-  /** The request holding `sessionId`: its write confirmation, its site check, else a borrowed one. */
+  /**
+   * The request holding `sessionId`: its write confirmation, its site check, else a borrowed one
+   * (always of the same owner: the bound is per owner, so no other principal's request id leaks,
+   * review I3). A reserved slot holds nothing yet.
+   */
   holdOf(sessionId: string): SiteHold | null {
-    const id =
+    const entry =
       this.#write.get(sessionId) ?? this.#challenge.get(sessionId) ?? this.#borrowed.get(sessionId);
-    const open = id === undefined ? undefined : this.#open.get(id);
-    if (open === undefined) return null;
+    const open = entry?.current;
+    if (open === undefined || open.requestId === null) return null;
     return { requestId: open.requestId, site: open.site, reason: open.reason };
   }
 
-  get(requestId: string): OpenIntercept | undefined {
-    return this.#open.get(requestId);
-  }
-
-  /** The session's open write confirmation. */
+  /** The session's write confirmation, open or reserved. */
   writeOf(sessionId: string): OpenIntercept | undefined {
-    const id = this.#write.get(sessionId);
-    return id === undefined ? undefined : this.#open.get(id);
+    return this.#write.get(sessionId)?.current;
   }
 
-  /** The session's open site check. */
+  /** The session's site check, open or reserved. */
   challengeOf(sessionId: string): OpenIntercept | undefined {
-    const id = this.#challenge.get(sessionId);
-    return id === undefined ? undefined : this.#open.get(id);
+    return this.#challenge.get(sessionId)?.current;
   }
 
-  /** Open intercepts of a template. */
-  openOf(templateId: string): OpenIntercept[] {
-    return [...this.#open.values()].filter((o) => o.templateId === templateId);
-  }
-
-  /** Open write confirmations of one template site. */
+  /** Open write confirmations of one template site (reserved ones not counted). */
   writesOf(templateId: string, site: string): OpenIntercept[] {
-    return this.openOf(templateId).filter((o) => o.reason === 'write_confirm' && o.site === site);
+    return [...this.#entries]
+      .map((e) => e.current)
+      .filter(
+        (o) =>
+          o.requestId !== null &&
+          o.templateId === templateId &&
+          o.reason === 'write_confirm' &&
+          o.site === site,
+      );
   }
 
   /**
-   * True when the template is at its bound; the session is then held on the template's newest open
-   * request until that settles.
+   * True when the owner's open and reserved intercepts of the template reached the bound; the
+   * session is then held on the owner's newest open request of the template until that settles.
    */
-  atBound(templateId: string, sessionId: string): boolean {
-    const open = this.openOf(templateId);
-    if (open.length < MAX_OPEN_INTERCEPTS_PER_TEMPLATE) return false;
-    const newest = open.reduce((a, b) => (b.createdAt >= a.createdAt ? b : a));
-    this.#borrowed.set(sessionId, newest.requestId);
+  atBound(templateId: string, owner: string, sessionId: string): boolean {
+    const mine = [...this.#entries].filter(
+      (e) => e.current.templateId === templateId && e.current.owner === owner,
+    );
+    if (mine.length < MAX_OPEN_INTERCEPTS_PER_TEMPLATE) return false;
+    let newest: Entry | undefined;
+    for (const e of mine) {
+      if (e.current.requestId === null) continue;
+      if (newest === undefined || e.current.createdAt >= newest.current.createdAt) newest = e;
+    }
+    if (newest !== undefined) this.#borrowed.set(sessionId, newest);
     return true;
   }
 
@@ -105,87 +117,51 @@ export class InterceptBook {
     return last !== undefined && now - last < CHALLENGE_SPACING_MS;
   }
 
-  add(intercept: OpenIntercept): void {
-    this.#open.set(intercept.requestId, intercept);
-    if (intercept.reason === 'write_confirm') {
-      this.#write.set(intercept.sessionId, intercept.requestId);
-    } else {
-      this.#challenge.set(intercept.sessionId, intercept.requestId);
-      this.#lastChallengeAt.set(intercept.sessionId, intercept.createdAt);
-    }
-    this.#borrowed.delete(intercept.sessionId);
+  /**
+   * Takes the slot of an intercept before its request is opened: the per-session check, the bound
+   * and the challenge rate see it at once, so concurrent callers cannot all pass them (M3).
+   */
+  reserve(facts: InterceptFacts, now: number): Reservation {
+    let settle: (id: string | null) => void = () => undefined;
+    const ready = new Promise<string | null>((resolve) => {
+      settle = resolve;
+    });
+    const entry: Entry = { current: { ...facts, requestId: null, createdAt: now, ready } };
+    this.#entries.add(entry);
+    const byReason = facts.reason === 'write_confirm' ? this.#write : this.#challenge;
+    byReason.set(facts.sessionId, entry);
+    if (facts.reason === 'challenge') this.#lastChallengeAt.set(facts.sessionId, now);
+    this.#borrowed.delete(facts.sessionId);
+    return {
+      commit: (requestId, createdAt) => {
+        entry.current = { ...entry.current, requestId, createdAt };
+        settle(requestId);
+        return entry.current;
+      },
+      cancel: () => {
+        this.#drop(entry);
+        settle(null);
+      },
+    };
   }
 
   /** Forgets a settled request and every hold on it. */
-  remove(requestId: string): OpenIntercept | undefined {
-    const open = this.#open.get(requestId);
-    if (open === undefined) return undefined;
-    this.#open.delete(requestId);
-    for (const map of [this.#write, this.#challenge, this.#borrowed]) {
-      for (const [session, id] of map) if (id === requestId) map.delete(session);
+  remove(requestId: string): void {
+    for (const entry of [...this.#entries]) {
+      if (entry.current.requestId === requestId) this.#drop(entry);
     }
-    return open;
   }
 
-  /** Grants the tool path's one-time pass for (session, guard, URL). */
-  grantToolPass(
-    sessionId: string,
-    guard: string,
-    url: string,
-    grant: PassGrant,
-    now: number,
-  ): void {
-    this.#prune(now);
-    this.#toolPasses.set(passKey(sessionId, guard, url), {
-      ...grant,
-      expiresAt: now + WRITE_PASS_MS,
-    });
-  }
-
-  /** Uses the tool path's pass for (session, guard, URL), if any. */
-  takeToolPass(sessionId: string, guard: string, url: string, now: number): PassGrant | null {
-    return take(this.#toolPasses, passKey(sessionId, guard, url), now);
-  }
-
-  /** Grants the network guard one pass for a request-guard rule of the session. */
-  grantNetworkPass(sessionId: string, ruleId: string, grant: PassGrant, now: number): void {
-    this.#prune(now);
-    this.#networkPasses.set(passKey(sessionId, ruleId, ''), {
-      ...grant,
-      expiresAt: now + NETWORK_PASS_MS,
-    });
-  }
-
-  /** Uses the network guard's pass for a rule of the session, if any. */
-  takeNetworkPass(sessionId: string, ruleId: string, now: number): PassGrant | null {
-    return take(this.#networkPasses, passKey(sessionId, ruleId, ''), now);
-  }
-
-  /** A closed session: its passes and challenge rate go; open requests are settled by the broker. */
+  /** A closed session: its borrowed hold and challenge rate go; its requests are settled elsewhere. */
   forgetSession(sessionId: string): void {
     this.#borrowed.delete(sessionId);
     this.#lastChallengeAt.delete(sessionId);
-    const prefix = `${sessionId}\u0000`;
-    for (const map of [this.#toolPasses, this.#networkPasses]) {
-      for (const key of [...map.keys()]) if (key.startsWith(prefix)) map.delete(key);
-    }
   }
 
-  #prune(now: number): void {
-    for (const map of [this.#toolPasses, this.#networkPasses]) {
-      for (const [key, pass] of map) if (pass.expiresAt <= now) map.delete(key);
+  #drop(entry: Entry): void {
+    this.#entries.delete(entry);
+    for (const map of [this.#write, this.#challenge, this.#borrowed]) {
+      for (const [session, held] of [...map]) if (held === entry) map.delete(session);
     }
   }
-}
-
-function passKey(sessionId: string, guard: string, url: string): string {
-  return `${sessionId}\u0000${guard}\u0000${url}`;
-}
-
-function take(map: Map<string, Pass>, key: string, now: number): PassGrant | null {
-  const pass = map.get(key);
-  if (pass === undefined) return null;
-  map.delete(key);
-  if (pass.expiresAt <= now) return null;
-  return { requestId: pass.requestId, decidedBy: pass.decidedBy };
 }

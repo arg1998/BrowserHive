@@ -44,12 +44,26 @@ export async function openSiteCheck(
   input: ChallengeInput,
 ): Promise<string | null> {
   const { deps, book } = ctx;
+  // Everything up to the reservation is synchronous, so concurrent matches cannot all pass the
+  // bounds (review PR #83 M3); a further match attaches to the open or reserved check.
   const existing = book.challengeOf(input.sessionId);
-  if (existing !== undefined) return existing.requestId;
-  if (book.challengeTooSoon(input.sessionId, deps.clock.now())) return null;
-  if (book.atBound(input.templateId, input.sessionId)) return null;
+  if (existing !== undefined) return existing.requestId ?? (await existing.ready);
+  const now = deps.clock.now();
+  if (book.challengeTooSoon(input.sessionId, now)) return null;
   const session = deps.sessions.peek(input.sessionId);
   if (session === undefined) return null;
+  if (book.atBound(input.templateId, session.owner, input.sessionId)) return null;
+  const reservation = book.reserve(
+    {
+      sessionId: input.sessionId,
+      owner: session.owner,
+      templateId: input.templateId,
+      site: input.site,
+      siteTitle: input.siteTitle,
+      reason: 'challenge',
+    },
+    now,
+  );
   const options: SecurityInterceptOptions = {
     reason: 'challenge',
     site: input.site,
@@ -73,15 +87,7 @@ export async function openSiteCheck(
       templateId: input.templateId,
       timeoutMs: interceptTimeoutMs(deps.config),
     });
-    book.add({
-      requestId: handle.id,
-      sessionId: input.sessionId,
-      templateId: input.templateId,
-      site: input.site,
-      siteTitle: input.siteTitle,
-      reason: 'challenge',
-      createdAt: handle.createdAt,
-    });
+    reservation.commit(handle.id, handle.createdAt);
     void handle.promise.then((outcome) => {
       book.remove(handle.id);
       // A resolution triggers a probe of the site (spec 13 §9.5 "Resolving").
@@ -89,6 +95,7 @@ export async function openSiteCheck(
     });
     return handle.id;
   } catch (error) {
+    reservation.cancel();
     ctx.log.warn('site check not opened', { err: serializeError(error) });
     return null;
   }
