@@ -6,7 +6,13 @@ export { BunSqliteDriver, type BunSqliteDriverOptions } from './dialect/bun-sqli
 export type { DB } from './generated/db.d.ts';
 export { LOG_INSERT_CHUNK, type NewLogRecordRow, SqliteLogRepository } from './log-rows.ts';
 export { type MaintenanceOptions, SqliteMaintenanceService } from './maintenance.ts';
-export { BACKUPS_KEEP, listBackups, newestBackup, pruneBackups } from './migrations/backups.ts';
+export {
+  BACKUPS_KEEP,
+  listBackups,
+  newestBackup,
+  pruneBackups,
+  readableBackup,
+} from './migrations/backups.ts';
 export {
   APPLICATION_ID,
   MIGRATIONS,

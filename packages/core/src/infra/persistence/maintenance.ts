@@ -14,7 +14,13 @@ import type {
   RetentionResult,
 } from '../../ports/persistence/maintenance.ts';
 import type { WriteQueue } from '../../ports/persistence/write-queue.ts';
-import { BACKUPS_KEEP, createBackup, listBackups, pruneBackups } from './migrations/backups.ts';
+import {
+  BACKUPS_KEEP,
+  createBackup,
+  listBackups,
+  pruneBackups,
+  readerFloors,
+} from './migrations/backups.ts';
 import { MIGRATIONS, TABLES } from './migrations/index.ts';
 import type { Migration } from './migrations/migration.ts';
 import { runMigrations } from './migrations/runner.ts';
@@ -72,7 +78,7 @@ export class SqliteMaintenanceService implements MaintenanceService {
     }
     const version = pragmaNumber(handle.raw, 'user_version');
     const path = createBackup(handle.raw, handle.backupsDir, version, this.#o.clock.now());
-    pruneBackups(handle.backupsDir, BACKUPS_KEEP);
+    pruneBackups(handle.backupsDir, BACKUPS_KEEP, readerFloors(this.#o.migrations ?? MIGRATIONS));
     this.#o.logger.info('backup created', { path });
     return path;
   }

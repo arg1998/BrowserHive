@@ -7,7 +7,7 @@ import type { Logger } from '../../../ports/logger.ts';
 import type { MigrationResult } from '../../../ports/persistence/maintenance.ts';
 import { withSpan } from '../dialect/spans.ts';
 import { pragmaNumber, setPragma, tableExists } from '../pragma.ts';
-import { BACKUPS_KEEP, createBackup, pruneBackups } from './backups.ts';
+import { BACKUPS_KEEP, createBackup, pruneBackups, readerFloors } from './backups.ts';
 import type { Migration } from './migration.ts';
 
 /** Inputs of {@link runMigrations}. */
@@ -58,7 +58,11 @@ export function runMigrations(options: RunMigrationsOptions): MigrationResult {
       if (options.backupsDir !== null && options.path !== ':memory:' && from > 0) {
         backupPath = createBackup(raw, options.backupsDir, from, clock.now());
         span.setAttribute('browserhive.backup_path', backupPath);
-        const pruned = pruneBackups(options.backupsDir, options.backupsKeep ?? BACKUPS_KEEP);
+        const pruned = pruneBackups(
+          options.backupsDir,
+          options.backupsKeep ?? BACKUPS_KEEP,
+          readerFloors(migrations),
+        );
         logger.info('backup created', { path: backupPath, pruned: pruned.length });
       }
 

@@ -9,7 +9,7 @@ import type { Clock } from '../../ports/clock.ts';
 import type { Logger } from '../../ports/logger.ts';
 import { BunSqliteDialect } from './dialect/bun-sqlite-dialect.ts';
 import type { DB } from './generated/db.d.ts';
-import { newestBackup } from './migrations/backups.ts';
+import { readableBackup } from './migrations/backups.ts';
 import { APPLICATION_ID, MIGRATIONS, SCHEMA_VERSION } from './migrations/index.ts';
 import type { Migration } from './migrations/migration.ts';
 import { readMinReaderVersion, runMigrations } from './migrations/runner.ts';
@@ -95,7 +95,8 @@ export async function openDatabase(options: OpenDatabaseOptions): Promise<Databa
     let backupPath: string | null = null;
     if (userVersion > headVersion) {
       if (minReader > headVersion) {
-        const backup = newestBackup(backupsDir);
+        // The pre-upgrade backup this binary can read, never a later backup of the newer schema.
+        const backup = readableBackup(backupsDir, headVersion);
         throw new AppError(
           'DB_NEWER_THAN_BINARY',
           {

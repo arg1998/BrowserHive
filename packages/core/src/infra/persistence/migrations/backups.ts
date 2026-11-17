@@ -4,6 +4,8 @@ import type { Database } from 'bun:sqlite';
 import { mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { AppError } from '../../../kernel/errors/app-error.ts';
+import { MIGRATIONS } from './index.ts';
+import type { Migration } from './migration.ts';
 
 /** Backups kept per directory (spec 03 §7.1). */
 export const BACKUPS_KEEP = 5;
@@ -44,10 +46,16 @@ export function createBackup(
   return target;
 }
 
+/** One backup file: its path, size, mtime and the schema version in its name. */
+export interface BackupFile {
+  readonly path: string;
+  readonly sizeBytes: number;
+  readonly mtimeMs: number;
+  readonly version: number;
+}
+
 /** Every backup in the directory, newest first (by mtime, then name). */
-export function listBackups(
-  backupsDir: string,
-): { path: string; sizeBytes: number; mtimeMs: number }[] {
+export function listBackups(backupsDir: string): BackupFile[] {
   let names: string[];
   try {
     names = readdirSync(backupsDir);
@@ -58,9 +66,10 @@ export function listBackups(
     .filter((name) => BACKUP_RE.test(name))
     .flatMap((name) => {
       const path = join(backupsDir, name);
+      const version = Number(BACKUP_RE.exec(name)?.[1] ?? 0);
       try {
         const stat = statSync(path);
-        return [{ path, sizeBytes: stat.size, mtimeMs: stat.mtimeMs }];
+        return [{ path, sizeBytes: stat.size, mtimeMs: stat.mtimeMs, version }];
       } catch {
         return [];
       }
@@ -74,15 +83,64 @@ export function newestBackup(backupsDir: string): string | null {
   return listBackups(backupsDir)[0]?.path ?? null;
 }
 
-/** Deletes all but the newest `keep` backups; returns the paths removed. */
-export function pruneBackups(backupsDir: string, keep = BACKUPS_KEEP): string[] {
+/**
+ * The backup a binary that reads up to schema `maxVersion` can restore: the highest schema version
+ * at most `maxVersion`, newest first within it (the pre-upgrade backup of an incompatible
+ * migration, never a later manual backup of the newer schema). `null` when there is none.
+ */
+export function readableBackup(backupsDir: string, maxVersion: number): string | null {
+  const readable = listBackups(backupsDir).filter((b) => b.version <= maxVersion);
+  readable.sort((a, b) => b.version - a.version || b.mtimeMs - a.mtimeMs);
+  return readable[0]?.path ?? null;
+}
+
+/** Versions of the incompatible migrations (each raised `meta.min_reader_version`). */
+export function readerFloors(migrations: readonly Migration[] = MIGRATIONS): number[] {
+  return migrations.filter((m) => !m.compatible).map((m) => m.version);
+}
+
+/**
+ * The backups pruning never deletes: for each reader floor `F` (an incompatible migration), the
+ * newest backup below `F`, which is the only file a binary older than `F` can restore (D-04).
+ */
+export function protectedBackups(
+  backups: readonly BackupFile[],
+  floors: readonly number[],
+): Set<string> {
+  const keep = new Set<string>();
+  for (const floor of floors) {
+    const below = backups.find((b) => b.version < floor);
+    if (below !== undefined) keep.add(below.path);
+  }
+  return keep;
+}
+
+/**
+ * Deletes all but the newest `keep` backups, never a {@link protectedBackups} file, together with
+ * any `-wal`/`-shm` sidecar; returns the paths removed.
+ */
+export function pruneBackups(
+  backupsDir: string,
+  keep = BACKUPS_KEEP,
+  floors: readonly number[] = readerFloors(),
+): string[] {
+  const backups = listBackups(backupsDir);
+  const kept = protectedBackups(backups, floors);
   const removed: string[] = [];
-  for (const entry of listBackups(backupsDir).slice(Math.max(0, keep))) {
+  for (const entry of backups.slice(Math.max(0, keep))) {
+    if (kept.has(entry.path)) continue;
     try {
       unlinkSync(entry.path);
       removed.push(entry.path);
     } catch {
       // Already gone; nothing to do.
+    }
+    for (const suffix of ['-wal', '-shm']) {
+      try {
+        unlinkSync(`${entry.path}${suffix}`);
+      } catch {
+        // No sidecar.
+      }
     }
   }
   return removed;
