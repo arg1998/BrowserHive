@@ -2,7 +2,7 @@
   "schema": 1,
   "id": "instagram.com",
   "version": 1,
-  "min_client": "0.3.0",
+  "min_client": "0.2.3",
   "title": "Instagram",
   "description": "Instagram's terms bar accessing or collecting information in an automated way. Sign-out, Accounts Center, account deletion and OAuth approvals are blocked for agents.",
   "domains": [

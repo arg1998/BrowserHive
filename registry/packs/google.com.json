@@ -2,7 +2,7 @@
   "schema": 1,
   "id": "google.com",
   "version": 1,
-  "min_client": "0.3.0",
+  "min_client": "0.2.3",
   "title": "Google Account",
   "description": "Google sign-in for a template. A person must sign in (Google blocks sign-in from automated browsers). Account security, recovery, app-password, connected-app and deletion pages are blocked for agents.",
   "domains": [

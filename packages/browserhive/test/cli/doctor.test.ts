@@ -1,6 +1,7 @@
 /** @module test/cli/doctor — `browserhive doctor`: every check with injected probes, exit 0/1/2, `--json` shape */
 import { describe, expect, it } from 'bun:test';
 import { z } from 'zod';
+import { resolveBundledPacksDir } from '../../src/composition/site-packs.ts';
 import {
   cliHarness,
   DATA_DIR,
@@ -14,8 +15,12 @@ import {
 
 const TOKEN = 'ci-runner:0123456789abcdef0123456789abcdef';
 
+/** Where `doctor` looks for the bundled site packs (the repository's `registry/packs` from source). */
+const BUNDLED = resolveBundledPacksDir() ?? '/bundled';
+
 function healthyFs(): MemoryFs {
   const fs = new MemoryFs({ [`${DATA_DIR}/browserhive.db`]: 'db' });
+  fs.ensureDir(BUNDLED);
   return fs;
 }
 
@@ -53,6 +58,7 @@ describe('doctor', () => {
       'unrecognised data files',
       'database',
       'reserved subjects',
+      'site packs',
       'otel',
       'max sessions',
       'secrets',
@@ -72,7 +78,7 @@ describe('doctor', () => {
     expect(run.stdout).toMatch(/^\s+CHECK\s+DETAIL/m);
     expect(run.stdout).toContain('✓  bun');
     expect(run.stdout).toContain('config: maxSessions=4 (cli) shadows env=2');
-    expect(run.stdout).toContain('21 passed, 0 warnings, 0 failed');
+    expect(run.stdout).toContain('22 passed, 0 warnings, 0 failed');
   });
 
   it.each([
@@ -159,7 +165,7 @@ describe('doctor', () => {
       });
       expect(run.code).toBe(2);
       expect(run.stdout).toMatch(/!\s+bh\s+\/home\/me\/bin\/bh is not BrowserHive's/);
-      expect(run.stdout).toContain('20 passed, 1 warnings, 0 failed');
+      expect(run.stdout).toContain('21 passed, 1 warnings, 0 failed');
     });
 
     it.each([

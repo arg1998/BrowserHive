@@ -10,9 +10,10 @@ import type {
   TemplateSiteRecord,
   TemplateVersionRepository,
 } from '../../ports/persistence/index.ts';
+import type { TemplateFiles } from '../../ports/template-files.ts';
 import type { TemplateRuntime } from '../../ports/template-runtime.ts';
 import type { DomainEvents } from '../events/catalog.ts';
-import { toTemplateSummary } from './views.ts';
+import { type SitePackReader, toTemplateSummary } from './views.ts';
 
 /** The degradation code of a template row `list_templates` had to skip. */
 export const ROW_UNREADABLE = 'TEMPLATE_ROW_UNREADABLE';
@@ -76,6 +77,7 @@ export function publishTemplateChanged(
     readonly repos: Pick<Repositories, 'templates' | 'templateSites'>;
     readonly runtime: Pick<TemplateRuntime, 'host'>;
     readonly bus?: EventPublisher<DomainEvents> | undefined;
+    readonly packs?: SitePackReader | undefined;
   },
   templateId: string,
   log: Logger,
@@ -88,7 +90,7 @@ export function publishTemplateChanged(
     const sites = await deps.repos.templateSites.list(templateId);
     bus.publish('template.changed', {
       type: 'template.changed',
-      template: toTemplateSummary(template, sites, deps.runtime.host(templateId)),
+      template: toTemplateSummary(template, sites, deps.runtime.host(templateId), deps.packs),
     });
   })().catch((err: unknown) => log.debug('template event failed', { err: serializeError(err) }));
 }
@@ -107,4 +109,18 @@ export async function storedUnlisted(
   return newest.summary.domains
     .filter((d) => !own.has(d.domain) && d.earliestExpiry !== null)
     .map((d) => d.domain);
+}
+
+/** Deletes `templates/<id>/`; the rows are gone already, so a failure is logged, never thrown. */
+export async function removeTemplateFiles(
+  files: TemplateFiles,
+  templateId: string,
+  log: Logger,
+): Promise<number> {
+  try {
+    return await files.removeTemplateDir(templateId);
+  } catch (cause) {
+    log.warn('template dir not removed', { templateId, err: serializeError(cause) });
+    return 0;
+  }
 }

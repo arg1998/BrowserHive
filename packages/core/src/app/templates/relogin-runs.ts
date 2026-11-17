@@ -18,6 +18,7 @@ import type { SessionService } from '../sessions/session-service.ts';
 import type { TemplateHostOperations } from './host-operations.ts';
 import type { TemplateHostSupervisor } from './host-supervisor.ts';
 import type { TemplateHealthService } from './template-health.ts';
+import { NO_PACKS, providerLookup, type TemplatePacks } from './template-packs.ts';
 import type { TemplateStateService } from './template-state.ts';
 
 /** The states a re-login is still running in. */
@@ -60,6 +61,8 @@ export interface ReloginRunsDeps {
   readonly bus?: EventPublisher<DomainEvents>;
   readonly machine: string;
   readonly changed?: (templateId: string) => void;
+  /** Site packs (T3a): the identity provider of a pack site. */
+  readonly packs?: TemplatePacks;
 }
 
 /** The re-login runs of every template. */
@@ -112,7 +115,7 @@ export class ReloginRuns {
       baseline: null,
       stop: new AbortController(),
       names: { name: template.name, display_name: template.displayName },
-      provider: providerOf(site),
+      provider: providerOf(site, providerLookup(this.#deps.packs ?? NO_PACKS)),
       opening: null,
       lastInputAt: null,
       view: {

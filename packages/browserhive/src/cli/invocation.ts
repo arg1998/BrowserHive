@@ -217,6 +217,13 @@ export type Invocation =
       readonly json: boolean;
       readonly remote: RemoteTarget;
     }
+  | {
+      /** `sitepacks verify <path>`: offline, no server (spec 13 §11.5). */
+      readonly command: 'sitepacks-verify';
+      /** Absolute path of the pack file. */
+      readonly path: string;
+      readonly json: boolean;
+    }
   | { readonly command: 'version'; readonly json: boolean };
 
 /** `?source=` of `sitepacks list` (`registry` is the remote source). */

@@ -15,6 +15,7 @@ import { runInit } from './commands/init.ts';
 import { runPurge } from './commands/purge.ts';
 import { runServe } from './commands/serve.ts';
 import { runSitePacks } from './commands/sitepacks.ts';
+import { runSitepacksVerify } from './commands/sitepacks-verify.ts';
 import { runTemplatesList, runTemplatesRm } from './commands/templates.ts';
 import { runTemplatesCreate, runTemplatesFinish } from './commands/templates-create.ts';
 import { runTemplatesLogin } from './commands/templates-login.ts';
@@ -133,6 +134,8 @@ export async function runInvocation(
       return runTemplatesRekey(context, invocation);
     case 'sitepacks':
       return runSitePacks(context, invocation);
+    case 'sitepacks-verify':
+      return runSitepacksVerify(context, invocation);
     case 'version':
       return runVersion(context, invocation.json);
   }

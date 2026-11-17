@@ -24,7 +24,13 @@ function step(name: string, r: { status: number; out: string }): void {
   console.log(`package-check: ${name} ok`);
 }
 
-for (const f of ['dist/bin.js', 'dist/index.js', 'dist/index.d.ts', 'dist/dashboard/index.html']) {
+for (const f of [
+  'dist/bin.js',
+  'dist/index.js',
+  'dist/index.d.ts',
+  'dist/dashboard/index.html',
+  'dist/site-packs/index.json',
+]) {
   if (!existsSync(join(pkgDir, f))) {
     console.error(`package-check: missing ${f}; run \`bun run build\` first`);
     process.exit(1);
@@ -49,6 +55,7 @@ try {
     'package/dist/index.js',
     'package/dist/index.d.ts',
     'package/dist/dashboard/index.html',
+    'package/dist/site-packs/index.json',
     'package/README.md',
     'package/LICENSE',
   ]) {

@@ -18,6 +18,7 @@ export const DATA_SUBDIRS: readonly string[] = [
   'admin',
   'templates',
   'site-packs',
+  'site-packs/local',
 ];
 /** Browser download ceiling. */
 export const INSTALL_TIMEOUT_MS = 15 * 60_000;

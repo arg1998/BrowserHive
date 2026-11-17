@@ -16,6 +16,7 @@ import type { DomainEvents } from '../events/catalog.ts';
 import type { VaultAdmin } from '../vault/vault-admin.ts';
 import { templatePrincipal } from './relogin-vault.ts';
 import { notFoundForOperator, validationFailed } from './template-errors.ts';
+import type { TemplatePacks } from './template-packs.ts';
 import { toSiteView } from './views.ts';
 
 /** The request, camelCase. */
@@ -35,6 +36,8 @@ export interface ReloginLinksDeps {
   readonly clock: Clock;
   readonly bus?: EventPublisher<DomainEvents>;
   readonly changed?: (templateId: string) => void;
+  /** Site packs (T3a): a `human_only` pack site refuses auto-relogin. */
+  readonly packs?: TemplatePacks;
 }
 
 /** The gates a binding would refuse a template fill at (those checkable without a page). */
@@ -85,6 +88,12 @@ export class ReloginLinks {
     const form = input.form === undefined ? site.form : input.form;
     const handle = input.vaultHandle;
     const auto = handle === null ? false : (input.autoRelogin ?? site.autoRelogin);
+    if (auto && this.#deps.packs?.humanOnly(site.packId) === true) {
+      throw invalid(
+        'auto_relogin',
+        `${site.siteId} is signed in by a person only (its site pack is human_only)`,
+      );
+    }
     if (auto && form === null) {
       throw invalid('auto_relogin', `${site.siteId} needs sign-in form selectors for auto-relogin`);
     }
@@ -116,7 +125,7 @@ export class ReloginLinks {
       },
       occurredAt: this.#deps.clock.now(),
     });
-    const view = toSiteView(updated);
+    const view = toSiteView(updated, this.#deps.packs);
     this.#deps.bus?.publish('template.health', {
       type: 'template.health',
       template_id: templateId,

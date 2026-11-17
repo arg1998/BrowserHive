@@ -2,7 +2,7 @@
   "schema": 1,
   "id": "glassdoor.com",
   "version": 1,
-  "min_client": "0.3.0",
+  "min_client": "0.2.3",
   "title": "Glassdoor",
   "description": "Glassdoor's terms bar software or automated agents. Glassdoor uses the Indeed login (a Connected Profile). Account settings are blocked for agents.",
   "domains": [

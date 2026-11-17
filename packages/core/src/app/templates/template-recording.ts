@@ -23,6 +23,7 @@ import type {
 import type { JsonObject } from '../../ports/persistence/json.ts';
 import type { TemplateHostOps, TemplateRuntime } from '../../ports/template-runtime.ts';
 import { disabled, notFoundForOperator, validationFailed } from './template-errors.ts';
+import type { TemplatePacks } from './template-packs.ts';
 import type { TemplateStateService } from './template-state.ts';
 import { toHostView, toSiteView, toTemplateView } from './views.ts';
 
@@ -39,6 +40,8 @@ export interface TemplateRecordingDeps {
   readonly state?: Pick<TemplateStateService, 'saveVersion' | 'forgetDomain'>;
   /** The template's summary changed (`template.changed`). */
   readonly changed?: (templateId: string) => void;
+  /** Site packs (T3a): the sites' packs in views. */
+  readonly packs?: TemplatePacks;
 }
 
 /** One removed sign-in as REST reports it. */
@@ -125,7 +128,7 @@ export class TemplateRecordingService {
       site_id: site.siteId,
       learned_cookie_names: [...names],
     });
-    return toSiteView(updated);
+    return toSiteView(updated, this.#deps.packs);
   }
 
   /**
@@ -185,7 +188,11 @@ export class TemplateRecordingService {
     this.#log.info('recording finished', { templateId, removed: removals.length, version });
     this.#deps.changed?.(templateId);
     const current = (await this.#deps.repos.templates.get(templateId)) ?? ready;
-    return { template: toTemplateView(current, finished), version, removed_sign_ins: removed };
+    return {
+      template: toTemplateView(current, finished, this.#deps.packs),
+      version,
+      removed_sign_ins: removed,
+    };
   }
 
   /** `DELETE /templates/{id}/recording`: closes the window; the template is unchanged. */

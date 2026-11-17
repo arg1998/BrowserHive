@@ -21,6 +21,13 @@ const FOLLOW_SETTINGS: ReadonlyMap<string, boolean | null> = new Map([
 export function planSitePacks(name: string, input: PlanInput): CliPlan {
   const { reader, color } = input;
   const json = reader.bool('json');
+  if (name === 'sitepacks verify') {
+    // Offline: no server, only the path (spec 13 §11.5).
+    if (reader.problems.length > 0) return usage(reader.problems);
+    const raw = input.args[0] ?? '';
+    const path = isAbsolute(raw) ? raw : resolvePath(input.context.cwd, raw);
+    return run({ command: 'sitepacks-verify', path, json }, color);
+  }
   const action = sitePacksAction(name, input);
   const explicit = remoteTarget(reader);
   if (reader.problems.length > 0) return usage(reader.problems);

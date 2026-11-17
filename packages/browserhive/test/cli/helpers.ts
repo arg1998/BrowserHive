@@ -207,6 +207,8 @@ export interface StorageState {
   templates: { name: string; principals: readonly string[] | null }[];
   /** Template rows (`templateRows`, doctor and rekey). */
   templateRows: TemplateRowFacts[];
+  /** Approved local pack hashes (`sitePackLocalApprovals`, doctor). */
+  sitePackApprovals: { packId: string; sha256: string | null }[];
   /** Version rows `templates rekey` updated, in order. */
   versionFiles: { templateId: string; version: number; file: TemplateFileRecord }[];
   backups: string[];
@@ -234,6 +236,7 @@ export function storageState(overrides: Partial<StorageState> = {}): StorageStat
     tokens: [],
     templates: [],
     templateRows: [],
+    sitePackApprovals: [],
     versionFiles: [],
     backups: [],
     quickCheckOk: true,
@@ -299,6 +302,7 @@ function fakeStorage(
     listTokens: async () => state.tokens,
     templateAccess: async () => state.templates,
     templateRows: async () => state.templateRows,
+    sitePackLocalApprovals: async () => state.sitePackApprovals,
     updateTemplateVersionFile: async (templateId, version, file) => {
       state.versionFiles.push({ templateId, version, file });
       return true;

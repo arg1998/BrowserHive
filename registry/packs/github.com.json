@@ -2,7 +2,7 @@
   "schema": 1,
   "id": "github.com",
   "version": 1,
-  "min_client": "0.3.0",
+  "min_client": "0.2.3",
   "title": "GitHub",
   "description": "GitHub permits machine accounts run by a responsible person. Token, SSH-key, security, OAuth-app, session, email and account-admin pages, sign-out and OAuth/device-flow approvals are blocked for agents.",
   "domains": [

@@ -35,6 +35,7 @@ import { type BootContext, part, type SeedNotice } from '../context.ts';
 import { hostFactsOf } from '../host.ts';
 import { createNotificationSnapshots } from '../notification-snapshots.ts';
 import { buildSitePackEnforcement } from '../site-pack-enforcement.ts';
+import { buildSitePacks } from '../site-packs.ts';
 import type { PhaseHandle } from '../unwind.ts';
 import { buildOperators } from './domain-operators.ts';
 import { buildOps, reconcile } from './domain-ops.ts';
@@ -257,9 +258,20 @@ async function buildDomain(
     .reconcileRequests(repos.operatorRequests)
     .catch((err: unknown) => logger.warn('catch-up failed', { err: serializeError(err) }));
 
+  const sitePacks = await buildSitePacks({
+    config,
+    release: ctx.input.appVersion,
+    uow: storage.uow,
+    repos,
+    clock,
+    ids,
+    logger,
+    bus,
+  });
   const tpl = await buildTemplates({
     config,
     bus,
+    sitePacks,
     keyFromFlag: ctx.input.resolved.provenance['templateKey']?.source === 'cli',
     ...(ctx.input.testingArgs !== undefined && { testingArgs: ctx.input.testingArgs }),
     host: hostFactsOf(ctx.input.host),
@@ -289,7 +301,7 @@ async function buildDomain(
     sessions,
     uow: storage.uow,
     health: tpl.health,
-    lookup: null,
+    lookup: sitePacks,
     bus,
     ids,
     clock,
@@ -357,6 +369,7 @@ async function buildDomain(
     reportService: ops.reportService,
     publicUrl: ops.publicUrl,
     templates,
+    sitePacks,
     templateRecording: tpl.recording,
     templateParts: tpl,
     instanceId,

@@ -2,7 +2,7 @@
   "schema": 1,
   "id": "microsoft.com",
   "version": 1,
-  "min_client": "0.3.0",
+  "min_client": "0.2.3",
   "title": "Microsoft account",
   "description": "Microsoft account sign-in. The account security pages force a fresh sign-in, so the probe is the account home and security, proofs, connected-app, security-info and account-closure pages are blocked for agents.",
   "domains": [

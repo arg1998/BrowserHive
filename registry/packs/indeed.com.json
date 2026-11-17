@@ -2,7 +2,7 @@
   "schema": 1,
   "id": "indeed.com",
   "version": 1,
-  "min_client": "0.3.0",
+  "min_client": "0.2.3",
   "title": "Indeed",
   "description": "Indeed's terms prohibit automating the Indeed Apply process. Glassdoor signs in with the Indeed login. Sign-out and account settings are blocked for agents.",
   "domains": [

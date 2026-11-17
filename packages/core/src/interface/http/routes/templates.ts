@@ -32,10 +32,10 @@ export const TEMPLATE_ROUTES = [
     operationId: 'createTemplate',
     tags,
     summary:
-      'Create a template in `recording` with its sites, pinned identity and access rule. Under auth=token `policy.authorized_principals` is required (`[]` = every agent).',
+      "Create a template in `recording` with its sites, pinned identity and access rule. Under auth=token `policy.authorized_principals` is required (`[]` = every agent). Each site approves its site pack on first use (a site's pack_sha256 names the version reviewed; another one is 409).",
     request: { body: TemplateInput },
     responses: { 201: TemplateResponse },
-    errors: ['TEMPLATE_NAME_TAKEN'],
+    errors: ['TEMPLATE_NAME_TAKEN', 'CONFLICT'],
     async handler({ input, principal, services }) {
       const owner = requirePrincipal(principal).subject;
       return reply(201, { template: await services.templates.create(input.body, owner) });

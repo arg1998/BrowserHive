@@ -22,6 +22,7 @@ import type { ChannelService } from '../../app/notifications/channel-service.ts'
 import type { PublicUrlChecker } from '../../app/notifications/public-url.ts';
 import type { SessionDirLayout } from '../../app/sessions/profile-dir.ts';
 import type { SessionService } from '../../app/sessions/session-service.ts';
+import type { SitePackRegistry } from '../../app/site-packs/registry.ts';
 import type { TemplateHealthFacade } from '../../app/templates/health-facade.ts';
 import type { TemplateActions } from '../../app/templates/template-actions.ts';
 import type { TemplateEditService } from '../../app/templates/template-edit.ts';
@@ -323,7 +324,28 @@ export interface HttpServices {
   readonly templateOperations: TemplateOperationsPort;
   /** Probes, re-login and the vault link (spec 13 §8, T2). */
   readonly templateHealth: TemplateHealthPort;
+  /** Site packs (spec 13 §9, §11.1, T3a). */
+  readonly sitePacks: SitePacksPort;
 }
+
+/** The site-pack routes' service (a structural slice of `SitePackRegistry`). */
+export type SitePacksPort = Pick<
+  SitePackRegistry,
+  | 'list'
+  | 'detail'
+  | 'diff'
+  | 'apply'
+  | 'reject'
+  | 'revert'
+  | 'pin'
+  | 'setFollow'
+  | 'approveLocal'
+  | 'setEnabled'
+  | 'reload'
+  | 'importPack'
+  | 'changes'
+  | 'guardHits'
+>;
 
 /** The health and re-login routes' service. */
 export type TemplateHealthPort = Pick<

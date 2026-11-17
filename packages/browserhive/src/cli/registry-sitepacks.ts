@@ -116,8 +116,10 @@ const localSubcommands = [
     ],
     flags: remoteJson,
   }),
-  // `sitepacks verify <path>` (offline: schema and refinements, no server) is WP-R's: its sub()
-  // goes here, with its own invocation and `planSitePacks` routing it before the REST target.
+  sub(['verify'], 'Check a site pack file offline (schema, refinements, size)', {
+    args: [{ name: 'path', required: true, describe: 'The pack file (<pack id>.json).' }],
+    flags: [jsonFlag],
+  }),
 ];
 
 /** `sitepacks`. */

@@ -15,6 +15,7 @@ USAGE
   browserhive sitepacks disable <pack> [flags]
   browserhive sitepacks reload [flags]
   browserhive sitepacks import <file> [flags]
+  browserhive sitepacks verify <path> [flags]
 
 Talks to a running server over its REST API (--url, default the configured host and port) with an
 operator bearer (--token) or the dashboard cookie (--cookie). A pack applies only once an operator
@@ -40,6 +41,7 @@ COMMANDS
   disable <pack>           Disable a pack: its sites become generic, its rules stop applying
   reload                   Read the bundled packs and the local folder (sitePacksDir) again
   import <file>            Copy an unsigned pack file into the local folder; approve it afterwards
+  verify <path>            Check a site pack file offline (schema, refinements, size)
 
 FLAGS
   --host <address>             Bind address. A non-loopback host requires auth=token or
@@ -157,6 +159,9 @@ FLAGS — import
                     (http://127.0.0.1:9876).
   --token <bearer>  Operator bearer token for --url (bh_operator_…).
   --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
+
+FLAGS — verify
+  --json  Print machine-readable JSON instead of text.
 
 GLOBAL FLAGS
   -h, --help     Show help.

@@ -265,6 +265,8 @@ function planInvocation(name: string, input: PlanInput): CliPlan {
     case 'sitepacks reload':
     case 'sitepacks import':
       return planSitePacks(name, input);
+    case 'sitepacks verify':
+      return planSitePacks(name, input);
     case 'version': {
       const json = reader.bool('json');
       if (reader.problems.length > 0) return usage(reader.problems);

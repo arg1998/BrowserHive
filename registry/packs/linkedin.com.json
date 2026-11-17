@@ -2,7 +2,7 @@
   "schema": 1,
   "id": "linkedin.com",
   "version": 1,
-  "min_client": "0.3.0",
+  "min_client": "0.2.3",
   "title": "LinkedIn",
   "description": "LinkedIn's terms bar bots and automated methods. Sign-out, session, settings and OAuth-approval requests are blocked for agents.",
   "domains": [

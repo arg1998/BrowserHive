@@ -47,6 +47,7 @@ import type {
   ReportSettingsStore,
   RuntimeFacts,
   SessionService,
+  SitePackRegistry,
   SystemStatusService,
   TemplateRecordingService,
   TemplateService,
@@ -144,6 +145,8 @@ export interface DomainPart {
     TemplatesParts,
     'edit' | 'actions' | 'state' | 'operations' | 'supervisor' | 'healthRoutes' | 'health'
   >;
+  /** Site packs (spec 13 §9, T3a). */
+  readonly sitePacks: SitePackRegistry;
   /** Random per start; `GET /health` reports it (D-37). */
   readonly instanceId: string;
   readonly preferences: PreferenceService;
