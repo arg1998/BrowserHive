@@ -72,9 +72,10 @@ test.describe('site packs in the dashboard', () => {
 
       await page.goto(`${baseUrl}/templates/new?step=2`);
       await expect(page.getByRole('heading', { name: 'Sites BrowserHive knows' })).toBeVisible();
-      await page.getByRole('button', { name: 'Add GitHub' }).click();
-      await expect(page.getByRole('button', { name: 'GitHub: added' })).toBeVisible();
-      await expect(page.getByText(/Adding this site approves GitHub v\d+/)).toBeVisible();
+      // Pack strings are wrapped in Unicode isolates (U+2068 … U+2069, review S-H4).
+      await page.getByRole('button', { name: /^Add \u2068?GitHub\u2069?$/ }).click();
+      await expect(page.getByRole('button', { name: /^\u2068?GitHub\u2069?: added$/ })).toBeVisible();
+      await expect(page.getByText(/Adding this site approves \u2068?GitHub\u2069? v\d+/)).toBeVisible();
       await expect(page.getByLabel('Add a site')).toBeVisible();
       expect(await violations(page)).toEqual([]);
     });
