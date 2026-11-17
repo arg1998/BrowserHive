@@ -56,7 +56,7 @@ export function productionDeps(argv: readonly string[]): CliDeps {
       return composition.bootServer(input);
     },
     openStorage: (input) => openCliStorage(input, context),
-    inspectDatabase: (path) => inspectDatabaseFile(path, context),
+    inspectDatabase: (path, mode) => inspectDatabaseFile(path, context, mode),
     copyFile: (from, to) => copyFile(from, to),
     lock: {
       read: (dataDir) => readLiveLock(dataDir),

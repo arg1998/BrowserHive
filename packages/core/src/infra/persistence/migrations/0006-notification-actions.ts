@@ -1,8 +1,19 @@
 /** @module infra/persistence/migrations/0006-notification-actions — schema v6: act-button command tokens, the press audit and the press listeners' resume cursors (spec 03 §7, §9.6; D-41, D-42). */
 
-import { NOTIFICATION_ACTION_OUTCOMES } from '../../../ports/persistence/enums.ts';
 import type { Migration } from './migration.ts';
 import { sqlIn } from './sql-enums.ts';
+
+/* `notification_actions.outcome` as v6 wrote it, frozen (spec 13 §9.9); `fixtures/ddl/` pins it. */
+const OUTCOMES = [
+  'done',
+  'failed',
+  'not_allowed',
+  'used',
+  'expired',
+  'stale',
+  'wrong_channel',
+  'disabled',
+] as const;
 
 /*
  * Tokens are stored only as SHA-256 hashes and die with their channel or notification. The audit
@@ -38,7 +49,7 @@ CREATE TABLE notification_actions (
   args_json TEXT NOT NULL DEFAULT '{}',
   actor TEXT NOT NULL,
   actor_name TEXT,
-  outcome TEXT NOT NULL CHECK (outcome IN (${sqlIn(NOTIFICATION_ACTION_OUTCOMES)})),
+  outcome TEXT NOT NULL CHECK (outcome IN (${sqlIn(OUTCOMES)})),
   detail TEXT
 );
 CREATE INDEX idx_notification_actions_at ON notification_actions(at);

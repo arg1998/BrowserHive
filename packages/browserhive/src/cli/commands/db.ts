@@ -1,4 +1,5 @@
 /** @module cli/commands/db — `db status | backup [--out] | restore <file> [--yes] | migrate [--dryRun]` (spec 08 §7.1, D-04) */
+import { join } from 'node:path';
 import type { CommandContext, DatabaseStatus } from '../deps.ts';
 import { EXIT, type ExitCode } from '../invocation.ts';
 import {
@@ -126,8 +127,32 @@ export async function runDbBackup(
 }
 
 /**
+ * Copies a database this binary cannot open (newer than its reader window) into `backups/` byte
+ * for byte, with its `-wal` next to the copy so the copy keeps every committed write. Named like
+ * every backup (`browserhive-v<N>-<stamp>.db`), so the newer binary can restore it again.
+ */
+async function copyAsideNewer(
+  context: CommandContext,
+  dataDir: string,
+  version: number,
+): Promise<string> {
+  const { deps } = context;
+  const dir = join(dataDir, 'backups');
+  await deps.fs.mkdir(dir, { mode: 0o700 });
+  const stamp = new Date(deps.clock.now()).toISOString().replaceAll(/[-:.]/g, '');
+  const copy = join(dir, `browserhive-v${version}-${stamp}.db`);
+  const source = databasePath(dataDir);
+  await deps.copyFile(source, copy);
+  if ((await deps.fs.stat(`${source}-wal`))?.isFile === true) {
+    await deps.copyFile(`${source}-wal`, `${copy}-wal`);
+  }
+  return copy;
+}
+
+/**
  * Runs `db restore <file> [--yes]`: refuses while the lock is held, verifies `application_id`
- * and the reader window, backs up the current database, then replaces it.
+ * and the reader window, backs up the current database, then replaces it. A current database newer
+ * than this binary (the downgrade path, D-04) is not opened: it is copied aside byte for byte.
  *
  * @returns 0 on success, 1 on refusal or failure, 3 when a server holds the data dir.
  */
@@ -177,7 +202,19 @@ export async function runDbRestore(
   }
   const lock = deps.lock.acquire(dataDir, 'db restore');
   try {
-    if (await databaseExists(deps, dataDir)) {
+    // The header alone: a database newer than this binary is never opened (opening it read-write
+    // could checkpoint or drop its WAL), only copied.
+    const current = (await databaseExists(deps, dataDir))
+      ? await deps.inspectDatabase(target, 'header')
+      : null;
+    if (current !== null && current.userVersion > deps.schemaVersion) {
+      const copy = await copyAsideNewer(context, dataDir, current.userVersion);
+      out.status(
+        'ok',
+        `current database copied aside: ${copy}`,
+        `schema v${current.userVersion}, newer than this binary (v${deps.schemaVersion})`,
+      );
+    } else if (await databaseExists(deps, dataDir)) {
       const backup = await withStorage(
         deps,
         { dataDir, readOnly: true, migrate: false, owner: 'db restore' },

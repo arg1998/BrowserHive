@@ -1,4 +1,5 @@
 /** @module test/cli/db — `db status | backup | restore | migrate` and `admin` against a temp file database opened through the composition's `openStorageForCli` */
+import { Database } from 'bun:sqlite';
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { copyFile } from 'node:fs/promises';
@@ -29,7 +30,7 @@ function realDeps(): Partial<CliDeps> {
     fs: createNodeFileSystem(),
     configFs: nodeConfigFs,
     openStorage: (input) => openCliStorage(input, context),
-    inspectDatabase: (path) => inspectDatabaseFile(path, context),
+    inspectDatabase: (path, mode) => inspectDatabaseFile(path, context, mode),
     copyFile: (from, to) => copyFile(from, to),
     schemaVersion: SCHEMA_VERSION,
     lock: {
@@ -145,6 +146,41 @@ describe('db (temp file database)', () => {
     expect(restored.stdout).toContain(`✓ restored ${snapshot}`);
     const list = JSON.parse((await cli(['admin', 'tokens', 'list', '--json'])).stdout);
     expect(list).toEqual([]);
+  });
+});
+
+describe('db restore over a database newer than the binary (the downgrade path, D-04)', () => {
+  it('copies the newer database aside byte for byte, without opening it, then restores', async () => {
+    const snapshot = join(root, 'pre-upgrade.db');
+    expect((await cli(['db', 'backup', '--out', snapshot])).code).toBe(0);
+    // What an older binary sees after an incompatible upgrade: the live file's schema and reader
+    // floor are above everything this binary reads.
+    const newer = SCHEMA_VERSION + 1;
+    const live = join(dataDir, 'browserhive.db');
+    const raw = new Database(live);
+    try {
+      raw.exec(`PRAGMA user_version = ${newer}`);
+      raw.query("UPDATE meta SET value = ? WHERE key = 'min_reader_version'").run(String(newer));
+    } finally {
+      raw.close();
+    }
+    expect((await cli(['db', 'status'])).code).toBe(3);
+    writeFileSync(`${live}-wal`, 'uncheckpointed frames');
+    const liveBytes = readFileSync(live);
+
+    const restored = await cli(['db', 'restore', snapshot, '--yes']);
+    expect(restored.stderr).toBe('');
+    expect(restored.code).toBe(0);
+    const copy = new RegExp(
+      `current database copied aside: (\\S+browserhive-v${newer}-\\d{8}T\\d{9}Z\\.db)`,
+    ).exec(restored.stdout)?.[1];
+    expect(copy).toBeDefined();
+    expect(readFileSync(copy ?? '')).toEqual(liveBytes);
+    expect(readFileSync(`${copy ?? ''}-wal`, 'utf8')).toBe('uncheckpointed frames');
+    expect(restored.stdout).toContain(`✓ restored ${snapshot}`);
+    const status = await cli(['db', 'status']);
+    expect(status.code).toBe(0);
+    expect(status.stdout).toMatch(new RegExp(`^user_version\\s+${SCHEMA_VERSION} `, 'm'));
   });
 });
 
