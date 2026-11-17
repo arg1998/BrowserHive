@@ -196,7 +196,9 @@ function hostOf(url: string): string | null {
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
-    return parsed.hostname.length > 0 ? parsed.hostname : null;
+    // `site.test.` is `site.test` to DNS: its pack applies (review PR #83 M2).
+    const host = parsed.hostname.replace(/\.+$/, '');
+    return host.length > 0 ? host : null;
   } catch {
     return null;
   }

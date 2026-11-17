@@ -72,9 +72,9 @@ describe('DEFAULT_GUARDS', () => {
   it('the consent globs span the query string, failing closed (review S-L8, pinned)', () => {
     // `*consent*` also matches a consent page reached with `prompt=consent` in the query, and an
     // `adminconsent` anywhere after the host; the sign-in identifier step is never matched.
-    expect(
-      ruleFor('https://accounts.google.com/signin/oauth/v2/x?prompt=consent', 'GET'),
-    ).toBe(defaultGuardRuleId('google-oauth-consent'));
+    expect(ruleFor('https://accounts.google.com/signin/oauth/v2/x?prompt=consent', 'GET')).toBe(
+      defaultGuardRuleId('google-oauth-consent'),
+    );
     expect(
       ruleFor('https://login.microsoftonline.com/common/oauth2/authorize?adminconsent=1', 'GET'),
     ).toBe(defaultGuardRuleId('entra-admin-consent'));

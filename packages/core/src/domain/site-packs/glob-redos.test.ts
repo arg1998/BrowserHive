@@ -1,13 +1,13 @@
 /** @module domain/site-packs/glob-redos.test — review PR #83 H1 as regression tests: pack globs match in linear time in the request guard and in pack globs, a pack with too many stars is refused at load, and a load with a long probe path stays fast whatever the guards. */
 
 import { describe, expect, it } from 'bun:test';
+import { SitePackV1 } from '@browserhive/contracts/site-packs';
 import { compileRequestGuardRules, matchRequestGuard } from '../policies/request-guard.ts';
 import { MAX_GLOB_STARS } from './glob-scope.ts';
 import { loadPackBytes } from './load.ts';
 import { matchesPackGlob } from './pack-glob.ts';
 import { refinePack } from './refine.ts';
 import { basePack } from './test-fixtures.ts';
-import { SitePackV1 } from '@browserhive/contracts/site-packs';
 
 const LIMIT_MS = 50;
 
@@ -23,18 +23,21 @@ describe('pack globs never backtrack (H1)', () => {
     [3, 500],
     [4, 200],
     [99, 2 * 1024 * 1024],
-  ])('the request guard matches `x.com/` + %i × `*a` + `*b` against %i chars in < 50 ms', (k, n) => {
-    const glob = `x.com/${'*a'.repeat(k)}*b`.slice(0, 300);
-    const rules = compileRequestGuardRules([{ id: 'g', url: glob, action: 'block' }]);
-    if (!rules.ok) throw new Error(rules.error.reason);
-    const url = `https://x.com/${'a'.repeat(n)}`;
-    const ms = timed(() => {
-      expect(matchRequestGuard(rules.value, { url, method: 'GET', resourceType: 'document' })).toBe(
-        null,
-      );
-    });
-    expect(ms).toBeLessThan(LIMIT_MS);
-  });
+  ])(
+    'the request guard matches `x.com/` + %i × `*a` + `*b` against %i chars in < 50 ms',
+    (k, n) => {
+      const glob = `x.com/${'*a'.repeat(k)}*b`.slice(0, 300);
+      const rules = compileRequestGuardRules([{ id: 'g', url: glob, action: 'block' }]);
+      if (!rules.ok) throw new Error(rules.error.reason);
+      const url = `https://x.com/${'a'.repeat(n)}`;
+      const ms = timed(() => {
+        expect(
+          matchRequestGuard(rules.value, { url, method: 'GET', resourceType: 'document' }),
+        ).toBe(null);
+      });
+      expect(ms).toBeLessThan(LIMIT_MS);
+    },
+  );
 
   it('a page, challenge or redirect glob is as fast (pack-glob)', () => {
     const glob = `x.com/${'*a'.repeat(4)}*b`;

@@ -33,6 +33,8 @@ export const DEFAULT_GUARDS: readonly DefaultGuard[] = Object.freeze([
   {
     // Observed: OAuth consent redirects to /signin/oauth/v3/consent. Approval request not
     // observable signed out (owner checklist item): every method on the consent pages is blocked.
+    // The glob spans the query string too (`?prompt=consent` on another oauth path): it fails
+    // closed, and the sign-in identifier step never matches (review S-L8, pinned by a test).
     id: 'google-oauth-consent',
     kind: 'credential',
     title: 'Google',
@@ -62,6 +64,7 @@ export const DEFAULT_GUARDS: readonly DefaultGuard[] = Object.freeze([
   },
   {
     // learn.microsoft.com v2-admin-consent: /{tenant}/v2.0/adminconsent (and the v1 form).
+    // Spans the query string like the Google glob (`?adminconsent=`): fails closed (S-L8).
     id: 'entra-admin-consent',
     kind: 'credential',
     title: 'Microsoft',
