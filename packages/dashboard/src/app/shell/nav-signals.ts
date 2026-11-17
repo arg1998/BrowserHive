@@ -1,7 +1,8 @@
-/** @module app/shell/nav-signals — what the sidebar needs besides the route table: badge counts (open attention, vault confirms, template sites that need a sign-in), which capabilities are on (vault, templates, site packs) and the pure grouping into enabled and "Not enabled" items */
+/** @module app/shell/nav-signals — what the sidebar needs besides the route table: badge counts (open attention, vault confirms, template sites that need a sign-in, site packs waiting for review), which capabilities are on (vault, templates, site packs) and the pure grouping into enabled and "Not enabled" items */
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useApi } from '@/app/providers/AuthProvider.tsx';
 import { useTopic } from '@/app/providers/SocketProvider.tsx';
+import { packsNeedingReview } from '@/features/site-packs/model.ts';
 import { TEMPLATES_TOPIC } from '@/features/templates/live.ts';
 import { keys } from '@/lib/api/keys.ts';
 import type { NavItem } from './use-route-table.ts';
@@ -40,6 +41,7 @@ export function useNavSignals() {
   });
   const vaultEnabled = system.data === undefined ? null : system.data.vault.enabled;
   const templatesEnabled = configFlag(config.data, 'templates');
+  const sitePacksEnabled = configFlag(config.data, 'sitePacks');
   const confirms = useQuery({
     queryKey: keys.vault.confirmCount(),
     queryFn: async () =>
@@ -54,6 +56,13 @@ export function useNavSignals() {
       sitesNeedingSignIn((await api.listTemplates({ query: { limit: 1 } })).facets.health),
     enabled: templatesEnabled !== false,
   });
+  // The catalog's cache entry: the Site packs page and the wizard share it (spec 13 §11.4 badge).
+  const packs = useQuery({
+    queryKey: keys.sitePacks.catalog(),
+    queryFn: () => api.listSitePacks({ query: {} }),
+    enabled: sitePacksEnabled === true && templatesEnabled !== false,
+    staleTime: 30_000,
+  });
   useTopic('attention');
   useTopic(vaultEnabled === true ? 'vault.confirm' : null);
   useTopic('system');
@@ -66,16 +75,20 @@ export function useNavSignals() {
     )
       void queryClient.invalidateQueries({ queryKey: [...keys.templates.lists(), 'nav-badge'] });
   });
+  useTopic(sitePacksEnabled === true ? 'site-packs' : null, (event) => {
+    if (event.type === 'site_pack.changed' || event.type === 'site_pack.pending')
+      void queryClient.invalidateQueries({ queryKey: keys.sitePacks.catalog() });
+  });
   return {
     capabilities: {
       vault: vaultEnabled,
       templates: templatesEnabled,
-      // Site packs ship with a later phase of the templates program (spec 13 §17 T3a).
-      sitePacks: false,
+      sitePacks: sitePacksEnabled,
     } satisfies NavCapabilities,
     attentionOpen: attention.data ?? 0,
     confirmsOpen: confirms.data ?? 0,
     signInsNeeded: signIns.data ?? 0,
+    packsToReview: packsNeedingReview(packs.data),
     version: system.data?.version ?? null,
   };
 }
@@ -101,7 +114,8 @@ function placement(
     case 'templates':
       return caps.templates === false ? 'disabled' : 'enabled';
     case 'sitePacks':
-      return caps.sitePacks === true && caps.templates !== false ? 'enabled' : 'disabled';
+      // On by default: shown while the config loads, "Not enabled" with sitePacks=false or templates=false.
+      return caps.sitePacks === false || caps.templates === false ? 'disabled' : 'enabled';
     default:
       return 'enabled';
   }
