@@ -63,7 +63,7 @@ describe('CdpPageFocus', () => {
     const page = new ScriptedPage();
     await focus.setEmulated(asPage(page), true, false);
     expect(page.sessions).toBe(0);
-    expect(focus.isUnfocused(asPage(page))).toBe(false);
+    expect(page.sent).toEqual([]);
   });
 
   it('turns focus off once, re-sends it after main-frame navigations, and back on', async () => {
@@ -73,7 +73,6 @@ describe('CdpPageFocus', () => {
     await focus.setEmulated(asPage(page), false, false);
     expect(page.sessions).toBe(1);
     expect(page.sent).toEqual([false]);
-    expect(focus.isUnfocused(asPage(page))).toBe(true);
     page.emit('framenavigated', page.frame);
     page.emit('framenavigated', {});
     await flush();
@@ -82,7 +81,6 @@ describe('CdpPageFocus', () => {
     page.emit('framenavigated', page.frame);
     await flush();
     expect(page.sent).toEqual([false, false, true]);
-    expect(focus.isUnfocused(asPage(page))).toBe(false);
   });
 
   it('headless: minimizes the window of an unfocused page and restores it with its focus', async () => {
@@ -118,7 +116,9 @@ describe('CdpPageFocus', () => {
     page.emit('close', undefined);
     await flush();
     expect(page.detached).toBe(1);
-    expect(focus.isUnfocused(asPage(page))).toBe(false);
+    // Forgotten: turning it off again attaches a new session.
+    await focus.setEmulated(asPage(page), false, false);
+    expect(page.sessions).toBe(2);
     const failing = new ScriptedPage();
     failing.failSend = true;
     await focus.setEmulated(asPage(failing), false, false);

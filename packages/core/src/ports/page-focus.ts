@@ -13,6 +13,4 @@ export interface PageFocusControl {
    * throws.
    */
   setEmulated(page: Page, emulated: boolean, headless: boolean): Promise<void>;
-  /** True while `page` has its focus emulation turned off. */
-  isUnfocused(page: Page): boolean;
 }
