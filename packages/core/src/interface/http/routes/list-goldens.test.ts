@@ -28,6 +28,8 @@ const LISTS: readonly (readonly [string, string])[] = [
   ['listLogs', '/api/v1/logs'],
   ['listMcpConnections', '/api/v1/system/mcp/connections'],
   ['getHarnessMetrics', '/api/v1/metrics/harnesses?since=0'],
+  ['listSitePackChanges', '/api/v1/site-packs/changes'],
+  ['listSiteGuardHits', '/api/v1/site-packs/guard-hits'],
 ];
 
 describe('list response goldens', () => {

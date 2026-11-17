@@ -1,6 +1,6 @@
 # Session templates
 
-> **In this release:** you create a template and sign it in to its sites (or seed it from a storage state) from the dashboard, the command line or the REST API; BrowserHive keeps encrypted versions of its sign-ins that you can restore, checks on a schedule that the sites are still signed in, tells you when one is not, and lets you sign it in again in a window or with the vault; agents list and launch it over MCP, and template sessions are sealed. Site packs (per-site knowledge such as a site's sign-in page and security checks) arrive in a later release; until then every site is a generic site.
+> **In this release:** you create a template and sign it in to its sites (or seed it from a storage state) from the dashboard, the command line or the REST API; BrowserHive keeps encrypted versions of its sign-ins that you can restore, checks on a schedule that the sites are still signed in, tells you when one is not, and lets you sign it in again in a window or with the vault; agents list and launch it over MCP, and template sessions are sealed. [Site packs](site-packs.md) describe the sites BrowserHive knows: how to check their sign-in by loading a page, which requests and buttons agents may not use, and which pages are security checks that need you.
 
 A session template is a browser identity you sign in to sites once. Agents then launch sessions from it with `launch_session` and its `template` parameter, and every such session starts signed in. Agents never see your passwords, and by default they never see the cookie values either.
 
@@ -10,6 +10,7 @@ A session template is a browser identity you sign in to sites once. Agents then 
 |---|---|
 | **Template** | A named browser identity (`job-hunt`), with an id (`tp-…`). It has sites, a pinned identity (seed, locale, timezone), an optional proxy, an access rule, a session cap and sealing settings. Agents address it by its name. |
 | **Site** | One registrable domain the template is signed in to, such as `linkedin.com`. `www.linkedin.com` and `uk.linkedin.com` are the same site. A template has 1 to 16 sites. |
+| **Site pack** | What BrowserHive knows about one site: how to check its sign-in, which requests and buttons are guarded, which pages are security checks. A site with an approved pack uses it; a site without one is a **generic site**. See [Sites with a site pack](#sites-with-a-site-pack). |
 | **The template's browser** | One Chromium with a persistent profile under `<data-dir>/templates/<id>/userdata`. Every session of the template runs in it and shares its cookies, storage, fingerprint and IP address. |
 | **Session and its windows** | Each session launched from a template gets its own window (or windows) in that browser and sees only its own pages. `list_tabs`, screenshots, the live view and every page tool reach only pages the session opened, or that a page of it opened. |
 | **Other windows** ("parked") | Pages of the template's browser that belong to no session: a tab or window you open by hand, the browser's first window, pages BrowserHive opens for its own work. No agent can reach them. |
@@ -44,7 +45,7 @@ browserhive --admin            # in one terminal (or your service)
 browserhive templates create job-hunt --sites linkedin.com,indeed.com --allPrincipals
 ```
 
-1. BrowserHive creates the template (status "setting up") and opens one window titled `[BrowserHive] Sign in to linkedin.com, indeed.com`. Its first tab is a short instructions page; there is one more tab per site, at `https://<site>/`.
+1. The command first prints the [site pack](#sites-with-a-site-pack) of each site that has one and, when a pack is not approved yet, asks you to type `yes` to approve it (`--yes` in scripts). BrowserHive then creates the template (status "setting up") and opens one window titled `[BrowserHive] Sign in to linkedin.com, indeed.com`. Its first tab is a short instructions page; there is one more tab per site, at `https://<site>/`.
 2. Sign in to each site in its tab, by hand. Type rather than paste, and check the address bar before you type a password. Passkeys and security keys on that machine work as in any browser.
 3. The command prints one line per site. Press **Enter** when you have signed in to every site.
 4. On Enter, BrowserHive treats every site you have not confirmed as "I'm signed in" ([below](#how-browserhive-knows-you-signed-in)), lists any [unlisted sign-ins](#unlisted-sign-ins) and removes them unless you answer no, closes the window and sets the template `ready`.
@@ -119,6 +120,21 @@ curl -sH "$H" -H 'Content-Type: application/json' -X POST $B/templates/tp-…/re
 | `DELETE /templates/{id}` | `templates:write` | Stops the browser and deletes `templates/<id>/`. `409 TEMPLATE_IN_USE` while sessions run; `?force=true` closes them. |
 
 The [REST reference](../reference/api.md#templates) lists every route with its fields.
+
+### Sites with a site pack
+
+When a site you add has a [site pack](site-packs.md), the wizard's sites step shows it before you go on: the pack's version, its SHA-256, where it comes from ("bundled with BrowserHive 0.3.1", or a local file's path), the site's terms on automation as a quoted clause, and whether the sign-in is for a person only. **Adding the site approves that version** of the pack, for every template ([Approval and provenance](site-packs.md#approval-and-provenance)). A pack another template already uses keeps its approved version. `templates create --sites` prints each site's pack (version, provenance, SHA-256, terms) before it creates anything and asks you to approve it on a terminal (or `--yes`). The REST API needs the reviewed SHA-256 on each site whose pack is not approved yet (`pack_sha256`); without it, adding the site is refused.
+
+With an approved pack, a site gets:
+
+- **Sign-in checks that load a page** of the site, which can also find a security check in the way ([How a site is checked](#how-a-site-is-checked)).
+- **Guards.** Requests and buttons that sign the account out, change its security settings or create credentials are blocked or wait for your confirmation on `/attention`. Agents get `URL_BLOCKED`, `SITE_ACTION_BLOCKED` or `SITE_OPERATOR_PENDING` ([Guards](site-packs.md#guards)).
+- **A write policy** for the actions the pack marks as writes (posts, messages, applications): `allow`, `warn` or `confirm`. A pack without write guards has nothing for it to act on, and the wizard and the Sites tab say so. The pack proposes one from the site's terms; you choose per template and site, in the wizard, on the template's **Sites** tab, or with `PUT /api/v1/templates/{id}/sites/{site}` and `{"write_policy": "confirm"}` (`null` returns to the pack's default). See [Write policies and the stance rule](site-packs.md#write-policies-and-the-stance-rule).
+- **Site checks.** A security check or CAPTCHA on one of the site's pages holds the agent's session until you resolve it on `/attention` ([Challenges](site-packs.md#challenges)).
+
+**Stopped sites.** A pack can mark a page as one where retrying makes things worse (a suspended account, "Couldn't sign you in"). When an agent's session lands on it, the site is **stopped**: every agent navigation to the site and every tool on its pages answers `SITE_OPERATOR_PENDING` until you look at the account and press **Clear stop** on the template's Sites tab (`POST /api/v1/templates/{id}/sites/{site}/clear-stop`).
+
+A site you added before its pack was available stays a generic site. To attach the pack, add the site again with `PUT /api/v1/templates/{id}/sites/{site}` and the pack's SHA-256 (`{"pack_sha256": "…"}`), which approves it, or remove the site and add it in the dashboard.
 
 ### Google and other sites that refuse automated browsers
 
@@ -323,7 +339,8 @@ Every change below is an operator call (scopes in [Access](#access)) and is reco
 | Check now whether its sites are signed in | `templates probe <name> [--site <site>]` | `POST …/probe` |
 | Sign a site in again | `templates login <name> --site <site>` | `POST …/relogin` ([below](#signing-in-again)) |
 | Edit it | — | `PATCH` |
-| Add, change or remove a site | — | `PUT …/sites/{site}`, `DELETE …/sites/{site}` |
+| Add, change or remove a site, or set its write policy | — | `PUT …/sites/{site}` `{enabled?, write_policy?, pack_sha256?}`, `DELETE …/sites/{site}` |
+| Clear a [stopped site](#sites-with-a-site-pack) | — | `POST …/sites/{site}/clear-stop` |
 | Close one of its other windows | — | `POST …/host/pages/{target_id}/close` |
 | Test whether a principal and harness may launch it | — | `POST …/access/resolve` |
 | Open its data directory in the file manager | — | `POST …/data-dir/reveal` |
@@ -340,7 +357,9 @@ Sites sign templates out: a session expires, a password changes, a site logs out
 
 ### How a site is checked
 
-Until site packs arrive, every site is a **generic site**: BrowserHive decides from the sign-in cookies it learned when you confirmed the site ([How BrowserHive knows you signed in](#how-browserhive-knows-you-signed-in)). A check reads the names and expiry of the site's cookies in the template's browser. It never reads a value and opens no page, so the site sees no traffic from it.
+**A site with an approved [site pack](site-packs.md)** is checked by loading the pack's check page (such as `www.linkedin.com/feed/`) in a background window of the template's browser, with `GET` only. Page loads that leave the site's domains are aborted during the check. The page tells BrowserHive whether the template is signed in: a redirect to a sign-in page, a signed-out marker, a signed-in landmark, or a security check in the way. The results and their reasons are in [Navigation checks](site-packs.md#navigation-checks). A check that loads a page needs the template's browser to run, so it starts a stopped browser.
+
+**A generic site** (no pack, or a pack you have not approved) is decided from the sign-in cookies BrowserHive learned when you confirmed the site ([How BrowserHive knows you signed in](#how-browserhive-knows-you-signed-in)). A check reads the names and expiry of the site's cookies in the template's browser. It never reads a value and opens no page, so the site sees no traffic from it.
 
 | Result | Reason | Meaning |
 |---|---|---|
@@ -349,12 +368,12 @@ Until site packs arrive, every site is a **generic site**: BrowserHive decides f
 | ? couldn't tell (`inconclusive`) | `partial_cookies` | Some are there, some are not. The site may have signed the template out, or uses some of the cookies only now and then. |
 | ? couldn't tell (`inconclusive`) | `no_pack` | BrowserHive has not learned any sign-in cookie for the site, for example on a template you only [seeded](#seeding-from-a-storage-state). Sign the site in again in a window and press **I'm signed in**: it learns them then. |
 
-Checks that open the site's own page, and the `challenged` result (a security check or CAPTCHA in the way, "! check needed"), arrive with site packs. A "couldn't tell" result never starts a re-login, and neither will a challenge: signing in again into a site's security check is how accounts get locked. Three "couldn't tell" results in a row put a warning on the template page ("BrowserHive couldn't tell whether … is signed in"); they send no notification.
+A site with a pack can also come out **! check needed** (`challenged`): a security check or CAPTCHA is in the way. A challenged site is never reported as signed out, and you get a [`template.challenged`](notifications.md#template-sign-ins) notification. Neither "couldn't tell" nor a challenge ever starts a re-login: signing in again into a site's security check is how accounts get locked. Three "couldn't tell" results in a row put a warning on the template page ("BrowserHive couldn't tell whether … is signed in"); they send no notification.
 
 ### When sites are checked
 
 - **On a schedule:** every `templateHealthInterval` (default `6h`; 30 minutes to 7 days), give or take 10 % so checks do not line up. Each template keeps its own interval, `policy.health_interval_ms`, set at creation from `templateHealthInterval` and changed with `PATCH /api/v1/templates/{id}`. A template's sites are checked one after the other, 5 to 20 seconds apart, and at most two templates are checked at the same time.
-- **A stopped browser is checked from its last checkpoint.** The cookie check needs only the cookie names, so when the template's browser is stopped, BrowserHive reads them from the encrypted checkpoint written when it stopped (nothing starts, no window can take your focus). Only when there is no checkpoint (no template key, or the browser never stopped cleanly) does a scheduled check start the browser: its windows open in the background and minimized, but a headed browser shows its first window for a moment and can take the keyboard focus once (see [the template's browser](#the-templates-browser)); keystrokes that land there reach no agent, and when every browser slot is taken (`maxSessions`) the check waits for the next interval. **Check now** starts a stopped browser only in that case too.
+- **A stopped browser is checked from its last checkpoint** when every site is generic. The cookie check needs only the cookie names, so when the template's browser is stopped, BrowserHive reads them from the encrypted checkpoint written when it stopped (nothing starts, no window can take your focus). Only when there is no checkpoint (no template key, or the browser never stopped cleanly) does a scheduled check start the browser: its windows open in the background and minimized, but a headed browser shows its first window for a moment and can take the keyboard focus once (see [the template's browser](#the-templates-browser)); keystrokes that land there reach no agent, and when every browser slot is taken (`maxSessions`) the check waits for the next interval. **Check now** starts a stopped browser only in that case too.
 - **After events:** every site is checked whenever the template's browser starts, after a [restore](#restoring-a-version) or a [seed](#seeding-from-a-storage-state), and when an [attention request](#through-an-attention-request) of one of the template's sessions is resolved.
 - **Before a launch,** see below.
 - **On demand:** **Check now** on the template page, `browserhive templates probe <name> [--site <site>]`, or `POST …/probe`. It waits for the result (at most 2 minutes) and starts a stopped browser.
@@ -365,7 +384,7 @@ Checks that open the site's own page, and the `challenged` result (a security ch
 
 With `policy.prelaunch_check` on (the default), a launch checks every enabled site whose last check is older than 15 minutes, once the template's browser runs. The check takes at most 10 seconds (less when the launch has less time left); a site not done by then counts as "couldn't tell" for that launch. Launches arriving together share one check.
 
-- **Every enabled site is signed out:** the launch fails with `TEMPLATE_NEEDS_LOGIN`, which tells the agent to retry after you have signed in again, and you get the sign-out notification.
+- **Every enabled site is signed out** (or held by a security check, `challenged`): the launch fails with `TEMPLATE_NEEDS_LOGIN`, which tells the agent to retry after you have signed in again, and you get the sign-out notification.
 - **Otherwise** the session starts. When some sites are signed out, it carries a `TEMPLATE_SITE_SIGNED_OUT` warning naming them, and its `template.sites` show each site's status.
 
 Turn the check off for a template with `PATCH` and `{"policy": {"prelaunch_check": false}}`; launches then trust the last scheduled check.
@@ -547,6 +566,8 @@ Rotation protects copies made from now on. Copies made before it can still be re
 | [`templateVersionsKeep`](../reference/configuration.md#templateVersionsKeep) | `10` | Versions kept per template (1 to 100), besides pinned ones and Last good. |
 | [`templateKey`](../reference/configuration.md#templateKey) | unset | The key that encrypts checkpoints and versions (base64 of 32 bytes). Secret: set `BROWSERHIVE_TEMPLATE_KEY`. Unset: `<data-dir>/admin/template.key`. |
 | [`templateKeyPrevious`](../reference/configuration.md#templateKeyPrevious) | unset | The previous key, read only, while you [rotate the key](#rotating-the-key). Secret. |
+| [`sitePacks`](../reference/configuration.md#sitePacks) | `true` | `false` turns [site packs](site-packs.md) off: every site is a generic site. |
+| [`sitePacksDir`](../reference/configuration.md#sitePacksDir) | `<data-dir>/site-packs/local` | The folder of your own [local packs](site-packs.md#local-packs). |
 
 ## Known limits
 
@@ -555,8 +576,8 @@ A template's browser always routes its requests through BrowserHive (that is how
 | Limit | What happens | What to do |
 |---|---|---|
 | **No HTTP cache** | Every page load fetches every script, style and image again: more traffic, slower pages, and a site can notice that nothing is ever served from cache. On the test site, reloading a page with five cacheable scripts fetched all five again. | Nothing to configure. A cache-preserving mode is planned. |
-| **SharedWorker requests** | Requests a page's SharedWorker makes are not seen by routing, so they have no owning session and site rules (once site packs exist) cannot stop them. Dedicated and service workers are routed. | Accepted; site packs express such writes as rules on the page actions instead. |
-| **Requests sent while a page closes** | A beacon or `keepalive` fetch a page sends while it closes (`close_tab`, `close_session`) is not routed: no owning session and no site rule ever sees it, and whether it reaches the site depends on timing. | Accepted; site packs express such writes as rules on the page actions instead. |
+| **SharedWorker requests** | Requests a page's SharedWorker makes are not seen by routing, so they have no owning session and [site pack guards](site-packs.md#what-guards-cannot-see) cannot stop them. Dedicated and service workers are routed. | Accepted; site packs express such writes as element guards on the page actions instead. |
+| **Requests sent while a page closes** | A beacon or `keepalive` fetch a page sends while it closes (`close_tab`, `close_session`) is not routed: no owning session and no guard ever sees it, and whether it reaches the site depends on timing. | Accepted; site packs express such writes as element guards on the page actions instead. |
 | **Redirects into BrowserHive** | Routing sees only the first URL of a redirect chain. A page can therefore redirect the template's browser to BrowserHive's own address; the request carries the template's marker cookie and BrowserHive refuses it (403), so the dashboard never loads there. BrowserHive also answers only `localhost`, `127.0.0.1` and `::1` among loopback names (not `*.localhost`, other `127.x` addresses or IPv4-mapped forms), so the marker covers every address it answers. | Nothing to configure. |
 | **Modifier clicks** | Chromium opens a Ctrl/Cmd/Shift- or middle-click tab with no link to the page that opened it. BrowserHive matches it to the clicking session by the page's own request; when two sessions request the same address at the same moment, the tab is left to no session (closed to agents). | Nothing to configure. |
 | **Page caps** | A session holds at most `max(2, floor(templateMaxPagesPerHost / cap))` pages, whoever opens them. A page a site opens beyond that is closed, and the session gets a `SESSION_PAGE_LIMIT` warning, so one session's site cannot take every page of the shared browser. | Raise `templateMaxPagesPerHost` if sessions need more pages. |

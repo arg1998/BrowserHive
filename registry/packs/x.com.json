@@ -1,0 +1,157 @@
+{
+  "schema": 1,
+  "id": "x.com",
+  "version": 1,
+  "min_client": "0.2.3",
+  "title": "X",
+  "description": "X's automation rules bar non-API automation such as scripting the X website, with permanent suspension as the stated risk. Sign-out, deactivation, connected-app and OAuth-approval requests are blocked for agents.",
+  "domains": [
+    "x.com",
+    "twitter.com",
+    "twimg.com"
+  ],
+  "sign_in": {
+    "url": {
+      "host": "x.com",
+      "path": "/i/flow/login"
+    },
+    "human_only": false
+  },
+  "signed_in": {
+    "probe": {
+      "host": "x.com",
+      "path": "/settings/account"
+    },
+    "kind": "redirect",
+    "signed_out_redirects": [
+      "x.com/i/jf/onboarding/web*",
+      "x.com/i/flow/login*",
+      "x.com/login*"
+    ],
+    "cookie_names": [
+      "auth_token"
+    ]
+  },
+  "guards": [
+    {
+      "id": "logout",
+      "kind": "logout",
+      "match": {
+        "url": "x.com/logout"
+      },
+      "action": "block"
+    },
+    {
+      "id": "logout-twitter",
+      "kind": "logout",
+      "match": {
+        "url": "twitter.com/logout"
+      },
+      "action": "block"
+    },
+    {
+      "id": "oauth-approve",
+      "kind": "credential",
+      "match": {
+        "url": "x.com/i/*oauth2/authorize*",
+        "methods": [
+          "POST"
+        ]
+      },
+      "action": "block"
+    },
+    {
+      "id": "oauth-approve-twitter",
+      "kind": "credential",
+      "match": {
+        "url": "twitter.com/i/*oauth2/authorize*",
+        "methods": [
+          "POST"
+        ]
+      },
+      "action": "block"
+    },
+    {
+      "id": "apps-sessions",
+      "kind": "credential",
+      "match": {
+        "url": "x.com/settings/applications"
+      },
+      "action": "block"
+    },
+    {
+      "id": "apps-sessions-twitter",
+      "kind": "credential",
+      "match": {
+        "url": "twitter.com/settings/applications"
+      },
+      "action": "block"
+    },
+    {
+      "id": "deactivate",
+      "kind": "destructive",
+      "match": {
+        "url": "x.com/settings/deactivate"
+      },
+      "action": "block"
+    },
+    {
+      "id": "deactivate-twitter",
+      "kind": "destructive",
+      "match": {
+        "url": "twitter.com/settings/deactivate"
+      },
+      "action": "block"
+    }
+  ],
+  "write_policy": {
+    "default": "confirm",
+    "stance": "prohibited",
+    "clause": {
+      "quote": "Use non-API-based forms of automation, such as scripting the X website. The use of these techniques may result in the permanent suspension of your account.",
+      "url": "https://help.x.com/en/rules-and-policies/x-automation",
+      "checked": "2026-11-16"
+    }
+  },
+  "browser": {
+    "channel": "any",
+    "headed": "preferred"
+  },
+  "verified": {
+    "sign_in": "2026-11-16",
+    "signed_in": "2026-11-16",
+    "guards": "2026-11-16",
+    "write_policy": "2026-11-16",
+    "browser": "2026-11-16"
+  },
+  "sources": [
+    {
+      "url": "https://help.x.com/en/rules-and-policies/x-automation",
+      "kind": "official"
+    },
+    {
+      "url": "https://help.x.com/en/rules-and-policies/x-limits",
+      "kind": "official"
+    },
+    {
+      "url": "https://help.x.com/en/rules-and-policies/x-cookies",
+      "kind": "official"
+    },
+    {
+      "url": "https://help.x.com/en/managing-your-account/how-to-deactivate-x-account",
+      "kind": "official"
+    },
+    {
+      "url": "https://help.x.com/en/managing-your-account/connect-or-revoke-access-to-third-party-apps",
+      "kind": "official"
+    },
+    {
+      "url": "https://docs.x.com/resources/fundamentals/authentication/oauth-2-0/authorization-code",
+      "kind": "official"
+    },
+    {
+      "url": "https://x.com/settings/account",
+      "kind": "observed"
+    }
+  ]
+}

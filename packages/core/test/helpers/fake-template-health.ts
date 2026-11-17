@@ -47,6 +47,7 @@ function defaultSite(): TemplateSiteView {
     stopped_at: null,
     device_bound: false,
     added_at: 1_700_000_000_000,
+    pack: null,
   };
 }
 

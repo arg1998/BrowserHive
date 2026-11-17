@@ -126,7 +126,8 @@ export const WS_TOPIC_SCOPES: {
     | 'logs'
     | 'notifications'
     | 'channels'
-    | 'templates']: Scope;
+    | 'templates'
+    | 'site-packs']: Scope;
 } = {
   sessions: 'sessions:read',
   session: 'sessions:read',
@@ -142,4 +143,5 @@ export const WS_TOPIC_SCOPES: {
   notifications: 'notifications:read',
   channels: 'channels:read',
   templates: 'templates:read',
+  'site-packs': 'sitepacks:read',
 };

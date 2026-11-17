@@ -140,6 +140,7 @@ Subscribe with `{ "type": "subscribe", "topic": "<topic>", "cursor"?: <last seq>
 | `notifications` | `notifications:read` | [`notification.created`](#event-notification-created), [`notification.updated`](#event-notification-updated) |
 | `channels` | `channels:read` | [`channel.changed`](#event-channel-changed), [`channel.removed`](#event-channel-removed), [`delivery.updated`](#event-delivery-updated), [`action.recorded`](#event-action-recorded) |
 | `templates` | `templates:read` | [`template.changed`](#event-template-changed), [`template.removed`](#event-template-removed), [`template.host`](#event-template-host), [`template.health`](#event-template-health), [`template.version`](#event-template-version), [`template.operation`](#event-template-operation), [`template.relogin`](#event-template-relogin), [`template.probe`](#event-template-probe) |
+| `site-packs` | `sitepacks:read` | [`site_pack.changed`](#event-site_pack-changed), [`site_pack.pending`](#event-site_pack-pending), [`site_pack.status`](#event-site_pack-status) |
 | `session:<id>` | `sessions:read` | [`session.opened`](#event-session-opened), [`session.updated`](#event-session-updated), [`session.closed`](#event-session-closed), [`session.removed`](#event-session-removed), [`session.warning`](#event-session-warning), [`tool.called`](#event-tool-called), [`page.visited`](#event-page-visited), [`screenshot.captured`](#event-screenshot-captured), [`vault.access`](#event-vault-access), [`blocklist.hit`](#event-blocklist-hit), [`attention.created`](#event-attention-created), [`attention.resolved`](#event-attention-resolved), [`vault.confirm.created`](#event-vault-confirm-created), [`vault.confirm.resolved`](#event-vault-confirm-resolved) |
 | `screencast:<id>` | `sessions:read` | stream messages `meta`, `started`, `stopped`, `failed` and binary frames |
 
@@ -230,28 +231,28 @@ Payloads of `kind: "event"` frames, discriminated on `type`. DTO fields (`sessio
 
 | Field | Type | Required | Constraints |
 |---|---|---|---|
-| `request` | `object` | yes | keys `request_id`, `kind`, `session_id`, `session_slug`, `owner`, `reason`, `mode`, `options`, `status`, `message`, `resolved_by`, `resolution_reason`, `created_at`, `resolved_at`, `deadline_at`, `waited_ms`, `page_url`, `tool`, `event_id`, `entry_name` |
+| `request` | `object` | yes | keys `request_id`, `kind`, `session_id`, `session_slug`, `owner`, `reason`, `mode`, `options`, `status`, `message`, `resolved_by`, `resolution_reason`, `created_at`, `resolved_at`, `deadline_at`, `waited_ms`, `page_url`, `tool`, `event_id`, `entry_name`, `template_id` |
 
 <a id="event-attention-resolved"></a>
 ### `attention.resolved`
 
 | Field | Type | Required | Constraints |
 |---|---|---|---|
-| `request` | `object` | yes | keys `request_id`, `kind`, `session_id`, `session_slug`, `owner`, `reason`, `mode`, `options`, `status`, `message`, `resolved_by`, `resolution_reason`, `created_at`, `resolved_at`, `deadline_at`, `waited_ms`, `page_url`, `tool`, `event_id`, `entry_name` |
+| `request` | `object` | yes | keys `request_id`, `kind`, `session_id`, `session_slug`, `owner`, `reason`, `mode`, `options`, `status`, `message`, `resolved_by`, `resolution_reason`, `created_at`, `resolved_at`, `deadline_at`, `waited_ms`, `page_url`, `tool`, `event_id`, `entry_name`, `template_id` |
 
 <a id="event-vault-confirm-created"></a>
 ### `vault.confirm.created`
 
 | Field | Type | Required | Constraints |
 |---|---|---|---|
-| `request` | `object` | yes | keys `request_id`, `kind`, `session_id`, `session_slug`, `owner`, `reason`, `mode`, `options`, `status`, `message`, `resolved_by`, `resolution_reason`, `created_at`, `resolved_at`, `deadline_at`, `waited_ms`, `page_url`, `tool`, `event_id`, `entry_name` |
+| `request` | `object` | yes | keys `request_id`, `kind`, `session_id`, `session_slug`, `owner`, `reason`, `mode`, `options`, `status`, `message`, `resolved_by`, `resolution_reason`, `created_at`, `resolved_at`, `deadline_at`, `waited_ms`, `page_url`, `tool`, `event_id`, `entry_name`, `template_id` |
 
 <a id="event-vault-confirm-resolved"></a>
 ### `vault.confirm.resolved`
 
 | Field | Type | Required | Constraints |
 |---|---|---|---|
-| `request` | `object` | yes | keys `request_id`, `kind`, `session_id`, `session_slug`, `owner`, `reason`, `mode`, `options`, `status`, `message`, `resolved_by`, `resolution_reason`, `created_at`, `resolved_at`, `deadline_at`, `waited_ms`, `page_url`, `tool`, `event_id`, `entry_name` |
+| `request` | `object` | yes | keys `request_id`, `kind`, `session_id`, `session_slug`, `owner`, `reason`, `mode`, `options`, `status`, `message`, `resolved_by`, `resolution_reason`, `created_at`, `resolved_at`, `deadline_at`, `waited_ms`, `page_url`, `tool`, `event_id`, `entry_name`, `template_id` |
 
 <a id="event-vault-binding-changed"></a>
 ### `vault.binding.changed`
@@ -393,7 +394,7 @@ Payloads of `kind: "event"` frames, discriminated on `type`. DTO fields (`sessio
 | Field | Type | Required | Constraints |
 |---|---|---|---|
 | `template_id` | `string` | yes | — |
-| `site` | `object` | yes | keys `site_id`, `title`, `pack_id`, `pack_version`, `enabled`, `write_policy`, `vault_handle`, `auto_relogin`, `form`, `learned_cookie_names`, `auto_relogin_at`, `health`, `stopped_at`, `device_bound`, `added_at` |
+| `site` | `object` | yes | keys `site_id`, `title`, `pack_id`, `pack_version`, `enabled`, `write_policy`, `vault_handle`, `auto_relogin`, `form`, `learned_cookie_names`, `auto_relogin_at`, `health`, `stopped_at`, `device_bound`, `added_at`, `pack` |
 
 <a id="event-template-version"></a>
 ### `template.version`
@@ -430,6 +431,29 @@ Payloads of `kind: "event"` frames, discriminated on `type`. DTO fields (`sessio
 |---|---|---|---|
 | `template_id` | `string` | yes | — |
 | `probe` | `object` | yes | keys `seq`, `site_id`, `outcome`, `reason`, `trigger`, `final_url`, `duration_ms`, `at` |
+
+<a id="event-site_pack-changed"></a>
+### `site_pack.changed`
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `view` | `object` | yes | keys `pack_id`, `title`, `domains`, `identity_provider`, `approved`, `offer`, `previous`, `pinned_version`, `follow`, `enabled`, `local`, `local_override`, `pending`, `used_by`, `human_only`, `write_policy_default`, `stance`, `write_guards`, `verified`, `skipped` |
+
+<a id="event-site_pack-pending"></a>
+### `site_pack.pending`
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `pack_id` | `string` | yes | — |
+| `to_version` | `integer` or `null` | yes | — |
+| `classification` | one of `unclassified`, `tightening`, `restrictive`, `loosening`, `neutral`, `new_pack`, `revoked`, `local_override` | yes | — |
+
+<a id="event-site_pack-status"></a>
+### `site_pack.status`
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `status` | `object` | yes | keys `enabled`, `update_check`, `auto_update`, `url`, `last_check_at`, `last_ok_at`, `last_outcome`, `index_version`, `index_expires_at`, `stale`, `clock_skew_ms`, `keys_version`, `bundled`, `local`, `skipped`, `last_load_at` |
 
 <a id="event-log-record"></a>
 ### `log.record`

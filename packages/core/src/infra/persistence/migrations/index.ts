@@ -9,6 +9,7 @@ import { notificationActions } from './0006-notification-actions.ts';
 import { vaultHarnesses } from './0007-vault-harnesses.ts';
 import { operatorTokenScopes } from './0008-operator-token-scopes.ts';
 import { templates } from './0009-templates.ts';
+import { sitePacks } from './0010-site-packs.ts';
 import type { Migration } from './migration.ts';
 
 export type { Migration } from './migration.ts';
@@ -24,6 +25,7 @@ export const MIGRATIONS: readonly Migration[] = [
   vaultHarnesses,
   operatorTokenScopes,
   templates,
+  sitePacks,
 ];
 
 /** The schema version this binary writes. */
@@ -40,6 +42,9 @@ export const TABLES: readonly string[] = [
   'vault_access',
   'blocked_requests',
   'operator_requests',
+  'site_guard_hits',
+  'site_pack_changes',
+  'site_pack_state',
   'resource_samples',
   'events',
   'notification_action_tokens',

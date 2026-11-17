@@ -24,6 +24,7 @@ import type { TemplateHost } from '../../ports/template-host.ts';
 import type { DomainEvents, SigninTransition } from '../events/catalog.ts';
 import { type ProberSelector, selectGenericProber } from './site-prober.ts';
 import { notFoundForOperator, validationFailed } from './template-errors.ts';
+import { NO_PACKS, providerLookup, type TemplatePacks } from './template-packs.ts';
 import { toSiteView } from './views.ts';
 
 /** One probe of one site. */
@@ -88,6 +89,8 @@ export interface TemplateHealthDeps {
   /** The machine sign-in windows open on (notification copy). */
   readonly machine: string;
   readonly probers?: ProberSelector;
+  /** Site packs (T3a): the sites' packs in views and their identity providers. */
+  readonly packs?: TemplatePacks;
 }
 
 /** Result of a probe run: `null` when skipped (no free browser slot for a scheduled start). */
@@ -293,7 +296,7 @@ export class TemplateHealthService {
       },
     });
     const changed = site.health.state !== health.state;
-    const view: TemplateSiteView = toSiteView(updated);
+    const view: TemplateSiteView = toSiteView(updated, this.#deps.packs);
     bus?.publish('template.health', {
       type: 'template.health',
       template_id: template.templateId,
@@ -325,8 +328,9 @@ export class TemplateHealthService {
     sites: readonly TemplateSiteRecord[],
     now: number,
   ): SigninTransition {
-    const provider = providerOf(after);
-    const group = sitesOfProvider(sites, provider);
+    const lookup = providerLookup(this.#deps.packs ?? NO_PACKS);
+    const provider = providerOf(after, lookup);
+    const group = sitesOfProvider(sites, provider, lookup);
     return {
       template: { name: template.name, display_name: template.displayName },
       provider,

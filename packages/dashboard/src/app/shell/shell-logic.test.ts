@@ -69,10 +69,20 @@ describe('templates in the nav', () => {
     ]);
   });
 
-  it('keeps Site packs in Not enabled until site packs ship', () => {
+  it('shows Site packs unless sitePacks=false (or templates=false)', () => {
+    expect(
+      groupNavItems(items, { vault: true, templates: true, sitePacks: null }).enabled.map(
+        (i) => i.to,
+      ),
+    ).toEqual(['/templates', '/site-packs', '/vault']);
     expect(groupNavItems(items, caps(true, true)).disabled.map((i) => i.to)).toEqual([
       '/site-packs',
     ]);
+    expect(
+      groupNavItems(items, { vault: true, templates: false, sitePacks: true }).disabled.map(
+        (i) => i.to,
+      ),
+    ).toEqual(['/templates', '/site-packs']);
   });
 
   it('counts the sites that need a sign-in from the health facet', () => {

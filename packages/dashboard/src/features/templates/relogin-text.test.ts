@@ -28,8 +28,32 @@ describe('health and re-login words', () => {
     ])
       expect(healthReasonText(code)).not.toContain('_');
     expect(healthReasonText('not_running')).toBe('Couldn’t check: the browser isn’t running.');
-    expect(healthReasonText('http_502')).toBe('http 502.');
     expect(healthReasonText(null)).toBeNull();
+  });
+
+  it('words every T3a probe reason (navigation probes and security checks)', () => {
+    for (const code of [
+      'redirect',
+      'marker',
+      'landmark',
+      'no_redirect',
+      'timeout',
+      'network',
+      'no_signal',
+      'challenge:captcha',
+      'challenge:checkpoint',
+      'challenge:reauth',
+      'challenge:locked',
+      'challenge:rejected',
+    ])
+      expect(healthReasonText(code)).not.toMatch(/_|:\w/);
+    expect(healthReasonText('http_502')).toBe('The site answered with an error (HTTP 502).');
+    expect(healthReasonText('challenge:captcha')).toBe(
+      'The site showed a captcha: clear it in the browser.',
+    );
+    expect(healthReasonText('challenge:new_kind')).toBe(
+      'The site showed a security check: clear it in the browser.',
+    );
   });
 
   it('words every re-login error', () => {

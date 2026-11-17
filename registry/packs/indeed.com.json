@@ -1,0 +1,95 @@
+{
+  "schema": 1,
+  "id": "indeed.com",
+  "version": 1,
+  "min_client": "0.2.3",
+  "title": "Indeed",
+  "description": "Indeed's terms prohibit automating the Indeed Apply process. Glassdoor signs in with the Indeed login. Sign-out and account settings are blocked for agents.",
+  "domains": [
+    "indeed.com"
+  ],
+  "shares_login_with": [
+    "glassdoor.com"
+  ],
+  "sign_in": {
+    "url": {
+      "host": "secure.indeed.com",
+      "path": "/auth"
+    },
+    "human_only": false
+  },
+  "signed_in": {
+    "probe": {
+      "host": "myjobs.indeed.com",
+      "path": "/"
+    },
+    "kind": "redirect",
+    "signed_out_redirects": [
+      "secure.indeed.com/auth*",
+      "secure.indeed.com/account/login*"
+    ]
+  },
+  "guards": [
+    {
+      "id": "logout",
+      "kind": "logout",
+      "match": {
+        "url": "secure.indeed.com/account/logout"
+      },
+      "action": "block"
+    },
+    {
+      "id": "settings",
+      "kind": "account",
+      "match": {
+        "url": "secure.indeed.com/settings"
+      },
+      "action": "block"
+    }
+  ],
+  "write_policy": {
+    "default": "confirm",
+    "stance": "writes_restricted",
+    "clause": {
+      "quote": "Use of any automation, scripting, or bots to automate the Indeed Apply process outside of Indeed’s official vendors and tooling is prohibited.",
+      "url": "https://www.indeed.com/legal",
+      "checked": "2026-11-16"
+    }
+  },
+  "challenges": [
+    {
+      "id": "request-blocked",
+      "kind": "rejected",
+      "match": {
+        "title_contains": "Blocked - Indeed.com"
+      },
+      "action": "attention"
+    }
+  ],
+  "browser": {
+    "channel": "any",
+    "headed": "preferred"
+  },
+  "verified": {
+    "sign_in": "2026-11-16",
+    "signed_in": "2026-11-16",
+    "guards": "2026-11-16",
+    "write_policy": "2026-11-16",
+    "challenges": "2026-11-16",
+    "browser": "2026-11-16"
+  },
+  "sources": [
+    {
+      "url": "https://www.indeed.com/legal",
+      "kind": "official"
+    },
+    {
+      "url": "https://www.glassdoor.com/about/terms/",
+      "kind": "official"
+    },
+    {
+      "url": "https://myjobs.indeed.com/",
+      "kind": "observed"
+    }
+  ]
+}

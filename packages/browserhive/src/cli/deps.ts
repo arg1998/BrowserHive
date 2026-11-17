@@ -5,6 +5,7 @@ import type { StartupNotificationChannel } from '@browserhive/contracts/notifica
 import type { ConfigFs, ResolvedConfigBundle } from '@browserhive/core/config';
 import type { FileSystem } from '@browserhive/core/ports/file-system';
 import type { HostEnvironment } from '@browserhive/core/ports/host-environment';
+import type { SitePackStateRecord } from '@browserhive/core/ports/persistence/site-packs';
 import type { ProcessRunner } from '@browserhive/core/ports/process-runner';
 import type { UrlProbeResult } from '@browserhive/core/runtime';
 import type {
@@ -170,6 +171,14 @@ export interface CliStorage {
   /** Every template's row facts (spec 13 §11.9); empty for a database from before schema v9. */
   templateRows(): Promise<readonly TemplateRowFacts[]>;
   /**
+   * Every pack's approval state (`site_pack_state`, spec 13 §9.6, §10.5) and the packs whose row
+   * cannot be read (review #83 C-M5); empty for a database from before schema v10.
+   */
+  sitePackStates(): Promise<{
+    readonly rows: readonly SitePackStateRecord[];
+    readonly unreadable: readonly string[];
+  }>;
+  /**
    * Records a re-encrypted version file in its `template_versions` row (`templates rekey`).
    *
    * @returns `false` when no row matched.
@@ -326,7 +335,12 @@ export interface CliDeps {
   readonly runner: ProcessRunner;
   bootServer(input: ServeBootInput): Promise<ServeRunningServer>;
   openStorage(input: OpenStorageInput): Promise<CliStorage>;
-  inspectDatabase(path: string): Promise<DatabaseFileInfo | null>;
+  /**
+   * Header facts of a SQLite file. `'header'` never opens it (`minReaderVersion` is then the file's
+   * own `user_version`, the conservative floor); otherwise a file newer than this binary is opened
+   * read-only to read `meta.min_reader_version`.
+   */
+  inspectDatabase(path: string, mode?: 'header'): Promise<DatabaseFileInfo | null>;
   /** Copies a file byte-for-byte (restore). */
   copyFile(from: string, to: string): Promise<void>;
   readonly lock: {

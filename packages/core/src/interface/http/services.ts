@@ -10,7 +10,6 @@ import type {
   ReportItem,
   ReportSettingsResponse,
   SystemInfo,
-  TemplateVersionsPage,
 } from '@browserhive/contracts/http';
 import type { ReportSettings } from '@browserhive/contracts/notifications';
 import type { LiveInput } from '@browserhive/contracts/ws';
@@ -22,12 +21,7 @@ import type { ChannelService } from '../../app/notifications/channel-service.ts'
 import type { PublicUrlChecker } from '../../app/notifications/public-url.ts';
 import type { SessionDirLayout } from '../../app/sessions/profile-dir.ts';
 import type { SessionService } from '../../app/sessions/session-service.ts';
-import type { TemplateHealthFacade } from '../../app/templates/health-facade.ts';
-import type { TemplateActions } from '../../app/templates/template-actions.ts';
-import type { TemplateEditService } from '../../app/templates/template-edit.ts';
-import type { TemplateOperations } from '../../app/templates/template-operations.ts';
-import type { TemplateRecordingService } from '../../app/templates/template-recording.ts';
-import type { TemplateService } from '../../app/templates/template-service.ts';
+import type { TemplateSiteStops } from '../../app/site-packs/site-stops.ts';
 import type { VaultAdmin } from '../../app/vault/vault-admin.ts';
 import type { VaultService } from '../../app/vault/vault-service.ts';
 import type { RequestPrincipal } from '../../domain/auth/principal.ts';
@@ -44,6 +38,27 @@ import type { IdempotencyRecord, NotificationRecord } from '../../ports/persiste
 import type { Repositories } from '../../ports/persistence/unit-of-work.ts';
 import type { ArtifactFiles } from '../../ports/static-assets.ts';
 import type { OperatorActor } from '../ws/input-audit.ts';
+import type {
+  SitePacksPort,
+  TemplateActionsPort,
+  TemplateEditPort,
+  TemplateHealthPort,
+  TemplateOperationsPort,
+  TemplateRecordingPort,
+  TemplatesPort,
+  TemplateVersionsPort,
+} from './services-templates.ts';
+
+export type {
+  SitePacksPort,
+  TemplateActionsPort,
+  TemplateEditPort,
+  TemplateHealthPort,
+  TemplateOperationsPort,
+  TemplateRecordingPort,
+  TemplatesPort,
+  TemplateVersionsPort,
+} from './services-templates.ts';
 
 /** The live-session facts the routes read (a structural slice of `SessionService`). */
 export type SessionsPort = Pick<SessionService, 'peek' | 'listAll' | 'close' | 'summary'>;
@@ -51,7 +66,7 @@ export type SessionsPort = Pick<SessionService, 'peek' | 'listAll' | 'close' | '
 /** The operator side of attention (a structural slice of `AttentionService`). */
 export type AttentionPort = Pick<
   AttentionService,
-  'openCount' | 'history' | 'facets' | 'resolve' | 'reject' | 'isInputPermitted'
+  'openCount' | 'history' | 'facets' | 'resolve' | 'reject' | 'decideInBulk' | 'isInputPermitted'
 >;
 
 /** Bindings/policies administration (a structural slice of `VaultAdmin`). */
@@ -323,52 +338,11 @@ export interface HttpServices {
   readonly templateOperations: TemplateOperationsPort;
   /** Probes, re-login and the vault link (spec 13 §8, T2). */
   readonly templateHealth: TemplateHealthPort;
+  /** Site packs (spec 13 §9, §11.1, T3a). */
+  readonly sitePacks: SitePacksPort;
+  /** **Clear stop** (spec 13 §9.5, T3a). */
+  readonly templateSiteStops: Pick<TemplateSiteStops, 'clear'>;
 }
-
-/** The health and re-login routes' service. */
-export type TemplateHealthPort = Pick<
-  TemplateHealthFacade,
-  | 'probe'
-  | 'probes'
-  | 'startRelogin'
-  | 'confirmRelogin'
-  | 'cancelRelogin'
-  | 'show'
-  | 'continueAgents'
-  | 'putLink'
->;
-
-/** The template edit routes' service. */
-export type TemplateEditPort = Pick<
-  TemplateEditService,
-  'update' | 'setEnabled' | 'putSite' | 'removeSite' | 'resolveAccess'
->;
-
-/** The template action routes' service. */
-export type TemplateActionsPort = Pick<
-  TemplateActions,
-  'host' | 'closePage' | 'saveVersion' | 'pin' | 'dataDir'
->;
-
-/** The versions list. */
-export interface TemplateVersionsPort {
-  list(
-    templateId: string,
-    query: { readonly cursor?: string | undefined; readonly limit: number },
-  ): Promise<TemplateVersionsPage>;
-}
-
-/** Restore and seed. */
-export type TemplateOperationsPort = Pick<TemplateOperations, 'get' | 'restore' | 'seed'>;
-
-/** The recording routes' service (a structural slice of `TemplateRecordingService`). */
-export type TemplateRecordingPort = Pick<
-  TemplateRecordingService,
-  'start' | 'confirm' | 'finish' | 'cancel' | 'removeSignIn' | 'clearProfileSecrets'
->;
-
-/** The template routes' service (a structural slice of `TemplateService`). */
-export type TemplatesPort = Pick<TemplateService, 'list' | 'get' | 'create' | 'remove'>;
 
 /** The notification channels API (a structural slice of `ChannelService`). */
 export type ChannelsPort = Pick<

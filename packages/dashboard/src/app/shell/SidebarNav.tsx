@@ -28,12 +28,14 @@ interface Badge {
 /** Sidebar nav. */
 export function SidebarNav({ collapsed, onNavigate }: SidebarNavProps) {
   const items = useNavItems();
-  const { capabilities, attentionOpen, confirmsOpen, signInsNeeded } = useNavSignals();
+  const { capabilities, attentionOpen, confirmsOpen, signInsNeeded, packsToReview } =
+    useNavSignals();
   const { enabled, disabled } = groupNavItems(items, capabilities);
   const badgeFor = (item: NavItem): Badge => {
     if (item.to === '/attention') return { count: attentionOpen, noun: 'open' };
     if (item.to === '/vault') return { count: confirmsOpen, noun: 'open' };
     if (item.to === '/templates') return { count: signInsNeeded, noun: 'need a sign-in' };
+    if (item.to === '/site-packs') return { count: packsToReview, noun: 'to review' };
     return { count: 0, noun: '' };
   };
   const nested = (item: NavItem, list: readonly NavItem[]) =>
@@ -112,7 +114,17 @@ function NavLink({
       to={item.to}
       onClick={onNavigate}
       activeOptions={{ exact: false, includeSearch: false }}
-      aria-label={collapsed ? (locked ? `${item.label} (not enabled)` : item.label) : undefined}
+      // One accessible name that carries the count, so the visible badge (aria-hidden) is never read
+      // twice ("Site packs, 3 to review3", review S-N1).
+      aria-label={
+        locked
+          ? `${item.label} (not enabled)`
+          : badge > 0
+            ? `${item.label}, ${badge} ${noun}`
+            : collapsed
+              ? item.label
+              : undefined
+      }
       className={cn(
         'group/nav relative flex items-center rounded-md text-sidebar-foreground transition-colors duration-(--duration-fast) hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground [&.active]:bg-sidebar-accent [&.active]:text-sidebar-accent-foreground',
         collapsed ? 'size-10 justify-center' : 'h-9 gap-3 px-2.5 text-base',
@@ -134,7 +146,6 @@ function NavLink({
       {!collapsed && locked ? (
         <Lock aria-hidden="true" className="size-3.5 shrink-0 text-subtle-foreground" />
       ) : null}
-      {badge > 0 ? <span className="sr-only">{`, ${badge} ${noun}`}</span> : null}
       {badge > 0 && !collapsed ? (
         <span
           aria-hidden="true"

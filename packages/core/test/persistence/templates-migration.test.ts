@@ -5,7 +5,7 @@ import { describe, expect, it } from 'bun:test';
 import { copyFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Scope } from '@browserhive/contracts/enums';
-import { SCHEMA_VERSION } from '../../src/infra/persistence/migrations/index.ts';
+import { MIGRATIONS, SCHEMA_VERSION } from '../../src/infra/persistence/migrations/index.ts';
 import { openDatabase } from '../../src/infra/persistence/open.ts';
 import { SqliteUnitOfWork } from '../../src/infra/persistence/unit-of-work.ts';
 import { isAppError } from '../../src/kernel/errors/app-error.ts';
@@ -89,7 +89,10 @@ describe('migration 0009-templates', () => {
       const reader = handle.raw
         .query<{ value: string }, []>("SELECT value FROM meta WHERE key = 'min_reader_version'")
         .get();
-      expect(reader?.value).toBe('1');
+      // v9 is additive and leaves the floor alone; the head's floor is v10's (`0010-site-packs` is
+      // incompatible, spec 13 §9.9).
+      expect(MIGRATIONS.find((m) => m.version === 9)?.compatible).toBe(true);
+      expect(reader?.value).toBe('10');
     } finally {
       await handle.close();
       dir.dispose();

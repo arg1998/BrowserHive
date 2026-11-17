@@ -7,6 +7,7 @@ import {
 } from '@browserhive/contracts/http';
 import type { CommandContext, IssuedToken, TokenRow } from '../deps.ts';
 import { EXIT, type ExitCode, type RemoteTarget } from '../invocation.ts';
+import { printable } from '../output/printable.ts';
 
 /** Dashboard session cookie name (spec 03 §3.3). */
 const SESSION_COOKIE = 'browserhive_session';
@@ -58,7 +59,8 @@ function printRefusal(
     problem === null
       ? `HTTP ${status}`
       : `[${problem.code}] ${problem.detail ?? problem.title}${problem.hint === undefined ? '' : ` ${problem.hint}`}`;
-  context.out.diagnostic(`browserhive: ${label} failed: ${detail}`);
+  // A problem can quote what a client sent or a pack holds: never let it drive the terminal.
+  context.out.diagnostic(`browserhive: ${label} failed: ${printable(detail)}`);
   if (status === 401 || status === 403) {
     context.out.diagnostic(
       'Pass an operator bearer with --token, or the dashboard session cookie with --cookie.',

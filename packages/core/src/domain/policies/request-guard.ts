@@ -1,8 +1,16 @@
 /** @module domain/policies/request-guard — pure method-, URL- and resource-type-aware request rules: compile, match, atomic holder (spec 13 §9.3, D-54). */
 
-import { globToRegExp, hasGlobWildcard } from '../../kernel/glob.ts';
+import { matchesGlob } from '../../kernel/glob.ts';
 import { err, ok, type Result } from '../../kernel/result.ts';
-import { blocklistComparisonForms } from './blocklist.ts';
+import {
+  decodeUnreserved,
+  guardComparisonForms,
+  matchersFor,
+  matchesForm,
+  type UrlMatcher,
+} from './guard-url.ts';
+
+export type { UrlMatcher } from './guard-url.ts';
 
 /**
  * The request guard decides, per routed request, whether a rule about *what may be sent* applies.
@@ -21,7 +29,9 @@ import { blocklistComparisonForms } from './blocklist.ts';
  *   or ids in the query, and a guard that a query string defeats is no guard; the blocklist keeps
  *   its stricter grammar unchanged. Percent-encodings of unreserved characters (RFC 3986 §2.3:
  *   letters, digits, `-._~`) are decoded on both sides before matching, so `/log%6Fut` is
- *   `/logout`, as the server reads it. A URL without a network scheme (`about:`, `data:`, `blob:`)
+ *   `/logout`, as the server reads it; the request is also tried normalised (`//` collapsed,
+ *   `;params` dropped, `%2F`/`%2E` decoded, a host's trailing dot dropped: `guard-url.ts`), so
+ *   `//logout`, `/logout;x` and `/logout%2F` match too. Globs match in linear time. A URL without a network scheme (`about:`, `data:`, `blob:`)
  *   or that does not parse matches nothing. Rule hosts must be ASCII (punycode for IDNs): the
  *   comparison forms are punycode, so a Unicode host would never match.
  * - **Method** — `methods` absent matches every method that reaches the route; present, the
@@ -33,8 +43,10 @@ import { blocklistComparisonForms } from './blocklist.ts';
  *   URL, reaches the host before the guard blocks or holds the request (a guard is a write policy,
  *   not egress control).
  * - **Resource type** — Playwright's name of the request's type. `resourceTypes` absent means
- *   {@link DEFAULT_GUARD_RESOURCE_TYPES}; a type outside {@link GUARD_RESOURCE_TYPES} (`image`,
- *   `script`, `stylesheet`, …) never matches, and `other` is Playwright's literal `other`.
+ *   {@link DEFAULT_GUARD_RESOURCE_TYPES}; `'all'` means every type the route sees (`image`,
+ *   `script`, `stylesheet`, prefetches as `other`…), which the site-pack source gives protective
+ *   guards; otherwise a type outside the list never matches, and `other` is Playwright's literal
+ *   `other`. WebSockets are never routed.
  *
  * Rule actions are **effective** actions. A site pack's `write_policy` action (spec 13 §9.2) is
  * resolved by the rule source (PR T3a) to `allow`, `warn` or `confirm` before a rule reaches this
@@ -93,8 +105,13 @@ export interface RequestGuardRuleInput {
   readonly url: string;
   /** Absent: every method. */
   readonly methods?: readonly GuardMethod[];
-  /** Absent: {@link DEFAULT_GUARD_RESOURCE_TYPES}. */
-  readonly resourceTypes?: readonly GuardResourceType[];
+  /**
+   * Absent: {@link DEFAULT_GUARD_RESOURCE_TYPES}. `'all'`: every type the route sees (images,
+   * prefetches, scripts, styles, media, fonts, `other`…), for guards protecting the account
+   * (`logout`, `account`, `credential`, `destructive`) that a page could trigger with any request
+   * (review PR #83 M2). WebSockets never reach the route.
+   */
+  readonly resourceTypes?: readonly GuardResourceType[] | 'all';
   readonly action: RequestGuardAction;
 }
 
@@ -107,7 +124,8 @@ export interface RequestGuardRule {
   readonly matchers: readonly UrlMatcher[];
   /** `null`: every method. */
   readonly methods: ReadonlySet<string> | null;
-  readonly resourceTypes: ReadonlySet<string>;
+  /** `null`: every resource type. */
+  readonly resourceTypes: ReadonlySet<string> | null;
   readonly action: RequestGuardAction;
 }
 
@@ -136,11 +154,6 @@ export interface RequestGuardMatch {
   readonly matched: string;
 }
 
-/** One compiled form of a rule's URL glob: plain equality when it has no wildcard. */
-export type UrlMatcher =
-  | { readonly kind: 'equals'; readonly value: string }
-  | { readonly kind: 'regexp'; readonly re: RegExp };
-
 /** The rule list that never matches. */
 export const EMPTY_REQUEST_GUARD_RULES: RequestGuardRules = Object.freeze({ rules: [] });
 
@@ -149,6 +162,8 @@ const ID_RE = /^(?:[a-z0-9][a-z0-9.-]{0,252}#)?[a-z][a-z0-9-]{0,39}$/;
 const METHOD_SET: ReadonlySet<string> = new Set(GUARD_METHODS);
 const RESOURCE_TYPE_SET: ReadonlySet<string> = new Set(GUARD_RESOURCE_TYPES);
 const DEFAULT_TYPES: ReadonlySet<string> = new Set(DEFAULT_GUARD_RESOURCE_TYPES);
+/** Marker of a rule over every resource type. */
+const ALL_TYPES: ReadonlySet<string> = new Set();
 const ACTION_SET: ReadonlySet<string> = new Set<RequestGuardAction>([
   'block',
   'confirm',
@@ -157,8 +172,6 @@ const ACTION_SET: ReadonlySet<string> = new Set<RequestGuardAction>([
 ]);
 /** Printable ASCII only: a Unicode host never equals the punycode comparison form. */
 const PRINTABLE_ASCII = /^[\x21-\x7e]+$/;
-const UNRESERVED_ESCAPE = /%([0-9a-f]{2})/gi;
-const UNRESERVED = /^[a-z0-9\-._~]$/i;
 
 /**
  * Compile an ordered rule list. Refuses the whole list on the first unusable rule: a guard is a
@@ -184,7 +197,8 @@ export function compileRequestGuardRules(
     if (url === '*' || url === '*/*') return refuse('url matches every URL');
     const methods = setOf(input.methods, METHOD_SET);
     if (methods === 'invalid') return refuse('methods must be a non-empty list of known methods');
-    const types = setOf(input.resourceTypes, RESOURCE_TYPE_SET);
+    const types =
+      input.resourceTypes === 'all' ? ALL_TYPES : setOf(input.resourceTypes, RESOURCE_TYPE_SET);
     if (types === 'invalid') {
       return refuse('resource types must be a non-empty list of known types');
     }
@@ -198,7 +212,7 @@ export function compileRequestGuardRules(
       url,
       matchers: matchersFor(url),
       methods,
-      resourceTypes: types ?? DEFAULT_TYPES,
+      resourceTypes: types === ALL_TYPES ? null : (types ?? DEFAULT_TYPES),
       action: input.action,
     });
   }
@@ -215,34 +229,6 @@ function setOf(
   return new Set(values);
 }
 
-/** The glob, then (when it does not end in `*`) its `/*` and literal-`?` variants. */
-function matchersFor(pattern: string): readonly UrlMatcher[] {
-  const compile = (glob: string): UrlMatcher =>
-    hasGlobWildcard(glob)
-      ? { kind: 'regexp', re: globToRegExp(glob) }
-      : { kind: 'equals', value: glob };
-  if (pattern.endsWith('*')) return [compile(pattern)];
-  const base = globToRegExp(pattern).source.slice(1, -1); // drop the anchors
-  return [
-    compile(pattern),
-    compile(`${pattern}/*`),
-    { kind: 'regexp', re: new RegExp(`^${base}\\?.*$`) },
-  ];
-}
-
-/** Decodes `%XX` escapes of unreserved characters (RFC 3986 §2.3), lowercased. */
-function decodeUnreserved(value: string): string {
-  if (!value.includes('%')) return value;
-  return value.replace(UNRESERVED_ESCAPE, (encoded, hex: string) => {
-    const char = String.fromCharCode(Number.parseInt(hex, 16));
-    return UNRESERVED.test(char) ? char.toLowerCase() : encoded;
-  });
-}
-
-function matches(matcher: UrlMatcher, form: string): boolean {
-  return matcher.kind === 'equals' ? matcher.value === form : matcher.re.test(form);
-}
-
 /**
  * The first rule that matches `request`, or `null`. Never throws for expected input; the URL is
  * reduced once and shared by every rule, and each rule's matchers were compiled with the set.
@@ -252,20 +238,74 @@ export function matchRequestGuard(
   request: GuardedRequest,
 ): RequestGuardMatch | null {
   if (rules.rules.length === 0) return null;
-  const raw = blocklistComparisonForms(request.url);
-  if (raw === null) return null;
-  const forms = [decodeUnreserved(raw[0]), decodeUnreserved(raw[1])];
+  if (request.url.length > MAX_GUARD_MATCH_URL) return matchLongUrl(rules, request);
+  const forms = guardComparisonForms(request.url);
+  if (forms === null) return null;
   const method = request.method.toUpperCase();
   for (const rule of rules.rules) {
     if (rule.methods !== null && !rule.methods.has(method)) continue;
-    if (!rule.resourceTypes.has(request.resourceType)) continue;
+    if (rule.resourceTypes !== null && !rule.resourceTypes.has(request.resourceType)) continue;
     for (const form of forms) {
       for (const matcher of rule.matchers) {
-        if (matches(matcher, form)) return { rule, matched: form };
+        if (matchesForm(matcher, form)) return { rule, matched: form };
       }
     }
   }
   return null;
+}
+
+/**
+ * The longest URL whose path and query are matched glob by glob (review #83 N1): a glob part with
+ * `?` is scanned in O(URL × part), so a 2 MB URL would cost about a second per rule. A longer URL
+ * is decided by its host alone, failing closed: {@link matchLongUrl}.
+ */
+export const MAX_GUARD_MATCH_URL = 16_384;
+
+/**
+ * A URL over {@link MAX_GUARD_MATCH_URL} characters: the first rule (method and type admitted)
+ * whose host part matches the URL's host decides, preferring `block`, then `confirm`; `warn` and
+ * `allow` rules are not applied. So a protective guard can never be dodged by padding a URL, at
+ * the price of blocking an over-long URL on a host a protective guard names.
+ */
+function matchLongUrl(rules: RequestGuardRules, request: GuardedRequest): RequestGuardMatch | null {
+  let host: string;
+  try {
+    const url = new URL(request.url);
+    if (
+      url.protocol !== 'http:' &&
+      url.protocol !== 'https:' &&
+      url.protocol !== 'ws:' &&
+      url.protocol !== 'wss:'
+    ) {
+      return null;
+    }
+    host = url.hostname.toLowerCase().replace(/\.$/, '');
+  } catch {
+    return null;
+  }
+  const method = request.method.toUpperCase();
+  let confirm: RequestGuardRule | null = null;
+  for (const rule of rules.rules) {
+    if (rule.methods !== null && !rule.methods.has(method)) continue;
+    if (rule.resourceTypes !== null && !rule.resourceTypes.has(request.resourceType)) continue;
+    if (!matchesGlob(host, hostPartOf(rule.url))) continue;
+    if (rule.action === 'block')
+      return { rule, matched: `${host} (URL over ${MAX_GUARD_MATCH_URL} characters)` };
+    if (rule.action === 'confirm' && confirm === null) confirm = rule;
+  }
+  return confirm === null
+    ? null
+    : { rule: confirm, matched: `${host} (URL over ${MAX_GUARD_MATCH_URL} characters)` };
+}
+
+/** The host part of a rule glob (`*.site.test/logout` → `*.site.test`), without a scheme or port. */
+function hostPartOf(glob: string): string {
+  const scheme = glob.indexOf('://');
+  const rest = scheme < 0 ? glob : glob.slice(scheme + 3);
+  const slash = rest.indexOf('/');
+  const host = slash < 0 ? rest : rest.slice(0, slash);
+  const colon = host.indexOf(':');
+  return colon < 0 ? host : host.slice(0, colon);
 }
 
 /**

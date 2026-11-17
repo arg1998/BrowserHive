@@ -36,6 +36,7 @@ import type { DomainEvents } from '../events/catalog.ts';
 import { launchDeclaredHarnessOf, launchHarnessOf } from '../sessions/metadata.ts';
 import type { SessionService } from '../sessions/session-service.ts';
 import { notFoundForOperator, operationRunning, validationFailed } from './template-errors.ts';
+import { NO_PACKS, type TemplatePacks } from './template-packs.ts';
 import { toSiteView, toTemplateView } from './views.ts';
 
 /** At most this many sites per template (spec 13 §2.1). */
@@ -54,6 +55,8 @@ export interface TemplateEditDeps {
   readonly bus?: EventPublisher<DomainEvents>;
   /** The template's summary changed (`template.changed`). */
   readonly changed: (templateId: string) => void;
+  /** Site packs: approval on first use when a site is added (T3a); absent = none. */
+  readonly packs?: TemplatePacks;
 }
 
 /** `CONFLICT` with an operator-facing message. */
@@ -91,7 +94,10 @@ export class TemplateEditService {
     const { patch, changed, restart } = validated.value;
     if (restart && this.#deps.ops.held(templateId)) throw operationRunning(templateId);
     if (changed.length === 0) {
-      return { template: toTemplateView(current.template, current.sites), closed_sessions: [] };
+      return {
+        template: toTemplateView(current.template, current.sites, this.#deps.packs),
+        closed_sessions: [],
+      };
     }
     const updated = await this.#deps.uow.transaction(async (repos) => {
       const row = await repos.templates.update(templateId, patch, options.ifMatch);
@@ -110,7 +116,10 @@ export class TemplateEditService {
     }
     this.#log.info('template updated', { templateId, changed, closedSessions: closed.length });
     this.#deps.changed(templateId);
-    return { template: toTemplateView(updated, current.sites), closed_sessions: closed };
+    return {
+      template: toTemplateView(updated, current.sites, this.#deps.packs),
+      closed_sessions: closed,
+    };
   }
 
   /**
@@ -152,7 +161,7 @@ export class TemplateEditService {
           });
     const closed = enabled ? [] : await this.#close(this.#live(templateId), 'disabled');
     this.#deps.changed(templateId);
-    return { template: toTemplateView(updated, sites), closed_sessions: closed };
+    return { template: toTemplateView(updated, sites, this.#deps.packs), closed_sessions: closed };
   }
 
   /**
@@ -166,6 +175,7 @@ export class TemplateEditService {
     body: {
       readonly enabled?: boolean | undefined;
       readonly write_policy?: TemplateSiteRecord['writePolicy'] | undefined;
+      readonly pack_sha256?: string | undefined;
     },
     by: string,
   ): Promise<TemplateSiteView> {
@@ -191,7 +201,13 @@ export class TemplateEditService {
       ]);
     }
     const now = this.#deps.clock.now();
-    const site: TemplateSiteRecord =
+    const packs = this.#deps.packs ?? NO_PACKS;
+    // First use (spec 13 §9.6): a new site, or a reviewed pack attached to an existing one.
+    const approval =
+      existing === undefined || body.pack_sha256 !== undefined
+        ? await packs.prepareSite(siteId, body.pack_sha256, by)
+        : null;
+    const base: TemplateSiteRecord =
       existing === undefined
         ? {
             templateId,
@@ -216,16 +232,28 @@ export class TemplateEditService {
             ...(body.enabled !== undefined && { enabled: body.enabled }),
             ...(body.write_policy !== undefined && { writePolicy: body.write_policy }),
           };
+    const site: TemplateSiteRecord =
+      approval === null
+        ? base
+        : { ...base, packId: approval.packId, packVersion: approval.version };
     await this.#deps.uow.transaction(async (repos) => {
       await repos.templateSites.upsert(site);
+      await approval?.write(repos);
       await this.#audit(repos, by, 'template.update', templateId, {
         changed: [`sites.${siteId}`],
-        site: { site_id: siteId, enabled: site.enabled, write_policy: site.writePolicy },
+        site: {
+          site_id: siteId,
+          enabled: site.enabled,
+          write_policy: site.writePolicy,
+          pack_id: site.packId,
+          pack_version: site.packVersion,
+        },
       });
     });
+    if (approval?.approves === true) await packs.approvalsCommitted();
     const after = await this.#deps.repos.templateSites.list(templateId);
     await this.#reach(template, after);
-    const view = toSiteView(site);
+    const view = toSiteView(site, packs);
     this.#deps.bus?.publish('template.health', {
       type: 'template.health',
       template_id: templateId,

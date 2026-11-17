@@ -76,6 +76,8 @@ describe('OperatorRequestRepository', () => {
       resolvedBy: 'local',
       resolutionReason: null,
       resolvedAt: 40,
+      // Schema v10: read as `null` when the request has no template.
+      templateId: null,
       sessionSlug: 'shop',
       waitedMs: 30,
     });
@@ -431,6 +433,7 @@ describe('SchemaMigrationRepository', () => {
       [7, 'vault-harnesses'],
       [8, 'operator-token-scopes'],
       [9, 'templates'],
+      [10, 'site-packs'],
     ]);
     expect(await t.repos.schemaMigrations.currentVersion()).toBe(SCHEMA_VERSION);
   });

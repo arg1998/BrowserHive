@@ -39,6 +39,7 @@ export function toOperatorRequestRow(
     tool: record.tool,
     event_id: record.toolEventId,
     entry_name: record.entryName,
+    ...(record.templateId != null && { template_id: record.templateId }),
   });
 }
 
@@ -54,7 +55,9 @@ export function operatorRequestEvent(
   };
 }[keyof OperatorRequestEvents] {
   const request = toOperatorRequestRow(record, sessionSlug);
-  if (record.kind === 'attention') {
+  // Security intercepts are operator requests resolved on `/attention`: they ride the attention
+  // events, told apart by `request.kind` (spec 13 §11.3).
+  if (record.kind === 'attention' || record.kind === 'security_intercept') {
     return phase === 'created'
       ? {
           name: 'attention.created',

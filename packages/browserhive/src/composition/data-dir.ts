@@ -7,7 +7,7 @@ import { AppError } from '@browserhive/core/runtime';
 /** Owner-only directory mode (D-24). */
 export const DATA_DIR_MODE = 0o700;
 
-/** Subdirectories created at boot and by `init` (D-24; `templates` and `site-packs`, spec 13 §11.10). */
+/** Subdirectories created at boot and by `init` (D-24; `templates`, `site-packs` and its `local` folder for unsigned packs, spec 13 §10.5, §11.10). */
 export const DATA_SUBDIRS = [
   'backups',
   'admin',
@@ -16,6 +16,7 @@ export const DATA_SUBDIRS = [
   'uploads',
   'templates',
   'site-packs',
+  'site-packs/local',
 ] as const;
 
 /** Resolved paths of the layout. */

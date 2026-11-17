@@ -1,0 +1,95 @@
+{
+  "schema": 1,
+  "id": "instagram.com",
+  "version": 1,
+  "min_client": "0.2.3",
+  "title": "Instagram",
+  "description": "Instagram's terms bar accessing or collecting information in an automated way. Sign-out, Accounts Center, account deletion and OAuth approvals are blocked for agents.",
+  "domains": [
+    "instagram.com",
+    "cdninstagram.com"
+  ],
+  "sign_in": {
+    "url": {
+      "host": "www.instagram.com",
+      "path": "/accounts/login/"
+    },
+    "human_only": false
+  },
+  "signed_in": {
+    "probe": {
+      "host": "www.instagram.com",
+      "path": "/accounts/edit/"
+    },
+    "kind": "redirect",
+    "signed_out_redirects": [
+      "www.instagram.com/accounts/login*"
+    ]
+  },
+  "guards": [
+    {
+      "id": "logout",
+      "kind": "logout",
+      "match": {
+        "url": "www.instagram.com/accounts/logout"
+      },
+      "action": "block"
+    },
+    {
+      "id": "oauth-approve",
+      "kind": "credential",
+      "match": {
+        "url": "www.instagram.com/oauth/authorize*",
+        "methods": [
+          "POST"
+        ]
+      },
+      "action": "block"
+    },
+    {
+      "id": "accounts-center",
+      "kind": "account",
+      "match": {
+        "url": "accountscenter.instagram.com"
+      },
+      "action": "block"
+    },
+    {
+      "id": "delete-account",
+      "kind": "destructive",
+      "match": {
+        "url": "www.instagram.com/accounts/remove"
+      },
+      "action": "block"
+    }
+  ],
+  "write_policy": {
+    "default": "confirm",
+    "stance": "prohibited",
+    "clause": {
+      "quote": "This includes creating accounts or accessing or collecting information in an automated way without our express permission, regardless of whether such automated access or collection is undertaken while logged-in to an Instagram account.",
+      "url": "https://help.instagram.com/581066165581870",
+      "checked": "2026-11-16"
+    }
+  },
+  "verified": {
+    "sign_in": "2026-11-16",
+    "signed_in": "2026-11-16",
+    "guards": "2026-11-16",
+    "write_policy": "2026-11-16"
+  },
+  "sources": [
+    {
+      "url": "https://help.instagram.com/581066165581870",
+      "kind": "official"
+    },
+    {
+      "url": "https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/business-login",
+      "kind": "official"
+    },
+    {
+      "url": "https://www.instagram.com/accounts/edit/",
+      "kind": "observed"
+    }
+  ]
+}

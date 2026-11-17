@@ -1,6 +1,6 @@
 /** @module cli/registry-admin — the `admin` (reset-password, tokens) and `channels` commands as registry data */
 import type { ConfigKey } from '@browserhive/contracts/config';
-import { jsonFlag as json, remoteFlags, sub } from './registry-parts.ts';
+import { jsonFlag as json, remoteFlags, serverFlags, sub } from './registry-parts.ts';
 import type { CommandDescriptor } from './registry-types.ts';
 
 const dataDirKeys: readonly ConfigKey[] = ['dataDir', 'config', 'color'];
@@ -58,11 +58,11 @@ export const CHANNELS_COMMAND: CommandDescriptor = {
   configKeys: ['host', 'port', 'config', 'color'],
   subcommands: [
     sub(['list'], 'List channels with status, target, secret variables and 24 h counts', {
-      flags: [json, ...remoteFlags],
+      flags: [json, ...serverFlags],
     }),
     sub(['test'], 'Send a real test message through a channel', {
       args: [{ name: 'name', required: true, describe: 'Channel name.' }],
-      flags: [json, ...remoteFlags],
+      flags: [json, ...serverFlags],
     }),
     sub(['preview'], 'Print the platform request a channel would send (sends nothing)', {
       args: [{ name: 'name', required: true, describe: 'Channel name.' }],
@@ -76,7 +76,7 @@ export const CHANNELS_COMMAND: CommandDescriptor = {
             'Sample notification: attention, attention-resolved, vault-confirm, tool-errors, crash, degraded, test, digest or anomaly.',
           defaultText: 'attention',
         },
-        ...remoteFlags,
+        ...serverFlags,
       ],
     }),
   ],

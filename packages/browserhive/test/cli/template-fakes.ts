@@ -3,6 +3,7 @@ import type { TemplateHealthState } from '@browserhive/contracts/enums';
 import type {
   HostView,
   ReloginView,
+  SitePackView,
   Template,
   TemplateDetailResponse,
   TemplateSiteView,
@@ -10,6 +11,7 @@ import type {
 } from '@browserhive/contracts/http';
 import type { CliDeps } from '../../src/cli/deps.ts';
 import { cliHarness, type HarnessResult } from './helpers.ts';
+import { catalogBody } from './sitepacks-fakes.ts';
 
 export const ID = 'tp-abcdefghij';
 export const BASE = '/api/v1/templates';
@@ -38,6 +40,7 @@ function siteView(siteId: string, state: TemplateHealthState): TemplateSiteView 
     stopped_at: null,
     device_bound: false,
     added_at: 1,
+    pack: null,
   };
 }
 
@@ -69,6 +72,8 @@ export interface FakeServer {
   onPoll?: (poll: number) => void;
   /** The template's re-login as `GET /templates/{id}` reports it (T2). */
   relogin: ReloginView | null;
+  /** The site-pack catalog `templates create` reads (`GET /site-packs`): none by default. */
+  packs: SitePackView[];
   /** Extra routes (T1b operations), tried before the built-in ones; `undefined` falls through. */
   routes?: (method: string, path: string, body: unknown) => [number, unknown] | undefined;
 }
@@ -82,6 +87,7 @@ export function fakeServer(sites: Record<string, TemplateHealthState>): FakeServ
     calls: [],
     uncleared: [],
     relogin: null,
+    packs: [],
   };
 }
 
@@ -177,6 +183,7 @@ function route(server: FakeServer, method: string, path: string, body: unknown):
   const extra = server.routes?.(method, path, body);
   if (extra !== undefined) return extra;
   const polls = server.calls.filter((c) => c.method === 'GET' && c.path === `${BASE}/${ID}`).length;
+  if (method === 'GET' && path === '/api/v1/site-packs') return [200, catalogBody(server.packs)];
   if (method === 'GET' && path.startsWith(`${BASE}?`)) {
     return [200, listPage([summary(server)])];
   }
@@ -294,5 +301,10 @@ export async function run(
   });
 }
 
+/** The `POST /templates` call. */
+export const created = (server: FakeServer) =>
+  server.calls.find((c) => c.method === 'POST' && c.path === BASE);
+
+/** The calls made, without `create`'s read of the site-pack catalog (asserted on its own). */
 export const paths = (server: FakeServer): string[] =>
-  server.calls.map((c) => `${c.method} ${c.path}`);
+  server.calls.filter((c) => c.path !== '/api/v1/site-packs').map((c) => `${c.method} ${c.path}`);

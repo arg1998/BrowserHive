@@ -2,7 +2,7 @@
 
 # Configuration reference
 
-Every configuration key of BrowserHive (62 keys), generated from the zod schema in `@browserhive/contracts/config`. For a guided introduction see [the configuration guide](../guide/configuration.md).
+Every configuration key of BrowserHive (64 keys), generated from the zod schema in `@browserhive/contracts/config`. For a guided introduction see [the configuration guide](../guide/configuration.md).
 
 ## Precedence
 
@@ -333,6 +333,8 @@ Per-session close and trace-finalize cap.
 | [`templateMaxPagesPerHost`](#templateMaxPagesPerHost) | `--templateMaxPagesPerHost` | `BROWSERHIVE_TEMPLATE_MAX_PAGES_PER_HOST` | `40` |
 | [`templateRecycleAfter`](#templateRecycleAfter) | `--templateRecycleAfter` | `BROWSERHIVE_TEMPLATE_RECYCLE_AFTER` | `24h` |
 | [`templateDrainTimeout`](#templateDrainTimeout) | `--templateDrainTimeout` | `BROWSERHIVE_TEMPLATE_DRAIN_TIMEOUT` | `15m` |
+| [`sitePacks`](#sitePacks) | `--sitePacks` | `BROWSERHIVE_SITE_PACKS` | `true` |
+| [`sitePacksDir`](#sitePacksDir) | `--sitePacksDir` | `BROWSERHIVE_SITE_PACKS_DIR` | unset |
 
 <a id="persistence"></a>
 ### `persistence`
@@ -640,6 +642,34 @@ How long a draining template browser waits for its sessions before closing them.
 | Config file | `"templateDrainTimeout"` |
 | Type | a duration between '1m' and '2h' |
 | Default | `15m` |
+| Notes | restart required |
+
+<a id="sitePacks"></a>
+### `sitePacks`
+
+Site packs for template sites (spec 13 §9). false: no pack data is used; template sites are generic (learned-cookie probes, no guards, no challenges).
+
+| Property | Value |
+|---|---|
+| CLI flag | `--sitePacks` |
+| Environment | `BROWSERHIVE_SITE_PACKS` |
+| Config file | `"sitePacks"` |
+| Type | a boolean: 'true', 'false', '1', '0', 'yes' or 'no' |
+| Default | `true` |
+| Notes | restart required |
+
+<a id="sitePacksDir"></a>
+### `sitePacksDir`
+
+Folder of local site packs (<pack id>.json). A local file applies only after an operator approves its content, once per SHA-256. Absent = <dataDir>/site-packs/local.
+
+| Property | Value |
+|---|---|
+| CLI flag | `--sitePacksDir` |
+| Environment | `BROWSERHIVE_SITE_PACKS_DIR` |
+| Config file | `"sitePacksDir"` |
+| Type | a non-empty file system path |
+| Default | unset |
 | Notes | restart required |
 
 ## Stealth

@@ -1,15 +1,26 @@
 /** @module infra/persistence/migrations/0005-notification-outbox — schema v5: the notification contract columns on `notifications` and the delivery outbox tables (spec 03 §7, §9; D-32, D-34, D-39). */
 
-import {
-  NOTIFICATION_CHANNEL_SOURCES,
-  NOTIFICATION_CHANNEL_STATUSES,
-  NOTIFICATION_DELIVERY_OPS,
-  NOTIFICATION_DELIVERY_STATUSES,
-  NOTIFICATION_SEVERITIES,
-  NOTIFICATION_STATES,
-} from '../../../ports/persistence/enums.ts';
 import type { Migration } from './migration.ts';
 import { sqlIn } from './sql-enums.ts';
+
+/*
+ * CHECK lists as v5 wrote them, frozen (spec 13 §9.9): a later binary that grows one of the live
+ * enums must not change this migration's DDL. `fixtures/ddl/0005-notification-outbox.sql` pins it.
+ */
+const SEVERITIES = ['info', 'warn', 'error', 'critical'] as const;
+const STATES = ['open', 'acted', 'resolved', 'expired', 'final'] as const;
+const CHANNEL_STATUSES = ['active', 'paused', 'broken'] as const;
+const CHANNEL_SOURCES = ['db', 'startup'] as const;
+const DELIVERY_OPS = ['send', 'edit', 'delete'] as const;
+const DELIVERY_STATUSES = [
+  'pending',
+  'sending',
+  'sent',
+  'retrying',
+  'dead',
+  'suppressed',
+  'superseded',
+] as const;
 
 /*
  * The classification columns are nullable and `kind`/`category` carry no CHECK: an older binary in
@@ -21,8 +32,8 @@ import { sqlIn } from './sql-enums.ts';
 const sql = `
 ALTER TABLE notifications ADD COLUMN kind TEXT;
 ALTER TABLE notifications ADD COLUMN category TEXT;
-ALTER TABLE notifications ADD COLUMN severity TEXT CHECK (severity IN (${sqlIn(NOTIFICATION_SEVERITIES)}));
-ALTER TABLE notifications ADD COLUMN state TEXT CHECK (state IN (${sqlIn(NOTIFICATION_STATES)}));
+ALTER TABLE notifications ADD COLUMN severity TEXT CHECK (severity IN (${sqlIn(SEVERITIES)}));
+ALTER TABLE notifications ADD COLUMN state TEXT CHECK (state IN (${sqlIn(STATES)}));
 ALTER TABLE notifications ADD COLUMN revision INTEGER NOT NULL DEFAULT 1 CHECK (revision >= 1);
 ALTER TABLE notifications ADD COLUMN thread TEXT;
 ALTER TABLE notifications ADD COLUMN message_json TEXT;
@@ -74,8 +85,8 @@ CREATE TABLE notification_channels (
   name TEXT NOT NULL UNIQUE,
   kind TEXT NOT NULL,
   mode TEXT,
-  source TEXT NOT NULL DEFAULT 'db' CHECK (source IN (${sqlIn(NOTIFICATION_CHANNEL_SOURCES)})),
-  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN (${sqlIn(NOTIFICATION_CHANNEL_STATUSES)})),
+  source TEXT NOT NULL DEFAULT 'db' CHECK (source IN (${sqlIn(CHANNEL_SOURCES)})),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN (${sqlIn(CHANNEL_STATUSES)})),
   target_json TEXT NOT NULL DEFAULT '{}',
   secret_refs_json TEXT NOT NULL DEFAULT '{}',
   rules_json TEXT NOT NULL DEFAULT '{}',
@@ -92,8 +103,8 @@ CREATE TABLE notification_deliveries (
   channel_id TEXT NOT NULL REFERENCES notification_channels(channel_id) ON DELETE CASCADE,
   notification_id TEXT NOT NULL REFERENCES notifications(notification_id) ON DELETE CASCADE,
   revision INTEGER NOT NULL CHECK (revision >= 1),
-  op TEXT NOT NULL CHECK (op IN (${sqlIn(NOTIFICATION_DELIVERY_OPS)})),
-  status TEXT NOT NULL CHECK (status IN (${sqlIn(NOTIFICATION_DELIVERY_STATUSES)})),
+  op TEXT NOT NULL CHECK (op IN (${sqlIn(DELIVERY_OPS)})),
+  status TEXT NOT NULL CHECK (status IN (${sqlIn(DELIVERY_STATUSES)})),
   reason TEXT,
   attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0),
   next_attempt_at INTEGER,

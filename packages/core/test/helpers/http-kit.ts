@@ -20,6 +20,7 @@ import { sampleAnomalyFacts, sampleDigestFacts } from '../../src/app/notificatio
 import { sessionDirLayout } from '../../src/app/sessions/profile-dir.ts';
 import { SessionService } from '../../src/app/sessions/session-service.ts';
 import { FakeSessionDirFs, testConfig } from '../../src/app/sessions/test-support.ts';
+import { TemplateSiteStops } from '../../src/app/site-packs/site-stops.ts';
 import { TemplateActions } from '../../src/app/templates/template-actions.ts';
 import { TemplateEditService } from '../../src/app/templates/template-edit.ts';
 import { TemplateOperations } from '../../src/app/templates/template-operations.ts';
@@ -55,6 +56,7 @@ import {
 } from './http-fakes.ts';
 import { SYSTEM_INFO, seedDataset } from './http-fixtures.ts';
 import { InMemoryRepositories, InMemoryUnitOfWork } from './in-memory-repos.ts';
+import { createMemorySitePacks } from './in-memory-site-packs.ts';
 import { createVaultRepos } from './in-memory-vault-repos.ts';
 import { RecordingEventBus } from './recording-event-bus.ts';
 import {
@@ -230,6 +232,13 @@ export async function createHttpKit(options: HttpKitOptions = {}) {
     clock,
   });
   const templateRepos = { ...repos, operatorActions: vaultRepos.actions };
+  const sitePacks = await createMemorySitePacks({
+    repos: templateRepos,
+    clock,
+    ids: auth.ids,
+    logger,
+    bus,
+  });
   const templateRuntime = new FakeTemplateRuntime();
   const templateFiles = new FakeTemplateFiles();
   const templateOps = new FakeTemplateHostOps();
@@ -249,6 +258,7 @@ export async function createHttpKit(options: HttpKitOptions = {}) {
     ops: templateOps,
     geo: FAKE_TEMPLATE_GEO,
     files: templateFiles,
+    packs: sitePacks.registry,
     degradations: new RecordingDegradations(),
     ids: auth.ids,
     clock,
@@ -280,6 +290,7 @@ export async function createHttpKit(options: HttpKitOptions = {}) {
     ops: templateOps,
     sessions,
     bus: events,
+    packs: sitePacks.registry,
     ...templateCommon,
   });
   const templateActions = new TemplateActions({
@@ -344,6 +355,14 @@ export async function createHttpKit(options: HttpKitOptions = {}) {
     templateVersions: templateState,
     templateOperations,
     templateHealth: new FakeTemplateHealth(),
+    sitePacks: sitePacks.registry,
+    templateSiteStops: new TemplateSiteStops({
+      repos: templateRepos,
+      ids: auth.ids,
+      clock,
+      logger,
+      bus: events,
+    }),
   };
   if (options.seed !== false) await seedDataset(repos, vaultRepos, files, sessionDirs);
   const http: HttpApp = createHttpApp({
@@ -421,6 +440,7 @@ export async function createHttpKit(options: HttpKitOptions = {}) {
     templateOps,
     templateStore,
     templateState,
+    sitePacks,
   };
 }
 

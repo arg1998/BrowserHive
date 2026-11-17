@@ -391,6 +391,46 @@ const SOURCES: readonly Source[] = [
     },
   },
   {
+    name: 'site pack challenges (site_pack.challenge)',
+    drives: ['browserhive.site_pack.challenges'],
+    async run(w) {
+      publish(w, 'site_pack.challenge', {
+        type: 'site_pack.challenge',
+        template_id: 'tp-aaaaaaaaaa',
+        session_id: 's-guard',
+        site: 'site-a.test',
+        kind: 'captcha',
+        action: 'attention',
+      });
+    },
+  },
+  {
+    name: 'site-pack guard hits (site_pack.guard_hit)',
+    drives: ['browserhive.site_pack.guard_hits'],
+    async run(w) {
+      publish(w, 'site_pack.guard_hit', {
+        type: 'site_pack.guard_hit',
+        row: {
+          event_id: 'ev-guardhit0001',
+          session_id: null,
+          template_id: 'tp-aaaaaaaaaa',
+          pack_id: 'site-a.test',
+          guard_id: 'logout',
+          guard_kind: 'logout',
+          action: 'block',
+          outcome: null,
+          decided_by: null,
+          source: 'request',
+          method: 'POST',
+          url: 'https://site-a.test/logout',
+          request_id: null,
+          tool: null,
+          ts: Date.now(),
+        },
+      });
+    },
+  },
+  {
     name: 'retention scheduler (retention.completed)',
     drives: ['browserhive.retention.pruned_rows'],
     async run(w) {
@@ -784,6 +824,12 @@ describe('documented == recorded', () => {
     ]);
     expect(points('browserhive.template.relogins')).toEqual([
       { value: 1, attrs: { method: 'window', outcome: 'signed_in' } },
+    ]);
+    expect(points('browserhive.site_pack.challenges')).toEqual([
+      { value: 1, attrs: { kind: 'captcha', action: 'attention' } },
+    ]);
+    expect(points('browserhive.site_pack.guard_hits')).toEqual([
+      { value: 1, attrs: { action: 'block', kind: 'logout' } },
     ]);
     expect(points('browserhive.retention.pruned_rows')).toEqual([
       { value: 4, attrs: { table: 'tool_calls' } },

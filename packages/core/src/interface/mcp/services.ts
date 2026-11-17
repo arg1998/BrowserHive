@@ -15,6 +15,7 @@ import type { DomainEvents } from '../../app/events/catalog.ts';
 import type { SessionService } from '../../app/sessions/session-service.ts';
 import type { TemplateService } from '../../app/templates/template-service.ts';
 import type { SessionPrincipal } from '../../domain/session/principal.ts';
+import type { Session } from '../../domain/session/session.ts';
 import type { CallerSubject } from '../../domain/vault/bindings.ts';
 import type {
   ListAvailableOptions,
@@ -28,6 +29,7 @@ import type { EventBus } from '../../ports/event-bus.ts';
 import type { IdGenerator } from '../../ports/id-generator.ts';
 import type { PageActions } from '../../ports/page-actions.ts';
 import type { RuntimeFacts } from './runtime.ts';
+import type { SiteHolds } from './site-hold.ts';
 
 /** The attention surface the two attention tools use (`AttentionService` satisfies it). */
 export interface AttentionLike {
@@ -97,6 +99,19 @@ export interface ToolRedaction {
   onNavigation(sessionId: string, url: string): void;
 }
 
+/**
+ * Site pack enforcement before a tool of an agent's template session (spec 13 §9.3, §9.5): a
+ * stopped site, `GET` document guards, element guards (`SiteToolGate` satisfies it).
+ */
+export interface SiteGuardsLike {
+  /** @throws `SITE_OPERATOR_PENDING`, `URL_BLOCKED`, `SITE_ACTION_BLOCKED` */
+  beforeTool(call: {
+    readonly tool: string;
+    readonly args: Readonly<Record<string, unknown>>;
+    readonly session: Session;
+  }): Promise<void>;
+}
+
 /** The template surface `list_templates` and `launch_session.template` use (`TemplateService` satisfies it). */
 export type TemplatesLike = Pick<TemplateService, 'enabled' | 'listForAgent' | 'launch'>;
 
@@ -120,6 +135,13 @@ export interface ToolServices {
   readonly templatePause?: {
     wait(templateId: string, name: string, signal?: AbortSignal): Promise<void>;
   };
+  /** Site pack enforcement (spec 13 §9.3, §9.5); absent when templates or site packs are off. */
+  readonly siteGuards?: SiteGuardsLike;
+  /**
+   * The security intercepts holding template sessions (spec 13 §9.3, §9.5): a held session's tools
+   * answer `SITE_OPERATOR_PENDING`. Absent when templates or site packs are off.
+   */
+  readonly siteHolds?: SiteHolds;
   readonly pageActions: PageActions;
   readonly fs: ToolFs;
   readonly redaction: ToolRedaction;

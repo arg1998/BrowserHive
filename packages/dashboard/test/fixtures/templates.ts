@@ -48,6 +48,7 @@ export function templateSite(
     stopped_at: null,
     device_bound: false,
     added_at: TT0 - 86_400_000,
+    pack: null,
     ...patch,
   };
 }

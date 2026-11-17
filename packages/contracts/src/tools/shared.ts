@@ -23,6 +23,17 @@ export const SESSION_ERRORS = [
   'SESSION_ACCESS_DENIED',
 ] as const;
 
+/**
+ * Codes every navigation and interaction tool can raise in a template session (spec 13 §12):
+ * the site pack hold (`SITE_OPERATOR_PENDING`), `serialize-site` pacing (`TEMPLATE_BUSY`) and the
+ * agents' pause while the operator signs in (`TEMPLATE_UNAVAILABLE` `paused`, D-60, deferred D35).
+ */
+export const TEMPLATE_SITE_ERRORS = [
+  'SITE_OPERATOR_PENDING',
+  'TEMPLATE_BUSY',
+  'TEMPLATE_UNAVAILABLE',
+] as const;
+
 /** Semver of first appearance for the 43 tools of the first release. */
 export const SINCE = '0.1.0';
 

@@ -34,6 +34,7 @@ import { createAuthStack } from '../auth-stack.ts';
 import { type BootContext, part, type SeedNotice } from '../context.ts';
 import { hostFactsOf } from '../host.ts';
 import { createNotificationSnapshots } from '../notification-snapshots.ts';
+import { attachSitePackEnforcement, buildSitePackLayer } from '../site-pack-layer.ts';
 import type { PhaseHandle } from '../unwind.ts';
 import { buildOperators } from './domain-operators.ts';
 import { buildOps, reconcile } from './domain-ops.ts';
@@ -256,9 +257,26 @@ async function buildDomain(
     .reconcileRequests(repos.operatorRequests)
     .catch((err: unknown) => logger.warn('catch-up failed', { err: serializeError(err) }));
 
+  const layer = await buildSitePackLayer({
+    config,
+    release: ctx.input.appVersion,
+    uow: storage.uow,
+    repos,
+    clock,
+    ids,
+    logger,
+    bus,
+    degradations,
+    sessions,
+    transport,
+    undo,
+  });
+  const sitePacks = layer.registry;
+  const sitePackPages = layer.pages;
   const tpl = await buildTemplates({
     config,
     bus,
+    sitePacks,
     keyFromFlag: ctx.input.resolved.provenance['templateKey']?.source === 'cli',
     ...(ctx.input.testingArgs !== undefined && { testingArgs: ctx.input.testingArgs }),
     host: hostFactsOf(ctx.input.host),
@@ -271,6 +289,7 @@ async function buildDomain(
     driver: sessionParts.driver,
     repeat: timers.every,
     vault: operators.vault,
+    ...(layer.probers !== undefined && { probers: layer.probers }),
   });
   const templates = tpl.service;
   // The notification button of a sign-out only queues the re-login (spec 13 §8.4, §8.6).
@@ -279,6 +298,21 @@ async function buildDomain(
     actionExecutors.set('template.relogin', reloginActionExecutor(relogin));
   }
 
+  // Site-pack enforcement: the request guard on every template host, security intercepts (T3a).
+  const enforcement = attachSitePackEnforcement(layer, {
+    config,
+    transport,
+    driver: sessionParts.driver,
+    broker: operators.broker,
+    sessions,
+    uow: storage.uow,
+    health: tpl.health,
+    bus,
+    ids,
+    clock,
+    logger,
+    undo,
+  });
   const tools = buildTools({
     config,
     transport,
@@ -293,7 +327,9 @@ async function buildDomain(
     blocklist: sessionParts.blocklist,
     templates,
     ...(tpl.supervisor !== null && { templatePause: tpl.supervisor.pause }),
+    ...(enforcement !== null && { siteHolds: enforcement.intercepts }),
     pageActions,
+    ...(enforcement !== null && { siteGuards: sitePackPages.gate }),
     redactor,
     bus,
     clock,
@@ -339,8 +375,10 @@ async function buildDomain(
     reportService: ops.reportService,
     publicUrl: ops.publicUrl,
     templates,
+    sitePacks,
     templateRecording: tpl.recording,
     templateParts: tpl,
+    sitePackPages,
     instanceId,
     preferences: ops.preferences,
     recorder: ops.recorder,

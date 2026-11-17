@@ -17,6 +17,11 @@ export interface TemplateDraft {
   readonly displayName: string;
   readonly description: string;
   readonly sites: readonly string[];
+  /**
+   * Site → the SHA-256 of the site pack version shown when it was added (spec 13 §9.6 "First use");
+   * creating the template approves exactly that version. Sites without an entry are generic.
+   */
+  readonly packs: Readonly<Record<string, string>>;
   readonly channel: Channel | null;
   readonly stealth: StealthLevel | null;
   readonly fingerprint: boolean | null;
@@ -47,6 +52,7 @@ export const EMPTY_DRAFT: TemplateDraft = {
   displayName: '',
   description: '',
   sites: [],
+  packs: {},
   channel: null,
   stealth: null,
   fingerprint: null,
@@ -159,20 +165,44 @@ export function firstProblemStep(draft: TemplateDraft, authToken: boolean): Wiza
   return null;
 }
 
-/** Add a site as typed; returns the new draft and what went wrong, if anything. */
+/**
+ * Add a site as typed; returns the new draft and what went wrong, if anything. `packSha256`: the
+ * site pack version the operator was shown for it (approved when the template is created).
+ */
 export function addSite(
   draft: TemplateDraft,
   input: string,
+  packSha256?: string,
 ): { readonly draft: TemplateDraft; readonly error: string | null } {
   const host = hostOf(input);
   if (host === null) return { draft, error: 'Enter a domain like linkedin.com.' };
   if (draft.sites.includes(host)) return { draft, error: `${host} is already in the list.` };
   if (draft.sites.length >= SITES_MAX) return { draft, error: `At most ${SITES_MAX} sites.` };
-  return { draft: { ...draft, sites: [...draft.sites, host] }, error: null };
+  return {
+    draft: {
+      ...draft,
+      sites: [...draft.sites, host],
+      ...(packSha256 !== undefined && { packs: { ...draft.packs, [host]: packSha256 } }),
+    },
+    error: null,
+  };
 }
 
-/** The `POST /templates` body. */
-export function toTemplateInput(draft: TemplateDraft): TemplateInput {
+/** Remove a site and the pack version chosen for it. */
+export function removeSite(draft: TemplateDraft, site: string): TemplateDraft {
+  const { [site]: _dropped, ...packs } = draft.packs;
+  return { ...draft, sites: draft.sites.filter((s) => s !== site), packs };
+}
+
+/**
+ * The `POST /templates` body. `catalogShas`: site → the SHA-256 the catalog offers for it now; a site
+ * added before the catalog loaded (or restored from an older draft) still sends the version its
+ * card shows (review S-M4). A hash chosen when the site was added wins.
+ */
+export function toTemplateInput(
+  draft: TemplateDraft,
+  catalogShas: Readonly<Record<string, string>> = {},
+): TemplateInput {
   const trim = (s: string) => s.trim();
   const proxy = draft.proxy;
   const unsealOn = UNSEAL_FLAGS.some((f) => draft.unseal[f]);
@@ -180,7 +210,10 @@ export function toTemplateInput(draft: TemplateDraft): TemplateInput {
     name: draft.name,
     ...(trim(draft.displayName).length > 0 && { display_name: trim(draft.displayName) }),
     ...(draft.description.trim().length > 0 && { description: draft.description.trim() }),
-    sites: draft.sites.map((site_id) => ({ site_id })),
+    sites: draft.sites.map((site_id) => {
+      const sha = draft.packs[site_id] ?? catalogShas[site_id];
+      return sha === undefined ? { site_id } : { site_id, pack_sha256: sha };
+    }),
     ...(draft.channel !== null && { channel: draft.channel }),
     ...(draft.stealth !== null && { stealth: draft.stealth }),
     ...(draft.fingerprint !== null && { fingerprint: draft.fingerprint }),
@@ -237,7 +270,18 @@ export function issuesOf(details: Readonly<Record<string, unknown>>): DraftProbl
 function validDraft(raw: unknown): TemplateDraft | null {
   if (typeof raw !== 'object' || raw === null) return null;
   const merged = { ...EMPTY_DRAFT, ...(raw as Partial<TemplateDraft>) };
-  return typeof merged.name === 'string' && Array.isArray(merged.sites) ? merged : null;
+  const packs =
+    typeof merged.packs === 'object' && merged.packs !== null && !Array.isArray(merged.packs)
+      ? Object.fromEntries(
+          Object.entries(merged.packs).filter(
+            (entry): entry is [string, string] =>
+              typeof entry[1] === 'string' && /^[0-9a-f]{64}$/.test(entry[1]),
+          ),
+        )
+      : {};
+  return typeof merged.name === 'string' && Array.isArray(merged.sites)
+    ? { ...merged, packs }
+    : null;
 }
 
 /** The draft saved on this device, if any. */

@@ -1,6 +1,6 @@
 /** @module composition/phases/domain-templates — the template service (spec 13 §2, §5, §6, §11.1): repositories, the pinned-identity geo, the template directories and the host supervisor (the runtime that starts template browsers); under `templates=false` the runtime has no hosts. */
 
-import { hostname, networkInterfaces } from 'node:os';
+import { hostname } from 'node:os';
 import { join } from 'node:path';
 import type { ServerConfig } from '@browserhive/contracts/config';
 import type { SqliteUnitOfWork } from '@browserhive/core/persistence';
@@ -22,9 +22,11 @@ import {
   HostGeoSeedResolver,
   PassThroughProxyResolver,
   type PlaywrightBrowserDriver,
+  type ProberSelector,
   reconcileTemplateState,
   resolveTemplateKeys,
   type SessionService,
+  type SitePackRegistry,
   TemplateActions,
   TemplateEditService,
   type TemplateHealthParts,
@@ -40,6 +42,11 @@ import {
   type VaultService,
   wireTemplateHealth,
 } from '@browserhive/core/server';
+import { wireSitePackUsage } from '../site-packs.ts';
+
+export { type MachineNames, machineNames, selfOriginsOf } from '../self-origins.ts';
+
+import { selfOriginsOf } from '../self-origins.ts';
 
 /** Inputs of {@link buildTemplates}. */
 export interface TemplatesInput {
@@ -66,6 +73,10 @@ export interface TemplatesInput {
   readonly machine?: string;
   /** `templateKey` came from a command-line flag (warned: argv is readable by other users). */
   readonly keyFromFlag?: boolean;
+  /** Site packs (T3a): approval on first use, the sites' packs, providers and `human_only`. */
+  readonly sitePacks?: SitePackRegistry;
+  /** The prober of each site over the supervisor (T3a: the pack prober); default generic. */
+  readonly probers?: (supervisor: TemplateHostSupervisor) => ProberSelector;
 }
 
 /** How often template hosts are checked for idleness, age and memory (spec 13 §3.2). */
@@ -92,50 +103,6 @@ export interface TemplatesParts {
 
 /** How often the probe schedule looks for due templates (spec 13 §8.3). */
 export const TEMPLATE_HEALTH_TICK_MS = 60_000;
-
-/** The machine's names and addresses, for a wildcard bind (test seam). */
-export interface MachineNames {
-  readonly hostname: string;
-  readonly addresses: readonly string[];
-}
-
-/** This machine's host name and interface addresses. */
-export function machineNames(): MachineNames {
-  const addresses = Object.values(networkInterfaces())
-    .flat()
-    .flatMap((info) => (info === undefined ? [] : [info.address]));
-  return { hostname: hostname(), addresses };
-}
-
-/**
- * BrowserHive's own origins (spec 13 §3.8): the self-origin guard of a template host blocks them,
- * and every loopback spelling on their ports; the host's marker cookie is set for each. The bound
- * host, the canonical loopback names, the extra `allowedHosts` and the `publicUrl` origin; under a
- * wildcard bind also the machine's host name (and `<name>.local`) and every interface address.
- */
-export function selfOriginsOf(
-  config: Readonly<ServerConfig>,
-  machineOf: () => MachineNames = machineNames,
-): string[] {
-  const port = config.port;
-  const hosts = new Set([config.host, 'localhost', '127.0.0.1', '::1', ...config.allowedHosts]);
-  if (['0.0.0.0', '::', ''].includes(config.host)) {
-    // Read only for a wildcard bind: the interface list can be slow to read (Windows).
-    const machine = machineOf();
-    hosts.add(machine.hostname);
-    hosts.add(`${machine.hostname}.local`);
-    for (const address of machine.addresses) hosts.add(address);
-  }
-  const origins = [...hosts]
-    .filter((host) => host !== '' && host !== '::')
-    .flatMap((host) => {
-      const bare = host.replace(/^\[|\]$/g, '');
-      const name = bare.includes(':') ? `[${bare}]` : bare;
-      return port > 0 ? [`http://${name}:${port}`, `https://${name}:${port}`] : [];
-    });
-  if (config.publicUrl !== undefined) origins.push(config.publicUrl);
-  return origins;
-}
 
 /** `<data-dir>/templates` (spec 13 §2.4). */
 export function templatesDirOf(dataDir: string): string {
@@ -196,6 +163,7 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
   const { config } = input;
   const templatesDir = templatesDirOf(config.dataDir);
   const store = await templateStateStore(input, templatesDir);
+  const packs = input.sitePacks === undefined ? {} : { packs: input.sitePacks };
   const reader = createProcessTreeReader();
   const supervisor = config.templates
     ? new TemplateHostSupervisor({
@@ -266,6 +234,7 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
     logger: input.logger,
     state,
     changed: (id) => changed(id),
+    ...packs,
   });
   const files = createTemplateFiles(templatesDir);
   const service = new TemplateService({
@@ -277,6 +246,7 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
     files,
     bus: input.bus,
     versions: input.uow.repos.templateVersions,
+    ...packs,
     degradations: input.degradations,
     ids: input.ids,
     clock: input.clock,
@@ -294,6 +264,9 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
     },
   });
   changed = (id) => service.publishChanged(id);
+  if (input.sitePacks !== undefined) {
+    wireSitePackUsage(input.sitePacks, input.bus, input.logger, changed);
+  }
   const common = { ids: input.ids, clock: input.clock, logger: input.logger, changed };
   const edit = new TemplateEditService({
     repos: input.uow.repos,
@@ -302,6 +275,7 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
     ops,
     sessions: input.sessions,
     bus: input.bus,
+    ...packs,
     ...common,
   });
   const actions = new TemplateActions({
@@ -340,6 +314,8 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
           machine: input.machine ?? hostname(),
           displayAvailable: () => !displayMissing(input.host.platform, input.host.env),
           changed,
+          ...packs,
+          ...(input.probers !== undefined && { probers: input.probers(supervisor) }),
         });
   if (health !== null) restored = (id) => health.scheduler.restored(id);
   // Idle stop, age recycle, memory and checkpoints of template hosts (spec 13 §3.2, §3.9).

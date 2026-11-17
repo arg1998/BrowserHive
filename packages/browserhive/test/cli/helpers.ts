@@ -5,6 +5,7 @@ import type { Channel } from '@browserhive/contracts/enums';
 import type { ConfigFs } from '@browserhive/core/config';
 import type { FileStat, FileSystem } from '@browserhive/core/ports/file-system';
 import type { HostEnvironment } from '@browserhive/core/ports/host-environment';
+import type { SitePackStateRecord } from '@browserhive/core/ports/persistence/site-packs';
 import type { ProcessRunner, ProcessRunResult } from '@browserhive/core/ports/process-runner';
 import type { UrlProbeResult } from '@browserhive/core/runtime';
 import type {
@@ -207,6 +208,10 @@ export interface StorageState {
   templates: { name: string; principals: readonly string[] | null }[];
   /** Template rows (`templateRows`, doctor and rekey). */
   templateRows: TemplateRowFacts[];
+  /** Pack approval rows (`sitePackStates`, doctor). */
+  sitePackStates: SitePackStateRecord[];
+  /** Packs whose state row reads as corrupt. */
+  sitePackUnreadable: string[];
   /** Version rows `templates rekey` updated, in order. */
   versionFiles: { templateId: string; version: number; file: TemplateFileRecord }[];
   backups: string[];
@@ -234,6 +239,8 @@ export function storageState(overrides: Partial<StorageState> = {}): StorageStat
     tokens: [],
     templates: [],
     templateRows: [],
+    sitePackStates: [],
+    sitePackUnreadable: [],
     versionFiles: [],
     backups: [],
     quickCheckOk: true,
@@ -299,6 +306,10 @@ function fakeStorage(
     listTokens: async () => state.tokens,
     templateAccess: async () => state.templates,
     templateRows: async () => state.templateRows,
+    sitePackStates: async () => ({
+      rows: state.sitePackStates,
+      unreadable: state.sitePackUnreadable,
+    }),
     updateTemplateVersionFile: async (templateId, version, file) => {
       state.versionFiles.push({ templateId, version, file });
       return true;

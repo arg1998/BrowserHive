@@ -13,12 +13,7 @@ import type { SessionClientInfo } from '../../domain/session/client-info.ts';
 import type { CreateSessionInput } from '../../domain/session/create-request.ts';
 import type { SessionPrincipal } from '../../domain/session/principal.ts';
 import type { Session } from '../../domain/session/session.ts';
-import {
-  buildTemplate,
-  pinnedIdentity,
-  type TemplateDefaults,
-  validateTemplateInput,
-} from '../../domain/templates/create.ts';
+import type { TemplateDefaults } from '../../domain/templates/create.ts';
 import { applyTemplateLaunchOptions } from '../../domain/templates/launch-options.ts';
 import {
   availabilityOf,
@@ -29,7 +24,6 @@ import {
   sealingFor,
   templateGate,
 } from '../../domain/templates/model.ts';
-import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { Clock } from '../../ports/clock.ts';
 import type { DegradationReporter } from '../../ports/degradation-reporter.ts';
 import type { EventPublisher } from '../../ports/event-bus.ts';
@@ -47,22 +41,22 @@ import type { TemplateHostOps, TemplateRuntime } from '../../ports/template-runt
 import type { DomainEvents } from '../events/catalog.ts';
 import { launchDeclaredHarnessOf, launchHarnessOf } from '../sessions/metadata.ts';
 import { launchWithRecheck } from './launch-recheck.ts';
+import { createTemplate } from './template-create.ts';
 import { readTemplateDetail, type TemplateServiceHooks } from './template-detail.ts';
 import {
   deleteRunning,
   disabled,
   inUse,
   invalidArguments,
-  nameTaken,
   notFoundForAgent,
   notFoundForOperator,
   operationRunning,
-  validationFailed,
 } from './template-errors.ts';
 import { pageTemplates } from './template-list.ts';
 import { TemplateLocks } from './template-locks.ts';
-import { publishTemplateChanged, readTemplates } from './template-reads.ts';
-import { toAgentTemplate, toTemplateSummary, toTemplateView } from './views.ts';
+import type { TemplatePacks } from './template-packs.ts';
+import { publishTemplateChanged, readTemplates, removeTemplateFiles } from './template-reads.ts';
+import { toAgentTemplate, toTemplateSummary } from './views.ts';
 
 /** Server configuration the service reads. */
 export interface TemplateServiceConfig {
@@ -95,6 +89,8 @@ export interface TemplateServiceDeps {
   readonly bus?: EventPublisher<DomainEvents>;
   /** The newest version's summary (unlisted sign-ins of a stopped browser, spec 13 §2.3). */
   readonly versions?: Pick<TemplateVersionRepository, 'list'>;
+  /** Site packs: approval on first use and the sites' packs (T3a); absent = none. */
+  readonly packs?: TemplatePacks;
 }
 
 /** The caller of an agent-facing operation: the principal and the call's resolved client (harness). */
@@ -102,11 +98,6 @@ export interface TemplateCaller {
   readonly principal: SessionPrincipal;
   readonly client: SessionClientInfo | null;
 }
-
-/** Characters of the seed that feeds the template's fingerprint for its life (spec 13 §2.2). */
-const SEED_LENGTH = 21;
-/** Characters after `tp-` (D-05). */
-const TEMPLATE_ID_LENGTH = 10;
 
 /** Session templates: the operator's CRUD and the agent's list and launch gate. */
 export class TemplateService {
@@ -139,49 +130,18 @@ export class TemplateService {
   /**
    * `POST /templates`: a new template in `recording`, with its sites and pinned identity.
    *
-   * @throws AppError `VALIDATION_FAILED`, `TEMPLATE_NAME_TAKEN`.
+   * @throws AppError `VALIDATION_FAILED`, `TEMPLATE_NAME_TAKEN`, and the first-use approval's
+   *   `SITE_PACK_APPROVAL_REQUIRED`, `CONFLICT`, `SITE_PACK_DOMAIN_TAKEN`.
    */
   async create(input: TemplateInput, owner: string): Promise<Template> {
-    const { config, ids, clock, geo } = this.#deps;
-    const validated = validateTemplateInput(input, { authMode: config.authMode });
-    if (!validated.ok) throw validationFailed(validated.issues);
-    if ((await this.#deps.repos.templates.getByName(input.name)) !== null) {
-      throw nameTaken(input.name);
-    }
-    const resolved = await geo.resolve({
-      ...(input.locale !== undefined && { locale: input.locale }),
-      ...(input.timezone_id !== undefined && { timezoneId: input.timezone_id }),
-    });
-    const identity = pinnedIdentity(ids.opaque(SEED_LENGTH), resolved, input.geolocation);
-    const now = clock.now();
-    const { template, sites } = buildTemplate(input, validated.value, {
-      templateId: `tp-${ids.opaque(TEMPLATE_ID_LENGTH)}`,
-      owner,
-      now,
-      identity,
-      defaults: config.defaults,
-      authMode: config.authMode,
-    });
-    await this.#deps.uow.transaction(async (repos) => {
-      await repos.templates.insert(template);
-      for (const site of sites) await repos.templateSites.upsert(site);
-      await repos.operatorActions.append({
-        eventId: ids.eventId(),
-        principalId: owner,
-        action: 'template.create',
-        resourceKind: 'template',
-        resourceId: template.templateId,
-        details: { name: template.name, sites: sites.map((s) => s.siteId) },
-        occurredAt: now,
-      });
-    });
+    const template = await createTemplate(this.#deps, input, owner);
     this.#log.info('template created', {
-      templateId: template.templateId,
+      templateId: template.template_id,
       name: template.name,
-      sites: sites.length,
+      sites: template.sites.length,
     });
-    this.publishChanged(template.templateId);
-    return toTemplateView(template, sites);
+    this.publishChanged(template.template_id);
+    return template;
   }
 
   /** `GET /templates`: every template as a summary, filtered, sorted and paged (spec 13 §11.1). */
@@ -192,7 +152,7 @@ export class TemplateService {
       return {
         record: t,
         sites: own,
-        summary: toTemplateSummary(t, own, this.#deps.runtime.host(t.templateId)),
+        summary: toTemplateSummary(t, own, this.#deps.runtime.host(t.templateId), this.#deps.packs),
       };
     });
     return pageTemplates(rows, query, this.#deps.clock.now());
@@ -249,7 +209,7 @@ export class TemplateService {
           occurredAt: now,
         });
       });
-      const deletedBytes = await this.#removeFiles(templateId);
+      const deletedBytes = await removeTemplateFiles(this.#deps.files, templateId, this.#log);
       this.#deps.bus?.publish('template.removed', {
         type: 'template.removed',
         template_id: templateId,
@@ -292,6 +252,7 @@ export class TemplateService {
           own,
           availabilityOf(template, own, host),
           isSessionSealed(sealing),
+          this.#deps.packs,
         ),
       );
     }
@@ -383,18 +344,5 @@ export class TemplateService {
       harness: launchHarnessOf(caller.client),
       declared: launchDeclaredHarnessOf(caller.client),
     };
-  }
-
-  /** Deletes `templates/<id>/`; the rows are gone already, so a failure is logged, never thrown. */
-  async #removeFiles(templateId: string): Promise<number> {
-    try {
-      return await this.#deps.files.removeTemplateDir(templateId);
-    } catch (cause) {
-      this.#log.warn('template dir not removed', {
-        templateId,
-        err: serializeError(cause),
-      });
-      return 0;
-    }
   }
 }

@@ -21,6 +21,9 @@ import type {
   SessionRemovedEvent,
   SessionUpdatedEvent,
   SessionWarningEvent,
+  SitePackChangedEvent,
+  SitePackPendingEvent,
+  SitePackStatusEvent,
   SystemCapacityEvent,
   SystemDegradedEvent,
   SystemRecoveredEvent,
@@ -45,6 +48,7 @@ import type { z } from 'zod';
 import type { DomainEvent } from '../../ports/event-bus.ts';
 import type { TemplateHealthState, TemplateVersionReason } from '../../ports/persistence/enums.ts';
 import type { JsonObject, SessionPatch, SessionRecord } from '../../ports/persistence/records.ts';
+import type { SiteConfirmEvent, SiteGuardHitEvent } from '../../ports/site-guards.ts';
 import type { AuthEvents } from '../auth/events.ts';
 
 /*
@@ -206,9 +210,49 @@ export type DomainEvents = {
     readonly template_id: string;
     readonly reason: 'checkpoint' | TemplateVersionReason;
   };
+  /** A challenge seen on an agent's page (internal: `browserhive.site_pack.challenges{kind,action}`). */
+  readonly 'site_pack.challenge': SitePackChallengeEvent;
+  // site packs (spec 13 §11.3; internal, not on the feed)
+  /** One `site_guard_hits` row (the recorder writes it; `browserhive.site_pack.guard_hits` counts it). */
+  readonly 'site_pack.guard_hit': SiteGuardHitEvent;
+  /** A template site's write confirmation opened or settled (the `site_pack.write_confirm` notification). */
+  readonly 'site_pack.confirm': SiteConfirmEvent;
+  // site packs (the `site-packs` topic, spec 13 §11.3)
+  readonly 'site_pack.changed': z.infer<typeof SitePackChangedEvent>;
+  readonly 'site_pack.pending': z.infer<typeof SitePackPendingEvent>;
+  readonly 'site_pack.status': z.infer<typeof SitePackStatusEvent> & {
+    /** Internal (`site_pack.update_pending`, spec 13 §8.6): what waits for an operator now. */
+    readonly updates?: SitePackUpdatesFact;
+  };
   // logs
   readonly 'log.record': z.infer<typeof LogRecordEvent>;
 } & AuthEvents; // auth (audit; never on the public feed): `auth.<auth_events.type>`
+
+/** Pending pack updates and local files needing approval (internal key of `site_pack.status`). */
+export interface SitePackUpdatesFact {
+  readonly at: number;
+  readonly items: readonly {
+    readonly pack_id: string;
+    readonly title: string;
+    readonly from_version: number | null;
+    /** The candidate's version, or the local file's. */
+    readonly to_version: number;
+    /** The candidate's or the local file's SHA-256 (a new content is a new notification). */
+    readonly sha256: string;
+    /** Set for a local file: changed since approval, or never approved. */
+    readonly local: 'changed' | 'not_approved' | null;
+  }[];
+}
+
+/** A detected challenge (spec 13 §9.5, §11.7); internal, never on the feed. */
+export interface SitePackChallengeEvent {
+  readonly type: 'site_pack.challenge';
+  readonly template_id: string;
+  readonly session_id: string;
+  readonly site: string;
+  readonly kind: 'checkpoint' | 'captcha' | 'reauth' | 'locked' | 'rejected';
+  readonly action: 'attention' | 'stop' | 'notify';
+}
 
 /** A template's names, carried by internal event keys for notification titles. */
 export interface TemplateNames {

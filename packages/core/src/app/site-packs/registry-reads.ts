@@ -1,0 +1,309 @@
+/** @module app/site-packs/registry-reads — the registry's read side over a snapshot (spec 13 §11.1): the filtered catalog with counts, one pack's detail and versions, the field-level diff, the pending list, and the change and guard-hit histories. */
+
+import type {
+  SiteGuardHitsPage,
+  SiteGuardHitsQuery,
+  SitePackChangesPage,
+  SitePackChangesQuery,
+  SitePackDetailResponse,
+  SitePackDiffQuery,
+  SitePackDiffResponse,
+  SitePacksQuery,
+  SitePacksResponse,
+  SitePackVersionRef,
+  SitePackView,
+} from '@browserhive/contracts/http';
+import { diffPacks, newDomains } from '../../domain/site-packs/diff.ts';
+import type {
+  SiteGuardHitRepository,
+  SitePackChangeRepository,
+} from '../../ports/persistence/site-packs.ts';
+import type { SourcePackVersion } from '../../ports/site-packs.ts';
+import { readCached } from './registry-build.ts';
+import { packConflict } from './registry-errors.ts';
+import type {
+  PackEntry,
+  PendingUpdate,
+  RegistrySnapshot,
+  SitePackRegistryDeps,
+} from './registry-types.ts';
+import { followEffective, toChangeRow, toGuardHitRow, toRegistryStatus } from './views.ts';
+
+/** What the reads need besides the snapshot. */
+export interface ReadFacts {
+  readonly view: (entry: PackEntry) => SitePackView;
+  readonly status: Parameters<typeof toRegistryStatus>[1];
+  readonly now: number;
+}
+
+/** True when the entry needs an operator: a followed, unpinned candidate or a local file to approve. */
+function needsReview(entry: PackEntry): { candidates: number; local: boolean } {
+  const local =
+    entry.local !== null && entry.local.current !== null && entry.local.state !== 'approved';
+  const followed = followEffective(entry) && entry.state?.pinnedVersion == null;
+  return { candidates: followed ? entry.pending.length : 0, local };
+}
+
+/** `GET /site-packs`. */
+export function listPacks(
+  snapshot: RegistrySnapshot,
+  query: SitePacksQuery,
+  facts: ReadFacts,
+): SitePacksResponse {
+  const q = query.q?.toLowerCase();
+  const entries = [...snapshot.packs.values()].filter((entry) => {
+    const display = entry.display;
+    if (q !== undefined && q !== '') {
+      const hay = [entry.packId, display?.title ?? '', ...(display?.domains ?? [])]
+        .join(' ')
+        .toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    if (query.source !== undefined && query.source.length > 0) {
+      const sources = new Set(query.source);
+      const approvedSource = entry.state?.approvedSource ?? null;
+      const matches =
+        (sources.has('local') && entry.local !== null) ||
+        (sources.has('bundled') && (entry.offer !== null || approvedSource === 'bundled')) ||
+        (sources.has('registry') && approvedSource === 'remote') ||
+        (sources.has('import') && approvedSource === 'import');
+      if (!matches) return false;
+    }
+    if (query.pending !== undefined) {
+      const review = needsReview(entry);
+      if ((review.candidates > 0 || review.local) !== query.pending) return false;
+    }
+    if (query.follow !== undefined && followEffective(entry) !== query.follow) return false;
+    return true;
+  });
+  let pendingCount = 0;
+  let localNeeding = 0;
+  for (const entry of snapshot.packs.values()) {
+    const review = needsReview(entry);
+    pendingCount += review.candidates;
+    if (review.local) localNeeding += 1;
+  }
+  return {
+    data: entries.map(facts.view),
+    status: toRegistryStatus(snapshot, facts.status),
+    pending_count: pendingCount,
+    local_needing_approval: localNeeding,
+    now: facts.now,
+  };
+}
+
+/** `GET /site-packs/{pack_id}`. */
+export function packDetail(entry: PackEntry, facts: ReadFacts): SitePackDetailResponse {
+  const versions: SitePackDetailResponse['versions'] = [];
+  const state = entry.state;
+  if (state?.approvedVersion != null && state.approvedSha256 !== null && state.approvedSource) {
+    versions.push({
+      version: state.approvedVersion,
+      sha256: state.approvedSha256,
+      source: state.approvedSource,
+      state: 'approved',
+    });
+  }
+  if (state?.previousVersion != null && state.previousSha256 !== null && state.previousSource) {
+    versions.push({
+      version: state.previousVersion,
+      sha256: state.previousSha256,
+      source: state.previousSource,
+      state: 'previous',
+    });
+  }
+  for (const row of entry.pending) {
+    versions.push({
+      version: row.toVersion,
+      sha256: row.toSha256,
+      source: row.source,
+      state: 'pending',
+    });
+  }
+  if (entry.offer !== null) {
+    versions.push({ ...ref(entry.offer, 'bundled'), state: 'offered' });
+  }
+  if (entry.local?.current != null) {
+    versions.push({ ...ref(entry.local.current, 'local'), state: 'local' });
+  }
+  return { view: facts.view(entry), pack: entry.display, versions };
+}
+
+function ref(version: SourcePackVersion, source: SitePackVersionRef['source']): SitePackVersionRef {
+  return { version: version.pack.version, sha256: version.sha256, source };
+}
+
+/** `GET /site-packs/{pack_id}/diff`: a pending version or the local file against the approved one. */
+export async function diffOf(
+  entry: PackEntry,
+  snapshot: RegistrySnapshot,
+  query: SitePackDiffQuery,
+  deps: Pick<SitePackRegistryDeps, 'cache' | 'binaryVersion'>,
+): Promise<SitePackDiffResponse> {
+  let to: { content: SourcePackVersion; source: SitePackVersionRef['source'] };
+  if (query.to === 'local') {
+    const current = entry.local?.current ?? null;
+    if (current === null) throw packConflict(`${entry.packId} has no valid local file`);
+    to = { content: current, source: 'local' };
+  } else {
+    const version = query.to;
+    const row = entry.pending.find((p) => p.toVersion === version);
+    const content =
+      row === undefined ? null : snapshot.bundled.packs.find((p) => p.sha256 === row.toSha256);
+    if (row === undefined || content === undefined || content === null) {
+      throw packConflict(`version ${version} of ${entry.packId} is not downloaded`);
+    }
+    to = { content, source: row.source };
+  }
+  const from = await fromOf(entry, query, to.source === 'local', deps);
+  return {
+    from: from === null ? null : ref(from.content, from.source),
+    to: ref(to.content, to.source),
+    classification: from === null ? 'new_pack' : 'unclassified',
+    new_domains: [...newDomains(from?.content.pack ?? null, to.content.pack)],
+    changes: diffPacks(from?.content.pack ?? null, to.content.pack).map((c) => ({ ...c })),
+  };
+}
+
+async function fromOf(
+  entry: PackEntry,
+  query: SitePackDiffQuery,
+  local: boolean,
+  deps: Pick<SitePackRegistryDeps, 'cache' | 'binaryVersion'>,
+): Promise<{ content: SourcePackVersion; source: SitePackVersionRef['source'] } | null> {
+  const state = entry.state;
+  if (query.from === undefined) {
+    if (local && entry.local?.approved != null)
+      return { content: entry.local.approved, source: 'local' };
+    if (entry.approved !== null && state?.approvedSource) {
+      return { content: entry.approved, source: state.approvedSource };
+    }
+    return null;
+  }
+  if (
+    entry.approved !== null &&
+    entry.approved.pack.version === query.from &&
+    state?.approvedSource
+  ) {
+    return { content: entry.approved, source: state.approvedSource };
+  }
+  if (
+    state?.previousVersion === query.from &&
+    state.previousSha256 !== null &&
+    state.previousSource !== null
+  ) {
+    const cached = await readCached(
+      deps.cache,
+      state.previousSource,
+      entry.packId,
+      state.previousSha256,
+      deps.binaryVersion,
+    );
+    if (cached !== null) return { content: cached, source: state.previousSource };
+  }
+  throw packConflict(`version ${query.from} of ${entry.packId} is not available to compare`);
+}
+
+/** Pending candidates of followed, unpinned packs and local files waiting for approval. */
+export function pendingOf(snapshot: RegistrySnapshot): readonly PendingUpdate[] {
+  const out: PendingUpdate[] = [];
+  for (const entry of snapshot.packs.values()) {
+    const title = entry.display?.title ?? entry.packId;
+    const review = needsReview(entry);
+    if (review.candidates > 0) {
+      for (const row of entry.pending) {
+        if (row.toVersion === null) continue;
+        out.push({
+          kind: 'candidate',
+          packId: entry.packId,
+          title,
+          fromVersion: entry.state?.approvedVersion ?? null,
+          toVersion: row.toVersion,
+          sha256: row.toSha256,
+          source: row.source,
+        });
+      }
+    }
+    const current = entry.local?.current ?? null;
+    if (
+      review.local &&
+      current !== null &&
+      entry.local !== null &&
+      entry.local.state !== 'approved'
+    ) {
+      out.push({
+        kind: 'local',
+        packId: entry.packId,
+        title,
+        state: entry.local.state,
+        sha256: current.sha256,
+        version: current.pack.version,
+      });
+    }
+  }
+  return out;
+}
+
+/** `GET /site-packs/changes`. */
+export async function listChanges(
+  repo: SitePackChangeRepository,
+  query: SitePackChangesQuery,
+  now: number,
+): Promise<SitePackChangesPage> {
+  const page = await repo.list({
+    limit: query.limit,
+    ...(query.cursor !== undefined && { cursor: query.cursor }),
+    ...(query.pack_id !== undefined && { packId: query.pack_id }),
+    ...(query.decision !== undefined && { decisions: query.decision }),
+    window: {
+      ...(query.since !== undefined && { since: query.since }),
+      ...(query.until !== undefined && { until: query.until }),
+    },
+  });
+  return {
+    data: page.items.map(toChangeRow),
+    page: { next_cursor: page.nextCursor, limit: query.limit },
+    applied: {
+      filters: {
+        ...(query.pack_id !== undefined && { pack_id: query.pack_id }),
+        ...(query.decision !== undefined && { decision: query.decision }),
+      },
+      sort: { key: 'seq', dir: 'desc' },
+    },
+    meta: { now },
+  };
+}
+
+/** `GET /site-packs/guard-hits`. */
+export async function listGuardHits(
+  repo: SiteGuardHitRepository,
+  query: SiteGuardHitsQuery,
+  now: number,
+): Promise<SiteGuardHitsPage> {
+  const page = await repo.list({
+    limit: query.limit,
+    ...(query.cursor !== undefined && { cursor: query.cursor }),
+    ...(query.template_id !== undefined && { templateId: query.template_id }),
+    ...(query.session_id !== undefined && { sessionId: query.session_id }),
+    ...(query.pack_id !== undefined && { packId: query.pack_id }),
+    ...(query.action !== undefined && { actions: query.action }),
+    window: {
+      ...(query.since !== undefined && { since: query.since }),
+      ...(query.until !== undefined && { until: query.until }),
+    },
+  });
+  return {
+    data: page.items.map(toGuardHitRow),
+    page: { next_cursor: page.nextCursor, limit: query.limit },
+    applied: {
+      filters: {
+        ...(query.template_id !== undefined && { template_id: query.template_id }),
+        ...(query.session_id !== undefined && { session_id: query.session_id }),
+        ...(query.pack_id !== undefined && { pack_id: query.pack_id }),
+        ...(query.action !== undefined && { action: query.action }),
+      },
+      sort: { key: 'ts', dir: 'desc' },
+    },
+    meta: { now },
+  };
+}

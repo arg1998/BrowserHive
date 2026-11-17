@@ -15,10 +15,12 @@ import { SESSION_ARTIFACT_ROUTES } from './session-artifacts.ts';
 import { SESSION_FACT_ROUTES } from './session-facts.ts';
 import { SESSION_LIVE_ROUTES } from './session-live.ts';
 import { SESSION_ROUTES } from './sessions.ts';
+import { SITE_PACK_ROUTES } from './site-packs.ts';
 import { SYSTEM_ROUTES } from './system.ts';
 import { TEMPLATE_HEALTH_ROUTES } from './template-health.ts';
 import { TEMPLATE_OPS_ROUTES } from './template-ops.ts';
 import { TEMPLATE_RECORDING_ROUTES } from './template-recording.ts';
+import { TEMPLATE_SITE_STOP_ROUTES } from './template-site-stops.ts';
 import { TEMPLATE_ROUTES } from './templates.ts';
 import { VAULT_ROUTES } from './vault.ts';
 import { VAULT_BINDING_ROUTES } from './vault-bindings.ts';
@@ -47,5 +49,7 @@ export function apiRoutes(deps: MetaRouteDeps & { readonly logger: Logger }): re
     ...TEMPLATE_ROUTES,
     ...TEMPLATE_RECORDING_ROUTES,
     ...TEMPLATE_HEALTH_ROUTES,
+    ...SITE_PACK_ROUTES,
+    ...TEMPLATE_SITE_STOP_ROUTES,
   ];
 }

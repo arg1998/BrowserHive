@@ -198,6 +198,18 @@ export async function openCliStorage(
         });
     },
     templateRows: async () => readTemplateRows(storage),
+    sitePackStates: async () => {
+      const unreadable: string[] = [];
+      try {
+        const rows = await storage.repos.sitePackState.list({
+          onUnreadable: (packId) => unreadable.push(packId),
+        });
+        return { rows, unreadable };
+      } catch {
+        // A database from before schema v10 has no site_pack_state table.
+        return { rows: [], unreadable: [] };
+      }
+    },
     updateTemplateVersionFile: (templateId, version, file) =>
       storage.repos.templateVersions.updateFile(templateId, version, file),
     createToken: async ({ principal, expiresInMs }) => {
@@ -277,13 +289,15 @@ const SQLITE_MAGIC = 'SQLite format 3\u0000';
 /**
  * Reads the SQLite header of a file: `user_version` (offset 60) and `application_id` (offset 68),
  * big-endian. `min_reader_version` lives in the `meta` table; it is read through a read-only open
- * only when the file is newer than this binary.
+ * only when the file is newer than this binary, and never in `'header'` mode (the floor is then the
+ * file's own `user_version`).
  *
  * @returns The header facts, or `null` when the file is not a SQLite database.
  */
 export async function inspectDatabaseFile(
   path: string,
   options: { readonly logger: Logger; readonly appVersion: string },
+  mode?: 'header',
 ): Promise<DatabaseFileInfo | null> {
   const header = Buffer.alloc(100);
   const file = await open(path, 'r');
@@ -295,6 +309,7 @@ export async function inspectDatabaseFile(
   }
   const userVersion = header.readUInt32BE(60);
   const applicationId = header.readUInt32BE(68);
+  if (mode === 'header') return { applicationId, userVersion, minReaderVersion: userVersion };
   const persistence: Persistence = await import('@browserhive/core/persistence');
   if (userVersion <= persistence.SCHEMA_VERSION) {
     // Readable by construction: min_reader_version <= user_version <= SCHEMA_VERSION.

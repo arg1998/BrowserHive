@@ -37,6 +37,11 @@ import {
   InMemoryNotificationRepository,
   InMemorySystemEventRepository,
 } from './in-memory-repos-operations.ts';
+import {
+  InMemorySiteGuardHitRepository,
+  InMemorySitePackChangeRepository,
+  InMemorySitePackStateRepository,
+} from './in-memory-site-pack-repos.ts';
 
 export { InMemoryNotificationRepository, InMemorySystemEventRepository };
 
@@ -352,6 +357,9 @@ export class InMemoryRepositories implements Repositories {
   readonly templateSites = new InMemoryTemplateSiteRepository();
   readonly templateVersions = new InMemoryTemplateVersionRepository();
   readonly templateProbes = new InMemoryTemplateProbeRepository();
+  readonly sitePackState = new InMemorySitePackStateRepository();
+  readonly sitePackChanges = new InMemorySitePackChangeRepository();
+  readonly siteGuardHits = new InMemorySiteGuardHitRepository();
   readonly templates = new InMemoryTemplateRepository(this.templateSites, this.templateVersions);
 
   constructor() {

@@ -23,6 +23,8 @@ export const NotificationKind = z.enum([
   'template.challenged',
   'template.relogin_failed',
   'template.host_failed',
+  'site_pack.write_confirm',
+  'site_pack.update_pending',
 ]);
 /** Union of {@link NotificationKind} members. */
 export type NotificationKind = z.infer<typeof NotificationKind>;

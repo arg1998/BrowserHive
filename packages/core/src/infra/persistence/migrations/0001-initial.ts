@@ -10,7 +10,6 @@ import {
   CREDENTIAL_KINDS,
   MCP_TRANSPORTS,
   NOTIFICATION_TYPES,
-  OPERATOR_REQUEST_KINDS,
   OPERATOR_REQUEST_STATUSES,
   ORIGIN_CHECKS,
   PAGE_CATEGORIES,
@@ -26,6 +25,12 @@ import {
 } from '../../../ports/persistence/enums.ts';
 import type { Migration } from './migration.ts';
 import { boolCol, enumCol } from './sql-enums.ts';
+
+/**
+ * `operator_requests.kind` as v1 wrote it, frozen (spec 13 §9.9): the live `OPERATOR_REQUEST_KINDS`
+ * grew `security_intercept` in v10, and v1's DDL must not change with it. A golden pins v1's text.
+ */
+const V1_OPERATOR_REQUEST_KINDS = ['attention', 'vault_confirm'] as const;
 
 const infrastructure = `
 CREATE TABLE schema_migrations (
@@ -266,7 +271,7 @@ CREATE INDEX idx_blocked_domain ON blocked_requests(domain, ts);
 const operatorRequests = `
 CREATE TABLE operator_requests (
   request_id TEXT PRIMARY KEY,
-  ${enumCol('kind', OPERATOR_REQUEST_KINDS)},
+  ${enumCol('kind', V1_OPERATOR_REQUEST_KINDS)},
   session_id TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
   owner TEXT NOT NULL,
   reason TEXT NOT NULL,

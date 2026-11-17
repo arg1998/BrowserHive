@@ -47,6 +47,7 @@ import type {
   ReportSettingsStore,
   RuntimeFacts,
   SessionService,
+  SitePackRegistry,
   SystemStatusService,
   TemplateRecordingService,
   TemplateService,
@@ -61,6 +62,7 @@ import type { PhaseTracker } from './health.ts';
 import type { DataDirLock } from './lock-file.ts';
 import type { TemplatesParts } from './phases/domain-templates.ts';
 import type { SandboxWiring } from './sandbox.ts';
+import type { SitePackPagesParts } from './site-packs-pages.ts';
 import type { BootInput } from './types.ts';
 
 /** Filled by `observability`. */
@@ -144,6 +146,10 @@ export interface DomainPart {
     TemplatesParts,
     'edit' | 'actions' | 'state' | 'operations' | 'supervisor' | 'healthRoutes' | 'health'
   >;
+  /** Site packs (spec 13 §9, T3a). */
+  readonly sitePacks: SitePackRegistry;
+  /** Site pack enforcement on pages and tools (spec 13 §9.3, §9.5; T3a). */
+  readonly sitePackPages: SitePackPagesParts;
   /** Random per start; `GET /health` reports it (D-37). */
   readonly instanceId: string;
   readonly preferences: PreferenceService;

@@ -40,6 +40,7 @@ describe('matchRequestGuard', () => {
       resourceTypes: ['eventsource', 'other'],
       action: 'block',
     },
+    { id: 'signout-any', url: 'site.test/m/out', resourceTypes: 'all', action: 'block' },
   );
 
   // [method, resource type, url, expected rule id or null]
@@ -64,8 +65,20 @@ describe('matchRequestGuard', () => {
     // Percent-encoded unreserved characters are what the server decodes them to.
     ['POST', 'fetch', 'https://site.test/log%6Fut', 'logout-post'],
     ['POST', 'fetch', 'https://site.test/LOG%4Fut?next=1', 'logout-post'],
-    // A reserved character stays encoded: `%2F` is not a path separator.
-    ['POST', 'fetch', 'https://site.test/logout%2Fnow', null],
+    // Normalised as servers read paths (review PR #83 M2): `%2F`, `//`, `;params`, a trailing dot.
+    ['POST', 'fetch', 'https://site.test/logout%2Fnow', 'logout-post'],
+    ['POST', 'fetch', 'https://site.test/logout%2F', 'logout-post'],
+    ['POST', 'fetch', 'https://site.test//logout', 'logout-post'],
+    ['POST', 'fetch', 'https://site.test/logout;jsessionid=1', 'logout-post'],
+    ['POST', 'fetch', 'https://site.test./logout', 'logout-post'],
+    ['POST', 'fetch', 'https://site.test/x/%2E%2E/logout', 'logout-post'],
+    ['POST', 'fetch', 'https://site.test/logout-help;x', null],
+    // `all` covers every type the route sees (review PR #83 M2): an <img>, a prefetch, a script.
+    ['GET', 'image', 'https://site.test/m/out', 'signout-any'],
+    ['GET', 'other', 'https://site.test/m/out', 'signout-any'],
+    ['GET', 'script', 'https://site.test/m/out?x', 'signout-any'],
+    ['GET', 'stylesheet', 'https://site.test/m/out', 'signout-any'],
+    ['GET', 'media', 'https://site.test/m/out', 'signout-any'],
     // Types outside the default set are not covered by a rule without resource types.
     ['POST', 'image', 'https://site.test/logout', null],
     ['POST', 'script', 'https://site.test/logout', null],
@@ -136,7 +149,7 @@ describe('matchRequestGuard', () => {
     const rule = compiled({ id: 'r', url: 'a.test/x*', action: 'block' }).rules[0];
     expect(rule?.matchers).toHaveLength(1);
     const plain = compiled({ id: 'r', url: 'a.test/x', action: 'block' }).rules[0];
-    expect(plain?.matchers.map((m) => m.kind)).toEqual(['equals', 'regexp', 'regexp']);
+    expect(plain?.matchers.map((m) => m.kind)).toEqual(['equals', 'glob', 'glob']);
   });
 
   it('a pattern with wildcards still gets the query variant', () => {

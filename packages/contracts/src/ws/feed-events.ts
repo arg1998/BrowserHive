@@ -10,6 +10,11 @@ import { LogRecord } from '../http/logs.ts';
 import { Notification } from '../http/notifications.ts';
 import { PageRow } from '../http/pages.ts';
 import { SessionSummary } from '../http/sessions.ts';
+import {
+  SitePackClassification,
+  SitePackRegistryStatus,
+  SitePackView,
+} from '../http/site-packs.ts';
 import { SystemEvent } from '../http/system.ts';
 import { TemplateProbeRow } from '../http/template-health.ts';
 import { ReloginView } from '../http/template-relogin-view.ts';
@@ -219,6 +224,22 @@ export const TemplateProbeEvent = z.object({
   probe: TemplateProbeRow,
 });
 
+// site packs (spec 13 §11.3, PR T3a) ------------------------------------------------------------
+/** A pack's view changed (approval, pin, follow, enable, a local file, a reload). */
+export const SitePackChangedEvent = z.object({ ...ev('site_pack.changed'), view: SitePackView });
+/** A pack has a new pending version or local file waiting for approval. */
+export const SitePackPendingEvent = z.object({
+  ...ev('site_pack.pending'),
+  pack_id: z.string(),
+  to_version: z.number().int().nullable(),
+  classification: SitePackClassification,
+});
+/** The registry's status changed (a reload, T4b: a check). */
+export const SitePackStatusEvent = z.object({
+  ...ev('site_pack.status'),
+  status: SitePackRegistryStatus,
+});
+
 // logs -------------------------------------------------------------------------------------------
 /** One log record from the ring buffer (droppable under backpressure). */
 export const LogRecordEvent = z.object({ ...ev('log.record'), record: LogRecord });
@@ -262,6 +283,9 @@ export const WsFeedEvent = z.discriminatedUnion('type', [
   TemplateOperationEvent,
   TemplateReloginEvent,
   TemplateProbeEvent,
+  SitePackChangedEvent,
+  SitePackPendingEvent,
+  SitePackStatusEvent,
   LogRecordEvent,
 ]);
 /** Every feed event payload. */
@@ -298,6 +322,7 @@ export const WS_TOPIC_EVENTS: { readonly [T in WsStaticTopic]: readonly WsFeedEv
     'template.relogin',
     'template.probe',
   ],
+  'site-packs': ['site_pack.changed', 'site_pack.pending', 'site_pack.status'],
 };
 
 /** Event types published on `session:<id>` topics. */

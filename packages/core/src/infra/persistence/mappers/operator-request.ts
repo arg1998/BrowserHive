@@ -38,6 +38,7 @@ export function operatorRequestFromRow(row: Selectable<OperatorRequests>): Opera
     createdAt: row.created_at,
     deadlineAt: row.deadline_at,
     resolvedAt: row.resolved_at,
+    templateId: row.template_id,
   };
 }
 
@@ -63,6 +64,7 @@ export function operatorRequestToRow(record: NewOperatorRequest): Selectable<Ope
     created_at: record.createdAt,
     deadline_at: record.deadlineAt,
     resolved_at: null,
+    template_id: record.templateId ?? null,
   };
 }
 

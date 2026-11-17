@@ -18,6 +18,7 @@ import {
   toolCallRecord,
   vaultAccessRecord,
 } from '../helpers.ts';
+import { seedSitePacks } from './seed-site-packs.ts';
 
 /** Seeds a representative dataset (one row per table family) into `repos`. */
 export async function seedFixture(uow: SqliteUnitOfWork): Promise<void> {
@@ -200,6 +201,8 @@ export async function seedFixture(uow: SqliteUnitOfWork): Promise<void> {
       createdAt: at + 3_000,
       deadlineAt: at + 300_000,
     });
+    // Schema v10: a security intercept, one pack's state, one candidate and one guard hit.
+    await seedSitePacks(r, at);
     await r.operatorActions.append({
       eventId: 'e-op-1',
       principalId: 'local',

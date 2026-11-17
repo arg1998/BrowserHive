@@ -156,6 +156,19 @@ const SPEC_CODES = [
   'TEMPLATE_STATE_COPY',
   'TEMPLATE_NEEDS_LOGIN',
   'TEMPLATE_SITE_SIGNED_OUT',
+  'SITE_OPERATOR_PENDING',
+  'SITE_ACTION_BLOCKED',
+  'SITE_PACK_NOT_FOUND',
+  'SITE_PACK_INVALID',
+  'SITE_PACK_UPDATE_NOT_PENDING',
+  'SITE_PACK_DOMAIN_TAKEN',
+  'SITE_PACK_NO_PREVIOUS',
+  'SITE_PACK_NO_LOCAL_FILE',
+  'SITE_PACK_APPROVAL_REQUIRED',
+  'SITE_PACKS_STATE_CORRUPT',
+  'SITE_PACKS_LOAD_FAILED',
+  'SITE_GUARD_WARNED',
+  'SITE_WRITE_HELD',
   // Real CORS preflights in routed browsers (spec 13 §3.8, D-66).
   'PREFLIGHTS_NOT_ENFORCED',
 ] as const;
@@ -223,7 +236,7 @@ describe('ERROR_REGISTRY completeness', () => {
   it('categories partition the codes; audit and warning codes are never thrown', () => {
     const total = ErrorCategory.options.reduce((n: number, c) => n + codesInCategory(c).length, 0);
     expect(total).toBe(ERROR_CODES.length);
-    expect(codesInCategory('warning')).toHaveLength(15);
+    expect(codesInCategory('warning')).toHaveLength(17);
     expect(codesInCategory('audit')).toContain('ORIGIN_MISMATCH');
     expect(codesInCategory('boot')).toContain('PORT_IN_USE');
   });
@@ -351,6 +364,26 @@ describe('error message texts are stable', () => {
         'SESSION_SEALED',
         { session_id: 's-1', tool: 'set_cookies' },
         "set_cookies is not available in this session: its sign-ins belong to the operator's session template.",
+        403,
+        'never',
+      ],
+      [
+        'SITE_OPERATOR_PENDING',
+        {
+          session_id: 's-1',
+          site: 'linkedin.com',
+          request_id: 'r-1',
+          reason: 'challenge',
+          wait_text: "Wait with get_attention_result('r-1'), or close the session.",
+        },
+        "linkedin.com needs the operator before this session can continue (challenge). Wait with get_attention_result('r-1'), or close the session.",
+        409,
+        'after_operator',
+      ],
+      [
+        'SITE_ACTION_BLOCKED',
+        { session_id: 's-1', site: 'linkedin.com', guard: 'linkedin.com#logout' },
+        "This action on linkedin.com is blocked by the operator's site rules. Do not retry it.",
         403,
         'never',
       ],

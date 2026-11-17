@@ -104,7 +104,7 @@ export const SessionInputResponse = z.object({
 export type SessionInputResponse = z.infer<typeof SessionInputResponse>;
 
 /** Timeline facets (also the `kinds[]` filter of `/timeline` and `/export`). */
-export const TimelineKind = z.enum(['tool', 'page', 'attention', 'vault', 'blocked']);
+export const TimelineKind = z.enum(['tool', 'page', 'attention', 'vault', 'blocked', 'guard']);
 /** Timeline facets. */
 export type TimelineKind = z.infer<typeof TimelineKind>;
 

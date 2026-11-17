@@ -146,6 +146,8 @@ export type Invocation =
       readonly timeoutMs: number;
       /** `--fromState <file>` (absolute): seed from a storage state instead of a sign-in window. */
       readonly fromState: string | null;
+      /** `--yes`: approve the sites' site packs without asking (spec 13 §9.6 first use). */
+      readonly yes: boolean;
       readonly json: boolean;
       readonly remote: RemoteTarget;
     }
@@ -211,7 +213,57 @@ export type Invocation =
       readonly templateKeyPrevious: string | null;
       readonly json: boolean;
     } & DataDirTarget)
+  | {
+      readonly command: 'sitepacks';
+      readonly action: SitePacksAction;
+      readonly json: boolean;
+      readonly remote: RemoteTarget;
+    }
+  | {
+      /** `sitepacks verify <path>`: offline, no server (spec 13 §11.5). */
+      readonly command: 'sitepacks-verify';
+      /** Absolute path of the pack file. */
+      readonly path: string;
+      readonly json: boolean;
+    }
   | { readonly command: 'version'; readonly json: boolean };
+
+/** `?source=` of `sitepacks list` (`registry` is the remote source). */
+export type SitePacksSource = 'local' | 'registry' | 'bundled' | 'import';
+
+/**
+ * One `sitepacks` subcommand over the REST API (spec 13 §11.5). `version: null` on `apply` and
+ * `reject` takes the single pending version; `to: null` on `diff` takes the single pending version
+ * or the local file waiting for approval. `sitepacks verify` is offline and is its own invocation.
+ */
+export type SitePacksAction =
+  | {
+      readonly kind: 'list';
+      readonly sources: readonly SitePacksSource[];
+      readonly pending: boolean;
+    }
+  | { readonly kind: 'show'; readonly packId: string }
+  | { readonly kind: 'diff'; readonly packId: string; readonly to: number | 'local' | null }
+  | {
+      readonly kind: 'apply';
+      readonly packId: string;
+      readonly version: number | null;
+      readonly yes: boolean;
+    }
+  | { readonly kind: 'reject'; readonly packId: string; readonly version: number | null }
+  | { readonly kind: 'revert'; readonly packId: string; readonly yes: boolean }
+  | { readonly kind: 'pin'; readonly packId: string; readonly version: number }
+  | { readonly kind: 'unpin'; readonly packId: string }
+  | { readonly kind: 'follow'; readonly packId: string; readonly follow: boolean | null }
+  | { readonly kind: 'approve-local'; readonly packId: string; readonly yes: boolean }
+  | { readonly kind: 'enable'; readonly packId: string }
+  | { readonly kind: 'disable'; readonly packId: string; readonly yes: boolean }
+  | { readonly kind: 'reload' }
+  | {
+      readonly kind: 'import';
+      /** The file or folder, absolute. */
+      readonly path: string;
+    };
 
 /** The template a `templates` subcommand acts on, by name, over the REST API. */
 export interface TemplateTarget {

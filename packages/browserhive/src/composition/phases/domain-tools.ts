@@ -1,6 +1,7 @@
 /** @module composition/phases/domain-tools — MCP runtime facts, tool registry, `ToolServices` and the shared `ToolDispatcher` (spec 02 §2). */
 
 import type { ServerConfig } from '@browserhive/contracts/config';
+import type { SiteHold } from '@browserhive/core/ports/security-intercepts';
 import type {
   Clock,
   DomainEvents,
@@ -16,6 +17,7 @@ import type {
   PageActions,
   RuntimeFacts,
   SessionService,
+  SiteToolGate,
   TemplateService,
   VaultRedaction,
   VaultService,
@@ -41,7 +43,11 @@ export interface ToolsInput {
   readonly templatePause?: {
     wait(templateId: string, name: string, signal?: AbortSignal): Promise<void>;
   };
+  /** The security intercepts holding template sessions (spec 13 §9.3); absent when site packs are off. */
+  readonly siteHolds?: { holdOf(sessionId: string): SiteHold | null };
   readonly pageActions: PageActions;
+  /** Site pack enforcement on the tool path (spec 13 §9.3, §9.5); absent under `templates=false`. */
+  readonly siteGuards?: SiteToolGate;
   readonly redactor: Redactor;
   readonly bus: EventBus<DomainEvents>;
   readonly clock: Clock;
@@ -87,7 +93,9 @@ export function buildTools(input: ToolsInput): {
       blocklist: input.blocklist,
       templates: input.templates,
       ...(input.templatePause !== undefined && { templatePause: input.templatePause }),
+      ...(input.siteHolds !== undefined && { siteHolds: input.siteHolds }),
       pageActions: input.pageActions,
+      ...(input.siteGuards !== undefined && { siteGuards: input.siteGuards }),
       fs: createNodeToolFs(),
       redaction: {
         scrubText: (sessionId, text) =>

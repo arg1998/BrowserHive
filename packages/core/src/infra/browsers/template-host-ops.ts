@@ -5,7 +5,11 @@ import { AppError } from '../../kernel/errors/app-error.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import { registrableDomain } from '../../kernel/url.ts';
 import type { Logger } from '../../ports/logger.ts';
-import type { SharedWindowInfo, SignInRemoval } from '../../ports/template-host.ts';
+import type {
+  SharedWindowInfo,
+  SignInRemoval,
+  TemplatePageWatcher,
+} from '../../ports/template-host.ts';
 import type { HostPageDispatcher } from './page-dispatcher.ts';
 import { profileOrigins } from './profile-origins.ts';
 import type { HostTargets } from './template-targets.ts';
@@ -225,4 +229,19 @@ export function windowUnavailable(why: string, cause?: unknown): AppError<'INTER
     { ref: 'template-window' },
     { message: `template window failed: ${why}`, ...(cause !== undefined && { cause }) },
   );
+}
+
+/** Hands a session's page to the page watcher (challenge detection, spec 13 §9.5); never throws. */
+export function watchPage(
+  watcher: TemplatePageWatcher | null,
+  templateId: string,
+  page: Page,
+  sessionId: string,
+  log: Logger,
+): void {
+  try {
+    watcher?.pageAttributed(templateId, page, sessionId);
+  } catch (err) {
+    log.warn('page watcher threw', { err: serializeError(err) });
+  }
 }

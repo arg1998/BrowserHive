@@ -23,8 +23,12 @@ export function remoteTarget(reader: FlagReader): RemoteTarget | null {
   return { url, ...(token !== undefined && { token }), ...(cookie !== undefined && { cookie }) };
 }
 
-/** `--url` when given, else the configured host and port (a wildcard bind is reached on loopback). */
-function remoteOrConfigured(input: PlanInput, explicit: RemoteTarget | null): RemoteTarget {
+/**
+ * `--url` when given, else the configured host and port (a wildcard bind is reached on loopback).
+ *
+ * @returns The REST target.
+ */
+export function remoteOrConfigured(input: PlanInput, explicit: RemoteTarget | null): RemoteTarget {
   if (explicit !== null) return explicit;
   const resolved = resolveFull(input);
   const host = resolved.ok ? resolved.value.config.host : '127.0.0.1';

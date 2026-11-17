@@ -18,7 +18,9 @@ BrowserHive can also put them on your phone: through your own Telegram bot, a Di
 | An agent called `request_attention` ([human takeover](attention.md)) | `attention.requested` | needs you | warn |
 | A vault fill waits for your confirmation ([vault](vault.md)) | `vault.confirm` | needs you | warn |
 | A [session template](templates.md#health-checks) is signed out of a site | `template.signed_out` | needs you | warn |
-| A template site is held by a security check (arrives with site packs) | `template.challenged` | needs you | warn |
+| A template site is held by a security check or CAPTCHA ([site packs](site-packs.md#challenges)) | `template.challenged` | needs you | warn |
+| An agent's write on a site waits for your confirmation ([site packs](site-packs.md#guards)) | `site_pack.write_confirm` | needs you | warn |
+| A site pack has a pending update, or a local pack file waits for approval | `site_pack.update_pending` | system | info (warn when a local file changed since you approved it) |
 | Signing a template site in again failed | `template.relogin_failed` | problems | warn |
 | A template's browser stopped trying to start | `template.host_failed` | problems | error |
 | A session crashed | `session.crashed` | problems | error |
@@ -33,14 +35,21 @@ Routine events are deliberately silent: a session opening, a page visit, a clean
 
 ### Template sign-ins
 
-- **`template.signed_out`**: a [health check](templates.md#health-checks) found a site of a template signed out ("Job hunt: linkedin.com signed out"). There is one per template and sign-in provider; until site packs say which sites share a sign-in, every site is its own provider. It resolves by itself when the site is signed in again, and ends when the site or the template is removed. Its buttons: **Re-login on …** (naming the machine running BrowserHive) and a link to the site on the template page.
-- **`template.challenged`**: a site shows a security check or CAPTCHA. It arrives with site packs, and resolves when the next check finds the site signed in.
+- **`template.signed_out`**: a [health check](templates.md#health-checks) found a site of a template signed out ("Job hunt: linkedin.com signed out"). There is one per template and sign-in provider: a site whose [site pack](site-packs.md) names an identity provider (YouTube signs in through Google) shares its provider's notification; any other site is its own provider. It resolves by itself when the site is signed in again, and ends when the site or the template is removed. Its buttons: **Re-login on …** (naming the machine running BrowserHive) and a link to the site on the template page.
+- **`template.challenged`**: a site shows a security check or CAPTCHA, found by a check or in an agent's session ([Challenges](site-packs.md#challenges)). It links to the site on the template page and, for a session, to its live view to take over. It resolves when the next check finds the site signed in.
 - **`template.relogin_failed`**: an automatic [vault re-login](vault.md#signing-template-sites-in-again) failed or was not retried (a second sign-out within 24 hours), or a re-login window closed after 30 minutes without a sign-in. It is final; the sign-out notification stays open.
 - **`template.host_failed`**: a template's browser failed five times in 30 minutes, or cannot start at all (no display, an unreachable proxy). It resolves when the browser runs again. See [Troubleshooting](troubleshooting.md#session-templates).
 
 A notification about a site shares one thread with that site's other notifications, so a chat shows its sign-out, its re-login failures and its recovery in one place.
 
 **Re-login on … only queues.** Pressed as an [act button](#answer-from-your-phone) in Telegram, Discord or ntfy, it queues a re-login of that site; it never opens a window on a desktop nobody may be watching. The window opens when you press **Show window** on the template page, at the machine running BrowserHive ([In a window](templates.md#in-a-window)). The press runs with the scope `templates:login`, like the dashboard's **Re-login**, and is recorded in the audit log with who pressed it.
+
+### Site packs
+
+- **`site_pack.write_confirm`**: an agent's write on a site whose write policy is `confirm` (a post, a message, an application) is held until you decide ([Guards](site-packs.md#guards)). There is one thread per template and site, showing how many confirmations are open. It shows the method, the address, the guard, the site and the tool call that triggered it. For guards of kind `write`, **Approve** and **Deny** act on the newest open confirmation, with the scope `attention:resolve`; confirmations of sign-out, account, credential and destructive guards can only be decided on `/attention`, so their notification only links there. It resolves when no confirmation is open.
+- **`site_pack.update_pending`**: a followed pack has a pending version (a newer bundled version from a BrowserHive release), or a local pack file waits for your approval ([Approval and provenance](site-packs.md#approval-and-provenance)). Its summary is one line per pack ("linkedin.com v7 → v8 available; local example.com changed"), and it links to the Site packs page. It is a warning when a local file changed since you approved it. It resolves when nothing is pending. Turn it off per pack with **Follow updates** (`browserhive sitepacks follow <pack> off`).
+
+Pack titles and text are escaped for each chat app's markup.
 
 ## A notification has a life
 
@@ -158,7 +167,7 @@ A revision is POSTed again with `op: "edit"` and a higher `message.revision`; ke
 
 ## Answer from your phone
 
-With **act buttons** on, a notification that waits for you carries buttons that act, not just links: **Mark resolved** and **Reject** for an attention request, **Approve** and **Deny** for a vault fill, **Re-login on …** for a signed-out template site (it [only queues](#template-sign-ins) the re-login). Press one in the chat, and BrowserHive does exactly what the same button in the dashboard does, then edits the message: the buttons disappear and it says who answered and when ("Resolved on Telegram by 123456789 after 42 s"). Everything else (take over, open the live view) stays a link.
+With **act buttons** on, a notification that waits for you carries buttons that act, not just links: **Mark resolved** and **Reject** for an attention request, **Approve** and **Deny** for a vault fill, **Re-login on …** for a signed-out template site (it [only queues](#template-sign-ins) the re-login), **Approve** and **Deny** for an agent's write on a site that waits for confirmation ([site packs](#site-packs); writes only, never sign-out, account or credential actions). Press one in the chat, and BrowserHive does exactly what the same button in the dashboard does, then edits the message: the buttons disappear and it says who answered and when ("Resolved on Telegram by 123456789 after 42 s"). Everything else (take over, open the live view) stays a link.
 
 Act buttons are **off** by default. Switch them on per channel in the wizard's **What to send → Answer from the chat**, or with `actButtons=true` on a [startup channel](#startup-channels).
 

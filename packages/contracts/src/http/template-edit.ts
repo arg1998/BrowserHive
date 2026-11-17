@@ -4,6 +4,7 @@ import { Channel } from '../enums/channel.ts';
 import { SiteWritePolicy } from '../enums/site-write-policy.ts';
 import { HARNESS_SLUG_MAX } from '../harness/index.ts';
 import { IfMatchVersion } from './common.ts';
+import { Sha256Hex } from './site-packs.ts';
 import {
   TemplateId,
   TemplateName,
@@ -67,6 +68,11 @@ export type TemplateSiteParams = z.infer<typeof TemplateSiteParams>;
 export const PutTemplateSiteRequest = z.strictObject({
   enabled: z.boolean().optional(),
   write_policy: SiteWritePolicy.nullable().optional(),
+  /**
+   * Approve and attach the pack version on offer for this site (spec 13 §9.6): the SHA-256 the
+   * operator was shown. Adds the pack to an existing generic site too. Another version is 409.
+   */
+  pack_sha256: Sha256Hex.optional(),
 });
 /** `PUT …/sites/{site_id}` body. */
 export type PutTemplateSiteRequest = z.infer<typeof PutTemplateSiteRequest>;

@@ -16,13 +16,15 @@ import type {
 } from '../../ports/persistence/operator-requests.ts';
 import type { OperatorRequestListQuery, Page } from '../../ports/persistence/queries.ts';
 import type { OperatorRequestRecord } from '../../ports/persistence/records.ts';
+import { OpenSlots } from './capacity.ts';
+import { findIdempotent } from './idempotency.ts';
 import {
   CANCELLED_MESSAGE,
   RESTART_MESSAGE,
   SESSION_CLOSE_MESSAGE,
   TIMEOUT_MESSAGE,
 } from './messages.ts';
-import { leaseCall, queueFullError, toJsonObject } from './support.ts';
+import { leaseCall, toJsonObject } from './support.ts';
 import {
   type LeaseController,
   type OpenOperatorRequest,
@@ -75,14 +77,14 @@ interface SettleInput {
  */
 export class OperatorRequestBroker {
   private readonly deps: OperatorRequestBrokerDeps;
-  private readonly limits: OperatorRequestLimits;
   private readonly log: Logger;
   private readonly pending = new Map<string, Pending>();
+  private readonly slots: OpenSlots;
   private shuttingDown = false;
 
   constructor(deps: OperatorRequestBrokerDeps) {
     this.deps = deps;
-    this.limits = { ...DEFAULT_LIMITS, ...deps.limits };
+    this.slots = new OpenSlots({ ...DEFAULT_LIMITS, ...deps.limits });
     this.log = deps.logger.child({ module: 'attention.broker' });
   }
 
@@ -92,10 +94,18 @@ export class OperatorRequestBroker {
    * @throws `RATE_LIMITED` when the per-session or global open queue is full.
    */
   async open(input: OpenOperatorRequest): Promise<OperatorRequestHandle> {
-    const reused = await this.findIdempotent(input);
+    const reused = await findIdempotent(input, {
+      pending: () => [...this.pending.values()],
+      stored: (sessionId, key) => this.deps.requests.getByIdempotencyKey(sessionId, key),
+      result: (id) => this.result(id),
+    });
     if (reused !== null) return reused;
 
-    this.assertCapacity(input.sessionId);
+    // Taken before the first await below, so concurrent opens cannot pass the bound together.
+    const release = this.slots.take(input.sessionId, {
+      session: this.openIdsFor(input.sessionId).length,
+      total: this.pending.size,
+    });
     const createdAt = this.deps.clock.now();
     const timeoutMs =
       input.timeoutMs !== undefined && input.timeoutMs > 0 && Number.isFinite(input.timeoutMs)
@@ -121,10 +131,19 @@ export class OperatorRequestBroker {
       createdAt,
       deadlineAt: timeoutMs === null ? null : createdAt + timeoutMs,
       resolvedAt: null,
+      ...(input.templateId !== undefined && { templateId: input.templateId }),
     };
 
     leaseCall(this.deps.leases, this.log, 'pause', record.sessionId, createdAt);
-    await this.deps.requests.insert(record);
+    try {
+      await this.deps.requests.insert(record);
+    } catch (error) {
+      leaseCall(this.deps.leases, this.log, 'resume', record.sessionId, this.deps.clock.now());
+      throw error;
+    } finally {
+      // The entry is pending (synchronously below) or the open failed: the slot goes back.
+      release();
+    }
 
     let resolve: (outcome: OperatorRequestOutcome) => void = () => undefined;
     const promise = new Promise<OperatorRequestOutcome>((r) => {
@@ -252,16 +271,19 @@ export class OperatorRequestBroker {
     return this.deps.requests.get(id);
   }
 
-  /** Open requests held in memory, oldest first. */
-  listOpen(kind?: OperatorRequestKind): readonly OperatorRequestRecord[] {
+  /** Open requests held in memory, oldest first; `kind` narrows to one kind or a list of kinds. */
+  listOpen(
+    kind?: OperatorRequestKind | readonly OperatorRequestKind[],
+  ): readonly OperatorRequestRecord[] {
+    const kinds = kind === undefined ? null : typeof kind === 'string' ? [kind] : kind;
     return [...this.pending.values()]
       .map((p) => p.record)
-      .filter((r) => kind === undefined || r.kind === kind)
+      .filter((r) => kinds === null || kinds.includes(r.kind))
       .sort((a, b) => a.createdAt - b.createdAt);
   }
 
-  /** Number of open requests, optionally of one kind. */
-  openCount(kind?: OperatorRequestKind): number {
+  /** Number of open requests, optionally of one kind or a list of kinds. */
+  openCount(kind?: OperatorRequestKind | readonly OperatorRequestKind[]): number {
     return this.listOpen(kind).length;
   }
 
@@ -286,42 +308,6 @@ export class OperatorRequestBroker {
   }
 
   // --- internals ------------------------------------------------------------------------------
-
-  private async findIdempotent(input: OpenOperatorRequest): Promise<OperatorRequestHandle | null> {
-    const key = input.idempotencyKey;
-    if (key === undefined) return null;
-    for (const p of this.pending.values()) {
-      const r = p.record;
-      if (r.sessionId === input.sessionId && r.idempotencyKey === key && r.kind === input.kind) {
-        const timeoutMs = r.deadlineAt === null ? null : r.deadlineAt - r.createdAt;
-        return {
-          id: r.requestId,
-          createdAt: r.createdAt,
-          timeoutMs,
-          promise: p.promise,
-          reused: true,
-        };
-      }
-    }
-    const stored = await this.deps.requests.getByIdempotencyKey(input.sessionId, key);
-    if (stored === null || stored.kind !== input.kind) return null;
-    const outcome = await this.result(stored.requestId);
-    if (outcome === null) return null;
-    return {
-      id: stored.requestId,
-      createdAt: stored.createdAt,
-      timeoutMs: stored.deadlineAt === null ? null : stored.deadlineAt - stored.createdAt,
-      promise: Promise.resolve(outcome),
-      reused: true,
-    };
-  }
-
-  private assertCapacity(sessionId: string): void {
-    const perSession = this.openIdsFor(sessionId).length;
-    if (perSession >= this.limits.perSession || this.pending.size >= this.limits.global) {
-      throw queueFullError(perSession, this.pending.size, this.limits);
-    }
-  }
 
   private openIdsFor(sessionId: string): string[] {
     const ids: string[] = [];

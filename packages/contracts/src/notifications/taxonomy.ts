@@ -25,6 +25,8 @@ export const KIND_CATEGORY: { readonly [K in NotificationKind]: NotificationCate
   'template.challenged': 'needs-you',
   'template.relogin_failed': 'problems',
   'template.host_failed': 'problems',
+  'site_pack.write_confirm': 'needs-you',
+  'site_pack.update_pending': 'system',
 };
 
 /** Severity each kind is produced with (a producer may raise it, never lower it below `info`). */
@@ -46,6 +48,8 @@ export const KIND_SEVERITY: { readonly [K in NotificationKind]: NotificationSeve
   'template.challenged': 'warn',
   'template.relogin_failed': 'warn',
   'template.host_failed': 'error',
+  'site_pack.write_confirm': 'warn',
+  'site_pack.update_pending': 'info',
 };
 
 /** Generic title per kind: what a `counts`-level channel shows instead of the producer's title. */
@@ -67,6 +71,8 @@ export const KIND_LABEL: { readonly [K in NotificationKind]: string } = {
   'template.challenged': 'Template site check',
   'template.relogin_failed': 'Re-login failed',
   'template.host_failed': 'Template browser failed',
+  'site_pack.write_confirm': 'Write approval',
+  'site_pack.update_pending': 'Site pack updates',
 };
 
 /** Kinds that are delivered in-app only and never enqueued for an external channel (D-34 loop cut). */
@@ -96,6 +102,8 @@ export const KIND_TYPE: { readonly [K in NotificationKind]: NotificationType } =
   'template.challenged': 'attention',
   'template.relogin_failed': 'error',
   'template.host_failed': 'error',
+  'site_pack.write_confirm': 'attention',
+  'site_pack.update_pending': 'system',
 };
 
 /** What a row from before the contract (or from an older reader) carries. */

@@ -42,7 +42,9 @@
         "template.signed_out",
         "template.challenged",
         "template.relogin_failed",
-        "template.host_failed"
+        "template.host_failed",
+        "site_pack.write_confirm",
+        "site_pack.update_pending"
       ]
     },
     "category": {

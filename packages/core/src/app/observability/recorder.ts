@@ -16,6 +16,7 @@ import type {
   ToolCallRecord,
   VaultAccessRecord,
 } from '../../ports/persistence/records.ts';
+import type { SiteGuardHitRecord } from '../../ports/persistence/site-packs.ts';
 import type { Repositories } from '../../ports/persistence/unit-of-work.ts';
 import type { WriteQueue } from '../../ports/persistence/write-queue.ts';
 import {
@@ -167,6 +168,28 @@ export class Recorder {
           ts: row.ts,
         };
         this.enqueue('blocked_requests.insert', (r) => r.blocklistAudit.insert(record));
+        return;
+      }
+      case 'site_pack.guard_hit': {
+        const { row } = narrow(event, 'site_pack.guard_hit');
+        const record: SiteGuardHitRecord = {
+          eventId: row.event_id,
+          sessionId: row.session_id,
+          templateId: row.template_id,
+          packId: row.pack_id,
+          guardId: row.guard_id,
+          guardKind: row.guard_kind,
+          action: row.action,
+          outcome: row.outcome,
+          decidedBy: row.decided_by,
+          source: row.source,
+          method: row.method,
+          url: this.sanitize(row.url),
+          requestId: row.request_id,
+          tool: row.tool,
+          ts: row.ts,
+        };
+        this.enqueue('site_guard_hits.insert', (r) => r.siteGuardHits.insert(record));
         return;
       }
       case 'vault.access': {

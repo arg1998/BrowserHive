@@ -102,6 +102,12 @@ FLAGS — sessions
   --templateDrainTimeout <duration>
                                     How long a draining template browser waits for its sessions
                                     before closing them. default: 15m
+  --sitePacks                       Site packs for template sites (spec 13 §9). false: no pack data
+                                    is used; template sites are generic (learned-cookie probes, no
+                                    guards, no challenges). default: true
+  --sitePacksDir <text>             Folder of local site packs (<pack id>.json). A local file
+                                    applies only after an operator approves its content, once per
+                                    SHA-256. Absent = <dataDir>/site-packs/local.
 
 FLAGS — stealth
   --stealth <off|standard|max>  Stealth level. max also defaults fingerprint to true.

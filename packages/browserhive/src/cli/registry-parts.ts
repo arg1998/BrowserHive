@@ -33,6 +33,21 @@ export const remoteFlags: readonly FlagDescriptor[] = [
 ];
 
 /**
+ * `--url`, `--token` and `--cookie` of the commands that only ever talk to a running server
+ * (`channels`, `templates`, `sitepacks`): they never open the database.
+ */
+export const serverFlags: readonly FlagDescriptor[] = [
+  {
+    name: 'url',
+    kind: 'value',
+    placeholder: '<url>',
+    describe: 'The running server to talk to, over its REST API.',
+    defaultText: 'the configured host and port, http://127.0.0.1:9876',
+  },
+  ...remoteFlags.filter((flag) => flag.name !== 'url'),
+];
+
+/**
  * A subcommand descriptor with empty defaults.
  *
  * @returns The descriptor.

@@ -27,6 +27,7 @@ export function requestRow(overrides: Record<string, unknown> = {}): Record<stri
     tool: 'request_attention',
     event_id: null,
     entry_name: null,
+    template_id: null,
     ...overrides,
   } satisfies Record<keyof OperatorRequestRow, unknown>;
 }

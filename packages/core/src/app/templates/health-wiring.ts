@@ -14,7 +14,9 @@ import type { TemplateHostOperations } from './host-operations.ts';
 import type { TemplateHostSupervisor } from './host-supervisor.ts';
 import { ReloginLinks } from './relogin-link.ts';
 import type { ReloginVault } from './relogin-vault.ts';
+import type { ProberSelector } from './site-prober.ts';
 import { TemplateHealthService } from './template-health.ts';
+import type { TemplatePacks } from './template-packs.ts';
 import { PrelaunchCheck } from './template-prelaunch.ts';
 import { TemplateReloginService } from './template-relogin.ts';
 import type { TemplateService } from './template-service.ts';
@@ -44,6 +46,10 @@ export interface TemplateHealthWiring {
   readonly random?: () => number;
   /** `template.changed`. */
   readonly changed: (templateId: string) => void;
+  /** Site packs (T3a): views, identity providers, `human_only`. */
+  readonly packs?: TemplatePacks;
+  /** The prober of each site (T3a: the pack prober for sites with a pack); default generic. */
+  readonly probers?: ProberSelector;
 }
 
 /** What the composition keeps. */
@@ -61,6 +67,7 @@ export function wireTemplateHealth(input: TemplateHealthWiring): TemplateHealthP
   const { supervisor, ops, repos, clock, logger, bus } = input;
   const vault = input.vault?.configured === true ? input.vault : undefined;
   const health = new TemplateHealthService({
+    ...(input.packs !== undefined && { packs: input.packs }),
     repos,
     hosts: {
       runningHost: (id) => supervisor.runningHost(id),
@@ -82,6 +89,7 @@ export function wireTemplateHealth(input: TemplateHealthWiring): TemplateHealthP
     bus,
     changed: input.changed,
     machine: input.machine,
+    ...(input.probers !== undefined && { probers: input.probers }),
   });
   const scheduler = new HealthScheduler({
     repos,
@@ -92,6 +100,7 @@ export function wireTemplateHealth(input: TemplateHealthWiring): TemplateHealthP
   });
   const prelaunch = new PrelaunchCheck({ repos, health, clock });
   const relogin = new TemplateReloginService({
+    ...(input.packs !== undefined && { packs: input.packs }),
     repos,
     supervisor,
     ops,
@@ -108,6 +117,7 @@ export function wireTemplateHealth(input: TemplateHealthWiring): TemplateHealthP
     ...(input.displayAvailable !== undefined && { displayAvailable: input.displayAvailable }),
   });
   const links = new ReloginLinks({
+    ...(input.packs !== undefined && { packs: input.packs }),
     repos,
     ...(vault !== undefined && { admin: vault.admin }),
     ids: input.ids,

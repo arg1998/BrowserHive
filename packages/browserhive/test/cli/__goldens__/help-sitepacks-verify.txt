@@ -1,0 +1,28 @@
+browserhive sitepacks verify — Check a site pack file offline (schema, refinements, size)
+
+USAGE
+  browserhive sitepacks verify <path> [flags]
+
+Talks to a running server over its REST API (--url, default the configured host and port) with an
+operator bearer (--token) or the dashboard cookie (--cookie). A pack applies only once an operator
+approved its version: adding a site to a template approves what it shows; later versions wait as
+pending updates until you apply them. Local files in sitePacksDir need approval once per content
+(SHA-256). apply, revert, approve-local and disable ask for confirmation on a terminal and refuse
+without one unless --yes. list --pending exits 2 when an update or a local file waits for you.
+
+ARGUMENTS
+  <path>  The pack file (<pack id>.json).
+
+FLAGS
+  --json                       Print machine-readable JSON instead of text.
+  --host <address>             Bind address. A non-loopback host requires auth=token or
+                               allowInsecureBind=true. default: 127.0.0.1
+  --port <1-65535>             Bind port for MCP, REST, WebSocket and the dashboard. default: 9876
+  --config <path>              Config file path. CLI and environment only: a config file cannot
+                               point at another.
+  --color <auto|always|never>  Colour for logs and CLI output. auto honours NO_COLOR, FORCE_COLOR,
+                               TERM=dumb and TTY. default: auto
+
+GLOBAL FLAGS
+  -h, --help     Show help.
+  -v, --version  Print the version.

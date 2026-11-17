@@ -32,6 +32,7 @@ import { Route as AuthNotificationsChannelsRouteImport } from './routes/_auth/no
 import { Route as AuthNotificationsLogRouteImport } from './routes/_auth/notifications_.log';
 import { Route as AuthNotificationsReportsRouteImport } from './routes/_auth/notifications_.reports';
 import { Route as AuthSessionsIdRouteImport } from './routes/_auth/sessions_.$id';
+import { Route as AuthSitePacksIdRouteImport } from './routes/_auth/site-packs_.$id';
 import { Route as AuthTemplatesIdRouteImport } from './routes/_auth/templates_.$id';
 import { Route as AuthTemplatesNewRouteImport } from './routes/_auth/templates_.new';
 import { Route as AuthVaultLogRouteImport } from './routes/_auth/vault_.log';
@@ -156,6 +157,11 @@ const AuthSessionsIdRoute = AuthSessionsIdRouteImport.update({
   path: '/sessions/$id',
   getParentRoute: () => AuthRoute,
 } as any);
+const AuthSitePacksIdRoute = AuthSitePacksIdRouteImport.update({
+  id: '/site-packs_/$id',
+  path: '/site-packs/$id',
+  getParentRoute: () => AuthRoute,
+} as any);
 const AuthTemplatesIdRoute = AuthTemplatesIdRouteImport.update({
   id: '/templates_/$id',
   path: '/templates/$id',
@@ -217,6 +223,7 @@ export interface FileRoutesByFullPath {
   '/notifications/log': typeof AuthNotificationsLogRoute;
   '/notifications/reports': typeof AuthNotificationsReportsRoute;
   '/sessions/$id': typeof AuthSessionsIdRoute;
+  '/site-packs/$id': typeof AuthSitePacksIdRoute;
   '/templates/$id': typeof AuthTemplatesIdRoute;
   '/templates/new': typeof AuthTemplatesNewRoute;
   '/vault/log': typeof AuthVaultLogRoute;
@@ -247,6 +254,7 @@ export interface FileRoutesByTo {
   '/notifications/log': typeof AuthNotificationsLogRoute;
   '/notifications/reports': typeof AuthNotificationsReportsRoute;
   '/sessions/$id': typeof AuthSessionsIdRoute;
+  '/site-packs/$id': typeof AuthSitePacksIdRoute;
   '/templates/$id': typeof AuthTemplatesIdRoute;
   '/templates/new': typeof AuthTemplatesNewRoute;
   '/vault/log': typeof AuthVaultLogRoute;
@@ -280,6 +288,7 @@ export interface FileRoutesById {
   '/_auth/notifications_/log': typeof AuthNotificationsLogRoute;
   '/_auth/notifications_/reports': typeof AuthNotificationsReportsRoute;
   '/_auth/sessions_/$id': typeof AuthSessionsIdRoute;
+  '/_auth/site-packs_/$id': typeof AuthSitePacksIdRoute;
   '/_auth/templates_/$id': typeof AuthTemplatesIdRoute;
   '/_auth/templates_/new': typeof AuthTemplatesNewRoute;
   '/_auth/vault_/log': typeof AuthVaultLogRoute;
@@ -312,6 +321,7 @@ export interface FileRouteTypes {
     | '/notifications/log'
     | '/notifications/reports'
     | '/sessions/$id'
+    | '/site-packs/$id'
     | '/templates/$id'
     | '/templates/new'
     | '/vault/log'
@@ -342,6 +352,7 @@ export interface FileRouteTypes {
     | '/notifications/log'
     | '/notifications/reports'
     | '/sessions/$id'
+    | '/site-packs/$id'
     | '/templates/$id'
     | '/templates/new'
     | '/vault/log'
@@ -374,6 +385,7 @@ export interface FileRouteTypes {
     | '/_auth/notifications_/log'
     | '/_auth/notifications_/reports'
     | '/_auth/sessions_/$id'
+    | '/_auth/site-packs_/$id'
     | '/_auth/templates_/$id'
     | '/_auth/templates_/new'
     | '/_auth/vault_/log'
@@ -553,6 +565,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthSessionsIdRouteImport;
       parentRoute: typeof AuthRoute;
     };
+    '/_auth/site-packs_/$id': {
+      id: '/_auth/site-packs_/$id';
+      path: '/site-packs/$id';
+      fullPath: '/site-packs/$id';
+      preLoaderRoute: typeof AuthSitePacksIdRouteImport;
+      parentRoute: typeof AuthRoute;
+    };
     '/_auth/templates_/$id': {
       id: '/_auth/templates_/$id';
       path: '/templates/$id';
@@ -623,6 +642,7 @@ interface AuthRouteChildren {
   AuthNotificationsLogRoute: typeof AuthNotificationsLogRoute;
   AuthNotificationsReportsRoute: typeof AuthNotificationsReportsRoute;
   AuthSessionsIdRoute: typeof AuthSessionsIdRoute;
+  AuthSitePacksIdRoute: typeof AuthSitePacksIdRoute;
   AuthTemplatesIdRoute: typeof AuthTemplatesIdRoute;
   AuthTemplatesNewRoute: typeof AuthTemplatesNewRoute;
   AuthVaultLogRoute: typeof AuthVaultLogRoute;
@@ -650,6 +670,7 @@ const AuthRouteChildren: AuthRouteChildren = {
   AuthNotificationsLogRoute: AuthNotificationsLogRoute,
   AuthNotificationsReportsRoute: AuthNotificationsReportsRoute,
   AuthSessionsIdRoute: AuthSessionsIdRoute,
+  AuthSitePacksIdRoute: AuthSitePacksIdRoute,
   AuthTemplatesIdRoute: AuthTemplatesIdRoute,
   AuthTemplatesNewRoute: AuthTemplatesNewRoute,
   AuthVaultLogRoute: AuthVaultLogRoute,

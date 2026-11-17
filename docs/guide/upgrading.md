@@ -2,6 +2,8 @@
 
 BrowserHive follows semantic versioning from `0.1.0`. While the major version is `0`, breaking changes bump the minor version. Release notes are in the changelog and on GitHub Releases.
 
+> **Upgrading to 0.3.0 (the release with session templates and site packs) is one-way.** Its database (schema v10) cannot be opened by an older BrowserHive. To go back to an older release afterwards, stop BrowserHive, copy the pre-upgrade backup out of the data directory, move `browserhive.db*` aside, install the older release and restore that backup; you lose what was recorded since. See [Site packs: schema v10 cannot be downgraded](#site-packs-schema-v10-cannot-be-downgraded).
+
 ## Upgrade
 
 ```bash
@@ -67,12 +69,52 @@ What you may need to change:
 - **CORS preflights are honoured with request interception too.** Before 0.3.0, a session with a configured blocklist let the browser driver answer CORS preflights itself, so a page could send a cross-origin write the site refused at preflight. Now the browser sends every preflight to the site and honours its answer at every stealth level, with or without interception (a configured blocklist, every template browser). A page that relied on the old behaviour to reach an API that refuses its origin will now get a CORS error, as in a normal browser. With interception, BrowserHive keeps the site's preflight answers for the time the site allows, because the HTTP cache is off. See the templates guide's [known limits](templates.md#known-limits).
 - `browserhive version` lists Patchright only, and `browserhive doctor` has one browser row, `chromium (patchright)`.
 
+### Site packs: schema v10 cannot be downgraded
+
+The release that adds [site packs](site-packs.md) migrates the database to **schema v10**. This is BrowserHive's first migration that an older release cannot read:
+
+- It rebuilds the table of operator requests so it can hold site checks and write confirmations, and adds three tables: the state of each site pack (the approved version, the local file's approval, pin and follow settings), every pack version offered and decided, and every guard decision.
+- It raises the database's oldest readable schema to 10. **Any older BrowserHive refuses to start** on the upgraded database with [`DB_NEWER_THAN_BINARY`](../reference/errors.md#DB_NEWER_THAN_BINARY) (exit code 3).
+- As with every upgrade, the backup is written first, to `<data-dir>/backups/browserhive-v<N>-<timestamp>.db`, where `<N>` is the schema you upgraded from: `browserhive-v8-<timestamp>.db` coming from 0.2.3. **0.3.0 never deletes it**: `--backupsKeep` rotates the other backups but keeps the newest backup below each migration an older release cannot read. A release that knows this (0.3.0 and later) names that backup in its `DB_NEWER_THAN_BINARY` message.
+
+**To go back to a release before 0.3.0** (such as 0.2.3), restore that backup. The older release cannot do it on its own: its `db restore` refuses while the newer database is in place, and its backup rotation may delete the v8 backup. So:
+
+1. Stop BrowserHive (the server, your service, any running `browserhive` command).
+2. Copy the pre-upgrade backup somewhere outside the data directory, so the older release cannot rotate it away:
+
+   ```bash
+   cp ~/.local/share/browserhive/backups/browserhive-v8-<timestamp>.db ~/browserhive-v8.db
+   ```
+
+3. Move the v10 database aside, with its WAL files, into a folder you keep:
+
+   ```bash
+   cd ~/.local/share/browserhive          # your data directory
+   mkdir -p v10-aside && mv browserhive.db browserhive.db-wal browserhive.db-shm v10-aside/
+   ```
+
+   (`browserhive.db-wal` and `browserhive.db-shm` exist only sometimes; a missing one is fine.)
+4. Install the older release and restore the copy. With no database in place, `db restore` has nothing to back up and restores directly:
+
+   ```bash
+   bun add -g browserhive@0.2.3
+   browserhive db restore ~/browserhive-v8.db --yes
+   ```
+
+5. Start BrowserHive.
+
+Everything recorded since the upgrade is lost with the restore: sessions, audit rows, notifications, session templates and their versions, and every site pack approval. The folders the older release does not know (`templates/`, `site-packs/`) are left alone. To return to 0.3.0 with what you had, stop BrowserHive, install 0.3.0 again, move the restored database aside and put the files from `v10-aside/` back.
+
+**Between releases from 0.3.0 on, `db restore` does this itself.** When the current database is newer than the running BrowserHive, `db restore` copies its file (and its `-wal` file) byte for byte into `backups/`, without opening it, and then restores. So going back from a later release to 0.3.0 or newer is: stop the server, install the older version, and run `browserhive db restore <the backup its DB_NEWER_THAN_BINARY message names>`. The replaced newer database stays in `backups/`, so you can go forward again.
+
+Nothing else changes for existing templates: their sites stay generic sites until you approve a pack for them ([Sites with a site pack](templates.md#sites-with-a-site-pack)).
+
 ## Downgrade
 
 Nothing is ever migrated downward in place. Instead, each database records two numbers: its schema version, and the **oldest schema version whose code can still read it**. Purely additive migrations (new tables or columns) do not raise the second number.
 
 - **Within the compatibility window:** an older release opens a newer database normally.
-- **Outside the window:** the older release refuses to start with [`DB_NEWER_THAN_BINARY`](../reference/errors.md#DB_NEWER_THAN_BINARY) (exit code 3). The message names the backup that was written before the upgrade.
+- **Outside the window:** the older release refuses to start with [`DB_NEWER_THAN_BINARY`](../reference/errors.md#DB_NEWER_THAN_BINARY) (exit code 3). The message names the backup that was written before the upgrade. Schema v10 (0.3.0, the release with site packs) is the first such migration: [any release before it cannot open the database](#site-packs-schema-v10-cannot-be-downgraded).
 
 To go back:
 
@@ -82,9 +124,11 @@ bun add -g browserhive@<older-version>
 browserhive db restore ~/.local/share/browserhive/backups/browserhive-v3-20260914T101500Z.db
 ```
 
+Going back below 0.3.0 needs more steps, because those releases cannot set a v10 database aside: copy the pre-upgrade backup out of the data directory and move `browserhive.db*` aside first ([Site packs: schema v10 cannot be downgraded](#site-packs-schema-v10-cannot-be-downgraded)).
+
 A release older than 0.2.3 does not know the per-principal saved-login directories: after a downgrade, token principals' saved logins under `auth-states/p/` are invisible to it (they are not deleted, and reappear after upgrading again). Logins saved by the `local` principal keep working. A login a token principal saves while downgraded goes to the shared flat layout again and is moved on the next upgrade; if that principal also has a copy of the same name from before the downgrade, the newer one is kept.
 
-`db restore` refuses while a server is running, checks that the file is a BrowserHive database, and copies the current database aside before replacing it. Anything recorded since the backup (sessions, audit rows, vault bindings changed in the meantime) is not in the restored file.
+`db restore` refuses while a server is running, checks that the file is a BrowserHive database, and copies the current database aside before replacing it (from 0.3.0, also a database newer than itself, by copying its files byte for byte into `backups/`). Anything recorded since the backup (sessions, audit rows, vault bindings changed in the meantime) is not in the restored file.
 
 Take a manual backup before risky changes:
 

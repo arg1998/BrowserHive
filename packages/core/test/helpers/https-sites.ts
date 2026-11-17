@@ -2,7 +2,8 @@
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-
+import { guardRoute } from './https-sites-guards.ts';
+import { FIXTURE_PROVIDER_HOSTS } from './https-sites-packs.ts';
 import { signInRoute } from './https-sites-signin.ts';
 
 const TLS_DIR = join(import.meta.dir, '..', 'fixtures', 'tls');
@@ -132,8 +133,17 @@ function route(host: string, path: string, method = 'GET', search = ''): Respons
   }
 }
 
+/** Options of {@link startHttpsSites}. */
+export interface HttpsSitesOptions {
+  /**
+   * Also map the challenge providers' hosts (`challenges.cloudflare.com`, `www.google.com`) to the
+   * fixture, which serves fake provider frames for them (site pack challenges, spec 13 §9.5).
+   */
+  readonly providers?: boolean;
+}
+
 /** Starts the HTTPS fixture on an ephemeral loopback port. */
-export function startHttpsSites(): HttpsSites {
+export function startHttpsSites(options: HttpsSitesOptions = {}): HttpsSites {
   const requests: { host: string; method: string; path: string }[] = [];
   const server = Bun.serve({
     hostname: '127.0.0.1',
@@ -149,6 +159,7 @@ export function startHttpsSites(): HttpsSites {
       const site = host.split(':')[0] ?? host;
       return (
         (await signInRoute(req, site, url.pathname)) ??
+        guardRoute(site, url.pathname) ??
         route(host, url.pathname, req.method, url.search)
       );
     },
@@ -158,7 +169,12 @@ export function startHttpsSites(): HttpsSites {
     port,
     url: (host, path = '/') => `https://${host}${path}`,
     chromiumArgs: [
-      `--host-resolver-rules=MAP *.test:443 127.0.0.1:${port}`,
+      `--host-resolver-rules=${[
+        `MAP *.test:443 127.0.0.1:${port}`,
+        ...(options.providers === true
+          ? FIXTURE_PROVIDER_HOSTS.map((h) => `MAP ${h}:443 127.0.0.1:${port}`)
+          : []),
+      ].join(',')}`,
       `--ignore-certificate-errors-spki-list=${FIXTURE_SPKI}`,
     ],
     requests,

@@ -230,6 +230,23 @@ describe('requestGuardHandler', () => {
     });
   }
 
+  it('a confirmer answering asBlock (host-owned, bounds) aborts and records a block', async () => {
+    const { confirmer } = fakeConfirmer({
+      outcome: 'cancelled',
+      decidedBy: null,
+      requestId: null,
+      asBlock: true,
+    });
+    const { chain, hits } = setup(
+      rules({ id: 'write', url: 'site.test/post', action: 'confirm' }),
+      { confirmer },
+    );
+    const route = fakeRoute('POST', 'fetch', 'https://site.test/post');
+    await chain.handle(route.route);
+    expect(route.outcome).toEqual(['abort:blockedbyclient']);
+    expect(hits.list()[0]).toMatchObject({ ruleAction: 'confirm', action: 'block', outcome: null });
+  });
+
   it('a matched request whose confirmation fails is aborted whatever its type', async () => {
     const { confirmer } = fakeConfirmer(new Error('broker down'));
     const { chain, logger, hits } = setup(

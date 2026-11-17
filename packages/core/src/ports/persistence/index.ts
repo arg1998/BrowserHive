@@ -244,6 +244,36 @@ export { UNKNOWN_SITE_HEALTH } from './records-templates.ts';
 export type { ScreenshotListRow, ScreenshotRepository } from './screenshots.ts';
 export type { SessionDeleteResult, SessionRepository } from './sessions.ts';
 export type {
+  SiteGuardActionValue,
+  SiteGuardHitQuery,
+  SiteGuardHitRecord,
+  SiteGuardHitRepository,
+  SiteGuardKindValue,
+  SiteGuardOutcomeValue,
+  SiteGuardSourceValue,
+  SitePackChangeFieldRecord,
+  SitePackChangeQuery,
+  SitePackChangeRecord,
+  SitePackChangeRepository,
+  SitePackClassificationValue,
+  SitePackDecisionValue,
+  SitePackProvenanceRecord,
+  SitePackSourceId,
+  SitePackStateRecord,
+  SitePackStateRepository,
+  UnreadableRowOptions,
+} from './site-packs.ts';
+export {
+  emptySitePackState,
+  SITE_GUARD_ACTIONS,
+  SITE_GUARD_KINDS,
+  SITE_GUARD_OUTCOMES,
+  SITE_GUARD_SOURCES,
+  SITE_PACK_CLASSIFICATIONS,
+  SITE_PACK_DECISIONS,
+  SITE_PACK_SOURCES,
+} from './site-packs.ts';
+export type {
   TemplateProbeQuery,
   TemplateProbeRepository,
   TemplateRepository,

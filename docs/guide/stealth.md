@@ -99,6 +99,17 @@ launch_session({
 
 Loopback and private network ranges are always bypassed so local tooling never goes through the proxy. The session records a `proxy_label` (never credentials). Chromium's raw proxy switches are also accepted in `args`. A managed pool with rotation and exit-IP geolocation is planned; the configuration key `proxy` is reserved for it and rejected today.
 
+## Session templates: one pinned identity
+
+A [session template](templates.md) is one person on one device, so its identity is pinned instead of chosen per session:
+
+- **Fixed at creation:** the fingerprint seed, the locale and languages, the time zone, and coordinates only if you give them. With a proxy, the locale and time zone must be given explicitly so they match the proxy's country. A different identity is a different template.
+- **Recorded at the first start, never faked:** the Chrome version, user agent, client hints, screen and window size. A later Chrome update is recorded as identity drift; launches continue.
+- **The same for every session of the template.** Every session shares the template's browser, its fingerprint, its IP address and its cookies; a launch with a different `stealth` or `fingerprint` is refused, and `channel` and `headless` are ignored ([options a template fixes](templates.md#options-a-template-fixes)).
+- **Site packs can ask for more.** A site's [pack](site-packs.md) records the browser and headedness the site expects and whether location, time zone and language must stay pinned; these are shown when you add the site.
+
+See [Identity](templates.md#identity) in the templates guide.
+
 ## Ceilings
 
 These are known and documented, not bugs:

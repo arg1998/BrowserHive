@@ -162,6 +162,7 @@ import {
   VaultStatus,
 } from '@browserhive/contracts/http';
 import type { z } from 'zod';
+import { SITE_PACK_OPERATIONS } from './operations-site-packs.ts';
 import { TEMPLATE_OPERATIONS } from './operations-templates.ts';
 
 /** One operation's contracts. Missing `response` = 204 (no body). */
@@ -352,6 +353,8 @@ export const OPERATIONS = {
   reportClientError: { body: ClientErrorReport },
   // spec 13 §11.1 session templates
   ...TEMPLATE_OPERATIONS,
+  // spec 13 §11.1 site packs (T3a)
+  ...SITE_PACK_OPERATIONS,
 } as const satisfies Record<string, OperationDef>;
 
 /** Every JSON operation id. */

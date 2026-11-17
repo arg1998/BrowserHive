@@ -41,6 +41,8 @@ export const CONSUMED_KEYS: Readonly<Record<ConfigKey, string>> = {
   templateHostIdleTimeout: 'app/templates/host-supervisor',
   templateRecycleAfter: 'app/templates/host-supervisor',
   templateDrainTimeout: 'app/templates/host-supervisor',
+  sitePacks: 'browserhive/composition/site-packs',
+  sitePacksDir: 'browserhive/composition/site-packs',
   templateKey: 'infra/fs/template-key',
   templateKeyPrevious: 'infra/fs/template-key',
   templateCheckpointInterval: 'app/templates/template-state',

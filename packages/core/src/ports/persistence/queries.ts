@@ -178,6 +178,8 @@ export interface BlockedStats {
 /** Filters of `GET /attention` and `GET /vault/confirm` history views. */
 export interface OperatorRequestListQuery extends PageQuery, TimeWindow {
   readonly kind?: OperatorRequestKind;
+  /** Any of these kinds (`GET /attention` lists `attention` and `security_intercept`, spec 13 §11.1). */
+  readonly kinds?: readonly OperatorRequestKind[];
   readonly statuses?: readonly OperatorRequestStatus[];
   readonly modes?: readonly AttentionMode[];
   readonly sessionId?: string;

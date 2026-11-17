@@ -64,6 +64,28 @@ function events(next: () => number, secret: string): ProducedEvent[] {
       attentionResolved('a-000000000001', 'resolved'),
     ],
     [vaultConfirmCreated('a-000000000002', text)],
+    [
+      {
+        name: 'site_pack.confirm',
+        at: 1,
+        payload: {
+          type: 'site_pack.confirm',
+          phase: 'opened',
+          template_id: 'tp-fixture001',
+          template_name: text,
+          site: 'example.com',
+          site_title: text,
+          open: 1,
+          request_id: 'a-000000000003',
+          session_id: 'demo-00000001',
+          guard: { pack_id: 'example.com', id: 'invite', kind: 'write' },
+          method: 'POST',
+          url: path ? `https://example.com/${secret}/api?q=${secret}` : 'https://example.com/',
+          tool: null,
+          at: 1,
+        },
+      },
+    ],
     [toolCalled(1, { ok: false, code: text })],
     [
       (() => {
