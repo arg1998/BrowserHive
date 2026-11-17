@@ -162,19 +162,17 @@ describe('site pack needs in the wizard', () => {
     const panel = (await screen.findByRole('heading', { name: 'What your sites need' })).closest(
       'section',
     ) as HTMLElement;
-    await within(panel).findByText(
-      'Humanized input needs stealth on (Hide automation Standard or Max)',
-    );
-    expect(within(panel).getByText(/With stealth off it is not applied/)).toBeDefined();
+    await within(panel).findByText('Humanized input: needs Hide automation on (Standard or Max)');
+    expect(within(panel).getByText(/Not applied with stealth off/)).toBeDefined();
     expect(
       within(panel).getByText(
-        'A site pack asks for a setting that’s off here. The template can still be created, without it.',
+        'A site pack asks for a setting that’s off here. You can still create the template; that part of the pack won’t apply.',
       ),
     ).toBeDefined();
     await expectNoA11yViolations(view.container);
     await click(within(panel).getByRole('button', { name: 'Turn stealth on for GitHub' }));
     expect(within(panel).getByText('Met')).toBeDefined();
-    expect(within(panel).queryByText(/With stealth off it is not applied/)).toBeNull();
+    expect(within(panel).queryByText(/Not applied with stealth off/)).toBeNull();
     expect(within(panel).getByText('These settings meet every site pack’s needs.')).toBeDefined();
     await expectNoA11yViolations(view.container);
   });
@@ -182,7 +180,7 @@ describe('site pack needs in the wizard', () => {
   it('the humanize advisory never keeps Next: the template is created with stealth off', async () => {
     const humanize = { ...NO_NOISE, strategies: [{ id: 'humanize-input' as const, params: {} }] };
     const view = mount({ sites: ['github.com'], step: 3, stealth: 'off', github: humanize });
-    await screen.findByText('Humanized input needs stealth on (Hide automation Standard or Max)');
+    await screen.findByText('Humanized input: needs Hide automation on (Standard or Max)');
     await click(screen.getByRole('button', { name: /Next/ }));
     await screen.findByRole('heading', { level: 2, name: 'Access' });
     await click(screen.getByRole('button', { name: 'Create and sign in' }));

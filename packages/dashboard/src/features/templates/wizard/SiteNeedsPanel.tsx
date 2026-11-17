@@ -63,11 +63,11 @@ function rowsOf(needs: SiteNeeds, s: NeedsSettings): NeedRow[] {
     rows.push({
       key: 'humanize',
       title: needs.title,
-      label: 'Humanized input needs stealth on (Hide automation Standard or Max)',
+      label: 'Humanized input: needs Hide automation on (Standard or Max)',
       fix: humanizeUnmet(needs, s),
       fixLabel: 'Turn stealth on',
       advisory:
-        'With stealth off it is not applied: clicks and typing on the site stay native and instant. You can still create the template.',
+        'Not applied with stealth off: clicks and typing on the site stay native and instant.',
     });
   }
   return rows;
@@ -103,7 +103,7 @@ export function SiteNeedsPanel({
           {open > 0
             ? 'Some site packs need other settings here; the template can’t be created until they’re met.'
             : advised > 0
-              ? 'A site pack asks for a setting that’s off here. The template can still be created, without it.'
+              ? 'A site pack asks for a setting that’s off here. You can still create the template; that part of the pack won’t apply.'
               : 'These settings meet every site pack’s needs.'}
         </p>
       </div>

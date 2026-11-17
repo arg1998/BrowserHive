@@ -11,7 +11,7 @@ import { TemplatePage } from './TemplatePage.tsx';
 const ID = tid(1);
 const AXE = { disable: ['aria-hidden-focus'] } as const;
 const HUMANIZE =
-  'The LinkedIn site pack asks for humanized input (clicks and typing paced like a person), but this template has stealth off, so input on the site stays native and instant.';
+  'The LinkedIn site pack asks for humanized input (clicks and typing paced like a person). This template has stealth off, so input on the site stays native and instant.';
 const FOCUS =
   'The LinkedIn site pack keeps one of the site’s tabs in focus at a time. On a headless browser on macOS or Windows, a tab that once got a click keeps real focus.';
 

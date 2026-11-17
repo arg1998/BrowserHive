@@ -37,10 +37,10 @@ export function strategyNotesOf(
     notes.push({
       code: 'humanize_needs_stealth',
       message:
-        `The ${pack.title} site pack asks for humanized input (clicks and typing paced like a person), ` +
-        'but this template has stealth off, so input on the site stays native and instant. ' +
-        'Stealth is fixed for a template’s life: to humanize, create a template with stealth on ' +
-        '(Standard or Max). Otherwise there is nothing to do: native input is what stealth off means.',
+        `The ${pack.title} site pack asks for humanized input (clicks and typing paced like a person). ` +
+        'This template has stealth off, so input on the site stays native and instant. Stealth ' +
+        'can’t change after creation: to humanize, create a template with stealth on (Standard or ' +
+        'Max). Otherwise there is nothing to do.',
     });
   }
   if (

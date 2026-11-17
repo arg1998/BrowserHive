@@ -35,7 +35,7 @@ describe('humanize_needs_stealth (D50)', () => {
     expect(rest).toEqual([]);
     expect(note?.code).toBe('humanize_needs_stealth');
     expect(note?.message).toContain(HUMANIZE.title);
-    expect(note?.message).toContain('stealth off');
+    expect(note?.message).toContain('has stealth off');
     expect(note?.message).toContain('create a template with stealth on');
     expect(note?.message).toContain('native');
   });
