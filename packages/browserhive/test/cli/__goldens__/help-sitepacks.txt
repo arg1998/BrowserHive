@@ -1,0 +1,163 @@
+browserhive sitepacks — List, review, approve and manage site packs
+
+USAGE
+  browserhive sitepacks list [flags]
+  browserhive sitepacks show <pack> [flags]
+  browserhive sitepacks diff <pack> [flags]
+  browserhive sitepacks apply <pack> [version] [flags]
+  browserhive sitepacks reject <pack> [version] [flags]
+  browserhive sitepacks revert <pack> [flags]
+  browserhive sitepacks pin <pack> <version> [flags]
+  browserhive sitepacks unpin <pack> [flags]
+  browserhive sitepacks follow <pack> <setting> [flags]
+  browserhive sitepacks approve-local <pack> [flags]
+  browserhive sitepacks enable <pack> [flags]
+  browserhive sitepacks disable <pack> [flags]
+  browserhive sitepacks reload [flags]
+  browserhive sitepacks import <file> [flags]
+
+Talks to a running server over its REST API (--url, default the configured host and port) with an
+operator bearer (--token) or the dashboard cookie (--cookie). A pack applies only once an operator
+approved its version: adding a site to a template approves what it shows; later versions wait as
+pending updates until you apply them. Local files in sitePacksDir need approval once per content
+(SHA-256). apply, revert and approve-local ask for confirmation on a terminal and refuse without one
+unless --yes. list --pending exits 2 when an update or a local file waits for you.
+
+COMMANDS
+  list                     List site packs with their approved version, local file and pending
+                           updates
+  show <pack>              Show a pack: approval and provenance, local file, pending versions, rules
+  diff <pack>              Show the field changes between the approved version and a candidate
+  apply <pack> [version]   Approve a pending version: every template using the pack follows it
+  reject <pack> [version]  Dismiss a pending version (a newer one appears again)
+  revert <pack>            Go back to the previous approved version
+  pin <pack> <version>     Keep a pack at its approved version; newer versions are listed, not
+                           offered
+  unpin <pack>             Stop pinning a pack
+  follow <pack> <setting>  Choose whether a pack lists pending updates and notifies about them
+  approve-local <pack>     Approve the local file's current content (prints its diff first)
+  enable <pack>            Enable a disabled pack
+  disable <pack>           Disable a pack: its sites become generic, its rules stop applying
+  reload                   Read the bundled packs and the local folder (sitePacksDir) again
+  import <file>            Copy an unsigned pack file into the local folder; approve it afterwards
+
+FLAGS
+  --host <address>             Bind address. A non-loopback host requires auth=token or
+                               allowInsecureBind=true. default: 127.0.0.1
+  --port <1-65535>             Bind port for MCP, REST, WebSocket and the dashboard. default: 9876
+  --config <path>              Config file path. CLI and environment only: a config file cannot
+                               point at another.
+  --color <auto|always|never>  Colour for logs and CLI output. auto honours NO_COLOR, FORCE_COLOR,
+                               TERM=dumb and TTY. default: auto
+
+FLAGS — list
+  --source <local|registry|bundled|import>
+                                    Only packs from these sources, comma-separated. default: every
+                                    source
+  --pending                         Only packs with a pending update or a local file waiting for
+                                    approval. Exits 2 when there is one.
+  --json                            Print machine-readable JSON instead of text.
+  --url <url>                       Talk to a running server over its REST API instead of opening
+                                    the database (http://127.0.0.1:9876).
+  --token <bearer>                  Operator bearer token for --url (bh_operator_…).
+  --cookie <value>                  Dashboard session cookie value for --url (browserhive_session).
+
+FLAGS — show
+  --json            Print machine-readable JSON instead of text.
+  --url <url>       Talk to a running server over its REST API instead of opening the database
+                    (http://127.0.0.1:9876).
+  --token <bearer>  Operator bearer token for --url (bh_operator_…).
+  --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
+
+FLAGS — diff
+  --to <version|local>  A pending version number, or local for the local file. default: the only
+                        pending version or local file waiting for approval
+  --json                Print machine-readable JSON instead of text.
+  --url <url>           Talk to a running server over its REST API instead of opening the database
+                        (http://127.0.0.1:9876).
+  --token <bearer>      Operator bearer token for --url (bh_operator_…).
+  --cookie <value>      Dashboard session cookie value for --url (browserhive_session).
+
+FLAGS — apply
+  --json            Print machine-readable JSON instead of text.
+  --url <url>       Talk to a running server over its REST API instead of opening the database
+                    (http://127.0.0.1:9876).
+  --token <bearer>  Operator bearer token for --url (bh_operator_…).
+  --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
+  --yes             Skip the confirmation prompt (required without a terminal).
+
+FLAGS — reject
+  --json            Print machine-readable JSON instead of text.
+  --url <url>       Talk to a running server over its REST API instead of opening the database
+                    (http://127.0.0.1:9876).
+  --token <bearer>  Operator bearer token for --url (bh_operator_…).
+  --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
+
+FLAGS — revert
+  --json            Print machine-readable JSON instead of text.
+  --url <url>       Talk to a running server over its REST API instead of opening the database
+                    (http://127.0.0.1:9876).
+  --token <bearer>  Operator bearer token for --url (bh_operator_…).
+  --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
+  --yes             Skip the confirmation prompt (required without a terminal).
+
+FLAGS — pin
+  --json            Print machine-readable JSON instead of text.
+  --url <url>       Talk to a running server over its REST API instead of opening the database
+                    (http://127.0.0.1:9876).
+  --token <bearer>  Operator bearer token for --url (bh_operator_…).
+  --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
+
+FLAGS — unpin
+  --json            Print machine-readable JSON instead of text.
+  --url <url>       Talk to a running server over its REST API instead of opening the database
+                    (http://127.0.0.1:9876).
+  --token <bearer>  Operator bearer token for --url (bh_operator_…).
+  --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
+
+FLAGS — follow
+  --json            Print machine-readable JSON instead of text.
+  --url <url>       Talk to a running server over its REST API instead of opening the database
+                    (http://127.0.0.1:9876).
+  --token <bearer>  Operator bearer token for --url (bh_operator_…).
+  --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
+
+FLAGS — approve-local
+  --json            Print machine-readable JSON instead of text.
+  --url <url>       Talk to a running server over its REST API instead of opening the database
+                    (http://127.0.0.1:9876).
+  --token <bearer>  Operator bearer token for --url (bh_operator_…).
+  --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
+  --yes             Skip the confirmation prompt (required without a terminal).
+
+FLAGS — enable
+  --json            Print machine-readable JSON instead of text.
+  --url <url>       Talk to a running server over its REST API instead of opening the database
+                    (http://127.0.0.1:9876).
+  --token <bearer>  Operator bearer token for --url (bh_operator_…).
+  --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
+
+FLAGS — disable
+  --json            Print machine-readable JSON instead of text.
+  --url <url>       Talk to a running server over its REST API instead of opening the database
+                    (http://127.0.0.1:9876).
+  --token <bearer>  Operator bearer token for --url (bh_operator_…).
+  --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
+
+FLAGS — reload
+  --json            Print machine-readable JSON instead of text.
+  --url <url>       Talk to a running server over its REST API instead of opening the database
+                    (http://127.0.0.1:9876).
+  --token <bearer>  Operator bearer token for --url (bh_operator_…).
+  --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
+
+FLAGS — import
+  --json            Print machine-readable JSON instead of text.
+  --url <url>       Talk to a running server over its REST API instead of opening the database
+                    (http://127.0.0.1:9876).
+  --token <bearer>  Operator bearer token for --url (bh_operator_…).
+  --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
+
+GLOBAL FLAGS
+  -h, --help     Show help.
+  -v, --version  Print the version.

@@ -12,6 +12,7 @@ export const COMMAND_NAMES = [
   'admin',
   'channels',
   'templates',
+  'sitepacks',
   'version',
   'help',
 ] as const;
