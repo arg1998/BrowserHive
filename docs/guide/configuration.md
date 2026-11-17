@@ -192,6 +192,17 @@ A template's browser takes one `maxSessions` slot however many sessions it serve
 
 `templateKey` and `templateKeyPrevious` are secrets. Set them in the environment (`BROWSERHIVE_TEMPLATE_KEY`, `BROWSERHIVE_TEMPLATE_KEY_PREVIOUS`) or through an `{env:…}` [reference](#references) in the config file. `--templateKey` on the command line works but logs a warning, because other users of the machine can read process arguments. Generate a key with `openssl rand -base64 32`, and keep it apart from your backups of the data directory: see [Backups and the template key](templates.md#backups-and-the-template-key) and [Rotating the key](templates.md#rotating-the-key).
 
+## Site packs
+
+[Site packs](site-packs.md) describe sites for session templates. Which pack versions apply is decided by your approvals, not by configuration.
+
+| Key | Default | Purpose |
+|---|---|---|
+| [`sitePacks`](../reference/configuration.md#sitePacks) | `true` | `false` uses no pack data: every template site is a generic site (sign-in checks by learned cookie names, no guards, no challenges) |
+| [`sitePacksDir`](../reference/configuration.md#sitePacksDir) | `<dataDir>/site-packs/local` | the folder of your own pack files (`<pack id>.json`); each file applies only after you approve its content, once per SHA-256 ([local packs](site-packs.md#local-packs)) |
+
+BrowserHive reads `sitePacksDir` at startup and on `browserhive sitepacks reload`; changing the key itself needs a restart. Approved content is copied to `<dataDir>/site-packs/cache/`, which `browserhive purge --all` deletes with the rest of `site-packs/`.
+
 ## Environment-only deployments
 
 For a service manager (systemd `EnvironmentFile`, `docker --env-file`):
