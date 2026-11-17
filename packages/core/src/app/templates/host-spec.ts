@@ -75,6 +75,7 @@ export async function buildHostSpec(
     selfOrigins: deps.selfOrigins(),
     testingArgs: deps.testingArgs,
     ...(hostFlags.length > 0 && { hostFlags }),
+    denyClipboardWrites: template.denyClipboardWrites,
   };
 }
 

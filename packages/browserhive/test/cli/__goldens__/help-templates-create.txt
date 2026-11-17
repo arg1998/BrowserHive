@@ -33,6 +33,9 @@ FLAGS
   --allPrincipals                   Let every agent principal use the template.
   --principal <subject>             Let this agent principal use the template (repeatable). Under
                                     auth=token one of --allPrincipals or --principal is required.
+  --denyClipboardWrites             Pages in the template's browser cannot write your clipboard
+                                    (sites can detect it). Change it later with 'templates
+                                    clipboard'.
   --noLogin                         Create the template and exit without opening a sign-in window.
   --fromState <file>                Seed the template from a Playwright storage-state file (≤ 16
                                     MiB) instead of opening a sign-in window. The file is read in

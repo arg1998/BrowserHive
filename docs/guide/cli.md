@@ -180,6 +180,7 @@ Manage [session templates](templates.md) on a running server started with `--adm
 | `templates save <name> [--json]` | Save the running browser's sign-ins as a `manual` version. When nothing changed since the newest version it writes nothing and says so. Fails (`409`) when the template's browser is not running. |
 | `templates restore <name> <version\|latest> [--forceClose] [--yes]` | Roll the template back to a version, or to `latest` (the checkpoint) ([below](#templates-seed-and-templates-restore)). |
 | `templates host <name> start\|stop\|restart [--json]` | Start, stop or restart the template's browser. `stop` writes a final checkpoint and ends its sessions; `restart` gives them up to `templateDrainTimeout`, and also clears a browser that gave up after five failures. |
+| `templates clipboard <name> deny\|allow [--json]` | Turn [Deny clipboard writes](templates.md#deny-clipboard-writes) on (`deny`) or off (`allow`): whether pages in the template's browser may write your clipboard. Applies at once to a running browser. |
 | `templates disable <name>`, `templates enable <name>` | `disable` ends the template's live sessions and refuses new launches; `enable` allows them again. Both print how many sessions were closed. |
 | `templates rm <name> [--force] [--yes]` | Delete a template: stop its browser and delete its directory. Asks you to type the name on a terminal and refuses without one unless `--yes`. With live sessions it fails (`TEMPLATE_IN_USE`) unless `--force`, which closes them. Deleting does not sign you out at the sites. |
 | `templates rekey --oldKeyEnv <ENV> [--json]` | Re-encrypt every template file with the current key, with the server stopped ([below](#templates-rekey)). |
@@ -190,8 +191,8 @@ Manage [session templates](templates.md) on a running server started with `--adm
 browserhive templates create <name> --sites <site,…> [--displayName <text>] [--description <text>]
     [--channel <chromium|chrome|edge>] [--headless] [--stealth <off|standard|max>]
     [--proxy <url> --proxyUsername <name> --proxyPasswordEnv <ENV>] [--locale <tag> --timezone <iana>]
-    [--maxConcurrent <1-20>] [--allPrincipals | --principal <subject>…] [--noLogin | --fromState <file>]
-    [--timeout <duration>] [--yes]
+    [--maxConcurrent <1-20>] [--allPrincipals | --principal <subject>…] [--denyClipboardWrites]
+    [--noLogin | --fromState <file>] [--timeout <duration>] [--yes]
 ```
 
 | Flag | Meaning |
@@ -207,6 +208,7 @@ browserhive templates create <name> --sites <site,…> [--displayName <text>] [-
 | `--maxConcurrent` | Sessions of this template at once, 1 to 20. Default 5. |
 | `--allPrincipals` | Every agent may launch it. |
 | `--principal <subject>` | Only this principal (an agent token's name) may launch it; repeat for more. Under `--auth token` one of `--allPrincipals` and `--principal` is required. |
+| `--denyClipboardWrites` | Pages in the template's browser cannot write your clipboard ([Deny clipboard writes](templates.md#deny-clipboard-writes)); sites can detect it. Off by default; change it later with `templates clipboard`. |
 | `--noLogin` | Create the template and exit without opening a window. |
 | `--fromState <file>` | Seed the template from a Playwright storage-state file instead of opening a window ([seeding](templates.md#seeding-from-a-storage-state)). The file is checked before anything is created. It cannot be combined with `--noLogin`, and it asks for no confirmation. |
 | `--timeout` | How long to wait for you, default `30m`. |

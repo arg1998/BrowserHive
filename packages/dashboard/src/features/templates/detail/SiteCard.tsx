@@ -14,6 +14,7 @@ import { removeSiteConfirm } from '../confirm-copy.ts';
 import { needsSignIn } from '../model.ts';
 import { HealthIcon } from '../SiteChips.tsx';
 import { ClearStop } from './ClearStop.tsx';
+import { DeviceBoundBadge } from './DeviceBoundBadge.tsx';
 import { ReloginProgress } from './ReloginProgress.tsx';
 import { CheckNowButton, SiteHealth, useCheckNow } from './SiteHealth.tsx';
 import { SitePackRows } from './SitePackRows.tsx';
@@ -103,6 +104,7 @@ export function SiteCard({
           {title !== site.site_id ? (
             <span className="truncate font-mono text-sm text-muted-foreground">{site.site_id}</span>
           ) : null}
+          <DeviceBoundBadge bound={site.device_bound} />
         </div>
         <StatusBadge domain="siteHealth" value={site.health.state} variant="pill" iconless />
       </div>

@@ -10,6 +10,7 @@ import { vaultHarnesses } from './0007-vault-harnesses.ts';
 import { operatorTokenScopes } from './0008-operator-token-scopes.ts';
 import { templates } from './0009-templates.ts';
 import { sitePacks } from './0010-site-packs.ts';
+import { templateClipboard } from './0011-template-clipboard.ts';
 import type { Migration } from './migration.ts';
 
 export type { Migration } from './migration.ts';
@@ -26,6 +27,7 @@ export const MIGRATIONS: readonly Migration[] = [
   operatorTokenScopes,
   templates,
   sitePacks,
+  templateClipboard,
 ];
 
 /** The schema version this binary writes. */

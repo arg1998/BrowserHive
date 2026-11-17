@@ -132,6 +132,7 @@ export function toTemplateView(
       prelaunch_check: template.prelaunchCheck,
     },
     agent_windows: template.agentWindows,
+    deny_clipboard_writes: template.denyClipboardWrites,
     current_version: template.currentVersion,
     checkpoint_at: template.checkpointAt,
     checkpoint_size_bytes: template.checkpointSizeBytes,

@@ -35,6 +35,7 @@ import type { TemplateHostOps, TemplateRuntime } from '../../ports/template-runt
 import type { DomainEvents } from '../events/catalog.ts';
 import { launchDeclaredHarnessOf, launchHarnessOf } from '../sessions/metadata.ts';
 import type { SessionService } from '../sessions/session-service.ts';
+import { applyClipboardSwitch, type ClipboardSwitchOption } from './clipboard-switch.ts';
 import { notFoundForOperator, operationRunning, validationFailed } from './template-errors.ts';
 import { NO_PACKS, type TemplatePacks } from './template-packs.ts';
 import { assertEditMeetsPacks, assertSiteMeetsPack } from './template-requirements.ts';
@@ -44,7 +45,7 @@ import { toSiteView, toTemplateView } from './views.ts';
 const MAX_SITES = 16;
 
 /** Collaborators of {@link TemplateEditService}. */
-export interface TemplateEditDeps {
+export interface TemplateEditDeps extends ClipboardSwitchOption {
   readonly repos: Pick<Repositories, 'templates' | 'templateSites' | 'operatorActions'>;
   readonly uow: UnitOfWork;
   readonly runtime: TemplateRuntime;
@@ -110,6 +111,7 @@ export class TemplateEditService {
       return row;
     });
     const closed = await this.#reach(updated, current.sites);
+    if (changed.includes('deny_clipboard_writes')) await applyClipboardSwitch(this.#deps, updated);
     if (restart && this.#deps.runtime.host(templateId).state === 'running') {
       await this.#deps.ops
         .restartHost(updated)

@@ -107,7 +107,9 @@ describe('migration 0010-site-packs', () => {
     const { handle, before } = await upgrade(dir);
     try {
       expect(handle.schemaVersion).toBe(SCHEMA_VERSION);
-      expect(handle.migrationsApplied.map((m) => m.name)).toEqual(['site-packs']);
+      expect(handle.migrationsApplied.map((m) => m.name)).toEqual(
+        MIGRATIONS.filter((m) => m.version >= 10).map((m) => m.name),
+      );
       expect(before).toHaveLength(3);
       expect(handle.raw.query(ROWS_SQL).all()).toEqual(before);
       const templateIds = handle.raw
@@ -223,7 +225,7 @@ describe('migration 0010-site-packs', () => {
       expect(isAppError(error, 'DB_NEWER_THAN_BINARY')).toBe(true);
       if (isAppError(error, 'DB_NEWER_THAN_BINARY')) {
         expect(error.details).toEqual({
-          db_version: 10,
+          db_version: SCHEMA_VERSION,
           min_reader_version: 10,
           binary_version: 9,
           backup_path: backupPath ?? '',

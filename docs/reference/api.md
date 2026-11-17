@@ -2,7 +2,7 @@
 
 # REST API reference
 
-The admin REST API served under `/api/v1` on the same port as MCP and the dashboard when `--admin` is on (163 operations), generated from `HTTP_ENDPOINTS` in `@browserhive/contracts/http`. Request and response schemas are in the OpenAPI 3.1 document the server serves at `/api/v1/openapi.json`, with an interactive reference UI at `/api/v1/docs`.
+The admin REST API served under `/api/v1` on the same port as MCP and the dashboard when `--admin` is on (164 operations), generated from `HTTP_ENDPOINTS` in `@browserhive/contracts/http`. Request and response schemas are in the OpenAPI 3.1 document the server serves at `/api/v1/openapi.json`, with an interactive reference UI at `/api/v1/docs`.
 
 Summaries come from `packages/contracts/generated/openapi.json`.
 
@@ -207,6 +207,7 @@ Summaries come from `packages/contracts/generated/openapi.json`.
 | GET | `/api/v1/site-packs` | `listSitePacks` | `sitepacks:read` | cookie, bearer | Every site pack (bundled, local files) with its approval, provenance, local file state, pending versions and the templates using it, plus the registry's status and the counts the navigation badge shows. |
 | GET | `/api/v1/site-packs/changes` | `listSitePackChanges` | `sitepacks:read` | cookie, bearer | The history of pack candidates and decisions (approvals, applies, rejects, reverts, local approvals), newest first. |
 | GET | `/api/v1/site-packs/guard-hits` | `listSiteGuardHits` | `sitepacks:read` | cookie, bearer | Guard decisions on template sessions (blocks, confirmations, warnings), newest first; filterable by template, session, pack and action. |
+| GET | `/api/v1/site-packs/strategies` | `listSiteStrategies` | `sitepacks:read` | cookie, bearer | — |
 | POST | `/api/v1/site-packs/reload` | `reloadSitePacks` | `sitepacks:write` | cookie, bearer | Re-read the bundled packs and the local folder (sitePacksDir); a folder that cannot be read keeps what was loaded before. |
 | POST | `/api/v1/site-packs/import` | `importSitePack` | `sitepacks:write` | cookie, bearer | Import one unsigned pack ({text}: the file's exact text, stored byte for byte; or {pack}: a parsed pack, stored re-serialized): it is validated, stored in the local folder as <id>.json and applies only after approve-local. Signed layouts ({files}) arrive with a later release. |
 | GET | `/api/v1/site-packs/{pack_id}` | `getSitePack` | `sitepacks:read` | cookie, bearer | One pack: its view, the content in force (else the offered or local one) and every version known. |

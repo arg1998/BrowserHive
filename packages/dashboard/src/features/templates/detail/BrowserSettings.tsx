@@ -10,6 +10,7 @@ import { SimpleSelect } from '@/components/ui/select.tsx';
 import { Switch } from '@/components/ui/switch.tsx';
 import { identityChangeConfirm } from '../confirm-copy.ts';
 import { CHANNEL_LABEL } from '../model.ts';
+import { ClipboardPanel } from './ClipboardPanel.tsx';
 import { HealthPanel } from './HealthPanel.tsx';
 import { ProxyPanel } from './ProxyPanel.tsx';
 import { Field } from './settings-field.tsx';
@@ -98,6 +99,7 @@ export function BrowserSettings({ template }: { readonly template: Template }) {
     <>
       <BrowserPanel template={template} />
       <ProxyPanel template={template} />
+      <ClipboardPanel template={template} />
       <HealthPanel template={template} />
     </>
   );

@@ -243,6 +243,7 @@ export const ICONS = {
   github: GitHub,
   rocket: Rocket,
   lock: Lock,
+  device: Laptop,
   logout: LogOut,
   user: UserRound,
   show: Eye,

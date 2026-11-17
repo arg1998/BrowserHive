@@ -14,6 +14,7 @@ import {
   serializeError,
 } from '@browserhive/core/runtime';
 import {
+  applyClipboardPolicy,
   createTemplateFiles,
   createTemplateGeoResolver,
   displayMissing,
@@ -282,6 +283,10 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
     bus: input.bus,
     ...packs,
     ...common,
+    clipboardWrites: async (id, deny) => {
+      const host = supervisor?.runningHost(id) ?? null;
+      if (host !== null) await applyClipboardPolicy(host.context, deny, input.logger);
+    },
   });
   const actions = new TemplateActions({
     repos: input.uow.repos,

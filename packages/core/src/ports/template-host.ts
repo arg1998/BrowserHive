@@ -43,6 +43,8 @@ export interface TemplateHostSpec {
    * table of `domain/site-packs/host-flags.ts`; absent = none.
    */
   readonly hostFlags?: readonly string[];
+  /** "Deny clipboard writes" (spec 13 §2.1, D18); absent = off. */
+  readonly denyClipboardWrites?: boolean;
 }
 
 /** Why a host's browser went away, as the host saw it. */

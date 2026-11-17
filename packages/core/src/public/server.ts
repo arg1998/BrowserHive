@@ -109,6 +109,7 @@ export {
 } from '../infra/browsers/browser-detection.ts';
 export { bundledChromiumVersion } from '../infra/browsers/bundled-chromium.ts';
 export { assertChromiumInstalled } from '../infra/browsers/chromium-resolver.ts';
+export { applyClipboardPolicy } from '../infra/browsers/clipboard-policy.ts';
 export { DRIVER_NAME, driverChromium, driverVersion } from '../infra/browsers/driver.ts';
 export { CdpPageFocus } from '../infra/browsers/focus-emulation.ts';
 export { HostGeoSeedResolver } from '../infra/browsers/geo-seed.ts';

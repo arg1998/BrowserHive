@@ -271,6 +271,7 @@
               "TEMPLATE_SITE_SIGNED_OUT",
               "TEMPLATE_STATE_COPY",
               "SITE_GUARD_WARNED",
+              "SITE_PACED",
               "SITE_WRITE_HELD"
             ]
           },
@@ -21783,6 +21784,9 @@
                   "minimized"
                 ]
               },
+              "deny_clipboard_writes": {
+                "type": "boolean"
+              },
               "current_version": {
                 "type": [
                   "integer",
@@ -21848,6 +21852,7 @@
               "proxy",
               "policy",
               "agent_windows",
+              "deny_clipboard_writes",
               "current_version",
               "checkpoint_at",
               "checkpoint_size_bytes",
@@ -21942,6 +21947,9 @@
               "normal",
               "minimized"
             ]
+          },
+          "deny_clipboard_writes": {
+            "type": "boolean"
           },
           "policy": {
             "type": "object",
@@ -24118,6 +24126,9 @@
                   "minimized"
                 ]
               },
+              "deny_clipboard_writes": {
+                "type": "boolean"
+              },
               "current_version": {
                 "type": [
                   "integer",
@@ -24183,6 +24194,7 @@
               "proxy",
               "policy",
               "agent_windows",
+              "deny_clipboard_writes",
               "current_version",
               "checkpoint_at",
               "checkpoint_size_bytes",
@@ -24344,6 +24356,9 @@
               "normal",
               "minimized"
             ]
+          },
+          "deny_clipboard_writes": {
+            "type": "boolean"
           },
           "policy": {
             "type": "object",
@@ -25065,6 +25080,9 @@
                   "minimized"
                 ]
               },
+              "deny_clipboard_writes": {
+                "type": "boolean"
+              },
               "current_version": {
                 "type": [
                   "integer",
@@ -25130,6 +25148,7 @@
               "proxy",
               "policy",
               "agent_windows",
+              "deny_clipboard_writes",
               "current_version",
               "checkpoint_at",
               "checkpoint_size_bytes",
@@ -26837,6 +26856,9 @@
                   "minimized"
                 ]
               },
+              "deny_clipboard_writes": {
+                "type": "boolean"
+              },
               "current_version": {
                 "type": [
                   "integer",
@@ -26902,6 +26924,7 @@
               "proxy",
               "policy",
               "agent_windows",
+              "deny_clipboard_writes",
               "current_version",
               "checkpoint_at",
               "checkpoint_size_bytes",

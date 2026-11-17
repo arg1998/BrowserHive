@@ -185,6 +185,11 @@ export type Invocation =
       readonly command: 'templates-host';
       readonly action: TemplateHostAction;
     } & TemplateTarget)
+  | ({
+      readonly command: 'templates-clipboard';
+      /** `deny` (true) or `allow` (false): the "Deny clipboard writes" switch (D18). */
+      readonly deny: boolean;
+    } & TemplateTarget)
   | ({ readonly command: 'templates-disable' } & TemplateTarget)
   | ({ readonly command: 'templates-enable' } & TemplateTarget)
   | ({
