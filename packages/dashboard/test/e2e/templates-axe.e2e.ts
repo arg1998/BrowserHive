@@ -8,6 +8,18 @@ const TABS = ['sites', 'sessions', 'versions', 'access', 'settings', 'activity']
 
 /** Serious and critical violations on the page, as readable lines. */
 async function violations(page: Page): Promise<string[]> {
+  // Colour contrast is only meaningful on the settled page: a dialog fading in (opacity < 1) blends
+  // its text with the backdrop, which axe reads as low contrast (CI is slow enough to catch it).
+  await page.mouse.move(0, 0);
+  await page.waitForFunction(
+    () =>
+      document
+        .getAnimations()
+        // Endless ones (the live dot, spinners) never settle and never fade text.
+        .every((a) => a.playState !== 'running' || a.effect?.getTiming().iterations === Infinity),
+    undefined,
+    { timeout: 10_000 },
+  );
   await page.addScriptTag({ path: AXE });
   return page.evaluate(async () => {
     const axe = (
