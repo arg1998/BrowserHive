@@ -121,9 +121,7 @@ export class SitePackRegistry implements SitePackLookup {
    * Prepares the first-use approval of a new template site (spec 13 §9.6, D-67): the version
    * already approved, else exactly the offer whose SHA-256 the operator reviewed. Write it with
    * `prepared.write(repos)` in the site's own transaction, then call {@link approvalsCommitted}.
-   * `null`: no pack covers the site (generic) or `sitePacks=false`.
-   *
-   * @throws `SITE_PACK_APPROVAL_REQUIRED`, `CONFLICT`, `SITE_PACK_DOMAIN_TAKEN`.
+   * `null`: no pack covers the site (generic) or `sitePacks=false`. @throws `SITE_PACK_APPROVAL_REQUIRED`, `CONFLICT`, `SITE_PACK_DOMAIN_TAKEN`.
    */
   async prepareSite(
     siteId: string,
@@ -209,10 +207,7 @@ export class SitePackRegistry implements SitePackLookup {
 
   // --- loading --------------------------------------------------------------------------------
 
-  /**
-   * Reads both sources and swaps the snapshot (spec 13 §9.6). A source that fails to load keeps its
-   * previous catalog. `by` (an operator's reload) records `site_pack.reload`.
-   */
+  /** Reads both sources and swaps the snapshot (§9.6); a failed source keeps its catalog. */
   reload(by?: string): Promise<SitePackRegistryStats> {
     return this.#serial(async () => {
       const signal = AbortSignal.timeout(30_000);
@@ -269,7 +264,9 @@ export class SitePackRegistry implements SitePackLookup {
   /** A publisher revoked `version` (§9.7, `registry-revoke.ts`); for the T4b registry client. */
   async revoke(packId: string, version: number, by: string): Promise<RevokeResult> {
     let outcome: RevocationOutcome = { outcome: 'not_in_force' };
-    const run = async () => void (outcome = await revokeVersion(this.#core(), packId, version, by));
+    const run = async () => {
+      outcome = await revokeVersion(this.#core(), packId, version, by);
+    };
     const view = await this.#act(packId, run);
     return { ...outcome, view };
   }
