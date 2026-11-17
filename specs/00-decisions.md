@@ -1329,3 +1329,25 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 **Status:** Accepted (lead decision for PR T3b; follows D-69)
 
 **Decision.** The bundled packs (version 2) select the §9.8 strategies except `pace-writes`: no pack has a verified `write` guard to pace (D-69), so pacing waits for the owner's signed-in checks (D43). Strategy parameters are BrowserHive's behaviour choices, not facts about the site, so `verified.strategies` is not set. LinkedIn's `launch-spacing` uses `min_gap_s: 30` (no official source; vendor guidance only recommends spacing). Each bump reaches an install as a pending bundled update with its classification.
+
+## D-73 How the pack-change classifier reads the §9.7 table
+
+**Status:** Accepted (lead decision for PR T3b)
+
+**Decision.** Default deny: an unknown field, sub-path or strategy parameter is loosening; parameters are compared after defaults and clamping, so an unchanged effective value is neutral. A `warn` guard is never restrictive (it cannot stop anything). A guard covers the probe when the request guard itself would match a `GET` document of the probe URL; element guards use their `page` glob. Challenge coverage reads the match members with OR (stricter than the run-time AND). A session cap or pace rule *added* at 1 is restrictive like lowering to 1. `device_binding` is compared as a set keyed by platform and mechanism. A strategy added with an explicit path parameter is loosening. `active-hours` is tightening only when the new window lies inside the old one and is at least 4 h (restrictive below). `stealth-profile` is restrictive when a template whose **enabled** site uses the pack is below the candidate's floor; the class is stored on the row and recomputed at load and after template changes. Revocation of content approved from a local file never replaces it (`keep_and_report`).
+
+## D-74 "Deny clipboard writes" blocks the permission and the page's copy paths
+
+**Status:** Accepted (owner decision D18 option C, carried out in PR T3b)
+
+**Decision.** A per-template switch `deny_clipboard_writes` (default off; migration `0011-template-clipboard`, v11, compatible). When on, the host's context gets `clipboard-write` (with and without sanitization) denied through `Browser.setPermission` on a browser DevTools session kept open for the browser's life (Chromium drops an override when its session detaches), and a main-world init script makes `execCommand('copy'|'cut')` return `false` and stops page `copy`/`cut` listeners (the permission does not cover `execCommand`, and a copy listener can rewrite what the operator copies). Applied at host start and live on PATCH; a failed live apply restarts a running browser. Sites can detect it (the permission reads `denied`, `execCommand` is not native, copy buttons stop working); it is opt-in for that reason.
+
+## D-75 Host strategies follow what Chrome honours; `either` probes wait for a late redirect
+
+**Status:** Accepted (lead decision for PR T3b)
+
+**Decision.**
+- `webrtc-policy` is applied both as `--force-webrtc-ip-handling-policy` and as the profile preference `webrtc.ip_handling_policy` (set at each start, removed when no enabled site selects a policy): full Chrome ignores the switch and honours the preference; the headless shell does the reverse (measured, Chromium 153). A change restarts a running host through the operator restart path.
+- `single-focus` turns emulated focus off through a second DevTools session per page (again after each navigation) and minimizes such a page's window on headless hosts; `visibilityState` stays `visible`, which screenshots and the live view need.
+- `redirect` and `either` probes wait for `load` and then up to 4 s for a client-side signed-out redirect; an `either` probe that loaded and stayed on its path is `signed_in` (`no_redirect`). This resolves D48 for Reddit without a signed-in landmark.
+- The keeper starts a stopped browser like a scheduled pack check and skips signed-out and challenged sites.
