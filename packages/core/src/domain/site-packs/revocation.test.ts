@@ -32,7 +32,8 @@ describe('revocationDecision (bundled source)', () => {
         p.guards?.push({
           id: 'x',
           kind: 'account',
-          match: { url: 'www.linkedin.com/x' },
+          // GET only: a guard that can block a POST on the sign-in host is restrictive (D-73).
+          match: { url: 'www.linkedin.com/x', methods: ['GET'] },
           action: 'block',
         }),
       ),

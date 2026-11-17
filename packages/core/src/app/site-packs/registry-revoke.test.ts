@@ -19,6 +19,15 @@ const EXTRA_GUARD = {
   action: 'block' as const,
 };
 
+/** A v2 whose default write policy is laxer than v1's `confirm`. */
+const LAXER_WRITES = {
+  write_policy: {
+    default: 'warn' as const,
+    stance: 'prohibited' as const,
+    exception: 'Writes are only reported while the owner checks them.',
+  },
+};
+
 /** v1 approved, then v2 (`v2Extra`) applied: v1 is the fallback. */
 async function withApplied(v2Extra: Parameters<typeof sitePack>[2]) {
   const repos = new InMemoryRepositories();
@@ -40,8 +49,9 @@ async function withApplied(v2Extra: Parameters<typeof sitePack>[2]) {
 
 describe('SitePackRegistry.revoke', () => {
   it('a tightening fallback applies at once (an automatic decision)', async () => {
-    // v2 dropped the logout guard: going back to v1 adds it again.
-    const { registry, repos, actions } = await withApplied({ guards: [] });
+    // v2 relaxed the write policy: going back to v1 makes it stricter again. (Dropping the logout
+    // guard would not do: adding it back can block a post on the sign-in host, D-73.)
+    const { registry, repos, actions } = await withApplied(LAXER_WRITES);
     const result = await registry.revoke(PACK, 2, 'browserhive');
     expect(result).toMatchObject({ outcome: 'fallback_applied', classification: 'tightening' });
     expect(result.view.approved?.version).toBe(1);

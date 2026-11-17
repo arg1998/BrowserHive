@@ -28,7 +28,7 @@ export const CLASSIFICATION_INFO: { readonly [K in SitePackClassification]: Clas
     tone: 'warn',
     icon: 'danger',
     summary:
-      'Adds a limit that can stop agents from using the site: a guard or check on the sign-in or signed-in check page, one session at a time, a short active window, or a stealth floor above a template.',
+      'Adds a limit that can stop agents from using the site: a guard on the sign-in host or the signed-in check page, a check that stops the site or matches pages by their content, one session at a time, a short active window, or a stealth floor above a template.',
   },
   tightening: {
     label: 'Tightens rules',

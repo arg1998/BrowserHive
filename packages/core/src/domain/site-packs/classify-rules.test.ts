@@ -1,4 +1,4 @@
-/** @module domain/site-packs/classify-rules.test — spec 13 §9.7 for guards, element guards and challenges (added, stricter, restrictive coverage of the probe, the sign-in URL and whole hosts, removed, laxer, match/target/request_guard changes, `write_policy` moves), and the default-deny paths of the classifier's dispatch. */
+/** @module domain/site-packs/classify-rules.test — spec 13 §9.7 for guards, element guards and challenges (added, stricter, restrictive coverage of the probe, the sign-in URL, a sign-in post and whole hosts, content-only and `stop` challenges (D-73, review #84 M2), removed, laxer, match/target/request_guard changes, `write_policy` moves), and the default-deny paths of the classifier's dispatch. */
 
 import { describe, expect, it } from 'bun:test';
 import type { SitePackV1Input } from '@browserhive/contracts/site-packs';
@@ -22,9 +22,31 @@ const guard = (id: string, url: string, extra: Partial<Guard> = {}): Guard => ({
 
 describe('guards', () => {
   it('a guard added elsewhere tightens', () => {
-    expect(classOf(addGuard(guard('apps', 'www.linkedin.com/developer/apps*'))).fields).toEqual({
-      'guards[apps]': 'tightening',
+    expect(
+      classOf(
+        addGuard(
+          guard('apps', 'x', {
+            match: { url: 'www.linkedin.com/developer/apps*', methods: ['GET', 'DELETE'] },
+          }),
+        ),
+      ).fields,
+    ).toEqual({ 'guards[apps]': 'tightening' });
+    // Another host than the sign-in page's: any method.
+    expect(classOf(addGuard(guard('media', 'media.licdn.com/dms/*'))).overall).toBe('tightening');
+  });
+
+  it('a guard that can block a form post on the sign-in host is restrictive (review #84 M2)', () => {
+    // LinkedIn's sign-in form posts to /checkpoint/lg/login-submit, not to its sign-in page.
+    const submit = guard('submit', 'x', {
+      match: { url: 'www.linkedin.com/checkpoint/lg/login-submit*', methods: ['POST'] },
     });
+    expect(classOf(addGuard(submit)).fields).toEqual({ 'guards[submit]': 'restrictive' });
+    // Methods absent cover POST too; a wildcard host covers the sign-in host.
+    expect(classOf(addGuard(guard('in', 'www.linkedin.com/in/*'))).overall).toBe('restrictive');
+    expect(classOf(addGuard(guard('w', '*.linkedin.com/jobs/apply*'))).overall).toBe('restrictive');
+    // `confirm` holds the post as well; `warn` never stops.
+    expect(classOf(addGuard({ ...submit, action: 'confirm' })).overall).toBe('restrictive');
+    expect(classOf(addGuard({ ...submit, action: 'warn' })).overall).toBe('tightening');
   });
 
   it('a guard added over the probe path, the sign-in URL or a whole host is restrictive', () => {
@@ -45,11 +67,16 @@ describe('guards', () => {
   });
 
   it('a POST-only guard on the probe path does not stop the GET probe; a warn guard never stops', () => {
+    // The sign-in page on another host, so only the probe is in question.
+    const signInElsewhere = (p: SitePackV1Input) => {
+      if (p.sign_in !== undefined) p.sign_in.url.host = 'login.linkedin.com';
+    };
     expect(
       classOf(
         addGuard(
           guard('feed-post', 'x', { match: { url: 'www.linkedin.com/feed/*', methods: ['POST'] } }),
         ),
+        { before: signInElsewhere },
       ).overall,
     ).toBe('tightening');
     expect(
@@ -64,10 +91,22 @@ describe('guards', () => {
         const g = p.guards?.[i];
         if (g) g.action = a;
       };
-    expect(classOf(action('block'), { before: action('warn') }).fields).toEqual({
-      'guards[logout].action': 'tightening',
+    // A fresh guard per call: `action` edits the pushed object.
+    const getGuard = (p: SitePackV1Input) =>
+      addGuard(
+        guard('apps', 'x', {
+          match: { url: 'www.linkedin.com/developer/apps*', methods: ['GET'] },
+          action: 'warn',
+        }),
+      )(p);
+    expect(classOf(action('block', 3), { before: getGuard }).fields).toEqual({
+      'guards[apps].action': 'tightening',
     });
-    expect(classOf(action('confirm'), { before: action('warn') }).overall).toBe('tightening');
+    expect(classOf(action('confirm', 3), { before: getGuard }).overall).toBe('tightening');
+    // The logout guard (every method on the sign-in host) can block a sign-in post.
+    expect(classOf(action('block'), { before: action('warn') }).fields).toEqual({
+      'guards[logout].action': 'restrictive',
+    });
     const probeGuard = addGuard(guard('feed', 'www.linkedin.com/feed/*', { action: 'warn' }));
     expect(
       classOf(action('confirm', 3), { before: probeGuard }).fields['guards[feed].action'],
@@ -147,11 +186,28 @@ describe('challenges', () => {
     (p: SitePackV1Input) => {
       p.challenges?.push({ id: 'wall', kind: 'captcha', match: c, action });
     };
-  it('a challenge added elsewhere tightens', () => {
+  it('a challenge added elsewhere, anchored by its address, that asks for attention tightens', () => {
     expect(classOf(add({ url: 'www.linkedin.com/security/*' })).fields).toEqual({
       'challenges[wall]': 'tightening',
     });
-    expect(classOf(add({ title_contains: 'Security check' })).overall).toBe('tightening');
+    expect(
+      classOf(add({ url: 'www.linkedin.com/security/*', title_contains: 'Security check' }))
+        .overall,
+    ).toBe('tightening');
+  });
+
+  it('a challenge without a url, or one that stops the site, is restrictive (review #84 M2)', () => {
+    // Content-only matches cannot be bounded: "LinkedIn" is in every title, `div` on every page.
+    expect(classOf(add({ title_contains: 'Security check' })).overall).toBe('restrictive');
+    expect(classOf(add({ landmark: 'div.captcha-wall' })).overall).toBe('restrictive');
+    expect(classOf(add({ text: 'Let us know you are human' })).overall).toBe('restrictive');
+    expect(classOf(add({ frame: 'recaptcha' })).overall).toBe('restrictive');
+    // `stop` anywhere, and a whole host.
+    expect(classOf(add({ url: 'www.linkedin.com/security/*' }, 'stop')).fields).toEqual({
+      'challenges[wall]': 'restrictive',
+    });
+    expect(classOf(add({ url: 'www.linkedin.com/*' })).overall).toBe('restrictive');
+    expect(classOf(add({ url: '*.licdn.com' })).overall).toBe('restrictive');
   });
 
   it('restrictive when it covers the probe or sign-in URL, or would match every page', () => {
@@ -170,13 +226,13 @@ describe('challenges', () => {
     expect(classOf(add({ title_contains: 'In' })).overall).toBe('restrictive');
   });
 
-  it('attention → stop tightens (restrictive when covering); stop → attention loosens', () => {
+  it('attention → stop can stop the site (restrictive); stop → attention loosens', () => {
     const action = (a: Challenge['action']) => (p: SitePackV1Input) => {
       const c = p.challenges?.[0];
       if (c) c.action = a;
     };
     expect(classOf(action('stop')).fields).toEqual({
-      'challenges[checkpoint].action': 'tightening',
+      'challenges[checkpoint].action': 'restrictive',
     });
     expect(classOf(action('attention'), { before: action('stop') }).fields).toEqual({
       'challenges[checkpoint].action': 'loosening',
