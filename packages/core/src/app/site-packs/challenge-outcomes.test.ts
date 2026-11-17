@@ -13,6 +13,7 @@ import { DEFAULT_CHALLENGES } from '../../domain/site-packs/challenges.ts';
 import type { ProbeVerdict } from '../../domain/templates/probe.ts';
 import { isAppError } from '../../kernel/errors/app-error.ts';
 import type { ChallengeInput, SecurityIntercepts } from '../../ports/security-intercepts.ts';
+import type { EffectivePack, SitePackLookup } from '../../ports/site-packs.ts';
 import { ChallengeOutcomes, type DetectedChallenge } from './challenge-outcomes.ts';
 import { TemplateSiteStops } from './site-stops.ts';
 
@@ -28,6 +29,7 @@ let recorded: { siteId: string; verdict: ProbeVerdict }[];
 let withIntercepts: boolean;
 let mode: 'live' | 'maintenance' | undefined;
 let transport: 'http' | 'stdio';
+let lookup: SitePackLookup | null;
 
 beforeEach(async () => {
   repos = Object.assign(new InMemoryRepositories(), {
@@ -49,6 +51,7 @@ beforeEach(async () => {
   withIntercepts = true;
   mode = 'live';
   transport = 'http';
+  lookup = null;
 });
 
 function outcomes(): ChallengeOutcomes {
@@ -71,7 +74,7 @@ function outcomes(): ChallengeOutcomes {
     }),
     stops,
     intercepts: () => (withIntercepts ? intercepts : null),
-    lookup: () => null,
+    lookup: () => lookup,
     transport,
     bus,
     logger: createCollectingLogger(),
@@ -154,6 +157,37 @@ describe('ChallengeOutcomes', () => {
     await outcomes().handle(detected(rule('stop')));
     expect((await site())?.stoppedAt).not.toBeNull();
     expect(recorded).toHaveLength(2);
+  });
+});
+
+describe('scope (review #83 C-M4)', () => {
+  const elsewhere = (r: DetectedChallenge['rule'], url: string): DetectedChallenge => ({
+    ...detected(r),
+    pageUrl: url,
+  });
+
+  it('a lookalike security check on any other site involves nobody', async () => {
+    const cf = DEFAULT_CHALLENGES[0];
+    const notify = DEFAULT_CHALLENGES[1];
+    if (cf === undefined || notify === undefined) throw new Error('no defaults');
+    await outcomes().handle(elsewhere(cf, 'https://attacker.test/just-a-moment'));
+    await outcomes().handle(elsewhere(notify, 'https://attacker.test/widget'));
+    await outcomes().handle(elsewhere(rule('stop'), 'http://127.0.0.1:9/x'));
+    expect([raised, recorded, bus.published]).toEqual([[], [], []]);
+  });
+
+  it("an approved pack's other domain (not a template site) still raises", async () => {
+    const pack = { id: 'pack.test', title: 'Pack', domains: ['pack.test', 'pack-cdn.test'] };
+    const effective = { packId: pack.id, pack } as unknown as EffectivePack;
+    lookup = {
+      effectiveFor: (host) => (host.endsWith('pack-cdn.test') ? effective : null),
+      effectiveById: () => effective,
+      generation: 1,
+    };
+    const cf = DEFAULT_CHALLENGES[0];
+    if (cf === undefined) throw new Error('no default');
+    await outcomes().handle(elsewhere(cf, 'https://www.pack-cdn.test/check'));
+    expect(raised.map((r) => r.site)).toEqual(['pack-cdn.test']);
   });
 });
 

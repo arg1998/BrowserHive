@@ -80,6 +80,13 @@ export function fixturePack(
         match: { url: 'site-a.test/pack/suspended' },
         action: 'stop',
       },
+      // Unanchored page text (review #83 C-L1): inert.
+      {
+        id: 'posted',
+        kind: 'rejected',
+        match: { text: 'blocked by network security' },
+        action: 'attention',
+      },
     ],
     ...extra,
   });

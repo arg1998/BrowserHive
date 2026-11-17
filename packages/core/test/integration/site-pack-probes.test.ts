@@ -50,6 +50,11 @@ describe('pack probes', () => {
       reason: 'challenge:captcha',
     });
 
+    // Review #83 C-L5: a 403 bot wall on the probe path is not a session.
+    p.lookup.swap(fixturePack('/pack/probe/forbidden'));
+    const forbidden = await probe(p);
+    expect(forbidden.result).toMatchObject({ outcome: 'inconclusive', reason: 'http_403' });
+
     p.lookup.swap(fixturePack('/pack/probe/slow'));
     const slow = await probe(p);
     expect(slow.result).toMatchObject({ outcome: 'inconclusive', reason: 'timeout' });

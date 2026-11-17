@@ -1,4 +1,4 @@
-/** @module app/site-packs/challenge-outcomes — what a challenge seen on a host page does (spec 13 §9.5 "Outcome"): on an agent's virtual session an `attention`/`stop` match goes to `SecurityIntercepts.raiseChallenge` (which marks the site `challenged`, stops it for `stop` and opens the `security_intercept` unless under stdio); `notify` only marks the site `challenged`; maintenance sessions and probes are the prober's (no request). Never throws. */
+/** @module app/site-packs/challenge-outcomes — what a challenge seen on a host page does (spec 13 §9.5 "Outcome"), only on pages of the template's sites or an approved pack's domains (review #83 C-M4): on an agent's virtual session an `attention`/`stop` match goes to `SecurityIntercepts.raiseChallenge` (which marks the site `challenged`, stops it for `stop` and opens the `security_intercept` unless under stdio); `notify` only marks the site `challenged`; maintenance sessions and probes are the prober's (no request). Never throws. */
 
 import {
   BUILTIN_PACK_ID,
@@ -94,6 +94,11 @@ export class ChallengeOutcomes {
       (host) => lookup?.effectiveFor(host)?.packId ?? null,
     );
     const host = hostOf(detected.pageUrl) ?? '';
+    // Scope (review #83 C-M4): only a page of one of the template's sites, or of an approved pack's
+    // domains, can involve the operator. Anywhere else a page could dress up as a security check
+    // (a Turnstile frame anyone can embed) and send the operator to it: nothing happens there.
+    const packed = host !== '' && lookup?.effectiveFor(host) != null;
+    if (site === null && !packed) return;
     const siteId = site?.siteId ?? (registrableDomain(host) || host);
     const pageUrl = sanitizeUrl(detected.pageUrl);
     this.#deps.bus?.publish('site_pack.challenge', {

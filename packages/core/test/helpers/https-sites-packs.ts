@@ -81,6 +81,18 @@ export function packRoute(path: string): Response | null {
       return html('Just a moment...', TURNSTILE_FRAME);
     case '/pack/probe/slow':
       return slowPage();
+    case '/pack/probe/forbidden':
+      // A bot wall on the probe path (review #83 C-L5).
+      return new Response('<!doctype html><title>Access denied</title><p>blocked</p>', {
+        status: 403,
+        headers: { 'content-type': 'text/html; charset=utf-8' },
+      });
+    case '/pack/posted':
+      // A post quoting a block page's text (review #83 C-L1).
+      return html(
+        'a thread',
+        '<article id="post">Mods: You have been blocked by network security?</article>',
+      );
     case '/pack/probe/broken':
       return new Response('down', { status: 503 });
     // The fake provider frames (served for the provider hosts mapped to the fixture).

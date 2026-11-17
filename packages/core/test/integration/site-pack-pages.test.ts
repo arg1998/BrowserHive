@@ -93,6 +93,10 @@ describe('site pack page enforcement', () => {
     );
     expect(paths(p)).not.toContain('/logout?d=abca');
     expect(page().url()).toBe('https://site-a.test/pack/guarded');
+    // Review #83 C-L2: a newline in the middle submits too.
+    expect(refusal(await call('type_text', { selector: '#danger-field', text: 'x\ny' })).code).toBe(
+      'SITE_ACTION_BLOCKED',
+    );
     ok(await call('type_text', { selector: '#q', text: 'hello\n' }));
     await until(() => page().url().includes('/pack/searched'), 10_000, 'the search submitted');
   });
@@ -222,5 +226,20 @@ describe('site pack page enforcement', () => {
     await p.stops.clear(p.w.template.templateId, SITE, 'admin');
     expect((await siteRow(p))?.stoppedAt).toBeNull();
     ok(await call('navigate', { url: p.w.sites.url(SITE, '/') }));
+  });
+
+  it('a lookalike security check off the template sites and packs, and posted block text, involve nobody (review #83 C-M4, C-L1)', async () => {
+    world = await packWorld();
+    const p = world;
+    const { id, call } = await session(p);
+    // site-b.test is neither a site of the template nor a pack domain.
+    ok(await call('navigate', { url: p.w.sites.url('site-b.test', '/pack/cf') }));
+    ok(await call('navigate', { url: p.w.sites.url(SITE, '/pack/posted') }));
+    await Bun.sleep(3_500);
+    expect(p.raised).toEqual([]);
+    expect(p.intercepts.holdOf(id)).toBeNull();
+    expect(p.w.harness.attentionBroker.listOpen('security_intercept')).toEqual([]);
+    expect((await siteRow(p))?.health.state).toBe('unknown');
+    ok(await call('get_content', {}));
   });
 });
