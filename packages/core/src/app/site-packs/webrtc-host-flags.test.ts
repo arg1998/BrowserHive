@@ -1,4 +1,4 @@
-/** @module app/site-packs/webrtc-host-flags.test — `webrtc-policy` (spec 13 §3.2, §9.4): a host start gets the strictest policy of the template's enabled sites; a running host whose desired switches changed (`site_pack.changed`, `template.changed`) restarts once until its next start; a stopped host, an unchanged set, a disabled site or no lookup (`sitePacks=false`) restart nothing. */
+/** @module app/site-packs/webrtc-host-flags.test — `webrtc-policy` (spec 13 §3.2, §9.4): a host start gets the strictest policy of the template's enabled sites; a running host whose desired switches changed (`site_pack.changed`, `template.changed`) restarts once until its next start; a stopped host, an unchanged set, a disabled site or no lookup (`sitePacks=false`) restart nothing; a change landing while the host starts restarts it once it is running (review PR #84 M1). */
 
 import { describe, expect, it } from 'bun:test';
 import { RecordingEventBus } from '../../../test/helpers/recording-event-bus.ts';
@@ -52,6 +52,12 @@ function world(initial: SitePackLookup | null, sites: TemplateSiteRecord[]) {
       type: 'template.changed',
       template: { template_id: ID },
     } as unknown as DomainEvents['template.changed']);
+  const hostState = (state: 'starting' | 'running') =>
+    bus.publish('template.host', {
+      type: 'template.host',
+      template_id: ID,
+      host: { state },
+    } as unknown as DomainEvents['template.host']);
   const packChanged = () =>
     bus.publish('site_pack.changed', {
       type: 'site_pack.changed',
@@ -61,6 +67,10 @@ function world(initial: SitePackLookup | null, sites: TemplateSiteRecord[]) {
     restarts,
     changed,
     packChanged,
+    hostState,
+    setRunning: (value: boolean) => {
+      running = value;
+    },
     swap: (next: SitePackLookup | null) => {
       lookup = next;
     },
@@ -120,6 +130,30 @@ describe('HostFlagsWatch', () => {
     w.packChanged();
     await w.settle();
     expect(w.restarts).toEqual([]);
+    w.watch.stop();
+  });
+
+  it('a pack change while the host starts restarts it once it is running (the review PoC)', async () => {
+    const w = world(lookupOf(other(null)), [site('linkedin.com', 'linkedin.com')]);
+    w.setRunning(false);
+    // The start read the switches (none); the browser is still launching.
+    expect(await w.watch.hostFlags(template)).toEqual([]);
+    w.hostState('starting');
+    // The operator approves a version selecting `webrtc-policy` meanwhile.
+    w.swap(lookupOf(linkedin('disable_non_proxied_udp')));
+    w.packChanged();
+    await w.settle();
+    expect(w.restarts).toEqual([]);
+    w.setRunning(true);
+    w.hostState('running');
+    await w.settle();
+    expect(await w.watch.desired(ID)).toEqual([STRICT]);
+    expect(w.restarts).toEqual([ID]);
+    // Running with what it started with: reaching `running` again restarts nothing.
+    expect(await w.watch.hostFlags(template)).toEqual([STRICT]);
+    w.hostState('running');
+    await w.settle();
+    expect(w.restarts).toEqual([ID]);
     w.watch.stop();
   });
 });
