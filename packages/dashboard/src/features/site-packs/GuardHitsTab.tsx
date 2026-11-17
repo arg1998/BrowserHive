@@ -74,16 +74,16 @@ export function GuardHitsTab() {
               <p className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
                 <span className="font-medium">{ACTION_LABEL[hit.action]}</span>
                 <Chip>{KIND_LABEL[hit.guard_kind]}</Chip>
-                <span className="font-mono text-sm text-muted-foreground">
+                <bdi className="font-mono text-sm text-muted-foreground">
                   {hit.pack_id}#{hit.guard_id}
-                </span>
+                </bdi>
                 {hit.outcome !== null ? (
                   <span className="text-sm text-muted-foreground">· {hit.outcome}</span>
                 ) : null}
               </p>
               <p className="min-w-0 font-mono text-xs text-muted-foreground [overflow-wrap:anywhere]">
                 {hit.method !== null ? `${hit.method} ` : ''}
-                {hit.url}
+                <bdi>{hit.url}</bdi>
               </p>
               {hit.session_id !== null || hit.tool !== null ? (
                 <p className="text-sm text-muted-foreground">

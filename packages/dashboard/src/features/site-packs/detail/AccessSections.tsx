@@ -1,6 +1,6 @@
 /** @module features/site-packs/detail/AccessSections — a pack's sign-in, signed-in check and write policy as readable text (spec 13 §9.2, §9.3, §11.4): the sign-in address in full, sign in by hand only, the identity provider, the form's selectors, the probe and how it decides, presence-only cookie names, the keeper; the default write policy, "What the site's terms say" as a label, the clause verbatim with its checked date and address as text, and the exception */
 import type { SitePackV1 } from '@browserhive/contracts/site-packs';
-import { WRITE_POLICY_HINT, WRITE_POLICY_LABEL } from '../model.ts';
+import { NO_WRITE_GUARDS, WRITE_POLICY_HINT, WRITE_POLICY_LABEL } from '../model.ts';
 import { StanceLabel, TermsClause, UrlText } from '../PackBits.tsx';
 import { PROBE_KIND_LABEL, scopedUrl } from './labels.ts';
 import { Code, Facts, PackSection } from './PackSection.tsx';
@@ -106,8 +106,14 @@ export function CheckSection({ pack }: { readonly pack: SitePackV1 }) {
   );
 }
 
-/** Write policy and the site's terms. */
-export function TermsSection({ pack }: { readonly pack: SitePackV1 }) {
+/** Write policy and the site's terms; `writeGuards` 0 says the policy has nothing to act on (review S-H3). */
+export function TermsSection({
+  pack,
+  writeGuards,
+}: {
+  readonly pack: SitePackV1;
+  readonly writeGuards: number;
+}) {
   const policy = pack.write_policy;
   return (
     <PackSection title="Writes and the site’s terms" docs="sitePacksWritePolicies">
@@ -117,12 +123,15 @@ export function TermsSection({ pack }: { readonly pack: SitePackV1 }) {
             'Default write policy',
             <span key="w">
               <span className="font-medium">{WRITE_POLICY_LABEL[policy.default]}</span>:{' '}
-              {WRITE_POLICY_HINT[policy.default]}
+              {writeGuards === 0 ? NO_WRITE_GUARDS : WRITE_POLICY_HINT[policy.default]}
             </span>,
           ],
           ['What the site’s terms say', <StanceLabel key="s" stance={policy.stance} />],
           policy.clause !== undefined && ['Clause', <TermsClause key="c" clause={policy.clause} />],
-          policy.exception !== undefined && ['Why the default differs', policy.exception],
+          policy.exception !== undefined && [
+            'Why the default differs',
+            <bdi key="e">{policy.exception}</bdi>,
+          ],
         ]}
       />
       <p className="text-sm text-muted-foreground">

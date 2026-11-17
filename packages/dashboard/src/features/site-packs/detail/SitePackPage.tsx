@@ -1,6 +1,7 @@
 /** @module features/site-packs/detail/SitePackPage — `/site-packs/$id` (spec 13 §11.4): every section of the pack as readable text (sign-in, signed-in check, writes and the site's terms, guards, guarded controls, security checks, sessions and pacing, what the site expects, strategies, verified dates and sources), its provenance and settings, its pending versions with their diffs, the local-file diff with **Approve**, its versions and its history; live over the `site-packs` topic */
 import { Link, useParams } from '@tanstack/react-router';
 import { usePageCrumb } from '@/app/shell/page-crumb.tsx';
+import { Callout } from '@/components/shared/Callout.tsx';
 import { Chip } from '@/components/shared/Chip.tsx';
 import { ErrorState } from '@/components/shared/ErrorState.tsx';
 import { PageHeader } from '@/components/shared/PageHeader.tsx';
@@ -10,9 +11,11 @@ import { useTemplatesOverview } from '@/features/templates/api.ts';
 import { toAppError } from '@/lib/api/errors.ts';
 import { useSitePack } from '../api.ts';
 import { HistoryTab } from '../HistoryTabs.tsx';
+import { LocalApprovalCard } from '../LocalApprovalCard.tsx';
 import { useSitePacksLive } from '../live.ts';
+import { skippedText } from '../model.ts';
 import { usedByText } from '../pack-columns.tsx';
-import { LocalApprovalCard, PendingUpdateCard } from '../UpdateCards.tsx';
+import { PendingUpdateCard } from '../UpdateCards.tsx';
 import { pendingDecisions } from '../UpdatesSection.tsx';
 import { CheckSection, SignInSection, TermsSection } from './AccessSections.tsx';
 import {
@@ -53,7 +56,7 @@ export function SitePackPage() {
   return (
     <div className="flex min-w-0 flex-col gap-5">
       <PageHeader
-        title={view.title}
+        title={<bdi>{view.title}</bdi>}
         learnMore="Everything this pack tells BrowserHive about the site, as plain text. Addresses are shown as text, never as links."
         learnMoreDocs="sitePacks"
         badge={!view.enabled ? <Chip tone="muted">Turned off</Chip> : undefined}
@@ -82,6 +85,18 @@ export function SitePackPage() {
           </span>
         }
       />
+      {view.skipped !== undefined ? (
+        <Callout
+          tone="warn"
+          title={
+            view.approved === null && view.offer === null
+              ? 'Not in force: none of the rules below apply'
+              : 'A version was skipped'
+          }
+        >
+          <bdi>{skippedText(view.skipped)}</bdi>
+        </Callout>
+      ) : null}
       {decisions.length > 0 ? (
         <Section title="Waiting for your review" count={decisions.length}>
           <div className="grid min-w-0 gap-4">
@@ -105,11 +120,13 @@ export function SitePackPage() {
           ) : (
             <>
               {pack.description !== undefined ? (
-                <p className="max-w-3xl text-base text-pretty">{pack.description}</p>
+                <p className="max-w-3xl text-base text-pretty">
+                  <bdi>{pack.description}</bdi>
+                </p>
               ) : null}
               <SignInSection pack={pack} />
               <CheckSection pack={pack} />
-              <TermsSection pack={pack} />
+              <TermsSection pack={pack} writeGuards={view.write_guards} />
               <GuardsSection pack={pack} />
               <ElementGuardsSection pack={pack} />
               <ChallengesSection pack={pack} />

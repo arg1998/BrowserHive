@@ -7,6 +7,7 @@ import { importIssues } from './ImportPack.tsx';
 import { applySitePackEvent } from './live.ts';
 import {
   approvalSentence,
+  iso,
   packChoice,
   packForHost,
   packsNeedingReview,
@@ -51,7 +52,7 @@ describe('site-pack model', () => {
     const offered = packChoice(offeredPack());
     expect(offered).toMatchObject({ version: 2, sha256: sha('b'), approved: false });
     expect(approvalSentence(offeredPack(), offered ?? (null as never))).toBe(
-      `Adding this site approves GitHub v2 (Bundled with BrowserHive 0.3.0, SHA-256 ${sha('b').slice(0, 12)}…).`,
+      `Adding this site approves ${iso('GitHub')} v2 (${iso('Bundled with BrowserHive 0.3.0')}, SHA-256 ${sha('b').slice(0, 12)}…).`,
     );
     expect(packChoice(packView())).toMatchObject({ version: 3, approved: true });
     expect(packChoice(offeredPack({ offer: null }))).toBeNull();

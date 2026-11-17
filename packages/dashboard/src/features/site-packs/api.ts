@@ -1,11 +1,12 @@
 /** @module features/site-packs/api — site-pack queries and mutations over `useApi()` + `keys.sitePacks.*` (spec 13 §11.1 "Site packs", T3a): the filtered list, the unfiltered catalog (wizard, template Sites tab, sidebar badge), one pack, a diff, the history and guard hits, and the operator actions (Apply, Reject, Pin, Follow, Enable, Revert, Approve a local file, Reload, Import); every action refreshes the pack queries and the templates that show packs */
-import type { SitePackImportRequest, SitePackView } from '@browserhive/contracts/http';
+import type { SitePackView } from '@browserhive/contracts/http';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { z } from 'zod';
 import { useApi } from '@/app/providers/AuthProvider.tsx';
 import { useToast } from '@/app/providers/ToastProvider.tsx';
 import { toAppError } from '@/lib/api/errors.ts';
 import { keys } from '@/lib/api/keys.ts';
+import type { SitePackImportBody } from '@/lib/api/operations-site-packs.ts';
 import { type SitePacksSearch, toSitePacksQuery } from './search.ts';
 
 /** Rows per page of the history and guard hits. */
@@ -160,12 +161,12 @@ export function useReloadSitePacks() {
   });
 }
 
-/** **Import…** one unsigned pack (`POST /site-packs/import`); the caller shows `SITE_PACK_INVALID` issues. */
+/** **Import…** one unsigned pack file as its exact text (`POST /site-packs/import {text}`); the caller shows `SITE_PACK_INVALID` issues. */
 export function useImportSitePack() {
   const api = useApi();
   const settle = useSettle();
   return useMutation({
-    mutationFn: (body: z.input<typeof SitePackImportRequest>) => api.importSitePack({ body }),
+    mutationFn: (body: z.input<typeof SitePackImportBody>) => api.importSitePack({ body }),
     onSettled: settle,
   });
 }

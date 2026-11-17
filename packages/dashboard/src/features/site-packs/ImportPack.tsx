@@ -1,4 +1,4 @@
-/** @module features/site-packs/ImportPack — **Import…** one unsigned pack file (spec 13 §10.5, `POST /site-packs/import` with `{pack}`, ≤ 1 MiB): the file picker, a toast for what was imported (it waits for approval like any local file), and the callout that says why a file was refused, every `SITE_PACK_INVALID` issue listed by field */
+/** @module features/site-packs/ImportPack — **Import…** one unsigned pack file (spec 13 §10.5, `POST /site-packs/import` with the file's exact `{text}`, ≤ 1 MiB): the file picker, a toast for what was imported (it waits for approval like any local file), and the callout that says why a file was refused, every `SITE_PACK_INVALID` issue listed by field */
 import { SITE_PACK_IMPORT_MAX_BYTES } from '@browserhive/contracts/http';
 import { useRef } from 'react';
 import { useToast } from '@/app/providers/ToastProvider.tsx';
@@ -44,15 +44,15 @@ export function ImportButton({
       onProblem({ title: `${file.name} is larger than 1 MiB`, issues: [] });
       return;
     }
-    let pack: unknown;
-    try {
-      pack = JSON.parse(await file.text());
-    } catch {
-      onProblem({ title: `${file.name} isn’t JSON`, issues: [] });
+    // The file's exact text: the server hashes and stores these bytes, so the SHA-256 it asks you
+    // to approve is the one `sitepacks verify` prints for the file (review S-M3, S-L2).
+    const text = await file.text();
+    if (text.trim() === '') {
+      onProblem({ title: `${file.name} is empty`, issues: [] });
       return;
     }
     try {
-      const result = await mutation.mutateAsync({ pack });
+      const result = await mutation.mutateAsync({ text });
       const first = result.imported[0];
       toast.success({
         title:
@@ -115,7 +115,8 @@ export function ImportProblemCallout({
         <ul className="flex flex-col gap-1">
           {problem.issues.map((issue) => (
             <li key={`${issue.path}:${issue.message}`} className="[overflow-wrap:anywhere]">
-              <span className="font-mono text-xs">{issue.path || '(file)'}</span>: {issue.message}
+              <bdi className="font-mono text-xs">{issue.path || '(file)'}</bdi>:{' '}
+              <bdi>{issue.message}</bdi>
             </li>
           ))}
         </ul>

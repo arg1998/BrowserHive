@@ -84,11 +84,14 @@ export function RegistryCard({ status }: { readonly status: SitePackRegistryStat
                 key={`${s.source}:${s.pack_id}:${s.version ?? 'x'}`}
                 className="min-w-0 [overflow-wrap:anywhere]"
               >
-                <span className="font-medium">{s.pack_id}</span>
+                <bdi className="font-medium">{s.pack_id}</bdi>
                 {s.version !== null ? ` v${s.version}` : ''} · {SOURCE_LABEL[s.source]}:{' '}
                 {SKIP_REASON_TEXT[s.reason]}
                 {s.detail !== '' ? (
-                  <span className="text-muted-foreground"> ({s.detail})</span>
+                  <span className="text-muted-foreground">
+                    {' '}
+                    (<bdi>{s.detail}</bdi>)
+                  </span>
                 ) : null}
               </li>
             ))}

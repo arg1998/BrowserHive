@@ -1,5 +1,6 @@
 /** @module lib/api/operations-site-packs — the site-pack operations of `HTTP_ENDPOINTS` (spec 13 §11.1 "Site packs", PR T3a) and a template site's **Clear stop**, spread into `OPERATIONS` */
 import {
+  SITE_PACK_IMPORT_MAX_BYTES,
   SiteGuardHitsPage,
   SiteGuardHitsQuery,
   SitePackApproveLocalRequest,
@@ -21,6 +22,17 @@ import {
   TemplateSiteParams,
   TemplateSiteResponse,
 } from '@browserhive/contracts/http';
+import { z } from 'zod';
+
+/**
+ * `POST /site-packs/import` body, with the `{text}` form (the file's exact UTF-8 text, hashed and
+ * stored verbatim; review S-M3/S-L2). Mirrors the contract once WP-C's branch adds it there; until
+ * then the dashboard declares the union itself.
+ */
+export const SitePackImportBody = z.union([
+  ...SitePackImportRequest.options,
+  z.strictObject({ text: z.string().min(1).max(SITE_PACK_IMPORT_MAX_BYTES) }),
+]);
 
 /** Site-pack routes (T3a; the registry's check and download arrive with T4b). */
 export const SITE_PACK_OPERATIONS = {
@@ -28,7 +40,7 @@ export const SITE_PACK_OPERATIONS = {
   listSitePackChanges: { query: SitePackChangesQuery, response: SitePackChangesPage },
   listSiteGuardHits: { query: SiteGuardHitsQuery, response: SiteGuardHitsPage },
   reloadSitePacks: { response: SitePackReloadResponse },
-  importSitePack: { body: SitePackImportRequest, response: SitePackImportResponse },
+  importSitePack: { body: SitePackImportBody, response: SitePackImportResponse },
   getSitePack: { params: SitePackIdParams, response: SitePackDetailResponse },
   diffSitePack: {
     params: SitePackIdParams,

@@ -1,4 +1,4 @@
-/** @module features/site-packs/detail/RuleSections — a pack's guards, guarded controls and security checks as tables of text (spec 13 §9.3, §9.5): each guard's kind, address pattern, methods and resource types (or their defaults) and action; each guarded control's page, selector or role and name, action and the guard that enforces it on the network; each check's kind, what it matches and what it does */
+/** @module features/site-packs/detail/RuleSections — a pack's guards, guarded controls and security checks as tables of text (spec 13 §9.3, §9.5): each guard's kind, address pattern, methods and resource types (or their defaults) and action (or that the pack has none); each guarded control's page, selector or role and name, action and the guard that enforces it on the network; each check's kind, what it matches and what it does */
 import type { SitePackV1 } from '@browserhive/contracts/site-packs';
 import {
   CHALLENGE_ACTION_LABEL,
@@ -10,7 +10,14 @@ import { Code, PackSection, RuleTable } from './PackSection.tsx';
 
 /** Network guards. */
 export function GuardsSection({ pack }: { readonly pack: SitePackV1 }) {
-  if (pack.guards.length === 0) return null;
+  if (pack.guards.length === 0)
+    return (
+      <PackSection title="Guards (0)" docs="sitePacksGuards">
+        <p className="text-base text-muted-foreground">
+          No guards: nothing on <bdi>{pack.domains.join(', ')}</bdi> is blocked, held or flagged.
+        </p>
+      </PackSection>
+    );
   return (
     <PackSection
       title={`Guards (${pack.guards.length})`}
@@ -61,7 +68,7 @@ export function ElementGuardsSection({ pack }: { readonly pack: SitePackV1 }) {
                   <Code>{g.target.selector}</Code>
                 ) : (
                   <span>
-                    {g.target.role} named “{g.target.name}”
+                    {g.target.role} named “<bdi>{g.target.name}</bdi>”
                   </span>
                 )}
                 <span className="font-mono text-xs text-muted-foreground">{g.id}</span>
@@ -117,7 +124,9 @@ export function ChallengesSection({ pack }: { readonly pack: SitePackV1 }) {
             <td>
               <ul className="flex flex-col gap-0.5">
                 {matchParts(c.match).map((part) => (
-                  <li key={part}>{part}</li>
+                  <li key={part}>
+                    <bdi>{part}</bdi>
+                  </li>
                 ))}
               </ul>
             </td>

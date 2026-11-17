@@ -1,4 +1,4 @@
-/** @module features/site-packs/PackControls — a pack's settings as controls (spec 13 §10.6, §11.4): **Follow updates** (Auto, On, Off), **Enabled**, **Revert…** behind a confirmation when a previous version exists, and the row menu that reaches all of them from the keyboard (Shift+F10 on a table row) */
+/** @module features/site-packs/PackControls — a pack's settings as controls (spec 13 §10.6, §11.4): **Follow updates** (Auto, On, Off), **Enabled** (turning it off asks first), **Revert…** behind a confirmation when a previous version exists, and the row menu that reaches all of them from the keyboard (Shift+F10 on a table row) */
 import type { SitePackView } from '@browserhive/contracts/http';
 import { useNavigate } from '@tanstack/react-router';
 import { useConfirm } from '@/app/providers/ConfirmProvider.tsx';
@@ -20,8 +20,8 @@ import { Switch } from '@/components/ui/switch.tsx';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group.tsx';
 import { ICONS } from '@/lib/icons.ts';
 import { useSitePackActions } from './api.ts';
-import { revertConfirm } from './confirm-copy.ts';
-import { FOLLOW_LABEL } from './model.ts';
+import { disableConfirm, revertConfirm } from './confirm-copy.ts';
+import { FOLLOW_LABEL, iso } from './model.ts';
 
 type Follow = SitePackView['follow']['setting'];
 const FOLLOWS: readonly Follow[] = ['auto', 'on', 'off'];
@@ -41,18 +41,21 @@ function usePackSettings(pack: SitePackView) {
       actions.follow.mutate(followBody(setting), {
         onSuccess: () =>
           toast.success({
-            title: `${pack.title}: follow updates ${FOLLOW_LABEL[setting].toLowerCase()}`,
+            title: `${iso(pack.title)}: follow updates ${FOLLOW_LABEL[setting].toLowerCase()}`,
           }),
       }),
-    setEnabled: (enabled: boolean) =>
+    setEnabled: async (enabled: boolean) => {
+      // Turning a pack off drops its guards for every template using it: ask first (review S-M2).
+      if (!enabled && !(await confirm(disableConfirm(pack)))) return;
       actions.setEnabled.mutate(enabled, {
         onSuccess: () =>
-          toast.success({ title: `${pack.title} ${enabled ? 'enabled' : 'turned off'}` }),
-      }),
+          toast.success({ title: `${iso(pack.title)} ${enabled ? 'enabled' : 'turned off'}` }),
+      });
+    },
     revert: async () => {
       if (!(await confirm(revertConfirm(pack)))) return;
       actions.revert.mutate(undefined, {
-        onSuccess: () => toast.success({ title: `${pack.title} reverted` }),
+        onSuccess: () => toast.success({ title: `${iso(pack.title)} reverted` }),
       });
     },
   };
@@ -103,7 +106,7 @@ export function EnabledSwitch({ pack, id }: { readonly pack: SitePackView; reado
       {...(tabIndex !== undefined && { tabIndex })}
       checked={pack.enabled}
       disabled={settings.busy}
-      onCheckedChange={(enabled: boolean) => settings.setEnabled(enabled)}
+      onCheckedChange={(enabled: boolean) => void settings.setEnabled(enabled)}
     />
   );
 }
@@ -171,7 +174,7 @@ export function PackMenu({ pack }: { readonly pack: SitePackView }) {
         <DropdownMenuSeparator />
         <DropdownMenuCheckboxItem
           checked={pack.enabled}
-          onCheckedChange={(checked: boolean) => settings.setEnabled(checked)}
+          onCheckedChange={(checked: boolean) => void settings.setEnabled(checked)}
         >
           Enabled
         </DropdownMenuCheckboxItem>

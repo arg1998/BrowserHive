@@ -11,6 +11,7 @@ import {
 import { expectNoA11yViolations } from '../../../test/helpers/axe.ts';
 import { envelope, type FakeRoute, renderPage } from '../../../test/helpers/page-harness.tsx';
 import { act, fireEvent, screen, waitFor, within } from '../../../test/helpers/render.tsx';
+import { iso } from './model.ts';
 import { SitePacksPage } from './SitePacksPage.tsx';
 import { sitePacksSearch } from './search.ts';
 
@@ -115,7 +116,7 @@ describe('SitePacksPage', () => {
     ) as HTMLElement;
     await click(within(card).getByRole('button', { name: 'Apply…' }));
     const dialog = await screen.findByRole('alertdialog');
-    expect(within(dialog).getByText('Apply LinkedIn v4?')).toBeDefined();
+    expect(within(dialog).getByText(`Apply ${iso('LinkedIn')} v4?`)).toBeDefined();
     expect(within(dialog).getByText(/v3 is kept, so Revert restores it/)).toBeDefined();
     await expectNoA11yViolations(document.body, AXE);
     await click(within(dialog).getByRole('button', { name: 'Apply v4' }));
@@ -143,7 +144,7 @@ describe('SitePacksPage', () => {
     await click(within(card).getByRole('button', { name: 'Approve…' }));
     const dialog = await screen.findByRole('alertdialog');
     expect(within(dialog).getByText(`SHA-256 ${sha('d')}`)).toBeDefined();
-    expect(within(dialog).getByText('/data/site-packs/local/github.com.json')).toBeDefined();
+    expect(within(dialog).getByText(iso('/data/site-packs/local/github.com.json'))).toBeDefined();
     await click(within(dialog).getByRole('button', { name: 'Approve this content' }));
     await waitFor(() =>
       expect(view.requests.find((r) => r.path.endsWith('/approve-local'))?.body).toEqual({

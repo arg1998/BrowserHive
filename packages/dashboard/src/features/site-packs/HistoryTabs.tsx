@@ -99,10 +99,9 @@ function ChangeRow({
   readonly row: SitePackChangeRow;
   readonly showPack: boolean;
 }) {
-  const versions =
-    row.from_version === null
-      ? `v${row.to_version ?? '?'}`
-      : `v${row.from_version} → v${row.to_version ?? '?'}`;
+  // Local content has no version of its own: say "local file" (review S-L4); the short SHA-256 below names it.
+  const to = row.to_version === null ? 'local file' : `v${row.to_version}`;
+  const versions = row.from_version === null ? to : `v${row.from_version} → ${to}`;
   return (
     <li className="flex min-w-0 flex-col gap-1 px-5 py-3 sm:flex-row sm:items-start sm:gap-6">
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -113,7 +112,7 @@ function ChangeRow({
               params={{ id: row.pack_id }}
               className="font-medium hover:underline underline-offset-4 focus-ring rounded-sm"
             >
-              {row.pack_id}
+              <bdi>{row.pack_id}</bdi>
             </Link>
           ) : null}
           <span className="tabular-nums">{versions}</span>
@@ -125,7 +124,11 @@ function ChangeRow({
         {row.new_domains.length > 0 ? (
           <p className="text-sm text-warn-text">New domains: {row.new_domains.join(', ')}</p>
         ) : null}
-        {row.notes !== null ? <p className="text-sm text-pretty">{row.notes}</p> : null}
+        {row.notes !== null ? (
+          <p className="text-sm text-pretty">
+            <bdi>{row.notes}</bdi>
+          </p>
+        ) : null}
         <ShaText sha256={row.to_sha256} className="text-muted-foreground" />
       </div>
       <div className="flex shrink-0 flex-col gap-0.5 text-sm text-muted-foreground sm:items-end">
@@ -156,7 +159,7 @@ export function HistoryTab({ packId }: { readonly packId?: string }) {
       }
     >
       {rows.map((row) => (
-        <ChangeRow key={row.seq} row={row} showPack={packId === undefined} />
+        <ChangeRow key={row.event_id} row={row} showPack={packId === undefined} />
       ))}
     </PagedList>
   );

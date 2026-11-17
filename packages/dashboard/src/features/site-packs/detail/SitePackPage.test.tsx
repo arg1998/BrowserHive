@@ -9,6 +9,7 @@ import {
   renderPage,
 } from '../../../../test/helpers/page-harness.tsx';
 import { act, fireEvent, screen, waitFor, within } from '../../../../test/helpers/render.tsx';
+import { iso } from '../model.ts';
 import { SitePackPage } from './SitePackPage.tsx';
 
 const AXE = { disable: ['aria-hidden-focus'] } as const;
@@ -50,7 +51,7 @@ describe('SitePackPage', () => {
     expect(within(guards).getByText(/Every method · document, xhr, fetch, ping/)).toBeDefined();
     expect(within(guards).getByText('Write policy')).toBeDefined();
     const controls = screen.getByRole('table', { name: 'Guarded controls' });
-    expect(within(controls).getByText('menuitem named “Sign Out”')).toBeDefined();
+    expect(controls.textContent).toContain('menuitem named “Sign Out”');
     expect(screen.getByRole('table', { name: 'Security checks' })).toBeDefined();
     // Pacing labelled vendor guidance with its source; strategies as data.
     expect(screen.getByText(/At most 100 per week/)).toBeDefined();
@@ -65,7 +66,7 @@ describe('SitePackPage', () => {
     await expectNoA11yViolations(view.container, AXE);
   });
 
-  it('Revert asks first; Follow updates and Enabled send their settings', async () => {
+  it('Revert and turning off ask first; Follow updates and Enabled send their settings', async () => {
     const view = mount({
       'GET /site-packs/linkedin.com': packDetail(
         packView({ previous: { version: 2, source: 'bundled' } }),
@@ -76,7 +77,7 @@ describe('SitePackPage', () => {
     });
     await click(await screen.findByRole('button', { name: 'Revert to v2…' }));
     const dialog = await screen.findByRole('alertdialog');
-    expect(within(dialog).getByText('Revert LinkedIn to v2?')).toBeDefined();
+    expect(within(dialog).getByText(`Revert ${iso('LinkedIn')} to v2?`)).toBeDefined();
     await click(within(dialog).getByRole('button', { name: 'Revert' }));
     await waitFor(() => expect(view.requests.some((r) => r.path.endsWith('/revert'))).toBe(true));
     await click(screen.getByRole('button', { name: 'Off' }));
@@ -85,7 +86,15 @@ describe('SitePackPage', () => {
         follow: false,
       }),
     );
+    // Turning a pack off drops its guards for every template: it asks first (review S-M2).
     await click(screen.getByRole('switch'));
+    const off = await screen.findByRole('alertdialog');
+    expect(within(off).getByText(`Turn off ${iso('LinkedIn')}?`)).toBeDefined();
+    expect(
+      within(off).getByText(/1 template loses its sign-out, account and credential guards/),
+    ).toBeDefined();
+    expect(view.requests.some((r) => r.path.endsWith('/disable'))).toBe(false);
+    await click(within(off).getByRole('button', { name: 'Turn off' }));
     await waitFor(() => expect(view.requests.some((r) => r.path.endsWith('/disable'))).toBe(true));
   });
 
