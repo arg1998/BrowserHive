@@ -4,9 +4,9 @@ import { beforeEach, describe, expect, it } from 'bun:test';
 import { SitePackV1 } from '@browserhive/contracts/site-packs';
 import { FakeClock } from '../../../test/helpers/fake-clock.ts';
 import { FakePackPage } from '../../../test/helpers/fake-pack-page.ts';
+import { createCollectingLogger } from '../../../test/helpers/test-logger.ts';
 import { templateSiteRecord } from '../../../test/persistence/helpers.ts';
 import type { Session } from '../../domain/session/session.ts';
-import { createCollectingLogger } from '../../infra/logging/collecting-logger.ts';
 import { isAppError } from '../../kernel/errors/app-error.ts';
 import type { TemplateSiteRecord } from '../../ports/persistence/index.ts';
 import type {

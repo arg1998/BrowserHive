@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'bun:test';
 import { SitePackV1 } from '@browserhive/contracts/site-packs';
 import { FakeClock } from '../../../test/helpers/fake-clock.ts';
 import { FakePackPage, fakeFrame, settle } from '../../../test/helpers/fake-pack-page.ts';
-import { createCollectingLogger } from '../../infra/logging/collecting-logger.ts';
+import { createCollectingLogger } from '../../../test/helpers/test-logger.ts';
 import type { EffectivePack, SitePackLookup } from '../../ports/site-packs.ts';
 import { AgentNavigations } from './agent-navigations.ts';
 import type { DetectedChallenge } from './challenge-outcomes.ts';

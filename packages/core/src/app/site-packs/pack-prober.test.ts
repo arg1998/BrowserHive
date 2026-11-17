@@ -3,8 +3,8 @@
 import { beforeEach, describe, expect, it } from 'bun:test';
 import { SitePackV1 } from '@browserhive/contracts/site-packs';
 import { FakePackPage, fakeFrame } from '../../../test/helpers/fake-pack-page.ts';
+import { createCollectingLogger } from '../../../test/helpers/test-logger.ts';
 import { templateRecord, templateSiteRecord } from '../../../test/persistence/helpers.ts';
-import { createCollectingLogger } from '../../infra/logging/collecting-logger.ts';
 import type { EffectivePack, SitePackLookup } from '../../ports/site-packs.ts';
 import { GENERIC_PROBER, type SiteProbeContext } from '../templates/site-prober.ts';
 import { PackProber, packProberSelector } from './pack-prober.ts';
