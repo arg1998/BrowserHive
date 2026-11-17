@@ -4930,6 +4930,9 @@
                       },
                       "agents_paused": {
                         "type": "boolean"
+                      },
+                      "clipboard_needs_restart": {
+                        "type": "boolean"
                       }
                     },
                     "required": [
@@ -11779,6 +11782,9 @@
                 "type": "boolean"
               },
               "agents_paused": {
+                "type": "boolean"
+              },
+              "clipboard_needs_restart": {
                 "type": "boolean"
               }
             },

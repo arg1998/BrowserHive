@@ -244,7 +244,15 @@ const operationSubcommands = [
         describe: 'deny (pages cannot write your clipboard; sites can detect it) or allow.',
       },
     ],
-    flags: remoteJson,
+    flags: [
+      ...remoteJson,
+      {
+        name: 'restart',
+        kind: 'boolean',
+        describe:
+          "Also restart the template's browser when it is running, so pages already open are covered too. Its live sessions close.",
+      },
+    ],
   }),
   sub(['disable'], 'Disable a template: close its sessions and refuse new ones', {
     args: [nameArg],

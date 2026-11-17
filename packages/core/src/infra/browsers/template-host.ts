@@ -23,6 +23,7 @@ import type {
   TemplateViewOptions,
 } from '../../ports/template-host.ts';
 import type { TemplateState } from '../../ports/template-state.ts';
+import { clipboardNeedsRestart } from './clipboard-policy.ts';
 import { closeContextWithin, readBrowserPid } from './host-process.ts';
 import { observeHostResponses } from './host-responses.ts';
 import { SentinelKeeper } from './host-sentinel.ts';
@@ -248,6 +249,10 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
 
   sessionPageCount(sessionId: string): number {
     return this.dispatcher.pagesOf(sessionId).length;
+  }
+
+  clipboardNeedsRestart(): boolean {
+    return clipboardNeedsRestart(this.context);
   }
 
   parkedPages(): readonly ParkedPageInfo[] {

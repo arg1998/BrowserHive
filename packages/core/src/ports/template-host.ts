@@ -161,6 +161,11 @@ export interface TemplateHost extends BrowserHost {
    * the profile is scanned before the browser opens it.
    */
   readonly profileSecrets: boolean;
+  /**
+   * "Deny clipboard writes" changed while this browser ran (spec 13 §2.1, D18): pages open at the
+   * change may keep their old state, so only a restart gives the switch full effect. Absent = false.
+   */
+  clipboardNeedsRestart?(): boolean;
   /** Every cookie of the template's one jar (operator surfaces: learned names, unlisted sign-ins). */
   jar(): Promise<readonly Cookie[]>;
   /**

@@ -189,6 +189,8 @@ FLAGS — clipboard
                     and port, http://127.0.0.1:9876
   --token <bearer>  Operator bearer token for --url (bh_operator_…).
   --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
+  --restart         Also restart the template's browser when it is running, so pages already open
+                    are covered too. Its live sessions close.
 
 FLAGS — disable
   --json            Print machine-readable JSON instead of text.

@@ -44,5 +44,6 @@ export function hostViewOf(
     profileSecrets: host?.profileSecrets ?? lifecycle.profileSecrets,
     agentsPaused,
     ...drift,
+    ...(host?.clipboardNeedsRestart?.() === true && { clipboardNeedsRestart: true }),
   };
 }

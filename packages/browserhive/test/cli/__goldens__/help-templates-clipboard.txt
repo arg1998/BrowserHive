@@ -21,6 +21,8 @@ FLAGS
                                configured host and port, http://127.0.0.1:9876
   --token <bearer>             Operator bearer token for --url (bh_operator_…).
   --cookie <value>             Dashboard session cookie value for --url (browserhive_session).
+  --restart                    Also restart the template's browser when it is running, so pages
+                               already open are covered too. Its live sessions close.
   --host <address>             Bind address. A non-loopback host requires auth=token or
                                allowInsecureBind=true. default: 127.0.0.1
   --port <1-65535>             Bind port for MCP, REST, WebSocket and the dashboard. default: 9876

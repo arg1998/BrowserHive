@@ -1,14 +1,46 @@
-/** @module features/templates/detail/ClipboardPanel — the Clipboard panel of the Settings tab (spec 13 §2.1, §13 "The operator's desktop"; D18): "Deny clipboard writes", off by default, saved at once with If-Match and applied to a running browser without a restart */
-import type { Template } from '@browserhive/contracts/http';
+/** @module features/templates/detail/ClipboardPanel — the Clipboard panel of the Settings tab (spec 13 §2.1, §13 "The operator's desktop"; D18): "Deny clipboard writes", off by default, saved at once with If-Match; a running browser takes it at once, and when pages that were already open need a browser restart for full effect the panel says so and offers the restart */
+import type { HostView, Template } from '@browserhive/contracts/http';
 import { useId } from 'react';
 import { Callout } from '@/components/shared/Callout.tsx';
 import { Panel } from '@/components/shared/Section.tsx';
+import { Button } from '@/components/ui/button.tsx';
 import { Switch } from '@/components/ui/switch.tsx';
+import { useTemplateActions } from '../use-template-actions.ts';
 import { Field } from './settings-field.tsx';
 import { useSaveTemplate } from './use-save-template.ts';
 
+/** The restart callout: what pages already open still do, and the restart that ends it. */
+function RestartCallout({ template }: { readonly template: Template }) {
+  const actions = useTemplateActions(template);
+  return (
+    <Callout tone="warn" className="mt-1" title="Restart the browser for full effect">
+      <p>
+        {template.deny_clipboard_writes
+          ? 'Pages that were already open could still write your clipboard until the browser restarts. Restarting closes this template’s live sessions.'
+          : 'Pages that were already open keep refusing to copy until they reload, and frames from other sites in those tabs until the browser restarts.'}
+      </p>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="mt-2"
+        disabled={actions.busy}
+        onClick={() => void actions.host('restart')}
+      >
+        Restart browser
+      </Button>
+    </Callout>
+  );
+}
+
 /** Clipboard panel. */
-export function ClipboardPanel({ template }: { readonly template: Template }) {
+export function ClipboardPanel({
+  template,
+  host,
+}: {
+  readonly template: Template;
+  readonly host: HostView;
+}) {
   const { save, saving } = useSaveTemplate(template);
   const switchId = useId();
   const hintId = useId();
@@ -39,8 +71,10 @@ export function ClipboardPanel({ template }: { readonly template: Template }) {
           </div>
           <p id={hintId} className="text-sm text-muted-foreground">
             A page an agent clicks can put its own text on your clipboard, or change what you copy.
-            With this on, it can’t, and your own copy still works. Applies at once.
+            With this on, it can’t, and your own copy still works. Pages opened from now on are
+            covered at once; pages already open are fully covered after a browser restart.
           </p>
+          {host.clipboard_needs_restart === true ? <RestartCallout template={template} /> : null}
           {deny ? (
             <Callout tone="info" className="mt-1">
               Sites can tell, and their own Copy buttons stop working, also when you click them.
