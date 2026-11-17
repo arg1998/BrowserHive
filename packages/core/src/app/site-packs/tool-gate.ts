@@ -280,6 +280,7 @@ export class SiteToolGate {
                 url: sanitizeUrl(d.url),
                 tool: call.tool,
                 source: d.source === 'element' ? 'element' : 'request',
+                ...targetOf(call.args),
               });
         // A pass and a pending confirmation are recorded by the security intercepts (the row of
         // the settled confirmation); only a refusal acting as `block` is this path's row.
@@ -337,4 +338,13 @@ async function withTimeout<T>(clock: Clock, work: Promise<T>, ms: number): Promi
   } finally {
     controller.abort();
   }
+}
+
+/** The control the agent named (`selector`, else `source`/`target` of a drag), keying the one-time pass. */
+function targetOf(args: Readonly<Record<string, unknown>>): { target?: string } {
+  for (const key of ['selector', 'source', 'target']) {
+    const value = args[key];
+    if (typeof value === 'string' && value.length > 0) return { target: `${key}:${value}` };
+  }
+  return {};
 }

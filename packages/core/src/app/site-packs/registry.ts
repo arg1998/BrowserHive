@@ -23,6 +23,7 @@ import * as actions from './registry-actions.ts';
 import { withUsage } from './registry-build.ts';
 import { packNotFound } from './registry-errors.ts';
 import { prepareFirstUse } from './registry-first-use.ts';
+import { humanOnlyOf, importResponse } from './registry-helpers.ts';
 import { loadSnapshot } from './registry-load.ts';
 import {
   diffOf,
@@ -112,14 +113,7 @@ export class SitePackRegistry implements SitePackLookup {
 
   /** `sign_in.human_only` of the pack in force, through its identity provider's pack. */
   humanOnly(packId: string | null): boolean {
-    if (packId === null) return false;
-    const pack = this.effectiveById(packId)?.pack;
-    if (pack === undefined) return false;
-    if (pack.sign_in !== undefined) return pack.sign_in.human_only;
-    const provider = pack.identity_provider;
-    return provider === undefined
-      ? false
-      : this.effectiveFor(provider)?.pack.sign_in?.human_only === true;
+    return humanOnlyOf(this, packId);
   }
 
   /**
@@ -321,17 +315,7 @@ export class SitePackRegistry implements SitePackLookup {
   ): Promise<SitePackImportResponse> {
     const written = await this.#serial(write);
     await this.reload();
-    const view = this.get(written.packId);
-    return {
-      imported: [
-        {
-          pack_id: written.packId,
-          version: written.version,
-          state: view?.local?.state ?? 'not_approved',
-          sha256: written.sha256,
-        },
-      ],
-    };
+    return importResponse(written, this.get(written.packId));
   }
 
   // --- internals ------------------------------------------------------------------------------

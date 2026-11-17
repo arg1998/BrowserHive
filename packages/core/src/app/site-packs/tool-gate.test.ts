@@ -299,7 +299,13 @@ describe('element guards', () => {
     expect((await refusal(call('click', { selector: '#post' }))).code).toBe(
       'SITE_OPERATOR_PENDING',
     );
-    expect(w.approvals.at(-1)).toMatchObject({ guardId: 'post', source: 'element', method: null });
+    expect(w.approvals.at(-1)).toMatchObject({
+      guardId: 'post',
+      source: 'element',
+      method: null,
+      // The one-time pass covers the control the agent named (review C-L6).
+      target: 'selector:#post',
+    });
     w.override = 'allow';
     await call('click', { selector: '#post' });
     w.page.currentUrl = 'https://site-b.test/compose';
