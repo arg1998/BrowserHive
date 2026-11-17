@@ -1,14 +1,10 @@
 /** @module app/site-packs/security-intercepts-checks — site checks (spec 13 §9.5): the site's health becomes `challenged` (`template.challenged`), `stop` stops the site, and an agent's session gets a `takeover` `security_intercept` within the bounds; a resolution probes the site. */
 
 import type { SecurityInterceptOptions } from '@browserhive/contracts/http';
+import { challengeReason } from '../../domain/site-packs/challenges.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { ChallengeInput } from '../../ports/security-intercepts.ts';
 import { type InterceptContext, interceptTimeoutMs } from './security-intercepts-types.ts';
-
-/** The health reason of a session's site check (`template_probes.reason`). */
-export function challengeReason(challengeId: string): string {
-  return `challenge:${challengeId}`;
-}
 
 /** The site's health becomes `challenged`; `stop` also sets the site's `stopped_at`. Never throws. */
 export async function markChallenged(ctx: InterceptContext, input: ChallengeInput): Promise<void> {
@@ -28,7 +24,7 @@ export async function markChallenged(ctx: InterceptContext, input: ChallengeInpu
       input.site,
       {
         outcome: 'challenged',
-        reason: challengeReason(input.challenge.id),
+        reason: challengeReason(input.challenge.kind),
         finalUrl: input.pageUrl,
       },
       'attention',

@@ -1,5 +1,7 @@
 /** @module test/helpers/https-sites-guards — the guard pages of the HTTPS fixture sites (spec 13 §14, T3a): a LinkedIn-shaped feed whose controls sign out by form `POST`, `fetch` and `sendBeacon`, a write endpoint, the logout endpoint (any method) and an open redirect into it. */
 
+import { packRoute } from './https-sites-packs.ts';
+
 const html = (title: string, body: string): Response =>
   new Response(
     `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title></head><body>${body}</body></html>`,
@@ -27,6 +29,7 @@ export function guardRoute(site: string, path: string): Response | null {
       // A same-site redirect into the logout (spec 13 §3.8: the route never sees the hop).
       return new Response(null, { status: 302, headers: { location: '/m/logout' } });
     default:
-      return null;
+      // The page enforcement's pages (WP-E2): element guards, challenges, probes.
+      return packRoute(path);
   }
 }

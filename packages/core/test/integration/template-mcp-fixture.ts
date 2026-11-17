@@ -35,6 +35,10 @@ export interface TemplateMcp {
 export interface TemplateMcpOptions {
   readonly unseal?: Partial<TemplateUnsealRecord>;
   readonly sites?: readonly Partial<TemplateSiteRecord>[];
+  /** Map the challenge providers' hosts to the fixture (site pack challenges). */
+  readonly providers?: boolean;
+  /** Site pack enforcement on the tool path. */
+  readonly siteGuards?: ToolHarnessOptions['siteGuards'];
   /** Passed to the tool harness (the security intercepts' tool hold). */
   readonly siteHolds?: ToolHarnessOptions['siteHolds'];
   readonly transport?: ToolHarnessOptions['transport'];
@@ -45,7 +49,7 @@ export async function templateMcp(
   stealth: StealthLeg,
   options: TemplateMcpOptions = {},
 ): Promise<TemplateMcp> {
-  const sites = startHttpsSites();
+  const sites = startHttpsSites({ providers: options.providers === true });
   const clock = createSystemClock();
   const real = new PlaywrightBrowserDriver({
     logger: createCollectingLogger(),
@@ -65,6 +69,7 @@ export async function templateMcp(
     ...(options.siteHolds !== undefined && { siteHolds: options.siteHolds }),
     ...(options.transport !== undefined && { transport: options.transport }),
     selfOrigins: [SELF_ORIGIN],
+    ...(options.siteGuards !== undefined && { siteGuards: options.siteGuards }),
     templateRuntime: (sessions, dataDir) => {
       const supervisor = new TemplateHostSupervisor({
         launcher: real,

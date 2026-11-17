@@ -17,6 +17,7 @@ import type {
   PageActions,
   RuntimeFacts,
   SessionService,
+  SiteToolGate,
   TemplateService,
   VaultRedaction,
   VaultService,
@@ -45,6 +46,8 @@ export interface ToolsInput {
   /** The security intercepts holding template sessions (spec 13 §9.3); absent when site packs are off. */
   readonly siteHolds?: { holdOf(sessionId: string): SiteHold | null };
   readonly pageActions: PageActions;
+  /** Site pack enforcement on the tool path (spec 13 §9.3, §9.5); absent under `templates=false`. */
+  readonly siteGuards?: SiteToolGate;
   readonly redactor: Redactor;
   readonly bus: EventBus<DomainEvents>;
   readonly clock: Clock;
@@ -92,6 +95,7 @@ export function buildTools(input: ToolsInput): {
       ...(input.templatePause !== undefined && { templatePause: input.templatePause }),
       ...(input.siteHolds !== undefined && { siteHolds: input.siteHolds }),
       pageActions: input.pageActions,
+      ...(input.siteGuards !== undefined && { siteGuards: input.siteGuards }),
       fs: createNodeToolFs(),
       redaction: {
         scrubText: (sessionId, text) =>

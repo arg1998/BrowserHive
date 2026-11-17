@@ -210,6 +210,8 @@ export type DomainEvents = {
     readonly template_id: string;
     readonly reason: 'checkpoint' | TemplateVersionReason;
   };
+  /** A challenge seen on an agent's page (internal: `browserhive.site_pack.challenges{kind,action}`). */
+  readonly 'site_pack.challenge': SitePackChallengeEvent;
   // site packs (spec 13 §11.3; internal, not on the feed)
   /** One `site_guard_hits` row (the recorder writes it; `browserhive.site_pack.guard_hits` counts it). */
   readonly 'site_pack.guard_hit': SiteGuardHitEvent;
@@ -238,6 +240,16 @@ export interface SitePackUpdatesFact {
     /** Set for a local file: changed since approval, or never approved. */
     readonly local: 'changed' | 'not_approved' | null;
   }[];
+}
+
+/** A detected challenge (spec 13 §9.5, §11.7); internal, never on the feed. */
+export interface SitePackChallengeEvent {
+  readonly type: 'site_pack.challenge';
+  readonly template_id: string;
+  readonly session_id: string;
+  readonly site: string;
+  readonly kind: 'checkpoint' | 'captcha' | 'reauth' | 'locked' | 'rejected';
+  readonly action: 'attention' | 'stop' | 'notify';
 }
 
 /** A template's names, carried by internal event keys for notification titles. */

@@ -22,6 +22,7 @@ import {
   HostGeoSeedResolver,
   PassThroughProxyResolver,
   type PlaywrightBrowserDriver,
+  type ProberSelector,
   reconcileTemplateState,
   resolveTemplateKeys,
   type SessionService,
@@ -69,6 +70,8 @@ export interface TemplatesInput {
   readonly keyFromFlag?: boolean;
   /** Site packs (T3a): approval on first use, the sites' packs, providers and `human_only`. */
   readonly sitePacks?: SitePackRegistry;
+  /** The prober of each site over the supervisor (T3a: the pack prober); default generic. */
+  readonly probers?: (supervisor: TemplateHostSupervisor) => ProberSelector;
 }
 
 /** How often template hosts are checked for idleness, age and memory (spec 13 §3.2). */
@@ -368,6 +371,7 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
           displayAvailable: () => !displayMissing(input.host.platform, input.host.env),
           changed,
           ...packs,
+          ...(input.probers !== undefined && { probers: input.probers(supervisor) }),
         });
   if (health !== null) restored = (id) => health.scheduler.restored(id);
   // Idle stop, age recycle, memory and checkpoints of template hosts (spec 13 §3.2, §3.9).

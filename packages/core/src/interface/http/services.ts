@@ -23,6 +23,7 @@ import type { PublicUrlChecker } from '../../app/notifications/public-url.ts';
 import type { SessionDirLayout } from '../../app/sessions/profile-dir.ts';
 import type { SessionService } from '../../app/sessions/session-service.ts';
 import type { SitePackRegistry } from '../../app/site-packs/registry.ts';
+import type { TemplateSiteStops } from '../../app/site-packs/site-stops.ts';
 import type { TemplateHealthFacade } from '../../app/templates/health-facade.ts';
 import type { TemplateActions } from '../../app/templates/template-actions.ts';
 import type { TemplateEditService } from '../../app/templates/template-edit.ts';
@@ -326,6 +327,8 @@ export interface HttpServices {
   readonly templateHealth: TemplateHealthPort;
   /** Site packs (spec 13 §9, §11.1, T3a). */
   readonly sitePacks: SitePacksPort;
+  /** **Clear stop** (spec 13 §9.5, T3a). */
+  readonly templateSiteStops: Pick<TemplateSiteStops, 'clear'>;
 }
 
 /** The site-pack routes' service (a structural slice of `SitePackRegistry`). */

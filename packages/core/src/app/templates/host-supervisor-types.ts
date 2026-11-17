@@ -84,6 +84,8 @@ export interface MaintenanceLaunch {
   readonly principal: SessionPrincipal;
   /** A recording or re-login window: agent windows are minimized while it is open (§3.3). */
   readonly recording?: boolean;
+  /** A page BrowserHive works in by itself (a probe): minimized on a headed host (§8.1). */
+  readonly background?: boolean;
   readonly signal?: AbortSignal;
   /** The token of the operation holding the template, if this launch is that operation's. */
   readonly holdToken?: symbol;

@@ -391,6 +391,20 @@ const SOURCES: readonly Source[] = [
     },
   },
   {
+    name: 'site pack challenges (site_pack.challenge)',
+    drives: ['browserhive.site_pack.challenges'],
+    async run(w) {
+      publish(w, 'site_pack.challenge', {
+        type: 'site_pack.challenge',
+        template_id: 'tp-aaaaaaaaaa',
+        session_id: 's-guard',
+        site: 'site-a.test',
+        kind: 'captcha',
+        action: 'attention',
+      });
+    },
+  },
+  {
     name: 'site-pack guard hits (site_pack.guard_hit)',
     drives: ['browserhive.site_pack.guard_hits'],
     async run(w) {
@@ -810,6 +824,9 @@ describe('documented == recorded', () => {
     ]);
     expect(points('browserhive.template.relogins')).toEqual([
       { value: 1, attrs: { method: 'window', outcome: 'signed_in' } },
+    ]);
+    expect(points('browserhive.site_pack.challenges')).toEqual([
+      { value: 1, attrs: { kind: 'captcha', action: 'attention' } },
     ]);
     expect(points('browserhive.site_pack.guard_hits')).toEqual([
       { value: 1, attrs: { action: 'block', kind: 'logout' } },

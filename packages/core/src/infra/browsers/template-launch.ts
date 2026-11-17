@@ -8,7 +8,11 @@ import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { LaunchWarning } from '../../ports/browser-driver.ts';
 import type { Clock } from '../../ports/clock.ts';
 import type { Logger } from '../../ports/logger.ts';
-import type { TemplateHost, TemplateHostSpec } from '../../ports/template-host.ts';
+import type {
+  TemplateHost,
+  TemplateHostSpec,
+  TemplatePageWatcher,
+} from '../../ports/template-host.ts';
 import { profileHasSecrets } from '../persistence/profile-secrets.ts';
 import { type BlocklistRouteDeps, blocklistHandler } from './blocklist-route.ts';
 import { launchKwargsForChannel } from './channel.ts';
@@ -55,6 +59,8 @@ export interface TemplateLaunchContext {
   readonly logger: Logger;
   /** The configured blocklist; joins the host's chain as handler 2 (spec 13 §3.8). */
   readonly blocklist: Omit<BlocklistRouteDeps, 'sessionId' | 'clock' | 'logger'> | null;
+  /** The watcher of the host's attributed pages (spec 13 §9.5), read per page; absent in tests. */
+  readonly pageWatcher?: () => TemplatePageWatcher | null;
   /** The site-pack request guard of a template's host: handler 3 (spec 13 §3.8, §9.3). */
   readonly requestGuard?: TemplateRequestGuard | null;
 }
@@ -235,6 +241,7 @@ function buildHost(
     window: spec.window,
     profileSecrets: facts.profileSecrets,
     userDataDir: spec.userDataDir,
+    ...(ctx.pageWatcher !== undefined && { pageWatcher: ctx.pageWatcher }),
     clock: ctx.clock,
     logger: ctx.logger,
   });

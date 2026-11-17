@@ -27,6 +27,7 @@ import {
   createPlaywrightPageActions,
   InProcessEventBus,
   reloginActionExecutor,
+  selectGenericProber,
 } from '@browserhive/core/server';
 import { notificationCounters } from '../adapters/metrics.ts';
 import { asyncTick, createTimers } from '../adapters/timers.ts';
@@ -36,6 +37,7 @@ import { hostFactsOf } from '../host.ts';
 import { createNotificationSnapshots } from '../notification-snapshots.ts';
 import { buildSitePackEnforcement } from '../site-pack-enforcement.ts';
 import { buildSitePacks } from '../site-packs.ts';
+import { buildSitePackPages } from '../site-packs-pages.ts';
 import type { PhaseHandle } from '../unwind.ts';
 import { buildOperators } from './domain-operators.ts';
 import { buildOps, reconcile } from './domain-ops.ts';
@@ -268,6 +270,20 @@ async function buildDomain(
     logger,
     bus,
   });
+  // `sitePacks=false` (or `templates=false`) turns the whole layer off (spec 13 §9.6).
+  const sitePacksOn = config.templates && config.sitePacks;
+  // Site pack enforcement on pages and tools (spec 13 §9.3, §9.5); the registry and the intercepts
+  // attach once built.
+  const sitePackPages = buildSitePackPages({
+    repos,
+    sessions,
+    transport,
+    bus,
+    clock,
+    ids,
+    logger,
+  });
+  undo.push(sitePackPages.stop);
   const tpl = await buildTemplates({
     config,
     bus,
@@ -284,6 +300,9 @@ async function buildDomain(
     driver: sessionParts.driver,
     repeat: timers.every,
     vault: operators.vault,
+    ...(sitePacksOn && {
+      probers: (supervisor) => sitePackPages.probers(supervisor, selectGenericProber),
+    }),
   });
   const templates = tpl.service;
   // The notification button of a sign-out only queues the re-login (spec 13 §8.4, §8.6).
@@ -307,7 +326,11 @@ async function buildDomain(
     clock,
     logger,
   });
-  if (enforcement !== null) undo.push(enforcement.stop);
+  if (enforcement !== null) {
+    undo.push(enforcement.stop);
+    sitePackPages.attach({ enforcement, lookup: sitePacks, health: tpl.health?.health ?? null });
+    sessionParts.driver.attachTemplatePageWatcher(sitePackPages.pageWatcher);
+  }
   const tools = buildTools({
     config,
     transport,
@@ -324,6 +347,7 @@ async function buildDomain(
     ...(tpl.supervisor !== null && { templatePause: tpl.supervisor.pause }),
     ...(enforcement !== null && { siteHolds: enforcement.intercepts }),
     pageActions,
+    ...(enforcement !== null && { siteGuards: sitePackPages.gate }),
     redactor,
     bus,
     clock,
@@ -372,6 +396,7 @@ async function buildDomain(
     sitePacks,
     templateRecording: tpl.recording,
     templateParts: tpl,
+    sitePackPages,
     instanceId,
     preferences: ops.preferences,
     recorder: ops.recorder,

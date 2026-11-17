@@ -35,10 +35,18 @@ export { PreferenceService } from '../app/preferences/preference-service.ts';
 export { LeaseSweeper } from '../app/sessions/lease-sweeper.ts';
 export { sessionDirLayout } from '../app/sessions/profile-dir.ts';
 export { SessionService } from '../app/sessions/session-service.ts';
+export { AgentNavigations } from '../app/site-packs/agent-navigations.ts';
+export { ChallengeOutcomes } from '../app/site-packs/challenge-outcomes.ts';
+export { ChallengeWatch } from '../app/site-packs/challenge-watch.ts';
+export { PackProber, packProberSelector } from '../app/site-packs/pack-prober.ts';
+export { maintenanceProbePages } from '../app/site-packs/probe-pages.ts';
 export { SitePackRegistry } from '../app/site-packs/registry.ts';
 export type { PendingUpdate, SitePackRegistryDeps } from '../app/site-packs/registry-types.ts';
 // Site-pack enforcement (spec 13 §9.3, §9.5; PR T3a, WP-E1).
 export { SecurityInterceptService } from '../app/site-packs/security-intercepts.ts';
+export { TemplateSiteStops } from '../app/site-packs/site-stops.ts';
+export { SiteToolGate } from '../app/site-packs/tool-gate.ts';
+export { ToolGuardHits } from '../app/site-packs/tool-guard-hits.ts';
 export { TemplateWritePolicies } from '../app/site-packs/write-policies.ts';
 export { unavailableHealthFacade } from '../app/templates/health-facade.ts';
 export {
@@ -56,6 +64,7 @@ export type {
   HostSupervisorDeps,
 } from '../app/templates/host-supervisor-types.ts';
 export { reloginActionExecutor } from '../app/templates/relogin-executor.ts';
+export { type ProberSelector, selectGenericProber } from '../app/templates/site-prober.ts';
 export { reconcileTemplateState } from '../app/templates/state-reconcile.ts';
 export { TemplateActions } from '../app/templates/template-actions.ts';
 export { TemplateEditService } from '../app/templates/template-edit.ts';
@@ -152,6 +161,7 @@ export { FileTemplateStateStore } from '../infra/fs/template-state-store.ts';
 export { sweepStaleTemplateBrowsers } from '../infra/host/stale-template-browsers.ts';
 export { profileHasSecrets } from '../infra/persistence/profile-secrets.ts';
 export { BundledIndex, BundledPackSource } from '../infra/site-packs/bundled-source.ts';
+export { documentGuardResolver } from '../infra/site-packs/document-guard.ts';
 export { SiteGuardHitsWriter } from '../infra/site-packs/guard-hits-writer.ts';
 export { GuardRuleCatalog, PackGuardRuleSource } from '../infra/site-packs/guard-rules.ts';
 export { LocalPackSource } from '../infra/site-packs/local-source.ts';

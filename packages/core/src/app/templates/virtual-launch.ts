@@ -71,6 +71,8 @@ export function virtualLauncher(input: {
   readonly caps: PageCaps | null;
   /** A recording or re-login window (spec 13 §3.3). */
   readonly recording?: boolean;
+  /** A maintenance page BrowserHive works in by itself (a probe): minimized (spec 13 §8.1). */
+  readonly background?: boolean;
   /** A site-opened page over the session's cap was closed. */
   readonly onPageLimit?: (sessionId: string) => void;
   /** Runs once the browser is up, within the launch budget (the pre-launch check, spec 13 §8.2). */
@@ -95,6 +97,7 @@ export function virtualLauncher(input: {
           pageOptions,
           ...(input.session.mode === 'maintenance' && { maintenance: true }),
           ...(input.recording === true && { recording: true }),
+          ...(input.background === true && { background: true }),
           signal,
           // Maintenance sessions are bounded by nothing but their own work (spec 13 §6.3).
           ...(caps !== null && {

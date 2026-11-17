@@ -171,3 +171,26 @@ describe('browserhive.template.relogins', () => {
     expect(counted(relogin('signed_in', { requested_at: 1_024 }))).toBeNull();
   });
 });
+
+describe('browserhive.site_pack.challenges', () => {
+  it('counts one per detected challenge with its kind and action', () => {
+    const w = world();
+    const challenge = (kind: string, action: string) =>
+      ({
+        type: 'site_pack.challenge',
+        template_id: 'tp-aaaaaaaaaa',
+        session_id: 's-1',
+        site: 'site-a.test',
+        kind,
+        action,
+      }) as DomainEvents['site_pack.challenge'];
+    w.emit('site_pack.challenge', challenge('captcha', 'attention'));
+    w.emit('site_pack.challenge', challenge('checkpoint', 'stop'));
+    w.emit('site_pack.challenge', challenge('captcha', 'notify'));
+    expect(w.of('sitePackChallenges')).toEqual([
+      { kind: 'captcha', action: 'attention' },
+      { kind: 'checkpoint', action: 'stop' },
+      { kind: 'captcha', action: 'notify' },
+    ]);
+  });
+});

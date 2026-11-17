@@ -14,6 +14,7 @@ import type { TemplateHostOperations } from './host-operations.ts';
 import type { TemplateHostSupervisor } from './host-supervisor.ts';
 import { ReloginLinks } from './relogin-link.ts';
 import type { ReloginVault } from './relogin-vault.ts';
+import type { ProberSelector } from './site-prober.ts';
 import { TemplateHealthService } from './template-health.ts';
 import type { TemplatePacks } from './template-packs.ts';
 import { PrelaunchCheck } from './template-prelaunch.ts';
@@ -47,6 +48,8 @@ export interface TemplateHealthWiring {
   readonly changed: (templateId: string) => void;
   /** Site packs (T3a): views, identity providers, `human_only`. */
   readonly packs?: TemplatePacks;
+  /** The prober of each site (T3a: the pack prober for sites with a pack); default generic. */
+  readonly probers?: ProberSelector;
 }
 
 /** What the composition keeps. */
@@ -86,6 +89,7 @@ export function wireTemplateHealth(input: TemplateHealthWiring): TemplateHealthP
     bus,
     changed: input.changed,
     machine: input.machine,
+    ...(input.probers !== undefined && { probers: input.probers }),
   });
   const scheduler = new HealthScheduler({
     repos,

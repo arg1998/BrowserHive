@@ -7,6 +7,7 @@ import {
   SelectorAck,
   SINCE,
   TabId,
+  TEMPLATE_SITE_ERRORS,
   Timeout,
 } from './shared.ts';
 import { defineTool } from './types.ts';
@@ -20,7 +21,14 @@ export const ScrollMode = z.enum(['by', 'to', 'selector']);
 /** `scroll` behaviour. */
 export const ScrollBehavior = z.enum(['auto', 'smooth']);
 
-const INTERACTION_ERRORS = [...SESSION_ERRORS, 'TAB_NOT_FOUND', 'ELEMENT_NOT_ACTIONABLE'] as const;
+const INTERACTION_ERRORS = [
+  ...SESSION_ERRORS,
+  'TAB_NOT_FOUND',
+  'ELEMENT_NOT_ACTIONABLE',
+  ...TEMPLATE_SITE_ERRORS,
+] as const;
+/** The tools checked against a site pack's element guards (spec 13 §9.3) also answer `SITE_ACTION_BLOCKED`. */
+const ELEMENT_ERRORS = [...INTERACTION_ERRORS, 'SITE_ACTION_BLOCKED'] as const;
 
 /** `click`: `page.click(selector, { button, clickCount, modifiers?, position?, timeout })`. */
 export const CLICK = defineTool({
@@ -41,7 +49,7 @@ export const CLICK = defineTool({
   annotations: annotations(false, false, false, true),
   pack: 'interaction',
   capability: 'mutate',
-  errors: [...INTERACTION_ERRORS],
+  errors: [...ELEMENT_ERRORS],
   since: SINCE,
 });
 
@@ -62,7 +70,7 @@ export const TYPE_TEXT = defineTool({
   annotations: annotations(false, false, false, true),
   pack: 'interaction',
   capability: 'mutate',
-  errors: [...INTERACTION_ERRORS],
+  errors: [...ELEMENT_ERRORS],
   since: SINCE,
 });
 
@@ -82,7 +90,7 @@ export const FILL = defineTool({
   annotations: annotations(false, false, true, true),
   pack: 'interaction',
   capability: 'mutate',
-  errors: [...INTERACTION_ERRORS],
+  errors: [...ELEMENT_ERRORS],
   since: SINCE,
 });
 
@@ -102,7 +110,7 @@ export const PRESS_KEY = defineTool({
   annotations: annotations(false, false, false, true),
   pack: 'interaction',
   capability: 'mutate',
-  errors: [...INTERACTION_ERRORS],
+  errors: [...ELEMENT_ERRORS],
   since: SINCE,
 });
 
@@ -116,7 +124,7 @@ export const HOVER = defineTool({
   annotations: annotations(false, false, true, true),
   pack: 'interaction',
   capability: 'mutate',
-  errors: [...INTERACTION_ERRORS],
+  errors: [...ELEMENT_ERRORS],
   since: SINCE,
 });
 
@@ -136,7 +144,7 @@ export const SELECT_OPTION = defineTool({
   annotations: annotations(false, false, true, true),
   pack: 'interaction',
   capability: 'mutate',
-  errors: [...INTERACTION_ERRORS],
+  errors: [...ELEMENT_ERRORS],
   since: SINCE,
 });
 
@@ -198,6 +206,6 @@ export const DRAG_AND_DROP = defineTool({
   annotations: annotations(false, false, false, true),
   pack: 'interaction',
   capability: 'mutate',
-  errors: [...INTERACTION_ERRORS],
+  errors: [...ELEMENT_ERRORS],
   since: SINCE,
 });

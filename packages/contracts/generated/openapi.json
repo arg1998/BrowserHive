@@ -51499,6 +51499,118 @@
           }
         }
       }
+    },
+    "/api/v1/templates/{template_id}/sites/{site_id}/clear-stop": {
+      "post": {
+        "operationId": "clearTemplateSiteStop",
+        "tags": [
+          "templates"
+        ],
+        "summary": "Clear stop: agents may navigate to and act on a site a terminal security check stopped (a no-op when the site is not stopped).",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-browserhive-scope": "templates:write",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^tp-[A-Za-z0-9_-]{10}$"
+            },
+            "required": true,
+            "name": "template_id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 253,
+              "pattern": "^[a-z0-9.-]+$"
+            },
+            "required": true,
+            "name": "site_id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Clear stop: agents may navigate to and act on a site a terminal security check stopped (a no-op when the site is not stopped).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateSiteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, PASSWORD_CHANGE_REQUIRED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "TEMPLATE_NOT_FOUND",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "webhooks": {}

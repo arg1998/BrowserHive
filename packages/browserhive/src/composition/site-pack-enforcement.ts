@@ -42,6 +42,8 @@ export interface SitePackEnforcement {
   /** The `site_guard_hits` writer (the tool layer writes its element and navigation hits with it). */
   readonly hits: SiteGuardHitsWriter;
   readonly catalog: GuardRuleCatalog;
+  /** The template sites' write-policy overrides (the tool layer's element and navigation guards). */
+  readonly policies: TemplateWritePolicies;
   readonly stop: () => void;
 }
 
@@ -106,6 +108,7 @@ export function buildSitePackEnforcement(
     intercepts,
     hits,
     catalog,
+    policies,
     stop: () => {
       input.driver.setTemplateRequestGuard(null);
       intercepts.stop();

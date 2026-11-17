@@ -224,7 +224,7 @@ Summaries come from `packages/contracts/generated/openapi.json`.
 
 | Method | Path | operationId | Scope | Auth | Summary |
 |---|---|---|---|---|---|
-| POST | `/api/v1/templates/{template_id}/sites/{site_id}/clear-stop` | `clearTemplateSiteStop` | `templates:write` | cookie, bearer | — |
+| POST | `/api/v1/templates/{template_id}/sites/{site_id}/clear-stop` | `clearTemplateSiteStop` | `templates:write` | cookie, bearer | Clear stop: agents may navigate to and act on a site a terminal security check stopped (a no-op when the site is not stopped). |
 | GET | `/api/v1/templates/operations/{operation_id}` | `getTemplateOperation` | `templates:read` | cookie, bearer | A restore or seed operation: running, done (with the version written) or failed. |
 | GET | `/api/v1/templates` | `listTemplates` | `templates:read` | cookie, bearer | Every session template with its sites, browser state, live sessions and cap; facets by status, browser state and site health. |
 | POST | `/api/v1/templates` | `createTemplate` | `templates:write` | cookie, bearer | Create a template in `recording` with its sites, pinned identity and access rule. Under auth=token `policy.authorized_principals` is required (`[]` = every agent). Each site approves its site pack on first use (a site's pack_sha256 names the version reviewed; another one is 409). |
