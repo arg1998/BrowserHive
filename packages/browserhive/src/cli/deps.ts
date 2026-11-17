@@ -5,6 +5,7 @@ import type { StartupNotificationChannel } from '@browserhive/contracts/notifica
 import type { ConfigFs, ResolvedConfigBundle } from '@browserhive/core/config';
 import type { FileSystem } from '@browserhive/core/ports/file-system';
 import type { HostEnvironment } from '@browserhive/core/ports/host-environment';
+import type { SitePackStateRecord } from '@browserhive/core/ports/persistence/site-packs';
 import type { ProcessRunner } from '@browserhive/core/ports/process-runner';
 import type { UrlProbeResult } from '@browserhive/core/runtime';
 import type {
@@ -170,12 +171,13 @@ export interface CliStorage {
   /** Every template's row facts (spec 13 §11.9); empty for a database from before schema v9. */
   templateRows(): Promise<readonly TemplateRowFacts[]>;
   /**
-   * The SHA-256 each pack's local file was approved at (`site_pack_state.local_approved_sha256`,
-   * spec 13 §10.5); empty for a database from before schema v10.
+   * Every pack's approval state (`site_pack_state`, spec 13 §9.6, §10.5) and the packs whose row
+   * cannot be read (review #83 C-M5); empty for a database from before schema v10.
    */
-  sitePackLocalApprovals(): Promise<
-    readonly { readonly packId: string; readonly sha256: string | null }[]
-  >;
+  sitePackStates(): Promise<{
+    readonly rows: readonly SitePackStateRecord[];
+    readonly unreadable: readonly string[];
+  }>;
   /**
    * Records a re-encrypted version file in its `template_versions` row (`templates rekey`).
    *
