@@ -121,9 +121,15 @@ export function emptySitePackState(packId: string, now: number): SitePackStateRe
   };
 }
 
+/** How a list read reports a row it cannot map (a corrupt cell); the row is left out. */
+export interface UnreadableRowOptions {
+  readonly onUnreadable?: (packId: string, error: unknown) => void;
+}
+
 /** Repository over `site_pack_state`. */
 export interface SitePackStateRepository {
-  list(): Promise<readonly SitePackStateRecord[]>;
+  /** Every row; an unreadable one is reported to `onUnreadable` and left out (else it throws). */
+  list(options?: UnreadableRowOptions): Promise<readonly SitePackStateRecord[]>;
   get(packId: string): Promise<SitePackStateRecord | null>;
   /** Inserts or replaces the whole row. */
   put(record: SitePackStateRecord): Promise<void>;
@@ -171,9 +177,9 @@ export interface SitePackChangeQuery extends PageQuery {
 export interface SitePackChangeRepository {
   /** Inserts and returns the stored row with its `seq`. */
   insert(record: SitePackChangeRecord): Promise<SitePackChangeRecord>;
-  /** Sets the decision of one row. */
+  /** Sets the decision of one row, by its `event_id` (`seq` may be reused after pruning). */
   decide(
-    seq: number,
+    eventId: string,
     decision: SitePackDecisionValue,
     by: string | null,
     at: number,
@@ -184,8 +190,8 @@ export interface SitePackChangeRepository {
     sha256: string,
     source: SitePackSourceId,
   ): Promise<SitePackChangeRecord | null>;
-  /** Rows whose decision is `available` or `downloaded`, oldest first. */
-  listPending(): Promise<readonly SitePackChangeRecord[]>;
+  /** Rows whose decision is `available` or `downloaded`, oldest first (unreadable rows as in `list`). */
+  listPending(options?: UnreadableRowOptions): Promise<readonly SitePackChangeRecord[]>;
   /** Newest first, cursor-paged. */
   list(query: SitePackChangeQuery): Promise<Page<SitePackChangeRecord>>;
   /**
