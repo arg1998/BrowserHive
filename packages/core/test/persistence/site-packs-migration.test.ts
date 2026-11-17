@@ -98,7 +98,7 @@ function indexNames(raw: Database): string[] {
 
 describe('migration 0010-site-packs', () => {
   it('pins v1 DDL byte-for-byte (frozen literals, spec 13 §9.9)', async () => {
-    const golden = await Bun.file(join(FIXTURES, 'ddl-v1.sql')).text();
+    const golden = await Bun.file(join(FIXTURES, 'ddl', '0001-initial.sql')).text();
     expect(MIGRATIONS[0]?.sql).toBe(golden);
   });
 
