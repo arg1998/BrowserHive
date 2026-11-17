@@ -125,7 +125,7 @@ function UsePack({
   return (
     <div className="flex flex-col items-start gap-2">
       <p className="text-muted-foreground">
-        None yet. BrowserHive has a {pack.title} pack (v{choice.version}, {choice.provenance}).
+        None yet. BrowserHive has a {pack.title} pack (v{choice.version}, {choice.provenanceShort}).
       </p>
       <Button
         type="button"

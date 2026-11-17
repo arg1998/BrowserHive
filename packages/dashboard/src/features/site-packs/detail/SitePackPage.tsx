@@ -6,6 +6,7 @@ import { ErrorState } from '@/components/shared/ErrorState.tsx';
 import { PageHeader } from '@/components/shared/PageHeader.tsx';
 import { Section } from '@/components/shared/Section.tsx';
 import { SkeletonCard } from '@/components/shared/Skeletons.tsx';
+import { useTemplatesOverview } from '@/features/templates/api.ts';
 import { toAppError } from '@/lib/api/errors.ts';
 import { useSitePack } from '../api.ts';
 import { HistoryTab } from '../HistoryTabs.tsx';
@@ -28,6 +29,9 @@ export function SitePackPage() {
   const params = useParams({ strict: false }) as { readonly id?: string };
   const id = params.id ?? '';
   const query = useSitePack(id);
+  const templates = useTemplatesOverview();
+  const nameOf = (templateId: string) =>
+    templates.data?.data.find((t) => t.template_id === templateId)?.display_name ?? templateId;
   useSitePacksLive();
   usePageCrumb(query.data?.view.title ?? null);
   if (query.isPending) return <SkeletonCard />;
@@ -50,6 +54,8 @@ export function SitePackPage() {
     <div className="flex min-w-0 flex-col gap-5">
       <PageHeader
         title={view.title}
+        learnMore="Everything this pack tells BrowserHive about the site, as plain text. Addresses are shown as text, never as links."
+        learnMoreDocs="sitePacks"
         badge={!view.enabled ? <Chip tone="muted">Turned off</Chip> : undefined}
         description={
           <span className="font-mono text-sm [overflow-wrap:anywhere]">
@@ -67,9 +73,9 @@ export function SitePackPage() {
                 <Link
                   to="/templates/$id"
                   params={{ id: t }}
-                  className="font-mono text-link underline decoration-link/40 underline-offset-2 hover:decoration-link"
+                  className="text-link underline decoration-link/40 underline-offset-2 hover:decoration-link"
                 >
-                  {t}
+                  {nameOf(t)}
                 </Link>
               </span>
             ))}

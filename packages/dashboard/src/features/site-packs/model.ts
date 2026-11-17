@@ -44,6 +44,22 @@ export function provenanceText(
   }
 }
 
+/** A long file path cut to its last two segments (`…/local/linkedin.com.json`); the full path goes in a tooltip. */
+export function shortPath(path: string): string {
+  const parts = path.split('/').filter((p) => p !== '');
+  return parts.length <= 3 ? path : `…/${parts.slice(-2).join('/')}`;
+}
+
+/** `provenanceText` with a local file's path shortened (tables and cards). */
+export function shortProvenance(
+  provenance: SitePackProvenance | null,
+  source: SitePackSourceKind,
+): string {
+  return provenance?.kind === 'local'
+    ? `Local file ${shortPath(provenance.path)}`
+    : provenanceText(provenance, source);
+}
+
 /** A local file's state (spec 13 §10.5) with its tone. */
 export const LOCAL_STATE: {
   readonly [K in NonNullable<SitePackView['local']>['state']]: {
@@ -134,6 +150,8 @@ export interface PackChoice {
   readonly sha256: string;
   readonly source: SitePackSourceKind;
   readonly provenance: string;
+  /** The provenance with a local path shortened (cards). */
+  readonly provenanceShort: string;
   /** `true`: another template already approved it; adding the site keeps that version. */
   readonly approved: boolean;
 }
@@ -146,6 +164,7 @@ export function packChoice(view: SitePackView): PackChoice | null {
       sha256: view.approved.sha256,
       source: view.approved.source,
       provenance: provenanceText(view.approved.provenance, view.approved.source),
+      provenanceShort: shortProvenance(view.approved.provenance, view.approved.source),
       approved: true,
     };
   }
@@ -155,6 +174,7 @@ export function packChoice(view: SitePackView): PackChoice | null {
       sha256: view.offer.sha256,
       source: view.offer.source,
       provenance: provenanceText(view.offer.provenance, view.offer.source),
+      provenanceShort: shortProvenance(view.offer.provenance, view.offer.source),
       approved: false,
     };
   }

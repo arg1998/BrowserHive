@@ -14,6 +14,7 @@ export function GuardsSection({ pack }: { readonly pack: SitePackV1 }) {
   return (
     <PackSection
       title={`Guards (${pack.guards.length})`}
+      docs="sitePacksGuards"
       description="Requests to these addresses are blocked, held for your approval or flagged, whichever page sends them. Write policy means the template site’s write policy decides."
     >
       <RuleTable label="Guards" head={['Guard', 'Matches', 'Action']}>
@@ -101,6 +102,7 @@ export function ChallengesSection({ pack }: { readonly pack: SitePackV1 }) {
   return (
     <PackSection
       title={`Security checks (${pack.challenges.length})`}
+      docs="sitePacksChallenges"
       description="Pages that need a person. The agent’s session waits while you clear them on Attention."
     >
       <RuleTable label="Security checks" head={['Check', 'Matches', 'Then']}>

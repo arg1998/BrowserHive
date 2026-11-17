@@ -90,14 +90,14 @@ describe('wizard site catalog', () => {
     ).toBeDefined();
 
     // A typed domain with a pack says so before it is added; a generic one stays generic.
-    fireEvent.change(screen.getByLabelText('Add another site'), {
+    fireEvent.change(screen.getByLabelText('Add a site'), {
       target: { value: 'https://www.linkedin.com/feed' },
     });
     expect(
       screen.getByText(/Uses LinkedIn v3 .* already approved for another template\./),
     ).toBeDefined();
     await click(screen.getByRole('button', { name: 'Add' }));
-    fireEvent.change(screen.getByLabelText('Add another site'), {
+    fireEvent.change(screen.getByLabelText('Add a site'), {
       target: { value: 'example.org' },
     });
     await click(screen.getByRole('button', { name: 'Add' }));

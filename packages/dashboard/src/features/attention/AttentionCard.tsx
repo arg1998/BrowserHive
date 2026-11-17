@@ -107,7 +107,7 @@ export const AttentionCard = memo(function AttentionCard({
               </>
             ) : null}
             {intercept !== null ? (
-              <InterceptFacts options={intercept} />
+              <InterceptFacts options={intercept} pageUrl={item.page_url} />
             ) : item.kind === 'security_intercept' ? null : hasOptions(item.options) ? (
               <>
                 <dt className="self-start pt-0.5 text-muted-foreground">Options</dt>

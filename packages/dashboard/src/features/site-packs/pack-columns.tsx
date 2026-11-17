@@ -3,9 +3,15 @@ import type { SitePackView } from '@browserhive/contracts/http';
 import { Chip } from '@/components/shared/Chip.tsx';
 import { RelativeTime } from '@/components/shared/RelativeTime.tsx';
 import type { DataTableColumn } from '@/components/shared/use-data-table.ts';
-import { provenanceText, SKIP_REASON_TEXT } from './model.ts';
+import {
+  FOLLOW_LABEL,
+  provenanceText,
+  SKIP_REASON_TEXT,
+  shortPath,
+  shortProvenance,
+} from './model.ts';
 import { LocalOverrideBadge, LocalStatePill, ShaText } from './PackBits.tsx';
-import { EnabledSwitch, FollowToggle, PackMenu, RevertButton } from './PackControls.tsx';
+import { EnabledSwitch, FollowToggle, PackMenu } from './PackControls.tsx';
 
 /** Pack: title (the row link's text) over its domains and what needs care. */
 export function PackTitleCell({ pack }: { readonly pack: SitePackView }) {
@@ -18,6 +24,11 @@ export function PackTitleCell({ pack }: { readonly pack: SitePackView }) {
         {!pack.enabled ? <Chip tone="muted">Turned off</Chip> : null}
         {pack.local_override ? (
           <LocalOverrideBadge version={pack.approved?.version ?? null} />
+        ) : null}
+        {pack.pinned_version === null && pack.follow.effective && pack.pending.length > 0 ? (
+          <Chip tone="accent">
+            v{pack.pending[pack.pending.length - 1]?.version} waiting for review
+          </Chip>
         ) : null}
         {pack.pinned_version !== null ? (
           <Chip tone="neutral">
@@ -47,21 +58,24 @@ export function PackSourceCell({ pack }: { readonly pack: SitePackView }) {
   return (
     <span className="flex min-w-0 flex-col items-start gap-1 text-sm">
       {shown !== null ? (
-        <span className="text-pretty [overflow-wrap:anywhere]">
-          {provenanceText(shown.provenance, shown.source)}
+        <span
+          className="text-pretty [overflow-wrap:anywhere]"
+          title={provenanceText(shown.provenance, shown.source)}
+        >
+          {shortProvenance(shown.provenance, shown.source)}
         </span>
       ) : null}
       {pack.local !== null ? (
         <>
           {shown?.source !== 'local' ? (
-            <span className="text-muted-foreground [overflow-wrap:anywhere]">
-              Local file {pack.local.path}
+            <span
+              className="text-muted-foreground [overflow-wrap:anywhere]"
+              title={pack.local.path}
+            >
+              Local file {shortPath(pack.local.path)}
             </span>
           ) : null}
           <LocalStatePill local={pack.local} />
-          {pack.local.problem !== null ? (
-            <span className="text-warn-text text-pretty">Skipped: {pack.local.problem}</span>
-          ) : null}
         </>
       ) : null}
     </span>
@@ -73,18 +87,18 @@ export function PackApprovedCell({ pack }: { readonly pack: SitePackView }) {
   if (pack.approved === null) {
     return (
       <span className="flex min-w-0 flex-col text-sm text-muted-foreground">
-        <span>Not approved yet</span>
-        {pack.offer !== null ? (
-          <span>v{pack.offer.version} is approved when a template adds the site</span>
-        ) : null}
+        <span className="font-medium text-foreground">Not approved yet</span>
+        {pack.offer !== null ? <span>v{pack.offer.version} on first use</span> : null}
       </span>
     );
   }
   const { approved } = pack;
   return (
     <span className="flex min-w-0 flex-col items-start gap-0.5 text-sm">
-      <span className="font-medium tabular-nums">v{approved.version}</span>
-      <ShaText sha256={approved.sha256} />
+      <span className="flex items-center gap-2 whitespace-nowrap">
+        <span className="shrink-0 font-medium tabular-nums">v{approved.version}</span>
+        <ShaText sha256={approved.sha256} className="text-muted-foreground" />
+      </span>
       {approved.at !== null ? (
         <span className="text-muted-foreground">
           {approved.by ?? 'Approved'} · <RelativeTime at={approved.at} className="text-sm" />
@@ -123,14 +137,14 @@ export function packColumns(): readonly DataTableColumn<SitePackView>[] {
       id: 'source',
       header: 'Source',
       priority: 1,
-      className: 'hidden w-[14rem] min-w-[10rem] py-2.5 @min-[56rem]:table-cell',
+      className: 'hidden w-[15rem] min-w-[13rem] py-2.5 @min-[56rem]:table-cell',
       cell: (p) => <PackSourceCell pack={p} />,
     },
     {
       id: 'approved',
       header: 'Approved',
       priority: 1,
-      className: 'w-[11rem] py-2.5',
+      className: 'w-[11rem] min-w-[10.5rem] py-2.5',
       cell: (p) => <PackApprovedCell pack={p} />,
     },
     {
@@ -138,7 +152,7 @@ export function packColumns(): readonly DataTableColumn<SitePackView>[] {
       header: 'Templates',
       priority: 3,
       nowrap: true,
-      className: 'w-28 py-2.5 text-sm text-muted-foreground',
+      className: 'w-28 min-w-[6.5rem] py-2.5 text-sm text-muted-foreground',
       cell: (p) => usedByText(p),
     },
     {
@@ -146,14 +160,14 @@ export function packColumns(): readonly DataTableColumn<SitePackView>[] {
       header: 'Follow updates',
       priority: 3,
       nowrap: true,
-      className: 'w-[10.5rem] py-2.5',
+      className: 'w-[10.5rem] min-w-[10.5rem] py-2.5',
       cell: (p) => <FollowToggle pack={p} />,
     },
     {
       id: 'enabled',
       header: 'Enabled',
       priority: 1,
-      className: 'w-20 py-2.5',
+      className: 'w-20 min-w-[4.5rem] py-2.5',
       cell: (p) => <EnabledSwitch pack={p} />,
     },
     {
@@ -168,7 +182,7 @@ export function packColumns(): readonly DataTableColumn<SitePackView>[] {
   ];
 }
 
-/** A pack under 768px: the whole card opens the pack; its controls sit above the link. */
+/** A pack under 768px: the whole card opens the pack; its settings read as text and change from its menu. */
 export function PackCard({ pack }: { readonly pack: SitePackView }) {
   return (
     <article className="flex flex-col gap-3" aria-label={pack.title} data-band="card">
@@ -185,14 +199,12 @@ export function PackCard({ pack }: { readonly pack: SitePackView }) {
         <PackApprovedCell pack={pack} />
         <span className="text-sm text-muted-foreground">{usedByText(pack)}</span>
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <FollowToggle pack={pack} />
-        <span className="flex items-center gap-2 text-sm">
-          <EnabledSwitch pack={pack} />
-          Enabled
-        </span>
-      </div>
-      <RevertButton pack={pack} />
+      {/* Settings change from the card's menu or the pack page: controls inside a card that is one big link would overlap it. */}
+      <p className="text-sm text-muted-foreground">
+        Follow updates: {FOLLOW_LABEL[pack.follow.setting]}
+        {pack.follow.setting === 'auto' ? ` (${pack.follow.effective ? 'on' : 'off'})` : ''} ·{' '}
+        {pack.enabled ? 'Enabled' : 'Turned off'}
+      </p>
     </article>
   );
 }

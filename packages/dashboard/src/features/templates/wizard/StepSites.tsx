@@ -1,4 +1,4 @@
-/** @module features/templates/wizard/StepSites — step 2 (spec 13 §7.1, §9.6): the site catalog of known sites (pack cards from `GET /site-packs`), **Add another site** by domain (`www.` and paths are dropped; the server keeps the registrable domain), and the chosen sites as cards. A site whose domain has a pack says which version adding it approves (provenance and SHA-256), and the create request carries that `pack_sha256`; any other site is a generic site whose sign-in BrowserHive learns when you press I'm signed in */
+/** @module features/templates/wizard/StepSites — step 2 (spec 13 §7.1, §9.6): the site catalog of known sites (pack cards from `GET /site-packs`), **Add a site** by domain (`www.` and paths are dropped; the server keeps the registrable domain), and the chosen sites as cards. A site whose domain has a pack says which version adding it approves (provenance and SHA-256), and the create request carries that `pack_sha256`; any other site is a generic site whose sign-in BrowserHive learns when you press I'm signed in */
 import type { SitePackView } from '@browserhive/contracts/http';
 import { type FormEvent, useId, useState } from 'react';
 import { Button } from '@/components/ui/button.tsx';
@@ -66,7 +66,7 @@ export function StepSites({
       ) : null}
       <form onSubmit={submit} className="max-w-xl">
         <Field
-          label={packs.length > 0 ? 'Add another site' : 'Add a site'}
+          label="Add a site"
           htmlFor={inputId}
           help={
             typed?.text ??

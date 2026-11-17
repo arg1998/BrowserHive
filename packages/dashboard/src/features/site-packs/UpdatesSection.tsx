@@ -35,6 +35,13 @@ export function UpdatesSection({ packs }: { readonly packs: readonly SitePackVie
       title="Updates available"
       count={decisions.length}
       description="Nothing here applies until you approve it. Templates keep using the version they have."
+      info={
+        <p>
+          Approving records who approved which version, with its SHA-256 and where it came from. A
+          local file is approved once per content: a later edit waits here again.
+        </p>
+      }
+      infoDocs="sitePacksApproval"
     >
       <div className="grid min-w-0 gap-4 2xl:grid-cols-2">
         {decisions.map((d) => {
