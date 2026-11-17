@@ -91,7 +91,7 @@ describe('ClassificationChip', () => {
 describe('DiffView', () => {
   it('leads with what needs a careful look, highlighted, each field with its class; axe clean', async () => {
     const view = render(<DiffView diff={mixedDiff()} />);
-    expect(screen.getAllByText('Relaxes rules').length).toBe(3); // candidate + two fields
+    expect(screen.getAllByText('Relaxes rules').length).toBe(2); // the two fields (the card shows the candidate's)
     expect(
       screen.getByText(/2 relax rules · 1 can stop the site · 1 tightens rules · 2 change no rule/),
     ).toBeDefined();

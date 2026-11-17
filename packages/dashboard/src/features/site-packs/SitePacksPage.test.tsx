@@ -89,8 +89,8 @@ describe('SitePacksPage', () => {
     expect(await within(linkedin).findByText('guards[logout].action')).toBeDefined();
     expect(within(linkedin).getByText('confirm')).toBeDefined();
     expect(within(linkedin).getByText('block')).toBeDefined();
-    // Classified: the card's chip, the diff's chip and the field's chip, in words (never colour alone).
-    expect(within(linkedin).getAllByText('Tightens rules').length).toBe(3);
+    // Classified: the card's chip and the field's chip, in words (never colour alone).
+    expect(within(linkedin).getAllByText('Tightens rules').length).toBe(2);
     const github = screen
       .getByRole('heading', { level: 3, name: /GitHub/ })
       .closest('article') as HTMLElement;

@@ -1,4 +1,4 @@
-/** @module features/site-packs/DiffView — a field-level pack diff (spec 13 §10.6, §11.4): new domains first, then the classified changes (the candidate's chip and what it means, counts per class, fields that relax rules or can stop the site first and highlighted, each with its class) with their old and new values as text (JSON, never markup; the first four, then Show all; a new pack starts folded); `DiffLoader` fetches `GET /site-packs/{id}/diff` and shows loading, error and empty states */
+/** @module features/site-packs/DiffView — a field-level pack diff (spec 13 §10.6, §11.4): new domains first, then the classified changes (what the candidate's class means, counts per class, fields that relax rules or can stop the site first and highlighted, each with its class) with their old and new values as text (JSON, never markup; the first four, then Show all; a new pack starts folded); `DiffLoader` fetches `GET /site-packs/{id}/diff` and shows loading, error and empty states */
 import type { SitePackDiffResponse } from '@browserhive/contracts/http';
 import { useState } from 'react';
 import { ErrorState } from '@/components/shared/ErrorState.tsx';
@@ -39,15 +39,17 @@ const ROW_TONE: Readonly<Record<string, string>> = {
   restrictive: 'border-l-warn-solid bg-warn-bg/35',
 };
 
-/** The headline of a classified diff: the candidate's chip, what it means, and counts per class. */
+/**
+ * The headline of a classified diff: how many fields change per class and what the candidate's
+ * class means (the card around it shows the candidate's chip).
+ */
 function DiffSummary({ diff }: { readonly diff: SitePackDiffResponse }) {
   const info = CLASSIFICATION_INFO[diff.classification];
   const counts = classCounts(diff.changes);
   return (
-    <div className="flex min-w-0 flex-col gap-1.5">
+    <div className="flex min-w-0 flex-col gap-1">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <ClassificationChip classification={diff.classification} />
-        <span className="text-sm text-muted-foreground">
+        <span className="text-sm font-medium text-foreground">
           {diff.changes.length} {diff.changes.length === 1 ? 'field changes' : 'fields change'}
           {counts.length > 1
             ? `: ${counts.map((c) => countText(c.cls, c.count)).join(' · ')}`
@@ -55,7 +57,10 @@ function DiffSummary({ diff }: { readonly diff: SitePackDiffResponse }) {
         </span>
       </div>
       {diff.classification !== 'unclassified' ? (
-        <p className="max-w-3xl text-sm text-pretty text-muted-foreground">{info.summary}</p>
+        <p className="max-w-3xl text-sm text-pretty text-muted-foreground">
+          <span className="sr-only">{info.label}: </span>
+          {info.summary}
+        </p>
       ) : null}
     </div>
   );

@@ -30,7 +30,9 @@ function ParamItem({ row }: { readonly row: ParamRow }) {
   const origin = originText(row);
   return (
     <li className="grid min-w-0 gap-x-4 gap-y-1 py-2.5 first:pt-0 last:pb-0 sm:grid-cols-[11rem_minmax(0,1fr)]">
-      <Code>{row.name}</Code>
+      <span className="justify-self-start self-start">
+        <Code>{row.name}</Code>
+      </span>
       <div className="flex min-w-0 flex-col gap-0.5">
         <span className="flex min-w-0 flex-wrap items-baseline gap-x-2">
           <span className="font-medium tabular-nums [overflow-wrap:anywhere]">{row.value}</span>
