@@ -12,6 +12,8 @@ const GITHUB = readFileSync(
 );
 
 const PACK = z.record(z.string(), z.unknown()).parse(JSON.parse(GITHUB));
+/** Its version, whatever the current bundled one is. */
+const VERSION = z.number().parse(PACK['version']);
 
 const Report = z.object({
   path: z.string(),
@@ -32,7 +34,7 @@ describe('sitepacks verify', () => {
       files: { '/work/packs/github.com.json': GITHUB },
     });
     expect(run.code).toBe(0);
-    expect(run.stdout).toContain('github.com v1');
+    expect(run.stdout).toContain(`github.com v${VERSION}`);
     expect(run.stdout).toMatch(/sha256 [0-9a-f]{64}/);
     expect(run.storage.opened).toEqual([]);
   });
@@ -43,7 +45,12 @@ describe('sitepacks verify', () => {
       files: { '/p/github.com.json': GITHUB },
     });
     const report = Report.parse(JSON.parse(run.stdout));
-    expect(report).toMatchObject({ ok: true, pack_id: 'github.com', version: 1, reason: null });
+    expect(report).toMatchObject({
+      ok: true,
+      pack_id: 'github.com',
+      version: VERSION,
+      reason: null,
+    });
   });
 
   it('an invalid pack: exit 1 with each issue', async () => {

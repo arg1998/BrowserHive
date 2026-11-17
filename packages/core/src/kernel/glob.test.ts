@@ -5,6 +5,7 @@ import {
   compileGlob,
   compileGlobTokens,
   globTokens,
+  globTokensIntersect,
   hasGlobWildcard,
   MAX_PATTERN_LENGTH,
   matchesCompiledGlob,
@@ -92,5 +93,32 @@ describe('matchesGlob', () => {
     expect(hasGlobWildcard('a*')).toBe(true);
     expect(hasGlobWildcard('a?')).toBe(true);
     expect(hasGlobWildcard('abc')).toBe(false);
+  });
+});
+
+describe('globTokensIntersect', () => {
+  const meet = (a: string, b: string) => globTokensIntersect(globTokens(a), globTokens(b));
+  it('is true exactly when some string matches both patterns', () => {
+    expect(meet('abc', 'abc')).toBe(true);
+    expect(meet('abc', 'abd')).toBe(false);
+    expect(meet('a*', '*c')).toBe(true);
+    expect(meet('a*b', 'a*c')).toBe(false);
+    expect(meet('a?c', 'abc')).toBe(true);
+    expect(meet('a?c', 'ac')).toBe(false);
+    expect(meet('*x*', '*y*')).toBe(true);
+    expect(meet('/session', '/sessions/*')).toBe(false);
+    expect(meet('/sessions/*', '/sessions/two-factor')).toBe(true);
+    expect(meet('*', '')).toBe(true);
+    expect(meet('?', '')).toBe(false);
+    expect(meet('', '')).toBe(true);
+  });
+
+  it('agrees with matchesGlob on a witness and stays fast with many stars', () => {
+    expect(meet('a*b*c', '*b*')).toBe(true);
+    expect(matchesGlob('abc', 'a*b*c') && matchesGlob('abc', '*b*')).toBe(true);
+    const long = `${'*a'.repeat(150)}`;
+    const started = performance.now();
+    expect(meet(long, `${'a*'.repeat(150)}b`)).toBe(false);
+    expect(performance.now() - started).toBeLessThan(500);
   });
 });

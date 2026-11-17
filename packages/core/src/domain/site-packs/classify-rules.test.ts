@@ -1,4 +1,4 @@
-/** @module domain/site-packs/classify-rules.test — spec 13 §9.7 for guards, element guards and challenges (added, stricter, restrictive coverage of the probe, the sign-in URL, a sign-in post and whole hosts, content-only and `stop` challenges (D-73, review #84 M2), removed, laxer, match/target/request_guard changes, `write_policy` moves), and the default-deny paths of the classifier's dispatch. */
+/** @module domain/site-packs/classify-rules.test — spec 13 §9.7 for guards, element guards and challenges (added, stricter, restrictive coverage of the probe, the sign-in URL, a sign-in post (declared in `sign_in.post` or, without it, anywhere on the sign-in host: review #84 N4) and whole hosts, content-only and `stop` challenges (D-73, review #84 M2), removed, laxer, match/target/request_guard changes, `write_policy` moves), and the default-deny paths of the classifier's dispatch. */
 
 import { describe, expect, it } from 'bun:test';
 import type { SitePackV1Input } from '@browserhive/contracts/site-packs';
@@ -47,6 +47,84 @@ describe('guards', () => {
     // `confirm` holds the post as well; `warn` never stops.
     expect(classOf(addGuard({ ...submit, action: 'confirm' })).overall).toBe('restrictive');
     expect(classOf(addGuard({ ...submit, action: 'warn' })).overall).toBe('tightening');
+  });
+
+  describe('with sign_in.post declared (review #84 N4)', () => {
+    const SUBMIT = 'www.linkedin.com/checkpoint/lg/login-submit';
+    const declared = (p: SitePackV1Input) => {
+      if (p.sign_in) p.sign_in.post = [SUBMIT];
+    };
+    const withPost = (g: Guard) => classOf(addGuard(g), { before: declared });
+
+    it('a guard that covers a declared post target is restrictive', () => {
+      expect(
+        withPost(guard('submit', SUBMIT, { match: { url: SUBMIT, methods: ['POST'] } })).fields,
+      ).toEqual({
+        'guards[submit]': 'restrictive',
+      });
+      // A wider glob that takes the target in, methods absent, `confirm`: all restrictive.
+      expect(withPost(guard('cp', 'www.linkedin.com/checkpoint/*')).overall).toBe('restrictive');
+      expect(withPost(guard('lg', '*.linkedin.com/checkpoint/lg*')).overall).toBe('restrictive');
+      expect(
+        withPost(guard('c', SUBMIT, { match: { url: SUBMIT }, action: 'confirm' })).overall,
+      ).toBe('restrictive');
+      // The query and sub-path variants of the guard grammar overlap too.
+      expect(withPost(guard('q', `${SUBMIT}?x=*`)).overall).toBe('restrictive');
+      expect(withPost(guard('sub', `${SUBMIT}/*`)).overall).toBe('restrictive');
+    });
+
+    it('a routine guard on the sign-in host away from the post targets tightens', () => {
+      // The logout, settings and write guards that M2's host-wide rule made restrictive.
+      expect(withPost(guard('signout', 'www.linkedin.com/zz-logout')).fields).toEqual({
+        'guards[signout]': 'tightening',
+      });
+      expect(withPost(guard('in', 'www.linkedin.com/in/*')).overall).toBe('tightening');
+      expect(withPost(guard('w', '*.linkedin.com/jobs/apply*')).overall).toBe('tightening');
+      expect(
+        withPost({
+          id: 'write',
+          kind: 'write',
+          match: { url: 'www.linkedin.com/voyager/api/*', methods: ['POST'] },
+          action: 'confirm',
+        }).overall,
+      ).toBe('tightening');
+      // GET-only on the target cannot stop its post.
+      expect(
+        withPost(guard('g', SUBMIT, { match: { url: SUBMIT, methods: ['GET'] } })).overall,
+      ).toBe('tightening');
+      // The sign-in page itself, the probe and a whole host are still restrictive.
+      expect(withPost(guard('login', 'www.linkedin.com/login')).overall).toBe('restrictive');
+      expect(withPost(guard('feed', 'www.linkedin.com/feed/*')).overall).toBe('restrictive');
+      expect(withPost(guard('all', 'www.linkedin.com/*')).overall).toBe('restrictive');
+    });
+
+    it('any change of sign_in.post is loosening', () => {
+      expect(classOf(declared).overall).toBe('loosening');
+      expect(
+        classOf(
+          (p) => {
+            if (p.sign_in) delete p.sign_in.post;
+          },
+          { before: declared },
+        ).overall,
+      ).toBe('loosening');
+      expect(
+        classOf(
+          (p) => {
+            if (p.sign_in) p.sign_in.post = [`${SUBMIT}-v2`];
+          },
+          { before: declared },
+        ).overall,
+      ).toBe('loosening');
+      expect(
+        classOf(
+          (p) => {
+            p.sign_in?.post?.push('www.linkedin.com/checkpoint/challenge*');
+          },
+          { before: declared },
+        ).overall,
+      ).toBe('loosening');
+    });
   });
 
   it('a guard added over the probe path, the sign-in URL or a whole host is restrictive', () => {
@@ -282,6 +360,8 @@ describe('default deny in the dispatch', () => {
     'browser.future',
     'consistency.future',
     'sign_in.future',
+    'sign_in.post',
+    'sign_in.post[0]',
     'pacing.rules',
     'pacing.future',
   ])('%s is loosening', (path) => {
