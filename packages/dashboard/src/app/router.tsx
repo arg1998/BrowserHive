@@ -30,8 +30,8 @@ export interface RouteStaticData {
   readonly crumb?: (params: Record<string, string>) => string;
   /**
    * Capability the page needs; when off, the item moves to the "Not enabled" group with a lock
-   * glyph (`vault` from `/system`, `templates` from the `templates` config key, `sitePacks` until
-   * site packs ship).
+   * glyph (`vault` from `/system`, `templates` from the `templates` config key, `sitePacks` from the
+   * `sitePacks` config key).
    */
   readonly requires?: 'vault' | 'admin' | 'templates' | 'sitePacks';
   readonly palette?: { readonly keywords: readonly string[] };

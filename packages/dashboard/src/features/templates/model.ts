@@ -111,9 +111,24 @@ export const CHANNEL_LABEL: { readonly [K in 'chromium' | 'chrome' | 'edge']: st
   edge: 'Edge',
 };
 
+/** A security check's kind (`challenge:<kind>`, spec 13 §9.5) in words. */
+const CHALLENGE_TEXT: Readonly<Record<string, string>> = {
+  checkpoint: 'a checkpoint',
+  captcha: 'a captcha',
+  reauth: 'a request to sign in again',
+  locked: 'a locked-account page',
+  rejected: 'a refused sign-in',
+};
+
 /** A health reason code (spec 13 §8.1) in words; unknown codes are shown plainly. */
 export function healthReasonText(reason: string | null): string | null {
   if (reason === null || reason === '') return null;
+  if (reason.startsWith('challenge:')) {
+    const kind = reason.slice('challenge:'.length);
+    return `The site showed ${CHALLENGE_TEXT[kind] ?? 'a security check'}: clear it in the browser.`;
+  }
+  const http = /^http_(\d{3})$/.exec(reason);
+  if (http !== null) return `The site answered with an error (HTTP ${http[1]}).`;
   const known: Readonly<Record<string, string>> = {
     confirmed_by_operator: 'You confirmed the sign-in.',
     not_confirmed: 'Not confirmed when the sign-in finished.',
@@ -127,6 +142,10 @@ export function healthReasonText(reason: string | null): string | null {
     no_signal: 'Nothing showed whether you are signed in.',
     timeout: 'The check timed out.',
     network: 'The site could not be reached.',
+    redirect: 'The site sent the check to its sign-in page.',
+    marker: 'The page showed a signed-out sign.',
+    landmark: 'The page showed the signed-in view.',
+    no_redirect: 'The signed-in page opened without a detour to sign-in.',
   };
   return known[reason] ?? `${reason.replaceAll('_', ' ')}.`;
 }

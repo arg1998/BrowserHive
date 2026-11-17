@@ -1,6 +1,6 @@
-/** @module features/templates/detail/SiteCard — one site of the Sites tab (spec 13 §11.4): its sign-in (state, why, last check, **Check now**, the couldn't-tell warning), its re-login in progress, the cookies that detect it, whether agents are offered it, automatic re-login with the vault, the account-change rule (read only until site packs), **Re-login…** and Remove site… */
+/** @module features/templates/detail/SiteCard — one site of the Sites tab (spec 13 §11.4): its sign-in (state, why, last check, **Check now**, the couldn't-tell warning), its re-login in progress, the cookies that detect it, whether agents are offered it, automatic re-login with the vault, its site pack (version and source, the terms, the write policy, rule counts; or "Use the … site pack" for a generic site), **Clear stop** for a stopped site, **Re-login…** and Remove site… */
 import type { ReloginView, TemplateSiteView } from '@browserhive/contracts/http';
-import { type ReactNode, useEffect, useId, useRef } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { useConfirm } from '@/app/providers/ConfirmProvider.tsx';
 import { useToast } from '@/app/providers/ToastProvider.tsx';
 import { StatusBadge } from '@/components/shared/StatusBadge.tsx';
@@ -13,24 +13,12 @@ import { useTemplateOperations } from '../api-operations.ts';
 import { removeSiteConfirm } from '../confirm-copy.ts';
 import { needsSignIn } from '../model.ts';
 import { HealthIcon } from '../SiteChips.tsx';
+import { ClearStop } from './ClearStop.tsx';
 import { ReloginProgress } from './ReloginProgress.tsx';
 import { CheckNowButton, SiteHealth, useCheckNow } from './SiteHealth.tsx';
+import { SitePackRows } from './SitePackRows.tsx';
+import { Row } from './site-row.tsx';
 import { VaultRelogin } from './VaultRelogin.tsx';
-
-const POLICY_TEXT = {
-  allow: 'Allowed',
-  warn: 'Allowed with a warning',
-  confirm: 'Asks you first',
-} as const;
-
-function Row({ label, children }: { readonly label: string; readonly children: ReactNode }) {
-  return (
-    <div className="grid gap-1 py-3 first:pt-0 last:pb-0 sm:grid-cols-[10rem_minmax(0,1fr)] sm:gap-4">
-      <span className="text-sm font-medium text-muted-foreground">{label}</span>
-      <div className="min-w-0 text-base text-pretty">{children}</div>
-    </div>
-  );
-}
 
 /** Props. `settingUp`: the template's first sign-in is not finished (the page says so once). */
 export interface SiteCardProps {
@@ -118,6 +106,11 @@ export function SiteCard({
         </div>
         <StatusBadge domain="siteHealth" value={site.health.state} variant="pill" iconless />
       </div>
+      {site.stopped_at !== null ? (
+        <div className="px-5 pt-4">
+          <ClearStop templateId={templateId} site={site} />
+        </div>
+      ) : null}
       {relogin !== null ? (
         <div className="px-5 pt-4">
           <ReloginProgress
@@ -134,7 +127,9 @@ export function SiteCard({
           <SiteHealth site={site} settingUp={settingUp} checking={check.mine} />
         </Row>
         <Row label="Detected by">
-          {cookies.length > 0 ? (
+          {site.pack !== null ? (
+            <p>The {site.pack.title} site pack’s signed-in check</p>
+          ) : cookies.length > 0 ? (
             <p>
               {cookies.length} {cookies.length === 1 ? 'cookie' : 'cookies'} BrowserHive learned:{' '}
               <span className="font-mono text-sm [overflow-wrap:anywhere]">
@@ -175,12 +170,7 @@ export function SiteCard({
         <Row label="Automatic re-login">
           <VaultRelogin templateId={templateId} templateName={templateName} site={site} />
         </Row>
-        <Row label="Account changes">
-          <p className="text-muted-foreground">
-            {site.write_policy === null ? 'Site default' : POLICY_TEXT[site.write_policy]} · takes
-            effect with site packs
-          </p>
-        </Row>
+        <SitePackRows templateId={templateId} site={site} />
       </div>
       <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t px-5 py-2.5">
         {settingUp ? (

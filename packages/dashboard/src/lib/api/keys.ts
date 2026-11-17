@@ -153,6 +153,17 @@ export const keys = {
     /** The **Check now** mutation of one template (a mutation key: every button shares its pending state). */
     probeRun: (id: string) => ['templates', 'probe-run', id] as const,
   },
+  sitePacks: {
+    all: ['site-packs'] as const,
+    lists: () => ['site-packs', 'list'] as const,
+    list: (params?: KeyParams) => ['site-packs', 'list', stableParams(params)] as const,
+    /** The sidebar badge and the wizard catalog (every pack, unfiltered). */
+    catalog: () => ['site-packs', 'list', 'catalog'] as const,
+    detail: (id: string) => ['site-packs', 'detail', id] as const,
+    diff: (id: string, to: string) => ['site-packs', 'diff', id, to] as const,
+    changes: (params?: KeyParams) => ['site-packs', 'changes', stableParams(params)] as const,
+    guardHits: (params?: KeyParams) => ['site-packs', 'guard-hits', stableParams(params)] as const,
+  },
   publicUrl: () => ['system', 'public-url'] as const,
   preferences: () => ['preferences'] as const,
   search: (q: string) => ['search', q] as const,

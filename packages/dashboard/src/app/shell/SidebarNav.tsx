@@ -28,12 +28,14 @@ interface Badge {
 /** Sidebar nav. */
 export function SidebarNav({ collapsed, onNavigate }: SidebarNavProps) {
   const items = useNavItems();
-  const { capabilities, attentionOpen, confirmsOpen, signInsNeeded } = useNavSignals();
+  const { capabilities, attentionOpen, confirmsOpen, signInsNeeded, packsToReview } =
+    useNavSignals();
   const { enabled, disabled } = groupNavItems(items, capabilities);
   const badgeFor = (item: NavItem): Badge => {
     if (item.to === '/attention') return { count: attentionOpen, noun: 'open' };
     if (item.to === '/vault') return { count: confirmsOpen, noun: 'open' };
     if (item.to === '/templates') return { count: signInsNeeded, noun: 'need a sign-in' };
+    if (item.to === '/site-packs') return { count: packsToReview, noun: 'to review' };
     return { count: 0, noun: '' };
   };
   const nested = (item: NavItem, list: readonly NavItem[]) =>
