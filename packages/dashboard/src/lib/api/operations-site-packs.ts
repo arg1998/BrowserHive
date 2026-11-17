@@ -24,15 +24,8 @@ import {
 } from '@browserhive/contracts/http';
 import { z } from 'zod';
 
-/**
- * `POST /site-packs/import` body, with the `{text}` form (the file's exact UTF-8 text, hashed and
- * stored verbatim; review S-M3/S-L2). Mirrors the contract once WP-C's branch adds it there; until
- * then the dashboard declares the union itself.
- */
-export const SitePackImportBody = z.union([
-  ...SitePackImportRequest.options,
-  z.strictObject({ text: z.string().min(1).max(SITE_PACK_IMPORT_MAX_BYTES) }),
-]);
+/** `POST /site-packs/import` body: `{text}` (the file's exact UTF-8 text, hashed and stored verbatim), `{pack}` or `{files}`. */
+export const SitePackImportBody = SitePackImportRequest;
 
 /** Site-pack routes (T3a; the registry's check and download arrive with T4b). */
 export const SITE_PACK_OPERATIONS = {
