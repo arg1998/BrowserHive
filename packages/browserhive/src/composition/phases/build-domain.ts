@@ -34,6 +34,7 @@ import { createAuthStack } from '../auth-stack.ts';
 import { type BootContext, part, type SeedNotice } from '../context.ts';
 import { hostFactsOf } from '../host.ts';
 import { createNotificationSnapshots } from '../notification-snapshots.ts';
+import { buildSitePackEnforcement } from '../site-pack-enforcement.ts';
 import type { PhaseHandle } from '../unwind.ts';
 import { buildOperators } from './domain-operators.ts';
 import { buildOps, reconcile } from './domain-ops.ts';
@@ -279,6 +280,22 @@ async function buildDomain(
     actionExecutors.set('template.relogin', reloginActionExecutor(relogin));
   }
 
+  // Site-pack enforcement: the request guard on every template host, security intercepts (T3a).
+  const enforcement = buildSitePackEnforcement({
+    config,
+    transport,
+    driver: sessionParts.driver,
+    broker: operators.broker,
+    sessions,
+    uow: storage.uow,
+    health: tpl.health,
+    lookup: null,
+    bus,
+    ids,
+    clock,
+    logger,
+  });
+  if (enforcement !== null) undo.push(enforcement.stop);
   const tools = buildTools({
     config,
     transport,
@@ -293,6 +310,7 @@ async function buildDomain(
     blocklist: sessionParts.blocklist,
     templates,
     ...(tpl.supervisor !== null && { templatePause: tpl.supervisor.pause }),
+    ...(enforcement !== null && { siteHolds: enforcement.intercepts }),
     pageActions,
     redactor,
     bus,

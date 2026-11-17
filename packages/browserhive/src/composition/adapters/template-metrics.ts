@@ -1,4 +1,4 @@
-/** @module composition/adapters/template-metrics — the template instruments of spec 13 §11.7 (spec 10 §7): `browserhive.template.hosts` (hosts per state at each export), `browserhive.template.probes` (one per `template.probe`) and `browserhive.template.relogins` (one per finished re-login, from `template.relogin`). */
+/** @module composition/adapters/template-metrics — the template instruments of spec 13 §11.7 (spec 10 §7): `browserhive.template.hosts` (hosts per state at each export), `browserhive.template.probes` (one per `template.probe`) `browserhive.template.relogins` (one per finished re-login, from `template.relogin`) and `browserhive.site_pack.guard_hits` (one per `site_pack.guard_hit`). */
 
 import type { DomainEvents, EventBus, Instruments } from '@browserhive/core/runtime';
 
@@ -86,5 +86,12 @@ export function subscribeTemplateMetrics(
       const counted = finished(payload);
       if (counted !== null) instruments.templateRelogins.add(1, counted);
     }),
+    // One per `site_pack.guard_hit` (spec 13 §11.7); pack and guard ids are never attributes.
+    bus.subscribe('site_pack.guard_hit', ({ payload }) =>
+      instruments.sitePackGuardHits.add(1, {
+        action: payload.row.action,
+        kind: payload.row.guard_kind,
+      }),
+    ),
   ];
 }

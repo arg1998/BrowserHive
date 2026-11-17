@@ -64,6 +64,12 @@ export interface RequestConfirmResult {
   readonly outcome: RequestConfirmOutcome;
   readonly decidedBy: string | null;
   readonly requestId: string | null;
+  /**
+   * No confirmation was opened and the request is refused as a `block` would be (a host-owned
+   * request, D-67; the per-template bound of open intercepts, spec 13 §9.3): the hit is recorded
+   * as `block` with rule action `confirm`, like a `confirm` without a confirmer.
+   */
+  readonly asBlock?: boolean;
 }
 
 /**

@@ -3,6 +3,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { guardRoute } from './https-sites-guards.ts';
 import { signInRoute } from './https-sites-signin.ts';
 
 const TLS_DIR = join(import.meta.dir, '..', 'fixtures', 'tls');
@@ -139,6 +140,7 @@ export function startHttpsSites(): HttpsSites {
       const site = host.split(':')[0] ?? host;
       return (
         (await signInRoute(req, site, url.pathname)) ??
+        guardRoute(site, url.pathname) ??
         route(host, url.pathname, req.method, url.search)
       );
     },

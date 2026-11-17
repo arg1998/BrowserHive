@@ -55,7 +55,15 @@ export interface TemplateLaunchContext {
   readonly logger: Logger;
   /** The configured blocklist; joins the host's chain as handler 2 (spec 13 §3.8). */
   readonly blocklist: Omit<BlocklistRouteDeps, 'sessionId' | 'clock' | 'logger'> | null;
+  /** The site-pack request guard of a template's host: handler 3 (spec 13 §3.8, §9.3). */
+  readonly requestGuard?: TemplateRequestGuard | null;
 }
+
+/**
+ * Builds the request guard of one template's host (its rule source, hit sink and confirmer);
+ * `null` when site packs are off. A rejection fails the host start: the guard is a safety rule.
+ */
+export type TemplateRequestGuard = (templateId: string) => Promise<InterceptionHandler | null>;
 
 /** `true` when `err` is one of Chromium's display failures. */
 export function isNoDisplayError(err: unknown): boolean {
@@ -143,7 +151,8 @@ export async function launchTemplateHostWith(
     await context.addCookies(templateHostCookies(spec.selfOrigins));
     const anchor = context.pages()[0] ?? (await context.newPage());
     const targets = await HostTargets.open(context, anchor, log);
-    const host = buildHost(ctx, spec, context, targets, { sandboxed, profileSecrets });
+    const guard = (await ctx.requestGuard?.(spec.templateId)) ?? null;
+    const host = buildHost(ctx, spec, context, targets, { sandboxed, profileSecrets, guard });
     await installHostChain(host);
     await host.adoptStartPages();
     if (spec.stealth) await applyIdentity(ctx, spec, host, anchor, log);
@@ -173,7 +182,11 @@ function buildHost(
   spec: TemplateHostSpec,
   context: BrowserContext,
   targets: HostTargets,
-  facts: { readonly sandboxed: boolean; readonly profileSecrets: boolean },
+  facts: {
+    readonly sandboxed: boolean;
+    readonly profileSecrets: boolean;
+    readonly guard: InterceptionHandler | null;
+  },
 ): PlaywrightTemplateHost {
   const { sandboxed } = facts;
   let attribution: PlaywrightTemplateHost | null = null;
@@ -190,6 +203,7 @@ function buildHost(
       }),
     );
   }
+  if (facts.guard !== null) handlers.push(facts.guard);
   const chain = new InterceptionChain({
     handlers,
     resolveOwner: hostOwnerResolver({

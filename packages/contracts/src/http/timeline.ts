@@ -5,13 +5,14 @@ import { BlockedRequestRow } from './blocklist.ts';
 import { Cursor, csv, EpochMs, limitQuery, page, QueryBool, QueryText } from './common.ts';
 import { PageRow } from './pages.ts';
 import { TimelineKind } from './session-actions.ts';
+import { SiteGuardHitRow } from './site-packs.ts';
 import { ToolCallRow } from './tool-calls.ts';
 import { VaultAccessRow } from './vault-bindings.ts';
 
 const base = {
   /**
    * Unique, stable row identity: `<kind>:<row id>` where the row id is `row.event_id` (tool, page,
-   * vault, blocked) or `row.request_id` (attention). A navigate call and the page row it produced
+   * vault, blocked, guard) or `row.request_id` (attention). A navigate call and the page row it produced
    * share an `event_id` but never an `id`. Live feed events map to the same value.
    */
   id: z.string(),
@@ -26,6 +27,8 @@ export const TimelineItem = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('attention'), ...base, row: OperatorRequestRow }),
   z.object({ kind: z.literal('vault'), ...base, row: VaultAccessRow }),
   z.object({ kind: z.literal('blocked'), ...base, row: BlockedRequestRow }),
+  /** A site-pack guard decision on the session (`site_guard_hits`, spec 13 §11.1). */
+  z.object({ kind: z.literal('guard'), ...base, row: SiteGuardHitRow }),
 ]);
 /** One merged timeline item. */
 export type TimelineItem = z.infer<typeof TimelineItem>;
@@ -33,11 +36,13 @@ export type TimelineItem = z.infer<typeof TimelineItem>;
 /**
  * `GET /sessions/{session_id}/timeline` query.
  *
- * - `kinds`: subset of `tool|page|attention|vault|blocked` (default all).
+ * - `kinds`: subset of `tool|page|attention|vault|blocked|guard` (default all).
  * - `errors_only`: tool calls with an `error_code`, attention ended `rejected|timeout|cancelled`,
- *   vault fills other than `success`, every blocked request; no pages.
+ *   vault fills other than `success`, every blocked request, guard hits that blocked or held a
+ *   request; no pages.
  * - `q`: free text per kind — tool (tool, error_code, error_message, tab_id), page (url, title),
- *   attention (reason, session_id), vault (entry_name, page_url, session_id), blocked (url, pattern).
+ *   attention (reason, session_id), vault (entry_name, page_url, session_id), blocked (url, pattern),
+ *   guard (url, pack and guard id).
  */
 export const TimelineQuery = z.strictObject({
   kinds: csv(TimelineKind),
