@@ -13,13 +13,15 @@ import type {
   SitePackVersionRef,
   SitePackView,
 } from '@browserhive/contracts/http';
-import { diffPacks, newDomains } from '../../domain/site-packs/diff.ts';
+import { newDomains } from '../../domain/site-packs/diff.ts';
 import type {
   SiteGuardHitRepository,
+  SitePackChangeRecord,
   SitePackChangeRepository,
 } from '../../ports/persistence/site-packs.ts';
 import type { SourcePackVersion } from '../../ports/site-packs.ts';
 import { readCached } from './registry-build.ts';
+import { classifyForRow, usageOf } from './registry-classify.ts';
 import { packConflict } from './registry-errors.ts';
 import type {
   PackEntry,
@@ -36,12 +38,16 @@ export interface ReadFacts {
   readonly now: number;
 }
 
-/** True when the entry needs an operator: a followed, unpinned candidate or a local file to approve. */
-function needsReview(entry: PackEntry): { candidates: number; local: boolean } {
+/**
+ * What of the entry needs an operator: candidates of a followed, unpinned pack, a revocation's
+ * decision whatever the pack's follow and pin (spec 13 §9.7), and a local file to approve.
+ */
+function needsReview(entry: PackEntry): { rows: SitePackChangeRecord[]; local: boolean } {
   const local =
     entry.local !== null && entry.local.current !== null && entry.local.state !== 'approved';
   const followed = followEffective(entry) && entry.state?.pinnedVersion == null;
-  return { candidates: followed ? entry.pending.length : 0, local };
+  const rows = entry.pending.filter((row) => followed || row.classification === 'revoked');
+  return { rows, local };
 }
 
 /** `GET /site-packs`. */
@@ -71,7 +77,7 @@ export function listPacks(
     }
     if (query.pending !== undefined) {
       const review = needsReview(entry);
-      if ((review.candidates > 0 || review.local) !== query.pending) return false;
+      if ((review.rows.length > 0 || review.local) !== query.pending) return false;
     }
     if (query.follow !== undefined && followEffective(entry) !== query.follow) return false;
     return true;
@@ -80,7 +86,7 @@ export function listPacks(
   let localNeeding = 0;
   for (const entry of snapshot.packs.values()) {
     const review = needsReview(entry);
-    pendingCount += review.candidates;
+    pendingCount += review.rows.length;
     if (review.local) localNeeding += 1;
   }
   return {
@@ -133,12 +139,15 @@ function ref(version: SourcePackVersion, source: SitePackVersionRef['source']): 
   return { version: version.pack.version, sha256: version.sha256, source };
 }
 
-/** `GET /site-packs/{pack_id}/diff`: a pending version or the local file against the approved one. */
+/**
+ * `GET /site-packs/{pack_id}/diff`: a pending version or the local file against the approved one,
+ * classified with the templates' current settings (spec 13 §9.7).
+ */
 export async function diffOf(
   entry: PackEntry,
   snapshot: RegistrySnapshot,
   query: SitePackDiffQuery,
-  deps: Pick<SitePackRegistryDeps, 'cache' | 'binaryVersion'>,
+  deps: Pick<SitePackRegistryDeps, 'cache' | 'binaryVersion' | 'repos'>,
 ): Promise<SitePackDiffResponse> {
   let to: { content: SourcePackVersion; source: SitePackVersionRef['source'] };
   if (query.to === 'local') {
@@ -156,12 +165,14 @@ export async function diffOf(
     to = { content, source: row.source };
   }
   const from = await fromOf(entry, query, to.source === 'local', deps);
+  const ctx = await usageOf(deps.repos, entry.packId);
+  const classified = classifyForRow(from?.content.pack ?? null, to.content.pack, ctx);
   return {
     from: from === null ? null : ref(from.content, from.source),
     to: ref(to.content, to.source),
-    classification: from === null ? 'new_pack' : 'unclassified',
+    classification: classified.classification,
     new_domains: [...newDomains(from?.content.pack ?? null, to.content.pack)],
-    changes: diffPacks(from?.content.pack ?? null, to.content.pack).map((c) => ({ ...c })),
+    changes: classified.diff.map((c) => ({ ...c })),
   };
 }
 
@@ -210,19 +221,18 @@ export function pendingOf(snapshot: RegistrySnapshot): readonly PendingUpdate[] 
   for (const entry of snapshot.packs.values()) {
     const title = entry.display?.title ?? entry.packId;
     const review = needsReview(entry);
-    if (review.candidates > 0) {
-      for (const row of entry.pending) {
-        if (row.toVersion === null) continue;
-        out.push({
-          kind: 'candidate',
-          packId: entry.packId,
-          title,
-          fromVersion: entry.state?.approvedVersion ?? null,
-          toVersion: row.toVersion,
-          sha256: row.toSha256,
-          source: row.source,
-        });
-      }
+    for (const row of review.rows) {
+      if (row.toVersion === null) continue;
+      out.push({
+        kind: 'candidate',
+        packId: entry.packId,
+        title,
+        fromVersion: entry.state?.approvedVersion ?? null,
+        toVersion: row.toVersion,
+        sha256: row.toSha256,
+        source: row.source,
+        classification: row.classification,
+      });
     }
     const current = entry.local?.current ?? null;
     if (

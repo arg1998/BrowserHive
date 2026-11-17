@@ -7,7 +7,7 @@ export const SITE_PACK_SOURCES = ['bundled', 'remote', 'import', 'local'] as con
 /** Element of {@link SITE_PACK_SOURCES}. */
 export type SitePackSourceId = (typeof SITE_PACK_SOURCES)[number];
 
-/** `site_pack_changes.classification` (T3a records `unclassified`, `new_pack` and `local_override`). */
+/** `site_pack_changes.classification` (`unclassified` only in rows written before the classifier, T3a). */
 export const SITE_PACK_CLASSIFICATIONS = [
   'unclassified',
   'tightening',
@@ -140,7 +140,7 @@ export interface SitePackChangeFieldRecord {
   readonly path: string;
   readonly from: unknown;
   readonly to: unknown;
-  /** `null` until T3b's classifier. */
+  /** `null` for a new pack's fields, and in rows written before the classifier (T3a). */
   readonly class: 'tightening' | 'restrictive' | 'loosening' | 'neutral' | null;
 }
 
@@ -183,6 +183,15 @@ export interface SitePackChangeRepository {
     decision: SitePackDecisionValue,
     by: string | null,
     at: number,
+  ): Promise<void>;
+  /**
+   * Sets the classification and the classified diff of one row, by its `event_id` (spec 13 §9.7:
+   * a pending candidate is re-classified at each load, as the templates using its pack change).
+   */
+  classify(
+    eventId: string,
+    classification: SitePackClassificationValue,
+    diff: readonly SitePackChangeFieldRecord[] | null,
   ): Promise<void>;
   /** The newest row for this candidate (pack, sha256, source), or `null`. */
   findCandidate(

@@ -6,9 +6,11 @@ import type {
   SiteGuardHitQuery,
   SiteGuardHitRecord,
   SiteGuardHitRepository,
+  SitePackChangeFieldRecord,
   SitePackChangeQuery,
   SitePackChangeRecord,
   SitePackChangeRepository,
+  SitePackClassificationValue,
   SitePackDecisionValue,
   SitePackSourceId,
   SitePackStateRecord,
@@ -17,6 +19,7 @@ import type {
 } from '../../../ports/persistence/site-packs.ts';
 import type { DB } from '../generated/db.d.ts';
 import {
+  diffToJson,
   siteGuardHitFromRow,
   siteGuardHitToRow,
   sitePackChangeFromRow,
@@ -116,6 +119,18 @@ export class SqliteSitePackChangeRepository implements SitePackChangeRepository 
     await this.#db
       .updateTable('site_pack_changes')
       .set({ decision, decided_by: by, decided_at: at })
+      .where('event_id', '=', eventId)
+      .execute();
+  }
+
+  async classify(
+    eventId: string,
+    classification: SitePackClassificationValue,
+    diff: readonly SitePackChangeFieldRecord[] | null,
+  ): Promise<void> {
+    await this.#db
+      .updateTable('site_pack_changes')
+      .set({ classification, diff_json: diffToJson(diff) })
       .where('event_id', '=', eventId)
       .execute();
   }

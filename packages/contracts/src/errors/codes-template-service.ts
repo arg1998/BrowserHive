@@ -182,4 +182,31 @@ export const TEMPLATE_SERVICE_ERRORS = {
     resolution:
       "Show the offered version (provenance, version, SHA-256) to the operator and send its `sha256` as the site's `pack_sha256`.",
   }),
+  SITE_PACK_BELOW_FLOOR: defineError({
+    code: 'SITE_PACK_BELOW_FLOOR',
+    httpStatus: 409,
+    category: 'domain',
+    retryable: 'after_operator',
+    title: "Templates below the pack's stealth floor",
+    message:
+      "Version {version} of site pack '{pack_id}' needs stronger stealth settings than templates using it have: {templates_text}. Change those templates or disable the site in them, then apply again.",
+    hint: 'Raise the stealth level or change fingerprint noise on the named templates (or disable the site there), then Apply.',
+    details: z.object({
+      pack_id: z.string(),
+      version: z.number().int(),
+      templates: z.array(
+        z.object({
+          template_id: z.string(),
+          name: z.string(),
+          issues: z.array(z.object({ code: z.string(), message: z.string() })),
+        }),
+      ),
+      templates_text: z.string(),
+    }),
+    docs: true,
+    cause:
+      "The version selects the `stealth-profile` strategy (spec 13 §9.4) with a floor (minimum stealth level, required or forbidden fingerprint noise) that templates whose enabled sites use the pack do not meet. Applying it would leave those templates running the site below the pack's floor, so Apply is refused and the approved version stays in force.",
+    resolution:
+      'Edit each named template (Settings: stealth level, fingerprint noise) to meet the floor, or disable the site on it, then apply the version again. Rejecting the version keeps the current one.',
+  }),
 } as const;

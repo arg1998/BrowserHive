@@ -1,3 +1,5 @@
+/** @module domain/site-packs/strategy-specs.test — the strategy table (spec 13 §9.4): exhaustive ids, parameter checks in `refinePack`, clamping, ramp factors and active windows. */
+
 import { describe, expect, test } from 'bun:test';
 import { SitePackV1, STRATEGY_IDS } from '@browserhive/contracts/site-packs';
 import { refinePack } from './refine.ts';

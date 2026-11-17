@@ -1,3 +1,5 @@
+/** @module domain/site-packs/stealth-floor.test — the `stealth-profile` floor (spec 13 §9.4): level ordering and fingerprint requirements. */
+
 import { describe, expect, test } from 'bun:test';
 import { SitePackV1 } from '@browserhive/contracts/site-packs';
 import { packFloorIssues, stealthFloorIssues } from './stealth-floor.ts';

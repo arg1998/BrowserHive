@@ -2,7 +2,7 @@
 
 # Error reference
 
-Every error code BrowserHive can produce (143 codes), generated from `ERROR_REGISTRY` in `@browserhive/contracts/errors`. Each code has a stable anchor: `errors.md#<CODE>`, which is also the `type` URL of HTTP problem responses (`https://browserhive.ai/docs/errors#<CODE>`).
+Every error code BrowserHive can produce (145 codes), generated from `ERROR_REGISTRY` in `@browserhive/contracts/errors`. Each code has a stable anchor: `errors.md#<CODE>`, which is also the `type` URL of HTTP problem responses (`https://browserhive.ai/docs/errors#<CODE>`).
 
 ## How errors reach you
 
@@ -103,6 +103,7 @@ Returned by tools and the REST API when a request cannot be served (unknown sess
 | [`SITE_PACK_NO_PREVIOUS`](#SITE_PACK_NO_PREVIOUS) | No previous version | 409 | never |
 | [`SITE_PACK_NO_LOCAL_FILE`](#SITE_PACK_NO_LOCAL_FILE) | No local pack file | 404 | never |
 | [`SITE_PACK_APPROVAL_REQUIRED`](#SITE_PACK_APPROVAL_REQUIRED) | Site pack needs review | 409 | different_args |
+| [`SITE_PACK_BELOW_FLOOR`](#SITE_PACK_BELOW_FLOOR) | Templates below the pack's stealth floor | 409 | after_operator |
 
 <a id="SESSION_NOT_FOUND"></a>
 ### `SESSION_NOT_FOUND`
@@ -1982,6 +1983,33 @@ Details:
 | `source` | `string` | yes | — |
 | `release` | `string` or `null` | yes | — |
 
+<a id="SITE_PACK_BELOW_FLOOR"></a>
+### `SITE_PACK_BELOW_FLOOR`
+
+| Property | Value |
+|---|---|
+| Title | Templates below the pack's stealth floor |
+| HTTP status | 409 |
+| Category | `domain` |
+| Retryable | `after_operator` (retry after an operator acts (unlock the vault, resolve a request, change policy)) |
+
+Message: `Version {version} of site pack '{pack_id}' needs stronger stealth settings than templates using it have: {templates_text}. Change those templates or disable the site in them, then apply again.`
+
+Hint: Raise the stealth level or change fingerprint noise on the named templates (or disable the site there), then Apply.
+
+Cause: The version selects the `stealth-profile` strategy (spec 13 §9.4) with a floor (minimum stealth level, required or forbidden fingerprint noise) that templates whose enabled sites use the pack do not meet. Applying it would leave those templates running the site below the pack's floor, so Apply is refused and the approved version stays in force.
+
+Resolution: Edit each named template (Settings: stealth level, fingerprint noise) to meet the floor, or disable the site on it, then apply the version again. Rejecting the version keeps the current one.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `pack_id` | `string` | yes | — |
+| `version` | `integer` | yes | — |
+| `templates` | `object[]` | yes | each item: keys `template_id`, `name`, `issues` |
+| `templates_text` | `string` | yes | — |
+
 ## Boot errors
 
 Stop the process before it serves anything. The CLI prints `[CODE] message` and exits with the listed exit code.
@@ -3313,6 +3341,7 @@ Non-fatal degradations recorded on a session or in the system events list; the o
 | [`TEMPLATE_SITE_SIGNED_OUT`](#TEMPLATE_SITE_SIGNED_OUT) | Some template sites are signed out | 500 | never |
 | [`TEMPLATE_STATE_COPY`](#TEMPLATE_STATE_COPY) | Session started from a copy of a template's sign-ins | 500 | never |
 | [`SITE_GUARD_WARNED`](#SITE_GUARD_WARNED) | A guarded request went out | 500 | never |
+| [`SITE_PACED`](#SITE_PACED) | A write was paced | 500 | never |
 | [`SITE_WRITE_HELD`](#SITE_WRITE_HELD) | A write is waiting for approval | 500 | never |
 
 <a id="EXECUTABLE_PATH_OVERRIDE"></a>
@@ -3722,6 +3751,32 @@ Hint: Session warning: logged and broadcast on session:<id>, never thrown.
 Cause: A request matched a site pack guard whose action is `warn` (or a write under a `warn` write policy) and was let through (spec 13 §9.3). The guard hit is listed on the template's Activity tab and the Site packs guard-hit log.
 
 Resolution: Nothing to do unless the request should not have gone out: then set the site's write policy to `confirm` on the template's Sites tab.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `session_id` | `string` | yes | — |
+| `message` | `string` | yes | — |
+| `details` | `object` | no | additional keys allowed |
+
+<a id="SITE_PACED"></a>
+### `SITE_PACED`
+
+| Property | Value |
+|---|---|
+| Title | A write was paced |
+| HTTP status | 500 |
+| Category | `warning` |
+| Retryable | `never` (do not retry; the request cannot succeed as sent) |
+
+Message: `{message}`
+
+Hint: Session warning: logged and broadcast on session:<id>, never thrown.
+
+Cause: A write matched a site pack write guard whose pacing budget (strategy `pace-writes`, spec 13 §9.4) was spent: it waited for the next token, or was aborted when that was more than 60 s away. The budget belongs to the template's account and is shared by its sessions; `ramp-up` lowers it for a new template.
+
+Resolution: Nothing to do: the budget refills over time. If writes are paced too often, spread the agents' work or lower their write rate.
 
 Details:
 

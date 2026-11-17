@@ -16,12 +16,22 @@ const MAX_LINES = 12;
 
 type Item = SitePackUpdatesFact['items'][number];
 
-/** "linkedin.com v7 → v8 available", "local linkedin.com changed". */
+/** The UI words of a candidate's classification (spec 13 §11.4 vocabulary); `''` when none applies. */
+const CLASS_WORDS: Readonly<Record<string, string>> = {
+  tightening: 'tightens rules',
+  restrictive: 'can stop the site',
+  loosening: 'relaxes rules',
+  neutral: 'no rule change',
+  revoked: 'revoked by the publisher',
+};
+
+/** "linkedin.com v7 → v8 available (relaxes rules)", "local linkedin.com changed". */
 function line(item: Item): string {
   if (item.local === 'changed') return `local ${item.pack_id} changed`;
   if (item.local === 'not_approved') return `local ${item.pack_id} not yet approved`;
   const from = item.from_version === null ? '' : `v${item.from_version} → `;
-  return `${item.pack_id} ${from}v${item.to_version} available`;
+  const words = CLASS_WORDS[item.classification ?? ''];
+  return `${item.pack_id} ${from}v${item.to_version} available${words === undefined ? '' : ` (${words})`}`;
 }
 
 /** `site_pack.status` with something waiting: opens the thread (once while it is open). */
