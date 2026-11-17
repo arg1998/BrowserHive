@@ -1353,3 +1353,12 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 - `single-focus` turns emulated focus off through a second DevTools session per page (again after each navigation) and minimizes such a page's window on headless hosts; `visibilityState` stays `visible`, which screenshots and the live view need.
 - `redirect` and `either` probes wait for `load` and then up to 4 s for a client-side signed-out redirect; an `either` probe that loaded and stayed on its path is `signed_in` (`no_redirect`). This resolves D48 for Reddit without a signed-in landmark.
 - The keeper starts a stopped browser like a scheduled pack check and skips signed-out and challenged sites.
+
+## D-76 Strategy waits re-check the gates; a site turned off below its floor is an error degradation
+
+**Status:** Accepted (lead decision for PR T3b review fixes; the owner may veto)
+
+**Decision.**
+- After a `human-dwell` or `serialize-site` wait (and after an `entry-warmup`, before the agent's own navigation), the dispatcher runs the sign-in pause, site-hold, stop and guard checks again; a call that did not wait skips the second check (its window is the pre-T3b one). Guard decisions already acted on (a warn row, a consumed one-time pass) are not repeated. A call that meets a sign-in pause at the re-check keeps its turn while it waits (at most the pause's bound).
+- `serialize-site` is FIFO across sessions: a session's concurrent calls share its turn only while nobody else is queued.
+- A site that BrowserHive turns off because a change no operator applied (a deleted local file, a revocation fallback) put its template below the pack's stealth floor is reported as the degradation `TEMPLATE_SITE_BELOW_FLOOR` at severity `error`, like `TEMPLATE_HOST_FAILED`: it notifies, and `/health` answers `degraded` until the operator removes the site or template or a lower floor applies. A deployment that restarts on an unhealthy check would restart in a loop until then; the owner may prefer `warn` (no notification).
