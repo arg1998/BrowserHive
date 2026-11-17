@@ -25,10 +25,13 @@ import { blocklistComparisonForms } from './blocklist.ts';
  *   or that does not parse matches nothing. Rule hosts must be ASCII (punycode for IDNs): the
  *   comparison forms are punycode, so a Unicode host would never match.
  * - **Method** — `methods` absent matches every method that reaches the route; present, the
- *   request's upper-cased method must be listed. A CORS preflight never reaches it: with routing
- *   on, the driver (Patchright, as Playwright did) answers `OPTIONS` preflights itself, or, with
- *   init scripts, the preflighted request fails in the page (spec 13 §3.8, D-65); only an `OPTIONS`
- *   request a page sends itself does.
+ *   request's upper-cased method must be listed. A CORS preflight never reaches it: the chain
+ *   hands preflights to Chromium, which sends them and honours the site's answer (spec 13 §3.8,
+ *   D-66), and the guard decides on the request that follows an allowed one; only an `OPTIONS`
+ *   request a page sends itself does. So a rule (even without `methods`) does not keep a URL
+ *   from being contacted: the preflight of a non-simple cross-origin request to it, with its full
+ *   URL, reaches the host before the guard blocks or holds the request (a guard is a write policy,
+ *   not egress control).
  * - **Resource type** — Playwright's name of the request's type. `resourceTypes` absent means
  *   {@link DEFAULT_GUARD_RESOURCE_TYPES}; a type outside {@link GUARD_RESOURCE_TYPES} (`image`,
  *   `script`, `stylesheet`, …) never matches, and `other` is Playwright's literal `other`.

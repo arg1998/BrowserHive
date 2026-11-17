@@ -2,9 +2,16 @@
 
 import { listBackups } from '@browserhive/core/persistence';
 import { createProcessTreeReader, type Logger, serializeError } from '@browserhive/core/runtime';
-import { driverVersion, SystemStatusService } from '@browserhive/core/server';
+import {
+  driverVersion,
+  onPreflightRefusal,
+  preflightEnforcement,
+  SystemStatusService,
+  verifyPreflightDriver,
+} from '@browserhive/core/server';
 import { hostKey, startBrowserMemorySampler } from '../adapters/browser-memory.ts';
 import { wireMetrics } from '../adapters/metrics.ts';
+import { wirePreflightDegradation } from '../adapters/preflight-degradation.ts';
 import { createTimers } from '../adapters/timers.ts';
 import { type BootContext, part } from '../context.ts';
 import type { PhaseHandle } from '../unwind.ts';
@@ -99,6 +106,10 @@ export async function wireObserversPhase(ctx: BootContext): Promise<PhaseHandle>
       stealth: {
         profile: config.stealth,
         driver: domain.driverName(),
+        // Read on every `/system` (the spread in SystemStatusService calls the getter).
+        get cors_preflights() {
+          return preflightEnforcement().state;
+        },
         fingerprint: config.fingerprint,
         humanize: config.humanize,
         captcha: config.captcha,
@@ -142,6 +153,11 @@ export async function wireObserversPhase(ctx: BootContext): Promise<PhaseHandle>
     .catch((err: unknown) => logger.warn('report cursors failed', { err: serializeError(err) }))
     .finally(() => domain.reports.start());
   status.start();
+  // Before any routed browser starts: an unverified driver is reported at boot (D-66).
+  const unwirePreflights = wirePreflightDegradation(domain.degradations, {
+    verify: verifyPreflightDriver,
+    onRefusal: onPreflightRefusal,
+  });
   domain.retention.start();
   domain.outbox.start();
   domain.backups.start();
@@ -156,6 +172,7 @@ export async function wireObserversPhase(ctx: BootContext): Promise<PhaseHandle>
 
   return {
     async stop() {
+      unwirePreflights();
       unwireMetrics();
       domain.sweeper.stop();
       domain.backups.stop();

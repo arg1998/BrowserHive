@@ -20,6 +20,7 @@ const ABORT_BLOCKED: InterceptionVerdict = Object.freeze({
   kind: 'abort',
   reason: 'blockedbyclient',
 });
+const ABORT_FAILED: InterceptionVerdict = Object.freeze({ kind: 'abort', reason: 'failed' });
 
 /** How often a frameless navigation is re-read while its page is being adopted. */
 const OWNER_POLL_MS = 25;
@@ -30,6 +31,8 @@ const OWNER_POLL_MS = 25;
  * its session cookie never enters a template's jar (spec 13 §3.8). Fail-closed for every type: a
  * request it cannot read is aborted. A redirect hop is not routed (Playwright routes the first URL
  * only); the daemon refuses those itself (the template-host marker cookie, `templateHostCookies`).
+ * CORS preflights to BrowserHive are failed too (D-66): Chromium sends them itself, so without
+ * this they would reach the daemon before the request the guard aborts.
  */
 export function selfOriginHandler(deps: {
   readonly origins: readonly string[];
@@ -37,19 +40,21 @@ export function selfOriginHandler(deps: {
 }): InterceptionHandler {
   const self = selfAddressesOf(deps.origins);
   const log = deps.logger.child({ module: 'self-origin' });
+  const decide = (url: () => string, preflight: boolean): InterceptionVerdict => {
+    try {
+      if (!isSelfAddress(url(), self)) return PASS;
+      log.info('own origin blocked', preflight ? { preflight } : {});
+      return ABORT_BLOCKED;
+    } catch (err) {
+      log.error('self-origin check threw', { err: serializeError(err) });
+      return ABORT_FAILED;
+    }
+  };
   return {
     id: 'self-origin',
     onError: 'closed',
-    handle: async (request: Request) => {
-      try {
-        if (!isSelfAddress(request.url(), self)) return PASS;
-        log.info('own origin blocked');
-        return ABORT_BLOCKED;
-      } catch (err) {
-        log.error('self-origin check threw', { err: serializeError(err) });
-        return { kind: 'abort', reason: 'failed' };
-      }
-    },
+    handle: async (request: Request) => decide(() => request.url(), false),
+    preflight: async (preflight) => decide(() => preflight.url, true),
   };
 }
 

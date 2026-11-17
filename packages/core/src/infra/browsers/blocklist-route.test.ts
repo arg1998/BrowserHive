@@ -28,6 +28,8 @@ function fakeRoute(url: string, resourceType: string | (() => string)) {
   const route: unknown = {
     request: () => ({
       url: () => url,
+      method: () => 'GET',
+      headers: () => ({}),
       resourceType: typeof resourceType === 'function' ? resourceType : () => resourceType,
     }),
     fallback: async () => {

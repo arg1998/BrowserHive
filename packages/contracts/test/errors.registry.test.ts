@@ -163,6 +163,8 @@ const SPEC_CODES = [
   'SITE_PACK_UPDATE_NOT_PENDING',
   'SITE_GUARD_WARNED',
   'SITE_WRITE_HELD',
+  // Real CORS preflights in routed browsers (spec 13 §3.8, D-66).
+  'PREFLIGHTS_NOT_ENFORCED',
 ] as const;
 
 describe('ERROR_REGISTRY completeness', () => {

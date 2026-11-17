@@ -63,6 +63,21 @@ describe('self-origin guard', () => {
     }
   });
 
+  it('fails CORS preflights to BrowserHive origins and lets the rest go on (D-66)', async () => {
+    const preflight = (url: string) => ({
+      url,
+      origin: 'https://site-a.test',
+      requestMethod: 'POST',
+      requestHeaders: 'content-type',
+    });
+    expect(await guard.preflight?.(preflight('http://LOCALHOST:9876/api/v1/x'))).toEqual({
+      kind: 'abort',
+      reason: 'blockedbyclient',
+    });
+    expect(await guard.preflight?.(preflight('https://site-b.test/api'))).toEqual({ kind: 'pass' });
+    expect(await guard.preflight?.(preflight('not a url'))).toEqual({ kind: 'pass' });
+  });
+
   it('fails closed when the request cannot be read', async () => {
     const broken = {
       url: () => {

@@ -88,6 +88,16 @@ function route(host: string, path: string, method = 'GET', search = ''): Respons
       });
     case '/cors-page':
       return page('cors', '<p id="cors">cors</p>');
+    case '/api/write-allowed':
+      // The preflight allows the asking origin, its method and headers (D-66).
+      return new Response(method === 'OPTIONS' ? null : 'written', {
+        status: method === 'OPTIONS' ? 204 : 200,
+        headers: {
+          'access-control-allow-origin': 'https://site-a.test',
+          'access-control-allow-methods': 'POST',
+          'access-control-allow-headers': 'content-type, x-test',
+        },
+      });
     case '/api/write':
       // The preflight is refused (no Access-Control-Allow-*): a browser that honours it never sends the write.
       if (method === 'OPTIONS') return new Response(null, { status: 403 });

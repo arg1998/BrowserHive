@@ -219,6 +219,7 @@
               "RETENTION_FAILED",
               "STALE_BROWSER_PROCESSES",
               "TEMPLATE_HOST_FAILED",
+              "PREFLIGHTS_NOT_ENFORCED",
               "TEMPLATE_ROW_UNREADABLE",
               "TEMPLATE_KEY_MISSING",
               "TEMPLATE_KEY_MISMATCH",
@@ -8005,6 +8006,14 @@
               },
               "driver": {
                 "type": "string"
+              },
+              "cors_preflights": {
+                "type": "string",
+                "enum": [
+                  "enforced",
+                  "pending",
+                  "refused"
+                ]
               },
               "fingerprint": {
                 "type": "boolean"

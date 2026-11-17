@@ -44,7 +44,8 @@ export interface BlocklistRouteDeps {
 /**
  * The blocklist as the chain's blocking handler (spec 11 §5, spec 13 §3.8 handler 2).
  *
- * Scoped to `document` requests on purpose. A blocklist entry describes a *place an agent may not
+ * Scoped to `document` requests on purpose, so it declares no `preflight` decision (a preflight is
+ * never a document; Chromium sends it, D-66). A blocklist entry describes a *place an agent may not
  * go*, so aborting the page load is the whole enforcement; extending it to images, scripts and XHR
  * would let a rule about one CDN quietly break every allowed page that happens to load from it.
  * Requests by method and resource type are the request guard's (spec 13 §9.3).
@@ -111,6 +112,7 @@ export async function installBlocklistRoute(
   const chain = new InterceptionChain({
     handlers: [blocklistHandler(deps)],
     resolveOwner: fixedOwner(deps.sessionId),
+    clock: deps.clock,
     logger: deps.logger,
   });
   const installed = await chain.install(context);

@@ -1,7 +1,8 @@
-/** @module infra/browsers/interception-chain.test — one route per context, ordered handlers, first abort wins, fail-closed and fail-open handler errors, lazy memoized owner (spec 13 §3.8). */
+/** @module infra/browsers/interception-chain.test — one route per context, ordered handlers, first abort wins, fail-closed and fail-open handler errors, lazy memoized owner (spec 13 §3.8). The preflight side (D-66) is `chain-preflights.test.ts`. */
 
 import { describe, expect, it } from 'bun:test';
 import type { BrowserContext, Request, Route } from 'patchright';
+import { ok } from '../../kernel/result.ts';
 import { createCollectingLogger } from '../logging/collecting-logger.ts';
 import {
   fixedOwner,
@@ -31,6 +32,7 @@ function fakeRoute(resourceType: string | (() => string), options: { noRequest?:
   const request: unknown = {
     url: () => 'https://site.test/x',
     method: () => 'POST',
+    headers: () => ({}),
     resourceType: typeof resourceType === 'function' ? resourceType : () => resourceType,
   };
   const route: unknown = {
@@ -64,8 +66,19 @@ function handler(
 
 const ABORT: InterceptionVerdict = { kind: 'abort', reason: 'blockedbyclient' };
 
+/** Preflights enforced (D-66 has its own suite): the driver hook is faked as armed. */
+const ENFORCED = {
+  installPreflights: () => ok('armed' as const),
+  preflightState: () => 'enforced' as const,
+};
+
 function chainOf(handlers: InterceptionHandler[], logger = createCollectingLogger()) {
-  return new InterceptionChain({ handlers, resolveOwner: fixedOwner('sess-1'), logger });
+  return new InterceptionChain({
+    handlers,
+    resolveOwner: fixedOwner('sess-1'),
+    logger,
+    ...ENFORCED,
+  });
 }
 
 describe('InterceptionChain', () => {
