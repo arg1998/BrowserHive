@@ -33,6 +33,8 @@ export const SiteStrategyParam = z.object({
   default_from: z.string().nullable(),
   fallback: z.number().nullable(),
   min: z.number().nullable(),
+  /** A parameter of the same strategy whose value in force is the lower bound (`max_ms` ≥ `min_ms`); `min` still holds. */
+  min_from: z.string().nullable(),
   max: z.number().nullable(),
   /** Enum values, in order (`up` means a later one). */
   values: z.array(z.string()).nullable(),

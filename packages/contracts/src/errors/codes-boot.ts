@@ -421,6 +421,38 @@ export const BOOT_ERRORS = {
     resolution:
       'Remove the sign-in of the named origins if the template does not need them (**Remove sign-in**), or accept that restores omit their IndexedDB data.',
   }),
+  TEMPLATE_SITE_BELOW_FLOOR: defineError({
+    code: 'TEMPLATE_SITE_BELOW_FLOOR',
+    httpStatus: 500,
+    category: 'boot',
+    retryable: 'never',
+    title: "A site turned off below its pack's stealth floor",
+    message:
+      "Version {version} of site pack '{pack_id}' now applies without an Apply, and templates using it are below its stealth floor: {templates_text}. BrowserHive turned the site off on them.",
+    hint: 'Create a new template with the stealth settings the pack needs for this site, or remove the site from the named templates.',
+    details: z.object({
+      pack_id: z.string(),
+      version: z.number().int(),
+      /** `local_override_ended`: the approved local file is gone and another approved version applies. */
+      reason: z.enum(['local_override_ended', 'content_changed']),
+      template_ids: z.array(z.string()),
+      templates: z.array(
+        z.object({
+          template_id: z.string(),
+          name: z.string(),
+          site_ids: z.array(z.string()),
+          issues: z.array(z.object({ code: z.string(), message: z.string() })),
+        }),
+      ),
+      templates_text: z.string(),
+    }),
+    docs: true,
+    exitCode: 1,
+    cause:
+      "The content in force of a site pack changed without an operator's Apply (the approved local file was deleted or came back, a revoked version fell back to the previous one, or a stored approval became readable again; spec 13 §9.6), and its `stealth-profile` floor is above templates whose enabled sites use the pack. A template never runs a site below its pack's floor (D-71), and a file deletion cannot be refused, so the site was turned off on those templates (`enabled=false`, an audit row by `browserhive`).",
+    resolution:
+      "Stealth and fingerprint noise are fixed for a template's life: create a new template with the settings the pack names for this site and sign in there, or remove the site from the named templates. Turning the site on again is refused while the template is below the floor. The record resolves once no turned-off site is below its pack's floor.",
+  }),
   SITE_PACKS_STATE_CORRUPT: defineError({
     code: 'SITE_PACKS_STATE_CORRUPT',
     httpStatus: 500,

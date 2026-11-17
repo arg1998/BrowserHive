@@ -1,4 +1,4 @@
-/** @module domain/site-packs/classify-rules — spec 13 §9.7 for `guards`, `element_guards` and `challenges`: an entry added or made stricter tightens, and is **restrictive** when its match covers the pack's probe path, its sign-in URL or a whole host (a challenge also when a member would match every page); an entry removed, laxer, or with its match, target or `request_guard` changed loosens. */
+/** @module domain/site-packs/classify-rules — spec 13 §9.7 for `guards`, `element_guards` and `challenges`: an entry added or made stricter tightens, and is **restrictive** when its match covers the pack's probe path, its sign-in URL or a whole host, or (a guard) can block a form post on the sign-in host; a challenge added or made stricter is restrictive when it stops the site, when its match has no `url` (content-only matches cannot be bounded), or when it covers those pages (D-73, review #84 M2); an entry removed, laxer, or with its match, target or `request_guard` changed loosens. */
 
 import type {
   PackChallenge,
@@ -6,6 +6,7 @@ import type {
   PackGuard,
   SitePackV1,
 } from '@browserhive/contracts/site-packs';
+import { matchesGlob } from '../../kernel/glob.ts';
 import { compileRequestGuardRules, matchRequestGuard } from '../policies/request-guard.ts';
 import type { ChangeClass, ClassifyInput } from './classify-types.ts';
 import { scopedUrl, scopeOfGlob } from './glob-scope.ts';
@@ -57,12 +58,13 @@ export function classifyChallengeChange(
   const after = findById(to.challenges, id);
   if (rest === '') {
     if (before !== undefined || after === undefined) return 'loosening';
-    return challengeCoversCritical(after, to) ? 'restrictive' : 'tightening';
+    return challengeCanStop(after, to) ? 'restrictive' : 'tightening';
   }
   if (rest === 'action' && before !== undefined && after !== undefined) {
     if (before.action === after.action) return 'neutral';
     if (after.action === 'attention') return 'loosening';
-    return challengeCoversCritical(after, to) ? 'restrictive' : 'tightening';
+    // `attention → stop`: the challenge now stops the site (D-73, review #84 M2).
+    return 'restrictive';
   }
   // `match` changed, `kind` changed: loosening.
   return 'loosening';
@@ -96,6 +98,20 @@ function wholeHost(glob: string, pack: SitePackV1): boolean {
   return scoped.ok && scoped.value.wholeHost;
 }
 
+/**
+ * True when a guard can stop a form post on the sign-in host: its methods include `POST` (or are
+ * absent) and its host covers the sign-in URL's host. The form's post target is not in the pack
+ * (LinkedIn posts to `/checkpoint/lg/login-submit`, not `/login`), so any such guard counts
+ * (D-73, review #84 M2).
+ */
+function coversSignInPost(guard: PackGuard, pack: SitePackV1): boolean {
+  const signIn = pack.sign_in?.url.host;
+  if (signIn === undefined) return false;
+  if (guard.match.methods !== undefined && !guard.match.methods.includes('POST')) return false;
+  const scoped = scopeOfGlob(guard.match.url, pack.domains);
+  return scoped.ok && matchesGlob(signIn.toLowerCase(), scoped.value.host);
+}
+
 /** True when the guard's match covers the probe path, the sign-in URL or a whole host. */
 function coversCritical(
   list: 'guards' | 'element_guards',
@@ -111,7 +127,7 @@ function coversCritical(
       (signIn !== null && matchesPackGlob(guard.page, signIn))
     );
   }
-  if (wholeHost(guard.match.url, pack)) return true;
+  if (wholeHost(guard.match.url, pack) || coversSignInPost(guard, pack)) return true;
   const compiled = compileRequestGuardRules([
     {
       id: guard.id,
@@ -131,12 +147,27 @@ function coversCritical(
   return hits(probe, 'GET') || (signIn !== null && (hits(signIn, 'GET') || hits(signIn, 'POST')));
 }
 
-/** True when a challenge would fire on the probe or sign-in page, or on every page. */
+/**
+ * True when an added challenge can stop the site (D-73, review #84 M2): it stops the site
+ * (`action: 'stop'`), its match has no `url` (a `title_contains`, `landmark`, `text` or `frame`
+ * match the classifier cannot bound: "LinkedIn" is in every LinkedIn title, `div` is on every
+ * page), or it covers the pack's own pages.
+ */
+function challengeCanStop(challenge: PackChallenge, pack: SitePackV1): boolean {
+  if (challenge.action === 'stop' || challenge.match.url === undefined) return true;
+  return challengeCoversCritical(challenge, pack);
+}
+
+/** True when a challenge would fire on the probe or sign-in page, a whole host, or every page. */
 function challengeCoversCritical(challenge: PackChallenge, pack: SitePackV1): boolean {
   const { probe, signIn } = criticalUrls(pack);
   const m = challenge.match;
   if (m.url !== undefined) {
-    if (matchesPackGlob(m.url, probe) || (signIn !== null && matchesPackGlob(m.url, signIn))) {
+    if (
+      wholeHost(m.url, pack) ||
+      matchesPackGlob(m.url, probe) ||
+      (signIn !== null && matchesPackGlob(m.url, signIn))
+    ) {
       return true;
     }
   }

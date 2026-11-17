@@ -1,4 +1,4 @@
-/** @module features/site-packs/detail/strategy-model — a pack's strategy parameters as the binary reads them (spec 13 §9.4): the value the pack sets, else the default (or the pack field it defaults from), clamped to the bounds of `GET /site-packs/strategies`, with the bounds and safe direction in words */
+/** @module features/site-packs/detail/strategy-model — a pack's strategy parameters as the binary reads them (spec 13 §9.4): the value the pack sets, else the default (or the pack field it defaults from), clamped to the bounds of `GET /site-packs/strategies` (a lower bound taken from another parameter, `min_from`, as `max_ms` ≥ `min_ms`, review #84 L3), with the bounds and safe direction in words */
 import type { SiteStrategyParam } from '@browserhive/contracts/http';
 import type { SitePackV1 } from '@browserhive/contracts/site-packs';
 
@@ -52,9 +52,11 @@ export function directionText(param: SiteStrategyParam): string {
   }
 }
 
-/** The bounds of a parameter in words, or `null` when it has none. */
+/** The bounds of a parameter in words ("min_ms–20000" when another parameter is the lower bound), or `null`. */
 function boundsText(param: SiteStrategyParam): string | null {
-  if (param.min !== null && param.max !== null) return `${param.min}–${param.max}`;
+  if (param.min !== null && param.max !== null) {
+    return `${param.min_from ?? param.min}–${param.max}`;
+  }
   if (param.values !== null) return param.values.join(' · ');
   if (param.type === 'path') return 'A path on the site';
   return null;
@@ -68,8 +70,16 @@ function defaultText(param: SiteStrategyParam): string {
   return '—';
 }
 
-/** One parameter's row: the pack's value clamped to the binary's bounds, else the default. */
-export function paramRow(param: SiteStrategyParam, raw: Raw, pack: SitePackV1): ParamRow {
+/**
+ * One parameter's row: the pack's value clamped to the binary's bounds, else the default.
+ * `lower` is the value in force of the parameter `min_from` names, when there is one.
+ */
+export function paramRow(
+  param: SiteStrategyParam,
+  raw: Raw,
+  pack: SitePackV1,
+  lower?: number,
+): ParamRow {
   const base = {
     name: param.name,
     defaultText: defaultText(param),
@@ -84,7 +94,8 @@ export function paramRow(param: SiteStrategyParam, raw: Raw, pack: SitePackV1): 
     return { ...base, value: text(value ?? undefined), origin: 'default', raw: null };
   }
   if (typeof raw === 'number' && param.min !== null && param.max !== null) {
-    const clamped = Math.min(param.max, Math.max(param.min, raw));
+    const min = Math.max(param.min, lower ?? param.min);
+    const clamped = Math.min(param.max, Math.max(min, raw));
     if (clamped !== raw) {
       return { ...base, value: text(clamped), origin: 'clamped', raw: text(raw) };
     }
@@ -98,7 +109,15 @@ export function paramRows(
   values: Readonly<Record<string, number | boolean | string>>,
   pack: SitePackV1,
 ): readonly ParamRow[] {
-  const known = params.map((p) => paramRow(p, values[p.name], pack));
+  const inForce = new Map<string, number>();
+  for (const p of params) {
+    if (p.min_from !== null) continue;
+    const value = Number(paramRow(p, values[p.name], pack).value);
+    if (Number.isFinite(value)) inForce.set(p.name, value);
+  }
+  const known = params.map((p) =>
+    paramRow(p, values[p.name], pack, p.min_from === null ? undefined : inForce.get(p.min_from)),
+  );
   const unknown = Object.entries(values)
     .filter(([name]) => !params.some((p) => p.name === name))
     .map(

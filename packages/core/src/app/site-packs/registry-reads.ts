@@ -159,10 +159,15 @@ export async function diffOf(
     const row = entry.pending.find((p) => p.toVersion === version);
     const content =
       row === undefined ? null : snapshot.bundled.packs.find((p) => p.sha256 === row.toSha256);
-    if (row === undefined || content === undefined || content === null) {
+    // The previous approved version too: what Revert restores, classified like Apply (review #84 L4).
+    const found =
+      row !== undefined && content !== undefined && content !== null
+        ? { content, source: row.source }
+        : await previousOf(entry, snapshot, version, deps);
+    if (found === null) {
       throw packConflict(`version ${version} of ${entry.packId} is not downloaded`);
     }
-    to = { content, source: row.source };
+    to = found;
   }
   const from = await fromOf(entry, query, to.source === 'local', deps);
   const ctx = await usageOf(deps.repos, entry.packId);
@@ -174,6 +179,37 @@ export async function diffOf(
     new_domains: [...newDomains(from?.content.pack ?? null, to.content.pack)],
     changes: classified.diff.map((c) => ({ ...c })),
   };
+}
+
+/** The previous approved version's content when it is `version` (the release's bytes, else BrowserHive's copy). */
+async function previousOf(
+  entry: PackEntry,
+  snapshot: RegistrySnapshot,
+  version: number,
+  deps: Pick<SitePackRegistryDeps, 'cache' | 'binaryVersion'>,
+): Promise<{ content: SourcePackVersion; source: SitePackVersionRef['source'] } | null> {
+  const state = entry.state;
+  if (
+    state === null ||
+    state.previousVersion !== version ||
+    state.previousSha256 === null ||
+    state.previousSource === null
+  ) {
+    return null;
+  }
+  const sha = state.previousSha256;
+  const bundled = snapshot.bundled.packs.find((p) => p.sha256 === sha);
+  if (state.previousSource === 'bundled' && bundled !== undefined) {
+    return { content: bundled, source: 'bundled' };
+  }
+  const cached = await readCached(
+    deps.cache,
+    state.previousSource,
+    entry.packId,
+    sha,
+    deps.binaryVersion,
+  );
+  return cached === null ? null : { content: cached, source: state.previousSource };
 }
 
 async function fromOf(

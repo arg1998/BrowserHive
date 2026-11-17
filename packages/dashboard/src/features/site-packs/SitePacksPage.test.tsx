@@ -155,6 +155,28 @@ describe('SitePacksPage', () => {
     );
   });
 
+  it('Approve of a local file that relaxes rules says so and asks with care (review #84 L1)', async () => {
+    mount({
+      'GET /site-packs/github.com/diff': packDiff({
+        to: { version: 1, sha256: sha('d'), source: 'local' },
+        classification: 'loosening',
+        changes: [{ path: 'guards[logout]', from: { id: 'logout' }, to: null, class: 'loosening' }],
+      }),
+    });
+    const card = (await screen.findByRole('heading', { level: 3, name: /GitHub/ })).closest(
+      'article',
+    ) as HTMLElement;
+    await within(card).findByText('guards[logout]');
+    await click(within(card).getByRole('button', { name: 'Approve…' }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(
+      within(dialog).getByText(/This file relaxes rules: check every highlighted field/),
+    ).toBeDefined();
+    expect(within(dialog).getByRole('button', { name: 'Approve this content' }).className).toMatch(
+      /destructive/,
+    );
+  });
+
   it('keeps the filters and the tab in the URL and sends them as the query', async () => {
     const view = mount({}, '/site-packs?source=local&pending=1&q=link');
     await screen.findByRole('region', { name: 'Site packs' });

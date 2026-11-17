@@ -127,7 +127,7 @@ export const SITE_PACK_ROUTES = [
     operationId: 'diffSitePack',
     tags,
     summary:
-      "The field-level diff from the approved version (or `from`) to a pending version or the current local file (`to=local`), classified (spec 13 §9.7): each change's class and the candidate's (the strongest; `new_pack` without an approved version), with the templates' current settings.",
+      "The field-level diff from the approved version (or `from`) to a pending version, the previous approved version (what Revert restores) or the current local file (`to=local`), classified (spec 13 §9.7): each change's class and the candidate's (the strongest; `new_pack` without an approved version), with the templates' current settings.",
     request: { params: SitePackIdParams, query: SitePackDiffQuery },
     responses: { 200: SitePackDiffResponse },
     errors: ['SITE_PACK_NOT_FOUND', 'CONFLICT'],
@@ -176,10 +176,11 @@ export const SITE_PACK_ROUTES = [
   defineRoute({
     operationId: 'revertSitePack',
     tags,
-    summary: 'Restore the previous approved version in one action.',
+    summary:
+      "Restore the previous approved version in one action. Refused (SITE_PACK_BELOW_FLOOR) while a template using the pack is below that version's stealth floor.",
     request: { params: SitePackIdParams },
     responses: { 200: SitePackViewResponse },
-    errors: ['SITE_PACK_NOT_FOUND', 'SITE_PACK_NO_PREVIOUS'],
+    errors: ['SITE_PACK_NOT_FOUND', 'SITE_PACK_NO_PREVIOUS', 'SITE_PACK_BELOW_FLOOR'],
     async handler({ input, principal, services }) {
       return reply(200, {
         view: await services.sitePacks.revert(input.params.pack_id, by(principal)),

@@ -1,4 +1,4 @@
-/** @module interface/http/routes/site-packs-classify.test — the T3b site-pack REST surface over the real app (spec 13 §11.1, §12): `GET /site-packs/strategies` from the binary's strategy table, a classified diff, and Apply refused with `SITE_PACK_BELOW_FLOOR` as problem+json naming the templates. */
+/** @module interface/http/routes/site-packs-classify.test — the T3b site-pack REST surface over the real app (spec 13 §11.1, §12): `GET /site-packs/strategies` from the binary's strategy table, a classified diff, and Apply and Revert refused with `SITE_PACK_BELOW_FLOOR` as problem+json naming the templates. */
 
 import { describe, expect, it } from 'bun:test';
 import {
@@ -42,6 +42,7 @@ describe('GET /site-packs/strategies', () => {
       default_from: 'pacing.min_launch_gap_s',
       fallback: 0,
       min: 0,
+      min_from: null,
       max: 3600,
       values: null,
       safe_direction: 'up',
@@ -53,6 +54,8 @@ describe('GET /site-packs/strategies', () => {
       safe_direction: 'toward',
       safe_value: 'disable_non_proxied_udp',
     });
+    const dwellMax = body.data.find((s) => s.id === 'human-dwell')?.params[1];
+    expect(dwellMax).toMatchObject({ name: 'max_ms', min: 0, min_from: 'min_ms', max: 20_000 });
     const warmup = body.data.find((s) => s.id === 'entry-warmup')?.params[0];
     expect(warmup).toMatchObject({ name: 'path', type: 'path', safe_direction: 'none' });
   });
@@ -91,5 +94,38 @@ describe('a classified diff and the stealth floor over REST', () => {
     expect(kit.sitePacks.registry.get('pack-a.test')?.pending[0]?.classification).toBe(
       'restrictive',
     );
+  });
+
+  it('Revert to a version whose floor is above a using template is 409 SITE_PACK_BELOW_FLOOR', async () => {
+    const kit = await createHttpKit();
+    const cookie = await kit.login();
+    const registry = kit.sitePacks.registry;
+    const v1 = sitePack('pack-a.test', 1, {
+      strategies: [{ id: 'stealth-profile', params: { min_level: 'max' } }],
+    });
+    kit.sitePacks.bundled.put(v1);
+    await registry.reload();
+    await registry.approveSite('pack-a.test', packSha(v1), 'admin');
+    kit.sitePacks.bundled.put(sitePack('pack-a.test', 2));
+    await registry.reload();
+    await registry.apply('pack-a.test', 2, 'admin');
+    // A `standard` template adds the site under v2, which has no floor.
+    await kit.repos.templates.insert(templateRecord({ name: 'sales', stealth: 'standard' }));
+    await kit.repos.templateSites.upsert(
+      templateSiteRecord({ siteId: 'pack-a.test', packId: 'pack-a.test', packVersion: 2 }),
+    );
+    await registry.refreshUsage();
+    const response = await kit.request('POST', '/api/v1/site-packs/pack-a.test/revert', {
+      cookie,
+    });
+    expect(response.status).toBe(409);
+    const problem = ProblemDetails.parse(await response.json());
+    expect(problem.code).toBe('SITE_PACK_BELOW_FLOOR');
+    expect(problem.details).toMatchObject({
+      pack_id: 'pack-a.test',
+      version: 1,
+      templates: [{ name: 'sales', issues: [{ code: 'stealth_below_floor' }] }],
+    });
+    expect(registry.effectiveFor('pack-a.test')?.version).toBe(2);
   });
 });

@@ -2,7 +2,7 @@
 
 # Error reference
 
-Every error code BrowserHive can produce (145 codes), generated from `ERROR_REGISTRY` in `@browserhive/contracts/errors`. Each code has a stable anchor: `errors.md#<CODE>`, which is also the `type` URL of HTTP problem responses (`https://browserhive.ai/docs/errors#<CODE>`).
+Every error code BrowserHive can produce (146 codes), generated from `ERROR_REGISTRY` in `@browserhive/contracts/errors`. Each code has a stable anchor: `errors.md#<CODE>`, which is also the `type` URL of HTTP problem responses (`https://browserhive.ai/docs/errors#<CODE>`).
 
 ## How errors reach you
 
@@ -1993,13 +1993,13 @@ Details:
 | Category | `domain` |
 | Retryable | `after_operator` (retry after an operator acts (unlock the vault, resolve a request, change policy)) |
 
-Message: `Version {version} of site pack '{pack_id}' needs stronger stealth settings than templates using it have: {templates_text}. Change those templates or disable the site in them, then apply again.`
+Message: `Version {version} of site pack '{pack_id}' needs stronger stealth settings than templates using it have: {templates_text}. Turn the site off on those templates, or create new templates that meet the floor, then try again.`
 
-Hint: Raise the stealth level or change fingerprint noise on the named templates (or disable the site there), then Apply.
+Hint: Stealth is fixed for a template's life: turn the site off on the named templates (their Sites tab), or create a new template with the stealth the pack needs; rejecting the version keeps the current one.
 
-Cause: The version selects the `stealth-profile` strategy (spec 13 §9.4) with a floor (minimum stealth level, required or forbidden fingerprint noise) that templates whose enabled sites use the pack do not meet. Applying it would leave those templates running the site below the pack's floor, so Apply is refused and the approved version stays in force.
+Cause: The version selects the `stealth-profile` strategy (spec 13 §9.4) with a floor (minimum stealth level, required or forbidden fingerprint noise) that templates whose enabled sites use the pack do not meet. Applying it (or reverting to it, or approving such a local file) would leave those templates running the site below the pack's floor (D-71), so the action is refused and the version in force stays. A template's stealth level and fingerprint noise are fixed when it is created, so the template itself cannot be changed to meet the floor.
 
-Resolution: Edit each named template (Settings: stealth level, fingerprint noise) to meet the floor, or disable the site on it, then apply the version again. Rejecting the version keeps the current one.
+Resolution: For each named template, turn the site off on it (the template's Sites tab, or `PUT /api/v1/templates/{id}/sites/{site}` with `enabled: false`), or create a new template with the stealth level and fingerprint noise the pack needs, sign in to the site there and remove it from the old template; then try again. Rejecting the version keeps the current one.
 
 Details:
 
@@ -2040,6 +2040,7 @@ Stop the process before it serves anything. The CLI prints `[CODE] message` and 
 | [`TEMPLATE_KEY_MISMATCH`](#TEMPLATE_KEY_MISMATCH) | Template files on another key | 500 | never |
 | [`TEMPLATE_CHECKPOINT_FAILED`](#TEMPLATE_CHECKPOINT_FAILED) | Template checkpoint failed | 500 | backoff |
 | [`TEMPLATE_CHECKPOINT_TOO_LARGE`](#TEMPLATE_CHECKPOINT_TOO_LARGE) | Template state over the size cap | 500 | never |
+| [`TEMPLATE_SITE_BELOW_FLOOR`](#TEMPLATE_SITE_BELOW_FLOOR) | A site turned off below its pack's stealth floor | 500 | never |
 | [`SITE_PACKS_STATE_CORRUPT`](#SITE_PACKS_STATE_CORRUPT) | Site pack state unreadable | 500 | never |
 | [`SITE_PACKS_LOAD_FAILED`](#SITE_PACKS_LOAD_FAILED) | Site packs not loaded | 500 | never |
 
@@ -2674,6 +2675,36 @@ Details:
 | `template_id` | `string` | yes | — |
 | `size_bytes` | `integer` | yes | ≥ 0 |
 | `dropped_origins` | `string[]` | yes | — |
+
+<a id="TEMPLATE_SITE_BELOW_FLOOR"></a>
+### `TEMPLATE_SITE_BELOW_FLOOR`
+
+| Property | Value |
+|---|---|
+| Title | A site turned off below its pack's stealth floor |
+| HTTP status | 500 |
+| Category | `boot` |
+| Retryable | `never` (do not retry; the request cannot succeed as sent) |
+| Exit code | 1 |
+
+Message: `Version {version} of site pack '{pack_id}' now applies without an Apply, and templates using it are below its stealth floor: {templates_text}. BrowserHive turned the site off on them.`
+
+Hint: Create a new template with the stealth settings the pack needs for this site, or remove the site from the named templates.
+
+Cause: The content in force of a site pack changed without an operator's Apply (the approved local file was deleted or came back, a revoked version fell back to the previous one, or a stored approval became readable again; spec 13 §9.6), and its `stealth-profile` floor is above templates whose enabled sites use the pack. A template never runs a site below its pack's floor (D-71), and a file deletion cannot be refused, so the site was turned off on those templates (`enabled=false`, an audit row by `browserhive`).
+
+Resolution: Stealth and fingerprint noise are fixed for a template's life: create a new template with the settings the pack names for this site and sign in there, or remove the site from the named templates. Turning the site on again is refused while the template is below the floor. The record resolves once no turned-off site is below its pack's floor.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `pack_id` | `string` | yes | — |
+| `version` | `integer` | yes | — |
+| `reason` | one of `local_override_ended`, `content_changed` | yes | — |
+| `template_ids` | `string[]` | yes | — |
+| `templates` | `object[]` | yes | each item: keys `template_id`, `name`, `site_ids`, `issues` |
+| `templates_text` | `string` | yes | — |
 
 <a id="SITE_PACKS_STATE_CORRUPT"></a>
 ### `SITE_PACKS_STATE_CORRUPT`

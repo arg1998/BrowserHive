@@ -69,13 +69,89 @@ describe('SitePackPage', () => {
     // Strategies as readable text: the title from the binary's table, the pack's value and the default.
     const strategies = await screen.findByRole('list', { name: 'Human dwell time parameters' });
     expect(within(strategies).getByText('800')).toBeDefined();
-    expect(within(strategies).getByText(/Default 2500 · Allowed 0–20000/)).toBeDefined();
+    expect(within(strategies).getByText(/Default 2500 · Allowed min_ms–20000/)).toBeDefined();
     // Provenance, SHA-256, versions.
     expect(screen.getAllByText('Bundled with BrowserHive 0.3.0').length).toBeGreaterThan(0);
     expect(screen.getAllByText(`${sha('a').slice(0, 12)}…`, { exact: false }).length).toBe(2);
     expect(screen.getByRole('heading', { name: 'In force' })).toBeDefined();
     expect(screen.getByRole('link', { name: 'tp-0000000001' })).toBeDefined(); // no template list in this test: the id stands in
     await expectNoA11yViolations(view.container, AXE);
+  });
+
+  it('Revert shows what going back changes before acting (review #84 L4)', async () => {
+    const view = mount({
+      'GET /site-packs/linkedin.com': packDetail(
+        packView({ previous: { version: 2, source: 'bundled' } }),
+      ),
+      'GET /site-packs/linkedin.com/diff': packDiff({
+        from: { version: 3, sha256: sha('a'), source: 'bundled' },
+        to: { version: 2, sha256: sha('b'), source: 'bundled' },
+        classification: 'loosening',
+        changes: [{ path: 'guards[logout]', from: { id: 'logout' }, to: null, class: 'loosening' }],
+      }),
+      'POST /site-packs/linkedin.com/revert': { view: packView() },
+    });
+    await click(await screen.findByRole('button', { name: 'Revert to v2…' }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(view.requests.find((r) => r.path.endsWith('/diff'))?.query.get('to')).toBe('2');
+    expect(
+      within(dialog).getByText(/v2 relaxes rules compared with the version in force/),
+    ).toBeDefined();
+    expect(within(dialog).getByText('guards[logout] · Relaxes rules')).toBeDefined();
+    await expectNoA11yViolations(document.body, AXE);
+    await click(within(dialog).getByRole('button', { name: 'Revert' }));
+    await waitFor(() => expect(view.requests.some((r) => r.path.endsWith('/revert'))).toBe(true));
+  });
+
+  it('Revert refused below a template’s stealth floor explains it in a dialog (D-71)', async () => {
+    mount({
+      'GET /site-packs/linkedin.com': packDetail(
+        packView({ previous: { version: 2, source: 'bundled' } }),
+      ),
+      'POST /site-packs/linkedin.com/revert': {
+        status: 409,
+        body: {
+          type: 'about:blank',
+          title: 'Templates below the pack’s stealth floor',
+          status: 409,
+          code: 'SITE_PACK_BELOW_FLOOR',
+          retryable: 'after_operator',
+          details: {
+            pack_id: 'linkedin.com',
+            version: 2,
+            templates: [
+              {
+                template_id: 'tp-0000000001',
+                name: 'sales',
+                issues: [
+                  {
+                    code: 'stealth_below_floor',
+                    message: "needs stealth 'max' or higher (the template has 'standard')",
+                  },
+                ],
+              },
+            ],
+            templates_text: "'sales' needs stealth 'max' or higher",
+          },
+        },
+      },
+    });
+    await click(await screen.findByRole('button', { name: 'Revert to v2…' }));
+    await click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Revert' }),
+    );
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/wasn’t reverted to v2/)).toBeDefined();
+    expect(
+      within(dialog)
+        .getByRole('link', { name: 'Open the Sites tab of sales' })
+        .getAttribute('href'),
+    ).toBe('/templates/tp-0000000001?tab=sites');
+    expect(
+      within(dialog).getByText('Or keep the current version.', { exact: false }),
+    ).toBeDefined();
+    await click(within(dialog).getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 
   it('Revert and turning off ask first; Follow updates and Enabled send their settings', async () => {

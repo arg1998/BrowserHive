@@ -13,7 +13,7 @@ import { expectNoA11yViolations } from '../../../../test/helpers/axe.ts';
 import { envelope, renderPage } from '../../../../test/helpers/page-harness.tsx';
 import { screen, within } from '../../../../test/helpers/render.tsx';
 import { SitePackPage } from './SitePackPage.tsx';
-import { directionText, paramRow } from './strategy-model.ts';
+import { directionText, paramRow, paramRows } from './strategy-model.ts';
 
 const AXE = { disable: ['aria-hidden-focus'] } as const;
 
@@ -34,6 +34,7 @@ function param(p: Partial<SiteStrategyParam> & Pick<SiteStrategyParam, 'name' | 
     default_from: null,
     fallback: null,
     min: null,
+    min_from: null,
     max: null,
     values: null,
     safe_direction: 'up' as const,
@@ -46,7 +47,14 @@ describe('strategy-model', () => {
   const pack = SitePackV1.parse(PACK);
   it('clamps a number to the bounds and says what was asked', () => {
     const row = paramRow(
-      param({ name: 'max_ms', type: 'integer', default: 2500, min: 0, max: 20_000 }),
+      param({
+        name: 'max_ms',
+        type: 'integer',
+        default: 2500,
+        min: 0,
+        min_from: 'min_ms',
+        max: 20_000,
+      }),
       50_000,
       pack,
     );
@@ -54,8 +62,31 @@ describe('strategy-model', () => {
       value: '20000',
       origin: 'clamped',
       raw: '50000',
-      bounds: '0–20000',
+      bounds: 'min_ms–20000',
     });
+  });
+
+  it('takes the lower bound from the parameter min_from names (max_ms ≥ min_ms, review #84 L3)', () => {
+    const params = [
+      param({ name: 'min_ms', type: 'integer', default: 600, min: 0, max: 10_000 }),
+      param({
+        name: 'max_ms',
+        type: 'integer',
+        default: 2500,
+        min: 0,
+        min_from: 'min_ms',
+        max: 20_000,
+      }),
+    ];
+    const [, max] = paramRows(params, { min_ms: 800, max_ms: 500 }, pack);
+    expect(max).toMatchObject({
+      value: '800',
+      origin: 'clamped',
+      raw: '500',
+      bounds: 'min_ms–20000',
+    });
+    const [, inside] = paramRows(params, { min_ms: 800, max_ms: 900 }, pack);
+    expect(inside).toMatchObject({ value: '900', origin: 'set', bounds: 'min_ms–20000' });
   });
 
   it('reads a default from the pack field it names, else the fallback', () => {
@@ -109,6 +140,7 @@ describe('StrategiesSection', () => {
     expect(within(dwell).getByText('800')).toBeDefined();
     expect(within(dwell).getByText('20000')).toBeDefined();
     expect(within(dwell).getByText('the pack asks for 50000; kept within bounds')).toBeDefined();
+    expect(within(dwell).getByText(/Allowed min_ms–20000/)).toBeDefined();
     const spacing = within(section).getByRole('list', { name: 'Space launches parameters' });
     expect(within(spacing).getByText('45')).toBeDefined();
     expect(within(spacing).getByText('from the pack’s settings')).toBeDefined();

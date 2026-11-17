@@ -35,6 +35,8 @@ export type StrategyParamSpec =
       readonly defaultFrom?: string;
       readonly fallback?: number;
       readonly min: number;
+      /** A parameter of the same strategy whose value in force is the lower bound (at least `min`). */
+      readonly minFrom?: string;
       readonly max: number;
       readonly safe: SafeDirection;
     }
@@ -136,7 +138,16 @@ export const STRATEGY_SPECS: { readonly [K in StrategyId]: StrategySpec } = {
     hooks: ['before_action'],
     params: [
       { name: 'min_ms', type: 'integer', default: 600, min: 0, max: 10_000, safe: UP },
-      { name: 'max_ms', type: 'integer', default: 2500, min: 0, max: 20_000, safe: UP },
+      // Clamped to `min_ms`–20000 (`strategy-params.ts`), so `min_ms` is its lower bound (review #84 L3).
+      {
+        name: 'max_ms',
+        type: 'integer',
+        default: 2500,
+        min: 0,
+        minFrom: 'min_ms',
+        max: 20_000,
+        safe: UP,
+      },
     ],
   },
   'humanize-input': {

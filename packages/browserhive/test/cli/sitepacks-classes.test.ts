@@ -1,6 +1,7 @@
 /** @module test/cli/sitepacks-classes.test — classifications and strategies in `browserhive sitepacks` (spec 13 §9.4, §9.7, §11.5, T3b): `diff` prints each field's class and the candidate's, `list` and `show` the pending versions' classification, `show` the strategies with their parameters from `GET /site-packs/strategies`, and `apply` refused below a template's stealth floor */
 
 import { describe, expect, it } from 'bun:test';
+import { ERROR_REGISTRY, renderMessage } from '@browserhive/contracts/errors';
 import type { SitePackDiffResponse, SiteStrategiesResponse } from '@browserhive/contracts/http';
 import {
   diffBody,
@@ -41,6 +42,7 @@ const STRATEGIES: SiteStrategiesResponse = {
           default_from: null,
           fallback: null,
           min: 0,
+          min_from: null,
           max: 10_000,
           values: null,
           safe_direction: 'up',
@@ -53,6 +55,7 @@ const STRATEGIES: SiteStrategiesResponse = {
           default_from: null,
           fallback: null,
           min: 0,
+          min_from: 'min_ms',
           max: 20_000,
           values: null,
           safe_direction: 'up',
@@ -116,7 +119,7 @@ describe('sitepacks list and show', () => {
     expect(result.stdout).toContain('Strategies:');
     expect(result.stdout).toContain('human-dwell — Human dwell time (behaviour)');
     expect(result.stdout).toContain('min_ms 800 (default 600, 0–10000)');
-    expect(result.stdout).toContain('max_ms 20000, asked 50000 (default 2500, 0–20000)');
+    expect(result.stdout).toContain('max_ms 20000, asked 50000 (default 2500, min_ms–20000)');
     expect(result.stdout).toMatch(/single-focus\n\s+no parameters/);
   });
 });
@@ -128,16 +131,28 @@ describe('sitepacks apply below the stealth floor', () => {
       method === 'POST' && path.endsWith('/apply')
         ? [
             409,
-            problem(
-              409,
-              'SITE_PACK_BELOW_FLOOR',
-              "Version 4 of site pack 'linkedin.com' needs stronger stealth settings than templates using it have: 'sales' needs stealth 'max' or higher (the template has 'standard'). Change those templates or disable the site in them, then apply again.",
-            ),
+            {
+              ...(problem(
+                409,
+                'SITE_PACK_BELOW_FLOOR',
+                renderMessage(ERROR_REGISTRY.SITE_PACK_BELOW_FLOOR.message, {
+                  version: 4,
+                  pack_id: 'linkedin.com',
+                  templates_text:
+                    "'sales' needs stealth 'max' or higher (the template has 'standard')",
+                }),
+              ) as object),
+              hint: ERROR_REGISTRY.SITE_PACK_BELOW_FLOOR.hint,
+            },
           ]
         : undefined;
     const result = await run(server, ['apply', 'linkedin.com', '--yes', ...URL_FLAGS]);
     expect(result.code).toBe(1);
     expect(result.stderr).toContain('[SITE_PACK_BELOW_FLOOR]');
     expect(result.stderr).toContain("'sales' needs stealth 'max' or higher");
+    // Stealth is fixed for a template's life (review #84 M3): the advice is the Sites tab or a
+    // new template, never raising the template's stealth.
+    expect(result.stderr).toContain('turn the site off on the named templates (their Sites tab)');
+    expect(result.stderr).not.toMatch(/Raise|Settings/);
   });
 });

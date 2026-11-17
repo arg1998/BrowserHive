@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'bun:test';
 import { MemoryFs } from './helpers.ts';
 import {
+  diffBody,
   fakePackServer,
   packView,
   pendingItem,
@@ -112,6 +113,32 @@ describe('sitepacks reject and revert', () => {
     expect(done.code).toBe(0);
     expect(done.stdout).toContain('This reverts linkedin.com from v3 to v2 (bundled).');
     expect(writes(server)).toEqual([`POST ${PACK}/revert`]);
+  });
+
+  it('revert prints the classified diff to the previous version before asking (review #84 L4)', async () => {
+    const server = fakePackServer(packView({ previous: { version: 2, source: 'bundled' } }));
+    server.routes = (method, path) =>
+      method === 'GET' && path === `${PACK}/diff?to=2`
+        ? [
+            200,
+            {
+              ...diffBody(2, SHA_B),
+              classification: 'loosening',
+              changes: [
+                { path: 'guards[logout]', from: { id: 'logout' }, to: null, class: 'loosening' },
+              ],
+            },
+          ]
+        : undefined;
+    const done = await run(server, ['revert', 'linkedin.com', ...URL_FLAGS], {
+      answers: ['linkedin.com'],
+    });
+    expect(done.code).toBe(0);
+    const out = done.stdout;
+    expect(out).toContain('Classification: relaxes rules (loosening)');
+    expect(out).toContain('guards[logout] [relaxes rules (loosening)]');
+    expect(out.indexOf('Classification:')).toBeLessThan(out.indexOf('This reverts linkedin.com'));
+    expect(server.calls.some((c) => c.path === `${PACK}/diff?to=2`)).toBe(true);
   });
 });
 

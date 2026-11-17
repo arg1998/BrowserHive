@@ -35,6 +35,7 @@ function paramView(p: StrategyParamSpec): SiteStrategyParam {
         default_from: p.defaultFrom ?? null,
         fallback: p.fallback ?? null,
         min: p.min,
+        min_from: p.minFrom ?? null,
         max: p.max,
         values: null,
       };
@@ -47,6 +48,7 @@ function paramView(p: StrategyParamSpec): SiteStrategyParam {
         default_from: null,
         fallback: null,
         min: null,
+        min_from: null,
         max: null,
         values: null,
       };
@@ -58,6 +60,7 @@ function paramView(p: StrategyParamSpec): SiteStrategyParam {
         default_from: null,
         fallback: null,
         min: null,
+        min_from: null,
         max: null,
         values: [...p.values],
       };
