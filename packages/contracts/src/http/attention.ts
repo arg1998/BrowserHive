@@ -52,9 +52,47 @@ export const OperatorRequestRow = z.object({
   tool: z.string().nullable(),
   event_id: EventId.nullable(),
   entry_name: z.string().nullable(),
+  /** The template a `security_intercept` belongs to (schema v10); absent or `null` otherwise. */
+  template_id: z.string().nullable().optional(),
 });
 /** One operator request. */
 export type OperatorRequestRow = z.infer<typeof OperatorRequestRow>;
+
+/**
+ * `options` of a `security_intercept` request (spec 13 §9.3, §9.5): a site check (`challenge`) or
+ * a write approval (`write_confirm`). The URL is sanitized (D-20); every string is shown as text.
+ */
+export const SecurityInterceptOptions = z.object({
+  reason: z.enum(['challenge', 'write_confirm']),
+  site: z.string(),
+  site_title: z.string(),
+  pack_id: z.string().nullable(),
+  template_id: z.string().nullable(),
+  /** A write approval: the guard that matched. */
+  guard: z
+    .object({
+      id: z.string(),
+      kind: z.enum(['logout', 'account', 'credential', 'destructive', 'write']),
+    })
+    .optional(),
+  /** A site check: the challenge that matched. */
+  challenge: z
+    .object({
+      id: z.string(),
+      kind: z.enum(['checkpoint', 'captcha', 'reauth', 'locked', 'rejected']),
+      action: z.enum(['attention', 'stop']),
+    })
+    .optional(),
+  method: z.string().optional(),
+  url: z.string().optional(),
+  resource_type: z.string().optional(),
+  /** The tool call that triggered it, when known. */
+  tool: z.string().optional(),
+  /** Where the request came from: the network (`request`) or a tool's element (`element`). */
+  source: z.enum(['request', 'element', 'page']).optional(),
+});
+/** `options` of a `security_intercept` request. */
+export type SecurityInterceptOptions = z.infer<typeof SecurityInterceptOptions>;
 
 /** Sort keys accepted by `GET /attention`. */
 export const AttentionSortKey = sortable(['created_at', 'resolved_at', 'waited_ms']);

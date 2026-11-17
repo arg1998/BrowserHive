@@ -221,4 +221,16 @@ export const WARNING_ERRORS = {
     'The saved login restored into this session was exported from a session template (`source_template_id`, spec 13 §5.4). Using the copy at the same time as the template can make sites sign the template out (token rotation, concurrent-session limits).',
     'Prefer launching from the template itself; delete the exported state when it is no longer needed.',
   ),
+  SITE_GUARD_WARNED: warning(
+    'SITE_GUARD_WARNED',
+    'A guarded request went out',
+    "A request matched a site pack guard whose action is `warn` (or a write under a `warn` write policy) and was let through (spec 13 §9.3). The guard hit is listed on the template's Activity tab and the Site packs guard-hit log.",
+    "Nothing to do unless the request should not have gone out: then set the site's write policy to `confirm` on the template's Sites tab.",
+  ),
+  SITE_WRITE_HELD: warning(
+    'SITE_WRITE_HELD',
+    'A write is waiting for approval',
+    'A request matched a site pack guard or write policy that needs confirmation (spec 13 §9.3); it is held until an operator approves or denies the "Write approval" on the Attention page, or until its deadline.',
+    'Approve or deny it on the Attention page.',
+  ),
 } as const;

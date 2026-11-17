@@ -60,7 +60,8 @@ class Sweep {
       | 'blocked_requests'
       | 'auth_events'
       | 'operator_actions'
-      | 'notification_actions',
+      | 'notification_actions'
+      | 'site_guard_hits',
     col: string,
     cutoff: number,
   ): Promise<number> {
@@ -124,6 +125,17 @@ class Sweep {
     await this.step('notification_actions', () =>
       this.deleteWhere('notification_actions', 'at', cutoff),
     );
+    // Site-pack audit (spec 13 §11.10): never byte-pruned. A pending candidate is live state, not
+    // history, so it stays until decided.
+    await this.step('site_pack_changes', async () => {
+      const result = await this.ctx.db
+        .deleteFrom('site_pack_changes')
+        .where('decision', 'not in', ['available', 'downloaded'])
+        .where('created_at', '<', cutoff)
+        .executeTakeFirst();
+      return Number(result.numDeletedRows);
+    });
+    await this.step('site_guard_hits', () => this.deleteWhere('site_guard_hits', 'ts', cutoff));
     await this.step('operator_requests', async () => {
       const result = await this.ctx.db
         .deleteFrom('operator_requests')
@@ -174,6 +186,13 @@ class Sweep {
               enqueued_at: now,
             })),
           )
+          .execute();
+        // Guard hits are audit and outlive their session (spec 13 §11.10); explicit so it does not
+        // depend on `foreign_keys` being on (the FK says `ON DELETE SET NULL` too).
+        await trx
+          .updateTable('site_guard_hits')
+          .set({ session_id: null })
+          .where('session_id', 'in', ids)
           .execute();
         await trx.deleteFrom('sessions').where('session_id', 'in', ids).execute();
         this.artifacts += ids.length;

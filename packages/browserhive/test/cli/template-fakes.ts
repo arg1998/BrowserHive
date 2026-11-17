@@ -38,6 +38,7 @@ function siteView(siteId: string, state: TemplateHealthState): TemplateSiteView 
     stopped_at: null,
     device_bound: false,
     added_at: 1,
+    pack: null,
   };
 }
 

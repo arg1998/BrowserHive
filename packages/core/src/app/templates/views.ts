@@ -42,6 +42,7 @@ export function toSiteView(site: TemplateSiteRecord): TemplateSiteView {
     stopped_at: site.stoppedAt,
     device_bound: site.deviceBound,
     added_at: site.addedAt,
+    pack: null,
   };
 }
 

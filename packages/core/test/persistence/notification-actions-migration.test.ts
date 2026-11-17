@@ -4,7 +4,7 @@ import { describe, expect, it } from 'bun:test';
 import { copyFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { SqliteMaintenanceService } from '../../src/infra/persistence/maintenance.ts';
-import { SCHEMA_VERSION } from '../../src/infra/persistence/migrations/index.ts';
+import { MIGRATIONS, SCHEMA_VERSION } from '../../src/infra/persistence/migrations/index.ts';
 import { openDatabase } from '../../src/infra/persistence/open.ts';
 import { FakeClock, FakeLogger, tempDir } from './helpers.ts';
 
@@ -41,7 +41,10 @@ describe('migration 0006-notification-actions', () => {
       const reader = handle.raw
         .query<{ value: string }, []>("SELECT value FROM meta WHERE key = 'min_reader_version'")
         .get();
-      expect(reader?.value).toBe('1');
+      // v6 is additive and leaves the floor alone; the head's floor is v10's (`0010-site-packs` is
+      // incompatible, spec 13 §9.9).
+      expect(MIGRATIONS.find((m) => m.version === 6)?.compatible).toBe(true);
+      expect(reader?.value).toBe('10');
     } finally {
       await handle.close();
       dir.dispose();

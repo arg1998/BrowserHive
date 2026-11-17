@@ -66,6 +66,9 @@ describe('schema fingerprint', () => {
       'idempotency_keys',
       'logs',
       'resource_samples',
+      'site_pack_state',
+      'site_pack_changes',
+      'site_guard_hits',
     ]) {
       expect(names).toContain(table);
     }

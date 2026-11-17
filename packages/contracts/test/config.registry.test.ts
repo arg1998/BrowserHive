@@ -75,6 +75,8 @@ const SPEC_KEYS = [
   'templateMaxPagesPerHost',
   'templateRecycleAfter',
   'templateDrainTimeout',
+  'sitePacks',
+  'sitePacksDir',
   'templateKey',
   'templateKeyPrevious',
   'templateCheckpointInterval',

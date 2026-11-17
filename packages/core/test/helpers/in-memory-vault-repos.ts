@@ -198,6 +198,7 @@ export class InMemoryOperatorRequestRepository implements OperatorRequestReposit
     }
     this.rows.set(record.requestId, {
       ...record,
+      templateId: record.templateId ?? null,
       status: 'pending',
       message: null,
       resolvedBy: null,

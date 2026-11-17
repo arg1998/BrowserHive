@@ -280,6 +280,7 @@ export interface OperatorRequests {
   resolved_by: string | null;
   session_id: string;
   status: string;
+  template_id: string | null;
   tool: string | null;
   tool_event_id: string | null;
 }
@@ -380,6 +381,64 @@ export interface Sessions {
   template_version: number | null;
   tenant_id: string | null;
   vault_enabled: Generated<number>;
+}
+
+export interface SiteGuardHits {
+  action: string;
+  decided_by: string | null;
+  event_id: string;
+  guard_id: string;
+  guard_kind: string;
+  method: string | null;
+  outcome: string | null;
+  pack_id: string;
+  request_id: string | null;
+  session_id: string | null;
+  source: string;
+  template_id: string | null;
+  tool: string | null;
+  ts: number;
+  url: string;
+}
+
+export interface SitePackChanges {
+  classification: string;
+  created_at: number;
+  decided_at: number | null;
+  decided_by: string | null;
+  decision: string;
+  diff_json: string | null;
+  event_id: string;
+  from_version: number | null;
+  new_domains_json: Generated<string>;
+  notes: string | null;
+  pack_id: string;
+  seq: Generated<number | null>;
+  source: string;
+  to_sha256: string;
+  to_version: number | null;
+}
+
+export interface SitePackState {
+  approved_at: number | null;
+  approved_by: string | null;
+  approved_domains_json: Generated<string>;
+  approved_provenance_json: string | null;
+  approved_sha256: string | null;
+  approved_source: string | null;
+  approved_version: number | null;
+  enabled: Generated<number>;
+  follow: number | null;
+  local_approved_at: number | null;
+  local_approved_by: string | null;
+  local_approved_sha256: string | null;
+  local_path: string | null;
+  pack_id: string;
+  pinned_version: number | null;
+  previous_sha256: string | null;
+  previous_source: string | null;
+  previous_version: number | null;
+  updated_at: number;
 }
 
 export interface SystemEvents {
@@ -579,6 +638,9 @@ export interface DB {
   schema_migrations: SchemaMigrations;
   screenshots: Screenshots;
   sessions: Sessions;
+  site_guard_hits: SiteGuardHits;
+  site_pack_changes: SitePackChanges;
+  site_pack_state: SitePackState;
   system_events: SystemEvents;
   template_probes: TemplateProbes;
   template_sites: TemplateSites;

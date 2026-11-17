@@ -2,7 +2,7 @@
 import { z } from 'zod';
 import { GRAMMAR_META_KEY } from './grammar.ts';
 import { key } from './key.ts';
-import { zBool, zBytes, zDuration, zInt } from './parsers.ts';
+import { zBool, zBytes, zDuration, zInt, zPath } from './parsers.ts';
 
 const ONE_MINUTE_MS = 60_000;
 const ONE_HOUR_MS = 3_600_000;
@@ -119,5 +119,17 @@ export const TEMPLATE_KEYS = {
     defaultText: '15m',
     group: 'sessions',
     describe: 'How long a draining template browser waits for its sessions before closing them.',
+  }),
+  sitePacks: key(zBool, {
+    default: true,
+    group: 'sessions',
+    describe:
+      'Site packs for template sites (spec 13 §9). false: no pack data is used; template sites are generic (learned-cookie probes, no guards, no challenges).',
+  }),
+  sitePacksDir: key(zPath, {
+    optional: true,
+    group: 'sessions',
+    describe:
+      'Folder of local site packs (<pack id>.json). A local file applies only after an operator approves its content, once per SHA-256. Absent = <dataDir>/site-packs/local.',
   }),
 } as const;

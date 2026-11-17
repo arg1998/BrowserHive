@@ -115,7 +115,7 @@ export const BLOCK_SOURCES = ['tool', 'request'] as const;
 export type BlockSource = (typeof BLOCK_SOURCES)[number];
 
 /** Operator request kinds (D-15). */
-export const OPERATOR_REQUEST_KINDS = ['attention', 'vault_confirm'] as const;
+export const OPERATOR_REQUEST_KINDS = ['attention', 'vault_confirm', 'security_intercept'] as const;
 /** Element of {@link OPERATOR_REQUEST_KINDS}. */
 export type OperatorRequestKind = (typeof OPERATOR_REQUEST_KINDS)[number];
 

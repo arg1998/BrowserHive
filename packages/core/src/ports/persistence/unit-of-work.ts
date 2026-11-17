@@ -34,6 +34,11 @@ import type { PageRepository } from './pages.ts';
 import type { ScreenshotRepository } from './screenshots.ts';
 import type { SessionRepository } from './sessions.ts';
 import type {
+  SiteGuardHitRepository,
+  SitePackChangeRepository,
+  SitePackStateRepository,
+} from './site-packs.ts';
+import type {
   TemplateProbeRepository,
   TemplateRepository,
   TemplateSiteRepository,
@@ -79,6 +84,9 @@ export interface Repositories {
   readonly templateSites: TemplateSiteRepository;
   readonly templateVersions: TemplateVersionRepository;
   readonly templateProbes: TemplateProbeRepository;
+  readonly sitePackState: SitePackStateRepository;
+  readonly sitePackChanges: SitePackChangeRepository;
+  readonly siteGuardHits: SiteGuardHitRepository;
 }
 
 /**

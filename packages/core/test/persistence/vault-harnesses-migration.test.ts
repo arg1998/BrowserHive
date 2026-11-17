@@ -4,7 +4,7 @@ import { describe, expect, it } from 'bun:test';
 import { copyFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { toWireExport } from '../../src/app/vault/export.ts';
-import { SCHEMA_VERSION } from '../../src/infra/persistence/migrations/index.ts';
+import { MIGRATIONS, SCHEMA_VERSION } from '../../src/infra/persistence/migrations/index.ts';
 import { openDatabase } from '../../src/infra/persistence/open.ts';
 import { SqliteUnitOfWork } from '../../src/infra/persistence/unit-of-work.ts';
 import { FakeClock, FakeLogger, sessionRecord, tempDir } from './helpers.ts';
@@ -49,7 +49,10 @@ describe('migration 0007-vault-harnesses', () => {
       const reader = handle.raw
         .query<{ value: string }, []>("SELECT value FROM meta WHERE key = 'min_reader_version'")
         .get();
-      expect(reader?.value).toBe('1');
+      // v7 is additive and leaves the floor alone; the head's floor is v10's (`0010-site-packs` is
+      // incompatible, spec 13 §9.9).
+      expect(MIGRATIONS.find((m) => m.version === 7)?.compatible).toBe(true);
+      expect(reader?.value).toBe('10');
 
       const binding = await uow.repos.vaultBindings.get('github');
       expect(binding?.harnesses).toBeNull();

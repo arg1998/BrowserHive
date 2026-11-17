@@ -12,6 +12,7 @@ export default defineConfig({
     http: 'src/http/index.ts',
     ws: 'src/ws/index.ts',
     notifications: 'src/notifications/index.ts',
+    'site-packs': 'src/site-packs/index.ts',
   },
   format: 'esm',
   platform: 'neutral',

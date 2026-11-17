@@ -50,6 +50,7 @@ function siteView(siteId = 'site-a.test'): TemplateSiteView {
     stopped_at: null,
     device_bound: false,
     added_at: 1,
+    pack: null,
   };
 }
 

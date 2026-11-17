@@ -18,6 +18,7 @@ import {
   QueryText,
   sortable,
 } from './common.ts';
+import { Sha256Hex, TemplateSitePack } from './site-packs.ts';
 import {
   ObservedIdentity,
   PinnedIdentity,
@@ -79,6 +80,8 @@ export const TemplateSiteView = z.object({
   stopped_at: EpochMs.nullable(),
   device_bound: z.boolean(),
   added_at: EpochMs,
+  /** The approved site pack in force for this site (spec 13 §9.6); `null` for a generic site. */
+  pack: TemplateSitePack.nullable(),
 });
 /** A site of a template. */
 export type TemplateSiteView = z.infer<typeof TemplateSiteView>;
@@ -87,6 +90,11 @@ export type TemplateSiteView = z.infer<typeof TemplateSiteView>;
 export const TemplateSiteInput = z.strictObject({
   site_id: TemplateSiteHost,
   write_policy: SiteWritePolicy.optional(),
+  /**
+   * The SHA-256 of the pack version the operator was shown (spec 13 §9.6 "First use"); adding the
+   * site approves exactly that version. A different version on offer is 409 `CONFLICT`.
+   */
+  pack_sha256: Sha256Hex.optional(),
 });
 /** A site as submitted. */
 export type TemplateSiteInput = z.infer<typeof TemplateSiteInput>;

@@ -350,4 +350,40 @@ export const SESSION_ERRORS = {
     resolution:
       'Unseal the flag on the template’s Access tab, for every principal or only for the ones that need it.',
   }),
+  SITE_OPERATOR_PENDING: defineError({
+    code: 'SITE_OPERATOR_PENDING',
+    httpStatus: 409,
+    category: 'domain',
+    retryable: 'after_operator',
+    title: 'Waiting for the operator',
+    message: '{site} needs the operator before this session can continue ({reason}). {wait_text}',
+    hint: 'Wait with get_attention_result for the request id, or close the session. Do not retry a stopped site.',
+    details: z.object({
+      session_id: z.string(),
+      site: z.string(),
+      request_id: z.string().nullable(),
+      reason: z.enum(['challenge', 'write_confirm', 'stopped']),
+      wait_text: z.string(),
+    }),
+    docs: true,
+    cause:
+      "The session's template has a site pack that handed something to a person (spec 13 §9.3, §9.5): a security check (a challenge page or CAPTCHA) the operator has to solve, a write the operator has to approve (`confirm` write policy or guard), or a site the operator stopped after a terminal check (`stop`). Every tool except the read-only ones answers this until the request settles.",
+    resolution:
+      'Resolve or reject the request on the Attention page (a "Site check" or "Write approval"); for a stopped site, press **Clear stop** on the template\'s Sites tab once the account is fine.',
+  }),
+  SITE_ACTION_BLOCKED: defineError({
+    code: 'SITE_ACTION_BLOCKED',
+    httpStatus: 403,
+    category: 'domain',
+    retryable: 'never',
+    title: 'Action blocked by site rules',
+    message: "This action on {site} is blocked by the operator's site rules. Do not retry it.",
+    hint: 'Choose another action; this control is protected.',
+    details: z.object({ session_id: z.string(), site: z.string(), guard: z.string() }),
+    docs: true,
+    cause:
+      "The element the tool would act on is, or is inside, a control a site pack's element guard blocks (a logout button, an account deletion link, a token creation form; spec 13 §9.3). The browser was not touched.",
+    resolution:
+      'Nothing to fix for a protected control. If the guard is wrong, edit the local pack or disable the pack on the Site packs page.',
+  }),
 } as const;

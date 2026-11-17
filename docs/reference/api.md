@@ -2,7 +2,7 @@
 
 # REST API reference
 
-The admin REST API served under `/api/v1` on the same port as MCP and the dashboard when `--admin` is on (147 operations), generated from `HTTP_ENDPOINTS` in `@browserhive/contracts/http`. Request and response schemas are in the OpenAPI 3.1 document the server serves at `/api/v1/openapi.json`, with an interactive reference UI at `/api/v1/docs`.
+The admin REST API served under `/api/v1` on the same port as MCP and the dashboard when `--admin` is on (163 operations), generated from `HTTP_ENDPOINTS` in `@browserhive/contracts/http`. Request and response schemas are in the OpenAPI 3.1 document the server serves at `/api/v1/openapi.json`, with an interactive reference UI at `/api/v1/docs`.
 
 Summaries come from `packages/contracts/generated/openapi.json`.
 
@@ -200,10 +200,31 @@ Summaries come from `packages/contracts/generated/openapi.json`.
 |---|---|---|---|---|---|
 | GET | `/api/v1/search` | `search` | `sessions:read` | cookie, bearer | Entity search for the command palette. |
 
+## site-packs
+
+| Method | Path | operationId | Scope | Auth | Summary |
+|---|---|---|---|---|---|
+| GET | `/api/v1/site-packs` | `listSitePacks` | `sitepacks:read` | cookie, bearer | — |
+| GET | `/api/v1/site-packs/changes` | `listSitePackChanges` | `sitepacks:read` | cookie, bearer | — |
+| GET | `/api/v1/site-packs/guard-hits` | `listSiteGuardHits` | `sitepacks:read` | cookie, bearer | — |
+| POST | `/api/v1/site-packs/reload` | `reloadSitePacks` | `sitepacks:write` | cookie, bearer | — |
+| POST | `/api/v1/site-packs/import` | `importSitePack` | `sitepacks:write` | cookie, bearer | — |
+| GET | `/api/v1/site-packs/{pack_id}` | `getSitePack` | `sitepacks:read` | cookie, bearer | — |
+| GET | `/api/v1/site-packs/{pack_id}/diff` | `diffSitePack` | `sitepacks:read` | cookie, bearer | — |
+| POST | `/api/v1/site-packs/{pack_id}/apply` | `applySitePack` | `sitepacks:write` | cookie, bearer | — |
+| POST | `/api/v1/site-packs/{pack_id}/reject` | `rejectSitePack` | `sitepacks:write` | cookie, bearer | — |
+| POST | `/api/v1/site-packs/{pack_id}/revert` | `revertSitePack` | `sitepacks:write` | cookie, bearer | — |
+| PUT | `/api/v1/site-packs/{pack_id}/pin` | `pinSitePack` | `sitepacks:write` | cookie, bearer | — |
+| PUT | `/api/v1/site-packs/{pack_id}/follow` | `followSitePack` | `sitepacks:write` | cookie, bearer | — |
+| POST | `/api/v1/site-packs/{pack_id}/approve-local` | `approveLocalSitePack` | `sitepacks:write` | cookie, bearer | — |
+| POST | `/api/v1/site-packs/{pack_id}/enable` | `enableSitePack` | `sitepacks:write` | cookie, bearer | — |
+| POST | `/api/v1/site-packs/{pack_id}/disable` | `disableSitePack` | `sitepacks:write` | cookie, bearer | — |
+
 ## templates
 
 | Method | Path | operationId | Scope | Auth | Summary |
 |---|---|---|---|---|---|
+| POST | `/api/v1/templates/{template_id}/sites/{site_id}/clear-stop` | `clearTemplateSiteStop` | `templates:write` | cookie, bearer | — |
 | GET | `/api/v1/templates/operations/{operation_id}` | `getTemplateOperation` | `templates:read` | cookie, bearer | A restore or seed operation: running, done (with the version written) or failed. |
 | GET | `/api/v1/templates` | `listTemplates` | `templates:read` | cookie, bearer | Every session template with its sites, browser state, live sessions and cap; facets by status, browser state and site health. |
 | POST | `/api/v1/templates` | `createTemplate` | `templates:write` | cookie, bearer | Create a template in `recording` with its sites, pinned identity and access rule. Under auth=token `policy.authorized_principals` is required (`[]` = every agent). |

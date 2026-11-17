@@ -35,7 +35,8 @@ describe('openDatabase', () => {
       expect(pragmaNumber(handle.raw, 'auto_vacuum')).toBe(REQUIRED_PRAGMAS.auto_vacuum);
       expect(pragmaNumber(handle.raw, 'application_id')).toBe(APPLICATION_ID);
       expect(handle.schemaVersion).toBe(SCHEMA_VERSION);
-      expect(handle.minReaderVersion).toBe(1);
+      // A fresh install applies v10 (`0010-site-packs`, incompatible), so the floor is 10.
+      expect(handle.minReaderVersion).toBe(10);
       expect(handle.migrationsApplied.map((m) => m.version)).toEqual(
         MIGRATIONS.map((m) => m.version),
       );

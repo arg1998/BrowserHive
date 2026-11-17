@@ -53,6 +53,8 @@ NAMES
   --templateMaxPagesPerHost     BROWSERHIVE_TEMPLATE_MAX_PAGES_PER_HOST
   --templateRecycleAfter        BROWSERHIVE_TEMPLATE_RECYCLE_AFTER
   --templateDrainTimeout        BROWSERHIVE_TEMPLATE_DRAIN_TIMEOUT
+  --sitePacks                   BROWSERHIVE_SITE_PACKS
+  --sitePacksDir                BROWSERHIVE_SITE_PACKS_DIR
   --stealth                     BROWSERHIVE_STEALTH
   --fingerprint                 BROWSERHIVE_FINGERPRINT
   --humanize                    BROWSERHIVE_HUMANIZE

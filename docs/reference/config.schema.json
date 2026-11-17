@@ -357,6 +357,21 @@
         "string"
       ]
     },
+    "sitePacks": {
+      "description": "Site packs for template sites (spec 13 §9). false: no pack data is used; template sites are generic (learned-cookie probes, no guards, no challenges).",
+      "x-browserhive-env": "BROWSERHIVE_SITE_PACKS",
+      "x-browserhive-cli": "--sitePacks",
+      "type": [
+        "boolean",
+        "string"
+      ]
+    },
+    "sitePacksDir": {
+      "type": "string",
+      "description": "Folder of local site packs (<pack id>.json). A local file applies only after an operator approves its content, once per SHA-256. Absent = <dataDir>/site-packs/local.",
+      "x-browserhive-env": "BROWSERHIVE_SITE_PACKS_DIR",
+      "x-browserhive-cli": "--sitePacksDir"
+    },
     "stealth": {
       "default": "standard",
       "anyOf": [

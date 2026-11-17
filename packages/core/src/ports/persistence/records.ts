@@ -291,6 +291,8 @@ export interface OperatorRequestRecord {
   readonly createdAt: number;
   readonly deadlineAt: number | null;
   readonly resolvedAt: number | null;
+  /** The template a `security_intercept` belongs to (schema v10); absent or `null` otherwise. */
+  readonly templateId?: string | null;
 }
 
 /** Input for a new operator request: always inserted as `pending`. */

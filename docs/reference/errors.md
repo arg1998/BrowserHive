@@ -2,7 +2,7 @@
 
 # Error reference
 
-Every error code BrowserHive can produce (129 codes), generated from `ERROR_REGISTRY` in `@browserhive/contracts/errors`. Each code has a stable anchor: `errors.md#<CODE>`, which is also the `type` URL of HTTP problem responses (`https://browserhive.ai/docs/errors#<CODE>`).
+Every error code BrowserHive can produce (136 codes), generated from `ERROR_REGISTRY` in `@browserhive/contracts/errors`. Each code has a stable anchor: `errors.md#<CODE>`, which is also the `type` URL of HTTP problem responses (`https://browserhive.ai/docs/errors#<CODE>`).
 
 ## How errors reach you
 
@@ -49,6 +49,8 @@ Returned by tools and the REST API when a request cannot be served (unknown sess
 | [`TEMPLATE_NEEDS_LOGIN`](#TEMPLATE_NEEDS_LOGIN) | Template signed out | 409 | after_operator |
 | [`TEMPLATE_DISABLED`](#TEMPLATE_DISABLED) | Template disabled | 409 | after_operator |
 | [`SESSION_SEALED`](#SESSION_SEALED) | Not available in this session | 403 | never |
+| [`SITE_OPERATOR_PENDING`](#SITE_OPERATOR_PENDING) | Waiting for the operator | 409 | after_operator |
+| [`SITE_ACTION_BLOCKED`](#SITE_ACTION_BLOCKED) | Action blocked by site rules | 403 | never |
 | [`EVALUATE_DISABLED`](#EVALUATE_DISABLED) | evaluate is disabled | 403 | never |
 | [`ELEMENT_NOT_ACTIONABLE`](#ELEMENT_NOT_ACTIONABLE) | Element not actionable | 422 | backoff |
 | [`ELEMENT_NOT_FOUND`](#ELEMENT_NOT_FOUND) | Element not found | 404 | different_args |
@@ -94,6 +96,9 @@ Returned by tools and the REST API when a request cannot be served (unknown sess
 | [`TEMPLATE_IN_USE`](#TEMPLATE_IN_USE) | Template has live sessions | 409 | different_args |
 | [`TEMPLATE_VERSION_NOT_FOUND`](#TEMPLATE_VERSION_NOT_FOUND) | Template version not found | 404 | never |
 | [`TEMPLATE_VERSION_UNREADABLE`](#TEMPLATE_VERSION_UNREADABLE) | Template version unreadable | 409 | after_operator |
+| [`SITE_PACK_NOT_FOUND`](#SITE_PACK_NOT_FOUND) | Site pack not found | 404 | never |
+| [`SITE_PACK_INVALID`](#SITE_PACK_INVALID) | Site pack invalid | 400 | different_args |
+| [`SITE_PACK_UPDATE_NOT_PENDING`](#SITE_PACK_UPDATE_NOT_PENDING) | No such pending version | 409 | never |
 
 <a id="SESSION_NOT_FOUND"></a>
 ### `SESSION_NOT_FOUND`
@@ -639,6 +644,60 @@ Details:
 |---|---|---|---|
 | `session_id` | `string` | yes | — |
 | `tool` | `string` | yes | — |
+
+<a id="SITE_OPERATOR_PENDING"></a>
+### `SITE_OPERATOR_PENDING`
+
+| Property | Value |
+|---|---|
+| Title | Waiting for the operator |
+| HTTP status | 409 |
+| Category | `domain` |
+| Retryable | `after_operator` (retry after an operator acts (unlock the vault, resolve a request, change policy)) |
+
+Message: `{site} needs the operator before this session can continue ({reason}). {wait_text}`
+
+Hint: Wait with get_attention_result for the request id, or close the session. Do not retry a stopped site.
+
+Cause: The session's template has a site pack that handed something to a person (spec 13 §9.3, §9.5): a security check (a challenge page or CAPTCHA) the operator has to solve, a write the operator has to approve (`confirm` write policy or guard), or a site the operator stopped after a terminal check (`stop`). Every tool except the read-only ones answers this until the request settles.
+
+Resolution: Resolve or reject the request on the Attention page (a "Site check" or "Write approval"); for a stopped site, press **Clear stop** on the template's Sites tab once the account is fine.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `session_id` | `string` | yes | — |
+| `site` | `string` | yes | — |
+| `request_id` | `string` or `null` | yes | — |
+| `reason` | one of `challenge`, `write_confirm`, `stopped` | yes | — |
+| `wait_text` | `string` | yes | — |
+
+<a id="SITE_ACTION_BLOCKED"></a>
+### `SITE_ACTION_BLOCKED`
+
+| Property | Value |
+|---|---|
+| Title | Action blocked by site rules |
+| HTTP status | 403 |
+| Category | `domain` |
+| Retryable | `never` (do not retry; the request cannot succeed as sent) |
+
+Message: `This action on {site} is blocked by the operator's site rules. Do not retry it.`
+
+Hint: Choose another action; this control is protected.
+
+Cause: The element the tool would act on is, or is inside, a control a site pack's element guard blocks (a logout button, an account deletion link, a token creation form; spec 13 §9.3). The browser was not touched.
+
+Resolution: Nothing to fix for a protected control. If the guard is wrong, edit the local pack or disable the pack on the Site packs page.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `session_id` | `string` | yes | — |
+| `site` | `string` | yes | — |
+| `guard` | `string` | yes | — |
 
 <a id="EVALUATE_DISABLED"></a>
 ### `EVALUATE_DISABLED`
@@ -1740,6 +1799,81 @@ Details:
 | `template_id` | `string` | yes | — |
 | `version` | `integer` or `"latest"` | yes | — |
 | `key_id` | `string` | yes | — |
+
+<a id="SITE_PACK_NOT_FOUND"></a>
+### `SITE_PACK_NOT_FOUND`
+
+| Property | Value |
+|---|---|
+| Title | Site pack not found |
+| HTTP status | 404 |
+| Category | `domain` |
+| Retryable | `never` (do not retry; the request cannot succeed as sent) |
+
+Message: `No site pack '{pack_id}'.`
+
+Hint: List the packs with GET /api/v1/site-packs.
+
+Cause: No source (bundled, local file) offers a pack with that id, or site packs are off (`sitePacks=false`).
+
+Resolution: Use the id shown on the Site packs page (the pack's registrable domain).
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `pack_id` | `string` | yes | — |
+
+<a id="SITE_PACK_INVALID"></a>
+### `SITE_PACK_INVALID`
+
+| Property | Value |
+|---|---|
+| Title | Site pack invalid |
+| HTTP status | 400 |
+| Category | `domain` |
+| Retryable | `different_args` (retry only with different arguments) |
+
+Message: `The site pack from {source} is not valid: {issues_text}`
+
+Hint: Fix the listed fields; `browserhive sitepacks verify <file>` checks a file offline.
+
+Cause: The pack failed the schema (`SitePackV1`, unknown keys are refused) or a refinement of spec 13 §9.10: a URL or glob outside the pack's domains, a probe path its own guards match, a selector outside the allowed CSS grammar, a number outside the binary's bounds, or a file over 64 KiB.
+
+Resolution: Correct the fields named in `issues`; see docs/guide/site-packs.md for the format.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `source` | `string` | yes | — |
+| `issues` | `object[]` | yes | each item: keys `path`, `message` |
+| `issues_text` | `string` | yes | — |
+
+<a id="SITE_PACK_UPDATE_NOT_PENDING"></a>
+### `SITE_PACK_UPDATE_NOT_PENDING`
+
+| Property | Value |
+|---|---|
+| Title | No such pending version |
+| HTTP status | 409 |
+| Category | `domain` |
+| Retryable | `never` (do not retry; the request cannot succeed as sent) |
+
+Message: `Version {version} of site pack '{pack_id}' is not pending.`
+
+Hint: Reload the Site packs page and pick a pending version.
+
+Cause: The version is already approved, was rejected or superseded, or was never offered (spec 13 §10.6).
+
+Resolution: Pick a version listed under Updates available.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `pack_id` | `string` | yes | — |
+| `version` | `integer` | yes | — |
 
 ## Boot errors
 
@@ -2990,6 +3124,8 @@ Non-fatal degradations recorded on a session or in the system events list; the o
 | [`SESSION_RESOURCE_LIMIT`](#SESSION_RESOURCE_LIMIT) | Memory limit: a page was closed | 500 | never |
 | [`TEMPLATE_SITE_SIGNED_OUT`](#TEMPLATE_SITE_SIGNED_OUT) | Some template sites are signed out | 500 | never |
 | [`TEMPLATE_STATE_COPY`](#TEMPLATE_STATE_COPY) | Session started from a copy of a template's sign-ins | 500 | never |
+| [`SITE_GUARD_WARNED`](#SITE_GUARD_WARNED) | A guarded request went out | 500 | never |
+| [`SITE_WRITE_HELD`](#SITE_WRITE_HELD) | A write is waiting for approval | 500 | never |
 
 <a id="EXECUTABLE_PATH_OVERRIDE"></a>
 ### `EXECUTABLE_PATH_OVERRIDE`
@@ -3372,6 +3508,58 @@ Hint: Session warning: logged and broadcast on session:<id>, never thrown.
 Cause: The saved login restored into this session was exported from a session template (`source_template_id`, spec 13 §5.4). Using the copy at the same time as the template can make sites sign the template out (token rotation, concurrent-session limits).
 
 Resolution: Prefer launching from the template itself; delete the exported state when it is no longer needed.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `session_id` | `string` | yes | — |
+| `message` | `string` | yes | — |
+| `details` | `object` | no | additional keys allowed |
+
+<a id="SITE_GUARD_WARNED"></a>
+### `SITE_GUARD_WARNED`
+
+| Property | Value |
+|---|---|
+| Title | A guarded request went out |
+| HTTP status | 500 |
+| Category | `warning` |
+| Retryable | `never` (do not retry; the request cannot succeed as sent) |
+
+Message: `{message}`
+
+Hint: Session warning: logged and broadcast on session:<id>, never thrown.
+
+Cause: A request matched a site pack guard whose action is `warn` (or a write under a `warn` write policy) and was let through (spec 13 §9.3). The guard hit is listed on the template's Activity tab and the Site packs guard-hit log.
+
+Resolution: Nothing to do unless the request should not have gone out: then set the site's write policy to `confirm` on the template's Sites tab.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `session_id` | `string` | yes | — |
+| `message` | `string` | yes | — |
+| `details` | `object` | no | additional keys allowed |
+
+<a id="SITE_WRITE_HELD"></a>
+### `SITE_WRITE_HELD`
+
+| Property | Value |
+|---|---|
+| Title | A write is waiting for approval |
+| HTTP status | 500 |
+| Category | `warning` |
+| Retryable | `never` (do not retry; the request cannot succeed as sent) |
+
+Message: `{message}`
+
+Hint: Session warning: logged and broadcast on session:<id>, never thrown.
+
+Cause: A request matched a site pack guard or write policy that needs confirmation (spec 13 §9.3); it is held until an operator approves or denies the "Write approval" on the Attention page, or until its deadline.
+
+Resolution: Approve or deny it on the Attention page.
 
 Details:
 
