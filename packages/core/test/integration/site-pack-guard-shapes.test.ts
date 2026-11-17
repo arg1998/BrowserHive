@@ -57,26 +57,30 @@ describe(`site-pack guard shapes (stealth off${HEADED ? ', headed' : ''})`, () =
     const g = await guarded();
     await g.page.evaluate(() => {
       const img = new Image();
-      img.src = '/m/logout?img';
+      img.src = '/m/logout/img';
       document.body.append(img);
       for (const [rel, as] of [
         ['prefetch', null],
         ['stylesheet', null],
-        ['preload', 'image'],
+        ['preload', 'fetch'],
       ] as const) {
         const link = document.createElement('link');
         link.rel = rel;
         if (as !== null) link.as = as;
-        link.href = `/m/logout?${rel}`;
+        link.href = `/m/logout/${rel}`;
         document.head.append(link);
       }
       const script = document.createElement('script');
-      script.src = '/m/logout?script';
+      script.src = '/m/logout/script';
       document.head.append(script);
-      const source = new EventSource('/m/logout?events');
+      const source = new EventSource('/m/logout/events');
       setTimeout(() => source.close(), 2_000);
     });
-    await until(() => logoutHits(g).length >= 6);
+    // Six requests on six paths beneath the guarded one (distinct URLs: identical hits would be
+    // coalesced into one row per second, review L3).
+    await until(() => logoutHits(g).length >= 6).catch(() => {
+      throw new Error(`hits ${JSON.stringify(logoutHits(g).map((h) => h.url))}`);
+    });
     expect(reachedLogout(g)).toBe(0);
     expect(new Set(logoutHits(g).map((h) => h.method))).toEqual(new Set(['GET']));
   });
