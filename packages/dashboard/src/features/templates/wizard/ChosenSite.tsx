@@ -1,17 +1,21 @@
-/** @module features/templates/wizard/ChosenSite — one chosen site on wizard step 2 (spec 13 §7.1, §9.3, §9.6): a site a pack covers names the pack and the version creating the template approves (whether it was picked from the catalog or typed, also before the catalog loaded), says when you sign in by hand only and when the pack guards no writes yet, and quotes the site's terms clause with its checked date and address as text (review S-L1, S-M4); any other site is a generic site */
+/** @module features/templates/wizard/ChosenSite — one chosen site on wizard step 2 (spec 13 §7.1, §9.3, §9.6): a site a pack covers names the pack and the version creating the template approves (whether it was picked from the catalog or typed, also before the catalog loaded), says when you sign in by hand only, what the pack needs from the template's settings (a stealth floor, fingerprint noise on or off, a visible browser) and when the pack guards no writes yet, and quotes the site's terms clause with its checked date and address as text (review S-L1, S-M4); any other site is a generic site */
 import type { SitePackView } from '@browserhive/contracts/http';
 import { Button } from '@/components/ui/button.tsx';
 import { useSitePack } from '@/features/site-packs/api.ts';
 import { NO_WRITE_GUARDS, packNote } from '@/features/site-packs/model.ts';
 import { StanceLabel, TermsClause } from '@/features/site-packs/PackBits.tsx';
 import { ICONS } from '@/lib/icons.ts';
+import { NeedChips } from './SiteNeedsPanel.tsx';
+import { siteNeedsOf } from './site-needs.ts';
 
-/** The pack's terms clause, read from the pack's content (the list view does not carry it). */
-function Clause({ pack }: { readonly pack: SitePackView }) {
+/** What the site needs from the template and the pack's terms clause, read from the pack's content (the list view carries neither). */
+function PackFacts({ pack, site }: { readonly pack: SitePackView; readonly site: string }) {
   const detail = useSitePack(pack.pack_id);
-  const clause = detail.data?.pack?.write_policy.clause;
+  const content = detail.data?.pack;
+  const clause = content?.write_policy.clause;
   return (
     <span className="flex min-w-0 flex-col gap-1.5">
+      <NeedChips needs={content == null ? null : siteNeedsOf(site, pack.title, content)} />
       <StanceLabel stance={pack.stance} />
       {clause !== undefined ? <TermsClause clause={clause} /> : null}
     </span>
@@ -62,7 +66,7 @@ export function ChosenSite({
         {note !== null && note.pack.write_guards === 0 ? (
           <span className="text-sm text-muted-foreground">{NO_WRITE_GUARDS}</span>
         ) : null}
-        {note !== null ? <Clause pack={note.pack} /> : null}
+        {note !== null ? <PackFacts pack={note.pack} site={site} /> : null}
       </span>
       <Button
         type="button"
