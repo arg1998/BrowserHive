@@ -1,6 +1,9 @@
 /** @module test/integration/template-mcp-fixture — the real MCP stack over a real template host: the tool harness (dispatcher, policies, sealing) with a `TemplateHostSupervisor` on the driver (Patchright) and the HTTPS fixture sites. */
 
-import { TemplateHostSupervisor } from '../../src/app/templates/host-supervisor.ts';
+import {
+  type HostSupervisorDeps,
+  TemplateHostSupervisor,
+} from '../../src/app/templates/host-supervisor.ts';
 import { PlaywrightBrowserDriver } from '../../src/infra/browsers/playwright-browser-driver.ts';
 import { createSystemClock } from '../../src/infra/clock/system-clock.ts';
 import { createCollectingLogger } from '../../src/infra/logging/collecting-logger.ts';
@@ -42,6 +45,8 @@ export interface TemplateMcpOptions {
   /** Passed to the tool harness (the security intercepts' tool hold). */
   readonly siteHolds?: ToolHarnessOptions['siteHolds'];
   readonly transport?: ToolHarnessOptions['transport'];
+  /** Supervisor collaborators: the site packs of the admission strategies, the jitter source. */
+  readonly supervisor?: Pick<HostSupervisorDeps, 'sitePacks' | 'random'>;
 }
 
 /** A ready template `job-hunt` on site-a.test (and the given sites) behind the real tool stack. */
@@ -95,6 +100,7 @@ export async function templateMcp(
           maxPagesPerHost: 40,
           closeTimeoutMs: 10_000,
         },
+        ...options.supervisor,
       });
       built.supervisor = supervisor;
       return supervisor;

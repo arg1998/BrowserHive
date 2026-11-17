@@ -204,6 +204,7 @@ export function toTemplateSummary(
   sites: readonly TemplateSiteRecord[],
   host: TemplateHostView,
   packs: SitePackReader = NO_PACKS,
+  cap: number = effectiveCap(template),
 ): TemplateSummary {
   return {
     template_id: template.templateId,
@@ -225,7 +226,7 @@ export function toTemplateSummary(
       ...(host.rssBytes !== null && { rss_bytes: host.rssBytes }),
     },
     in_use: host.liveAgentSessions,
-    cap: effectiveCap(template),
+    cap,
     current_version: template.currentVersion,
     checkpoint_at: template.checkpointAt,
     last_used_at: template.lastUsedAt,

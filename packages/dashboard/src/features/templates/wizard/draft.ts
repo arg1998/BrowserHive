@@ -5,6 +5,7 @@ import { readStorageJson, removeStorage, writeStorageJson } from '@/lib/storage.
 import { hostOf, nameProblem } from '../model.ts';
 import type { WizardStep } from '../search.ts';
 import { UNSEAL_FLAGS, type UnsealFlag } from '../unseal.ts';
+import { FIELD_OF_ISSUE_CODE } from './site-needs.ts';
 
 /** Who may use the template: every agent, or the listed principals; `null` = not chosen yet. */
 export type AccessChoice = 'all' | 'listed' | null;
@@ -254,15 +255,19 @@ export function stepOfIssue(path: string): WizardStep {
   return 3;
 }
 
-/** Field issues of a `VALIDATION_FAILED` answer. */
+/**
+ * Field issues of a `VALIDATION_FAILED` answer. A site pack's requirement (`sites[i]` with a code
+ * such as `stealth_below_floor`) belongs to the step 3 setting that meets it.
+ */
 export function issuesOf(details: Readonly<Record<string, unknown>>): DraftProblem[] {
   const issues = details['issues'];
   if (!Array.isArray(issues)) return [];
   return issues.flatMap((issue: unknown) => {
     if (typeof issue !== 'object' || issue === null) return [];
-    const { path, message } = issue as { path?: unknown; message?: unknown };
+    const { path, message, code } = issue as { path?: unknown; message?: unknown; code?: unknown };
+    const setting = typeof code === 'string' ? FIELD_OF_ISSUE_CODE[code] : undefined;
     return typeof path === 'string' && typeof message === 'string'
-      ? [{ field: path.replace(/^body\./, ''), message }]
+      ? [{ field: setting ?? path.replace(/^body\./, ''), message }]
       : [];
   });
 }

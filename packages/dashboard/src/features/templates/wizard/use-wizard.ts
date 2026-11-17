@@ -20,6 +20,9 @@ import {
   toTemplateInput,
   writeDraft,
 } from './draft.ts';
+import { identityDefaults } from './identity-defaults.ts';
+import { needProblems } from './site-needs.ts';
+import { useSiteNeeds } from './use-site-needs.ts';
 
 /** Server field names → the draft's (`display_name` → `displayName`). */
 export function errorMap(problems: readonly DraftProblem[]): Readonly<Record<string, string>> {
@@ -101,7 +104,19 @@ export function useWizard() {
     else if (step === 5) goTo(4, {}, true);
   }, [blocked, step, templateId, goTo, system.data]);
 
-  const problems = step === 5 ? [] : stepProblems(draft, step, authToken);
+  // A chosen site's pack needs (stealth floor, fingerprint, headed): step 3 explains before a refusal.
+  const needs = useSiteNeeds(draft.sites, catalogPacks);
+  const defaults = identityDefaults(system.data, null, '');
+  const settings = {
+    stealth: draft.stealth ?? defaults.stealth,
+    fingerprint: draft.fingerprint ?? defaults.fingerprint,
+    headless: draft.headless,
+  };
+  const problemsAt = (s: WizardStep) => [
+    ...stepProblems(draft, s, authToken),
+    ...(s === 3 ? needProblems(needs, settings) : []),
+  ];
+  const problems = step === 5 ? [] : problemsAt(step);
   const errors = errorMap([
     ...(tried.has(step) ? problems : []),
     ...serverProblems.filter((p) => stepOfIssue(p.field) === step),
@@ -146,7 +161,7 @@ export function useWizard() {
     else if (step < 4) goTo((step + 1) as WizardStep);
   };
   const skip = () => {
-    const blockedAt = firstProblemStep(draft, authToken);
+    const blockedAt = ([1, 2, 3, 4] as const).find((x) => problemsAt(x).length > 0) ?? null;
     if (blockedAt !== null) {
       setTried((t) => new Set([...t, blockedAt]));
       goTo(blockedAt);
@@ -157,11 +172,8 @@ export function useWizard() {
   const reachable = (s: WizardStep) =>
     templateId === undefined &&
     s < 5 &&
-    ([1, 2, 3, 4] as const)
-      .filter((x) => x < s)
-      .every((x) => stepProblems(draft, x, authToken).length === 0);
-  const done = (s: WizardStep) =>
-    templateId !== undefined || stepProblems(draft, s, authToken).length === 0;
+    ([1, 2, 3, 4] as const).filter((x) => x < s).every((x) => problemsAt(x).length === 0);
+  const done = (s: WizardStep) => templateId !== undefined || problemsAt(s).length === 0;
 
   return {
     search,
@@ -174,6 +186,8 @@ export function useWizard() {
     creating: create.isPending,
     catalogLoading,
     system: system.data,
+    needs,
+    settings,
     headingRef,
     nextRef,
     goTo,

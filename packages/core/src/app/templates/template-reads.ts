@@ -75,7 +75,7 @@ export async function readTemplates(
 export function publishTemplateChanged(
   deps: {
     readonly repos: Pick<Repositories, 'templates' | 'templateSites'>;
-    readonly runtime: Pick<TemplateRuntime, 'host'>;
+    readonly runtime: Pick<TemplateRuntime, 'host' | 'cap'>;
     readonly bus?: EventPublisher<DomainEvents> | undefined;
     readonly packs?: SitePackReader | undefined;
   },
@@ -90,7 +90,13 @@ export function publishTemplateChanged(
     const sites = await deps.repos.templateSites.list(templateId);
     bus.publish('template.changed', {
       type: 'template.changed',
-      template: toTemplateSummary(template, sites, deps.runtime.host(templateId), deps.packs),
+      template: toTemplateSummary(
+        template,
+        sites,
+        deps.runtime.host(templateId),
+        deps.packs,
+        deps.runtime.cap?.(template, sites),
+      ),
     });
   })().catch((err: unknown) => log.debug('template event failed', { err: serializeError(err) }));
 }

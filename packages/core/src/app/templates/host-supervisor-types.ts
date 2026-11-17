@@ -11,6 +11,7 @@ import type {
   TemplateRepository,
   TemplateSiteRecord,
 } from '../../ports/persistence/index.ts';
+import type { SitePackLookup } from '../../ports/site-packs.ts';
 import type { TemplateHostLauncher } from '../../ports/template-host.ts';
 import type { DomainEvents } from '../events/catalog.ts';
 import type { SessionService } from '../sessions/session-service.ts';
@@ -54,6 +55,10 @@ export interface HostSupervisorDeps {
   readonly bus?: EventPublisher<DomainEvents>;
   /** The template's summary changed (identity drift): the service publishes `template.changed`. */
   readonly onTemplateChanged?: (templateId: string) => void;
+  /** The approved site packs for the admission strategies; `null` under `sitePacks=false`. */
+  readonly sitePacks?: () => SitePackLookup | null;
+  /** In [0, 1): the `launch-spacing` jitter (tests inject it). */
+  readonly random?: () => number;
 }
 
 /** What a launch learned from the pre-launch check (spec 13 §8.2). */

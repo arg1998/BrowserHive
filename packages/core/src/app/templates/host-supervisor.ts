@@ -3,48 +3,38 @@
 import type { ClosedReason } from '@browserhive/contracts/enums';
 import type { Session } from '../../domain/session/session.ts';
 import { NO_SEALING } from '../../domain/session/session-template.ts';
-import { effectiveCap, pageCaps } from '../../domain/templates/model.ts';
+import { effectiveCap } from '../../domain/templates/model.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { Logger } from '../../ports/logger.ts';
-import type { TemplateRecord } from '../../ports/persistence/index.ts';
+import type { TemplateRecord, TemplateSiteRecord } from '../../ports/persistence/index.ts';
 import type { TemplateHost } from '../../ports/template-host.ts';
 import type {
   TemplateHostView,
   TemplateLaunchRequest,
   TemplateRuntime,
 } from '../../ports/template-runtime.ts';
+import { AdmissionStrategies } from './admission-strategies.ts';
 import { HostEvents, PendingLaunches, sampleRss } from './host-events.ts';
 import { TemplateHolds } from './host-holds.ts';
 import { HostLifecycle } from './host-lifecycle.ts';
-import {
-  HostMemoryGuard,
-  PAGE_LIMIT_MESSAGE,
-  RESOURCE_LIMIT_MESSAGE,
-  warnSession,
-} from './host-memory.ts';
+import { HostMemoryGuard, RESOURCE_LIMIT_MESSAGE, warnSession } from './host-memory.ts';
 import { IdentityObserver, stopHosts } from './host-shutdown.ts';
 import { buildHostSpec } from './host-spec.ts';
 import { idleExpired, nextIdleSince, recycleAt, TEMPLATE_LAUNCH_BUDGET_MS } from './host-state.ts';
+import { launchVirtual } from './host-supervisor-launch.ts';
 import type {
   HostCheckpoints,
   HostSupervisorDeps,
   MaintenanceLaunch,
-  PrelaunchOutcome,
   SupervisorHealth,
 } from './host-supervisor-types.ts';
 import { SYSTEM_MAINTENANCE_SLUG } from './host-supervisor-types.ts';
 import { hostViewOf } from './host-view.ts';
-import { reportPrelaunch } from './prelaunch-report.ts';
-import { admitTemplateLaunch, templateUnavailable } from './template-admission.ts';
+import { templateUnavailable } from './template-admission.ts';
 import { notFoundForOperator } from './template-errors.ts';
 import { TemplatePause } from './template-pause.ts';
 import { toHostView } from './views.ts';
-import {
-  maintenanceSessionInput,
-  sessionTemplateOf,
-  virtualLauncher,
-  virtualSessionInput,
-} from './virtual-launch.ts';
+import { maintenanceSessionInput, sessionTemplateOf, virtualLauncher } from './virtual-launch.ts';
 
 export type {
   HostCheckpoints,
@@ -74,10 +64,18 @@ export class TemplateHostSupervisor implements TemplateRuntime {
   /** Agents wait while a sign-in window is open (D-60). */
   readonly pause: TemplatePause;
   private health: SupervisorHealth = {}; // attached at composition (spec 13 §8.2, §8.3)
+  /** `concurrency`, `ramp-up`, `active-hours` and `launch-spacing` (spec 13 §9.6 admission). */
+  private readonly strategies: AdmissionStrategies;
 
   constructor(deps: HostSupervisorDeps) {
     this.deps = deps;
     this.log = deps.logger.child({ module: 'templates.supervisor' });
+    this.strategies = new AdmissionStrategies({
+      clock: deps.clock,
+      logger: this.log,
+      ...(deps.sitePacks !== undefined && { lookup: deps.sitePacks }),
+      ...(deps.random !== undefined && { random: deps.random }),
+    });
     deps.sessions.setHostSlots(() => this.slots());
     this.identity = new IdentityObserver({
       templates: deps.templates,
@@ -168,53 +166,24 @@ export class TemplateHostSupervisor implements TemplateRuntime {
     // A sign-in window is open: the launch waits for the operator, bounded, inside its budget (D-60).
     const waitStarted = this.deps.clock.now();
     await this.pause.wait(template.templateId, template.name, signal);
-    const waited = this.deps.clock.now() - waitStarted;
-    const lifecycle = this.lifecycleOf(template);
-    const cap = effectiveCap(template);
-    const caps = pageCaps(this.deps.config.maxPagesPerHost, cap);
-    admitTemplateLaunch({
-      name: template.name,
-      state: lifecycle.state,
-      retryAfterMs:
-        lifecycle.restartAt === null ? null : lifecycle.restartAt - this.deps.clock.now(),
-      agentSessions:
-        this.liveSessions(template.templateId).length + this.pending.count(template.templateId),
-      cap,
-      agentPages: lifecycle.current?.agentPageCount() ?? 0,
-      caps,
-    });
-    const session = sessionTemplateOf(template, request.sites, 'live', request.sealing);
-    const prelaunch = this.health.prelaunch;
-    let checked: PrelaunchOutcome | null = null;
-    return this.pending.run(
-      template.templateId,
-      async (budget) => {
-        const created = await this.deps.sessions.createVirtual(
-          virtualSessionInput(request),
-          request.principal,
-          virtualLauncher({
-            lifecycle,
-            template,
-            session,
-            caps,
-            onPageLimit: (id) =>
-              warnSession(this.deps.sessions, id, 'SESSION_PAGE_LIMIT', PAGE_LIMIT_MESSAGE),
-            ...(prelaunch !== undefined && {
-              afterAcquire: async (s: AbortSignal) => {
-                checked = await prelaunch(template, s);
-              },
-            }),
-          }),
-          { signal: budget, deadlineMs: TEMPLATE_LAUNCH_BUDGET_MS },
-        );
-        if (checked !== null) reportPrelaunch(this.deps.sessions, created, checked);
-        const at = this.deps.clock.now();
-        await this.deps.templates.touchLastUsed(template.templateId, at).catch(() => undefined);
-        return created;
+    return launchVirtual(
+      {
+        deps: this.deps,
+        lifecycle: this.lifecycleOf(template),
+        strategies: this.strategies,
+        pending: this.pending,
+        health: this.health,
+        liveSessions: this.liveSessions(template.templateId).length,
+        waitedMs: this.deps.clock.now() - waitStarted,
       },
+      request,
       signal,
-      TEMPLATE_LAUNCH_BUDGET_MS - waited,
     );
+  }
+
+  /** The effective live-session cap with the enabled sites' packs (spec 13 §6.3; operator views, `list_templates`). */
+  cap(template: TemplateRecord, sites: readonly TemplateSiteRecord[]): number {
+    return effectiveCap(template, this.strategies.capLimits(template, sites));
   }
 
   /**
@@ -259,6 +228,7 @@ export class TemplateHostSupervisor implements TemplateRuntime {
     await this.hosts.get(templateId)?.stop('template deleted', 'operator', false);
     this.hosts.delete(templateId);
     this.memory.forget(templateId);
+    this.strategies.forget(templateId);
     await this.closeSessions(
       this.sessionsOf(templateId, null).map((s) => s.id),
       'operator',
