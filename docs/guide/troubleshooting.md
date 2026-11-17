@@ -109,11 +109,36 @@ The template's browser was not running, and starting it needs a browser slot: it
 **[`TEMPLATE_UNAVAILABLE`](../reference/errors.md#TEMPLATE_UNAVAILABLE)**
 The browser is starting, restarting (after `templateRecycleAfter`) or recovering from a crash. Agents should retry after `retry_after_ms`.
 
+**Agents get `TEMPLATE_UNAVAILABLE` with `reason: paused`, or their tool calls hang for 15 seconds**
+A re-login or sign-in window is open on the template, and its agents wait until you finish ([Agents wait while you sign in](templates.md#agents-wait-while-you-sign-in)). Finish signing in, cancel the re-login, or press **Let agents continue** on the template page. A window nobody is at (a re-login started from another machine, or forgotten) closes by itself after 30 minutes.
+
+**A site shows signed out, or agents get `TEMPLATE_NEEDS_LOGIN`**
+A [health check](templates.md#health-checks) found the site's sign-in cookies gone: the site ended the session, or one of the template's sessions signed out. Agents get `TEMPLATE_NEEDS_LOGIN` only when every enabled site is signed out; with some still signed in, sessions start with a `TEMPLATE_SITE_SIGNED_OUT` warning. Sign the site in again: **Re-login** on the template page, or `browserhive templates login <name> --site <site>` ([Signing in again](templates.md#signing-in-again)). If it keeps happening soon after you sign in, an agent may be signing out (a "Log out" link it followed), or the site may limit concurrent sessions; lower `max_concurrent` or look at the sessions' history.
+
+**A site shows "couldn't tell"**
+`partial_cookies`: only some of the sign-in cookies BrowserHive learned are there. Run `browserhive templates probe <name>` again later, open a session and look, or sign in again to be sure; signing in again also relearns the cookie names. `no_pack`: BrowserHive never learned the site's sign-in cookies (a template you only seeded, or a site you did not confirm). Sign it in again in a window and press **I'm signed in** (Enter on the command line), and later checks can tell.
+
+**The re-login window does not open**
+- The re-login came from a notification's **Re-login on …** button: it is queued on purpose. Press **Show window** on the template page, at the machine running BrowserHive.
+- The window opened on another machine: it always opens on the machine running BrowserHive, and `templates login` warns when `--url` points elsewhere. On a server, use VNC ([Signing in on Xvfb](templates.md#signing-in-on-xvfb-vnc)), or [seed the template](templates.md#seeding-from-a-storage-state) from a browser you can see.
+- The browser cannot start (`no_display`, `host_failed`, below).
+
+**Auto-relogin is refused, or does not run**
+The re-login fails with `not_authorized`, or the link answer lists `binding_problems`:
+- `principals_open` or `principal_not_listed`: the binding must name `template:<template_id>` among its principals. Press **Allow this template** (needs `vault:write`).
+- `harness_list`: the binding or its folder lists harnesses, and a template's fill has none. Use a binding without a harness list for the template.
+- `binding_not_found`: the handle no longer exists; link another one.
+
+Other causes: the vault is locked (unlock it on the Vault page), the sign-in page is not on the binding's allowed origins, the `form` selectors do not match the page (`password_target_invalid` or `fill_failed` in the [Vault log](vault.md#7-audit)), or a `dashboard_confirm` binding waits for your approval. After one automatic attempt, a second sign-out within 24 hours is not retried: you get `template.relogin_failed`, and the site waits for you ([When it runs](vault.md#when-it-runs)).
+
+**A template's browser starts though no agent uses it**
+A [scheduled check](templates.md#when-sites-are-checked) needs the browser: BrowserHive starts a stopped one for it and lets it stop again after `templateHostIdleTimeout`. Raise the template's check interval (`policy.health_interval_ms`, or `templateHealthInterval` for new templates) to start it less often, or set `templateHostIdleTimeout` to `0` to keep it running.
+
 **"I'm signed in" answers `409 CONFLICT`, or a site stays signed out after Enter**
 No new cookie appeared on that site's registrable domain since the sign-in window opened (analytics cookies do not count), or no recording is open. Finish the sign-in in the site's own tab and confirm again. A site that signs you in on another domain only (a separate single sign-on domain) cannot be confirmed this way yet.
 
-**A window took the focus when an agent launched**
-Starting a template's browser shows its first window for a moment before BrowserHive minimizes it, so the first launch after the browser was stopped can take the focus once. Sessions' own windows never do. Raise `templateHostIdleTimeout` (or set it to `0`) to restart the browser less often.
+**A window took the focus when an agent launched, or out of nowhere**
+Starting a template's browser shows its first window for a moment before BrowserHive minimizes it, so the first launch after the browser was stopped, or a scheduled check of an idle template, can take the focus once. Sessions' own windows never do. Raise `templateHostIdleTimeout` (or set it to `0`) to restart the browser less often.
 
 **The log says the template's identity drifted**
 The browser reported a different Chrome major version than at the template's first start: Chrome or BrowserHive's Chromium was updated. Launches continue, and the user agent follows the real browser. Some sites ask you to sign in again after a browser update; delete and recreate the template if one does.

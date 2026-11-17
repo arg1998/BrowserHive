@@ -13,10 +13,9 @@ export const TEMPLATE_NAME_RE = /^[a-z][a-z0-9-]{1,31}$/;
 
 /**
  * Semver of first appearance of the template surface (`list_templates`, `launch_session.template`).
- * 0.3.0 is planned for other work (#57, #60), so templates ship in 0.4.0 at the earliest; the final
- * feature PR moves this if they ship later.
+ * Templates ship in 0.3.0 (owner decision 2026-11-16, D14).
  */
-export const TEMPLATES_SINCE = '0.4.0';
+export const TEMPLATES_SINCE = '0.3.0';
 
 /** One site of a template as an agent sees it: the registrable domain, a title and its sign-in state. */
 export const AgentTemplateSite = z.object({

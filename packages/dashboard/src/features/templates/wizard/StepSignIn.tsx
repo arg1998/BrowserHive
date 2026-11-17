@@ -64,7 +64,7 @@ export function StepSignIn({
 
   return (
     <div className="flex flex-col gap-5">
-      <RemoteOperatorBanner />
+      <RemoteOperatorBanner machineName={s.detail.data.machine.name} />
       {s.problem !== null ? (
         <SignInProblemCallout
           problem={s.problem}

@@ -29,7 +29,6 @@ import {
   sealingFor,
   templateGate,
 } from '../../domain/templates/model.ts';
-import { unlistedDomains } from '../../domain/templates/sign-ins.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { Clock } from '../../ports/clock.ts';
 import type { DegradationReporter } from '../../ports/degradation-reporter.ts';
@@ -47,6 +46,8 @@ import type { TemplateFiles } from '../../ports/template-files.ts';
 import type { TemplateHostOps, TemplateRuntime } from '../../ports/template-runtime.ts';
 import type { DomainEvents } from '../events/catalog.ts';
 import { launchDeclaredHarnessOf, launchHarnessOf } from '../sessions/metadata.ts';
+import { launchWithRecheck } from './launch-recheck.ts';
+import { readTemplateDetail, type TemplateServiceHooks } from './template-detail.ts';
 import {
   deleteRunning,
   disabled,
@@ -60,8 +61,8 @@ import {
 } from './template-errors.ts';
 import { pageTemplates } from './template-list.ts';
 import { TemplateLocks } from './template-locks.ts';
-import { publishTemplateChanged, readTemplates, storedUnlisted } from './template-reads.ts';
-import { toAgentTemplate, toTemplateDetail, toTemplateSummary, toTemplateView } from './views.ts';
+import { publishTemplateChanged, readTemplates } from './template-reads.ts';
+import { toAgentTemplate, toTemplateSummary, toTemplateView } from './views.ts';
 
 /** Server configuration the service reads. */
 export interface TemplateServiceConfig {
@@ -112,10 +113,15 @@ export class TemplateService {
   readonly #deps: TemplateServiceDeps;
   readonly #log: Logger;
   readonly #locks = new TemplateLocks();
+  #t2: TemplateServiceHooks = {}; // attached after composition (T2)
 
   constructor(deps: TemplateServiceDeps) {
     this.#deps = deps;
     this.#log = deps.logger.child({ module: 'templates' });
+  }
+
+  attach(hooks: TemplateServiceHooks): void {
+    this.#t2 = hooks;
   }
 
   /** `templates` (spec 08 §5.9). */
@@ -198,31 +204,7 @@ export class TemplateService {
    * @throws AppError `TEMPLATE_NOT_FOUND`.
    */
   async get(templateId: string): Promise<TemplateDetailResponse> {
-    const template = await this.#deps.repos.templates.get(templateId);
-    if (template === null) throw notFoundForOperator(templateId);
-    const sites = await this.#deps.repos.templateSites.list(templateId);
-    const ops = this.#deps.ops;
-    const host = this.#deps.runtime.host(templateId);
-    const jar = (await ops?.jar(templateId)) ?? null;
-    const shared = (await ops?.sharedWindows(templateId)) ?? [];
-    const own = new Set(sites.map((s) => s.siteId));
-    const stored = jar === null ? await storedUnlisted(this.#deps.versions, templateId, own) : [];
-    return toTemplateDetail(
-      template,
-      sites,
-      { ...host, sharedWindows: shared },
-      this.#deps.runtime.liveSessions(templateId).length,
-      this.#deps.clock.now(),
-      {
-        unlistedDomains:
-          jar === null
-            ? stored
-            : unlistedDomains(
-                jar,
-                sites.map((s) => s.siteId),
-              ),
-      },
-    );
+    return readTemplateDetail(this.#deps, this.#t2, templateId);
   }
 
   /**
@@ -352,20 +334,31 @@ export class TemplateService {
     // flight or has started first and this launch finds the template gone.
     if (this.#locks.isDeleting(template.templateId)) throw notFoundForAgent(name);
     const release = this.#locks.beginLaunch(template.templateId);
+    const subject = this.#subject(caller);
     try {
-      return await this.#deps.runtime.launch(
+      return await launchWithRecheck(
+        this.#deps.repos,
         {
-          template,
-          sites,
-          slug: input.slug,
-          connectionId: input.connectionId ?? null,
-          client: caller.client,
-          principal: caller.principal,
-          sealing,
-          sealed: isSessionSealed(sealing),
-          settings: options.settings,
+          name,
+          templateId: template.templateId,
+          allowed: (current) => current.name === name && templateGate(current, subject).allowed,
         },
-        signal,
+        () =>
+          this.#deps.runtime.launch(
+            {
+              template,
+              sites,
+              slug: input.slug,
+              connectionId: input.connectionId ?? null,
+              client: caller.client,
+              principal: caller.principal,
+              sealing,
+              sealed: isSessionSealed(sealing),
+              settings: options.settings,
+            },
+            signal,
+          ),
+        (id) => this.#t2.closeSession?.(id) ?? Promise.resolve(),
       );
     } finally {
       release();

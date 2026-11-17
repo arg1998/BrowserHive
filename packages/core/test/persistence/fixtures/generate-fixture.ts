@@ -129,6 +129,17 @@ export async function seedFixture(uow: SqliteUnitOfWork): Promise<void> {
         addedAt: at + 1,
       }),
     );
+    await r.templateProbes.insert({
+      seq: 0,
+      templateId: TEMPLATE_ID,
+      siteId: 'site-b.test',
+      outcome: 'signed_in',
+      reason: 'learned_cookies',
+      trigger: 'schedule',
+      finalUrl: null,
+      durationMs: 3,
+      at,
+    });
     await r.sessions.insert(
       sessionRecord({
         sessionId: 'jobs-t1t2t3t4',

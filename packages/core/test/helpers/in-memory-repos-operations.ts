@@ -134,9 +134,15 @@ export class InMemoryNotificationRepository implements NotificationRepository {
   async findLatestByThread(
     principalId: string | null,
     thread: string,
+    kinds?: readonly string[],
   ): Promise<NotificationRecord | null> {
     const rows = [...this.rows.values()]
-      .filter((r) => r.principalId === principalId && r.thread === thread)
+      .filter(
+        (r) =>
+          r.principalId === principalId &&
+          r.thread === thread &&
+          (kinds === undefined || kinds.length === 0 || kinds.includes(r.kind)),
+      )
       .sort(
         (a, b) => b.createdAt - a.createdAt || b.notificationId.localeCompare(a.notificationId),
       );

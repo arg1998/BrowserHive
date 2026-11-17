@@ -1,4 +1,4 @@
-/** @module cli/registry-templates — the `templates` command as registry data: list, show, create, finish, seed, versions, save, restore, host, disable, enable and rm over a running server's REST API, and the local rekey (spec 13 §7.2, §11.5) */
+/** @module cli/registry-templates — the `templates` command as registry data: list, show, create, finish, login, probe, seed, versions, save, restore, host, disable, enable and rm over a running server's REST API, and the local rekey (spec 13 §7.2, §8, §11.5) */
 
 import { jsonFlag, remoteFlags, sub } from './registry-parts.ts';
 import type { CommandDescriptor, FlagDescriptor } from './registry-types.ts';
@@ -122,6 +122,56 @@ const yesFlag: FlagDescriptor = {
 };
 const remoteJson: readonly FlagDescriptor[] = [jsonFlag, ...remoteFlags];
 
+/** `templates login | probe` (T2): sign a site in again, and check the sites now. */
+const healthSubcommands = [
+  sub(['login'], 'Sign a template in to one of its sites again', {
+    args: [nameArg],
+    flags: [
+      {
+        name: 'site',
+        kind: 'value',
+        placeholder: '<site>',
+        describe: 'The site to sign in to again (linkedin.com). Required.',
+      },
+      {
+        name: 'method',
+        kind: 'value',
+        placeholder: '<window|vault>',
+        describe:
+          "window opens a sign-in window at the site on the machine running the server; vault fills the site's linked vault login there, in the background.",
+        defaultText: 'window',
+      },
+      {
+        name: 'timeout',
+        kind: 'value',
+        placeholder: '<duration>',
+        describe: 'How long to wait for the sign-in. The re-login is then cancelled.',
+        defaultText: TEMPLATE_CREATE_TIMEOUT_TEXT,
+      },
+      {
+        name: 'letAgentsContinue',
+        kind: 'boolean',
+        describe:
+          "Do not pause the template's agents while the window is open. They may then type into or navigate pages while you sign in.",
+      },
+      ...remoteJson,
+    ],
+  }),
+  sub(['probe'], "Check now whether a template's sites are still signed in", {
+    args: [nameArg],
+    flags: [
+      {
+        name: 'site',
+        kind: 'value',
+        placeholder: '<site>',
+        describe: 'Check only this site.',
+        defaultText: 'every enabled site',
+      },
+      ...remoteJson,
+    ],
+  }),
+];
+
 /** `templates show | seed | versions | save | restore | host | disable | enable | rekey` (T1b). */
 const operationSubcommands = [
   sub(['show'], "Show a template, its browser and its sites' sign-in state", {
@@ -196,9 +246,9 @@ const operationSubcommands = [
 /** `templates`. */
 export const TEMPLATES_COMMAND: CommandDescriptor = {
   name: 'templates',
-  summary: 'Create, inspect, seed, version, restore and delete session templates',
+  summary: 'Create, inspect, check, sign in, seed, version, restore and delete session templates',
   description:
-    'Talks to a running server over its REST API (--url, default the configured host and port) with an operator bearer (--token) or the dashboard cookie (--cookie). create opens a sign-in window on the machine running the server, wherever the CLI runs, and waits until every site is signed in, you press Enter, or --timeout passes. create and finish exit 0 when every site is signed in, 2 when one is not, 1 on an API error. seed and restore run on the server and the CLI waits for them. rekey is the exception: it runs locally against the data directory with the server stopped.',
+    'Talks to a running server over its REST API (--url, default the configured host and port) with an operator bearer (--token) or the dashboard cookie (--cookie). create and login open a sign-in window on the machine running the server, wherever the CLI runs, and wait until the sites are signed in, you press Enter, or --timeout passes. create, finish, login and probe exit 0 when every site is signed in, 2 when one is not, 1 on an API error. seed and restore run on the server and the CLI waits for them. rekey is the exception: it runs locally against the data directory with the server stopped.',
   flags: [],
   configKeys: ['host', 'port', 'config', 'color'],
   subcommands: [
@@ -232,6 +282,7 @@ export const TEMPLATES_COMMAND: CommandDescriptor = {
         ...remoteFlags,
       ],
     }),
+    ...healthSubcommands,
     ...operationSubcommands,
   ],
   defaultSubcommand: ['list'],

@@ -21,6 +21,10 @@ export const KIND_CATEGORY: { readonly [K in NotificationKind]: NotificationCate
   'digest.weekly': 'reports',
   'report.anomaly': 'reports',
   test: 'system',
+  'template.signed_out': 'needs-you',
+  'template.challenged': 'needs-you',
+  'template.relogin_failed': 'problems',
+  'template.host_failed': 'problems',
 };
 
 /** Severity each kind is produced with (a producer may raise it, never lower it below `info`). */
@@ -38,6 +42,10 @@ export const KIND_SEVERITY: { readonly [K in NotificationKind]: NotificationSeve
   'digest.weekly': 'info',
   'report.anomaly': 'warn',
   test: 'info',
+  'template.signed_out': 'warn',
+  'template.challenged': 'warn',
+  'template.relogin_failed': 'warn',
+  'template.host_failed': 'error',
 };
 
 /** Generic title per kind: what a `counts`-level channel shows instead of the producer's title. */
@@ -55,6 +63,10 @@ export const KIND_LABEL: { readonly [K in NotificationKind]: string } = {
   'digest.weekly': 'Weekly digest',
   'report.anomaly': 'Something looks off',
   test: 'Test notification',
+  'template.signed_out': 'Template signed out',
+  'template.challenged': 'Template site check',
+  'template.relogin_failed': 'Re-login failed',
+  'template.host_failed': 'Template browser failed',
 };
 
 /** Kinds that are delivered in-app only and never enqueued for an external channel (D-34 loop cut). */
@@ -80,6 +92,10 @@ export const KIND_TYPE: { readonly [K in NotificationKind]: NotificationType } =
   'digest.weekly': 'lifecycle',
   'report.anomaly': 'system',
   test: 'system',
+  'template.signed_out': 'attention',
+  'template.challenged': 'attention',
+  'template.relogin_failed': 'error',
+  'template.host_failed': 'error',
 };
 
 /** What a row from before the contract (or from an older reader) carries. */

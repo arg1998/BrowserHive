@@ -33,6 +33,7 @@ import {
   TemplateSiteHost,
   TemplateTimezoneId,
 } from './template-parts.ts';
+import { ReloginView, TemplateMachine } from './template-relogin-view.ts';
 
 // ------------------------------------------------------------------------------------------------
 // Sites (spec 13 §2.3).
@@ -55,6 +56,8 @@ export const TemplateSiteForm = z.object({
   password: z.string(),
   submit: z.string().optional(),
   next: z.string().optional(),
+  /** The sign-in page's path on the site (a site without a pack; default `/`). */
+  path: z.string().optional(),
 });
 
 /** A site of a template as operators see it. */
@@ -70,6 +73,8 @@ export const TemplateSiteView = z.object({
   auto_relogin: z.boolean(),
   form: TemplateSiteForm.nullable(),
   learned_cookie_names: z.array(z.string()),
+  /** When BrowserHive last tried an automatic re-login with the vault (one try per 24 h, §8.4). */
+  auto_relogin_at: EpochMs.nullable(),
   health: TemplateSiteHealth,
   stopped_at: EpochMs.nullable(),
   device_bound: z.boolean(),
@@ -182,6 +187,11 @@ export const HostView = z.object({
   sandboxed: z.boolean().nullable(),
   /** Saved passwords or autofill data were found in the profile at the last start (spec 13 §3.1). */
   profile_secrets: z.boolean(),
+  /**
+   * Agents are paused: a re-login or recording window is open and the operator has not let them
+   * continue (D-60). Launches and tool calls of the template's sessions wait meanwhile.
+   */
+  agents_paused: z.boolean(),
 });
 /** A template's browser. */
 export type HostView = z.infer<typeof HostView>;
@@ -281,6 +291,10 @@ export const TemplateDetailResponse = z.object({
   shared_windows: z.array(SharedWindow),
   /** Signed-in domains that are not sites of the template (spec 13 §2.3); from T1b's versions. */
   unlisted_domains: z.array(z.string()),
+  /** The current or last re-login of the template (spec 13 §8.4); `null` when none ran in this process. */
+  relogin: ReloginView.nullable(),
+  /** The machine sign-in windows open on (spec 13 §3.11). */
+  machine: TemplateMachine,
   now: EpochMs,
 });
 /** `GET /templates/{template_id}` body. */

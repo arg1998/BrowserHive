@@ -68,6 +68,8 @@ export interface ToolHarnessOptions {
   readonly ids?: FakeIdGenerator | ToolServices['ids'];
   /** When set, every connection resolves its identity (spec 02 §1.4) as a stdio process with this environment. */
   readonly identityEnv?: Readonly<Record<string, string>>;
+  /** Agents' pause while the operator signs in (D-60); absent by default. */
+  readonly templatePause?: ToolServices['templatePause'];
   /** `templates` (default `true`); `false` also disables the `templates` pack, as composition does. */
   readonly templates?: boolean;
   /**
@@ -254,6 +256,7 @@ export async function createToolHarness(options: ToolHarnessOptions = {}): Promi
     authStates,
     blocklist,
     templates: templates.service,
+    ...(options.templatePause !== undefined && { templatePause: options.templatePause }),
     pageActions: options.pageActions ?? createPlaywrightPageActions(),
     fs: createNodeToolFs(),
     redaction: {

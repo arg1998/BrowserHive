@@ -1,5 +1,6 @@
 /** @module kernel — named exports of the leaf layer (L0): errors, result, context, deadlines, redaction, URL/glob/slug/path helpers. */
 
+export { type BoundedReadOptions, readBounded } from './bounded.ts';
 export { type FormatBytesOptions, formatBytes } from './bytes.ts';
 export {
   bindRequestContext,

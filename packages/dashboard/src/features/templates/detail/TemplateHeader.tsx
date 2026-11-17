@@ -1,4 +1,4 @@
-/** @module features/templates/detail/TemplateHeader — the template's title (display name, status pill), its agent-facing name with copy, a facts line (owner · channel · headed · created), the Browser's state with Start / Stop / Restart, Continue sign-in while setting up, and an overflow menu with Disable… / Enable and Delete… (spec 13 §11.4) */
+/** @module features/templates/detail/TemplateHeader — the template's title (display name, status pill), its agent-facing name with copy, a facts line (owner · channel · headed · created), the Browser's state with Start / Stop / Restart, Continue sign-in while setting up, **Show window** and the **Re-login** menu (`HeaderRelogin`), and an overflow menu with Disable… / Enable and Delete… (spec 13 §11.4) */
 import type { TemplateDetailResponse } from '@browserhive/contracts/http';
 import { useNavigate } from '@tanstack/react-router';
 import { CopyButton } from '@/components/shared/CopyButton.tsx';
@@ -17,6 +17,7 @@ import { Spinner } from '@/components/ui/spinner.tsx';
 import { ICONS } from '@/lib/icons.ts';
 import { CHANNEL_LABEL, pagesText } from '../model.ts';
 import { useTemplateActions } from '../use-template-actions.ts';
+import { HeaderRelogin } from './HeaderRelogin.tsx';
 
 /** The Browser block: state, agent pages and the start/stop/restart controls. */
 function BrowserControls({
@@ -83,7 +84,13 @@ function BrowserControls({
 }
 
 /** Header. */
-export function TemplateHeader({ detail }: { readonly detail: TemplateDetailResponse }) {
+export function TemplateHeader({
+  detail,
+  onRelogin,
+}: {
+  readonly detail: TemplateDetailResponse;
+  readonly onRelogin: (site: string) => void;
+}) {
   const { template } = detail;
   const navigate = useNavigate();
   const actions = useTemplateActions(template);
@@ -123,6 +130,7 @@ export function TemplateHeader({ detail }: { readonly detail: TemplateDetailResp
               Continue sign-in
             </Button>
           ) : null}
+          <HeaderRelogin detail={detail} onRelogin={onRelogin} />
           <BrowserControls
             detail={detail}
             busy={actions.busy}

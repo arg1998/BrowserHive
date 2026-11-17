@@ -73,6 +73,8 @@ export function virtualLauncher(input: {
   readonly recording?: boolean;
   /** A site-opened page over the session's cap was closed. */
   readonly onPageLimit?: (sessionId: string) => void;
+  /** Runs once the browser is up, within the launch budget (the pre-launch check, spec 13 §8.2). */
+  readonly afterAcquire?: (signal: AbortSignal) => Promise<void>;
 }): VirtualSessionLauncher {
   const { lifecycle, template, caps } = input;
   const name = template.name;
@@ -82,6 +84,7 @@ export function virtualLauncher(input: {
     reserve: (admitSlot) => lifecycle.reserve(admitSlot),
     acquire: async (signal) => {
       await lifecycle.acquire(signal);
+      await input.afterAcquire?.(signal);
     },
     open: async (sessionId, { pageOptions, signal }) => {
       const host = lifecycle.running;

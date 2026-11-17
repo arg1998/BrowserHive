@@ -37,6 +37,10 @@ export interface ToolsInput {
   readonly authStates: AuthStateStore;
   readonly blocklist: BlocklistService;
   readonly templates: TemplateService;
+  /** Agents wait while the operator signs in (D-60); absent under `templates=false`. */
+  readonly templatePause?: {
+    wait(templateId: string, name: string, signal?: AbortSignal): Promise<void>;
+  };
   readonly pageActions: PageActions;
   readonly redactor: Redactor;
   readonly bus: EventBus<DomainEvents>;
@@ -82,6 +86,7 @@ export function buildTools(input: ToolsInput): {
       authStates: input.authStates,
       blocklist: input.blocklist,
       templates: input.templates,
+      ...(input.templatePause !== undefined && { templatePause: input.templatePause }),
       pageActions: input.pageActions,
       fs: createNodeToolFs(),
       redaction: {

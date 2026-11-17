@@ -5,6 +5,8 @@ import type {
   SessionChannel,
   SiteWritePolicy,
   TemplateHealthState,
+  TemplateProbeOutcome,
+  TemplateProbeTrigger,
   TemplateStatus,
   TemplateStealthLevel,
   TemplateVersionReason,
@@ -53,6 +55,11 @@ export interface ObservedIdentityRecord {
   };
   readonly window: { readonly width: number; readonly height: number };
   readonly observedAt: number;
+  /**
+   * The last start reported another Chrome major than the one recorded (spec 13 §2.2); kept so the
+   * drift survives a restart (deferred D23). Absent = no drift seen.
+   */
+  readonly drift?: { readonly from: string; readonly to: string; readonly at: number };
 }
 
 /** A template's pinned proxy; `password_env` is a variable NAME (D-33). `proxy_json`. */
@@ -134,6 +141,8 @@ export interface TemplateSiteFormRecord {
   readonly password: string;
   readonly submit?: string;
   readonly next?: string;
+  /** The sign-in page's path on the site (generic sites; default `/`). */
+  readonly path?: string;
 }
 
 /** One `template_sites` row. */
@@ -148,6 +157,10 @@ export interface TemplateSiteRecord {
   readonly writePolicy: SiteWritePolicy | null;
   readonly vaultHandle: string | null;
   readonly autoRelogin: boolean;
+  /** The operator who linked `vaultHandle` (recorded on auto-relogin fills, spec 13 §8.4). */
+  readonly vaultLinkedBy: string | null;
+  /** When the last automatic re-login was tried (one try per 24 h, spec 13 §8.4). */
+  readonly autoReloginAt: number | null;
   readonly form: TemplateSiteFormRecord | null;
   /** Generic sites only (spec 13 §8.1); names, never values. */
   readonly learnedCookieNames: readonly string[];
@@ -232,4 +245,20 @@ export interface TemplateVersionRecord extends TemplateStateFileRecord {
   /** The principal, or `browserhive` for automatic versions. */
   readonly createdBy: string | null;
   readonly createdAt: number;
+}
+
+/** One `template_probes` row (spec 13 §2.5, §8.1): telemetry class, pruned with `retentionDays`. */
+export interface TemplateProbeRecord {
+  /** Assigned by the database; `0` on insert. */
+  readonly seq: number;
+  readonly templateId: string;
+  readonly siteId: string;
+  readonly outcome: TemplateProbeOutcome;
+  /** Reason code of spec 13 §8.1. */
+  readonly reason: string;
+  readonly trigger: TemplateProbeTrigger;
+  /** Sanitized (query and fragment stripped, D-20); `null` for a probe that loaded nothing. */
+  readonly finalUrl: string | null;
+  readonly durationMs: number;
+  readonly at: number;
 }

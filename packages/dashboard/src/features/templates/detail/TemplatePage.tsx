@@ -1,6 +1,7 @@
 /** @module features/templates/detail/TemplatePage — `/templates/$id` (spec 13 §11.4): header with the browser's state and actions, banners, and six tabs in `?tab=` (Sites, Sessions, Versions, Access, Settings, Activity); live through the `templates` and `sessions` topics */
 import type { TemplateDetailResponse } from '@browserhive/contracts/http';
 import { useParams } from '@tanstack/react-router';
+import { useState } from 'react';
 import { usePageCrumb } from '@/app/shell/page-crumb.tsx';
 import { ErrorState } from '@/components/shared/ErrorState.tsx';
 import { Skeleton } from '@/components/ui/skeleton.tsx';
@@ -8,7 +9,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs.t
 import { toAppError } from '@/lib/api/errors.ts';
 import { useSearchState } from '@/lib/search/use-search-state.ts';
 import { useTemplateDetail } from '../api.ts';
+import { expectsLiveView } from '../LiveViewSignIn.tsx';
 import { useTemplatesLive } from '../live.ts';
+import { ReloginDialog } from '../ReloginDialog.tsx';
 import { TEMPLATE_TABS, type TemplatePageSearch, type TemplateTab } from '../search.ts';
 import { AccessTab } from './AccessTab.tsx';
 import { ActivityTab } from './ActivityTab.tsx';
@@ -62,14 +65,16 @@ function TabBody({
   tab,
   detail,
   site,
+  onRelogin,
 }: {
   readonly tab: TemplateTab;
   readonly detail: TemplateDetailResponse;
   readonly site: string | undefined;
+  readonly onRelogin: (site: string) => void;
 }) {
   switch (tab) {
     case 'sites':
-      return <SitesTab detail={detail} focusSite={site} />;
+      return <SitesTab detail={detail} focusSite={site} onRelogin={onRelogin} />;
     case 'sessions':
       return <SessionsTab detail={detail} />;
     case 'versions':
@@ -79,7 +84,7 @@ function TabBody({
     case 'settings':
       return <SettingsTab detail={detail} />;
     case 'activity':
-      return <ActivityTab />;
+      return <ActivityTab detail={detail} />;
   }
 }
 
@@ -89,6 +94,8 @@ export function TemplatePage() {
   const id = params.id ?? '';
   const { search, set } = useSearchState<TemplatePageSearch>();
   const query = useTemplateDetail(id);
+  // The site a Re-login… dialog is open for (`''`: choose in the dialog), `null` when closed.
+  const [reloginSite, setReloginSite] = useState<string | null>(null);
   useTemplatesLive();
   usePageCrumb(query.data?.template.display_name ?? null);
 
@@ -109,12 +116,18 @@ export function TemplatePage() {
   const tab = search.tab ?? 'sites';
   return (
     <div className="flex min-w-0 flex-col gap-5">
-      <TemplateHeader detail={detail} />
-      <TemplateBanners detail={detail} />
+      <TemplateHeader detail={detail} onRelogin={setReloginSite} />
+      <TemplateBanners detail={detail} onRelogin={setReloginSite} />
       <Tabs
         value={tab}
         onValueChange={(value: unknown) => {
-          if (isTab(value)) set({ tab: value === 'sites' ? undefined : value, site: undefined });
+          if (isTab(value))
+            set({
+              tab: value === 'sites' ? undefined : value,
+              site: undefined,
+              outcome: undefined,
+              trigger: undefined,
+            });
         }}
         className="min-w-0 gap-4"
       >
@@ -126,9 +139,17 @@ export function TemplatePage() {
           ))}
         </TabsList>
         <TabsContent value={tab}>
-          <TabBody tab={tab} detail={detail} site={search.site} />
+          <TabBody tab={tab} detail={detail} site={search.site} onRelogin={setReloginSite} />
         </TabsContent>
       </Tabs>
+      <ReloginDialog
+        templateId={detail.template.template_id}
+        sites={detail.sites}
+        machineName={detail.machine.name}
+        site={reloginSite}
+        onClose={() => setReloginSite(null)}
+        liveView={expectsLiveView(detail)}
+      />
     </div>
   );
 }

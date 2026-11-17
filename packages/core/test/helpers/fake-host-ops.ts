@@ -70,7 +70,7 @@ export class FakeTemplateHostOps implements TemplateHostOps {
   host: TemplateHost | null = null;
   /** Templates held by an operation. */
   readonly holds = new Set<string>();
-  /** Host operations, in order (`start:<id>`, `stop:<id>`, `restart:<id>`, `drain:<id>:<force>`). */
+  /** Host operations, in order (`start:<id>`, `stop:<id>`, `restart:<id>`, `drain:<id>:<force>`, `discard:<id>`). */
   readonly calls: string[] = [];
   /** Sessions `drainForOperation` and `stopHost` report closed. */
   liveSessions: string[] = [];
@@ -116,5 +116,9 @@ export class FakeTemplateHostOps implements TemplateHostOps {
   ): Promise<readonly string[]> {
     this.calls.push(`drain:${template.templateId}:${forceClose}`);
     return this.liveSessions.splice(0);
+  }
+
+  async discardHost(template: TemplateRecord): Promise<void> {
+    this.calls.push(`discard:${template.templateId}`);
   }
 }

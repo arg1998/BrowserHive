@@ -163,7 +163,7 @@ export const HTTP_ENDPOINTS: readonly HttpEndpoint[] = [
   ep('getPreferences', 'get', '/me/preferences', null),
   ep('putPreferences', 'put', '/me/preferences', 'preferences:write'),
   ep('search', 'get', '/search', 'sessions:read'),
-  // spec 13 §11.1 session templates (T1a and T1b; the remaining routes arrive with T2 and T3a)
+  // spec 13 §11.1 session templates (T1a, T1b and T2; the remaining routes arrive with T3a)
   ep('getTemplateOperation', 'get', '/templates/operations/{operation_id}', 'templates:read'),
   ep('listTemplates', 'get', '/templates', 'templates:read'),
   ep('createTemplate', 'post', '/templates', 'templates:write'),
@@ -230,6 +230,30 @@ export const HTTP_ENDPOINTS: readonly HttpEndpoint[] = [
     'post',
     '/templates/{template_id}/data-dir/reveal',
     'templates:write',
+  ),
+  // spec 13 §8 health and re-login (T2)
+  ep('probeTemplate', 'post', '/templates/{template_id}/probe', 'templates:write'),
+  ep('listTemplateProbes', 'get', '/templates/{template_id}/probes', 'templates:read'),
+  ep('startTemplateRelogin', 'post', '/templates/{template_id}/relogin', 'templates:login'),
+  ep(
+    'confirmTemplateRelogin',
+    'post',
+    '/templates/{template_id}/relogin/confirm',
+    'templates:login',
+  ),
+  ep('cancelTemplateRelogin', 'delete', '/templates/{template_id}/relogin', 'templates:login'),
+  ep('showTemplateWindow', 'post', '/templates/{template_id}/host/show', 'templates:login'),
+  ep(
+    'continueTemplateAgents',
+    'post',
+    '/templates/{template_id}/agents/continue',
+    'templates:login',
+  ),
+  ep(
+    'putTemplateReloginLink',
+    'put',
+    '/templates/{template_id}/sites/{site_id}/relogin',
+    'templates:login',
   ),
   // §4.9 client errors
   ep('reportClientError', 'post', '/client-errors', null),

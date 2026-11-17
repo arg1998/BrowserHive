@@ -14,7 +14,7 @@ COMMANDS
   db         Inspect, back up, restore, or migrate the database
   admin      Administrative actions (reset-password, tokens)
   channels   List, test and preview notification channels
-  templates  Create, inspect, seed, version, restore and delete session templates
+  templates  Create, inspect, check, sign in, seed, version, restore and delete session templates
   version    Print version information
   help       Show help for a command
 

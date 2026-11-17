@@ -102,6 +102,20 @@ function stringField(value: unknown, key: string): string | null {
   return typeof field === 'string' ? field : null;
 }
 
+/** Tools a template session may call while its agents are paused (D-60): they end or only inspect a session. */
+export const PAUSE_EXEMPT_TOOLS: ReadonlySet<string> = new Set([
+  'close_session',
+  'list_sessions',
+  'server_status',
+  'session_info',
+  'list_tabs',
+  'list_templates',
+  'get_attention_result',
+  'request_attention',
+  'list_saved_auths',
+  'vault_list_available',
+]);
+
 /** The dispatcher. One instance per server; stateless apart from per-session sequence numbers. */
 export class ToolDispatcher {
   private readonly deps: ToolDispatcherDeps;
@@ -115,6 +129,22 @@ export class ToolDispatcher {
     this.sealed = new SealedRedaction(deps.services.clock);
     this.tracer = deps.tracer ?? trace.getTracer('browserhive');
     this.log = deps.logger.child({ module: 'mcp.dispatcher' });
+  }
+
+  /**
+   * A call on a template session waits while the operator signs in to one of its sites (D-60);
+   * reading tools and the ones that end or inspect a session do not.
+   */
+  private async holdWhilePaused(
+    tool: string,
+    session: Session | null,
+    signal: AbortSignal,
+  ): Promise<void> {
+    const template = session?.template;
+    const pause = this.deps.services.templatePause;
+    if (template == null || template.mode !== 'live' || pause === undefined) return;
+    if (PAUSE_EXEMPT_TOOLS.has(tool)) return;
+    await pause.wait(template.templateId, template.name, signal);
   }
 
   /** The registry this dispatcher serves. */
@@ -240,6 +270,7 @@ export class ToolDispatcher {
       const argRecord =
         typeof args === 'object' && args !== null ? Object.fromEntries(Object.entries(args)) : {};
       for (const policy of definition.policies) await policy.apply(ctx, argRecord);
+      await this.holdWhilePaused(name, holder.session, call.signal);
       const handlerCtx: ToolCallContext = ctx;
       // The registry pairs each name with its own definition; the parsed args came from that
       // definition's schema, so the widened handler receives exactly its contract's input.

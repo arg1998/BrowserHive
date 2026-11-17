@@ -9,7 +9,7 @@ import {
 } from '@browserhive/contracts/http';
 import { AppError, isAppError } from '../../../kernel/errors/app-error.ts';
 import { defineRoute, reply } from '../define-route.ts';
-import { requireSession } from './common.ts';
+import { assertTemplateViewScope, requireSession } from './common.ts';
 
 const tags = ['sessions'];
 
@@ -44,6 +44,9 @@ export const SESSION_LIVE_ROUTES = [
     errors: ['SESSION_NOT_FOUND', 'INPUT_NOT_PERMITTED'],
     async handler({ input, services, principal }) {
       const known = await requireSession(services, input.params.session_id);
+      // A template session's input needs its template scope too (`templates:login` for a
+      // maintenance session: a live-view re-login, spec 13 §8.4).
+      assertTemplateViewScope(principal, known);
       // A takeover route is never public, so the principal is always present here.
       const actor = { principalId: principal?.subject ?? 'unknown', via: 'rest' } as const;
       if (!services.attention.isInputPermitted(known.id, 'input')) {

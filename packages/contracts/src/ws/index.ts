@@ -58,6 +58,8 @@ export {
   TemplateHealthEvent,
   TemplateHostEvent,
   TemplateOperationEvent,
+  TemplateProbeEvent,
+  TemplateReloginEvent,
   TemplateRemovedEvent,
   TemplateVersionEvent,
   ToolCalledEvent,

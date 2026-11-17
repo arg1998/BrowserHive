@@ -290,14 +290,34 @@ export const SESSION_ERRORS = {
     hint: 'Wait a few seconds, then retry.',
     details: z.object({
       template: z.string(),
-      reason: z.enum(['starting', 'restarting', 'recovering']),
+      reason: z.enum(['starting', 'restarting', 'recovering', 'paused']),
       retry_after_ms: z.number().int().nonnegative(),
     }),
     docs: true,
     cause:
-      'The template’s browser is starting and did not finish within the launch budget (`starting`), is being drained for a recycle, restore or operator restart (`restarting`), or is restarting after a crash (`recovering`, spec 13 §3.2).',
+      'The template’s browser is starting and did not finish within the launch budget (`starting`), is being drained for a recycle, restore or operator restart (`restarting`), is restarting after a crash (`recovering`, spec 13 §3.2), or the operator is signing in to one of its sites in a re-login or recording window and agents are paused until they finish (`paused`, D-60): launches and tool calls of the template’s sessions wait up to 15 s first (a launch counts the wait in its 50 s budget). Any tool of a template session can answer it with `paused`.',
     resolution:
-      'Retry after `retry_after_ms`. A template that stays unavailable shows its browser state and last error on the template page.',
+      'Retry after `retry_after_ms`. A template that stays unavailable shows its browser state and last error on the template page; while a sign-in window is open the operator can let agents continue (**Let agents continue**, `templates login --letAgentsContinue`).',
+  }),
+  TEMPLATE_NEEDS_LOGIN: defineError({
+    code: 'TEMPLATE_NEEDS_LOGIN',
+    httpStatus: 409,
+    category: 'domain',
+    retryable: 'after_operator',
+    title: 'Template signed out',
+    message:
+      "Template '{template}' is signed out of {sites_text}. The operator has been asked to sign in again; retry after that.",
+    hint: 'Use another template, or retry after the operator has signed in again.',
+    details: z.object({
+      template: z.string(),
+      sites: z.array(z.string()),
+      sites_text: z.string(),
+    }),
+    docs: true,
+    cause:
+      'The pre-launch check (spec 13 §8.2) found every enabled site of the template signed out or held by a security check. Launches are refused only when every site is out; with some sites signed in the launch goes ahead and the session carries a `TEMPLATE_SITE_SIGNED_OUT` warning.',
+    resolution:
+      'Re-login on the template page (or `browserhive templates login <name> --site <site>`); the `template.signed_out` notification links there.',
   }),
   TEMPLATE_DISABLED: defineError({
     code: 'TEMPLATE_DISABLED',

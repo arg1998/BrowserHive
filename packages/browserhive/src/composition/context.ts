@@ -140,7 +140,10 @@ export interface DomainPart {
   /** Recording a template's sign-ins and the T1a host routes (spec 13 §7.1, §11.1). */
   readonly templateRecording: TemplateRecordingService;
   /** Template edits, actions, versions and operations (T1b). */
-  readonly templateParts: Pick<TemplatesParts, 'edit' | 'actions' | 'state' | 'operations'>;
+  readonly templateParts: Pick<
+    TemplatesParts,
+    'edit' | 'actions' | 'state' | 'operations' | 'supervisor' | 'healthRoutes' | 'health'
+  >;
   /** Random per start; `GET /health` reports it (D-37). */
   readonly instanceId: string;
   readonly preferences: PreferenceService;

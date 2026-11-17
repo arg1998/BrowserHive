@@ -154,6 +154,8 @@ const SPEC_CODES = [
   'TEMPLATE_CHECKPOINT_TOO_LARGE',
   'SESSION_RESOURCE_LIMIT',
   'TEMPLATE_STATE_COPY',
+  'TEMPLATE_NEEDS_LOGIN',
+  'TEMPLATE_SITE_SIGNED_OUT',
 ] as const;
 
 describe('ERROR_REGISTRY completeness', () => {
@@ -219,7 +221,7 @@ describe('ERROR_REGISTRY completeness', () => {
   it('categories partition the codes; audit and warning codes are never thrown', () => {
     const total = ErrorCategory.options.reduce((n: number, c) => n + codesInCategory(c).length, 0);
     expect(total).toBe(ERROR_CODES.length);
-    expect(codesInCategory('warning')).toHaveLength(14);
+    expect(codesInCategory('warning')).toHaveLength(15);
     expect(codesInCategory('audit')).toContain('ORIGIN_MISMATCH');
     expect(codesInCategory('boot')).toContain('PORT_IN_USE');
   });

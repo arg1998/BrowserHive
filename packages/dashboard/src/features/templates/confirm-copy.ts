@@ -144,3 +144,28 @@ export function clearSecretsConfirm(liveSessions: readonly string[]): ConfirmOpt
     itemsLabel: 'Sessions that close',
   };
 }
+
+/** **Allow this template** (spec 13 §8.4): adds `template:<id>` to a vault binding's principals, nothing else (review #81 M-1). */
+export function allowTemplateConfirm(
+  binding: string,
+  templateName: string,
+  templateId: string,
+): ConfirmOptions {
+  return {
+    title: `Let ${templateName} use ${binding}?`,
+    description:
+      `Adds template:${templateId} to this credential’s principals. BrowserHive then fills it only into this template’s own sign-in sessions; it can’t be used by agents’ sessions. ` +
+      'Remove the principal on the Vault page to take it back.',
+    confirmLabel: 'Allow this template',
+  };
+}
+
+/** **Let agents continue** while a sign-in window is open (D-60). */
+export function letAgentsContinueConfirm(): ConfirmOptions {
+  return {
+    title: 'Let agents continue?',
+    description:
+      'Agents may change cookies while you sign in, and may get signed-out pages until you finish. The window stays open.',
+    confirmLabel: 'Let agents continue',
+  };
+}

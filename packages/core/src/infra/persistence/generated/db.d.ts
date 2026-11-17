@@ -443,6 +443,7 @@ export interface Templates {
 export interface TemplateSites {
   added_at: number;
   auto_relogin: Generated<number>;
+  auto_relogin_at: number | null;
   consecutive_inconclusive: Generated<number>;
   device_bound: Generated<number>;
   enabled: Generated<number>;
@@ -458,6 +459,7 @@ export interface TemplateSites {
   stopped_at: number | null;
   template_id: string;
   vault_handle: string | null;
+  vault_linked_by: string | null;
   write_policy: string | null;
 }
 

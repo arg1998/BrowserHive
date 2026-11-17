@@ -331,6 +331,8 @@ export function buildTemplate(
       writePolicy: site.writePolicy,
       vaultHandle: null,
       autoRelogin: false,
+      vaultLinkedBy: null,
+      autoReloginAt: null,
       form: null,
       learnedCookieNames: [],
       health: UNKNOWN_SITE_HEALTH,

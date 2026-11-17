@@ -110,6 +110,16 @@ export interface ToolServices {
   readonly blocklist: BlocklistLike;
   /** Session templates (spec 13 §5). */
   readonly templates: TemplatesLike;
+  /**
+   * Agents wait while the operator signs in to a template's site (D-60): resolves at once when the
+   * template is not paused, else when the window closes or the operator lets agents continue.
+   * Absent when templates are off.
+   *
+   * @throws AppError `TEMPLATE_UNAVAILABLE` (`paused`) when the bounded wait runs out.
+   */
+  readonly templatePause?: {
+    wait(templateId: string, name: string, signal?: AbortSignal): Promise<void>;
+  };
   readonly pageActions: PageActions;
   readonly fs: ToolFs;
   readonly redaction: ToolRedaction;

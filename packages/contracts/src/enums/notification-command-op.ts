@@ -10,6 +10,7 @@ export const NotificationCommandOp = z.enum([
   'vault.confirm.resolve',
   'session.extend_lease',
   'session.close',
+  'template.relogin',
 ]);
 /** Union of {@link NotificationCommandOp} members. */
 export type NotificationCommandOp = z.infer<typeof NotificationCommandOp>;

@@ -58,6 +58,7 @@ const observedJson = z.object({
   screen: z.object({ width: z.number(), height: z.number(), device_scale_factor: z.number() }),
   window: z.object({ width: z.number(), height: z.number() }),
   observed_at: z.number(),
+  drift: z.object({ from: z.string(), to: z.string(), at: z.number() }).optional(),
 });
 
 const proxyJson = z.object({
@@ -144,6 +145,7 @@ function observedFromJson(text: string | null, where: string): ObservedIdentityR
     },
     window: j.window,
     observedAt: j.observed_at,
+    ...(j.drift !== undefined && { drift: j.drift }),
   };
 }
 
@@ -167,6 +169,7 @@ function observedToJson(observed: ObservedIdentityRecord | null): string | null 
     },
     window: observed.window,
     observed_at: observed.observedAt,
+    ...(observed.drift !== undefined && { drift: observed.drift }),
   });
 }
 

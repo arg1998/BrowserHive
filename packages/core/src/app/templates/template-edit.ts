@@ -202,6 +202,8 @@ export class TemplateEditService {
             writePolicy: body.write_policy ?? null,
             vaultHandle: null,
             autoRelogin: false,
+            vaultLinkedBy: null,
+            autoReloginAt: null,
             form: null,
             learnedCookieNames: [],
             health: UNKNOWN_SITE_HEALTH,

@@ -109,7 +109,7 @@ Result (JSON text block, mirrored in `structuredContent`):
 | `proxy_label` | `string` or `null` | yes |
 | `template` | `object` | no |
 
-Errors: [`INVALID_SLUG`](errors.md#INVALID_SLUG), [`UNKNOWN_CHANNEL`](errors.md#UNKNOWN_CHANNEL), [`SESSION_LIMIT_REACHED`](errors.md#SESSION_LIMIT_REACHED), [`SESSION_ALREADY_EXISTS`](errors.md#SESSION_ALREADY_EXISTS), [`UNSAFE_LAUNCH_ARG`](errors.md#UNSAFE_LAUNCH_ARG), [`INVALID_PERSISTENCE_CONFIG`](errors.md#INVALID_PERSISTENCE_CONFIG), [`AUTH_STATE_NOT_FOUND`](errors.md#AUTH_STATE_NOT_FOUND), [`BROWSER_NOT_INSTALLED`](errors.md#BROWSER_NOT_INSTALLED), [`SANDBOX_UNAVAILABLE`](errors.md#SANDBOX_UNAVAILABLE), [`TEMPLATE_NOT_FOUND`](errors.md#TEMPLATE_NOT_FOUND), [`TEMPLATE_BUSY`](errors.md#TEMPLATE_BUSY), [`TEMPLATE_UNAVAILABLE`](errors.md#TEMPLATE_UNAVAILABLE), [`TEMPLATE_DISABLED`](errors.md#TEMPLATE_DISABLED). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
+Errors: [`INVALID_SLUG`](errors.md#INVALID_SLUG), [`UNKNOWN_CHANNEL`](errors.md#UNKNOWN_CHANNEL), [`SESSION_LIMIT_REACHED`](errors.md#SESSION_LIMIT_REACHED), [`SESSION_ALREADY_EXISTS`](errors.md#SESSION_ALREADY_EXISTS), [`UNSAFE_LAUNCH_ARG`](errors.md#UNSAFE_LAUNCH_ARG), [`INVALID_PERSISTENCE_CONFIG`](errors.md#INVALID_PERSISTENCE_CONFIG), [`AUTH_STATE_NOT_FOUND`](errors.md#AUTH_STATE_NOT_FOUND), [`BROWSER_NOT_INSTALLED`](errors.md#BROWSER_NOT_INSTALLED), [`SANDBOX_UNAVAILABLE`](errors.md#SANDBOX_UNAVAILABLE), [`TEMPLATE_NOT_FOUND`](errors.md#TEMPLATE_NOT_FOUND), [`TEMPLATE_BUSY`](errors.md#TEMPLATE_BUSY), [`TEMPLATE_UNAVAILABLE`](errors.md#TEMPLATE_UNAVAILABLE), [`TEMPLATE_DISABLED`](errors.md#TEMPLATE_DISABLED), [`TEMPLATE_NEEDS_LOGIN`](errors.md#TEMPLATE_NEEDS_LOGIN). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
 
 <a id="close_session"></a>
 ### `close_session`
@@ -1311,7 +1311,7 @@ Errors: [`VAULT_NOT_CONFIGURED`](errors.md#VAULT_NOT_CONFIGURED), [`VAULT_LOCKED
 <a id="list_templates"></a>
 ### `list_templates`
 
-**List templates** · capability `read` · since 0.4.0
+**List templates** · capability `read` · since 0.3.0
 
 > List the session templates you may use. A session launched with a template's name as `template` starts signed in to the template's sites. The sign-ins belong to the operator: do not sign out, and do not change account, security or privacy settings; such actions may be blocked or need the operator's approval. Sign-ins and site data the session changes are kept in the template and carried into later sessions from it. Cookie values are hidden, and evaluate and saving the login are unavailable unless the operator allows them.
 

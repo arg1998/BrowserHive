@@ -1,6 +1,8 @@
 /** @module infra/browsers/template-host-state — a template host's state and memory operations (spec 13 §3.2, §3.9, §3.12, §7.4): the storage state read into memory with IndexedDB, applied with `setStorageState`, the JavaScript heap of each session's pages for the memory trim, and closing one page by target id. */
 
 import type { BrowserContext, Page } from 'patchright';
+import { readBounded } from '../../kernel/bounded.ts';
+import { withDeadline } from '../../kernel/deadline.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type { PageHeap } from '../../ports/template-host.ts';
@@ -10,6 +12,18 @@ import type { ViewPages } from './template-host-ops.ts';
 
 /** How long one page's heap read may take before it is skipped. */
 const HEAP_READ_MS = 2_000;
+
+/** Heap reads in flight at once (spec 13 §3.2 memory; review #79 L-7). */
+export const HEAP_READ_CONCURRENCY = 8;
+
+/** Overall limit of one host's heap reads: pages not read by then are skipped (count 0). */
+export const HEAP_READS_DEADLINE_MS = 10_000;
+
+/** Limits of {@link pageHeaps} (tests shorten them). */
+export interface HeapReadLimits {
+  readonly concurrency: number;
+  readonly deadlineMs: number;
+}
 
 /**
  * The template's storage state in memory (`storageState({indexedDB: true})`, spec 13 §3.9). Never
@@ -58,29 +72,55 @@ async function heapOf(context: BrowserContext, page: Page): Promise<number | nul
 }
 
 /**
- * `JSHeapTotalSize` of every agent page (spec 13 §3.2 memory), by session. Maintenance pages are
- * not trimmed. Unreadable pages are skipped.
+ * `JSHeapTotalSize` of every agent page (spec 13 §3.2 memory), by session, read
+ * {@link HEAP_READ_CONCURRENCY} at a time within {@link HEAP_READS_DEADLINE_MS} so a host with
+ * many pages never holds the supervisor's tick. Maintenance pages are not trimmed. Pages that are
+ * unreadable, or not read before the deadline, are skipped (they count 0).
  */
 export async function pageHeaps(
   context: BrowserContext,
   dispatcher: HostPageDispatcher,
   views: Iterable<ViewPages>,
   log: Logger,
+  limits: HeapReadLimits = {
+    concurrency: HEAP_READ_CONCURRENCY,
+    deadlineMs: HEAP_READS_DEADLINE_MS,
+  },
 ): Promise<readonly PageHeap[]> {
-  const out: PageHeap[] = [];
+  const targets: { readonly sessionId: string; readonly targetId: string; readonly page: Page }[] =
+    [];
   for (const view of views) {
     if (view.maintenance) continue;
     for (const page of view.pages()) {
       const targetId = dispatcher.targetIdOf(page);
-      if (targetId === undefined) continue;
-      const bytes = await heapOf(context, page);
-      if (bytes === null) {
-        log.debug('page heap unreadable', { sessionId: view.sessionId });
-        continue;
-      }
-      out.push({ sessionId: view.sessionId, targetId, jsHeapTotalBytes: Math.round(bytes) });
+      if (targetId !== undefined) targets.push({ sessionId: view.sessionId, targetId, page });
     }
   }
+  const deadline = withDeadline(undefined, limits.deadlineMs);
+  let bytes: (number | null)[];
+  try {
+    bytes = await readBounded(targets, (target) => heapOf(context, target.page), {
+      concurrency: limits.concurrency,
+      signal: deadline.signal,
+    });
+  } finally {
+    deadline.clear();
+  }
+  const out: PageHeap[] = [];
+  let unread = 0;
+  targets.forEach((target, index) => {
+    const value = bytes[index];
+    if (value === null || value === undefined) {
+      unread += 1;
+      return;
+    }
+    out.push({
+      sessionId: target.sessionId,
+      targetId: target.targetId,
+      jsHeapTotalBytes: Math.round(value),
+    });
+  });
+  if (unread > 0) log.debug('page heaps unread', { unread, pages: targets.length });
   return out;
 }
 

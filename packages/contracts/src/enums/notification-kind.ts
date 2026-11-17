@@ -19,6 +19,10 @@ export const NotificationKind = z.enum([
   'digest.weekly',
   'report.anomaly',
   'test',
+  'template.signed_out',
+  'template.challenged',
+  'template.relogin_failed',
+  'template.host_failed',
 ]);
 /** Union of {@link NotificationKind} members. */
 export type NotificationKind = z.infer<typeof NotificationKind>;

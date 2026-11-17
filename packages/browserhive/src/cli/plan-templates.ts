@@ -1,6 +1,6 @@
-/** @module cli/plan-templates — the `templates` subcommands' flags → their invocations, with the cheap local checks (`create`'s flags, `restore`'s version, `host`'s action) as usage errors (spec 13 §7.2, §11.5) */
+/** @module cli/plan-templates — the `templates` subcommands' flags → their invocations, with the cheap local checks (`create`'s flags, `restore`'s version, `host`'s action, `login`'s and `probe`'s site) as usage errors (spec 13 §7.2, §8, §11.5) */
 import { isAbsolute, resolve as resolvePath } from 'node:path';
-import { Channel, StealthLevel } from '@browserhive/contracts/enums';
+import { Channel, StealthLevel, TemplateReloginMethod } from '@browserhive/contracts/enums';
 import {
   TEMPLATE_MAX_CONCURRENT,
   TEMPLATE_SITES_MAX,
@@ -22,6 +22,9 @@ import type { FlagReader } from './plan-args.ts';
 
 /** `--timeout` default of `templates create`: 30 minutes. */
 export const TEMPLATE_CREATE_TIMEOUT_MS = 30 * 60_000;
+
+/** `--timeout` default of `templates login`: 30 minutes, the window's own limit (spec 13 §8.4). */
+export const TEMPLATE_LOGIN_TIMEOUT_MS = 30 * 60_000;
 
 /** An invocation waiting for its REST target (resolved after the flags are known to be valid). */
 export type RemoteInvocation = (remote: RemoteTarget) => Invocation;
@@ -84,6 +87,12 @@ export function templatesInvocation(name: string, input: TemplatesPlanInput): Re
       const action = hostAction(reader, args[1] ?? '');
       return (remote) => ({ command: 'templates-host', action, ...target(remote) });
     }
+    case 'templates login':
+      return loginInvocation(reader, target);
+    case 'templates probe': {
+      const site = siteFlag(reader);
+      return (remote) => ({ command: 'templates-probe', site, ...target(remote) });
+    }
     default: {
       const force = reader.bool('force');
       const yes = reader.bool('yes');
@@ -123,6 +132,42 @@ function hostAction(reader: FlagReader, raw: string): TemplateHostAction {
       : `unknown action '${raw}' for 'templates host'. Expected one of: start, stop, restart.`,
   );
   return 'start';
+}
+
+function loginInvocation(
+  reader: FlagReader,
+  target: (remote: RemoteTarget) => TemplateTarget,
+): RemoteInvocation {
+  const site = siteFlag(reader);
+  if (site === null) {
+    reader.problems.push(
+      "'templates login' requires --site <site>, the site to sign in to again (e.g. --site linkedin.com).",
+    );
+  }
+  const method =
+    TemplateReloginMethod.safeParse(reader.oneOf('method', TemplateReloginMethod.options)).data ??
+    'window';
+  const timeoutMs = reader.duration('timeout') ?? TEMPLATE_LOGIN_TIMEOUT_MS;
+  const letAgentsContinue = reader.bool('letAgentsContinue');
+  return (remote) => ({
+    command: 'templates-login',
+    site: site ?? '',
+    method,
+    timeoutMs,
+    letAgentsContinue,
+    ...target(remote),
+  });
+}
+
+/** `--site <site>` of `login` and `probe`: one domain, trimmed and lower-cased; `null` when absent. */
+function siteFlag(reader: FlagReader): string | null {
+  const raw = reader.text('site');
+  if (raw === undefined) return null;
+  const site = raw.trim().toLowerCase();
+  if (!TemplateSiteHost.safeParse(site).success) {
+    reader.problems.push(`invalid site '${raw}' in --site. Expected a domain like linkedin.com.`);
+  }
+  return site;
 }
 
 function createInvocation(

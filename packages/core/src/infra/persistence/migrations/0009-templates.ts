@@ -61,6 +61,8 @@ CREATE TABLE template_sites (
   write_policy TEXT CHECK (write_policy IN ('allow','warn','confirm')),
   vault_handle TEXT,
   auto_relogin INTEGER NOT NULL DEFAULT 0 CHECK (auto_relogin IN (0,1)),
+  vault_linked_by TEXT,
+  auto_relogin_at INTEGER,
   form_json TEXT,
   learned_cookie_names_json TEXT NOT NULL DEFAULT '[]',
   health_state TEXT NOT NULL DEFAULT 'unknown' CHECK (health_state IN ('unknown','signed_in','signed_out','challenged','inconclusive')),

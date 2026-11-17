@@ -71,7 +71,8 @@ export function useTakeover({
           toast.error({
             id: INPUT_REJECTED_TOAST_ID,
             title: 'Input rejected',
-            description: 'Takeover needs an open attention request for this session.',
+            description:
+              'Input needs an open takeover request for this session, or an open re-login signed in through this live view.',
             code,
           });
         } else {

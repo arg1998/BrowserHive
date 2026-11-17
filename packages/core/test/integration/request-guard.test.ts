@@ -426,8 +426,12 @@ describe('documented blind spots (real Chromium)', () => {
       const { hits } = await guard(session, everything(state.fixture));
       const page = await session.handle.context.newPage();
       await page.goto(state.fixture.url('/unload-beacon'));
-      await page.close();
-      expect(await waitFor(() => seen(state.fixture, 'POST', '/api/pagehide') === 1)).toBe(true);
+      // Bounded, as production closes are: a keepalive beacon can hold a target's destruction.
+      await Promise.race([page.close(), Bun.sleep(10_000)]);
+      // Whether the beacon reaches the server is timing (both outcomes are seen on CI). The route
+      // sees a request before the network does, so once the server has it, or after a bounded
+      // settle, the routing-side fact is final: the chain never saw it (D30a).
+      await waitFor(() => seen(state.fixture, 'POST', '/api/pagehide') === 1, 3_000);
       expect(hits.list()).toEqual([]);
     });
   }

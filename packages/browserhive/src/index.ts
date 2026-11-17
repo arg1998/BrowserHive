@@ -27,7 +27,12 @@ import {
   type RunningServer,
 } from './composition/index.ts';
 import { urlFor } from './composition/phases/listeners-http.ts';
-import { type ServerTesting, testingArgsOf } from './testing.ts';
+import {
+  type ServerTesting,
+  testingArgsOf,
+  testingEnabled,
+  testingRefusedMessage,
+} from './composition/testing-seam.ts';
 
 export type { Provenance, ServerConfig, ServerConfigInput } from '@browserhive/contracts/config';
 export type {
@@ -89,7 +94,8 @@ export interface CreateServerOptions extends ServerOptions {
   readonly notificationChannels?: readonly string[];
   /**
    * The internal testing seam (spec 13 §14): Chromium switches for BrowserHive's own suites. Its
-   * type is exported from `browserhive/testing` only.
+   * type is exported from `browserhive/testing` only; refused (`ConfigError`) unless the process
+   * environment sets `BHDEV_TESTING=1` (D-63).
    *
    * @internal
    */
@@ -139,7 +145,7 @@ function isConfigKey(name: string): name is ConfigKey {
   return (CONFIG_KEYS as readonly string[]).includes(name);
 }
 
-/** Splits the options into config overrides and reports unknown keys the resolver would never see. */
+/** Splits the options into config overrides and reports unknown keys the resolver would never see, and a testing seam the environment did not opt into. */
 function splitOptions(options: CreateServerOptions): ConfigOverrides {
   const overrides: Record<string, unknown> = {};
   const problems: Parameters<typeof configFailure>[0][number][] = [];
@@ -157,6 +163,14 @@ function splitOptions(options: CreateServerOptions): ConfigOverrides {
       location: `options.${name}`,
       message: withSuggestion(`unknown option '${name}'.`, hint.suggestions),
       suggestions: hint.suggestions,
+    });
+  }
+  if (options.testing !== undefined && !testingEnabled()) {
+    problems.push({
+      code: 'CONFIG_INVALID',
+      source: 'cli',
+      location: 'options.testing',
+      message: testingRefusedMessage(`option 'testing'`),
     });
   }
   if (problems.length > 0) throw new ConfigError(configFailure(problems));

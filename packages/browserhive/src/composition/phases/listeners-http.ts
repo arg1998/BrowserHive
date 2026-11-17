@@ -112,14 +112,28 @@ export async function openHttpListener(
   const storage = part(ctx.storage, 'storage');
   const domain = part(ctx.domain, 'domain');
   const observers = part(ctx.observers, 'observers');
-  const attention = domain.attention;
-  if (attention === null) {
+  const attentionService = domain.attention;
+  if (attentionService === null) {
     throw new AppError(
       'INTERNAL_ERROR',
       { ref: 'composition' },
       { message: 'http without attention' },
     );
   }
+  // Live-view input is also open on a live-view re-login's window (spec 13 §8.4, review #81 M-2);
+  // the input marks the operator signing in, which is when the template's agents wait.
+  const relogin = domain.templateParts.health?.relogin;
+  const attention =
+    relogin === undefined
+      ? attentionService
+      : Object.assign(Object.create(attentionService) as typeof attentionService, {
+          isInputPermitted: (
+            sessionId: string,
+            command: Parameters<typeof attentionService.isInputPermitted>[1],
+          ) =>
+            attentionService.isInputPermitted(sessionId, command) ||
+            (command === 'input' && relogin.liveInput(sessionId)),
+        });
   const log = logger.child({ module: 'http' });
   const identityVars = IDENTITY_ENV_VARS.filter((name) => (ctx.input.env[name] ?? '') !== '');
   if (identityVars.length > 0) {
@@ -274,6 +288,7 @@ export async function openHttpListener(
         templateActions: domain.templateParts.actions,
         templateVersions: domain.templateParts.state,
         templateOperations: domain.templateParts.operations,
+        templateHealth: domain.templateParts.healthRoutes,
         traceViewerAvailable: traceViewer.available,
       },
       adminAuthenticator: domain.adminAuthenticator,

@@ -47,6 +47,12 @@ export interface VaultFillSession {
    * allows, past the binding's own rules (spec 13 §5.5).
    */
   readonly template?: boolean;
+  /**
+   * The template whose maintenance session this is (from `sessions.template_mode`, never the slug),
+   * or absent. A template's auto-relogin in its own maintenance session satisfies the binding's
+   * session rule: the principal `template:<id>` is reserved and the binding names it (spec 13 §8.4).
+   */
+  readonly maintenanceOf?: string | null;
 }
 
 /** The `vault_fill` tool input (camelCase). */
@@ -73,6 +79,16 @@ export interface VaultFillContext {
   /** The `vault_fill` tool call's event id, for the audit row and the confirm request. */
   readonly toolEventId?: string | null;
   readonly signal?: AbortSignal;
+  /**
+   * A template's auto-relogin (spec 13 §8.4): BrowserHive fills as `template:<template_id>` into a
+   * maintenance session of the template's own browser. Every gate runs as for any fill, except that
+   * an empty principal list does not admit it (the binding must name the template), and the audit row
+   * carries `trigger: 'auto_relogin'` with the operator who linked the binding.
+   */
+  readonly autoRelogin?: {
+    readonly templateId: string;
+    readonly linkedBy: string | null;
+  };
 }
 
 /** `vault_fill` outcome; `reason` carries the code on non-success. */

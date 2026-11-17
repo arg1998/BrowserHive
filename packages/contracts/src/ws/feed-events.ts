@@ -11,6 +11,8 @@ import { Notification } from '../http/notifications.ts';
 import { PageRow } from '../http/pages.ts';
 import { SessionSummary } from '../http/sessions.ts';
 import { SystemEvent } from '../http/system.ts';
+import { TemplateProbeRow } from '../http/template-health.ts';
+import { ReloginView } from '../http/template-relogin-view.ts';
 import {
   TemplateOperationKind,
   TemplateOperationState,
@@ -204,6 +206,19 @@ export const TemplateOperationEvent = z.object({
   error: z.object({ code: z.string(), message: z.string() }).optional(),
 });
 
+/** A template's re-login changed state (queued, window open, finished; spec 13 §8.4, PR T2). */
+export const TemplateReloginEvent = z.object({
+  ...ev('template.relogin'),
+  template_id: z.string(),
+  relogin: ReloginView,
+});
+/** A probe of a template site finished (spec 13 §8.1, PR T2). */
+export const TemplateProbeEvent = z.object({
+  ...ev('template.probe'),
+  template_id: z.string(),
+  probe: TemplateProbeRow,
+});
+
 // logs -------------------------------------------------------------------------------------------
 /** One log record from the ring buffer (droppable under backpressure). */
 export const LogRecordEvent = z.object({ ...ev('log.record'), record: LogRecord });
@@ -245,6 +260,8 @@ export const WsFeedEvent = z.discriminatedUnion('type', [
   TemplateHealthEvent,
   TemplateVersionEvent,
   TemplateOperationEvent,
+  TemplateReloginEvent,
+  TemplateProbeEvent,
   LogRecordEvent,
 ]);
 /** Every feed event payload. */
@@ -278,6 +295,8 @@ export const WS_TOPIC_EVENTS: { readonly [T in WsStaticTopic]: readonly WsFeedEv
     'template.health',
     'template.version',
     'template.operation',
+    'template.relogin',
+    'template.probe',
   ],
 };
 

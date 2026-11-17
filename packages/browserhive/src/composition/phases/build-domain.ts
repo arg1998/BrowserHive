@@ -26,6 +26,7 @@ import {
   type ActionExecutor,
   createPlaywrightPageActions,
   InProcessEventBus,
+  reloginActionExecutor,
 } from '@browserhive/core/server';
 import { notificationCounters } from '../adapters/metrics.ts';
 import { asyncTick, createTimers } from '../adapters/timers.ts';
@@ -269,8 +270,14 @@ async function buildDomain(
     sessions,
     driver: sessionParts.driver,
     repeat: timers.every,
+    vault: operators.vault,
   });
   const templates = tpl.service;
+  // The notification button of a sign-out only queues the re-login (spec 13 §8.4, §8.6).
+  const relogin = tpl.health?.relogin;
+  if (relogin !== undefined) {
+    actionExecutors.set('template.relogin', reloginActionExecutor(relogin));
+  }
 
   const tools = buildTools({
     config,
@@ -285,6 +292,7 @@ async function buildDomain(
     authStates: sessionParts.authStates,
     blocklist: sessionParts.blocklist,
     templates,
+    ...(tpl.supervisor !== null && { templatePause: tpl.supervisor.pause }),
     pageActions,
     redactor,
     bus,

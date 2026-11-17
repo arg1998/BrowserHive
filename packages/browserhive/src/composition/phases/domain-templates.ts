@@ -4,7 +4,7 @@ import { hostname, networkInterfaces } from 'node:os';
 import { join } from 'node:path';
 import type { ServerConfig } from '@browserhive/contracts/config';
 import type { SqliteUnitOfWork } from '@browserhive/core/persistence';
-import type { DomainEvents, EventPublisher } from '@browserhive/core/runtime';
+import type { DomainEvents, EventBus } from '@browserhive/core/runtime';
 import {
   type Clock,
   createProcessTreeReader,
@@ -16,6 +16,7 @@ import {
 import {
   createTemplateFiles,
   createTemplateGeoResolver,
+  displayMissing,
   FileTemplateStateStore,
   type HostFacts,
   HostGeoSeedResolver,
@@ -26,6 +27,7 @@ import {
   type SessionService,
   TemplateActions,
   TemplateEditService,
+  type TemplateHealthParts,
   TemplateHostOperations,
   TemplateHostSupervisor,
   TemplateOperations,
@@ -34,6 +36,9 @@ import {
   TemplateStateService,
   UnavailableTemplateHostOps,
   UnavailableTemplateRuntime,
+  unavailableHealthFacade,
+  type VaultService,
+  wireTemplateHealth,
 } from '@browserhive/core/server';
 
 /** Inputs of {@link buildTemplates}. */
@@ -53,8 +58,12 @@ export interface TemplatesInput {
   readonly testingArgs?: readonly string[];
   /** The composition's interval timer (the supervisor's periodic pass). */
   readonly repeat: (fn: () => void, ms: number) => () => void;
-  /** The `templates` topic and the checkpoint metric. */
-  readonly bus: EventPublisher<DomainEvents>;
+  /** The `templates` topic, the checkpoint metric and the health hooks. */
+  readonly bus: EventBus<DomainEvents>;
+  /** The vault (auto-relogin fills and the binding link); absent or unconfigured under `vault=off`. */
+  readonly vault?: VaultService;
+  /** The machine sign-in windows open on (`os.hostname()`; test seam). */
+  readonly machine?: string;
   /** `templateKey` came from a command-line flag (warned: argv is readable by other users). */
   readonly keyFromFlag?: boolean;
 }
@@ -73,9 +82,16 @@ export interface TemplatesParts {
   readonly actions: TemplateActions;
   readonly state: TemplateStateService;
   readonly operations: TemplateOperations;
-  /** Stops the supervisor's periodic pass. */
+  /** Health and re-login (T2); `null` under `templates=false`. */
+  readonly health: TemplateHealthParts | null;
+  /** The T2 routes' service. */
+  readonly healthRoutes: TemplateHealthParts['facade'] | ReturnType<typeof unavailableHealthFacade>;
+  /** Stops the supervisor's periodic pass and the probe schedule. */
   readonly stopTicks: () => void;
 }
+
+/** How often the probe schedule looks for due templates (spec 13 §8.3). */
+export const TEMPLATE_HEALTH_TICK_MS = 60_000;
 
 /** The machine's names and addresses, for a wildcard bind (test seam). */
 export interface MachineNames {
@@ -193,6 +209,7 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
           dataDir: config.dataDir,
           proxyResolver: new PassThroughProxyResolver(),
           env: input.host.env,
+          platform: input.host.platform,
           selfOrigins: () => selfOriginsOf(config),
           testingArgs: input.testingArgs ?? [],
         },
@@ -295,15 +312,38 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
     files,
     ...common,
   });
+  // Every site is probed after a restore or seed (spec 13 §3.12, §7.4; deferred D22).
+  let restored: (templateId: string) => void = () => undefined;
   const operations = new TemplateOperations({
     repos: input.uow.repos,
     ops,
     state,
     bus: input.bus,
+    afterApply: (templateId) => restored(templateId),
     ...common,
   });
+  const health =
+    supervisor === null || !(ops instanceof TemplateHostOperations)
+      ? null
+      : wireTemplateHealth({
+          repos: input.uow.repos,
+          supervisor,
+          ops,
+          sessions: input.sessions,
+          service,
+          state,
+          ...(input.vault !== undefined && { vault: input.vault }),
+          bus: input.bus,
+          ids: input.ids,
+          clock: input.clock,
+          logger: input.logger,
+          machine: input.machine ?? hostname(),
+          displayAvailable: () => !displayMissing(input.host.platform, input.host.env),
+          changed,
+        });
+  if (health !== null) restored = (id) => health.scheduler.restored(id);
   // Idle stop, age recycle, memory and checkpoints of template hosts (spec 13 §3.2, §3.9).
-  const stopTicks =
+  const stopHostTicks =
     supervisor === null
       ? () => undefined
       : input.repeat(() => {
@@ -313,5 +353,26 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
               input.logger.warn('host tick failed', { err: serializeError(err) }),
             );
         }, TEMPLATE_HOST_TICK_MS);
-  return { service, recording, supervisor, edit, actions, state, operations, stopTicks };
+  // The probe schedule (spec 13 §8.3): never throws.
+  const stopHealthTicks =
+    health === null
+      ? () => undefined
+      : input.repeat(() => void health.scheduler.tick(), TEMPLATE_HEALTH_TICK_MS);
+  const stopTicks = () => {
+    stopHostTicks();
+    stopHealthTicks();
+    health?.stop();
+  };
+  return {
+    service,
+    recording,
+    supervisor,
+    edit,
+    actions,
+    state,
+    operations,
+    health,
+    healthRoutes: health?.facade ?? unavailableHealthFacade(),
+    stopTicks,
+  };
 }

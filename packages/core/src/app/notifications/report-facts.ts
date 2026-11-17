@@ -4,6 +4,7 @@ import { parseSessionId } from '@browserhive/contracts/ids';
 import type { DigestRule } from '@browserhive/contracts/notifications';
 import type { AnalyticsQueries } from '../../ports/persistence/analytics.ts';
 import type { Repositories } from '../../ports/persistence/unit-of-work.ts';
+import { templateDigestFacts } from './report-templates.ts';
 import { type AnomalyFacts, type DigestFacts, SLOWEST_TOOL_MIN_CALLS } from './reports.ts';
 
 const HOUR = 3_600_000;
@@ -18,10 +19,17 @@ export interface ReportFactsDeps {
   >;
   readonly repos: Pick<
     Repositories,
-    'operatorRequests' | 'vaultAudit' | 'blocklistAudit' | 'systemEvents'
+    | 'operatorRequests'
+    | 'vaultAudit'
+    | 'blocklistAudit'
+    | 'systemEvents'
+    | 'templateProbes'
+    | 'templateVersions'
   >;
   /** Live sessions and `maxSessions` now. */
   readonly capacity: () => { readonly live: number; readonly max: number };
+  /** The `templates` setting: digests carry the "Templates" block only when on (spec 13 §8.6). */
+  readonly templates?: boolean;
 }
 
 /** The facts behind the reports (a port so the scheduler can be tested without a database). */
@@ -56,7 +64,7 @@ export function createReportFacts(deps: ReportFactsDeps): ReportFacts {
           analytics.toolLatency(previous),
           analytics.topErrors(window, TOP_ERRORS),
         ]);
-      const [open, harnesses, activity] = await Promise.all([
+      const [open, harnesses, activity, templates] = await Promise.all([
         repos.systemEvents.open(),
         analytics.harnessMetrics({ since: window.since, until: window.until - 1 }),
         analytics.activity({
@@ -64,6 +72,7 @@ export function createReportFacts(deps: ReportFactsDeps): ReportFacts {
           until: window.until - 1,
           bucketMs: rule.every === 'week' ? 12 * HOUR : HOUR,
         }),
+        deps.templates === true ? templateDigestFacts(repos, window) : null,
       ]);
       const slowest = latency
         .filter((r) => r.calls >= SLOWEST_TOOL_MIN_CALLS)
@@ -118,6 +127,7 @@ export function createReportFacts(deps: ReportFactsDeps): ReportFacts {
           stepMs: activity.window.bucketMs,
           values: buckets.map((b) => b.toolCalls),
         },
+        templates,
       };
     },
 

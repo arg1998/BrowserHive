@@ -16,6 +16,7 @@ import { runPurge } from './commands/purge.ts';
 import { runServe } from './commands/serve.ts';
 import { runTemplatesList, runTemplatesRm } from './commands/templates.ts';
 import { runTemplatesCreate, runTemplatesFinish } from './commands/templates-create.ts';
+import { runTemplatesLogin } from './commands/templates-login.ts';
 import {
   runTemplatesAvailability,
   runTemplatesHost,
@@ -23,6 +24,7 @@ import {
   runTemplatesShow,
   runTemplatesVersions,
 } from './commands/templates-ops.ts';
+import { runTemplatesProbe } from './commands/templates-probe.ts';
 import { runTemplatesRekey } from './commands/templates-rekey.ts';
 import { runTemplatesRestore, runTemplatesSeed } from './commands/templates-state.ts';
 import { runVersion } from './commands/version.ts';
@@ -122,6 +124,10 @@ export async function runInvocation(
     case 'templates-disable':
     case 'templates-enable':
       return runTemplatesAvailability(context, invocation);
+    case 'templates-login':
+      return runTemplatesLogin(context, invocation);
+    case 'templates-probe':
+      return runTemplatesProbe(context, invocation);
     case 'templates-rekey':
       return runTemplatesRekey(context, invocation);
     case 'version':

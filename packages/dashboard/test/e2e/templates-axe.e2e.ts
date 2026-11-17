@@ -8,6 +8,7 @@ const TABS = ['sites', 'sessions', 'versions', 'access', 'settings', 'activity']
 
 /** Serious and critical violations on the page, as readable lines. */
 async function violations(page: Page): Promise<string[]> {
+  await page.mouse.move(0, 0);
   // Colour contrast is computed from the current styles: let finite transitions (a dialog fading
   // in, a focus ring, a button turning red once enabled) finish, or a slow runner measures them
   // halfway. Infinite ones (the live dot's pulse) never finish and are left alone.

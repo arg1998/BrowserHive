@@ -37,6 +37,7 @@ import { createAuthTestKit, seedOperator } from './fake-auth.ts';
 import { FakeBrowserDriver } from './fake-browser-driver.ts';
 import { FakeTemplateHostOps } from './fake-host-ops.ts';
 import { FakeTemplateStateStore } from './fake-state-store.ts';
+import { FakeTemplateHealth } from './fake-template-health.ts';
 import { FakeVaultBackend } from './fake-vault-backend.ts';
 import {
   FakeAnalytics,
@@ -342,6 +343,7 @@ export async function createHttpKit(options: HttpKitOptions = {}) {
     templateActions,
     templateVersions: templateState,
     templateOperations,
+    templateHealth: new FakeTemplateHealth(),
   };
   if (options.seed !== false) await seedDataset(repos, vaultRepos, files, sessionDirs);
   const http: HttpApp = createHttpApp({

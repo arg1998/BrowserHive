@@ -2,7 +2,7 @@
 
 # REST API reference
 
-The admin REST API served under `/api/v1` on the same port as MCP and the dashboard when `--admin` is on (139 operations), generated from `HTTP_ENDPOINTS` in `@browserhive/contracts/http`. Request and response schemas are in the OpenAPI 3.1 document the server serves at `/api/v1/openapi.json`, with an interactive reference UI at `/api/v1/docs`.
+The admin REST API served under `/api/v1` on the same port as MCP and the dashboard when `--admin` is on (147 operations), generated from `HTTP_ENDPOINTS` in `@browserhive/contracts/http`. Request and response schemas are in the OpenAPI 3.1 document the server serves at `/api/v1/openapi.json`, with an interactive reference UI at `/api/v1/docs`.
 
 Summaries come from `packages/contracts/generated/openapi.json`.
 
@@ -231,6 +231,14 @@ Summaries come from `packages/contracts/generated/openapi.json`.
 | PATCH | `/api/v1/templates/{template_id}/versions/{version}` | `updateTemplateVersion` | `templates:write` | cookie, bearer | Pin a version (kept past templateVersionsKeep) or unpin it. |
 | POST | `/api/v1/templates/{template_id}/access/resolve` | `resolveTemplateAccess` | `templates:read` | cookie, bearer | Test the template's access rule for a principal and harness (D-48); agents never see the reason. |
 | POST | `/api/v1/templates/{template_id}/data-dir/reveal` | `revealTemplateDataDir` | `templates:write` | cookie, bearer | Open the template's data directory in the host file manager (honest result). |
+| POST | `/api/v1/templates/{template_id}/probe` | `probeTemplate` | `templates:write` | cookie, bearer | Check now: probe the template's sites (every enabled site, or the ones given), starting its browser when it is stopped; waits at most 120 s. |
+| GET | `/api/v1/templates/{template_id}/probes` | `listTemplateProbes` | `templates:read` | cookie, bearer | The template's probe history, newest first, filterable by site, outcome, trigger and time. |
+| POST | `/api/v1/templates/{template_id}/relogin` | `startTemplateRelogin` | `templates:login` | cookie, bearer | Re-login a site: `window` opens a window at the site on the machine running BrowserHive (the template's agents wait meanwhile unless let_agents_continue); `vault` fills the linked vault binding in the background as template:<id>. |
+| POST | `/api/v1/templates/{template_id}/relogin/confirm` | `confirmTemplateRelogin` | `templates:login` | cookie, bearer | I'm signed in, for a site without a pack: the cookie names that appeared on it since the re-login window opened become its learned sign-in cookies, and the re-login finishes. |
+| DELETE | `/api/v1/templates/{template_id}/relogin` | `cancelTemplateRelogin` | `templates:login` | cookie, bearer | Cancel the queued or open re-login: its window closes and agents continue. |
+| POST | `/api/v1/templates/{template_id}/host/show` | `showTemplateWindow` | `templates:login` | cookie, bearer | Show window: open the re-login window a notification button queued, or raise the open re-login or recording window, on the machine running BrowserHive. |
+| POST | `/api/v1/templates/{template_id}/agents/continue` | `continueTemplateAgents` | `templates:login` | cookie, bearer | Let agents continue: the template's launches and tool calls stop waiting for the open sign-in window (D-60). |
+| PUT | `/api/v1/templates/{template_id}/sites/{site_id}/relogin` | `putTemplateReloginLink` | `templates:login` | cookie, bearer | Link a vault binding to a site for auto-relogin (also needs vault:write): the binding, the auto-relogin switch, the sign-in form, and Allow this template (adds template:<id> to the binding's principals, widening who can use the credential). |
 
 ## Client errors
 

@@ -10,7 +10,7 @@ browserhive db status|backup|restore <file>|migrate
 browserhive admin reset-password
 browserhive admin tokens list|create <name>|revoke <name>
 browserhive channels list | test <name> | preview <name> [--sample <kind>]
-browserhive templates list | show | create | finish | seed | versions | save | restore | host | disable | enable | rm | rekey
+browserhive templates list | show | create | finish | login | probe | seed | versions | save | restore | host | disable | enable | rm | rekey
 browserhive version | --version | -v
 browserhive help [command] | --help | -h
 ```
@@ -168,10 +168,12 @@ Manage [session templates](templates.md) on a running server started with `--adm
 
 | Command | Meaning |
 |---|---|
-| `templates list [--json]` | Every template: name, status (`setting up`, `ready`, `disabled`), each site with a mark for its sign-in state (✓ signed in, ✗ signed out, · not checked), the state of its browser, sessions against the cap, and when it was last used. |
+| `templates list [--json]` | Every template: name, status (`setting up`, `ready`, `disabled`), each site with a mark for its sign-in state (✓ signed in, ✗ signed out, ? couldn't tell, · not checked), the state of its browser, sessions against the cap, and when it was last used. |
 | `templates show <name> [--json]` | One template: its settings, access, live sessions, newest version and checkpoint; its browser (state, pages, memory, restarts, sandbox, last error); and each site's sign-in state. It warns when the profile holds saved passwords or autofill data. |
 | `templates create <name> --sites <site,…> [flags]` | Create a template, open the sign-in window and wait for you to sign in (below), or seed it with `--fromState`. |
 | `templates finish <name>` | Complete a template that is still setting up (after `--timeout`, a cancel or `--noLogin`): sites you never confirmed are kept and marked signed out, and the template becomes `ready`. |
+| `templates login <name> --site <site> [flags]` | Sign the template in to one of its sites again, in a window on the server's machine or with the site's vault login ([below](#templates-login)). |
+| `templates probe <name> [--site <site>] [--json]` | Check now whether the template's sites are signed in ([below](#templates-probe)). |
 | `templates seed <name> <file> [--yes]` | Replace the template's sign-ins with a Playwright storage-state file ([below](#templates-seed-and-templates-restore)). |
 | `templates versions <name> [--json]` | The template's [versions](templates.md#versions-and-the-checkpoint), newest first: number, reason, time, size, sites signed in, pinned, Last good and whether the current key can read it; then the checkpoint. |
 | `templates save <name> [--json]` | Save the running browser's sign-ins as a `manual` version. When nothing changed since the newest version it writes nothing and says so. Fails (`409`) when the template's browser is not running. |
@@ -198,7 +200,7 @@ browserhive templates create <name> --sites <site,…> [--displayName <text>] [-
 | `--displayName`, `--description` | Shown in lists; agents see the description in `list_templates`. |
 | `--channel` | The browser: the bundled `chromium`, or the installed `chrome` or `edge`. Default: `defaultChannel`. |
 | `--headless` | No window. Sites challenge headless browsers more often, and you cannot sign in by hand. |
-| `--stealth` | Default: the server's `stealth`. Avoid `off`, which runs on the stock driver ([known limits](templates.md#known-limits)). |
+| `--stealth` | `standard` or `max`. Default: the server's `stealth`, or `standard` when that is `off`: templates always run with stealth on ([known limits](templates.md#known-limits)). |
 | `--proxy`, `--proxyUsername`, `--proxyPasswordEnv` | One fixed proxy (`scheme://host:port`, no credentials in the URL). The password is the **name** of an environment variable on the server, not starting with `BROWSERHIVE_`. With `--proxy`, `--locale` and `--timezone` are required. |
 | `--locale`, `--timezone` | The identity's language tag and IANA time zone. Default: this machine's. Fixed for the template's life. |
 | `--maxConcurrent` | Sessions of this template at once, 1 to 20. Default 5. |
@@ -249,7 +251,51 @@ Re-encrypts every template checkpoint and version file with the current key and 
 
 Exit codes: `0` every file is on the current key; `1` a file could not be re-encrypted, or a key is missing or invalid; `3` the data directory is in use; `64` usage error.
 
-`templates login` and `templates probe` arrive in a later release.
+### `templates login`
+
+```
+browserhive templates login <name> --site <site> [--method window|vault] [--timeout <duration>] [--letAgentsContinue] [--json]
+```
+
+Signs a template in to one of its sites again ([Signing in again](templates.md#signing-in-again)).
+
+| Flag | Meaning |
+|---|---|
+| `--site` | The site, one of the template's. Required. |
+| `--method` | `window` (default): a window opens at the site **on the machine running the server**, and you sign in there. `vault`: BrowserHive fills the vault login linked to the site, in the background ([auto-relogin](vault.md#signing-template-sites-in-again)). |
+| `--timeout` | How long the command waits, default `30m` (the window's own limit). At the timeout it cancels the re-login. |
+| `--letAgentsContinue` | Do not pause the template's agents while the window is open ([Agents wait while you sign in](templates.md#agents-wait-while-you-sign-in)). |
+
+What it does with a window:
+
+1. Starts the re-login and says where the window opened, whether the template's agents are paused, and when the window closes. When `--url` points at another machine, it warns that the window opens there.
+2. Waits, reading the re-login every 2 seconds. BrowserHive checks the site's sign-in cookies every 5 seconds, so a site whose sign-in cookies come back finishes by itself.
+3. **Enter** sends **I'm signed in**. When no new cookie appeared on the site yet, it says so and keeps waiting: finish signing in and press Enter again.
+4. When the site is signed in, it prints the version saved and any unlisted sign-ins (`Also signed in to: … — agents can use this`), with the REST call that removes each one.
+
+With `--method vault` it says that the fill runs and waits for it; Enter does nothing. `--timeout` and Ctrl+C cancel the re-login, which closes its window, so agents continue. With `--json` it prints the finished re-login (`{session_id, relogin}`) and nothing else on stdout.
+
+Exit codes: `0` the site is signed in again; `1` failure (server unreachable, an API error printed as `[CODE] message`, a site the template does not have, or Ctrl+C); `2` the re-login failed, timed out or was cancelled (also at `--timeout`); `64` usage error.
+
+### `templates probe`
+
+```
+browserhive templates probe <name> [--site <site>] [--json]
+```
+
+Checks now whether the template's enabled sites (or only `--site`) are signed in ([Health checks](templates.md#health-checks)), starting the template's browser when it is stopped, and prints one line per site with the result and its reason:
+
+```
+Checking the sites of job-hunt…
+linkedin.com  ✓ signed in  every sign-in cookie is there (learned_cookies)  38 ms
+indeed.com    ✗ signed out  no sign-in cookie is left (cookies_absent)  41 ms
+
+Sign in to indeed.com again: browserhive templates login job-hunt --site indeed.com
+```
+
+The server waits at most 2 minutes for the checks. `--json` prints `{results: [{site_id, outcome, reason, duration_ms}]}`.
+
+Exit codes: `0` every checked site is signed in; `1` failure; `2` a site is signed out or BrowserHive couldn't tell; `64` usage error.
 
 ## `version`
 
@@ -265,7 +311,7 @@ browserhive 0.3.0 (bun 1.4.2, sqlite 3.53.2, patchright 1.63.0)
 |---|---|
 | `0` | Success, or clean shutdown after a signal. |
 | `1` | Fatal runtime error (a boot phase failed after configuration, storage corruption, `purge` or `doctor` failure). |
-| `2` | `doctor` found warnings only; `templates create` finished with a site not signed in, or timed out; `templates seed` (or `create --fromState`) left a site signed out or needing a check. |
+| `2` | `doctor` found warnings only; `templates create` finished with a site not signed in, or timed out; `templates seed` (or `create --fromState`) left a site signed out or needing a check; `templates login` did not sign the site in (failed, timed out or cancelled); `templates probe` found a site not signed in. |
 | `3` | Policy refusal at startup: [`INSECURE_BIND_REFUSED`](../reference/errors.md#INSECURE_BIND_REFUSED), [`ADMIN_REQUIRES_HTTP`](../reference/errors.md#ADMIN_REQUIRES_HTTP), [`BLOCKLIST_LOAD_FAILED`](../reference/errors.md#BLOCKLIST_LOAD_FAILED), [`PORT_IN_USE`](../reference/errors.md#PORT_IN_USE), [`DB_NEWER_THAN_BINARY`](../reference/errors.md#DB_NEWER_THAN_BINARY), [`SANDBOX_UNAVAILABLE`](../reference/errors.md#SANDBOX_UNAVAILABLE) (`--sandbox on`). Also a command that needs the server stopped while it runs, such as `templates rekey` ([`DATA_DIR_LOCKED`](../reference/errors.md#DATA_DIR_LOCKED)). Printed as `[CODE] message`. |
 | `64` | Usage error: unknown flag or key, invalid value, conflicting settings, missing argument. |
 | `130` | A second interrupt arrived before graceful shutdown finished. |

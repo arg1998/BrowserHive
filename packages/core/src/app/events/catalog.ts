@@ -29,6 +29,8 @@ import type {
   TemplateHealthEvent,
   TemplateHostEvent,
   TemplateOperationEvent,
+  TemplateProbeEvent,
+  TemplateReloginEvent,
   TemplateRemovedEvent,
   TemplateVersionEvent,
   ToolCalledEvent,
@@ -41,7 +43,7 @@ import type {
 } from '@browserhive/contracts/ws';
 import type { z } from 'zod';
 import type { DomainEvent } from '../../ports/event-bus.ts';
-import type { TemplateVersionReason } from '../../ports/persistence/enums.ts';
+import type { TemplateHealthState, TemplateVersionReason } from '../../ports/persistence/enums.ts';
 import type { JsonObject, SessionPatch, SessionRecord } from '../../ports/persistence/records.ts';
 import type { AuthEvents } from '../auth/events.ts';
 
@@ -180,8 +182,22 @@ export type DomainEvents = {
   // templates (the `templates` topic, spec 13 §11.3)
   readonly 'template.changed': z.infer<typeof TemplateChangedEvent>;
   readonly 'template.removed': z.infer<typeof TemplateRemovedEvent>;
-  readonly 'template.host': z.infer<typeof TemplateHostEvent>;
-  readonly 'template.health': z.infer<typeof TemplateHealthEvent>;
+  readonly 'template.host': z.infer<typeof TemplateHostEvent> & {
+    /** Internal (the host notifications): the template's names and the state it left. */
+    readonly names?: TemplateNames;
+    readonly previous_state?: z.infer<typeof TemplateHostEvent>['host']['state'];
+  };
+  readonly 'template.health': z.infer<typeof TemplateHealthEvent> & {
+    /** Internal (the sign-in notifications, spec 13 §8.6): set when a probe changed the state. */
+    readonly transition?: SigninTransition;
+  };
+  readonly 'template.probe': z.infer<typeof TemplateProbeEvent>;
+  readonly 'template.relogin': z.infer<typeof TemplateReloginEvent> & {
+    /** Internal (`template.relogin_failed`): the template's names, the site's provider, the machine. */
+    readonly names?: TemplateNames;
+    readonly provider?: string;
+    readonly machine?: string;
+  };
   readonly 'template.version': z.infer<typeof TemplateVersionEvent>;
   readonly 'template.operation': z.infer<typeof TemplateOperationEvent>;
   /** A checkpoint or version file was written (internal: `browserhive.template.checkpoints{reason}`). */
@@ -193,6 +209,29 @@ export type DomainEvents = {
   // logs
   readonly 'log.record': z.infer<typeof LogRecordEvent>;
 } & AuthEvents; // auth (audit; never on the public feed): `auth.<auth_events.type>`
+
+/** A template's names, carried by internal event keys for notification titles. */
+export interface TemplateNames {
+  readonly name: string;
+  readonly display_name: string;
+}
+
+/** A site's sign-in state changed (internal key of `template.health`, spec 13 §8.6). */
+export interface SigninTransition {
+  readonly template: TemplateNames;
+  /** The identity provider whose thread the notification belongs to (the site until packs, T3a). */
+  readonly provider: string;
+  /** The enabled sites the provider's sign-in covers. */
+  readonly covers: readonly string[];
+  readonly from: TemplateHealthState;
+  readonly to: TemplateHealthState;
+  readonly reason: string | null;
+  /** Every enabled site of the provider is signed in now. */
+  readonly provider_signed_in: boolean;
+  /** The machine sign-in windows open on ("Re-login on <machine>"). */
+  readonly machine: string;
+  readonly at: number;
+}
 
 /** Every event name. */
 export type DomainEventName = keyof DomainEvents;

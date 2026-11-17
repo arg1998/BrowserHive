@@ -4,7 +4,6 @@ import type { ClosedReason } from '@browserhive/contracts/enums';
 import type { Session } from '../../domain/session/session.ts';
 import { NO_SEALING } from '../../domain/session/session-template.ts';
 import { effectiveCap, pageCaps } from '../../domain/templates/model.ts';
-import { withDeadline } from '../../kernel/deadline.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type { TemplateRecord } from '../../ports/persistence/index.ts';
@@ -14,6 +13,7 @@ import type {
   TemplateLaunchRequest,
   TemplateRuntime,
 } from '../../ports/template-runtime.ts';
+import { HostEvents, PendingLaunches, sampleRss } from './host-events.ts';
 import { TemplateHolds } from './host-holds.ts';
 import { HostLifecycle } from './host-lifecycle.ts';
 import {
@@ -29,11 +29,15 @@ import type {
   HostCheckpoints,
   HostSupervisorDeps,
   MaintenanceLaunch,
+  PrelaunchOutcome,
+  SupervisorHealth,
 } from './host-supervisor-types.ts';
 import { SYSTEM_MAINTENANCE_SLUG } from './host-supervisor-types.ts';
 import { hostViewOf } from './host-view.ts';
+import { reportPrelaunch } from './prelaunch-report.ts';
 import { admitTemplateLaunch, templateUnavailable } from './template-admission.ts';
 import { notFoundForOperator } from './template-errors.ts';
+import { TemplatePause } from './template-pause.ts';
 import { toHostView } from './views.ts';
 import {
   maintenanceSessionInput,
@@ -46,6 +50,8 @@ export type {
   HostCheckpoints,
   HostSupervisorConfig,
   HostSupervisorDeps,
+  PrelaunchOutcome,
+  SupervisorHealth,
 } from './host-supervisor-types.ts';
 export { SYSTEM_MAINTENANCE_SLUG } from './host-supervisor-types.ts';
 
@@ -55,14 +61,19 @@ export class TemplateHostSupervisor implements TemplateRuntime {
   private readonly log: Logger;
   private readonly hosts = new Map<string, HostLifecycle>();
   /** Launches admitted and not finished, per template (the cap counts them, spec 13 §6.3). */
-  private readonly pending = new Map<string, number>();
+  private readonly pending = new PendingLaunches();
   private readonly rss = new Map<string, number>();
+  /** `template.host` with the names and the state left (host notifications). */
+  private readonly events: HostEvents;
   /** Templates held by an operation (restore, seed, clearing saved passwords): agents wait. */
   readonly holds = new TemplateHolds();
   private readonly memory: HostMemoryGuard;
   private checkpoints: HostCheckpoints | null = null;
   /** The observed identity and its drift (spec 13 §2.2). */
   readonly identity: IdentityObserver;
+  /** Agents wait while a sign-in window is open (D-60). */
+  readonly pause: TemplatePause;
+  private health: SupervisorHealth = {}; // attached at composition (spec 13 §8.2, §8.3)
 
   constructor(deps: HostSupervisorDeps) {
     this.deps = deps;
@@ -77,6 +88,15 @@ export class TemplateHostSupervisor implements TemplateRuntime {
         deps.onTemplateChanged?.(id);
       },
     });
+    this.events = new HostEvents(deps.bus, (id) => toHostView(this.host(id)));
+    this.pause = new TemplatePause({
+      clock: deps.clock,
+      alive: (sessionId) => {
+        const kind = deps.sessions.peek(sessionId)?.state.kind;
+        return kind !== undefined && kind !== 'closed' && kind !== 'crashed';
+      },
+      changed: (id) => this.publishHost(id),
+    });
     this.memory = new HostMemoryGuard({
       limitBytes: deps.config.recycleRssBytes ?? 0,
       clock: deps.clock,
@@ -84,6 +104,11 @@ export class TemplateHostSupervisor implements TemplateRuntime {
       warn: (id, details) =>
         warnSession(deps.sessions, id, 'SESSION_RESOURCE_LIMIT', RESOURCE_LIMIT_MESSAGE, details),
     });
+  }
+
+  /** The health hooks: the pre-launch check and the probe after a browser start. */
+  attachHealth(health: SupervisorHealth): void {
+    this.health = health;
   }
 
   /** The checkpoint writer (set once at composition; it reads hosts back through `runningHost`). */
@@ -113,6 +138,7 @@ export class TemplateHostSupervisor implements TemplateRuntime {
       liveAgentSessions: this.liveSessions(templateId).length,
       rssBytes: this.rss.get(templateId) ?? null,
       recycleAfterMs: this.deps.config.recycleAfterMs,
+      agentsPaused: this.pause.paused(templateId),
       identityDrift: this.identity.drift(templateId),
     });
   }
@@ -139,6 +165,10 @@ export class TemplateHostSupervisor implements TemplateRuntime {
     const { template } = request;
     if (this.holds.held(template.templateId))
       throw templateUnavailable(template.name, 'restarting');
+    // A sign-in window is open: the launch waits for the operator, bounded, inside its budget (D-60).
+    const waitStarted = this.deps.clock.now();
+    await this.pause.wait(template.templateId, template.name, signal);
+    const waited = this.deps.clock.now() - waitStarted;
     const lifecycle = this.lifecycleOf(template);
     const cap = effectiveCap(template);
     const caps = pageCaps(this.deps.config.maxPagesPerHost, cap);
@@ -148,13 +178,15 @@ export class TemplateHostSupervisor implements TemplateRuntime {
       retryAfterMs:
         lifecycle.restartAt === null ? null : lifecycle.restartAt - this.deps.clock.now(),
       agentSessions:
-        this.liveSessions(template.templateId).length + this.pendingOf(template.templateId),
+        this.liveSessions(template.templateId).length + this.pending.count(template.templateId),
       cap,
       agentPages: lifecycle.current?.agentPageCount() ?? 0,
       caps,
     });
     const session = sessionTemplateOf(template, request.sites, 'live', request.sealing);
-    return this.run(
+    const prelaunch = this.health.prelaunch;
+    let checked: PrelaunchOutcome | null = null;
+    return this.pending.run(
       template.templateId,
       async (budget) => {
         const created = await this.deps.sessions.createVirtual(
@@ -167,14 +199,21 @@ export class TemplateHostSupervisor implements TemplateRuntime {
             caps,
             onPageLimit: (id) =>
               warnSession(this.deps.sessions, id, 'SESSION_PAGE_LIMIT', PAGE_LIMIT_MESSAGE),
+            ...(prelaunch !== undefined && {
+              afterAcquire: async (s: AbortSignal) => {
+                checked = await prelaunch(template, s);
+              },
+            }),
           }),
           { signal: budget, deadlineMs: TEMPLATE_LAUNCH_BUDGET_MS },
         );
+        if (checked !== null) reportPrelaunch(this.deps.sessions, created, checked);
         const at = this.deps.clock.now();
         await this.deps.templates.touchLastUsed(template.templateId, at).catch(() => undefined);
         return created;
       },
       signal,
+      TEMPLATE_LAUNCH_BUDGET_MS - waited,
     );
   }
 
@@ -191,7 +230,7 @@ export class TemplateHostSupervisor implements TemplateRuntime {
     const lifecycle = this.lifecycleOf(template);
     if (['failed', 'draining', 'crashed'].includes(lifecycle.state)) throw lifecycle.refusal();
     const session = sessionTemplateOf(template, input.sites, 'maintenance', NO_SEALING);
-    return this.run(
+    return this.pending.run(
       template.templateId,
       (budget) =>
         this.deps.sessions.createVirtual(
@@ -247,7 +286,8 @@ export class TemplateHostSupervisor implements TemplateRuntime {
           continue;
         }
         const due = recycleAt(lifecycle.startedAt, this.deps.config.recycleAfterMs);
-        const rss = await this.sample(lifecycle.templateId, host);
+        const rss = await sampleRss(this.deps.rssOf, host);
+        if (rss !== null) this.rss.set(lifecycle.templateId, rss);
         const memory =
           rss === null ? 'ok' : await this.memory.check(lifecycle.templateId, rss, host);
         if ((due !== null && now >= due) || memory === 'drain') {
@@ -302,27 +342,9 @@ export class TemplateHostSupervisor implements TemplateRuntime {
 
   // --- internals ----------------------------------------------------------------------------------
 
-  private async run(
-    templateId: string,
-    launch: (budget: AbortSignal) => Promise<Session>,
-    signal?: AbortSignal,
-  ): Promise<Session> {
-    const budget = withDeadline(signal, TEMPLATE_LAUNCH_BUDGET_MS);
-    this.pending.set(templateId, this.pendingOf(templateId) + 1);
-    try {
-      return await launch(budget.signal);
-    } finally {
-      this.pending.set(templateId, Math.max(0, this.pendingOf(templateId) - 1));
-      budget.clear();
-    }
-  }
-
-  private pendingOf(templateId: string): number {
-    return this.pending.get(templateId) ?? 0;
-  }
-
   private lifecycleOf(template: TemplateRecord): HostLifecycle {
     if (this.holds.deleted(template.templateId)) throw notFoundForOperator(template.templateId);
+    this.events.remember(template);
     const existing = this.hosts.get(template.templateId);
     if (existing !== undefined) {
       existing.refresh(template);
@@ -334,7 +356,10 @@ export class TemplateHostSupervisor implements TemplateRuntime {
       logger: this.deps.logger,
       degradations: this.deps.degradations,
       buildSpec: (record) => buildHostSpec(record, this.deps.spec),
-      started: (record, host) => this.identity.started(record, host),
+      started: (record, host) => {
+        this.identity.started(record, host);
+        this.health.hostStarted?.(record.templateId);
+      },
       closeSessions: (ids, reason) => this.closeSessions(ids, reason),
       slotFree: () => {
         const cap = this.deps.sessions.capacity();
@@ -371,22 +396,8 @@ export class TemplateHostSupervisor implements TemplateRuntime {
     await Promise.allSettled(ids.map((id) => this.deps.sessions.close(id, reason)));
   }
 
-  private async sample(templateId: string, host: TemplateHost): Promise<number | null> {
-    const rssOf = this.deps.rssOf;
-    if (rssOf === undefined || host.browserPid === undefined) return null;
-    const pid = await host.browserPid();
-    if (pid === null) return null;
-    const rss = await rssOf(pid);
-    if (rss !== null) this.rss.set(templateId, rss);
-    return rss;
-  }
-
-  /** `template.host` on the `templates` topic. */
+  /** `template.host` on the `templates` topic (with the names and state left for notifications). */
   publishHost(templateId: string): void {
-    this.deps.bus?.publish('template.host', {
-      type: 'template.host',
-      template_id: templateId,
-      host: toHostView(this.host(templateId)),
-    });
+    this.events.publish(templateId);
   }
 }

@@ -2,7 +2,7 @@
 
 # Error reference
 
-Every error code BrowserHive can produce (127 codes), generated from `ERROR_REGISTRY` in `@browserhive/contracts/errors`. Each code has a stable anchor: `errors.md#<CODE>`, which is also the `type` URL of HTTP problem responses (`https://browserhive.ai/docs/errors#<CODE>`).
+Every error code BrowserHive can produce (129 codes), generated from `ERROR_REGISTRY` in `@browserhive/contracts/errors`. Each code has a stable anchor: `errors.md#<CODE>`, which is also the `type` URL of HTTP problem responses (`https://browserhive.ai/docs/errors#<CODE>`).
 
 ## How errors reach you
 
@@ -46,6 +46,7 @@ Returned by tools and the REST API when a request cannot be served (unknown sess
 | [`TEMPLATE_NOT_FOUND`](#TEMPLATE_NOT_FOUND) | Template not found | 404 | different_args |
 | [`TEMPLATE_BUSY`](#TEMPLATE_BUSY) | Template busy | 429 | backoff |
 | [`TEMPLATE_UNAVAILABLE`](#TEMPLATE_UNAVAILABLE) | Template temporarily unavailable | 503 | backoff |
+| [`TEMPLATE_NEEDS_LOGIN`](#TEMPLATE_NEEDS_LOGIN) | Template signed out | 409 | after_operator |
 | [`TEMPLATE_DISABLED`](#TEMPLATE_DISABLED) | Template disabled | 409 | after_operator |
 | [`SESSION_SEALED`](#SESSION_SEALED) | Not available in this session | 403 | never |
 | [`EVALUATE_DISABLED`](#EVALUATE_DISABLED) | evaluate is disabled | 403 | never |
@@ -551,17 +552,43 @@ Message: `Template '{template}' is temporarily unavailable. Retry in a few secon
 
 Hint: Wait a few seconds, then retry.
 
-Cause: The template’s browser is starting and did not finish within the launch budget (`starting`), is being drained for a recycle, restore or operator restart (`restarting`), or is restarting after a crash (`recovering`, spec 13 §3.2).
+Cause: The template’s browser is starting and did not finish within the launch budget (`starting`), is being drained for a recycle, restore or operator restart (`restarting`), is restarting after a crash (`recovering`, spec 13 §3.2), or the operator is signing in to one of its sites in a re-login or recording window and agents are paused until they finish (`paused`, D-60): launches and tool calls of the template’s sessions wait up to 15 s first (a launch counts the wait in its 50 s budget). Any tool of a template session can answer it with `paused`.
 
-Resolution: Retry after `retry_after_ms`. A template that stays unavailable shows its browser state and last error on the template page.
+Resolution: Retry after `retry_after_ms`. A template that stays unavailable shows its browser state and last error on the template page; while a sign-in window is open the operator can let agents continue (**Let agents continue**, `templates login --letAgentsContinue`).
 
 Details:
 
 | Field | Type | Required | Constraints |
 |---|---|---|---|
 | `template` | `string` | yes | — |
-| `reason` | one of `starting`, `restarting`, `recovering` | yes | — |
+| `reason` | one of `starting`, `restarting`, `recovering`, `paused` | yes | — |
 | `retry_after_ms` | `integer` | yes | ≥ 0 |
+
+<a id="TEMPLATE_NEEDS_LOGIN"></a>
+### `TEMPLATE_NEEDS_LOGIN`
+
+| Property | Value |
+|---|---|
+| Title | Template signed out |
+| HTTP status | 409 |
+| Category | `domain` |
+| Retryable | `after_operator` (retry after an operator acts (unlock the vault, resolve a request, change policy)) |
+
+Message: `Template '{template}' is signed out of {sites_text}. The operator has been asked to sign in again; retry after that.`
+
+Hint: Use another template, or retry after the operator has signed in again.
+
+Cause: The pre-launch check (spec 13 §8.2) found every enabled site of the template signed out or held by a security check. Launches are refused only when every site is out; with some sites signed in the launch goes ahead and the session carries a `TEMPLATE_SITE_SIGNED_OUT` warning.
+
+Resolution: Re-login on the template page (or `browserhive templates login <name> --site <site>`); the `template.signed_out` notification links there.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `template` | `string` | yes | — |
+| `sites` | `string[]` | yes | — |
+| `sites_text` | `string` | yes | — |
 
 <a id="TEMPLATE_DISABLED"></a>
 ### `TEMPLATE_DISABLED`
@@ -2961,6 +2988,7 @@ Non-fatal degradations recorded on a session or in the system events list; the o
 | [`SESSION_PAGE_LIMIT`](#SESSION_PAGE_LIMIT) | Page limit: a site-opened page was closed | 500 | never |
 | [`SCREENSHOT_ARCHIVE_FAILED`](#SCREENSHOT_ARCHIVE_FAILED) | Screenshot archive failed | 500 | never |
 | [`SESSION_RESOURCE_LIMIT`](#SESSION_RESOURCE_LIMIT) | Memory limit: a page was closed | 500 | never |
+| [`TEMPLATE_SITE_SIGNED_OUT`](#TEMPLATE_SITE_SIGNED_OUT) | Some template sites are signed out | 500 | never |
 | [`TEMPLATE_STATE_COPY`](#TEMPLATE_STATE_COPY) | Session started from a copy of a template's sign-ins | 500 | never |
 
 <a id="EXECUTABLE_PATH_OVERRIDE"></a>
@@ -3292,6 +3320,32 @@ Hint: Session warning: logged and broadcast on session:<id>, never thrown.
 Cause: A template's browser used more memory than `templateRecycleRss` (spec 13 §3.2): the largest page of the session using the most JavaScript memory was closed. When the browser is still above the limit five minutes later it is drained and restarted.
 
 Resolution: Close pages the session no longer needs; raise templateRecycleRss on a machine with more memory.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `session_id` | `string` | yes | — |
+| `message` | `string` | yes | — |
+| `details` | `object` | no | additional keys allowed |
+
+<a id="TEMPLATE_SITE_SIGNED_OUT"></a>
+### `TEMPLATE_SITE_SIGNED_OUT`
+
+| Property | Value |
+|---|---|
+| Title | Some template sites are signed out |
+| HTTP status | 500 |
+| Category | `warning` |
+| Retryable | `never` (do not retry; the request cannot succeed as sent) |
+
+Message: `{message}`
+
+Hint: Session warning: logged and broadcast on session:<id>, never thrown.
+
+Cause: The pre-launch check (spec 13 §8.2) found at least one enabled site of the template signed out or held by a security check while others were signed in, so the session started; its `template.sites` list each site’s status. The message names the sites.
+
+Resolution: Re-login the sites on the template page; the session sees the sign-in once it is restored.
 
 Details:
 

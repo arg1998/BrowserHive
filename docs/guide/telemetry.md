@@ -58,7 +58,10 @@ If the MCP client sends a W3C `traceparent` in the tool call's `_meta`, the tool
 | `browserhive.attention.wait` | histogram | `ms` | `status` | How long each attention request waited until it was answered, timed out or cancelled. |
 | `browserhive.vault.fills` | counter | `{fill}` | `result` | Vault fills. |
 | `browserhive.blocklist.hits` | counter | `{hit}` | `source` | Blocked requests. |
+| `browserhive.template.hosts` | gauge | `{host}` | `state` (`starting`, `running`, `draining`, `crashed`, `failed`) | Template browsers by state; stopped ones are not counted. |
 | `browserhive.template.checkpoints` | counter | `{checkpoint}` | `reason` (`checkpoint`, `recording`, `relogin`, `restore`, `manual`, `import`, `signin_change`, `daily`) | Encrypted template state files written: the rolling checkpoint, and each version by why it was written. |
+| `browserhive.template.probes` | counter | `{probe}` | `outcome`, `trigger` | Sign-in checks of template sites, by what they found (`signed_in`, `signed_out`, `challenged`, `inconclusive`) and why they ran. |
+| `browserhive.template.relogins` | counter | `{relogin}` | `method` (`window`, `vault`, `attention`), `outcome` (`signed_in`, `failed`, `timeout`) | Finished re-logins of template sites; cancelled ones are not counted. |
 | `browserhive.retention.pruned_rows` | counter | `{row}` | `table` | Rows removed by retention. |
 | `browserhive.notifications.deliveries` | counter | `{delivery}` | `channel_kind`, `status` | Notification deliveries by outcome: `sent`, `retrying`, `dead`, `suppressed`, `superseded`. |
 | `browserhive.notifications.reports` | counter | `{report}` | `kind`, `outcome` | Digest and anomaly-alert decisions: `sent`, `late`, `empty`, `skipped`, `manual`, `resolved`, `in_app`. |

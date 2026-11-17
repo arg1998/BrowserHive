@@ -38,7 +38,11 @@
         "digest.daily",
         "digest.weekly",
         "report.anomaly",
-        "test"
+        "test",
+        "template.signed_out",
+        "template.challenged",
+        "template.relogin_failed",
+        "template.host_failed"
       ]
     },
     "category": {
@@ -1231,7 +1235,8 @@
                       "attention.resolve",
                       "vault.confirm.resolve",
                       "session.extend_lease",
-                      "session.close"
+                      "session.close",
+                      "template.relogin"
                     ]
                   },
                   "args": {
@@ -1380,6 +1385,14 @@
           "maxLength": 253
         },
         "request_id": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "template_id": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "template_name": {
           "type": "string",
           "maxLength": 64
         }

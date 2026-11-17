@@ -203,6 +203,9 @@ export class NotificationService {
         bus.subscribe('system.degraded', on),
         bus.subscribe('system.recovered', on),
         bus.subscribe('notification.channel.changed', on),
+        bus.subscribe('template.health', on),
+        bus.subscribe('template.relogin', on),
+        bus.subscribe('template.host', on),
       );
     }
     return () => this.stop();
@@ -235,6 +238,17 @@ export class NotificationService {
     const out: Notification[] = [];
     let primary = true;
     for (const principalId of (this.deps.recipients ?? (() => [null]))()) {
+      if (draft.once !== undefined) {
+        const open = await this.deps.repo.findLatestByThread(
+          principalId,
+          draft.thread,
+          draft.once.kinds,
+        );
+        if (open !== null && (open.state === 'open' || open.state === 'acted')) {
+          primary = false;
+          continue;
+        }
+      }
       const grown =
         draft.group === undefined
           ? null
@@ -535,7 +549,11 @@ export class NotificationService {
     for (const principalId of (this.deps.recipients ?? (() => [null]))()) {
       const isPrimary = primary;
       primary = false;
-      const row = await this.deps.repo.findLatestByThread(principalId, revision.thread);
+      const row = await this.deps.repo.findLatestByThread(
+        principalId,
+        revision.thread,
+        revision.kinds,
+      );
       if (row === null || (row.state !== 'open' && row.state !== 'acted')) continue;
       if (row.state === revision.change.state) continue;
       const now = this.deps.clock.now();

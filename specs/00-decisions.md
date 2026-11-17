@@ -1169,6 +1169,52 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 
 **Alternatives considered.** *Clearing the field after a short delay*: the agent can read it in between. *Checking only the first fill*: a page can swap the element between check and fill.
 
+## D-60 Agents wait while the operator signs in to a template's site
+
+**Status:** Accepted (owner decision 2026-11-16, deferred D19 option B)
+
+**Implementation:** PR T2 of spec 13 §17: `app/templates/template-pause.ts` (`TemplatePause`, owned by the host supervisor), the launch wait in `TemplateHostSupervisor.launch`, the tool-call hold in `interface/mcp/dispatcher.ts` (`holdWhilePaused`), `POST /templates/{id}/agents/continue` and `templates login --letAgentsContinue`.
+
+**Context.** A recording or re-login window shares the template's browser with the agents' windows (D-50). While the operator signs in, agents keep acting on the same cookie jar: their activity can set cookies the window's **I'm signed in** then learns as sign-in cookies (review #77 L-7), their windows' popups can take the focus for an instant, and an agent can fail on a half-signed-in site.
+
+**Decision.**
+- While a recording or a window re-login is open on a template (a maintenance session with a sign-in window), its agents are **paused**: a new launch waits before admission, and every tool call of the template's sessions waits after the ownership check, except the tools that end or only inspect a session (`close_session`, `list_sessions`, `server_status`, `session_info`, `list_tabs`, `list_templates`, `get_attention_result`, `request_attention`, `list_saved_auths`, `vault_list_available`). A wait is bounded at 15 s, so the wait plus a tool's own default timeout (30 s) stays below 55 s, under the 60 s timeout of common MCP clients (a launch counts the wait in its 50 s budget; review #81 M-3); then the call answers `TEMPLATE_UNAVAILABLE` with the new reason `paused` and `retry_after_ms: 15000` (retryable `backoff`). Agents see slower answers, then a retryable error, never a failure of the session.
+- The pause ends when the window closes, whatever closes it (Finish, the re-login succeeding, Cancel, a crash, the operator closing it), or when the operator presses **Let agents continue** (dashboard, `POST …/agents/continue`), or starts the re-login with `let_agents_continue` (`--letAgentsContinue`): the urgent override.
+- `HostView.agents_paused` shows it on operator surfaces. Vault auto-relogin (a background fill with no window) does not pause agents.
+- Agent-facing text names no mechanism: `paused` is a reason value; the message is the existing one of `TEMPLATE_UNAVAILABLE` (spec 13 §5).
+
+**Consequences.** Learned cookie names are taken from a jar agents did not touch meanwhile, unless the operator let them continue. An operator who leaves a window open stalls the template's agents (each call at most 15 s, then retryable); the dashboard shows the paused banner with the override.
+
+**Alternatives considered.** *Refusing launches only* (D19 option A): existing sessions keep writing the jar. *Draining the template's sessions*: loses agents' work for a sign-in that may take seconds. *Doing nothing* (D19 option C): leaves L-7 open.
+
+## D-61 A headed template browser may take the focus once when it starts
+
+**Status:** Accepted (owner decision 2026-11-16, deferred D1 option A)
+
+**Context.** Starting a headed template host shows Chromium's first window (the sentinel) as active before BrowserHive minimizes it (measured on Xvfb and desktops, spec 13 §3.3). No Chromium switch starts the first window inactive under Playwright's persistent launch; the remaining routes (a self-spawned browser over a debugging port, a helper extension) trade away the pipe's isolation or do not work in branded Chrome.
+
+**Decision.** The one-time focus grab at host start is accepted and documented (spec 13 §3.3, `docs/guide/templates.md`). No "keep the browser running" setting is added: hosts still stop after `templateHostIdleTimeout`, and a scheduled health check may start a stopped host briefly (spec 13 §8.3).
+
+**Alternatives considered.** *A per-template keep-warm switch* (option B): rejected by the owner; it trades memory for fewer starts without removing the grab.
+
+## D-62 Patchright is BrowserHive's only browser driver (owner decision; carried out by D-65)
+
+**Status:** Accepted (owner decision 2026-11-16, deferred D6); **implemented by D-65** (PR T2b)
+
+**Decision.** The owner chose Patchright as the only driver for all of BrowserHive, not only for templates. D-65 records how it is done. A provisional template-side rule of PR T2 (templates refusing `stealth: 'off'`) was dropped when T2b merged: under D-65 a template with `stealth: 'off'` still runs on Patchright, without BrowserHive's own stealth, so templates accept every stealth level again; the CORS-preflight behaviour that motivated the rule is now the same at every level and is tracked as deferred D41.
+
+## D-63 The internal testing seam needs `BHDEV_TESTING=1`
+
+**Status:** Accepted (owner decision 2026-11-16, deferred D20 option A)
+
+**Decision.** `browserhive/testing` throws at import unless `BHDEV_TESTING=1` is set in the process environment, and `createServer({ testing })` refuses the option otherwise (`CONFIG_INVALID`). BrowserHive's own suites and the e2e template daemon set it; the seam's Chromium switches cannot reach a production server by accident.
+
+## D-64 Session templates ship in 0.3.0
+
+**Status:** Accepted (owner decision 2026-11-16, deferred D14)
+
+**Decision.** `TEMPLATES_SINCE` is `0.3.0`: `list_templates`, `launch_session.template` and the template surfaces first appear in 0.3.0.
+
 ## D-65 Patchright is the only browser driver
 
 **Status:** Accepted

@@ -6,6 +6,7 @@ import type { DegradationReporter } from '../../ports/degradation-reporter.ts';
 import type { EventPublisher } from '../../ports/event-bus.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type {
+  TemplateHealthState,
   TemplateRecord,
   TemplateRepository,
   TemplateSiteRecord,
@@ -53,6 +54,26 @@ export interface HostSupervisorDeps {
   readonly bus?: EventPublisher<DomainEvents>;
   /** The template's summary changed (identity drift): the service publishes `template.changed`. */
   readonly onTemplateChanged?: (templateId: string) => void;
+}
+
+/** What a launch learned from the pre-launch check (spec 13 §8.2). */
+export interface PrelaunchOutcome {
+  /** Enabled sites with their state for this launch. */
+  readonly sites: readonly { readonly site: string; readonly status: TemplateHealthState }[];
+  /** Enabled sites signed out or challenged. */
+  readonly out: readonly string[];
+}
+
+/** The health hooks of the supervisor (attached at composition, spec 13 §8.2, §8.3). */
+export interface SupervisorHealth {
+  /**
+   * The pre-launch check, after the browser runs (spec 13 §8.2).
+   *
+   * @throws AppError `TEMPLATE_NEEDS_LOGIN` when every enabled site is out.
+   */
+  prelaunch?(template: TemplateRecord, signal: AbortSignal): Promise<PrelaunchOutcome>;
+  /** A browser started: every site is probed (spec 13 §8.3). Never throws. */
+  hostStarted?(templateId: string): void;
 }
 
 /** A maintenance session to open (`TemplateHostSupervisor.launchMaintenance`). */

@@ -226,6 +226,9 @@ export const NotificationEntities = z.object({
   error_code: z.string().max(64).optional(),
   domain: z.string().max(253).optional(),
   request_id: z.string().max(64).optional(),
+  /** The session template the notification is about (spec 13 §8.6). */
+  template_id: z.string().max(64).optional(),
+  template_name: z.string().max(64).optional(),
 });
 /** Routing input. */
 export type NotificationEntities = z.infer<typeof NotificationEntities>;

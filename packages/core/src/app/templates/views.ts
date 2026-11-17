@@ -2,6 +2,7 @@
 
 import type {
   HostView,
+  ReloginView,
   Template,
   TemplateDetailResponse,
   TemplateSiteView,
@@ -28,6 +29,7 @@ export function toSiteView(site: TemplateSiteRecord): TemplateSiteView {
     write_policy: site.writePolicy,
     vault_handle: site.vaultHandle,
     auto_relogin: site.autoRelogin,
+    auto_relogin_at: site.autoReloginAt,
     form: site.form === null ? null : { ...site.form },
     learned_cookie_names: [...site.learnedCookieNames],
     health: {
@@ -145,6 +147,7 @@ export function toHostView(host: TemplateHostView): HostView {
     ...(host.recycleAt !== null && { recycle_at: host.recycleAt }),
     sandboxed: host.sandboxed,
     profile_secrets: host.profileSecrets,
+    agents_paused: host.agentsPaused,
   };
 }
 
@@ -155,7 +158,11 @@ export function toTemplateDetail(
   host: TemplateHostView,
   sessionsLive: number,
   now: number,
-  live: { readonly unlistedDomains: readonly string[] } = { unlistedDomains: [] },
+  live: {
+    readonly unlistedDomains: readonly string[];
+    readonly relogin?: ReloginView | null;
+    readonly machine?: string;
+  } = { unlistedDomains: [] },
 ): TemplateDetailResponse {
   return {
     template: toTemplateView(template, sites),
@@ -174,6 +181,8 @@ export function toTemplateDetail(
     })),
     // From the running browser's jar and the newest version's summary (spec 13 §2.3).
     unlisted_domains: [...live.unlistedDomains],
+    relogin: live.relogin ?? null,
+    machine: { name: live.machine ?? '' },
     now,
   };
 }
@@ -209,7 +218,7 @@ export function toTemplateSummary(
     checkpoint_at: template.checkpointAt,
     last_used_at: template.lastUsedAt,
     sealed: isTemplateSealed(template.unseal),
-    ...(host.identityDrift !== undefined && { identity_drift: { ...host.identityDrift } }),
+    ...(driftOf(template, host) !== undefined && { identity_drift: driftOf(template, host) }),
   };
 }
 
@@ -238,4 +247,13 @@ export function toAgentTemplate(
     availability,
     sealed,
   };
+}
+
+/** The drift the last start saw: the running process's, else the one stored with the row (deferred D23). */
+function driftOf(
+  template: TemplateRecord,
+  host: TemplateHostView,
+): { from: string; to: string } | undefined {
+  const drift = host.identityDrift ?? template.identityObserved?.drift;
+  return drift === undefined ? undefined : { from: drift.from, to: drift.to };
 }

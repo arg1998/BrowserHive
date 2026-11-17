@@ -149,6 +149,11 @@ export class VaultBroker {
           username_selector: request.usernameSelector,
           password_selector: request.passwordSelector,
           submit_selector: request.submitSelector ?? null,
+          ...(ctx.autoRelogin !== undefined && {
+            trigger: 'auto_relogin',
+            template_id: ctx.autoRelogin.templateId,
+            linked_by: ctx.autoRelogin.linkedBy,
+          }),
           ...details,
         },
         ts: this.deps.clock.now(),
@@ -206,6 +211,10 @@ export class VaultBroker {
       allowEvaluate: this.deps.allowEvaluate,
       pageUrl,
       entry,
+      ...(ctx.autoRelogin !== undefined && {
+        strictPrincipal: true,
+        templateMaintenance: session.maintenanceOf === ctx.autoRelogin.templateId,
+      }),
     });
     if (decision.kind === 'blocked') {
       if (decision.reason === 'not_authorized' || decision.reason === 'vault_disabled') {

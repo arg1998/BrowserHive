@@ -10,7 +10,7 @@ import type { HostState } from './host-state.ts';
 export const DEFAULT_RETRY_AFTER_MS = 5_000;
 
 /** Why a template is briefly unavailable (agent-safe reasons, spec 13 §12). */
-export type UnavailableReason = 'starting' | 'restarting' | 'recovering';
+export type UnavailableReason = 'starting' | 'restarting' | 'recovering' | 'paused';
 
 /** `TEMPLATE_UNAVAILABLE`. */
 export function templateUnavailable(
