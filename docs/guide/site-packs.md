@@ -118,7 +118,7 @@ A pack that departs from the rule says why (`exception`), and the reason is show
 
 Guards are checked in two places, both pure matching over the pack's data:
 
-- **In the browser, on every request** of a template's browser: by method, address and type. This is the enforcement point. Sign-out, account, credential and destructive guards match **every** type of request (page loads, `fetch`, XHR, beacons, images, scripts, stylesheets, prefetches, event streams, WebSocket handshakes and the rest), so an `<img src="/logout">` is stopped too, unless the guard names the types it covers (`resource_types`). Write guards match page loads, `fetch`, XHR and beacons unless they name others.
+- **In the browser, on every request** of a template's browser: by method, address and type. This is the enforcement point. Sign-out, account, credential and destructive guards match **every** type of request (page loads, `fetch`, XHR, beacons, images, scripts, stylesheets, prefetches, event streams and the rest; WebSockets are never routed, see below), so an `<img src="/logout">` is stopped too, unless the guard names the types it covers (`resource_types`). Write guards match page loads, `fetch`, XHR and beacons unless they name others.
 - **In the tools, before the browser is touched**: `navigate` and `new_tab` check page-load guards, and `click`, `hover`, `select_option`, `drag_and_drop`, `fill`, `type_text` and `press_key` check element guards. An action is refused when its target **is** the guarded element **or is inside it** (a `<span>` in a guarded button). This is an earlier, friendlier refusal, not the boundary.
 
 A request belongs to the pack of its own address's registrable domain, not of the page that sent it. The first matching guard of that pack decides. A guard address without a trailing `*` also matches the same path with any query string and the paths beneath it: `www.example.com/logout` matches `/logout`, `/logout/x` and `/logout?next=/`, but not `/logout-help`. Before matching, the address is read the way a server reads it: percent-encoded letters and digits are decoded (`/log%6Fut` is `/logout`), encoded slashes and dots are decoded, repeated slashes collapse (`//logout` is `/logout`), `;parameters` in a path segment are dropped (`/logout;x=1` is `/logout`), and host names are compared without case or a trailing dot. Pattern matching takes time proportional to the address, whatever the pattern, and a pattern may hold only a few `*`.
@@ -179,7 +179,7 @@ The request guard sees what the browser driver routes. Some traffic is not route
 | Not seen | What packs do about it |
 |---|---|
 | **Redirect hops.** Only the first address of a redirect chain is routed. A redirect into a guarded address (`/go?to=/logout` answering `302 /logout`) is not stopped, and because `307` and `308` keep the method, that covers `POST` too. | Packs block the site's known open redirectors. |
-| **WebSocket frames.** The connection is routed, the messages are not. | — |
+| **WebSockets.** Neither the connection nor its messages pass through BrowserHive's routing, so no guard sees them. | Element guards on the controls that send them. |
 | **`javascript:` URLs.** Requests a page makes from one. Agents cannot open them: every non-web scheme is refused at the tools ([Security](security.md#agents-open-web-urls-only)). | — |
 | **SharedWorker requests.** Dedicated workers and service workers are routed; shared workers are not. | Packs express such writes as element guards. |
 | **Requests sent while a page closes.** A beacon or `keepalive` fetch sent from `pagehide` or `unload` while `close_tab` or `close_session` closes the page. Whether it reaches the site depends on timing. | Packs express writes a site sends on unload as element guards (the tool path). |
@@ -196,7 +196,7 @@ Packs come from a source you trust less than yourself (a release, later a regist
 | `sign_in.url` | `https` only, a host inside the pack's domains, a path with no query. Shown in full before a sign-in window opens. |
 | `domains` | A domain another pack covers is refused, also for a local file you approve. A new domain is shown in the difference and needs your approval. |
 | Pages BrowserHive loads by itself (the probe page) | A path inside the domains, no query, and never one of the pack's own sign-out, account, credential or destructive guards. During a check, page loads that leave the domains are aborted. |
-| `guards` | The glob grammar only (`*` and `?`, a few `*` per pattern, matched in linear time), hosts inside the pack's domains, at most 64. |
+| `guards` | The glob grammar only (`*` and `?`, at most 4 `*` and no `**` per pattern, matched in linear time), hosts inside the pack's domains, at most 64. |
 | `challenges` | Per-session and per-template bounds on Site checks; an agent's own navigation never triggers one. |
 | `signed_in` | Cookie **names** only, never values. A re-login never starts on `challenged` or "couldn't tell". |
 | Numbers (sessions, pacing, intervals) | Floors and ceilings built into BrowserHive; sessions never above the template's own cap. |
@@ -330,7 +330,7 @@ Packs without write guards (all of these for now) leave the write policy with no
 | Read the folder again | `sitepacks reload` | `POST /site-packs/reload` |
 | Import one pack file | `sitepacks import <file>` | `POST /site-packs/import` `{text}` (the file's exact text) or `{pack}` (a parsed pack, stored re-serialized) |
 | Check a file offline | `sitepacks verify <file>` | — |
-| Decisions and guard hits | — | `GET /site-packs/changes`, `GET /site-packs/guard-hits` |
+| Decisions and guard hits (identical hits within a second are recorded once; confirmations always) | — | `GET /site-packs/changes`, `GET /site-packs/guard-hits` (`since`/`until` inclusive) |
 
 The routes need the scopes `sitepacks:read` or `sitepacks:write` ([REST reference](../reference/api.md#site-packs)). The commands are described in the [CLI guide](cli.md#sitepacks).
 
