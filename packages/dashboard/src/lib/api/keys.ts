@@ -145,6 +145,13 @@ export const keys = {
     operation: (operationId: string) => ['templates', 'operation', operationId] as const,
     access: (id: string, params?: KeyParams) =>
       ['templates', 'access', id, stableParams(params)] as const,
+    /** The probe history of one template (`GET /templates/{id}/probes`, spec 13 §8). */
+    probes: (id: string, params?: KeyParams) =>
+      ['templates', 'probes', id, stableParams(params)] as const,
+    /** Every probe query of one template (invalidation prefix). */
+    probesOf: (id: string) => ['templates', 'probes', id] as const,
+    /** The **Check now** mutation of one template (a mutation key: every button shares its pending state). */
+    probeRun: (id: string) => ['templates', 'probe-run', id] as const,
   },
   publicUrl: () => ['system', 'public-url'] as const,
   preferences: () => ['preferences'] as const,

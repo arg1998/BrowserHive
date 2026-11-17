@@ -182,7 +182,7 @@ export function toTemplateInput(draft: TemplateDraft): TemplateInput {
     ...(draft.description.trim().length > 0 && { description: draft.description.trim() }),
     sites: draft.sites.map((site_id) => ({ site_id })),
     ...(draft.channel !== null && { channel: draft.channel }),
-    ...(draft.stealth !== null && { stealth: draft.stealth }),
+    ...(draft.stealth !== null && draft.stealth !== 'off' && { stealth: draft.stealth }),
     ...(draft.fingerprint !== null && { fingerprint: draft.fingerprint }),
     ...(draft.headless && { headless: true }),
     ...(draft.useProxy && {

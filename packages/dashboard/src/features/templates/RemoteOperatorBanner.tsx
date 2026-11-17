@@ -8,20 +8,32 @@ export function useRemoteHost(): string | null {
   return typeof window === 'undefined' ? null : remoteHost(window.location);
 }
 
-/** Notice; renders nothing for a local operator. `host` overrides the detected machine (tests). */
+/**
+ * Notice; renders nothing for a local operator. `host` overrides the detected address (tests);
+ * `machineName` is the server's own name for itself (`TemplateDetailResponse.machine.name`), used in
+ * the sentence when known.
+ */
 export function RemoteOperatorBanner({
   host,
+  machineName,
   action = 'This opens a window',
+  className,
 }: {
   readonly host?: string | null;
+  readonly machineName?: string;
   /** What the action does, for the sentence ("Re-login opens a window"). */
   readonly action?: string;
+  readonly className?: string;
 }) {
   const detected = useRemoteHost();
-  const machine = host === undefined ? detected : host;
-  if (machine === null) return null;
+  const address = host === undefined ? detected : host;
+  if (address === null) return null;
+  const title =
+    machineName !== undefined && machineName !== ''
+      ? `${action} on ${machineName}, the machine running BrowserHive, not on this device`
+      : `${action} on ${address}, not on this device`;
   return (
-    <Callout tone="info" title={`${action} on ${machine}, not on this device`}>
+    <Callout tone="info" title={title} {...(className !== undefined && { className })}>
       <p>
         Sign in where BrowserHive runs: at that machine’s screen, or through a remote desktop to it.
         On a server without a screen, connect a VNC viewer to its virtual display first.{' '}

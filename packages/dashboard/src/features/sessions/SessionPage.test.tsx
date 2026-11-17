@@ -1,4 +1,4 @@
-/** @module features/sessions/SessionPage.test — the session workspace: header and tabs, one Activity stream (page visits folded into their calls, rows expand inline), the attention banner from the per-session query (not counts) with Take over, the Live toggle (`L`), Details counts linking into Activity, alias link redirects, 404 */
+/** @module features/sessions/SessionPage.test — the session workspace: header and tabs, one Activity stream (page visits folded into their calls, rows expand inline), the attention banner from the per-session query (not counts) with Take over, input open to a template re-login signed in through the live view, the Live toggle (`L`), Details counts linking into Activity, alias link redirects, 404 */
 
 import { describe, expect, it } from 'bun:test';
 import { createRoute } from '@tanstack/react-router';
@@ -11,7 +11,13 @@ import {
   toolCallDetail,
   toolItem,
 } from '../../../test/fixtures/sessions.ts';
-import { templateSummary, templatesPage } from '../../../test/fixtures/templates.ts';
+import {
+  reloginView,
+  templateDetail,
+  templateSummary,
+  templatesPage,
+  tid,
+} from '../../../test/fixtures/templates.ts';
 import { expectNoA11yViolations } from '../../../test/helpers/axe.ts';
 import { envelope, problem, renderPage } from '../../../test/helpers/page-harness.tsx';
 import { act, fireEvent, screen, waitFor, within } from '../../../test/helpers/render.tsx';
@@ -27,7 +33,10 @@ const ITEMS = [
   toolItem(3, { tool: 'click' }),
 ];
 
-function mount(url: string, options: { detail?: unknown; pending?: unknown[] } = {}) {
+function mount(
+  url: string,
+  options: { detail?: unknown; pending?: unknown[]; template?: unknown } = {},
+) {
   return renderPage({
     path: '/sessions/$id',
     component: SessionPage,
@@ -40,6 +49,7 @@ function mount(url: string, options: { detail?: unknown; pending?: unknown[] } =
         toolCallDetail(1, { ok: false, error_code: 'TIMEOUT', error_message: 'took too long' }),
       'GET /system': { vault: { enabled: false, backend: null } },
       'GET /templates': templatesPage([templateSummary(1)]),
+      ...(options.template !== undefined && { [`GET /templates/${tid(1)}`]: options.template }),
     },
     url,
   });
@@ -67,6 +77,42 @@ describe('SessionPage of a template session', () => {
     expect(await screen.findByText('BrowserHive (system)')).toBeDefined();
     expect(screen.getByText('Template: job-hunt')).toBeDefined();
     expect(screen.queryByRole('link', { name: /Template:/ })).toBeNull();
+  });
+
+  it('opens input to a re-login signed in through this live view, without an attention request; axe clean', async () => {
+    mount(`/sessions/${ID}?live=1&takeover=1`, {
+      detail: templated('maintenance', tid(1)),
+      template: templateDetail(
+        {},
+        {
+          relogin: reloginView({ sign_in_via: 'live_view', session_id: ID, agents_paused: false }),
+        },
+      ),
+    });
+    const pane = await screen.findByRole('region', { name: 'Live view' });
+    expect(await within(pane).findByText('Sign-in open')).toBeDefined();
+    expect(within(pane).getByTestId('takeover-origin')).toBeDefined();
+    // The pane only: the split's resize handle is the layout's, not this feature's.
+    await expectNoA11yViolations(pane, { disable: ['aria-hidden-focus'] });
+  });
+
+  it('keeps the live view read only for a re-login in a window, or of another session', async () => {
+    for (const relogin of [
+      reloginView({ sign_in_via: 'window', session_id: ID }),
+      reloginView({ sign_in_via: 'live_view', session_id: 'ses_other' }),
+    ]) {
+      const view = mount(`/sessions/${ID}?live=1`, {
+        detail: templated('maintenance', tid(1)),
+        template: templateDetail({}, { relogin }),
+      });
+      const pane = await screen.findByRole('region', { name: 'Live view' });
+      await waitFor(() =>
+        expect(view.requests.some((r) => r.path.endsWith(`/templates/${tid(1)}`))).toBe(true),
+      );
+      expect(within(pane).queryByText('Sign-in open')).toBeNull();
+      expect(within(pane).queryByTestId('takeover-origin')).toBeNull();
+      view.unmount();
+    }
   });
 
   it('explains on Files & trace that template sessions are not traced', async () => {

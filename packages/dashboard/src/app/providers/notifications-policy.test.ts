@@ -1,5 +1,6 @@
 /** @module app/providers/notifications-policy.test — toast policy: no tool-error toasts by default, never for the session on screen, titles name the session; bell badge cap */
 import { describe, expect, it } from 'bun:test';
+import { notificationEntry } from '@/lib/status-registry.ts';
 import { notification } from '../../../test/fixtures/ops.ts';
 import { bellBadge } from '../shell/NotificationBell.tsx';
 import { DEFAULT_TOAST_TYPES, planToast, toastSettled } from './NotificationsProvider.tsx';
@@ -87,6 +88,29 @@ describe('toast policy', () => {
     ).toBeNull();
     // Its "back to normal" closes the toast.
     expect(toastSettled({ ...alert, state: 'resolved' })).toBe(true);
+  });
+
+  it('opens the template for a template notification, with its own icon (spec 13 §8.6)', () => {
+    const signedOut = notification(3, {
+      type: 'attention',
+      kind: 'template.signed_out',
+      title: 'Job hunt: LinkedIn signed out',
+      target: '/templates/tp-0000000001?site=linkedin.com',
+    });
+    expect(planToast(signedOut, { pathname: '/overview', preferences: undefined })).toMatchObject({
+      actionLabel: 'Open template',
+      target: '/templates/tp-0000000001?site=linkedin.com',
+    });
+    expect(notificationEntry(signedOut).icon).toBe('signIn');
+    expect(notificationEntry({ type: 'error', kind: 'template.host_failed' }).icon).toBe(
+      'templates',
+    );
+    expect(notificationEntry({ type: 'error', kind: 'template.relogin_failed' }).tone).toBe(
+      'danger',
+    );
+    expect(notificationEntry({ type: 'attention', kind: 'template.challenged' }).label).toBe(
+      'site check',
+    );
   });
 
   it('caps the bell badge at 9+', () => {

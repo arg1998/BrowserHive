@@ -9,7 +9,7 @@ import type { AppError } from '@/lib/api/errors.ts';
 /** Why a version was written, in words. */
 export const VERSION_REASON: { readonly [K in TemplateVersionReason]: string } = {
   recording: 'Sign-in finished',
-  relogin: 'Signed in again',
+  relogin: 'Re-login',
   restore: 'Restored',
   manual: 'Saved by hand',
   import: 'Seeded from a file',

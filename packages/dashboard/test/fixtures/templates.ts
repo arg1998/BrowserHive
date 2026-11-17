@@ -1,8 +1,11 @@
-/** @module dashboard/test/fixtures/templates — typed builders for template DTOs (list rows, the template, its detail, sites, versions) used by the templates page tests; shaped by the contracts schemas  */
+/** @module dashboard/test/fixtures/templates — typed builders for template DTOs (list rows, the template, its detail, sites, versions, re-logins, probes) used by the templates page tests; shaped by the contracts schemas  */
 import type {
   HostView,
+  ReloginView,
   Template,
   TemplateDetailResponse,
+  TemplateProbeRow,
+  TemplateProbesPage,
   TemplateSiteView,
   TemplateSummary,
   TemplatesPage,
@@ -32,6 +35,7 @@ export function templateSite(
     write_policy: null,
     vault_handle: null,
     auto_relogin: false,
+    auto_relogin_at: null,
     form: null,
     learned_cookie_names: [],
     health: {
@@ -73,6 +77,7 @@ export function hostView(patch: Partial<HostView> = {}): HostView {
     parked_pages: 0,
     sandboxed: null,
     profile_secrets: false,
+    agents_paused: false,
     ...patch,
   };
 }
@@ -189,6 +194,8 @@ export function templateDetail(
     parked_pages: [],
     shared_windows: [],
     unlisted_domains: [],
+    relogin: null,
+    machine: { name: 'hive-box' },
     now: TT0,
     ...extra,
   };
@@ -237,5 +244,72 @@ export function versionsPage(rows: readonly TemplateVersionRow[]): TemplateVersi
     applied: { filters: {}, sort: { key: 'version', dir: 'desc' } },
     meta: { now: TT0 },
     checkpoint: { at: TT0 - 300_000, size_bytes: 52_000, readable: true },
+  };
+}
+
+/** A signed-out site (`cookies_absent` unless told otherwise). */
+export function signedOutSite(
+  siteId: string,
+  patch: Partial<TemplateSiteView> = {},
+): TemplateSiteView {
+  return templateSite(siteId, {
+    learned_cookie_names: ['sid'],
+    health: {
+      state: 'signed_out',
+      checked_at: TT0 - 120_000,
+      changed_at: TT0 - 120_000,
+      reason: 'cookies_absent',
+      consecutive_inconclusive: 0,
+    },
+    ...patch,
+  });
+}
+
+/** A template's re-login. */
+export function reloginView(patch: Partial<ReloginView> = {}): ReloginView {
+  return {
+    site_id: 'indeed.com',
+    method: 'window',
+    state: 'open',
+    session_id: 'ses_relogin0001',
+    requested_by: 'operator',
+    requested_at: TT0 - 60_000,
+    deadline_at: TT0 + 29 * 60_000,
+    finished_at: null,
+    agents_paused: true,
+    sign_in_via: 'window',
+    confirm_required: false,
+    version: null,
+    unlisted_domains: [],
+    error: null,
+    ...patch,
+  };
+}
+
+/** One probe. */
+export function probeRow(seq: number, patch: Partial<TemplateProbeRow> = {}): TemplateProbeRow {
+  return {
+    seq,
+    site_id: 'linkedin.com',
+    outcome: 'signed_in',
+    reason: 'learned_cookies',
+    trigger: 'schedule',
+    final_url: null,
+    duration_ms: 42,
+    at: TT0 - seq * 60_000,
+    ...patch,
+  };
+}
+
+/** `GET /templates/{id}/probes` body. */
+export function probesPage(
+  rows: readonly TemplateProbeRow[],
+  nextCursor: string | null = null,
+): TemplateProbesPage {
+  return {
+    data: [...rows],
+    page: { next_cursor: nextCursor, limit: 50 },
+    applied: { filters: {}, sort: { key: 'at', dir: 'desc' } },
+    meta: { now: TT0 },
   };
 }

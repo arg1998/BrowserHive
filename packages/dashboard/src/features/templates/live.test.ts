@@ -5,6 +5,8 @@ import { QueryClient } from '@tanstack/react-query';
 import { keys } from '@/lib/api/keys.ts';
 import {
   hostView,
+  probeRow,
+  reloginView,
   signedInSite,
   templateDetail,
   templateSite,
@@ -28,6 +30,49 @@ function seeded() {
   return qc;
 }
 const stale = (qc: QueryClient, key: readonly unknown[]) => qc.getQueryState(key)?.isInvalidated;
+
+describe('templates topic: re-login and probes (T2)', () => {
+  it('patches an open re-login and the paused agents in place', () => {
+    const qc = seeded();
+    applyTemplateEvent(
+      qc,
+      ev({ type: 'template.relogin', template_id: ID, relogin: reloginView() }),
+    );
+    const detail = qc.getQueryData<ReturnType<typeof templateDetail>>(keys.templates.detail(ID));
+    expect(detail?.relogin?.state).toBe('open');
+    expect(detail?.host.agents_paused).toBe(true);
+    expect(stale(qc, keys.templates.detail(ID))).toBe(false);
+  });
+
+  it('reads the template again when a re-login ends, leaving the pause to the host event', () => {
+    const qc = seeded();
+    applyTemplateEvent(
+      qc,
+      ev({ type: 'template.relogin', template_id: ID, relogin: reloginView() }),
+    );
+    applyTemplateEvent(
+      qc,
+      ev({
+        type: 'template.relogin',
+        template_id: ID,
+        relogin: reloginView({ state: 'signed_in', agents_paused: false, version: 4 }),
+      }),
+    );
+    const detail = qc.getQueryData<ReturnType<typeof templateDetail>>(keys.templates.detail(ID));
+    expect(detail?.relogin?.state).toBe('signed_in');
+    expect(detail?.host.agents_paused).toBe(true);
+    expect(stale(qc, keys.templates.detail(ID))).toBe(true);
+  });
+
+  it('refreshes only that template’s probe history on a probe', () => {
+    const qc = seeded();
+    qc.setQueryData(keys.templates.probes(ID, {}), { pages: [], pageParams: [] });
+    qc.setQueryData(keys.templates.probes(tid(2), {}), { pages: [], pageParams: [] });
+    applyTemplateEvent(qc, ev({ type: 'template.probe', template_id: ID, probe: probeRow(1) }));
+    expect(stale(qc, keys.templates.probes(ID, {}))).toBe(true);
+    expect(stale(qc, keys.templates.probes(tid(2), {}))).toBe(false);
+  });
+});
 
 describe('templates topic', () => {
   it('patches the browser state of the cached template in place', () => {

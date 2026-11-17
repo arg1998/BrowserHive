@@ -1,5 +1,10 @@
-/** @module features/templates/search — URL state of the templates pages (spec 04 §12.14): the list (table params + `status`, `host`), the wizard (`step` 1–5, `template` once created) and the template page (`tab`, `site`) */
-import { TemplateHostState, TemplateStatus } from '@browserhive/contracts/enums';
+/** @module features/templates/search — URL state of the templates pages (spec 04 §12.14): the list (table params + `status`, `host`), the wizard (`step` 1–5, `template` once created) and the template page (`tab`, `site`, and the Activity filters `outcome`, `trigger`) */
+import {
+  TemplateHostState,
+  TemplateProbeOutcome,
+  TemplateProbeTrigger,
+  TemplateStatus,
+} from '@browserhive/contracts/enums';
 import type { TemplatesQuery } from '@browserhive/contracts/http';
 import { z } from 'zod';
 import { csvParam, TABLE_SEARCH_DEFAULTS, tableSearchSchema } from '@/lib/search/table.ts';
@@ -91,8 +96,12 @@ export type TemplateTab = (typeof TEMPLATE_TABS)[number];
 /** `/templates/$id` search. */
 export const templatePageSearch = z.object({
   tab: z.enum(TEMPLATE_TABS).default('sites').catch('sites'),
-  /** A site to focus on the Sites tab (`?site=linkedin.com`). */
+  /** A site to focus on the Sites tab, or to filter the Activity tab by (`?site=linkedin.com`). */
   site: z.string().trim().toLowerCase().min(1).max(253).optional().catch(undefined),
+  /** Activity tab: probe outcomes to show. */
+  outcome: csvParam(TemplateProbeOutcome),
+  /** Activity tab: why the probes ran. */
+  trigger: csvParam(TemplateProbeTrigger),
 });
 /** `/templates/$id` search. */
 export type TemplatePageSearch = z.infer<typeof templatePageSearch>;

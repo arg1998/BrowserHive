@@ -31,7 +31,9 @@ export function StepIdentity({
   };
   const channel = draft.channel ?? defaults.channel;
   const missing = defaults.installed !== null && !defaults.installed.has(channel);
-  const stealth = draft.stealth ?? defaults.stealth;
+  // A draft from before D6 may hold `off`, which templates no longer take.
+  const stealth =
+    draft.stealth === null || draft.stealth === 'off' ? defaults.stealth : draft.stealth;
   const setProxy = (patch: Partial<TemplateDraft['proxy']>) =>
     onDraft((d) => ({ ...d, proxy: { ...d.proxy, ...patch } }));
   const prefill = () =>
@@ -122,11 +124,10 @@ export function StepIdentity({
           ))}
         </ToggleGroup>
         <p className="text-sm text-muted-foreground">
-          {stealth === 'off'
-            ? 'Sites can tell the browser is automated. Some sign-ins, like Google’s, refuse it.'
-            : stealth === 'max'
-              ? 'Every countermeasure on, at some cost in speed.'
-              : 'Hides the usual automation signals. Right for most sites.'}
+          Templates always run with stealth on.{' '}
+          {stealth === 'max'
+            ? 'Max turns every countermeasure on, at some cost in speed.'
+            : 'Standard hides the usual automation signals; right for most sites.'}
         </p>
       </div>
       <div className="flex max-w-3xl flex-col gap-4">

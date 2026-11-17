@@ -117,12 +117,36 @@ export function healthReasonText(reason: string | null): string | null {
   const known: Readonly<Record<string, string>> = {
     confirmed_by_operator: 'You confirmed the sign-in.',
     not_confirmed: 'Not confirmed when the sign-in finished.',
+    relogin: 'Signed in again with Re-login.',
     cookies_absent: 'Its sign-in cookies are gone.',
     partial_cookies: 'Only some of its sign-in cookies are there.',
     learned_cookies: 'Its sign-in cookies are there.',
+    no_pack:
+      'BrowserHive hasn’t learned how this site signs in yet. Use Re-login, sign in, then press I’m signed in to teach it.',
+    not_running: 'Couldn’t check: the browser isn’t running.',
     no_signal: 'Nothing showed whether you are signed in.',
     timeout: 'The check timed out.',
     network: 'The site could not be reached.',
   };
   return known[reason] ?? `${reason.replaceAll('_', ' ')}.`;
+}
+
+/** Inconclusive checks in a row before the page warns (spec 13 §8.3). */
+export const INCONCLUSIVE_WARN_AFTER = 3;
+
+/** "BrowserHive couldn't tell whether LinkedIn is signed in", or `null` below the threshold. */
+export function inconclusiveWarning(
+  site: Pick<TemplateSiteView, 'title' | 'health'>,
+): string | null {
+  // `no_pack`: nothing learned yet; the reason already says what to do.
+  return site.health.consecutive_inconclusive >= INCONCLUSIVE_WARN_AFTER &&
+    site.health.reason !== 'no_pack'
+    ? `BrowserHive couldn’t tell whether ${site.title} is signed in`
+    : null;
+}
+
+/** Whether `host` (a page's host name) is one of `sites` or under one of them (`www.linkedin.com`). */
+export function hostOnSites(host: string, sites: readonly string[]): boolean {
+  const h = host.toLowerCase().replace(/\.$/, '');
+  return sites.some((site) => h === site || h.endsWith(`.${site}`));
 }

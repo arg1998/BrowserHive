@@ -175,14 +175,27 @@ export const REPORT_KIND: {
   'report.anomaly': { label: 'anomaly alert', tone: 'warn', icon: 'anomaly' },
 };
 
-/** The entry a notification row shows: its report kind's, else its type's. */
+/** Template kinds (spec 13 §8.6): their own icon in the inbox, the bell and the delivery log. */
+export const TEMPLATE_KIND: {
+  readonly 'template.signed_out': StatusEntry;
+  readonly 'template.challenged': StatusEntry;
+  readonly 'template.relogin_failed': StatusEntry;
+  readonly 'template.host_failed': StatusEntry;
+} = {
+  'template.signed_out': { label: 'signed out', tone: 'warn', icon: 'signIn' },
+  'template.challenged': { label: 'site check', tone: 'warn', icon: 'warn' },
+  'template.relogin_failed': { label: 're-login failed', tone: 'danger', icon: 'failure' },
+  'template.host_failed': { label: 'template browser failed', tone: 'danger', icon: 'templates' },
+};
+
+/** The entry a notification row shows: its report or template kind's, else its type's. */
 export function notificationEntry(n: {
   readonly type: NotificationType;
   readonly kind: string;
 }): StatusEntry {
-  return n.kind in REPORT_KIND
-    ? REPORT_KIND[n.kind as keyof typeof REPORT_KIND]
-    : NOTIFICATION_TYPE[n.type];
+  if (n.kind in REPORT_KIND) return REPORT_KIND[n.kind as keyof typeof REPORT_KIND];
+  if (n.kind in TEMPLATE_KIND) return TEMPLATE_KIND[n.kind as keyof typeof TEMPLATE_KIND];
+  return NOTIFICATION_TYPE[n.type];
 }
 
 /**

@@ -41,6 +41,7 @@ import {
 } from './detail-search.ts';
 import { LivePane } from './live/LivePane.tsx';
 import { takeoverRequest } from './live/live-status.ts';
+import { useReloginInput } from './live/relogin-input.ts';
 import { closedReasonText, sessionEnded } from './session-format.ts';
 
 /** Tabs in display order. */
@@ -274,6 +275,7 @@ export function SessionPage() {
 
   const pending = attention.data?.data ?? [];
   const takeover = session === undefined ? null : takeoverRequest(session, attention.data?.data);
+  const signIn = useReloginInput(session);
 
   const toggleLive = useCallback(() => {
     set({ live: liveOpen ? undefined : 1, takeover: undefined, page: search.page });
@@ -343,7 +345,8 @@ export function SessionPage() {
     <LivePane
       session={current}
       takeover={takeover}
-      gateKnown={attention.isSuccess}
+      signIn={signIn.open}
+      gateKnown={attention.isSuccess && signIn.known}
       vaultEnabled={vaultEnabled === true}
       armTakeover={search.takeover === 1}
       onArmed={onArmed}

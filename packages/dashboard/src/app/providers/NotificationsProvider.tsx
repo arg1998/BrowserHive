@@ -118,9 +118,11 @@ export function planToast(
     target: here ? null : target,
     actionLabel: anomaly
       ? 'Open report'
-      : notification.type === 'vault'
-        ? 'Review in vault'
-        : 'Open session',
+      : notification.kind.startsWith('template.')
+        ? 'Open template'
+        : notification.type === 'vault'
+          ? 'Review in vault'
+          : 'Open session',
   };
 }
 

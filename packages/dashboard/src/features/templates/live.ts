@@ -1,4 +1,4 @@
-/** @module features/templates/live — keeps template queries current over the `templates` topic (spec 13 §11.3): a browser's state patches the cached detail in place, a site's health patches its card, versions and operations refresh their own queries, and changes or removals refresh the lists and that template; the `sessions` topic refreshes live counts when a template session opens or closes. Each event touches only the queries of its template */
+/** @module features/templates/live — keeps template queries current over the `templates` topic (spec 13 §11.3): a browser's state patches the cached detail in place, a site's health patches its card, a re-login patches its progress (and the paused agents), a probe refreshes the Activity tab, versions and operations refresh their own queries, and changes or removals refresh the lists and that template; the `sessions` topic refreshes live counts when a template session opens or closes. Each event touches only the queries of its template */
 import type { TemplateDetailResponse } from '@browserhive/contracts/http';
 import type { WsFeedEvent } from '@browserhive/contracts/ws';
 import { type QueryClient, useQueryClient } from '@tanstack/react-query';
@@ -57,6 +57,27 @@ export function applyTemplateEvent(qc: QueryClient, event: WsFeedEvent): void {
     }
     case 'template.version':
       void qc.invalidateQueries({ queryKey: keys.templates.versions(event.template_id) });
+      return;
+    case 'template.relogin': {
+      const key = keys.templates.detail(event.template_id);
+      const cached = qc.getQueryData<TemplateDetailResponse>(key);
+      if (cached !== undefined) {
+        const { relogin } = event;
+        const open = relogin.state === 'open' || relogin.state === 'queued';
+        qc.setQueryData(key, {
+          ...cached,
+          relogin,
+          // A recording window pauses agents too: only an open re-login speaks for the pause.
+          host: open ? { ...cached.host, agents_paused: relogin.agents_paused } : cached.host,
+        });
+      }
+      // An ending writes a version and new health: read the template again.
+      if (!['queued', 'open', 'filling'].includes(event.relogin.state))
+        refreshTemplate(qc, event.template_id);
+      return;
+    }
+    case 'template.probe':
+      void qc.invalidateQueries({ queryKey: keys.templates.probesOf(event.template_id) });
       return;
     case 'template.operation':
       void qc.invalidateQueries({ queryKey: keys.templates.operation(event.operation_id) });

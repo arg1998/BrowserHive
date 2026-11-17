@@ -35,7 +35,7 @@ function mount(routes: Record<string, unknown>) {
 }
 
 describe('template care', () => {
-  it('says a ready template has a signed-out site and links to signing in again; axe clean', async () => {
+  it('says a ready template has a signed-out site and offers Re-login for it; axe clean', async () => {
     const view = mount({
       [`GET /templates/${ID}`]: templateDetail({
         sites: [signedInSite('linkedin.com'), signedOut],
@@ -43,10 +43,13 @@ describe('template care', () => {
     });
     expect(await screen.findByText('1 site isn’t signed in')).toBeDefined();
     expect(screen.getByText(/Agents get signed-out pages on indeed.com/)).toBeDefined();
-    const links = screen.getAllByRole('link', { name: /Sign in again/ });
-    expect(links.length).toBe(2);
-    for (const link of links)
-      expect(link.getAttribute('href')).toBe(`/templates/new?step=5&template=${ID}&again=1`);
+    expect(screen.queryAllByRole('link', { name: /Sign in again/ })).toHaveLength(0);
+    expect(screen.getByRole('button', { name: 'Re-login: indeed.com' })).toBeDefined();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /^Re-login…$/ }));
+    });
+    const dialog = await screen.findByRole('dialog', { name: 'Re-login to indeed.com' });
+    expect(within(dialog).getByText(/hive-box/)).toBeDefined();
     await expectNoA11yViolations(view.container, { disable: ['aria-hidden-focus'] });
   });
 

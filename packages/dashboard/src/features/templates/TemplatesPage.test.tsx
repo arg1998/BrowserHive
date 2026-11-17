@@ -1,6 +1,13 @@
 /** @module features/templates/TemplatesPage.test — `/templates`: rows with each site's health, Browser and sessions, whole-row links, Setting up with Continue sign-in, facet chips written to the URL and the REST query, the first-visit explainer, zero results; axe on each */
 import { describe, expect, it } from 'bun:test';
-import { templateSummary, templatesPage } from '../../../test/fixtures/templates.ts';
+import {
+  signedInSite,
+  signedOutSite,
+  templateDetail,
+  templateSummary,
+  templatesPage,
+  tid,
+} from '../../../test/fixtures/templates.ts';
 import { expectNoA11yViolations } from '../../../test/helpers/axe.ts';
 import { renderPage } from '../../../test/helpers/page-harness.tsx';
 import { act, fireEvent, screen, waitFor, within } from '../../../test/helpers/render.tsx';
@@ -124,5 +131,32 @@ describe('TemplatesPage', () => {
   it('counts the sites that need a sign-in in the header line', () => {
     expect(templatesCountText(ROWS, 2)).toBe('2 templates · 1 site needs a sign-in');
     expect(templatesCountText(ROWS.slice(1), 1)).toBe('1 template');
+  });
+});
+
+describe('row menu: Re-login…', () => {
+  it('opens the re-login dialog for the row’s signed-out site', async () => {
+    const view = renderPage({
+      path: '/templates',
+      component: TemplatesPage,
+      validateSearch: (s) => templatesSearch.parse(s),
+      routes: {
+        'GET /templates': templatesPage(ROWS),
+        [`GET /templates/${tid(1)}`]: templateDetail({
+          sites: [signedInSite('linkedin.com'), signedOutSite('indeed.com')],
+        }),
+      },
+      url: '/templates',
+    });
+    const menu = (await screen.findAllByRole('button', { name: 'Actions for Job hunt' }))[0];
+    await act(async () => {
+      fireEvent.click(menu as HTMLElement);
+    });
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('menuitem', { name: /Re-login/ }));
+    });
+    const dialog = await screen.findByRole('dialog', { name: 'Re-login to indeed.com' });
+    expect(within(dialog).getByRole('button', { name: 'Open sign-in window' })).toBeDefined();
+    expect(view.requests.some((r) => r.path.endsWith(`/templates/${tid(1)}`))).toBe(true);
   });
 });

@@ -1,20 +1,21 @@
-/** @module features/templates/detail/SiteCard — one site of the Sites tab (spec 13 §11.4): its sign-in (state, why, last check), the cookies that detect it, whether agents are offered it, the account-change rule (read only until site packs), **Sign in again** for a site that is not signed in, and Remove site… */
-import type { TemplateSiteView } from '@browserhive/contracts/http';
-import { Link } from '@tanstack/react-router';
+/** @module features/templates/detail/SiteCard — one site of the Sites tab (spec 13 §11.4): its sign-in (state, why, last check, **Check now**, the couldn't-tell warning), its re-login in progress, the cookies that detect it, whether agents are offered it, automatic re-login with the vault, the account-change rule (read only until site packs), **Re-login…** and Remove site… */
+import type { ReloginView, TemplateSiteView } from '@browserhive/contracts/http';
 import { type ReactNode, useEffect, useId, useRef } from 'react';
 import { useConfirm } from '@/app/providers/ConfirmProvider.tsx';
 import { useToast } from '@/app/providers/ToastProvider.tsx';
-import { RelativeTime } from '@/components/shared/RelativeTime.tsx';
 import { StatusBadge } from '@/components/shared/StatusBadge.tsx';
-import { Button, buttonVariants } from '@/components/ui/button.tsx';
+import { Button } from '@/components/ui/button.tsx';
 import { Switch } from '@/components/ui/switch.tsx';
 import { Hint } from '@/components/ui/tooltip.tsx';
 import { ICONS } from '@/lib/icons.ts';
 import { cn } from '@/lib/utils.ts';
 import { useTemplateOperations } from '../api-operations.ts';
 import { removeSiteConfirm } from '../confirm-copy.ts';
-import { healthReasonText } from '../model.ts';
+import { needsSignIn } from '../model.ts';
 import { HealthIcon } from '../SiteChips.tsx';
+import { ReloginProgress } from './ReloginProgress.tsx';
+import { CheckNowButton, SiteHealth, useCheckNow } from './SiteHealth.tsx';
+import { VaultRelogin } from './VaultRelogin.tsx';
 
 const POLICY_TEXT = {
   allow: 'Allowed',
@@ -31,22 +32,34 @@ function Row({ label, children }: { readonly label: string; readonly children: R
   );
 }
 
-/** One site. `settingUp`: the template's first sign-in is not finished (the page says so once). */
-export function SiteCard({
-  templateId,
-  site,
-  title,
-  last,
-  focused,
-  settingUp,
-}: {
+/** Props. `settingUp`: the template's first sign-in is not finished (the page says so once). */
+export interface SiteCardProps {
   readonly templateId: string;
+  readonly templateName: string;
   readonly site: TemplateSiteView;
   readonly title: string;
   readonly last: boolean;
   readonly focused: boolean;
   readonly settingUp: boolean;
-}) {
+  /** The template's re-login when it is about this site. */
+  readonly relogin: ReloginView | null;
+  readonly machineName: string;
+  readonly onRelogin: (site: string) => void;
+}
+
+/** One site. */
+export function SiteCard({
+  templateId,
+  templateName,
+  site,
+  title,
+  last,
+  focused,
+  settingUp,
+  relogin,
+  machineName,
+  onRelogin,
+}: SiteCardProps) {
   const ops = useTemplateOperations(templateId);
   const confirm = useConfirm();
   const toast = useToast();
@@ -56,9 +69,9 @@ export function SiteCard({
   useEffect(() => {
     if (focused) ref.current?.scrollIntoView?.({ block: 'center' });
   }, [focused]);
-  const reason = healthReasonText(site.health.reason);
+  const check = useCheckNow(templateId, site);
   const cookies = site.learned_cookie_names;
-  const signedIn = site.health.state === 'signed_in';
+  const needed = needsSignIn(site.health.state);
   const onRemove = async () => {
     if (!(await confirm(removeSiteConfirm(site.site_id)))) return;
     ops.deleteSite.mutate(site.site_id, {
@@ -91,7 +104,12 @@ export function SiteCard({
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 pt-4">
         <div className="flex min-w-0 items-center gap-2">
           <HealthIcon state={site.health.state} className="size-4" />
-          <h2 id={headingId} className="truncate text-base font-semibold">
+          {/* `tabIndex={-1}`: focus lands here when a control of the card goes away (`focus-rescue`). */}
+          <h2
+            id={headingId}
+            tabIndex={-1}
+            className="truncate rounded-sm text-base font-semibold focus-ring"
+          >
             {title}
           </h2>
           {title !== site.site_id ? (
@@ -100,17 +118,20 @@ export function SiteCard({
         </div>
         <StatusBadge domain="siteHealth" value={site.health.state} variant="pill" iconless />
       </div>
+      {relogin !== null ? (
+        <div className="px-5 pt-4">
+          <ReloginProgress
+            templateId={templateId}
+            site={site}
+            relogin={relogin}
+            machineName={machineName}
+            onRetry={() => onRelogin(site.site_id)}
+          />
+        </div>
+      ) : null}
       <div className="flex flex-col divide-y px-5 py-4">
         <Row label="Sign-in">
-          <p className="flex flex-col">
-            <span>{reason ?? (settingUp ? 'Not signed in yet.' : 'Not checked yet.')}</span>
-            {site.health.checked_at !== null ? (
-              <span className="text-sm text-muted-foreground">
-                Last checked{' '}
-                <RelativeTime at={site.health.checked_at} className="min-w-0 text-sm" />
-              </span>
-            ) : null}
-          </p>
+          <SiteHealth site={site} settingUp={settingUp} checking={check.mine} />
         </Row>
         <Row label="Detected by">
           {cookies.length > 0 ? (
@@ -151,6 +172,9 @@ export function SiteCard({
             </label>
           </div>
         </Row>
+        <Row label="Automatic re-login">
+          <VaultRelogin templateId={templateId} templateName={templateName} site={site} />
+        </Row>
         <Row label="Account changes">
           <p className="text-muted-foreground">
             {site.write_policy === null ? 'Site default' : POLICY_TEXT[site.write_policy]} · takes
@@ -159,28 +183,36 @@ export function SiteCard({
         </Row>
       </div>
       <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t px-5 py-2.5">
-        {!signedIn && !settingUp ? (
-          <Link
-            to="/templates/new"
-            search={{ step: 5, template: templateId, again: 1 }}
-            className={buttonVariants({ variant: 'outline', size: 'sm' })}
-          >
-            <ICONS.signIn aria-hidden="true" />
-            Sign in again
-          </Link>
-        ) : (
+        {settingUp ? (
           <span />
-        )}
-        {last ? (
-          <Hint label="A template needs at least one site">
-            {/* biome-ignore lint/a11y/noNoninteractiveTabindex: a disabled button cannot take focus, so its wrapper carries the tooltip reason */}
-            <span tabIndex={0} className="rounded-md focus-ring">
-              {removeButton}
-            </span>
-          </Hint>
         ) : (
-          removeButton
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant={needed ? 'default' : 'outline'}
+              size="sm"
+              aria-label={`Re-login: ${site.site_id}`}
+              onClick={() => onRelogin(site.site_id)}
+            >
+              <ICONS.signIn aria-hidden="true" />
+              Re-login…
+            </Button>
+            <CheckNowButton site={site} checking={check.checking} onCheck={check.checkNow} />
+          </div>
         )}
+        {/* `ml-auto`: Remove stays at the end of the line when the footer wraps on a phone. */}
+        <div className="ml-auto">
+          {last ? (
+            <Hint label="A template needs at least one site">
+              {/* biome-ignore lint/a11y/noNoninteractiveTabindex: a disabled button cannot take focus, so its wrapper carries the tooltip reason */}
+              <span tabIndex={0} className="rounded-md focus-ring">
+                {removeButton}
+              </span>
+            </Hint>
+          ) : (
+            removeButton
+          )}
+        </div>
       </div>
     </section>
   );

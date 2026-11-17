@@ -40,6 +40,10 @@ const KIND_OPTIONS: readonly NotificationKind[] = [
   'digest.daily',
   'digest.weekly',
   'report.anomaly',
+  'template.signed_out',
+  'template.challenged',
+  'template.relogin_failed',
+  'template.host_failed',
   'test',
 ];
 const KIND_LABEL: Readonly<Record<string, string>> = {
@@ -52,6 +56,10 @@ const KIND_LABEL: Readonly<Record<string, string>> = {
   'digest.daily': 'Daily digest',
   'digest.weekly': 'Weekly digest',
   'report.anomaly': 'Anomaly alert',
+  'template.signed_out': 'Template signed out',
+  'template.challenged': 'Template site check',
+  'template.relogin_failed': 'Re-login failed',
+  'template.host_failed': 'Template browser failed',
   test: 'Test',
 };
 

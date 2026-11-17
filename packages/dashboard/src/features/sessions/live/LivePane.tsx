@@ -1,4 +1,4 @@
-/** @module features/sessions/live/LivePane — the live browser: a card whose stage takes the page's own aspect ratio (so the frame fills it instead of floating in black bars) and a stream sized to the pane (`set_size` on resize); a compact toolbar (status pill with stream numbers, current URL, pause, quality, resize viewport, fullscreen, focus, hide); takeover input gated on an open `takeover` request; an ended state that keeps the last frame (spec 04 §13) */
+/** @module features/sessions/live/LivePane — the live browser: a card whose stage takes the page's own aspect ratio (so the frame fills it instead of floating in black bars) and a stream sized to the pane (`set_size` on resize); a compact toolbar (status pill with stream numbers, current URL, pause, quality, resize viewport, fullscreen, focus, hide); takeover input gated on an open `takeover` request or a template re-login signed in through this live view (a template session's page origin shown above the stage, `TakeoverOrigin`); an ended state that keeps the last frame (spec 04 §13) */
 import type { OperatorRequestRow, SessionSummary } from '@browserhive/contracts/http';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StatusDot } from '@/components/shared/StatusBadge.tsx';
@@ -27,6 +27,7 @@ import { closedReasonText, sessionEnded } from '../session-format.ts';
 import type { Size } from './input-mapping.ts';
 import { LIVE_PILL, livePillState, streamStats } from './live-status.ts';
 import { readStoredSize, storeSize, streamDims } from './stream-size.ts';
+import { TakeoverOrigin } from './TakeoverOrigin.tsx';
 import { useContainerSize } from './use-container-size.ts';
 import { useScreencast } from './use-screencast.ts';
 import { useTakeover } from './use-takeover.ts';
@@ -47,6 +48,11 @@ export interface LivePaneProps {
   readonly session: SessionSummary;
   /** The open takeover request (`takeoverRequest()`), `null` when the operator may only watch. */
   readonly takeover: OperatorRequestRow | null;
+  /**
+   * A template re-login signed in through this live view is open (`useReloginInput`): input is
+   * allowed without an attention request (spec 13 §8.4).
+   */
+  readonly signIn?: boolean;
   /** `false` until the per-session attention query answered (the arm waits for it). */
   readonly gateKnown: boolean;
   readonly vaultEnabled: boolean;
@@ -121,6 +127,7 @@ function CurrentUrl({ url }: { readonly url: string | null }) {
 export function LivePane({
   session,
   takeover: request,
+  signIn = false,
   gateKnown,
   vaultEnabled,
   armTakeover,
@@ -146,7 +153,7 @@ export function LivePane({
     canvasRef,
     dims: streamDims(size, box ?? { width: 1280, height: 720 }, dpr),
   });
-  const canTakeover = request !== null && !ended;
+  const canTakeover = (request !== null || signIn) && !ended;
   const takeover = useTakeover({
     sessionId: session.session_id,
     enabled: canTakeover && cast.status === 'streaming',
@@ -256,7 +263,7 @@ export function LivePane({
       {ended ? null : canTakeover ? (
         <span className="ml-1 inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full bg-warn-bg px-2 text-xs font-medium text-warn-text">
           <ICONS.takeover aria-hidden="true" className="size-3.5" />
-          Takeover open
+          {request === null ? 'Sign-in open' : 'Takeover open'}
         </span>
       ) : (
         <span className="ml-1 hidden shrink-0 items-center gap-1.5 text-sm text-muted-foreground @2xl:inline-flex">
@@ -491,6 +498,7 @@ export function LivePane({
       )}
     >
       {toolbar}
+      {canTakeover && !ended ? <TakeoverOrigin session={session} /> : null}
       <div
         ref={stageRef}
         data-testid="live-stage"
