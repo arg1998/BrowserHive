@@ -1076,7 +1076,7 @@ Result (JSON text block, mirrored in `structuredContent`):
 | `selector` | `string` | yes |
 | `ok` | `true` | yes |
 
-Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`PATH_NOT_ALLOWED`](errors.md#PATH_NOT_ALLOWED), [`UPLOAD_FAILED`](errors.md#UPLOAD_FAILED). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
+Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`PATH_NOT_ALLOWED`](errors.md#PATH_NOT_ALLOWED), [`UPLOAD_FAILED`](errors.md#UPLOAD_FAILED), [`SITE_OPERATOR_PENDING`](errors.md#SITE_OPERATOR_PENDING), [`TEMPLATE_BUSY`](errors.md#TEMPLATE_BUSY), [`TEMPLATE_UNAVAILABLE`](errors.md#TEMPLATE_UNAVAILABLE). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
 
 <a id="download_file"></a>
 ### `download_file`
@@ -1106,7 +1106,7 @@ Result (JSON text block, mirrored in `structuredContent`):
 | `suggested_name` | `string` | yes |
 | `size` | `number` | yes |
 
-Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`DOWNLOAD_FAILED`](errors.md#DOWNLOAD_FAILED). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
+Errors: [`SESSION_NOT_FOUND`](errors.md#SESSION_NOT_FOUND), [`SESSION_DEAD`](errors.md#SESSION_DEAD), [`SESSION_ACCESS_DENIED`](errors.md#SESSION_ACCESS_DENIED), [`TAB_NOT_FOUND`](errors.md#TAB_NOT_FOUND), [`DOWNLOAD_FAILED`](errors.md#DOWNLOAD_FAILED), [`SITE_OPERATOR_PENDING`](errors.md#SITE_OPERATOR_PENDING), [`TEMPLATE_BUSY`](errors.md#TEMPLATE_BUSY), [`TEMPLATE_UNAVAILABLE`](errors.md#TEMPLATE_UNAVAILABLE). Any tool may also return [`INVALID_ARGUMENTS`](errors.md#INVALID_ARGUMENTS) and [`INTERNAL_ERROR`](errors.md#INTERNAL_ERROR).
 
 ## Auth states
 

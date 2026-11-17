@@ -1,8 +1,9 @@
 /** @module interface/mcp/tools/interaction/act — actionability mapping and humanize gating shared by the interaction tools. */
 
 import type { Session } from '../../../../domain/session/session.ts';
+import type { Page } from '../../../../ports/page-types.ts';
 import type { ToolCallContext } from '../../context.ts';
-import { drive } from '../shared.ts';
+import { drive, safeUrl } from '../shared.ts';
 
 /*
  * Humanization is opt-in per session; when off every interaction tool runs its exact native
@@ -11,9 +12,13 @@ import { drive } from '../shared.ts';
  * reliably produce HTML5 drag events, and `select_option` drives a native popup no pointer reaches.
  */
 
-/** True when the session types and points with human cadence. */
-export function humanized(session: Session): boolean {
-  return session.request.humanize;
+/**
+ * True when the session types and points with human cadence on `page`: the session's `humanize`,
+ * or the site's pack forcing it (`humanize-input`, `stealth-profile.humanize`; spec 13 §9.4).
+ */
+export function humanized(ctx: ToolCallContext, session: Session, page: Page): boolean {
+  if (session.request.humanize) return true;
+  return ctx.services.siteActions?.forcesHumanize(session, safeUrl(page)) ?? false;
 }
 
 /** Whether `evaluate` must opt out of Patchright's isolated world for this session. */

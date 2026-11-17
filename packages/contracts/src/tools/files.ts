@@ -7,6 +7,7 @@ import {
   SelectorAck,
   SINCE,
   TabId,
+  TEMPLATE_SITE_ERRORS,
   Timeout,
 } from './shared.ts';
 import { defineTool } from './types.ts';
@@ -29,7 +30,13 @@ export const UPLOAD_FILE = defineTool({
   annotations: annotations(false, false, true, false),
   pack: 'files',
   capability: 'mutate',
-  errors: [...SESSION_ERRORS, 'TAB_NOT_FOUND', 'PATH_NOT_ALLOWED', 'UPLOAD_FAILED'],
+  errors: [
+    ...SESSION_ERRORS,
+    'TAB_NOT_FOUND',
+    'PATH_NOT_ALLOWED',
+    'UPLOAD_FAILED',
+    ...TEMPLATE_SITE_ERRORS,
+  ],
   since: SINCE,
 });
 
@@ -52,6 +59,6 @@ export const DOWNLOAD_FILE = defineTool({
   annotations: annotations(false, false, false, true),
   pack: 'files',
   capability: 'mutate',
-  errors: [...SESSION_ERRORS, 'TAB_NOT_FOUND', 'DOWNLOAD_FAILED'],
+  errors: [...SESSION_ERRORS, 'TAB_NOT_FOUND', 'DOWNLOAD_FAILED', ...TEMPLATE_SITE_ERRORS],
   since: SINCE,
 });

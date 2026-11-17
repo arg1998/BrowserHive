@@ -21,8 +21,13 @@ export interface HttpsSites {
   url(host: string, path?: string): string;
   /** The Chromium switches of the testing seam (spec 13 §14). */
   readonly chromiumArgs: readonly string[];
-  /** Requests seen: host, method and path. */
-  readonly requests: readonly { host: string; method: string; path: string }[];
+  /** Requests seen: host, method, path and `Referer` (`null` when none was sent). */
+  readonly requests: readonly {
+    host: string;
+    method: string;
+    path: string;
+    referer: string | null;
+  }[];
   stop(): void;
 }
 
@@ -144,7 +149,7 @@ export interface HttpsSitesOptions {
 
 /** Starts the HTTPS fixture on an ephemeral loopback port. */
 export function startHttpsSites(options: HttpsSitesOptions = {}): HttpsSites {
-  const requests: { host: string; method: string; path: string }[] = [];
+  const requests: { host: string; method: string; path: string; referer: string | null }[] = [];
   const server = Bun.serve({
     hostname: '127.0.0.1',
     port: 0,
@@ -155,7 +160,12 @@ export function startHttpsSites(options: HttpsSitesOptions = {}): HttpsSites {
     async fetch(req) {
       const url = new URL(req.url);
       const host = req.headers.get('host') ?? url.host;
-      requests.push({ host, method: req.method, path: url.pathname + url.search });
+      requests.push({
+        host,
+        method: req.method,
+        path: url.pathname + url.search,
+        referer: req.headers.get('referer'),
+      });
       const site = host.split(':')[0] ?? host;
       return (
         (await signInRoute(req, site, url.pathname)) ??

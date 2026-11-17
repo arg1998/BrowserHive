@@ -47,7 +47,7 @@ export const scroll = defineTool('scroll', {
         isolated,
         `window.scrollTo({ left: ${JSON.stringify(args.x)}, top: ${JSON.stringify(args.y)}, behavior: ${behavior} })`,
       );
-    } else if (humanized(session)) {
+    } else if (humanized(ctx, session, page)) {
       await actions.humanScroll(session.id, { page, deltaX: args.dx, deltaY: args.dy });
     } else {
       await actions.evaluate(

@@ -66,12 +66,22 @@ export async function gotoCapturingDownload(
   target: GotoTarget,
 ): Promise<GotoOutcome> {
   const startedAt = ctx.services.clock.now();
+  // A site pack's `entry-warmup` may load the site's entry page first, within the timeout.
+  const warmupMs = await (ctx.services.siteActions?.beforeGoto({
+    tool: ctx.tool,
+    session,
+    page,
+    url: target.url,
+    timeoutMs: target.timeoutMs,
+    signal: ctx.signal,
+  }) ?? 0);
+  const gotoTimeout = target.timeoutMs === 0 ? 0 : Math.max(1, target.timeoutMs - warmupMs);
   const listener = downloadListener();
   page.on('download', listener.onDownload);
   try {
     try {
       const response = await navigation(ctx, session, target, () =>
-        page.goto(target.url, { waitUntil: target.waitUntil, timeout: target.timeoutMs }),
+        page.goto(target.url, { waitUntil: target.waitUntil, timeout: gotoTimeout }),
       );
       return { kind: 'page', response };
     } catch (err) {
