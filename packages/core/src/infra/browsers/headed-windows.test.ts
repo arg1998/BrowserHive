@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'bun:test';
 import { createCollectingLogger } from '../logging/collecting-logger.ts';
 import {
+  DURING_CALL_MS,
   MinimizedWindows,
   RESTORE_QUIET_MS,
   type WindowControl,
@@ -133,9 +134,10 @@ describe('MinimizedWindows', () => {
   });
 
   it('around: a kept window found normal before the action is the operator’s and stays restored', async () => {
-    const { windows, kept } = keeper();
+    const { windows, kept, advance } = keeper();
     windows.open('a', 1, 'minimized');
     await kept.pageOpened('a');
+    advance(RESTORE_QUIET_MS + 1);
     windows.states.set(1, 'normal'); // the operator restored it, no poll yet
     await kept.around(
       async () => ['a'],
@@ -177,6 +179,73 @@ describe('MinimizedWindows', () => {
     );
     await polled;
     expect(kept.restoredByOperator(1)).toBe(false);
+    kept.dispose();
+  });
+
+  it('around: a parallel call never takes the other call’s restore for the operator’s (review #89 F2)', async () => {
+    const { windows, kept, advance } = keeper();
+    windows.open('a', 1, 'minimized');
+    await kept.pageOpened('a');
+    advance(RESTORE_QUIET_MS + 1);
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const navigatingClick = kept.around(
+      async () => ['a'],
+      async () => {
+        windows.states.set(1, 'normal'); // the click restored it; the navigation is slow
+        await held;
+      },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    advance(RESTORE_QUIET_MS + 1);
+    windows.states.set(1, 'normal');
+    // A screenshot or snapshot meanwhile.
+    await kept.around(
+      async () => ['a'],
+      async () => undefined,
+    );
+    expect(kept.restoredByOperator(1)).toBe(false);
+    windows.states.set(1, 'normal');
+    release();
+    await navigatingClick;
+    expect(windows.states.get(1)).toBe('minimized');
+    kept.dispose();
+  });
+
+  it('around: the window is minimized again while the call runs, not only after it (review #89 F1)', async () => {
+    const windows = new FakeWindows();
+    const kept = new MinimizedWindows(windows, createCollectingLogger(), { duringMs: 5 });
+    windows.open('a', 1, 'minimized');
+    await kept.pageOpened('a');
+    let duringCall = 0;
+    await kept.around(
+      async () => ['a'],
+      async () => {
+        windows.states.set(1, 'normal'); // the click's press
+        await new Promise((resolve) => setTimeout(resolve, 60)); // its navigation, or typing
+        duringCall = windows.minimizeCalls.length;
+      },
+    );
+    expect(duringCall).toBeGreaterThan(0);
+    expect(DURING_CALL_MS).toBeLessThanOrEqual(50);
+    kept.dispose();
+  });
+
+  it('a restore after the quiet period, with no call on the window, is the operator’s (a dialog too)', async () => {
+    const { windows, kept, advance } = keeper();
+    windows.open('a', 1, 'minimized');
+    await kept.around(
+      async () => ['a'],
+      async () => undefined,
+    );
+    windows.states.set(1, 'normal');
+    await kept.poll(); // within the quiet period after the call: says nothing
+    expect(kept.restoredByOperator(1)).toBe(false);
+    advance(RESTORE_QUIET_MS + 1);
+    await kept.poll();
+    expect(kept.restoredByOperator(1)).toBe(true);
     kept.dispose();
   });
 });

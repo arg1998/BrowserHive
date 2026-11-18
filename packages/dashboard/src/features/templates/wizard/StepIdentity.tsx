@@ -98,7 +98,7 @@ export function StepIdentity({
         <Field
           label="Agent windows"
           htmlFor={ids.windows}
-          help="How agents’ windows open on this machine’s screen. Minimized keeps them out of your way; Normal opens them behind your windows, and an agent’s click brings one to the front."
+          help="How agents’ windows open on this machine’s screen. Minimized keeps them out of your way; Normal opens them behind your windows (on Linux, an agent’s click brings one to the front)."
         >
           <SimpleSelect
             id={ids.windows}

@@ -129,9 +129,11 @@ Canvas and audio noise cannot be switched per page inside one shared browser, so
 - animation frames run at the display rate (about 60 per second) and timers are not throttled;
 - minimizing and restoring fire no `visibilitychange`, `blur`, `focus` or `resize` event.
 
-What differs is outside the page: a click restores the window for about 15 to 25 ms before BrowserHive minimizes it again, and a popup is visible for up to about 0.1 s. Chromium gives the window the keyboard focus during that moment; keys you type then can reach the agent's page.
+`new_tab` in such a session opens a new minimized window rather than a tab: a background tab of a minimized window reports `outerWidth` / `outerHeight` equal to its inner size, which a real window's front tab never does.
 
-Not measured: Windows, where the system places minimized windows at -32000, -32000 and a page may read that as `screenX` / `screenY`; macOS; and Wayland compositors. If a site behaves differently with minimized windows there, set `headedWindows` to `normal` (and a template's Agent windows to Normal); ordinary background windows are what BrowserHive used before.
+What differs is outside the page. On Linux, Chrome brings a window to the front and gives it the keyboard focus when a pointer is pressed in its page, also a click from an agent; while such a call runs, BrowserHive minimizes the window again every 40 ms, so after each press it can be in front for up to about 40 ms (measured: 2 or 3 samples at 13 ms during a 1.5 s call and during 2 s of typing). A popup is visible for up to about 0.1 s. Keys you type in that moment can reach the agent's page. A page that shows a JavaScript dialog brings its window up too, and BrowserHive leaves it up.
+
+Not measured: Windows, where the system places minimized windows at -32000, -32000 and a page may read that as `screenX` / `screenY`; macOS; and Wayland compositors. Chrome's raise on a click is Linux code (Chromium source); on Windows and macOS clicks are not expected to raise a window, which was not measured either. If a site behaves differently with minimized windows there, set `headedWindows` to `normal` (and a template's Agent windows to Normal); ordinary background windows are what BrowserHive used before.
 
 ## Ceilings
 

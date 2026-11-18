@@ -104,6 +104,17 @@ async function opened(page: Page, selector: string): Promise<Page> {
   return await next;
 }
 
+/** Polls the X input focus without blocking the event loop until `done()`; returns the samples. */
+async function sampleFocus(done: () => boolean): Promise<string[]> {
+  const samples: string[] = [];
+  while (!done()) {
+    const child = Bun.spawn(['xdotool', 'getwindowfocus'], { stdout: 'pipe' });
+    samples.push((await new Response(child.stdout).text()).trim());
+    await new Promise((resolve) => setTimeout(resolve, 15));
+  }
+  return samples;
+}
+
 /** One exclusive headed session on its own driver. */
 interface Exclusive {
   readonly view: SessionView;
@@ -188,13 +199,17 @@ describe.skipIf(!WM)('headed windows kept minimized (headedWindows=minimized, D-
         expect(focusedWindow()).toBe(operator.id);
         await s.page.goto(sites?.url('site-a.test') ?? '');
         expect(await s.windows.stateOf(s.page)).toBe('minimized');
-        // A new tab never shows: in the background of the minimized window, or with an emulated
-        // viewport (Playwright would restore that window to size it) a new minimized window.
+        // A new tab never shows: a new minimized window, whose page is its front tab, so its
+        // outer size is a real window's (a background tab's equals its inner size, review #89 F6).
         const tab = await s.view.newPage();
-        if (viewport === null) {
-          expect(await s.windows.windowOf(tab)).toBe(await s.windows.windowOf(s.page));
-        }
+        expect(await s.windows.windowOf(tab)).not.toBe(await s.windows.windowOf(s.page));
         expect(await s.windows.stateOf(tab)).toBe('minimized');
+        await tab.goto(sites?.url('site-a.test') ?? '');
+        const sizes = await evaluateMainWorld(tab, true, () => [
+          window.outerWidth - window.innerWidth,
+          window.outerHeight - window.innerHeight,
+        ]);
+        if (viewport === null) expect(sizes[1]).toBeGreaterThan(0);
         expect(await s.windows.stateOf(s.page)).toBe('minimized');
         expect(focusedWindow()).toBe(operator.id);
       } finally {
@@ -237,10 +252,64 @@ describe.skipIf(!WM)('headed windows kept minimized (headedWindows=minimized, D-
     });
   }
 
+  it('the window stays minimized for the whole call: a click whose call goes on, and typing after it (review #89 F1)', async () => {
+    const operator = operatorWindow();
+    try {
+      const s = await launchExclusive('minimized', { viewport: null });
+      await s.page.goto(sites?.url('site-a.test') ?? '');
+      await s.page.setContent('<input id="i" style="width:300px">');
+      const around = s.view.aroundAction?.bind(s.view);
+      if (around === undefined) throw new Error('no aroundAction');
+      spawnSync('xdotool', ['windowactivate', '--sync', operator.id], { timeout: 10_000 });
+      let finished = false;
+      const sampling = sampleFocus(() => finished);
+      // A click whose call lasts on (a slow navigation), then human-paced typing in the page.
+      await around(async () => {
+        await s.page.click('#i');
+        await new Promise((resolve) => setTimeout(resolve, 1_000));
+        await s.page.keyboard.type('hello world', { delay: 60 });
+      });
+      finished = true;
+      const samples = await sampling;
+      const away = samples.filter((id) => id !== operator.id).length;
+      // At most one sample in the ~40 ms between a press and the next minimize.
+      expect(away).toBeLessThanOrEqual(2);
+      expect(samples.length).toBeGreaterThan(20);
+      expect(await s.page.inputValue('#i')).toBe('hello world');
+      expect(await s.windows.stateOf(s.page)).toBe('minimized');
+    } finally {
+      operator.close();
+    }
+  }, 20_000);
+
+  it('a parallel call never leaves the window restored (review #89 F2)', async () => {
+    const s = await launchExclusive('minimized', { viewport: null });
+    await s.page.goto(sites?.url('site-a.test') ?? '');
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    const around = s.view.aroundAction?.bind(s.view);
+    if (around === undefined) throw new Error('no aroundAction');
+    const slowClick = around(async () => {
+      await s.page.click('#site');
+      await new Promise((resolve) => setTimeout(resolve, 1_500));
+    });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    await around(() => s.page.screenshot({ timeout: 10_000 }));
+    await slowClick;
+    await eventually(
+      () => s.windows.stateOf(s.page),
+      (v) => v === 'minimized',
+      2_000,
+      'after',
+    );
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    await around(() => s.page.click('#site'));
+    expect(await s.windows.stateOf(s.page)).toBe('minimized');
+  }, 20_000);
+
   it('a window the operator restored by hand stays restored through clicks', async () => {
     const s = await launchExclusive('minimized', { viewport: null });
     await s.page.goto(sites?.url('site-a.test') ?? '');
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
     await s.windows.restore(s.page);
     await s.view.aroundAction?.(() => s.page.click('#site'));
     expect(await s.windows.stateOf(s.page)).toBe('normal');
@@ -250,7 +319,7 @@ describe.skipIf(!WM)('headed windows kept minimized (headedWindows=minimized, D-
     const s = await launchExclusive('minimized');
     await s.page.goto(sites?.url('site-a.test') ?? '');
     // A person restores a window later than the keeper's last look after creating it.
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
     await s.windows.restore(s.page);
     // The keeper notices the restore on its next poll (after the quiet period of the launch).
     await new Promise((resolve) => setTimeout(resolve, RESTORE_QUIET_MS + RESTORE_POLL_MS + 1_000));

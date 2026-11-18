@@ -29,7 +29,7 @@ export const SESSION_KEYS = {
     default: 'minimized',
     group: 'sessions',
     describe:
-      "How a headed browser's windows open on this machine's screen. minimized: every window of a headed session opens minimized in the background, and an agent's click, which restores it for a moment, is followed by minimizing it again; a window you restore yourself stays open. normal: ordinary background windows (an agent's click still raises one). On Linux a page sees no difference; Windows and macOS were not measured, so choose normal if a site behaves differently (stealth guide). Also the default Agent windows of new templates.",
+      "How a headed browser's windows open on this machine's screen. minimized: every window of a headed session opens minimized in the background; on Linux, where Chrome brings a window to the front when an agent clicks in it, BrowserHive minimizes it again within about 40 ms for as long as the call lasts. A window you restore yourself stays open. normal: ordinary background windows (on Linux an agent's click brings one to the front). On Linux X11 a page sees no difference; Windows, macOS and Wayland were not measured, so choose normal if a site behaves differently (stealth guide). Also the default Agent windows of new templates.",
   }),
   defaultChannel: key(zEnumOf(Channel.options), {
     default: 'chromium',

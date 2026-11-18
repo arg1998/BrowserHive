@@ -216,9 +216,18 @@ export class LiveView {
       if (opened.viewers.size === 0) this.scheduleStop(sessionId, opened);
       return opened;
     });
+    // A press activates a headed window on Linux, also from the live view: where the session's
+    // windows are kept minimized (D-77, review #89 F5) the window goes back down at once, unless
+    // the operator restored it by hand.
+    const keepMinimized = <T>(press: boolean, run: () => Promise<T>): Promise<T> => {
+      const around = press ? session.view?.aroundAction?.bind(session.view) : undefined;
+      return around !== undefined ? around(run) : run();
+    };
     switch (input.type) {
       case 'mouse':
-        await bridge.cdp.dispatchMouseEvent(mouseParams(input));
+        await keepMinimized(input.action === 'mousePressed', () =>
+          bridge.cdp.dispatchMouseEvent(mouseParams(input)),
+        );
         try {
           this.deps.onOperatorPointer?.(session, input.x, input.y);
         } catch (error) {
@@ -229,7 +238,9 @@ export class LiveView {
         await bridge.cdp.dispatchKeyEvent(keyParams(input));
         break;
       case 'touch':
-        await bridge.cdp.dispatchTouchEvent(touchParams(input));
+        await keepMinimized(input.action === 'touchStart', () =>
+          bridge.cdp.dispatchTouchEvent(touchParams(input)),
+        );
         break;
     }
     try {

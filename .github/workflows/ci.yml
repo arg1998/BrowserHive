@@ -279,7 +279,8 @@ jobs:
           BROWSERHIVE_HEADED_WM: '1'
           BROWSERHIVE_TEMPLATES_HEADED: '1'
         run: >-
-          xvfb-run -a sh -c 'openbox & sleep 1;
+          xvfb-run -a sh -c 'openbox &
+          until xprop -root _NET_SUPPORTING_WM_CHECK | grep -q window; do sleep 0.1; done;
           bun run test:integration packages/core/test/integration/headed-windows.test.ts'
 
   ntfy:

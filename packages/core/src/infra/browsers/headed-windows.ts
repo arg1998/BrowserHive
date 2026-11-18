@@ -22,10 +22,11 @@ export interface WindowControl {
 export const RESTORE_POLL_MS = 2_000;
 
 /**
- * A poll this soon after BrowserHive acted (a page target created, a tool call) skips its round:
- * the restore it would see is BrowserHive's own, not the operator's.
+ * A window BrowserHive acted on this recently (a tool call on it ended, BrowserHive minimized it, a
+ * page target was created) and found restored was restored by BrowserHive or the window manager,
+ * not the operator.
  */
-export const RESTORE_QUIET_MS = 1_500;
+export const RESTORE_QUIET_MS = 600;
 
 /**
  * Second looks this long after BrowserHive minimized a window or acted, for a window manager that
@@ -34,23 +35,45 @@ export const RESTORE_QUIET_MS = 1_500;
 export const LATE_RESTORE_MS: readonly number[] = [100, 300];
 
 /**
- * Keeps windows minimized. Chromium restores a minimized window, and gives it the input focus, when
- * BrowserHive presses a pointer in a page (`Input.dispatchMouseEvent` or a touch: every click), when
- * Playwright sizes a window for an emulated viewport, and when a site opens a tab in it; it opens
- * every popup as a normal active window (measured, Chromium 153, Xvfb + openbox). So every new page's
- * window is minimized as soon as the page is seen, and every window a tool call found minimized is
- * minimized again after the call. A window the operator restored by hand (normal before a call, or
- * noticed by a poll every {@link RESTORE_POLL_MS}) is left alone from then on.
+ * While a tool call runs, the windows it found minimized are minimized again this often (review
+ * #89 F1): a click that navigates, or a humanized click followed by typing, would otherwise keep the
+ * window active, with the operator's keys landing in the page, for the whole call.
+ */
+export const DURING_CALL_MS = 40;
+
+/** What the keeper knows about one window. */
+interface KeptWindow {
+  /** `kept` minimized by BrowserHive, or restored by the `operator` (left alone from then on). */
+  owner: 'kept' | 'operator';
+  /** Tool calls on the window now running: a restore meanwhile is BrowserHive's. */
+  busy: number;
+  /** When BrowserHive last acted on it (a call ended, it minimized it). */
+  touchedAt: number;
+}
+
+/**
+ * Keeps windows minimized. Chrome on Linux activates a browser window, which restores a minimized
+ * one and gives it the input focus, when a pointer is pressed in its active tab, also when the press
+ * comes over the DevTools protocol (`ContentsWebView::DidGetUserInteraction`; every click); Chromium
+ * also restores a minimized window when Playwright sizes it for an emulated viewport and when a
+ * site opens a tab in it, and opens every popup as a normal active window (measured, Chromium 153,
+ * Xvfb + openbox). So every new page's window is minimized as soon as the page is seen, and while a
+ * tool call that can press a pointer runs, the windows it found minimized are minimized again every
+ * {@link DURING_CALL_MS} and once more after it.
+ *
+ * A window that turns normal while BrowserHive is not acting on it (no call on it running, nothing
+ * done to it for {@link RESTORE_QUIET_MS}) was restored by the operator, or by the page itself (a
+ * JavaScript dialog activates its window), and is left alone from then on.
  */
 export class MinimizedWindows {
-  /** Windows this keeper keeps minimized (`kept`) or the operator restored (`operator`). */
-  private readonly windows = new Map<number, 'kept' | 'operator'>();
+  private readonly windows = new Map<number, KeptWindow>();
   private readonly control: WindowControl;
   private readonly log: Logger;
   private readonly now: () => number;
   private readonly pollMs: number;
-  private lastActivityAt = Number.NEGATIVE_INFINITY;
-  private active = 0;
+  private readonly duringMs: number;
+  /** A page target was created (a site's tab can restore any window of the browser). */
+  private lastTargetAt = Number.NEGATIVE_INFINITY;
   private timer: ReturnType<typeof setInterval> | null = null;
   private polling = false;
   private disposed = false;
@@ -58,17 +81,22 @@ export class MinimizedWindows {
   constructor(
     control: WindowControl,
     log: Logger,
-    options: { readonly now?: () => number; readonly pollMs?: number } = {},
+    options: {
+      readonly now?: () => number;
+      readonly pollMs?: number;
+      readonly duringMs?: number;
+    } = {},
   ) {
     this.control = control;
     this.log = log;
     this.now = options.now ?? Date.now;
     this.pollMs = options.pollMs ?? RESTORE_POLL_MS;
+    this.duringMs = options.duringMs ?? DURING_CALL_MS;
   }
 
-  /** BrowserHive acted (a page target was created): a restore seen now is not the operator's. */
+  /** A page target was created: a restore seen now is not the operator's. */
   targetCreated(): void {
-    this.lastActivityAt = this.now();
+    this.lastTargetAt = this.now();
   }
 
   /**
@@ -80,11 +108,12 @@ export class MinimizedWindows {
     this.targetCreated();
     try {
       const windowId = await this.control.windowOf(targetId);
-      if (windowId === null || this.windows.get(windowId) === 'operator') return;
-      this.keep(windowId);
+      if (windowId === null || this.windows.get(windowId)?.owner === 'operator') return;
+      const kept = this.keep(windowId);
       const state = await this.control.stateOf(windowId);
       if (state === null || state === 'minimized') return;
       await this.control.minimizeWindow(windowId);
+      kept.touchedAt = this.now();
       // A window manager that maps a new window after the request shows it again: look twice more.
       this.later([windowId]);
     } catch (err) {
@@ -93,64 +122,85 @@ export class MinimizedWindows {
   }
 
   /**
-   * Runs one of BrowserHive's own actions on the pages of `targets` (a tool call): every window of
-   * them that was minimized before is minimized again afterwards when the action restored it (a
-   * click does); a kept window found normal before is the operator's from then on.
+   * Runs one of BrowserHive's own actions that can restore a window (a click, a resize) on the pages
+   * of `targets`: the windows of them that are minimized, or that BrowserHive itself restored a
+   * moment ago (another call running on it, review #89 F2), are minimized again every
+   * {@link DURING_CALL_MS} while it runs and once more after it. A kept window found normal while
+   * BrowserHive was not acting on it is the operator's from then on.
    */
   async around<T>(targets: () => Promise<readonly string[]>, run: () => Promise<T>): Promise<T> {
     if (this.disposed) return await run();
-    this.active++;
-    this.targetCreated();
-    const minimizedBefore = new Set<number>();
+    const ours = new Set<number>();
     try {
       for (const targetId of await targets()) {
         const windowId = await this.control.windowOf(targetId);
-        if (windowId === null || minimizedBefore.has(windowId)) continue;
-        if (this.windows.get(windowId) === 'operator') continue;
+        if (windowId === null || ours.has(windowId)) continue;
+        const known = this.windows.get(windowId);
+        if (known?.owner === 'operator') continue;
         const state = await this.control.stateOf(windowId);
+        if (state === null) continue;
         if (state === 'minimized') {
-          minimizedBefore.add(windowId);
-          this.keep(windowId);
-        } else if (state !== null && this.windows.get(windowId) === 'kept') {
-          this.restoredByHand(windowId);
+          ours.add(windowId);
+        } else if (known !== undefined) {
+          if (this.actingOn(known)) ours.add(windowId);
+          else this.restoredByHand(windowId, known);
         }
       }
     } catch (err) {
       this.log.debug('window states unread', { err: serializeError(err) });
     }
+    for (const windowId of ours) this.keep(windowId).busy++;
+    let ticking = false;
+    const during =
+      ours.size === 0
+        ? null
+        : setInterval(() => {
+            if (ticking) return;
+            ticking = true;
+            void this.minimizeAgain(ours).finally(() => {
+              ticking = false;
+            });
+          }, this.duringMs);
+    if (during !== null && typeof during === 'object' && 'unref' in during) during.unref();
     try {
       return await run();
     } finally {
-      await this.minimizeAgain(minimizedBefore);
-      this.active--;
-      this.targetCreated();
-      if (minimizedBefore.size > 0) this.later(minimizedBefore);
+      if (during !== null) clearInterval(during);
+      await this.minimizeAgain(ours);
+      const at = this.now();
+      for (const windowId of ours) {
+        const kept = this.windows.get(windowId);
+        if (kept === undefined) continue;
+        kept.busy = Math.max(0, kept.busy - 1);
+        kept.touchedAt = at;
+      }
+      if (ours.size > 0) this.later(ours);
     }
   }
 
   /** True when the operator restored `windowId` by hand (BrowserHive leaves it alone). */
   restoredByOperator(windowId: number): boolean {
-    return this.windows.get(windowId) === 'operator';
+    return this.windows.get(windowId)?.owner === 'operator';
   }
 
-  /** Reads every kept window once: gone ones are forgotten, restored ones are the operator's. */
+  /** Reads every kept window BrowserHive is not acting on: gone ones are forgotten, restored ones are the operator's. */
   async poll(): Promise<void> {
-    if (this.polling || this.disposed || this.quiet()) return;
+    if (this.polling || this.disposed) return;
     this.polling = true;
     try {
-      for (const [windowId, owner] of [...this.windows]) {
-        if (owner !== 'kept') continue;
+      for (const [windowId, kept] of [...this.windows]) {
+        if (kept.owner !== 'kept' || this.actingOn(kept)) continue;
         const state = await this.control.stateOf(windowId);
-        // BrowserHive acted meanwhile and may have restored a window: this round says nothing.
-        if (this.quiet()) return;
+        // BrowserHive acted on it meanwhile and may have restored it: this read says nothing.
+        if (this.actingOn(kept)) continue;
         if (state === null) this.windows.delete(windowId);
-        else if (state !== 'minimized') this.restoredByHand(windowId);
+        else if (state !== 'minimized') this.restoredByHand(windowId, kept);
       }
     } catch (err) {
       this.log.debug('window states unread', { err: serializeError(err) });
     } finally {
       this.polling = false;
-      if (![...this.windows.values()].includes('kept')) this.stopPolling();
+      if (![...this.windows.values()].some((w) => w.owner === 'kept')) this.stopPolling();
     }
   }
 
@@ -161,18 +211,26 @@ export class MinimizedWindows {
     this.windows.clear();
   }
 
-  /** BrowserHive is acting, or acted a moment ago. */
-  private quiet(): boolean {
-    return this.active > 0 || this.now() - this.lastActivityAt < RESTORE_QUIET_MS;
+  /** BrowserHive is acting on the window, or acted on it (or created a page) a moment ago. */
+  private actingOn(kept: KeptWindow): boolean {
+    const now = this.now();
+    return (
+      kept.busy > 0 ||
+      now - kept.touchedAt < RESTORE_QUIET_MS ||
+      now - this.lastTargetAt < RESTORE_QUIET_MS
+    );
   }
 
   private async minimizeAgain(windows: ReadonlySet<number>): Promise<void> {
     if (this.disposed) return;
     try {
       for (const windowId of windows) {
-        if (this.windows.get(windowId) !== 'kept') continue;
+        const kept = this.windows.get(windowId);
+        if (kept?.owner !== 'kept') continue;
         const state = await this.control.stateOf(windowId);
-        if (state !== null && state !== 'minimized') await this.control.minimizeWindow(windowId);
+        if (state === null || state === 'minimized') continue;
+        await this.control.minimizeWindow(windowId);
+        kept.touchedAt = this.now();
       }
     } catch (err) {
       this.log.debug('window not minimized again', { err: serializeError(err) });
@@ -184,24 +242,27 @@ export class MinimizedWindows {
     if (this.disposed) return;
     const ids = new Set(windows);
     for (const ms of LATE_RESTORE_MS) {
-      const timer = setTimeout(() => {
-        this.targetCreated();
-        void this.minimizeAgain(ids);
-      }, ms);
+      const timer = setTimeout(() => void this.minimizeAgain(ids), ms);
       if (typeof timer === 'object' && 'unref' in timer) timer.unref();
     }
   }
 
-  private restoredByHand(windowId: number): void {
-    this.windows.set(windowId, 'operator');
+  private restoredByHand(windowId: number, kept: KeptWindow): void {
+    kept.owner = 'operator';
     this.log.info('window restored by hand', { windowId });
   }
 
-  private keep(windowId: number): void {
-    if (!this.windows.has(windowId)) this.windows.set(windowId, 'kept');
-    if (this.timer !== null || this.disposed) return;
-    this.timer = setInterval(() => void this.poll(), this.pollMs);
-    if (typeof this.timer === 'object' && 'unref' in this.timer) this.timer.unref();
+  private keep(windowId: number): KeptWindow {
+    let kept = this.windows.get(windowId);
+    if (kept === undefined) {
+      kept = { owner: 'kept', busy: 0, touchedAt: this.now() };
+      this.windows.set(windowId, kept);
+    }
+    if (this.timer === null && !this.disposed) {
+      this.timer = setInterval(() => void this.poll(), this.pollMs);
+      if (typeof this.timer === 'object' && 'unref' in this.timer) this.timer.unref();
+    }
+    return kept;
   }
 
   private stopPolling(): void {
@@ -222,9 +283,10 @@ export const ADOPTION_MS = 10_000;
  *
  * With an emulated viewport (the context has a `viewport`), Playwright sizes each new page's window
  * to it with `Browser.setWindowBounds`, which restores a minimized window and gives it the focus; so
- * there a window is created normal in the background and minimized once adopted, and a new tab is a
- * new window. Without one (`viewport: null`, every headed stealth session) a window is created
- * minimized and a new tab opens in the background of the session's minimized window.
+ * there a window is created normal in the background and minimized once adopted. Without one
+ * (`viewport: null`, every headed stealth session) a window is created minimized. A new tab is
+ * always a new window: a background tab of a minimized window reports `outerWidth/outerHeight`
+ * equal to its inner size (measured, review #89 F6), which no front tab of a real window does.
  */
 export class ExclusiveWindows implements WindowControl {
   readonly keeper: MinimizedWindows;
@@ -285,8 +347,8 @@ export class ExclusiveWindows implements WindowControl {
   }
 
   /**
-   * A new page that never shows: a tab in the background of the session's minimized window, or
-   * with an emulated viewport a new window minimized once adopted (see the class comment).
+   * A new page that never shows: a new background window, minimized (see the class comment). Its
+   * page is the front tab of its window, so its outer size is a real window's.
    */
   async newTab(context: BrowserContext): Promise<Page> {
     const contextId = await this.contextId(context);
@@ -295,12 +357,7 @@ export class ExclusiveWindows implements WindowControl {
       await this.minimizePage(context, page);
       return page;
     }
-    if (this.emulatedViewport) return await this.openWindow(context, contextId);
-    const targetId = await this.create({ browserContextId: contextId });
-    const page = await adoptedPage(context, targetId, ADOPTION_MS);
-    this.targetIds.set(page, targetId);
-    await this.keeper.pageOpened(targetId);
-    return page;
+    return await this.openWindow(context, contextId);
   }
 
   /** Minimizes the window of `page` (a persistent session's first window, a popup). */
@@ -383,7 +440,7 @@ export class ExclusiveWindows implements WindowControl {
 
   private async create(params: {
     readonly browserContextId: string;
-    readonly newWindow?: boolean;
+    readonly newWindow: boolean;
     readonly windowState?: 'minimized';
   }): Promise<string> {
     const { targetId } = await this.cdp.send('Target.createTarget', {

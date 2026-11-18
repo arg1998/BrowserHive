@@ -73,7 +73,7 @@ function BrowserPanel({ template }: { readonly template: Template }) {
         <Field
           label="Agent windows"
           htmlFor={windowsId}
-          hint="How a session’s windows open on a headed browser. Minimized keeps them out of your way; Normal opens them behind your windows, and an agent’s click brings one to the front."
+          hint="How a session’s windows open on a headed browser. Minimized keeps them out of your way; Normal opens them behind your windows (on Linux, an agent’s click brings one to the front)."
         >
           <SimpleSelect
             id={windowsId}
