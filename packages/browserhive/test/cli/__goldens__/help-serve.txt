@@ -49,6 +49,18 @@ FLAGS — sessions
                                     overrides per session. default: memory
   --defaultHeadless                 Default headless mode; launch_session headless overrides per
                                     session. default: true
+  --headedWindows <minimized|normal>
+                                    How a headed browser's windows open on this machine's screen.
+                                    minimized: every window of a headed session opens minimized in
+                                    the background; on Linux, where Chrome brings a window to the
+                                    front when an agent clicks in it, BrowserHive minimizes it again
+                                    within about 40 ms for as long as the call lasts. A window you
+                                    restore yourself stays open. normal: ordinary background windows
+                                    (on Linux an agent's click brings one to the front). On Linux
+                                    X11 a page sees no difference; Windows, macOS and Wayland were
+                                    not measured, so choose normal if a site behaves differently
+                                    (stealth guide). Also the default Agent windows of new
+                                    templates. default: minimized
   --defaultChannel <chromium|chrome|edge>
                                     Default browser channel; launch_session channel overrides per
                                     session. default: chromium

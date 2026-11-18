@@ -13,6 +13,7 @@ export { ContextTransport } from './context-transport.ts';
 export { CredentialKind } from './credential-kind.ts';
 export { DegradationSeverity } from './degradation-severity.ts';
 export { ErrorCategory } from './error-category.ts';
+export { HeadedWindows } from './headed-windows.ts';
 export { LogColor } from './log-color.ts';
 export { LogFormat } from './log-format.ts';
 export { LogLevel } from './log-level.ts';

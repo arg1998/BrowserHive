@@ -126,6 +126,20 @@ const ROWS: readonly LadderRow[] = [
     source: 'cli',
   },
   {
+    name: '--headedWindows normal turns minimized headed windows off',
+    key: 'headedWindows',
+    argv: ['--headedWindows', 'normal'],
+    value: 'normal',
+    source: 'cli',
+  },
+  {
+    name: 'BROWSERHIVE_HEADED_WINDOWS sets headedWindows',
+    key: 'headedWindows',
+    env: { BROWSERHIVE_HEADED_WINDOWS: 'normal' },
+    value: 'normal',
+    source: 'env',
+  },
+  {
     name: 'unbounded maxSessions is accepted from JSON strings',
     key: 'maxSessions',
     file: { maxSessions: 'unbounded' },

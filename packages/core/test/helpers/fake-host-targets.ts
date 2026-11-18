@@ -82,6 +82,7 @@ export class FakeTargets {
 
   async createWindow(request: WindowRequest): Promise<string> {
     this.created.push(request);
+    if (request.minimized) this.states.set(this.next, 'minimized');
     const targetId = `W${this.next++}`;
     if (this.timing === 'adoptFirst') {
       this.page(targetId);
@@ -100,6 +101,21 @@ export class FakeTargets {
     if (scripted !== undefined) return scripted;
     const created = /^W(\d+)$/.exec(targetId);
     return created === null ? null : Number(created[1]);
+  }
+
+  /** Window states by window id (`normal` unless set here or minimized). */
+  readonly states = new Map<number, 'normal' | 'minimized'>();
+  readonly minimizedWindows: number[] = [];
+  created_: (() => void) | null = null;
+  async stateOf(windowId: number): Promise<'normal' | 'minimized'> {
+    return this.states.get(windowId) ?? 'normal';
+  }
+  async minimizeWindow(windowId: number): Promise<void> {
+    this.minimizedWindows.push(windowId);
+    this.states.set(windowId, 'minimized');
+  }
+  onCreated(listener: () => void): void {
+    this.created_ = listener;
   }
 
   async closeTarget(targetId: string): Promise<void> {

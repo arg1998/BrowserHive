@@ -391,6 +391,27 @@ describe('LiveView', () => {
     expect(h.opened).toHaveLength(1);
   });
 
+  it('wraps operator presses (mouse down, touch start) in the view’s aroundAction, nothing else (D-77, review #89 F5)', async () => {
+    const h = await harness();
+    const view = h.session.view;
+    if (view === null) throw new Error('no view');
+    const wrapped: number[] = [];
+    Object.assign(view, {
+      aroundAction: async <T>(run: () => Promise<T>): Promise<T> => {
+        wrapped.push(1);
+        return await run();
+      },
+    });
+    const send = (input: Parameters<typeof h.live.sendInput>[1]) =>
+      h.live.sendInput(h.session.id, input, OPERATOR_WS);
+    await send({ type: 'mouse', action: 'mouseMoved', x: 1, y: 1 });
+    await send({ type: 'key', action: 'keyDown', key: 'a' });
+    expect(wrapped).toHaveLength(0);
+    await send({ type: 'mouse', action: 'mousePressed', x: 1, y: 1 });
+    await send({ type: 'touch', action: 'touchStart', points: [{ x: 1, y: 2 }] });
+    expect(wrapped).toHaveLength(2);
+  });
+
   it('reports each input the browser accepted for the audit, and none it rejected', async () => {
     const h = await harness();
     await h.live.sendInput(

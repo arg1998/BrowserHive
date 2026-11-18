@@ -277,6 +277,8 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
         stealth: config.stealth,
         fingerprint: config.fingerprint,
         humanize: config.humanize,
+        // A new template's Agent windows (D-77): the `headedWindows` setting.
+        agentWindows: config.headedWindows,
       },
     },
   });

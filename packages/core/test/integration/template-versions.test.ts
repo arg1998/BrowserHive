@@ -240,7 +240,13 @@ for (const stealth of STEALTH_LEGS) {
           enabled: true,
           authMode: 'off',
           maxPagesPerHost: 40,
-          defaults: { channel: 'chromium', stealth: 'off', fingerprint: false, humanize: false },
+          defaults: {
+            channel: 'chromium',
+            stealth: 'off',
+            fingerprint: false,
+            humanize: false,
+            agentWindows: 'normal',
+          },
         },
       });
       await signIn(pageOf(await w.launch('alpha')), 'restored-secret-0000000');

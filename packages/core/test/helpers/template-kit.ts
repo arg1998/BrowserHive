@@ -168,7 +168,13 @@ export function createTemplateKit(options: TemplateKitOptions): TemplateKit {
       enabled: true,
       authMode: 'off',
       maxPagesPerHost: 40,
-      defaults: { channel: 'chromium', stealth: 'standard', fingerprint: false, humanize: false },
+      defaults: {
+        channel: 'chromium',
+        stealth: 'standard',
+        fingerprint: false,
+        humanize: false,
+        agentWindows: 'normal',
+      },
       ...options.config,
     },
   });

@@ -259,4 +259,55 @@ describe('PlaywrightTemplateHost over fakes', () => {
     await alpha.fitWindow?.(alpha.page, 640, 480);
     expect(targets.created.length).toBe(before);
   });
+
+  it('agent_windows minimized: a popup or a tab that restored its window is minimized again (D-77)', async () => {
+    const { host, targets } = fakeTemplateHost({ headless: false });
+    await host.adoptStartPages();
+    const alpha = await host.openView('alpha', { windowState: 'minimized' });
+    expect(targets.created.at(-1)?.minimized).toBe(true);
+    const alphaWindow = (await host.windowOf(alpha.page)) ?? -1;
+    expect(targets.minimizedWindows).toEqual([]);
+    const opener = host.dispatcher.targetIdOf(alpha.page) ?? '';
+    // A popup in a window of its own (normal), and a tab a site opened in alpha's window (restored).
+    targets.windows.set('P1', 41);
+    targets.page('P1', opener);
+    targets.windows.set('T1', alphaWindow);
+    targets.states.set(alphaWindow, 'normal');
+    targets.page('T1', opener);
+    await settle();
+    await settle();
+    expect(targets.minimizedWindows.sort()).toEqual([41, alphaWindow].sort());
+  });
+
+  it('agent_windows normal: site-opened pages keep their windows (D-77 applies to minimized only)', async () => {
+    const { host, targets } = fakeTemplateHost({ headless: false });
+    await host.adoptStartPages();
+    const alpha = await host.openView('alpha', { windowState: 'normal' });
+    const opener = host.dispatcher.targetIdOf(alpha.page) ?? '';
+    targets.windows.set('P1', 41);
+    targets.page('P1', opener);
+    await settle();
+    await settle();
+    expect(targets.minimizedWindows).toEqual([]);
+  });
+
+  it('agent_windows minimized: new_tab opens a minimized window, never window.open (it restores the window, D-77)', async () => {
+    const { host, context, targets } = fakeTemplateHost({ headless: false });
+    await host.adoptStartPages();
+    const view = await host.openView('alpha', { windowState: 'minimized' });
+    context.cdpAnswers = {
+      'Page.getFrameTree': { frameTree: { frame: { id: 'F' } } },
+      'Page.createIsolatedWorld': { executionContextId: 1 },
+      'Runtime.evaluate': { result: { value: true } },
+    };
+    const before = targets.created.length;
+    const cdps = context.cdps.length;
+    const page = await view.newPage(view.page);
+    expect(targets.created.length).toBe(before + 1);
+    expect(targets.created.at(-1)?.minimized).toBe(true);
+    expect(context.cdps.slice(cdps).some((cdp) => cdp.sent.includes('Runtime.evaluate'))).toBe(
+      false,
+    );
+    expect(view.owns(page)).toBe(true);
+  });
 });

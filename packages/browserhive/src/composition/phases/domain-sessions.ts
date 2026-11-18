@@ -128,6 +128,8 @@ export async function buildSessions(input: SessionsInput): Promise<SessionsParts
     clock,
     host,
     sandbox: sandbox.policy,
+    // Headed exclusive sessions' windows (D-77).
+    headedWindows: config.headedWindows,
     ...(input.testingArgs !== undefined && { testingArgs: input.testingArgs }),
     // Every template host's chain carries the configured blocklist (spec 13 §3.8).
     templateBlocklist: blocklist.configured

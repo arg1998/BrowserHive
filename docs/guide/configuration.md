@@ -156,6 +156,7 @@ Secrets stay hidden. For `authTokens` and `otelHeaders`, BrowserHive shows the v
 | [`persistence`](../reference/configuration.md#persistence) | `memory` | default for `launch_session`: `memory`, `persistent`, `storage-state` |
 | [`vault`](../reference/configuration.md#vault) | `off` | `bitwarden` enables credential injection |
 | [`stealth`](../reference/configuration.md#stealth) | `standard` | `off`, `standard` or `max`; see also `fingerprint` and `humanize` |
+| [`headedWindows`](../reference/configuration.md#headedWindows) | `minimized` | headed sessions' windows open minimized and stay out of your way; `normal` opens ordinary background windows ([what pages can tell](stealth.md#minimized-windows)). Also the default Agent windows of new templates |
 | [`defaultChannel`](../reference/configuration.md#defaultChannel) | `chromium` | the browser sessions use: the bundled `chromium`, or the installed `chrome` or `edge` ([choosing the browser](installation.md#choosing-the-browser)) |
 | [`sandbox`](../reference/configuration.md#sandbox) | `auto` | Chromium's sandbox: `auto` wherever the machine allows it, `on` required (refuses to start otherwise), `off` never ([security](security.md#the-browser-sandbox)) |
 | [`maxSessions`](../reference/configuration.md#maxSessions) | derived from RAM | concurrent session cap, or `unbounded` |

@@ -26,6 +26,8 @@ export const CONSUMED_KEYS: Readonly<Record<ConfigKey, string>> = {
   persistence: 'app/sessions/session-service',
   defaultHeadless: 'app/sessions/session-service',
   defaultChannel: 'app/sessions/session-service',
+  // Exclusive headed sessions' windows (D-77); also the default `agent_windows` of new templates.
+  headedWindows: 'infra/browsers/headed-windows',
   sandbox: 'infra/browsers/sandbox-policy',
   maxSessions: 'domain/session/admission',
   sessionLease: 'app/sessions/session-service',

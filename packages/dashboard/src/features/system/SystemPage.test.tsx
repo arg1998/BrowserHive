@@ -296,6 +296,7 @@ describe('browsers and sandbox', () => {
     systemInfo({
       browser: {
         default_channel: 'chrome',
+        headed_windows: 'minimized',
         sandbox_mode: mode,
         running_as_root: root,
         channels: [

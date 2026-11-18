@@ -132,6 +132,14 @@ describe('the POST /templates body', () => {
     expect(toTemplateInput({ ...READY, access: 'all' }).policy?.authorized_principals).toEqual([]);
   });
 
+  it("leaves Agent windows to the server's headedWindows unless the operator picked one (D-77)", () => {
+    expect(toTemplateInput(READY)).not.toHaveProperty('agent_windows');
+    expect(toTemplateInput({ ...READY, agentWindows: 'normal' }).agent_windows).toBe('normal');
+    expect(toTemplateInput({ ...READY, agentWindows: 'minimized' }).agent_windows).toBe(
+      'minimized',
+    );
+  });
+
   it('sends a server issue back to its step', () => {
     expect(stepOfIssue('body.name')).toBe(1);
     expect(stepOfIssue('body.sites.0.site_id')).toBe(2);

@@ -37,7 +37,8 @@ export interface TemplateDraft {
   };
   readonly locale: string;
   readonly timezoneId: string;
-  readonly agentWindows: 'normal' | 'minimized';
+  /** `null`: the server's `headedWindows` setting (minimized unless the operator changed it). */
+  readonly agentWindows: 'normal' | 'minimized' | null;
   readonly access: AccessChoice;
   readonly principals: readonly string[];
   readonly harnesses: readonly string[] | null;
@@ -62,7 +63,7 @@ export const EMPTY_DRAFT: TemplateDraft = {
   proxy: { server: '', username: '', passwordEnv: '', label: '', bypass: '' },
   locale: '',
   timezoneId: '',
-  agentWindows: 'normal',
+  agentWindows: null,
   access: null,
   principals: [],
   harnesses: null,
@@ -230,7 +231,7 @@ export function toTemplateInput(
     }),
     ...(trim(draft.locale).length > 0 && { locale: trim(draft.locale) }),
     ...(trim(draft.timezoneId).length > 0 && { timezone_id: trim(draft.timezoneId) }),
-    ...(draft.agentWindows !== 'normal' && { agent_windows: draft.agentWindows }),
+    ...(draft.agentWindows !== null && { agent_windows: draft.agentWindows }),
     policy: {
       ...(draft.access === 'all' && { authorized_principals: [] }),
       ...(draft.access === 'listed' && { authorized_principals: [...draft.principals] }),

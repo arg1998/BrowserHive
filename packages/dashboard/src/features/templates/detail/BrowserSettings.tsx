@@ -8,8 +8,10 @@ import { Callout } from '@/components/shared/Callout.tsx';
 import { Panel } from '@/components/shared/Section.tsx';
 import { SimpleSelect } from '@/components/ui/select.tsx';
 import { Switch } from '@/components/ui/switch.tsx';
+import { useSystem } from '@/features/system/api.ts';
 import { identityChangeConfirm } from '../confirm-copy.ts';
 import { CHANNEL_LABEL } from '../model.ts';
+import { agentWindowsOptions } from '../wizard/identity-defaults.ts';
 import { ClipboardPanel } from './ClipboardPanel.tsx';
 import { HealthPanel } from './HealthPanel.tsx';
 import { ProxyPanel } from './ProxyPanel.tsx';
@@ -21,6 +23,8 @@ function BrowserPanel({ template }: { readonly template: Template }) {
   const channelId = useId();
   const headlessId = useId();
   const windowsId = useId();
+  // New templates' Agent windows: the server's `headedWindows` setting (D-77).
+  const headedDefault = useSystem().data?.browser?.headed_windows ?? 'minimized';
   return (
     <Panel title="Browser" description="Every session of this template runs in this one browser.">
       <div className="flex flex-col gap-5">
@@ -69,7 +73,7 @@ function BrowserPanel({ template }: { readonly template: Template }) {
         <Field
           label="Agent windows"
           htmlFor={windowsId}
-          hint="How a session’s window opens on a headed browser. Windows never take focus."
+          hint="How a session’s windows open on a headed browser. Minimized keeps them out of your way; Normal opens them behind your windows (on Linux, an agent’s click brings one to the front)."
         >
           <SimpleSelect
             id={windowsId}
@@ -77,10 +81,7 @@ function BrowserPanel({ template }: { readonly template: Template }) {
             className="w-48"
             value={template.agent_windows}
             disabled={saving}
-            options={[
-              { value: 'normal', label: 'Normal' },
-              { value: 'minimized', label: 'Minimized' },
-            ]}
+            options={agentWindowsOptions(headedDefault)}
             onValueChange={(value) => {
               const windows = AgentWindows.safeParse(value);
               if (windows.success)

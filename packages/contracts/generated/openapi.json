@@ -8053,6 +8053,13 @@
                   "edge"
                 ]
               },
+              "headed_windows": {
+                "type": "string",
+                "enum": [
+                  "minimized",
+                  "normal"
+                ]
+              },
               "sandbox_mode": {
                 "type": "string",
                 "enum": [
@@ -8132,6 +8139,7 @@
             },
             "required": [
               "default_channel",
+              "headed_windows",
               "sandbox_mode",
               "running_as_root",
               "channels"

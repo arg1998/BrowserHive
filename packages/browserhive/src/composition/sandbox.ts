@@ -245,6 +245,7 @@ export async function buildSandbox(input: SandboxInput): Promise<SandboxWiring> 
       const browsers = await detected;
       return {
         default_channel: config.defaultChannel,
+        headed_windows: config.headedWindows,
         sandbox_mode: config.sandbox,
         running_as_root: environment.root,
         channels: browsers.map((b) => {

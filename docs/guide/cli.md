@@ -214,6 +214,8 @@ browserhive templates create <name> --sites <site,…> [--displayName <text>] [-
 | `--timeout` | How long to wait for you, default `30m`. |
 | `--yes` | Approve the [site packs](site-packs.md) of the sites without asking. Without a terminal it is required when a site has a pack to approve. |
 
+A template created here takes the server's [`headedWindows`](../reference/configuration.md#headedWindows) as its Agent windows (`minimized` by default); change it on the template's Settings tab or with `PATCH` (`agent_windows`).
+
 What it does:
 
 1. **Shows the site packs.** Before anything is created, it reads the site-pack catalog (the token needs `sitepacks:read`) and prints, for each site a pack covers, the pack's title and version, where it comes from, its SHA-256, the site's terms on automation and whether writes need confirmation (or that the pack has no write guards, so the write policy has no effect yet). Adding a site approves its pack for every template ([Approval and provenance](site-packs.md#approval-and-provenance)), so when a pack is not approved yet it asks you to type `yes`; without a terminal it refuses unless `--yes`, and nothing is created. A pack already approved is listed and needs no answer. It sends each site with the SHA-256 it printed (`pack_sha256`), so the server approves exactly that version.

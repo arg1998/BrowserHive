@@ -1,6 +1,7 @@
 /** @module contracts/config/keys-sessions — session, browser and stealth keys (spec 08 §5.2) */
 import type { z } from 'zod';
 import { Channel } from '../enums/channel.ts';
+import { HeadedWindows } from '../enums/headed-windows.ts';
 import { SandboxMode } from '../enums/sandbox-mode.ts';
 import { StealthLevel } from '../enums/stealth-level.ts';
 import { derived, key } from './key.ts';
@@ -23,6 +24,12 @@ export const SESSION_KEYS = {
     default: true,
     group: 'sessions',
     describe: 'Default headless mode; launch_session headless overrides per session.',
+  }),
+  headedWindows: key(zEnumOf(HeadedWindows.options), {
+    default: 'minimized',
+    group: 'sessions',
+    describe:
+      "How a headed browser's windows open on this machine's screen. minimized: every window of a headed session opens minimized in the background; on Linux, where Chrome brings a window to the front when an agent clicks in it, BrowserHive minimizes it again within about 40 ms for as long as the call lasts. A window you restore yourself stays open. normal: ordinary background windows (on Linux an agent's click brings one to the front). On Linux X11 a page sees no difference; Windows, macOS and Wayland were not measured, so choose normal if a site behaves differently (stealth guide). Also the default Agent windows of new templates.",
   }),
   defaultChannel: key(zEnumOf(Channel.options), {
     default: 'chromium',
