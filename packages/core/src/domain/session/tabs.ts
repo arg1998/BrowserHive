@@ -6,12 +6,19 @@ import { AppError } from '../../kernel/errors/app-error.ts';
 /** Sentinel tab id reported when the active-tab fallback finds no open tab. */
 export const ACTIVE_TAB_SENTINEL = '<active>';
 
-/** Builds the typed `TAB_NOT_FOUND` error with its public message text. */
+/** What `TAB_NOT_FOUND` adds when the session has no open tab at all (workload test B2). */
+export const NO_OPEN_TAB_TEXT = 'The session has no open tab; open one with new_tab.';
+
+/**
+ * Builds the typed `TAB_NOT_FOUND` error with its public message text; for {@link ACTIVE_TAB_SENTINEL}
+ * (no open tab) the message says how to recover.
+ */
 export function tabNotFound(sessionId: string, tabId: string): AppError<'TAB_NOT_FOUND'> {
+  const base = `Tab '${tabId}' not found in session '${sessionId}'.`;
   return new AppError(
     'TAB_NOT_FOUND',
     { session_id: sessionId, tab_id: tabId },
-    { publicMessage: `Tab '${tabId}' not found in session '${sessionId}'.` },
+    { publicMessage: tabId === ACTIVE_TAB_SENTINEL ? `${base} ${NO_OPEN_TAB_TEXT}` : base },
   );
 }
 

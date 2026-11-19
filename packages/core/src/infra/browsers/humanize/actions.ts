@@ -23,6 +23,7 @@
  * behavioural signal for outright broken drags.
  */
 
+import type { Vector } from './bezier.ts';
 import { sleep as defaultSleep, type Sleep } from './clock.ts';
 import {
   type BoundingBox,
@@ -237,6 +238,10 @@ export interface HumanScrollParams {
   readonly sleep?: Sleep;
   readonly deltaX: number;
   readonly deltaY: number;
+  /** The cursor, moved along a human path to `at` first when given. */
+  readonly tracker?: CursorTracker;
+  /** Where the wheel must land (a scroll container): the pointer moves there first. */
+  readonly at?: Vector;
 }
 
 /**
@@ -247,6 +252,12 @@ export interface HumanScrollParams {
  * dispatched**. A page listening for `wheel` sees scrolling with no cause.
  */
 export async function humanScroll(params: HumanScrollParams): Promise<void> {
+  if (params.at !== undefined && params.tracker !== undefined) {
+    await moveTo(params.page, params.tracker, params.at, {
+      rng: params.rng,
+      ...(params.sleep !== undefined && { sleep: params.sleep }),
+    });
+  }
   await scrollBy(params.page, params.deltaX, params.deltaY, {
     rng: params.rng,
     ...(params.sleep !== undefined && { sleep: params.sleep }),

@@ -206,7 +206,11 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
         onTemplateChanged: (id) => changed(id),
         sitePacks: () => (input.sitePacks?.enabled === true ? input.sitePacks : null),
         ...(reader !== null && {
-          rssOf: async (pid: number) => (await reader.rssOfTrees([pid])).get(pid) ?? null,
+          // Proportional memory where the platform reports it (Linux), so the memory limit is not
+          // reached by memory the browser's processes share (workload test B2).
+          rssOf: async (pid: number) =>
+            (await (reader.memoryOfTrees ?? reader.rssOfTrees).call(reader, [pid])).get(pid) ??
+            null,
         }),
       })
     : null;

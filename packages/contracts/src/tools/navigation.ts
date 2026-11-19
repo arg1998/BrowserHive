@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   annotations,
   SavedDownload,
+  SEALED_TEXT_NOTE,
   SESSION_ERRORS,
   SINCE,
   TabId,
@@ -44,7 +45,8 @@ export const NAVIGATE = defineTool({
     'answers with a download (Content-Disposition: attachment) saves the file into the managed ' +
     'downloads dir (<data-dir>/sessions/<id>/downloads/) within the same timeout: the tab keeps ' +
     'its page, status is null, and download holds saved_to, suggested_name and size, as ' +
-    'download_file returns them. A download that fails or runs out of time is DOWNLOAD_FAILED.',
+    'download_file returns them. A download that fails or runs out of time is DOWNLOAD_FAILED. ' +
+    SEALED_TEXT_NOTE,
   input: z.object({
     session_id: z.string(),
     url: z.string(),

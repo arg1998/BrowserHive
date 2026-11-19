@@ -1,6 +1,6 @@
 /** @module contracts/tools/state — get_cookies, set_cookies, set_viewport, set_extra_http_headers contracts */
 import { z } from 'zod';
-import { annotations, SESSION_ERRORS, SINCE, TabId } from './shared.ts';
+import { annotations, SEALED_COOKIES_NOTE, SESSION_ERRORS, SINCE, TabId } from './shared.ts';
 import { defineTool } from './types.ts';
 
 /**
@@ -29,7 +29,8 @@ export const GET_COOKIES = defineTool({
   title: 'Get cookies',
   description:
     "Return the session context's cookies, optionally filtered to those that would be sent " +
-    'to the given URLs.',
+    'to the given URLs. ' +
+    SEALED_COOKIES_NOTE,
   input: z.object({ session_id: z.string(), urls: z.array(z.string()).optional() }),
   // `sealed: true` only in a sealed template session, whose cookie values are empty (spec 13 §5.4).
   output: z.object({ cookies: z.array(Cookie), sealed: z.literal(true).optional() }),

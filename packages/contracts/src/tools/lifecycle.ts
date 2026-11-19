@@ -40,7 +40,9 @@ export const BASE_LAUNCH_DEFAULTS: LaunchSessionDefaults = {
 /** Description of `launch_session.template` (spec 13 §5.2; wording rule of §5). */
 export const TEMPLATE_PARAM_DESCRIPTION =
   "Name of a session template from list_templates. The session starts signed in to the template's " +
-  'sites; sign-ins and site data it changes are kept in the template.';
+  'sites; sign-ins and site data it changes are kept in the template. The session reports ' +
+  "persistence_mode 'memory' because it keeps no profile of its own: what it changes on the " +
+  "template's sites persists in the template, not in the session.";
 
 /**
  * The `context_options` keys a template session applies per session (spec 13 §4, §5.3); any other key

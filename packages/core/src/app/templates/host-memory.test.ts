@@ -10,12 +10,16 @@ const GIB = 1024 ** 3;
 
 function setup() {
   const clock = new FakeClock();
-  const warned: { sessionId: string; details: Readonly<Record<string, unknown>> }[] = [];
+  const warned: {
+    sessionId: string;
+    details: Readonly<Record<string, unknown>>;
+    closed: boolean;
+  }[] = [];
   const guard = new HostMemoryGuard({
     limitBytes: 3 * GIB,
     clock,
     logger: new CollectingLogger(),
-    warn: (sessionId, details) => void warned.push({ sessionId, details }),
+    warn: (sessionId, details, closed) => void warned.push({ sessionId, details, closed }),
   });
   const host = new FakeTemplateHost('tp-aaaaaaaaaa');
   for (const id of ['alpha-aaaaaaaa', 'bravo-bbbbbbbb']) {
@@ -51,7 +55,7 @@ describe('host memory limit (spec 13 §3.2)', () => {
     const { guard, host, warned, clock } = setup();
     expect(await guard.check('tp-aaaaaaaaaa', 4 * GIB, host)).toBe('trimmed');
     expect(host.closedPages).toEqual([{ targetId: 'A1', scope: 'session' }]);
-    expect(warned.map((w) => w.sessionId)).toEqual(['alpha-aaaaaaaa']);
+    expect(warned.map((w) => [w.sessionId, w.closed])).toEqual([['alpha-aaaaaaaa', true]]);
     expect(warned[0]?.details).toMatchObject({ rss_bytes: 4 * GIB, limit_bytes: 3 * GIB });
     await clock.advance(60_000);
     expect(await guard.check('tp-aaaaaaaaaa', 4 * GIB, host)).toBe('waiting');
@@ -65,5 +69,50 @@ describe('host memory limit (spec 13 §3.2)', () => {
     expect(await guard.check('tp-aaaaaaaaaa', GIB, host)).toBe('ok');
     await clock.advance(MEMORY_DRAIN_AFTER_MS);
     expect(await guard.check('tp-aaaaaaaaaa', 4 * GIB, host)).toBe('trimmed');
+  });
+
+  it("never closes a session's active tab: the largest other page goes (workload test B2)", async () => {
+    const { guard, host, warned } = setup();
+    host.heaps = [
+      { sessionId: 'alpha-aaaaaaaa', targetId: 'A1', jsHeapTotalBytes: 300, active: true },
+      { sessionId: 'alpha-aaaaaaaa', targetId: 'A2', jsHeapTotalBytes: 200 },
+      { sessionId: 'bravo-bbbbbbbb', targetId: 'B1', jsHeapTotalBytes: 400, active: true },
+    ];
+    expect(largestConsumer(host.heaps)).toMatchObject({
+      sessionId: 'alpha-aaaaaaaa',
+      page: { targetId: 'A2' },
+    });
+    expect(await guard.check('tp-aaaaaaaaaa', 4 * GIB, host)).toBe('trimmed');
+    expect(host.closedPages).toEqual([{ targetId: 'A2', scope: 'session' }]);
+    expect(warned.map((w) => [w.sessionId, w.closed])).toEqual([['alpha-aaaaaaaa', true]]);
+  });
+
+  it('a session with a background tab is trimmed before a larger one holding only its active tab', () => {
+    expect(
+      largestConsumer([
+        { sessionId: 'alpha-aaaaaaaa', targetId: 'A1', jsHeapTotalBytes: 900, active: true },
+        { sessionId: 'bravo-bbbbbbbb', targetId: 'B1', jsHeapTotalBytes: 100, active: true },
+        { sessionId: 'bravo-bbbbbbbb', targetId: 'B2', jsHeapTotalBytes: 50 },
+      ]),
+    ).toMatchObject({ sessionId: 'bravo-bbbbbbbb', page: { targetId: 'B2' }, total: 150 });
+  });
+
+  it('when every session holds only its active tab, nothing is closed and the largest is warned', async () => {
+    const { guard, host, warned, clock } = setup();
+    host.heaps = [
+      { sessionId: 'alpha-aaaaaaaa', targetId: 'A1', jsHeapTotalBytes: 300, active: true },
+      { sessionId: 'bravo-bbbbbbbb', targetId: 'B1', jsHeapTotalBytes: 400, active: true },
+    ];
+    expect(largestConsumer(host.heaps)).toEqual({
+      sessionId: 'bravo-bbbbbbbb',
+      page: null,
+      total: 400,
+    });
+    expect(await guard.check('tp-aaaaaaaaaa', 4 * GIB, host)).toBe('trimmed');
+    expect(host.closedPages).toEqual([]);
+    expect(warned.map((w) => [w.sessionId, w.closed])).toEqual([['bravo-bbbbbbbb', false]]);
+    // The host is still drained when it stays above the limit.
+    await clock.advance(MEMORY_DRAIN_AFTER_MS);
+    expect(await guard.check('tp-aaaaaaaaaa', 4 * GIB, host)).toBe('drain');
   });
 });

@@ -66,6 +66,10 @@ describe('TabRegistry', () => {
       expect(isAppError(err, 'TAB_NOT_FOUND')).toBe(true);
       if (isAppError(err, 'TAB_NOT_FOUND')) expect(err.details.tab_id).toBe(ACTIVE_TAB_SENTINEL);
     }
+    // The message says how to recover (workload test B2).
+    expect(tabNotFound('s', ACTIVE_TAB_SENTINEL).message).toBe(
+      "Tab '<active>' not found in session 's'. The session has no open tab; open one with new_tab.",
+    );
   });
 
   it('setActive changes the active tab and throws for unknown ids', () => {

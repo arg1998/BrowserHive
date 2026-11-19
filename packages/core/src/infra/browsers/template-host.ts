@@ -13,6 +13,7 @@ import type {
 import type { Clock } from '../../ports/clock.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type {
+  ActivePageOf,
   PageHeap,
   TemplatePageWatcher as PageWatcher,
   ParkedPageInfo,
@@ -297,8 +298,10 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
     return new Set([...this.origins, ...this.cleared]);
   }
 
-  pageHeaps(): Promise<readonly PageHeap[]> {
-    return hostState.pageHeaps(this.context, this.dispatcher, this.views.values(), this.log);
+  pageHeaps(activeOf?: ActivePageOf): Promise<readonly PageHeap[]> {
+    return hostState.pageHeaps(this.context, this.dispatcher, this.views.values(), this.log, {
+      activeOf,
+    });
   }
 
   closePage(targetId: string, scope: 'parked' | 'session'): Promise<boolean> {

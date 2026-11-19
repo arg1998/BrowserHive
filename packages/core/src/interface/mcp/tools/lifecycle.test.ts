@@ -94,4 +94,20 @@ describe('introspection tools', () => {
       navigation_count: 1,
     });
   });
+
+  it('a session whose last tab closed reports no URL, and page tools say how to recover (B2)', async () => {
+    h = await createToolHarness();
+    const id = await h.launch();
+    await executeTool(h, 'navigate', { session_id: id, url: 'http://127.0.0.1/a' });
+    const session = h.services.sessions.peek(id);
+    const page = session?.tabs.activePage();
+    if (session === undefined || page === undefined) throw new Error('no page');
+    await page.close();
+    const { value } = await executeTool(h, 'session_info', { session_id: id });
+    expect(value).toMatchObject({ page_count: 0, current_url: null });
+    const shot = await h.call('screenshot', { session_id: id });
+    expect(textOf(shot)).toBe(
+      `[TAB_NOT_FOUND] Tab '<active>' not found in session '${id}'. The session has no open tab; open one with new_tab.`,
+    );
+  });
 });

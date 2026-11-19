@@ -106,4 +106,27 @@ describe('SealedRedaction', () => {
     );
     expect((await redaction.scrubberFor(s))?.('site-token-0123456789')).toBe('[sealed]');
   });
+
+  it('plain cookie and storage values never blank a URL or a time zone (workload test B1)', async () => {
+    const redaction = new SealedRedaction(new FakeClock());
+    const inbox = 'https://mail.google.com/mail/u/0/#inbox';
+    const token = 'Q7f2Kx9LmZ0pR4tV8wY1bN6cH3jD5sGa';
+    const s = session(
+      {
+        cookies: [
+          fakeCookie('site-a.test', 'u', '0'),
+          fakeCookie('site-a.test', 'timezone', 'America/Toronto'),
+          fakeCookie('site-a.test', 'lang', 'v=2&lang=en-us'),
+          fakeCookie('site-a.test', 'sid', token),
+        ],
+      },
+      SEALED,
+      [page('https://www.site-a.test/mail/u/0/', [inbox])],
+    );
+    const scrub = await redaction.scrubberFor(s);
+    const text = JSON.stringify({ url: `${inbox}/FMfcgz`, timezoneId: 'America/Toronto', token });
+    expect(scrub?.(text)).toBe(
+      JSON.stringify({ url: `${inbox}/FMfcgz`, timezoneId: 'America/Toronto', token: '[sealed]' }),
+    );
+  });
 });

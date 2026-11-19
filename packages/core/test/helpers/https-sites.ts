@@ -62,6 +62,37 @@ function route(host: string, path: string, method = 'GET', search = ''): Respons
       );
     case '/landing':
       return page(`landing ${site}`, `<p id="landing">${site}</p>`);
+    case '/inner-feed':
+      // The app layout of the agent workload test (B2, B4): the document does not scroll, an inner
+      // feed does; scrolling appends posts and rewrites the URL (replaceState, pushState); a
+      // speculation rule prerenders a page a link then activates.
+      return page(
+        `feed ${site}`,
+        `<nav id="nav" style="position:fixed;top:0;left:0;right:0;height:48px;background:#eee">nav</nav>
+        <main id="feed" style="position:fixed;top:48px;bottom:0;left:0;right:0;overflow-y:auto">
+          <a id="next" href="/landing?prerendered">next</a>
+        </main>
+        <script>
+          const feed = document.getElementById('feed');
+          let n = 0;
+          const more = () => {
+            for (let i = 0; i < 20; i++, n++) {
+              const post = document.createElement('article');
+              post.style.height = '120px';
+              post.textContent = 'post ' + n;
+              feed.appendChild(post);
+            }
+          };
+          more();
+          feed.addEventListener('scroll', () => {
+            if (feed.scrollTop + feed.clientHeight > feed.scrollHeight - 400) more();
+            history.replaceState({}, '', '/inner-feed?at=' + Math.round(feed.scrollTop));
+            if (n % 40 === 0) history.pushState({}, '', '/inner-feed?page=' + n / 20);
+          });
+        </script>
+        <script type="speculationrules">{"prerender":[{"source":"list","urls":["/landing?prerendered"]}]}</script>`,
+        '<style>html,body{margin:0;height:100%;overflow:hidden}</style>',
+      );
     case '/popup':
       return page(
         'popup',

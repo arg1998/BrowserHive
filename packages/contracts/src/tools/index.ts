@@ -178,6 +178,7 @@ export {
   requestAttentionFloorNote,
 } from './attention.ts';
 export { AUTH_NAME_RE, SavedAuthEntry, SavedAuthResult } from './auth-states.ts';
+export { GET_CONTENT_DEFAULT_MAX_CHARS } from './inspection.ts';
 export {
   BASE_LAUNCH_DEFAULTS,
   BrowserContextOptions,
@@ -190,7 +191,15 @@ export {
   TEMPLATE_PARAM_DESCRIPTION,
 } from './lifecycle.ts';
 export { AppliedIdentity, SessionMetadata } from './session-metadata.ts';
-export { SESSION_ERRORS, Selector, TabId, Timeout, WaitUntil } from './shared.ts';
+export {
+  SEALED_COOKIES_NOTE,
+  SEALED_TEXT_NOTE,
+  SESSION_ERRORS,
+  Selector,
+  TabId,
+  Timeout,
+  WaitUntil,
+} from './shared.ts';
 export { Cookie, CookieInput } from './state.ts';
 export { TabSummary } from './tabs.ts';
 export {
@@ -200,6 +209,7 @@ export {
   SessionTemplateInfo,
   TEMPLATE_BUSY_LIMIT_TEXT,
   TEMPLATE_CLIPBOARD_TEXT,
+  TEMPLATE_EVALUATE_TEXT,
   TEMPLATE_MIDDLE_CLICK_TEXT,
   TEMPLATE_NAME_RE,
   TEMPLATE_VAULT_NOTE,

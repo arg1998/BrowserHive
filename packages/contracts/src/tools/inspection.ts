@@ -1,6 +1,6 @@
 /** @module contracts/tools/inspection — screenshot, snapshot, get_content, evaluate contracts */
 import { z } from 'zod';
-import { annotations, SESSION_ERRORS, SINCE, TabId } from './shared.ts';
+import { annotations, SEALED_TEXT_NOTE, SESSION_ERRORS, SINCE, TabId } from './shared.ts';
 import { defineTool } from './types.ts';
 
 /**
@@ -45,7 +45,8 @@ export const SNAPSHOT = defineTool({
   name: 'snapshot',
   title: 'Snapshot',
   description:
-    "Return the tab's ARIA accessibility tree (YAML) — purpose-built for LLM consumption.",
+    "Return the tab's ARIA accessibility tree (YAML) — purpose-built for LLM consumption. " +
+    SEALED_TEXT_NOTE,
   input: z.object({ session_id: z.string(), tab_id: TabId }),
   output: z.object({ session_id: z.string(), url: z.string(), tree: z.string() }),
   annotations: annotations(true, false, true, false),
@@ -55,16 +56,39 @@ export const SNAPSHOT = defineTool({
   since: SINCE,
 });
 
-/** `get_content`: `page.content()`. */
+/** `get_content`'s default `max_chars`: about 25 000 tokens, what an agent can read in one result. */
+export const GET_CONTENT_DEFAULT_MAX_CHARS = 100_000;
+
+/** `get_content`: `page.content()`, at most `max_chars` characters (workload test 2026-11-17). */
 export const GET_CONTENT = defineTool({
   name: 'get_content',
   title: 'Get content',
   description:
     'Return the current HTML content of a tab. While the tab is still navigating, waits up to ' +
     '5 s for the new page to reach domcontentloaded; if it is still navigating then, fails with ' +
-    'WAIT_TIMEOUT, which is safe to retry.',
-  input: z.object({ session_id: z.string(), tab_id: TabId }),
-  output: z.object({ session_id: z.string(), url: z.string(), html: z.string() }),
+    'WAIT_TIMEOUT, which is safe to retry. HTML longer than max_chars (default 100000) is cut ' +
+    'to its first max_chars characters and the result says so (truncated, total_chars, notice); ' +
+    'max_chars: 0 returns all of it. Web apps can be megabytes of HTML: snapshot is the ' +
+    'readable view of a page. ' +
+    SEALED_TEXT_NOTE,
+  input: z.object({
+    session_id: z.string(),
+    tab_id: TabId,
+    max_chars: z
+      .number()
+      .int()
+      .min(0)
+      .default(GET_CONTENT_DEFAULT_MAX_CHARS)
+      .describe('At most this many characters of HTML (0 = no limit).'),
+  }),
+  output: z.object({
+    session_id: z.string(),
+    url: z.string(),
+    html: z.string(),
+    truncated: z.literal(true).optional(),
+    total_chars: z.number().optional(),
+    notice: z.string().optional(),
+  }),
   annotations: annotations(true, false, true, false),
   pack: 'inspection',
   capability: 'read',
@@ -86,7 +110,8 @@ export const EVALUATE = defineTool({
     'included) is called and its result returned; anything else, including an IIFE that is ' +
     'already invoked, runs as written. A page-side exception fails with SCRIPT_ERROR carrying ' +
     'its message. A session launched with disable_evaluate: true rejects this call with ' +
-    'EVALUATE_DISABLED.',
+    'EVALUATE_DISABLED, as does a template session unless the operator allows evaluate for ' +
+    'its template.',
   input: z.object({ session_id: z.string(), expression: z.string().min(1), tab_id: TabId }),
   output: z.object({ session_id: z.string(), result: z.unknown() }),
   annotations: annotations(false, false, false, true),

@@ -1,7 +1,7 @@
 {
   "name": "scroll",
   "title": "Scroll",
-  "description": "Scroll a tab: mode=\"by\" scrolls by (dx,dy); mode=\"to\" scrolls to (x,y); mode=\"selector\" brings an element into view. Returns the resulting scroll offset.",
+  "description": "Scroll a tab: mode=\"by\" scrolls by (dx,dy); mode=\"to\" scrolls to (x,y); mode=\"selector\" brings an element into view. \"by\" and \"to\" scroll the document, or, when the document itself does not scroll (app layouts whose feed is an inner panel), the page's main scroll container: the scrollable element under the centre of the viewport, else the largest one. Returns the resulting offset (x, y) of what scrolled, target (\"window\" or \"element\") and, for an element, a short description of it (element, e.g. \"main#feed\").",
   "inputSchema": {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "type": "object",
@@ -11,7 +11,11 @@
       },
       "mode": {
         "type": "string",
-        "enum": ["by", "to", "selector"]
+        "enum": [
+          "by",
+          "to",
+          "selector"
+        ]
       },
       "dx": {
         "default": 0,
@@ -34,7 +38,10 @@
       "behavior": {
         "default": "auto",
         "type": "string",
-        "enum": ["auto", "smooth"]
+        "enum": [
+          "auto",
+          "smooth"
+        ]
       },
       "timeout": {
         "default": 30000,
@@ -46,7 +53,10 @@
         "type": "string"
       }
     },
-    "required": ["session_id", "mode"]
+    "required": [
+      "session_id",
+      "mode"
+    ]
   },
   "outputSchema": {
     "$schema": "http://json-schema.org/draft-07/schema#",
@@ -60,9 +70,23 @@
       },
       "y": {
         "type": "number"
+      },
+      "target": {
+        "type": "string",
+        "enum": [
+          "window",
+          "element"
+        ]
+      },
+      "element": {
+        "type": "string"
       }
     },
-    "required": ["session_id", "x", "y"],
+    "required": [
+      "session_id",
+      "x",
+      "y"
+    ],
     "additionalProperties": false
   },
   "annotations": {

@@ -4,8 +4,11 @@ import { describe, expect, it } from 'bun:test';
 import { ERROR_CODES, ERROR_REGISTRY, type ErrorCode } from '../../src/errors/index.ts';
 import {
   LIST_TEMPLATES_DESCRIPTION,
+  SEALED_COOKIES_NOTE,
+  SEALED_TEXT_NOTE,
   TEMPLATE_BUSY_LIMIT_TEXT,
   TEMPLATE_CLIPBOARD_TEXT,
+  TEMPLATE_EVALUATE_TEXT,
   TEMPLATE_MIDDLE_CLICK_TEXT,
   TEMPLATE_PARAM_DESCRIPTION,
   TEMPLATE_VAULT_NOTE,
@@ -86,6 +89,9 @@ describe('template wording (spec 13 §5)', () => {
       TEMPLATE_VAULT_NOTE,
       TEMPLATE_CLIPBOARD_TEXT,
       TEMPLATE_MIDDLE_CLICK_TEXT,
+      TEMPLATE_EVALUATE_TEXT,
+      SEALED_TEXT_NOTE,
+      SEALED_COOKIES_NOTE,
       TEMPLATE_BUSY_LIMIT_TEXT.capacity('job-hunt'),
       TEMPLATE_BUSY_LIMIT_TEXT.tabs(),
       TEMPLATE_BUSY_LIMIT_TEXT.pace('linkedin.com'),

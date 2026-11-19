@@ -82,4 +82,26 @@ describe('pageHeaps', () => {
     expect(performance.now() - started).toBeLessThan(250);
     expect(heaps.map((h) => h.targetId)).toEqual(['F0', 'F1']);
   });
+
+  it("marks each session's active tab, which the memory trim never closes (workload test B2)", async () => {
+    const { context } = fakeContext();
+    const alpha = pagesOf('A', 2, 0);
+    const bravo = pagesOf('B', 1, 0);
+    const active = new Map<string, FakePage | undefined>([
+      ['alpha', alpha[1]],
+      ['bravo', bravo[0]],
+    ]);
+    const heaps = await pageHeaps(
+      context,
+      dispatcher,
+      [view('alpha', alpha), view('bravo', bravo)],
+      new CollectingLogger(),
+      { activeOf: (id) => active.get(id) as unknown as Page | undefined },
+    );
+    expect(heaps.map((h) => [h.targetId, h.active === true])).toEqual([
+      ['A0', false],
+      ['A1', true],
+      ['B0', true],
+    ]);
+  });
 });

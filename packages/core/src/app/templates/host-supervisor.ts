@@ -17,7 +17,12 @@ import { AdmissionStrategies } from './admission-strategies.ts';
 import { HostEvents, PendingLaunches, sampleRss } from './host-events.ts';
 import { TemplateHolds } from './host-holds.ts';
 import { HostLifecycle } from './host-lifecycle.ts';
-import { HostMemoryGuard, RESOURCE_LIMIT_MESSAGE, warnSession } from './host-memory.ts';
+import {
+  HostMemoryGuard,
+  RESOURCE_LIMIT_KEPT_MESSAGE,
+  RESOURCE_LIMIT_MESSAGE,
+  warnSession,
+} from './host-memory.ts';
 import { IdentityObserver, stopHosts } from './host-shutdown.ts';
 import { buildHostSpec } from './host-spec.ts';
 import { idleExpired, nextIdleSince, recycleAt, TEMPLATE_LAUNCH_BUDGET_MS } from './host-state.ts';
@@ -99,8 +104,15 @@ export class TemplateHostSupervisor implements TemplateRuntime {
       limitBytes: deps.config.recycleRssBytes ?? 0,
       clock: deps.clock,
       logger: deps.logger,
-      warn: (id, details) =>
-        warnSession(deps.sessions, id, 'SESSION_RESOURCE_LIMIT', RESOURCE_LIMIT_MESSAGE, details),
+      warn: (id, details, closed) =>
+        warnSession(
+          deps.sessions,
+          id,
+          'SESSION_RESOURCE_LIMIT',
+          closed ? RESOURCE_LIMIT_MESSAGE : RESOURCE_LIMIT_KEPT_MESSAGE,
+          details,
+        ),
+      activeOf: (id) => deps.sessions.peek(id)?.tabs.activePage(),
     });
   }
 

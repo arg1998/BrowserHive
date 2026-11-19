@@ -39,6 +39,12 @@ export interface ToolCallContext {
    * (`entry-warmup`, spec 13 §9.4); `null` before the gate ran or for a call on no session.
    */
   readonly siteRecheck: (() => Promise<void>) | null;
+  /**
+   * The sealed-session scrubber of the resolved session (`null`: not sealed), for a handler that
+   * cuts text before the dispatcher redacts it (`get_content`'s size cap: a cut through a secret
+   * would leave its start unredacted). Absent in contexts built without a dispatcher.
+   */
+  readonly sealedScrubber?: () => Promise<((text: string) => string) | null>;
 }
 
 /** The session the ownership policy resolved. @throws `INTERNAL_ERROR` when the policy did not run. */

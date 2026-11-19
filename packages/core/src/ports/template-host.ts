@@ -119,7 +119,12 @@ export interface PageHeap {
   readonly sessionId: string;
   readonly targetId: string;
   readonly jsHeapTotalBytes: number;
+  /** The page is its session's active tab: the memory trim never closes it (workload test B2). */
+  readonly active?: boolean;
 }
+
+/** A session's active tab, for {@link TemplateHost.pageHeaps}. */
+export type ActivePageOf = (sessionId: string) => Page | undefined;
 
 /** A window that shows pages of several sessions (spec 13 §3.4). */
 export interface SharedWindowInfo {
@@ -193,8 +198,11 @@ export interface TemplateHost extends BrowserHost {
    * counts only for these (spec 13 §2.3). Absent = none.
    */
   pageSites?(): ReadonlySet<string>;
-  /** `JSHeapTotalSize` of every agent page (spec 13 §3.2 memory). */
-  pageHeaps(): Promise<readonly PageHeap[]>;
+  /**
+   * `JSHeapTotalSize` of every agent page (spec 13 §3.2 memory); with `activeOf`, each session's
+   * active tab is marked `active`.
+   */
+  pageHeaps(activeOf?: ActivePageOf): Promise<readonly PageHeap[]>;
   /**
    * Closes one page by target id: a parked page (`parked`, never the sentinel) or an agent session's
    * page (`session`, the memory trim). False when no such page is open.

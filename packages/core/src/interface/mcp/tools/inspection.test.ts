@@ -10,7 +10,10 @@ import {
   textOf,
 } from '../../../../test/helpers/fake-transport.ts';
 import { executeTool } from '../../../../test/helpers/tool-run.ts';
+import { evaluateDisabledMessage } from '../policies.ts';
 import { wrapFunctionExpression } from './inspection/evaluate-wrap.ts';
+import { truncateChars } from './inspection/index.ts';
+import { pngSize } from './inspection/screenshot-capture.ts';
 
 let h: ToolHarness;
 afterEach(async () => h.close());
@@ -61,6 +64,28 @@ describe('screenshot', () => {
   });
 });
 
+describe('evaluate refusal text', () => {
+  it('a template session is told why and who can allow it, after the usual first sentence', () => {
+    expect(evaluateDisabledMessage('s-1')).toBe(
+      "The 'evaluate' tool is disabled for session 's-1'.",
+    );
+    expect(evaluateDisabledMessage('s-1', true)).toBe(
+      "The 'evaluate' tool is disabled for session 's-1': its sign-ins belong to the operator's session template. Ask the operator to allow evaluate for this template, or use the structured tools (click, fill, get_content, snapshot).",
+    );
+  });
+});
+
+describe('screenshot size (workload test B3)', () => {
+  it('reads the width and height of the PNG itself', () => {
+    const header = Uint8Array.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0,
+      0x01, 0x90, 0, 0, 0, 0x78, 8, 6, 0, 0, 0,
+    ]);
+    expect(pngSize(header)).toEqual({ width: 400, height: 120 });
+    expect(pngSize(Uint8Array.from([1, 2, 3]))).toBeNull();
+  });
+});
+
 describe('snapshot / get_content', () => {
   it('return the tree and the html', async () => {
     h = await createToolHarness();
@@ -70,6 +95,26 @@ describe('snapshot / get_content', () => {
     handle().firstPage.script.html = '<p>clicked</p>';
     const content = await executeTool(h, 'get_content', { session_id: id });
     expect(content.value).toEqual({ session_id: id, url: 'about:blank', html: '<p>clicked</p>' });
+  });
+
+  it('get_content cuts long HTML to max_chars (default 100 000) and says so', async () => {
+    h = await createToolHarness();
+    const id = await h.launch();
+    const html = `<p>${'x'.repeat(150_000)}</p>`;
+    handle().firstPage.script.html = html;
+    const cut = await executeTool(h, 'get_content', { session_id: id });
+    expect(cut.value).toMatchObject({ truncated: true, total_chars: html.length });
+    const value = cut.value as { html: string; notice: string };
+    expect(value.html).toBe(html.slice(0, 100_000));
+    expect(value.notice).toBe(
+      `Cut to the first 100000 of ${html.length} characters. Pass max_chars: 0 for all of it, or use snapshot for the readable structure of the page.`,
+    );
+    const all = await executeTool(h, 'get_content', { session_id: id, max_chars: 0 });
+    expect(all.value).toEqual({ session_id: id, url: 'about:blank', html });
+    const small = await executeTool(h, 'get_content', { session_id: id, max_chars: 10 });
+    expect(small.value).toMatchObject({ html: '<p>xxxxxxx', truncated: true });
+    expect(truncateChars('ab\u{1F600}cd', 3)).toBe('ab');
+    expect(truncateChars('abc', 5)).toBe('abc');
   });
 
   it('get_content waits for a navigation in flight and reads once more (#55)', async () => {

@@ -5,6 +5,7 @@ import {
   createProcessTreeReader,
   parseProcStatus,
   parsePsTable,
+  parseSmapsRollupPss,
   parseWindowsProcessTable,
   sumProcessTrees,
   WINDOWS_PROCESS_TABLE_SCRIPT,
@@ -91,4 +92,24 @@ describe('createProcessTreeReader', () => {
       expect((await reader?.rssOfTrees([]))?.size).toBe(0);
     },
   );
+
+  it.if(process.platform === 'linux')(
+    'Linux: proportional memory of a tree, never above its summed RSS (workload test B2)',
+    async () => {
+      const reader = createProcessTreeReader();
+      const pss = await reader?.memoryOfTrees?.([process.pid, 2 ** 30]);
+      const rss = await reader?.rssOfTrees([process.pid]);
+      expect(pss?.get(process.pid)).toBeGreaterThan(1024 * 1024);
+      expect(pss?.get(process.pid)).toBeLessThanOrEqual((rss?.get(process.pid) ?? 0) * 1.1);
+      expect(pss?.has(2 ** 30)).toBe(false);
+      expect(createProcessTreeReader('darwin')?.memoryOfTrees).toBeUndefined();
+    },
+  );
+
+  it('parses the Pss line of smaps_rollup', () => {
+    expect(parseSmapsRollupPss('Rss:   2048 kB\nPss:   1024 kB\nPss_Anon: 10 kB\n')).toBe(
+      1024 * 1024,
+    );
+    expect(parseSmapsRollupPss('Rss: 1 kB\n')).toBeNull();
+  });
 });

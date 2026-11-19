@@ -38,6 +38,20 @@ export const TEMPLATE_SITE_ERRORS = [
 export const SINCE = '0.1.0';
 
 /**
+ * The `[sealed]` sentence of the page-reading tools' descriptions (workload test 2026-11-17: an
+ * agent read a `[sealed]` URL as a failed navigation). Wording rule of spec 13 §5.
+ */
+export const SEALED_TEXT_NOTE =
+  'In a template session, text equal to a stored sign-in value that could be a secret (a cookie ' +
+  'or site-data value) reads [sealed]; only that text is replaced, and URLs, numbers, language ' +
+  'and time-zone names are shown as they are.';
+
+/** The `get_cookies` sentence for sealed template sessions (spec 13 §5.4). */
+export const SEALED_COOKIES_NOTE =
+  'In a template session whose cookie values are hidden, every value is empty and the result ' +
+  'carries sealed: true.';
+
+/**
  * Build a {@link ToolAnnotations} record positionally (readOnly, destructive, idempotent,
  * openWorld), matching the RO/D/I/OW columns of spec 02 §3.
  */
