@@ -171,8 +171,12 @@ describe('D34: sign-in threads go final when their site or template is removed',
 });
 
 describe("D45: a session's challenge links to its takeover", () => {
-  it('a challenge met by an agent session adds Take over for that session', () => {
-    const event = signedOut('site-a.test', TID, { to: 'challenged', session_id: 'demo-00000001' });
+  it('a challenge that opened a takeover on an agent session adds Take over for it', () => {
+    const event = signedOut('site-a.test', TID, {
+      to: 'challenged',
+      session_id: 'demo-00000001',
+      session_takeover: true,
+    });
     if (event.name !== 'template.health') throw new Error('unreachable');
     const draft = signinDraft(event.payload);
     expect(draft?.sessionId).toBe('demo-00000001');
@@ -186,6 +190,23 @@ describe("D45: a session's challenge links to its takeover", () => {
       expect.objectContaining({ id: 'open-template', style: 'default' }),
     ]);
     expect(content?.entities).toMatchObject({ session_id: 'demo-00000001' });
+  });
+
+  it('a notify challenge opened no takeover: Watch live, the template stays primary (review #93 M1)', () => {
+    const event = signedOut('site-a.test', TID, {
+      to: 'challenged',
+      session_id: 'demo-00000001',
+      session_takeover: false,
+    });
+    if (event.name !== 'template.health') throw new Error('unreachable');
+    expect(signinDraft(event.payload)?.content(1).actions).toEqual([
+      expect.objectContaining({
+        id: 'watch-live',
+        style: 'default',
+        path: '/sessions/demo-00000001?live=1',
+      }),
+      expect.objectContaining({ id: 'open-template', style: 'primary' }),
+    ]);
   });
 
   it('a probe challenge and a sign-out have no takeover action', () => {

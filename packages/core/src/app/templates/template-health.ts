@@ -74,6 +74,12 @@ export interface ProbeOptions {
   readonly onResult?: (result: SiteProbeResult) => void;
 }
 
+/** The agent session that met a challenge; `takeover`: a takeover request was opened on it. */
+export interface ChallengeSession {
+  readonly id: string;
+  readonly takeover: boolean;
+}
+
 /** Hooks other services attach after composition. */
 export interface HealthHooks {
   /** A site became `signed_out` (vault auto-relogin, spec 13 §8.4). Never throws. */
@@ -160,21 +166,22 @@ export class TemplateHealthService {
 
   /**
    * Records a sign-in state BrowserHive learned outside a probe (a re-login that signed the site in)
-   * as a probe row with its trigger, and applies it like one. `sessionId` names the agent session
-   * that met a challenge (its notification links to that session's takeover, spec 13 §8.6).
+   * as a probe row with its trigger, and applies it like one. `session` names the agent session
+   * that met a challenge and whether a takeover request was opened on it (its notification links
+   * to that session, spec 13 §8.6).
    */
   async record(
     template: TemplateRecord,
     siteId: string,
     verdict: ProbeVerdict,
     trigger: TemplateProbeTrigger,
-    sessionId?: string,
+    session?: ChallengeSession,
   ): Promise<void> {
     // On the template's probe chain, so it never interleaves with a probe's read-modify-write.
     const id = template.templateId;
     const run = (this.#tails.get(id) ?? Promise.resolve())
       .catch(() => undefined)
-      .then(() => this.#apply(template, siteId, verdict, trigger, 0, sessionId));
+      .then(() => this.#apply(template, siteId, verdict, trigger, 0, session));
     this.#tails.set(id, run);
     try {
       await run;
@@ -268,7 +275,7 @@ export class TemplateHealthService {
     verdict: ProbeVerdict,
     trigger: TemplateProbeTrigger,
     durationMs: number,
-    sessionId?: string,
+    session?: ChallengeSession,
   ): Promise<void> {
     const { repos, clock, bus } = this.#deps;
     const now = clock.now();
@@ -311,7 +318,7 @@ export class TemplateHealthService {
       template_id: template.templateId,
       site: view,
       ...(changed && {
-        transition: this.#transition(template, site, updated, after, now, sessionId),
+        transition: this.#transition(template, site, updated, after, now, session),
       }),
     });
     if (!changed) return;
@@ -338,7 +345,7 @@ export class TemplateHealthService {
     after: TemplateSiteRecord,
     sites: readonly TemplateSiteRecord[],
     now: number,
-    sessionId: string | undefined,
+    session: ChallengeSession | undefined,
   ): SigninTransition {
     const lookup = providerLookup(this.#deps.packs ?? NO_PACKS);
     const provider = providerOf(after, lookup);
@@ -353,7 +360,10 @@ export class TemplateHealthService {
       provider_signed_in: group.length > 0 && group.every((s) => s.health.state === 'signed_in'),
       machine: this.#deps.machine,
       at: now,
-      ...(sessionId !== undefined && { session_id: sessionId }),
+      ...(session !== undefined && {
+        session_id: session.id,
+        session_takeover: session.takeover,
+      }),
     };
   }
 

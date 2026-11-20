@@ -6,8 +6,15 @@ import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { ChallengeInput } from '../../ports/security-intercepts.ts';
 import { type InterceptContext, interceptTimeoutMs } from './security-intercepts-types.ts';
 
-/** The site's health becomes `challenged`; `stop` also sets the site's `stopped_at`. Never throws. */
-export async function markChallenged(ctx: InterceptContext, input: ChallengeInput): Promise<void> {
+/**
+ * The site's health becomes `challenged`; `stop` also sets the site's `stopped_at`. `takeover`: a
+ * site check will be opened on the session (its notification offers Take over). Never throws.
+ */
+export async function markChallenged(
+  ctx: InterceptContext,
+  input: ChallengeInput,
+  takeover: boolean,
+): Promise<void> {
   const { deps } = ctx;
   try {
     const template = await deps.templates.get(input.templateId);
@@ -28,7 +35,7 @@ export async function markChallenged(ctx: InterceptContext, input: ChallengeInpu
         finalUrl: input.pageUrl,
       },
       'attention',
-      input.sessionId,
+      { id: input.sessionId, takeover },
     );
   } catch (error) {
     ctx.log.warn('challenge not recorded', { err: serializeError(error) });

@@ -77,6 +77,8 @@ export function interceptsWorld(options: InterceptsWorldOptions = {}) {
   const warnings: SessionWarning[] = [];
   const hits: SiteGuardHitInput[] = [];
   const health: { site: string; verdict: ProbeVerdict }[] = [];
+  /** The session each health record named (review #93 M1: whether a takeover was opened). */
+  const healthSessions: ({ readonly id: string; readonly takeover: boolean } | undefined)[] = [];
   const probes: string[] = [];
   const sites: TemplateSiteRecord[] = [
     templateSiteRecord({ templateId: TEMPLATE.templateId, siteId: 'site-a.test' }),
@@ -98,8 +100,9 @@ export function interceptsWorld(options: InterceptsWorldOptions = {}) {
       },
     },
     health: {
-      record: async (_t, site, verdict) => {
+      record: async (_t, site, verdict, _trigger, session) => {
         health.push({ site, verdict });
+        healthSessions.push(session);
       },
       probe: async (_t, o) => {
         probes.push(...(o.siteIds ?? []));
@@ -147,6 +150,7 @@ export function interceptsWorld(options: InterceptsWorldOptions = {}) {
     warnings,
     hits,
     health,
+    healthSessions,
     probes,
     sites,
     add,

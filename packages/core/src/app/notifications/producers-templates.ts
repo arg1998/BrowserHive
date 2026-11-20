@@ -71,22 +71,30 @@ export function signinDraft(payload: DomainEvents['template.health']): Notificat
       fallback: { label: 'Open template', path },
     });
   }
-  // A session's challenge: the operator can take over that session's page (spec 13 §8.6, D45).
+  // A session's challenge (spec 13 §8.6, D45): with a takeover request open on it the operator can
+  // take over its page; a `notify` challenge opened none, so the session can only be watched
+  // (review #93 M1).
   const session = signedOut ? undefined : t.session_id;
+  const takeover = session !== undefined && t.session_takeover === true;
   if (session !== undefined) {
-    actions.push({
-      kind: 'open',
-      id: 'take-over',
-      label: 'Take over',
-      style: 'primary',
-      path: `/sessions/${encodeURIComponent(session)}?live=1&takeover=1`,
-    });
+    const live = `/sessions/${encodeURIComponent(session)}?live=1`;
+    actions.push(
+      takeover
+        ? {
+            kind: 'open',
+            id: 'take-over',
+            label: 'Take over',
+            style: 'primary',
+            path: `${live}&takeover=1`,
+          }
+        : { kind: 'open', id: 'watch-live', label: 'Watch live', style: 'default', path: live },
+    );
   }
   actions.push({
     kind: 'open',
     id: 'open-template',
     label: 'Open template',
-    style: signedOut || session !== undefined ? 'default' : 'primary',
+    style: signedOut || takeover ? 'default' : 'primary',
     path,
   });
   return {

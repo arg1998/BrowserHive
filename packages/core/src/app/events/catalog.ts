@@ -285,6 +285,8 @@ export interface SigninTransition {
   readonly at: number;
   /** The agent session that met the challenge (a session challenge, spec 13 §9.5). */
   readonly session_id?: string;
+  /** A takeover request was opened on that session (an `attention`/`stop` challenge over http). */
+  readonly session_takeover?: boolean;
 }
 
 /** Every event name. */
