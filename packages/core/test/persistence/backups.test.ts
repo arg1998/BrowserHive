@@ -1,6 +1,6 @@
 /** @module test/persistence/backups.test — backup selection and pruning across schema versions (D-04, spec 13 §9.9): pruning never deletes the pre-upgrade backup of an incompatible migration, and the "binary too old" refusal names the backup that binary can restore, not a later backup of the newer schema. */
 
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, setDefaultTimeout } from 'bun:test';
 import { copyFileSync, existsSync, utimesSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { SqliteMaintenanceService } from '../../src/infra/persistence/maintenance.ts';
@@ -12,7 +12,10 @@ import {
 import { MIGRATIONS } from '../../src/infra/persistence/migrations/index.ts';
 import { openDatabase } from '../../src/infra/persistence/open.ts';
 import { isAppError } from '../../src/kernel/errors/app-error.ts';
-import { FakeClock, FakeLogger, tempDir } from './helpers.ts';
+import { DISK_MIGRATION_TEST_MS, FakeClock, FakeLogger, tempDir } from './helpers.ts';
+
+// Each case opens a database on disk: fsync stalls on CI runners (D30 l, helpers.ts).
+setDefaultTimeout(DISK_MIGRATION_TEST_MS);
 
 const FIXTURES = join(import.meta.dir, 'fixtures');
 

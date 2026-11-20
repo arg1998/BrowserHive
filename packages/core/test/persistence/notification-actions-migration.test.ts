@@ -1,12 +1,15 @@
 /** @module test/persistence/notification-actions-migration.test — schema v6 (`0006-notification-actions`) over a v5 database: three new, empty tables, the minimum reader unchanged, the outcome CHECK and the token cascades, and `purge` inventorying a v5 database (03 §7; D-41). */
 
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, setDefaultTimeout } from 'bun:test';
 import { copyFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { SqliteMaintenanceService } from '../../src/infra/persistence/maintenance.ts';
 import { MIGRATIONS, SCHEMA_VERSION } from '../../src/infra/persistence/migrations/index.ts';
 import { openDatabase } from '../../src/infra/persistence/open.ts';
-import { FakeClock, FakeLogger, tempDir } from './helpers.ts';
+import { DISK_MIGRATION_TEST_MS, FakeClock, FakeLogger, tempDir } from './helpers.ts';
+
+// Each case opens a database on disk: fsync stalls on CI runners (D30 l, helpers.ts).
+setDefaultTimeout(DISK_MIGRATION_TEST_MS);
 
 const FIXTURES = join(import.meta.dir, 'fixtures');
 

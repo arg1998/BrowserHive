@@ -1,6 +1,6 @@
 /** @module test/persistence/strategy-state-migration.test — schema v12 (`0012-strategy-state`, D53) over a v11 database: the table is added empty, the minimum reader stays 10 (compatible) and a v11 binary still opens the database and deletes templates; the repository upserts, lists and removes rows; deleting a template removes its rows (FK cascade); and the store over real SQLite keeps a budget across a reopen and discards a corrupt row with a warning. */
 
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, setDefaultTimeout } from 'bun:test';
 import { copyFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DomainEvents } from '../../src/app/events/catalog.ts';
@@ -11,7 +11,10 @@ import { SqliteUnitOfWork } from '../../src/infra/persistence/unit-of-work.ts';
 import type { StrategyStateRecord } from '../../src/ports/persistence/strategy-state.ts';
 import { RecordingEventBus } from '../helpers/recording-event-bus.ts';
 import { createCollectingLogger } from '../helpers/test-logger.ts';
-import { FakeClock, FakeLogger, TEMPLATE_ID, tempDir } from './helpers.ts';
+import { DISK_MIGRATION_TEST_MS, FakeClock, FakeLogger, TEMPLATE_ID, tempDir } from './helpers.ts';
+
+// Each case opens a database on disk: fsync stalls on CI runners (D30 l, helpers.ts).
+setDefaultTimeout(DISK_MIGRATION_TEST_MS);
 
 const FIXTURES = join(import.meta.dir, 'fixtures');
 const AT = 1_700_000_000_000;

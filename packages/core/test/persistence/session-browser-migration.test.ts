@@ -1,13 +1,22 @@
 /** @module test/persistence/session-browser-migration.test — schema v4 (`0004-session-browser`) over a v3 database: additive, nothing backfilled, old sessions serve no `browser` ("not recorded"), and the columns round-trip (03 §7, D-31). */
 
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, setDefaultTimeout } from 'bun:test';
 import { copyFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { SCHEMA_VERSION } from '../../src/infra/persistence/migrations/index.ts';
 import { openDatabase } from '../../src/infra/persistence/open.ts';
 import { SqliteUnitOfWork } from '../../src/infra/persistence/unit-of-work.ts';
 import { sessionRowToSummary } from '../../src/interface/http/serializers/sessions.ts';
-import { FakeClock, FakeLogger, sessionRecord, tempDir } from './helpers.ts';
+import {
+  DISK_MIGRATION_TEST_MS,
+  FakeClock,
+  FakeLogger,
+  sessionRecord,
+  tempDir,
+} from './helpers.ts';
+
+// Each case opens a database on disk: fsync stalls on CI runners (D30 l, helpers.ts).
+setDefaultTimeout(DISK_MIGRATION_TEST_MS);
 
 const FIXTURES = join(import.meta.dir, 'fixtures');
 

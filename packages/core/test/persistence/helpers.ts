@@ -67,11 +67,12 @@ export class FakeLogger implements Logger {
 }
 
 /**
- * Limit of a test that upgrades a fixture database on disk (copy, `VACUUM INTO` backup, every
- * migration since the fixture's version): about 35 ms locally, but each commit and the backup wait
- * for `fsync`, and a CI runner's disk stalls for seconds at a time (D30 l: on ubuntu CI one such
- * test took 5.8 s and its neighbours 1–2.6 s, the file-key and other on-disk tests alike, while
- * bun's default limit is 5 s).
+ * Limit of a test that opens a database on disk (a fixture copy upgraded with its `VACUUM INTO`
+ * backup and every migration since its version, a backup, a fresh file): about 35 ms locally, but
+ * each commit and the backup wait for `fsync`, and a CI runner's disk stalls for seconds at a time
+ * (D30 l: on ubuntu CI one such test took 5.8 s and its neighbours 1–2.6 s, while bun's default
+ * limit is 5 s). Every on-disk persistence suite sets it as its file's default (`setDefaultTimeout`,
+ * review #93 L4); what a case does is unchanged, so a slow case still shows in the timings.
  */
 export const DISK_MIGRATION_TEST_MS = 30_000;
 

@@ -1,12 +1,22 @@
 /** @module test/persistence/template-clipboard-migration.test — schema v11 (`0011-template-clipboard`) over a v10 database: one column, every existing template keeps clipboard writes allowed (`0`), the minimum reader stays 10 (compatible), the CHECK refuses anything but 0 and 1, and the repository round-trips the switch (spec 13 §2.1, D18). */
 
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, setDefaultTimeout } from 'bun:test';
 import { copyFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { MIGRATIONS, SCHEMA_VERSION } from '../../src/infra/persistence/migrations/index.ts';
 import { openDatabase } from '../../src/infra/persistence/open.ts';
 import { SqliteUnitOfWork } from '../../src/infra/persistence/unit-of-work.ts';
-import { FakeClock, FakeLogger, TEMPLATE_ID, tempDir, templateRecord } from './helpers.ts';
+import {
+  DISK_MIGRATION_TEST_MS,
+  FakeClock,
+  FakeLogger,
+  TEMPLATE_ID,
+  tempDir,
+  templateRecord,
+} from './helpers.ts';
+
+// Each case opens a database on disk: fsync stalls on CI runners (D30 l, helpers.ts).
+setDefaultTimeout(DISK_MIGRATION_TEST_MS);
 
 const FIXTURES = join(import.meta.dir, 'fixtures');
 

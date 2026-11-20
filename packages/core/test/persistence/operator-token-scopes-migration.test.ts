@@ -1,13 +1,16 @@
 /** @module test/persistence/operator-token-scopes-migration.test — schema v8 (`0008-operator-token-scopes`): operator tokens issued without `scopes` (the full list of their release) become `[]`, so they keep every scope now that operator tokens are limited to their credential's scopes; every other credential is untouched, and the minimum reader is unchanged (03 §3.5). */
 
 import { Database } from 'bun:sqlite';
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, setDefaultTimeout } from 'bun:test';
 import { copyFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Scope } from '@browserhive/contracts/enums';
 import { MIGRATIONS, SCHEMA_VERSION } from '../../src/infra/persistence/migrations/index.ts';
 import { openDatabase } from '../../src/infra/persistence/open.ts';
-import { FakeClock, FakeLogger, tempDir } from './helpers.ts';
+import { DISK_MIGRATION_TEST_MS, FakeClock, FakeLogger, tempDir } from './helpers.ts';
+
+// Each case opens a database on disk: fsync stalls on CI runners (D30 l, helpers.ts).
+setDefaultTimeout(DISK_MIGRATION_TEST_MS);
 
 const FIXTURES = join(import.meta.dir, 'fixtures');
 
