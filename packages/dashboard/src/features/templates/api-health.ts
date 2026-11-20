@@ -129,12 +129,19 @@ export function useTemplateHealth(id: string) {
         }),
       onSettled: settle,
     }),
+    // `requested_at`: only the re-login this tab shows; one started meanwhile answers 409 (review
+    // #81 L-2).
     confirm: useMutation({
-      mutationFn: (site: string) => api.confirmTemplateRelogin({ params, body: { site_id: site } }),
+      mutationFn: (input: { readonly site: string; readonly requestedAt: number }) =>
+        api.confirmTemplateRelogin({
+          params,
+          body: { site_id: input.site, requested_at: input.requestedAt },
+        }),
       ...refused('confirm'),
     }),
     cancel: useMutation({
-      mutationFn: () => api.cancelTemplateRelogin({ params }),
+      mutationFn: (requestedAt: number) =>
+        api.cancelTemplateRelogin({ params, query: { requested_at: requestedAt } }),
       ...refused('cancel'),
     }),
     show: useMutation({

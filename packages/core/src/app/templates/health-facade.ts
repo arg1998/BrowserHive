@@ -127,13 +127,18 @@ export class TemplateHealthFacade {
   }
 
   /** `POST …/relogin/confirm`. */
-  confirmRelogin(templateId: string, siteId: string, by: string): Promise<ReloginResponse> {
-    return this.#deps.relogin.confirm(templateId, siteId, by);
+  confirmRelogin(
+    templateId: string,
+    siteId: string,
+    by: string,
+    requestedAt?: number,
+  ): Promise<ReloginResponse> {
+    return this.#deps.relogin.confirm(templateId, siteId, by, requestedAt);
   }
 
   /** `DELETE …/relogin`. */
-  cancelRelogin(templateId: string, by: string): Promise<ReloginResponse> {
-    return this.#deps.relogin.cancel(templateId, by);
+  cancelRelogin(templateId: string, by: string, requestedAt?: number): Promise<ReloginResponse> {
+    return this.#deps.relogin.cancel(templateId, by, requestedAt);
   }
 
   /** `POST …/host/show`. */

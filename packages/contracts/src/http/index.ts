@@ -363,6 +363,7 @@ export {
 } from './template-edit.ts';
 export {
   BindingProblem,
+  CancelReloginQuery,
   ConfirmReloginRequest,
   ContinueAgentsResponse,
   ProbeResult,

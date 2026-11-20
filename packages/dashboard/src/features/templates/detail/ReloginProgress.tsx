@@ -135,7 +135,7 @@ export function ReloginProgress({
   const confirmable =
     relogin.state === 'open' && (relogin.confirm_required || site.pack_id === null);
   const onCancel = () =>
-    health.cancel.mutate(undefined, {
+    health.cancel.mutate(relogin.requested_at, {
       onSuccess: () => toast.info({ title: `Re-login of ${site.title} cancelled` }),
     });
   return (
@@ -185,7 +185,9 @@ export function ReloginProgress({
               variant={live !== null ? 'outline' : 'default'}
               disabled={busy}
               aria-label={`${confirmLabel}: ${site.title}`}
-              onClick={() => health.confirm.mutate(site.site_id)}
+              onClick={() =>
+                health.confirm.mutate({ site: site.site_id, requestedAt: relogin.requested_at })
+              }
             >
               {health.confirm.isPending ? <Spinner /> : <ICONS.check aria-hidden="true" />}
               {confirmLabel}

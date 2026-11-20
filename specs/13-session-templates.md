@@ -1388,8 +1388,8 @@ Conventions of 03 §4–§5 apply (snake_case, problem+json, `Page<T>`, cursors,
 | POST | `/templates/{template_id}/state` | `templates:write` | a Playwright storage state (≤ 16 MiB), `confirm?` | 202 `{operation_id}` (§7.4) | 400, 404, 409, 413 | T1b |
 | POST | `/templates/{template_id}/relogin` | `templates:login` | `{site_id, method: 'window'\|'vault', let_agents_continue?}` | `{session_id, relogin: ReloginView}` | 400 (`vault` without a linked binding or on a `human_only` site), 404, 409 `TEMPLATE_DISABLED` | T2 |
 | POST | `/templates/{template_id}/host/show` | `templates:login` | — | `{ok, window: 'relogin'\|'recording', session_id}` (opens the queued re-login window or raises the open one, §8.4) | 404, 409 | T2 |
-| POST | `/templates/{template_id}/relogin/confirm` | `templates:login` | `{site_id}` | `{session_id, relogin}` (**I'm signed in** during a window re-login of a generic site) | 400, 404, 409 | T2 |
-| DELETE | `/templates/{template_id}/relogin` | `templates:login` | — | `{session_id, relogin}` (cancels a queued or open re-login) | 404, 409 | T2 |
+| POST | `/templates/{template_id}/relogin/confirm` | `templates:login` | `{site_id, requested_at?}` | `{session_id, relogin}` (**I'm signed in** during a window re-login of a generic site; `requested_at` names the re-login the caller saw, 409 when another replaced it, D38) | 400, 404, 409 | T2 |
+| DELETE | `/templates/{template_id}/relogin` | `templates:login` | query `requested_at?` | `{session_id, relogin}` (cancels a queued or open re-login; with `requested_at` only that one, 409 when another replaced it, D38) | 400, 404, 409 | T2 |
 | POST | `/templates/{template_id}/agents/continue` | `templates:login` | — | `{ok, agents_paused: false}` (**Let agents continue**, D-60) | 404, 409 | T2 |
 | POST | `/templates/{template_id}/probe` | `templates:write` | `{site_ids?: string[]}` | `{results: [{site_id, outcome, reason, duration_ms}]}` (waits, at most 120 s) | 404, 409 `TEMPLATE_DISABLED` | T2 |
 | GET | `/templates/{template_id}/probes` | `templates:read` | filters `site_id`, `outcome[]`, `trigger[]`, `since`, `until`; cursor | `Page<ProbeRow>` | 404 | T2 |

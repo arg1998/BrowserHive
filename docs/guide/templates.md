@@ -477,8 +477,8 @@ A site can have a [vault](vault.md) login linked to it. BrowserHive then fills i
 | `POST /templates/{id}/probe` `{site_ids?}` | `templates:write` | `{results: [{site_id, outcome, reason, duration_ms}]}` after at most 2 minutes. |
 | `GET /templates/{id}/probes` | `templates:read` | Past checks, newest first (filters `site_id`, `outcome`, `trigger`, `since`, `until`). |
 | `POST /templates/{id}/relogin` `{site_id, method?, let_agents_continue?}` | `templates:login` | `{session_id, relogin}`. `method` is `window` (default) or `vault`. |
-| `POST /templates/{id}/relogin/confirm` `{site_id}` | `templates:login` | **I'm signed in**. `409 CONFLICT` when no new cookie appeared on the site. |
-| `DELETE /templates/{id}/relogin` | `templates:login` | Cancels it and closes its window. |
+| `POST /templates/{id}/relogin/confirm` `{site_id, requested_at?}` | `templates:login` | **I'm signed in**. `409 CONFLICT` when no new cookie appeared on the site, or when `requested_at` (the re-login's `requested_at` you saw) names a re-login another one replaced. |
+| `DELETE /templates/{id}/relogin?requested_at=` | `templates:login` | Cancels it and closes its window. With `requested_at`, only that re-login: `409 CONFLICT` when another replaced it, so a stale tab or an interrupted `templates login` never cancels someone else's. |
 | `POST /templates/{id}/host/show` | `templates:login` | Opens a queued re-login's window, or raises an open sign-in window. |
 | `POST /templates/{id}/agents/continue` | `templates:login` | Lets agents continue while a window is open. |
 | `PUT /templates/{id}/sites/{site}/relogin` | `templates:login` and `vault:write` | Links a vault login to the site ([vault guide](vault.md#signing-template-sites-in-again)). |
