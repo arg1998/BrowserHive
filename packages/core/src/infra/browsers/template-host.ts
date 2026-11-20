@@ -46,6 +46,11 @@ import { TemplateSessionView, type TemplateViewHost } from './template-view.ts';
 export const ADOPTION_DEADLINE_MS = 10_000;
 /** The close deadline of a host the operator quit while nobody listened for it. */
 const OPERATOR_CLOSE_MS = 10_000;
+/** A cookie of the host's jar, as the driver reports it. */
+type JarCookie = Awaited<ReturnType<BrowserContext['cookies']>>[number];
+
+/** How long after its last window closed Chrome may still drop session cookies (measured < 1 s). */
+export const SESSION_COOKIE_WATCH_MS = 3_000;
 
 export { CLOSE_BURST_MS } from './host-closes.ts';
 export { MAX_PARKED_PAGES } from './parked-pages.ts';
@@ -268,6 +273,40 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
       clamp(width, this.window.width),
       clamp(height, this.window.height),
     );
+  }
+
+  /**
+   * Chrome drops session-only cookies when its last window closes (measured on Chromium 153 with
+   * `--no-startup-window`: the process lives on, the session cookie is gone; the sentinel used to
+   * prevent it, D-78). When `count` pages are the host's last ones, the session cookies are read
+   * right before `close` and those Chrome then drops are put back. Snapshotting right before
+   * BrowserHive's own close means nothing a site deleted is brought back.
+   */
+  async keepSessionCookies<T>(count: number, close: () => Promise<T>): Promise<T> {
+    if (count === 0 || this.closing || this.targets.livePageCount() > count) return await close();
+    const before = (await this.context.cookies().catch(() => [])).filter((c) => c.expires === -1);
+    const result = await close();
+    if (before.length > 0) void this.restoreSessionCookies(before);
+    return result;
+  }
+
+  private async restoreSessionCookies(before: readonly JarCookie[]): Promise<void> {
+    const key = (c: JarCookie) => `${c.name}\t${c.domain}\t${c.path}`;
+    // Real time: Chrome drops them on its own schedule.
+    const until = Date.now() + SESSION_COOKIE_WATCH_MS;
+    while (!this.closing) {
+      const now = new Set((await this.context.cookies().catch(() => [])).map(key));
+      const lost = before.filter((c) => !now.has(key(c)));
+      if (lost.length > 0) {
+        await this.context.addCookies(lost.map((c) => ({ ...c }))).catch((err: unknown) => {
+          this.log.warn('session cookies lost', { err: serializeError(err) });
+        });
+        this.log.info('session cookies kept', { count: lost.length });
+        return;
+      }
+      if (Date.now() >= until) return;
+      await new Promise<void>((resolve) => setTimeout(resolve, 100));
+    }
   }
 
   viewClosed(sessionId: string): void {

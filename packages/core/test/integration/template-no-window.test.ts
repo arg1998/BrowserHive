@@ -1,5 +1,5 @@
 /// <reference lib="dom" />
-/** @module test/integration/template-no-window.test — a template host starts with no window (`--no-startup-window`, D-78) on a real browser: no page and no window at start, alive with none, BrowserHive's own closes never stop it and a page cannot close its window, the operator closing its last window (or the menu's Exit) stops it cleanly (sessions `operator`, a checkpoint while the browser is still up, then the browser), the sign-in window closed by hand leaves it up, a checkpoint never moves the focus, and session cookies survive a restart without any window coming back. Every OS, headless and headed; the focus, window-list and Exit checks need Linux with a window manager (`BROWSERHIVE_HEADED_WM=1`, CI's openbox leg); on macOS and Windows the foreground app is logged, not asserted (not measured yet, D-items in deferred.md). */
+/** @module test/integration/template-no-window.test — a template host starts with no window (`--no-startup-window`, D-78) on a real browser: no page and no window at start, alive with none, BrowserHive's own closes never stop it and a page cannot close its window, the operator closing its last window (or the menu's Exit) stops it cleanly (sessions `operator`, a checkpoint while the browser is still up, then the browser), the sign-in window closed by hand leaves it up, a checkpoint never moves the focus. Every OS, headless and headed; the focus, window-list and Exit checks need Linux with a window manager (`BROWSERHIVE_HEADED_WM=1`, CI's openbox leg); on macOS and Windows the foreground app is logged, not asserted (not measured yet, D-items in deferred.md). */
 
 import { afterEach, describe, expect, it } from 'bun:test';
 import { spawnSync } from 'node:child_process';
@@ -290,6 +290,21 @@ describe(`template host with no window (${HEADED ? 'headed' : 'headless'})`, () 
     expect(w.hosts).toHaveLength(2);
   }, 60_000);
 
+  it("closing the browser's last session keeps the session-only cookies Chrome drops with its last window", async () => {
+    world = await templateWorld('standard');
+    const w = world;
+    const alpha = await w.launch('alpha');
+    await w
+      .host()
+      .context.addCookies([
+        { name: 'bh_session_only', value: '1', url: 'https://site-a.test/', secure: true },
+      ]);
+    await w.sessions.close(alpha.id);
+    await new Promise((resolve) => setTimeout(resolve, 1_500));
+    expect(w.hosts).toHaveLength(1);
+    expect((await w.host().jar()).find((c) => c.name === 'bh_session_only')?.value).toBe('1');
+  });
+
   it('the sign-in window closed by hand leaves the browser up with no window', async () => {
     world = await templateWorld('standard');
     const signIn = await world.supervisor.launchMaintenance({
@@ -308,31 +323,6 @@ describe(`template host with no window (${HEADED ? 'headed' : 'headless'})`, () 
     const alpha = await world.launch('alpha');
     expect(alpha.view).not.toBeNull();
     expect(world.hosts).toHaveLength(1);
-  });
-
-  it('session cookies survive a restart of the browser, and no window comes back', async () => {
-    world = await templateWorld('standard');
-    const w = world;
-    const alpha = await w.launch('alpha');
-    await pageOf(alpha).goto(w.sites.url('site-a.test'));
-    // A session-only cookie (no expiry), as a site sets one for a sign-in it does not remember.
-    await w
-      .host()
-      .context.addCookies([
-        { name: 'bh_session_only', value: '1', url: 'https://site-a.test/', secure: true },
-      ]);
-    const before = (await w.host().jar()).find((c) => c.name === 'bh_session_only');
-    expect(before?.expires).toBe(-1);
-    await w.supervisor.stopHost(w.template.templateId, 'test');
-    const desktop = watchDesktop();
-    const host = await startHost(w);
-    await new Promise((resolve) => setTimeout(resolve, 1_500));
-    const seen = await desktop.stop();
-    expect(w.hosts).toHaveLength(2);
-    expect(host.context.pages()).toHaveLength(0);
-    expect(await pageTargets(host)).toBe(0);
-    if (WM) expect([...seen.windows]).toEqual([]);
-    expect((await host.jar()).find((c) => c.name === 'bh_session_only')?.value).toBe('1');
   });
 });
 

@@ -1,4 +1,4 @@
-/** @module infra/browsers/profile-preferences — the Chromium profile preferences every template host start merges in (spec 13 §3.1): no password saving, no autofill, no browser sign-in, session cookies kept across restarts ("Continue where you left off", D-78; no window is restored since the host starts with none); and the `webrtc-policy` strategy's `webrtc.ip_handling_policy` (§9.4), set or removed at each start. */
+/** @module infra/browsers/profile-preferences — the Chromium profile preferences every template host start merges in (spec 13 §3.1): no password saving, no autofill, no browser sign-in, never restore pages; and the `webrtc-policy` strategy's `webrtc.ip_handling_policy` (§9.4), set or removed at each start. */
 
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -10,18 +10,17 @@ type JsonObject = { [key: string]: unknown };
 
 /**
  * The preferences of spec 13 §3.1, as Chromium's nested `Preferences` keys. Chrome then offers no
- * "Save password?" or "Sign in to Chrome" and autofills nothing. `session.restore_on_startup: 1`
- * ("Continue where you left off") makes Chrome keep session-only cookies across a restart (it saves
- * them with the profile and loads them at the next start); it restores no window, because a host
- * starts with `--no-startup-window` (D-78; measured on Chromium 153, headed and headless, after a
- * clean close and after the menu's Exit: 0 pages, 0 windows, the session cookie back).
+ * "Save password?" or "Sign in to Chrome", autofills nothing, and never offers to restore pages
+ * after a crash (`session.restore_on_startup: 5` opens the New Tab page). `1` ("Continue where you
+ * left off") was measured for D-78: it kept session cookies across a restart on Linux only, not on
+ * the macOS and Windows CI runners, so it is not used (deferred D67).
  */
 export const TEMPLATE_PREFERENCES: JsonObject = {
   credentials_enable_service: false,
   profile: { password_manager_enabled: false, exit_type: 'Normal', exited_cleanly: true },
   autofill: { profile_enabled: false, credit_card_enabled: false },
   signin: { allowed: false },
-  session: { restore_on_startup: 1 },
+  session: { restore_on_startup: 5 },
 };
 
 function isObject(value: unknown): value is JsonObject {
