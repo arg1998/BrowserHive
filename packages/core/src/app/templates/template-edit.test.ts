@@ -50,6 +50,7 @@ let ops: FakeTemplateHostOps;
 let sessions: Map<string, ReturnType<typeof liveSession>>;
 let closed: string[];
 let changed: string[];
+let removedSites: string[];
 let edit: TemplateEditService;
 
 beforeEach(async () => {
@@ -67,6 +68,7 @@ beforeEach(async () => {
   runtime.sessions.set(TEMPLATE_ID, [...sessions.keys()]);
   closed = [];
   changed = [];
+  removedSites = [];
   let n = 0;
   edit = new TemplateEditService({
     repos,
@@ -83,7 +85,10 @@ beforeEach(async () => {
     ids: { eventId: () => `e-${++n}` },
     clock: new FakeClock(),
     logger: new CollectingLogger(),
-    changed: (id) => void changed.push(id),
+    changed: (id, removed) => {
+      changed.push(id);
+      if (removed !== undefined) removedSites.push(removed.siteId);
+    },
   });
 });
 
@@ -234,6 +239,8 @@ describe('sites', () => {
     await edit.putSite(TEMPLATE_ID, 'site-a.test', { enabled: false }, 'a');
     expect(sessions.get('bob-bbbbbbbb')?.current.sites.map((s) => s.site)).toEqual(['site-b.test']);
     await edit.removeSite(TEMPLATE_ID, 'site-b.test', 'a');
+    // The removed site goes with its change, so its sign-out thread can end (D34).
+    expect(removedSites).toEqual(['site-b.test']);
     expect(await code(edit.removeSite(TEMPLATE_ID, 'site-a.test', 'a'))).toBe('CONFLICT');
     expect(await code(edit.removeSite(TEMPLATE_ID, 'nope.test', 'a'))).toBe('TEMPLATE_NOT_FOUND');
   });

@@ -55,8 +55,8 @@ export interface TemplateEditDeps extends ClipboardSwitchOption {
   readonly clock: Clock;
   readonly logger: Logger;
   readonly bus?: EventPublisher<DomainEvents>;
-  /** The template's summary changed (`template.changed`). */
-  readonly changed: (templateId: string) => void;
+  /** The template's summary changed (`template.changed`); `removed`: the site just removed (D34). */
+  readonly changed: (templateId: string, removed?: TemplateSiteRecord) => void;
   /** Site packs: approval on first use when a site is added (T3a); absent = none. */
   readonly packs?: TemplatePacks;
 }
@@ -281,7 +281,8 @@ export class TemplateEditService {
   async removeSite(templateId: string, raw: string, by: string): Promise<void> {
     const { template, sites } = await this.#load(templateId);
     const siteId = registrableDomain(raw) || raw;
-    if (!sites.some((s) => s.siteId === siteId)) throw notFoundForOperator(templateId);
+    const removed = sites.find((s) => s.siteId === siteId);
+    if (removed === undefined) throw notFoundForOperator(templateId);
     if (sites.length === 1)
       throw conflict('A template needs at least one site; this is the last one.');
     await this.#deps.uow.transaction(async (repos) => {
@@ -295,7 +296,7 @@ export class TemplateEditService {
       template,
       sites.filter((s) => s.siteId !== siteId),
     );
-    this.#deps.changed(templateId);
+    this.#deps.changed(templateId, removed);
   }
 
   /** `POST /templates/{id}/access/resolve`: the D-48 tester on the template's rule (operators only). */

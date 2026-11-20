@@ -91,14 +91,19 @@ function summary(templateId: string): TemplateSummary {
   };
 }
 
-function changed(providers: readonly string[], at: number, templateId = TID): ProducedEvent {
+/** `template.changed` after the removal of a site of `provider`, `providers` left (or a plain change). */
+function changed(
+  removed: { readonly provider: string; readonly providers: readonly string[] } | null,
+  at: number,
+  templateId = TID,
+): ProducedEvent {
   return {
     name: 'template.changed',
     at: 1,
     payload: {
       type: 'template.changed',
       template: summary(templateId),
-      providers: { ids: providers, at },
+      ...(removed !== null && { site_removed: { ...removed, at } }),
     },
   };
 }
@@ -127,7 +132,10 @@ describe('D34: sign-in threads go final when their site or template is removed',
     const [elsewhere] = await service.produce(signedOut('site-a.test', OTHER));
     const [challenged] = await service.produce(signedOut('site-c.test', TID, { to: 'challenged' }));
     // site-a.test was removed: site-b.test and site-c.test remain.
-    const revised = await service.produce(changed(['site-b.test', 'site-c.test'], AT + 1));
+    const left = ['site-b.test', 'site-c.test'];
+    const revised = await service.produce(
+      changed({ provider: 'site-a.test', providers: left }, AT + 1),
+    );
     expect(revised.map((n) => String(n.notification_id))).toEqual([String(a?.notification_id)]);
     expect(stateOf(repo, a?.notification_id)).toBe('final');
     expect(stateOf(repo, b?.notification_id)).toBe('open');
@@ -138,15 +146,28 @@ describe('D34: sign-in threads go final when their site or template is removed',
     );
     expect(message).toMatchObject({ state: 'final', actions: [] });
     expect(message.summary).toContain('no longer part of this template');
-    // An unrelated change that keeps every provider revises nothing.
-    expect(await service.produce(changed(['site-b.test', 'site-c.test'], AT + 2))).toEqual([]);
+  });
+
+  it('a change that removes no site closes nothing, even when a pack moves a site to another provider (review #93 L3)', async () => {
+    const { repo, service } = setup();
+    const [a] = await service.produce(signedOut('site-a.test'));
+    // The summary changed (here: site-a.test now signs in through another provider): no removal.
+    expect(await service.produce(changed(null, AT + 1))).toEqual([]);
+    // A removed site whose provider another site still uses keeps the thread open too.
+    const shared = { provider: 'site-a.test', providers: ['site-a.test'] };
+    expect(await service.produce(changed(shared, AT + 2))).toEqual([]);
+    expect(stateOf(repo, a?.notification_id)).toBe('open');
   });
 
   it('a template whose id prefixes another one leaves the other alone', async () => {
     const { repo, service } = setup();
     const [mine] = await service.produce(signedOut('site-a.test', 'tp-a'));
     const [longer] = await service.produce(signedOut('site-a.test', 'tp-ab'));
-    await service.produce(changed([], AT + 1, 'tp-a'));
+    await service.produce({
+      name: 'template.removed',
+      at: 1,
+      payload: { type: 'template.removed', template_id: 'tp-a' },
+    });
     expect(stateOf(repo, mine?.notification_id)).toBe('final');
     expect(stateOf(repo, longer?.notification_id)).toBe('open');
   });

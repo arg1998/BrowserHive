@@ -323,6 +323,9 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
     bus: input.bus,
     ...packs,
     ...common,
+    // A removed site names its sign-out thread's provider in `template.changed` (D34).
+    changed: (id: string, removed?: Parameters<typeof service.publishChanged>[1]) =>
+      service.publishChanged(id, removed),
     clipboardWrites,
   });
   const actions = new TemplateActions({

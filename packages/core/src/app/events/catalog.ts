@@ -186,10 +186,14 @@ export type DomainEvents = {
   // templates (the `templates` topic, spec 13 §11.3)
   readonly 'template.changed': z.infer<typeof TemplateChangedEvent> & {
     /**
-     * Internal (spec 13 §8.6, D34): the identity providers of the template's sites now and when
-     * they were read, so the sign-out thread of a removed site goes `final`.
+     * Internal (spec 13 §8.6, D34): a site was removed; its identity provider and the providers of
+     * the sites left, so the sign-out thread of a provider no site uses any more goes `final`.
      */
-    readonly providers?: { readonly ids: readonly string[]; readonly at: number };
+    readonly site_removed?: {
+      readonly provider: string;
+      readonly providers: readonly string[];
+      readonly at: number;
+    };
   };
   readonly 'template.removed': z.infer<typeof TemplateRemovedEvent>;
   readonly 'template.host': z.infer<typeof TemplateHostEvent> & {

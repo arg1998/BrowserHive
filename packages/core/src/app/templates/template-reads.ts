@@ -74,7 +74,10 @@ export async function readTemplates(
   return { templates: read.filter((t) => !broken.has(t.templateId)), sites };
 }
 
-/** Publishes `template.changed` with the template's summary now; never throws. */
+/**
+ * Publishes `template.changed` with the template's summary now; after a site's removal also its
+ * provider and the providers left (D34). Never throws.
+ */
 export function publishTemplateChanged(
   deps: {
     readonly repos: Pick<Repositories, 'templates' | 'templateSites'>;
@@ -85,6 +88,7 @@ export function publishTemplateChanged(
   },
   templateId: string,
   log: Logger,
+  removed?: TemplateSiteRecord,
 ): void {
   const bus = deps.bus;
   if (bus === undefined) return;
@@ -95,10 +99,13 @@ export function publishTemplateChanged(
     const lookup = deps.packs?.providerOf?.bind(deps.packs) ?? (() => null);
     bus.publish('template.changed', {
       type: 'template.changed',
-      providers: {
-        ids: [...new Set(sites.map((s) => providerOf(s, lookup)))],
-        at: deps.clock.now(),
-      },
+      ...(removed !== undefined && {
+        site_removed: {
+          provider: providerOf(removed, lookup),
+          providers: [...new Set(sites.map((s) => providerOf(s, lookup)))],
+          at: deps.clock.now(),
+        },
+      }),
       template: toTemplateSummary(
         template,
         sites,

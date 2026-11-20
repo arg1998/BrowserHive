@@ -36,6 +36,7 @@ import type { Logger } from '../../ports/logger.ts';
 import type {
   Repositories,
   TemplateRecord,
+  TemplateSiteRecord,
   TemplateVersionRepository,
   UnitOfWork,
 } from '../../ports/persistence/index.ts';
@@ -358,9 +359,12 @@ export class TemplateService {
     return this.#deps.files.dirOf(templateId);
   }
 
-  /** Publishes `template.changed` with the template's summary now (never throws). */
-  publishChanged(templateId: string): void {
-    publishTemplateChanged(this.#deps, templateId, this.#log);
+  /**
+   * Publishes `template.changed` with the template's summary now (never throws); `removed`: a site
+   * that was just removed (D34).
+   */
+  publishChanged(templateId: string, removed?: TemplateSiteRecord): void {
+    publishTemplateChanged(this.#deps, templateId, this.#log, removed);
   }
 
   // --- helpers ----------------------------------------------------------------------------------

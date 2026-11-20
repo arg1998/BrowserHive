@@ -1,4 +1,4 @@
-/** @module app/templates/template-reads.test — `publishTemplateChanged` carries the identity providers of the template's sites (spec 13 §8.6, D34): a pack's provider, else the site itself, once each. */
+/** @module app/templates/template-reads.test — `publishTemplateChanged` after a site's removal carries its identity provider and the providers left (spec 13 §8.6, D34; review #93 L3): a pack's provider, else the site itself, once each; a plain change carries none. */
 
 import { describe, expect, it } from 'bun:test';
 import { CollectingLogger } from '../../../test/helpers/collecting-logger.ts';
@@ -40,11 +40,34 @@ describe('publishTemplateChanged', () => {
       },
       id,
       new CollectingLogger(),
+      // Glassdoor (provider indeed.com) was just removed; indeed.com still uses that provider.
+      templateSiteRecord({ templateId: id, siteId: 'glassdoor.com', packId: 'glassdoor' }),
     );
     for (let i = 0; i < 20 && bus.published.length === 0; i++) await Promise.resolve();
     const payload = bus.published[0]?.payload as DomainEvents['template.changed'] | undefined;
     expect(payload?.template.template_id).toBe(id);
-    expect([...(payload?.providers?.ids ?? [])].sort()).toEqual(['indeed.com', 'site-a.test']);
-    expect(payload?.providers?.at).toBe(clock.now());
+    expect(payload?.site_removed?.provider).toBe('indeed.com');
+    expect([...(payload?.site_removed?.providers ?? [])].sort()).toEqual([
+      'indeed.com',
+      'site-a.test',
+    ]);
+    expect(payload?.site_removed?.at).toBe(clock.now());
+  });
+
+  it('a change that removed no site carries no removal', async () => {
+    const repos = new InMemoryRepositories();
+    const template = templateRecord();
+    await repos.templates.insert(template);
+    await repos.templateSites.upsert(templateSiteRecord({ templateId: template.templateId }));
+    const bus = new RecordingEventBus<DomainEvents>();
+    publishTemplateChanged(
+      { repos, runtime: new FakeTemplateRuntime(), bus, clock: new FakeClock() },
+      template.templateId,
+      new CollectingLogger(),
+    );
+    for (let i = 0; i < 20 && bus.published.length === 0; i++) await Promise.resolve();
+    const payload = bus.published[0]?.payload as DomainEvents['template.changed'] | undefined;
+    expect(payload?.template.template_id).toBe(template.templateId);
+    expect(payload?.site_removed).toBeUndefined();
   });
 });

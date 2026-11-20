@@ -165,20 +165,20 @@ export function templateGoneRevision(payload: DomainEvents['template.removed']):
 }
 
 /**
- * `template.changed`: the sign-out and challenge threads of identity providers no site of the
- * template uses any more (the site was removed) go `final` (spec 13 §8.6, D34).
+ * `template.changed` after a site's removal: the sign-out and challenge thread of its identity
+ * provider goes `final` when no site left uses that provider (spec 13 §8.6, D34). A pack's provider
+ * changing for a site that stays closes nothing (review #93 L3).
  */
 export function sitesGoneRevision(
   payload: DomainEvents['template.changed'],
 ): ThreadRevision | null {
-  const providers = payload.providers;
-  if (providers === undefined) return null;
+  const removed = payload.site_removed;
+  if (removed === undefined || removed.providers.includes(removed.provider)) return null;
   const id = payload.template.template_id;
   return {
-    thread: providerThread(id, ''),
-    prefix: { except: providers.ids.map((p) => providerThread(id, p)) },
+    thread: providerThread(id, removed.provider),
     kinds: SIGNIN_KINDS,
-    dedupKey: `tpl-sites:${id}:${providers.at}`,
+    dedupKey: `tpl-site-gone:${id}:${removed.provider}:${removed.at}`,
     change: { state: 'final', summary: 'The site is no longer part of this template.' },
   };
 }

@@ -608,6 +608,8 @@ export class NotificationService {
   ): Promise<readonly Notification[]> {
     const keep = new Set(except);
     const threads = new Set<string>();
+    // The oldest BULK_EVENT_LIMIT open rows of these kinds across every template: a backlog past it
+    // (hundreds of open sign-outs) leaves its newest threads to the next revision or a dismissal.
     for (const row of await this.deps.repo.listUnsettled(revision.kinds ?? [], BULK_EVENT_LIMIT)) {
       if (row.thread.startsWith(revision.thread) && !keep.has(row.thread)) threads.add(row.thread);
     }
