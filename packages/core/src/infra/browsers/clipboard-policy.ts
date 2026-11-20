@@ -1,8 +1,9 @@
 /** @module infra/browsers/clipboard-policy — a template's "Deny clipboard writes" switch on its browser (spec 13 §2.1, §13 "The operator's desktop"; D18): the `clipboard-write` permission denied for the context, and, through a main-world init script, `document.execCommand('copy' | 'cut')` refused and the page's `copy`/`cut` listeners kept from rewriting a person's own copy, which the permission does not cover. A change while the browser runs reaches every open document at once, but only a start gives full effect: a document open at the change keeps whatever it took before (`needsRestart`). */
 
-import type { BrowserContext, CDPSession, Disposable } from 'patchright';
+import type { BrowserContext, CDPSession, Disposable, Page } from 'patchright';
 import type { Logger } from '../../ports/logger.ts';
 import { patchOpenDocuments, RestoredDocumentsWatch } from './clipboard-frames.ts';
+import { defaultContextIdOf } from './template-targets.ts';
 
 // Core compiles without the DOM lib; the page globals the init script touches.
 declare const Document: { readonly prototype: object };
@@ -145,6 +146,10 @@ class ClipboardPolicy {
   /** A live change took effect: documents open at that moment keep their old state until a start. */
   #changedLive = false;
   #script: Disposable | null = null;
+  /** While denied: every page the context reports gets the script of its own too (see `#apply`). */
+  #onPage: ((page: Page) => void) | null = null;
+  /** Those per-page scripts, removed again when the switch goes off. */
+  #pageScripts: Promise<Disposable | null>[] = [];
   /** After a live "on": documents of open pages restored from the back/forward cache. */
   #restores: RestoredDocumentsWatch | null = null;
   #contextId: string | null = null;
@@ -171,7 +176,16 @@ class ClipboardPolicy {
     if (deny === this.#deny) return;
     if (deny) {
       await this.#permissions(true);
+      // A page whose target was being set up while the context script was added can miss it
+      // (Patchright adds a context init script to the pages it already lists); with no window at
+      // the start (D-78) the first agent window often is one. Each page reported from now on gets
+      // the script on its own as well (running it twice changes nothing).
+      this.#onPage = (page: Page) => {
+        this.#pageScripts.push(page.addInitScript(blockPageClipboardWrites).catch(() => null));
+      };
+      this.#context.on('page', this.#onPage);
       this.#script = await this.#context.addInitScript(blockPageClipboardWrites);
+      for (const page of this.#context.pages()) this.#onPage(page);
       const reached = await patchOpenDocuments(
         this.#context,
         blockPageClipboardWrites.toString(),
@@ -189,6 +203,13 @@ class ClipboardPolicy {
     } else {
       await this.#restores?.stop();
       this.#restores = null;
+      if (this.#onPage !== null) this.#context.off('page', this.#onPage);
+      this.#onPage = null;
+      const pageScripts = this.#pageScripts;
+      this.#pageScripts = [];
+      for (const script of await Promise.all(pageScripts)) {
+        await script?.dispose().catch(() => undefined);
+      }
       await this.#permissions(false);
       // Documents loaded from now on are untouched; open ones keep the script part (`execCommand`
       // copy/cut refused, page copy listeners stopped) until they reload: a page could reach
@@ -233,11 +254,19 @@ class ClipboardPolicy {
     return this.#cdp;
   }
 
-  /** The context's id from any open page's target info (as `HostTargets.open` reads it). */
+  /**
+   * The context's id: from an open page's target info, or (a host starts with no window, D-78)
+   * the default browser context's, which is the persistent profile's.
+   */
   async #browserContextId(): Promise<string> {
     if (this.#contextId !== null) return this.#contextId;
     const page = this.#context.pages().find((p) => !p.isClosed());
-    if (page === undefined) throw new Error('the template browser has no open page');
+    if (page === undefined) {
+      const id = await defaultContextIdOf(await this.#browserSession(), this.#log);
+      if (id === null) throw new Error('the template browser names no default context');
+      this.#contextId = id;
+      return id;
+    }
     const cdp = await this.#context.newCDPSession(page);
     try {
       const { targetInfo } = await cdp.send('Target.getTargetInfo');

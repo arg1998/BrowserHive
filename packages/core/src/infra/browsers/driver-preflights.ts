@@ -105,7 +105,7 @@ function isHook(value: unknown): value is PreflightHook {
 type Fn = (...args: unknown[]) => unknown;
 
 /** The server-side object of a client-side driver object, through the in-process connection. */
-function serverObjectOf(client: object): object | null {
+export function serverObjectOf(client: object): object | null {
   try {
     const toImpl = field(field(client, '_connection'), 'toImpl');
     if (typeof toImpl !== 'function') return null;

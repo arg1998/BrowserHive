@@ -1,7 +1,8 @@
-/** @module infra/browsers/template-host — the shared browser of a template (spec 13 §3.1–§3.6): every page attributed before any session sees it, background windows claimed by target id, the parked sentinel (recreated when closed by hand), the parked-page bound, crash and operator-stop detection, and a close only the supervisor calls. */
+/** @module infra/browsers/template-host — the shared browser of a template (spec 13 §3.1–§3.6): every page attributed before any session sees it, background windows claimed by target id, no window of its own (it starts with none, D-78), the parked-page bound, crash and operator-stop detection, and a close only the supervisor calls. */
 
 import type { Browser, BrowserContext, Page } from 'patchright';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
+import { registrableDomain } from '../../kernel/url.ts';
 import type {
   AppliedIdentity,
   Cookie,
@@ -26,9 +27,9 @@ import type {
 import type { TemplateState } from '../../ports/template-state.ts';
 import { clipboardNeedsRestart } from './clipboard-policy.ts';
 import { MinimizedWindows } from './headed-windows.ts';
+import { OperatorCloseWatch, type ZeroWindows } from './host-closes.ts';
 import { closeContextWithin, readBrowserPid } from './host-process.ts';
 import { observeHostResponses } from './host-responses.ts';
-import { SentinelKeeper } from './host-sentinel.ts';
 import type { IdentityApplier } from './identity-applier.ts';
 import type { InterceptionChain } from './interception-chain.ts';
 import { PARKED, type PageOwner, sessionOwner, type TargetFacts } from './page-attribution.ts';
@@ -36,6 +37,7 @@ import { HostPageDispatcher } from './page-dispatcher.ts';
 import { pageSitesFileOf, watchPageSites } from './page-sites.ts';
 import { PageWaiters } from './page-waiters.ts';
 import { ParkedPages } from './parked-pages.ts';
+import { type RawCookie, SessionCookieKeeper } from './session-cookies.ts';
 import type { TemplateHostInput } from './template-host-input.ts';
 import * as ops from './template-host-ops.ts';
 import * as hostState from './template-host-state.ts';
@@ -44,9 +46,19 @@ import { TemplateSessionView, type TemplateViewHost } from './template-view.ts';
 
 /** How long a created window may take to be adopted and attributed (spec 13 §3.3). */
 export const ADOPTION_DEADLINE_MS = 10_000;
-export { OPERATOR_STOP_WINDOW_MS, SENTINEL_GRACE_MS } from './host-sentinel.ts';
+/** The close deadline of a host the operator quit while nobody listened for it. */
+const OPERATOR_CLOSE_MS = 10_000;
+/** When the marker cookie is looked at after the host was left with no window (ms after). */
+const MARKER_LOOKS_MS: readonly number[] = [0, 100, 300];
+/** How often an open sign-in window's session cookies are read (review #91 M2). */
+const SIGN_IN_COOKIES_MS = 250;
+
+export { OPERATOR_CLOSE_WINDOW_MS } from './host-closes.ts';
 export { MAX_PARKED_PAGES } from './parked-pages.ts';
 export type { TemplateHostInput } from './template-host-input.ts';
+
+/** A marker cookie as `context.addCookies` takes it (spec 13 §3.8). */
+type MarkerCookie = Parameters<BrowserContext['addCookies']>[0][number];
 
 /** A template host over a persistent context; built by the driver, held only by the supervisor. */
 export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
@@ -81,7 +93,27 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
   private readonly pageWatcher: (() => PageWatcher | null) | null;
   private readonly exitListeners = new Set<(exit: TemplateHostExit) => void>();
   private applied: { identity: AppliedIdentity; applier: IdentityApplier } | null = null;
-  private readonly keeper: SentinelKeeper;
+  /** Tells the operator quitting the browser from BrowserHive's own closes (D-78). */
+  private readonly closeWatch: OperatorCloseWatch;
+  /** Adopted pages by target id, with their owner and opener, until Chromium destroys the target. */
+  private readonly byTarget = new Map<
+    string,
+    { readonly page: Page; readonly owner: PageOwner; readonly opened: boolean }
+  >();
+  /** A headless host's invisible anchor page (D-78): its target id, `null` on a headed host. */
+  private anchorTarget: string | null = null;
+  /** Puts back the session cookies Chrome drops with the last window (D-78). */
+  private readonly cookieKeeper: SessionCookieKeeper;
+  /** BrowserHive's marker cookies (spec 13 §3.8), re-asserted after the last window closed. */
+  private readonly markerCookies: readonly MarkerCookie[];
+  /** When the last page was adopted (real time: the cookie watch runs on Chrome's schedule). */
+  private lastAdoptedAt = 0;
+  /** The open sign-in window's session cookies, read every second (review #91 M2). */
+  private signInCookies: RawCookie[] = [];
+  private signInTimer: ReturnType<typeof setInterval> | null = null;
+  private offSignInResponses: (() => void) | null = null;
+  /** The session cookies being put back after the last window closed (readers wait for it). */
+  private restoring: Promise<unknown> = Promise.resolve();
   /** Agent windows of sessions whose windows stay minimized (`agent_windows`, D-77). */
   private readonly minimizedWindows: MinimizedWindows;
   private closing = false;
@@ -118,23 +150,52 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
       onCommitted: (page, owner, facts) => this.committed(page, owner, facts),
       onReleased: (page) => void page.close({ runBeforeUnload: false }).catch(() => undefined),
     });
-    this.keeper = new SentinelKeeper({
-      context: this.context,
-      dispatcher: this.dispatcher,
-      targets: this.targets,
-      headless: this.headless,
+    this.closeWatch = new OperatorCloseWatch({
       clock: input.clock,
       log: this.log,
       closing: () => this.closing,
-      openParkedWindow: () => this.openWindow(null, !this.headless),
-      adopted: (page) => this.parked.delete(page),
+      livePageCount: () => this.targets.livePageCount(),
+      closedByHost: (targetId) => this.targets.closedByHost(targetId),
+      pageOf: (targetId) => {
+        const known = this.byTarget.get(targetId);
+        if (known === undefined) return undefined;
+        const { owner } = known;
+        const maintenance =
+          owner.kind === 'session' && this.views.get(owner.sessionId)?.maintenance === true;
+        return {
+          page: known.page,
+          maintenance,
+          // A tab with an opener may be closed by its own page's script (`window.close()`), BrowserHive's
+          // `new_tab` tabs too (`window.open`): never an operator close (verify #91 N1).
+          opened: known.opened,
+        };
+      },
+      operatorStop: (reason) => this.operatorStopped(reason),
+      zeroWindows: (kind) => this.zeroWindows(kind),
+    });
+    this.markerCookies = input.markerCookies ?? [];
+    this.cookieKeeper = new SessionCookieKeeper({
+      cdp: this.targets.session,
+      browserContextId: this.targets.browserContextId,
+      log: this.log,
+      closing: () => this.closing,
+      adoptedSince: (at) => this.lastAdoptedAt > at,
     });
     this.minimizedWindows = new MinimizedWindows(this.targets, this.log, {
       now: () => input.clock.now(),
     });
     this.targets.onCreated(() => this.minimizedWindows.targetCreated());
     this.targets.onLostTarget((facts) => this.dispatcher.adoptClosedTarget(facts));
-    this.targets.onDestroyed((targetId) => this.keeper.targetDestroyed(targetId));
+    this.targets.onDestroyed((targetId) => {
+      if (targetId === this.anchorTarget) {
+        this.anchorTarget = null;
+        this.byTarget.delete(targetId);
+        void this.openAnchor();
+        return;
+      }
+      this.closeWatch.targetDestroyed(targetId);
+      this.byTarget.delete(targetId);
+    });
     this.browser?.on('disconnected', () => this.exited('browser disconnected'));
     this.context.on('close', () => this.exited('context closed'));
     this.context.on('page', (page) => this.dispatcher.adopt(page));
@@ -153,9 +214,16 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
     return this.applied?.identity ?? null;
   }
 
-  /** The start pages: the sentinel parked (minimized when headed), restored pages closed. */
-  adoptStartPages(): Promise<void> {
-    return this.keeper.adoptStartPages();
+  /**
+   * Pages present at start: none, since the host starts with no window (D-78); any there is
+   * (a window Chromium restored) is closed before a session is admitted.
+   */
+  async adoptStartPages(): Promise<void> {
+    const pages = this.context.pages();
+    for (const page of pages) this.dispatcher.adopt(page);
+    await Promise.all(
+      pages.map((page) => page.close({ runBeforeUnload: false }).catch(() => undefined)),
+    );
   }
 
   /** Records the identity the launcher applied (the applier's page subscription stays host-level). */
@@ -188,6 +256,7 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
     const view = new TemplateSessionView(this, sessionId, page, options, this.log);
     this.views.set(sessionId, view);
     await view.prepareFirstPage();
+    if (view.recording) this.watchSignIn();
     // The operator signs in now: agent windows step aside (never raised again by BrowserHive).
     if (view.recording && !this.headless) await ops.minimizeAgentWindows(this, this.views.values());
     return view;
@@ -201,12 +270,18 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
     sessionId: string | null,
     minimized: boolean,
     signal?: AbortSignal,
+    anchor = false,
   ): Promise<Page> {
     const owner: PageOwner = sessionId === null ? PARKED : sessionOwner(sessionId);
     const settle = this.dispatcher.beginCreate();
     let targetId: string;
     try {
-      targetId = await this.targets.createWindow({ ...this.window, minimized });
+      targetId = await this.targets.createWindow({
+        ...this.window,
+        minimized,
+        ...(anchor && { foreground: true }),
+      });
+      if (anchor) this.anchorTarget = targetId;
     } catch (err) {
       settle();
       throw ops.windowUnavailable('window not created', err);
@@ -227,6 +302,8 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
         accepted ? 'window not adopted in time' : 'window parked before its claim',
       );
     }
+    // Before the window navigates: the marker may have gone with the last window (D-78).
+    await this.keepMarker([0]);
     return page;
   }
 
@@ -249,8 +326,137 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
     );
   }
 
+  /**
+   * Chrome drops every session-only cookie when its last window closes, BrowserHive's marker
+   * cookie included (measured on Chromium 153 with `--no-startup-window`: the process lives on and
+   * the cookies are gone about 20 ms after the close; the sentinel used to prevent it, D-78). When
+   * `close` will leave the host with no window (`count` pages are its last, or it has none and
+   * `close` opens and closes one: a checkpoint's storage page, a sign-in removal's window), the
+   * session cookies are read right before and those Chrome then drops are put back, raw. `except`
+   * leaves out cookies `close` itself removes. Reading right before BrowserHive's own close means
+   * nothing a site deleted is brought back.
+   */
+  async keepSessionCookies<T>(
+    count: number,
+    close: () => Promise<T>,
+    except?: (cookie: RawCookie) => boolean,
+  ): Promise<T> {
+    // A put-back still running belongs before anything that reads or changes the jar.
+    await this.restoring;
+    if (this.closing || this.targets.livePageCount() > count) return await close();
+    const before = (await this.cookieKeeper.snapshot()).filter((c) => except?.(c) !== true);
+    try {
+      return await close();
+    } finally {
+      const closedAt = Date.now();
+      this.track(this.cookieKeeper.putBack(before, closedAt));
+      void this.keepMarker();
+    }
+  }
+
+  /** Remembers a put-back in flight, so the jar's readers wait for it. */
+  private track(work: Promise<unknown>): void {
+    const settled = work.catch(() => undefined);
+    this.restoring = Promise.all([this.restoring, settled]);
+  }
+
+  /**
+   * Re-asserts BrowserHive's marker cookies (spec 13 §3.8: the daemon refuses any request that
+   * carries one, a redirect hop included); they are session cookies, so Chrome drops them with
+   * the last window. Watched for a moment, since the drop can land after the close is reported.
+   * The marker is BrowserHive's own, so re-adding it never brings back a site's state.
+   */
+  private async keepMarker(looks: readonly number[] = MARKER_LOOKS_MS): Promise<void> {
+    if (this.markerCookies.length === 0) return;
+    const names = new Set(this.markerCookies.map((c) => c.name));
+    const started = Date.now();
+    for (const at of looks) {
+      const wait = started + at - Date.now();
+      if (wait > 0) await new Promise<void>((resolve) => setTimeout(resolve, wait));
+      if (this.closing) return;
+      const jar = await this.context.cookies().catch(() => null);
+      const present = jar?.filter((c) => names.has(c.name)).length ?? 0;
+      if (present >= this.markerCookies.length) continue;
+      await this.context.addCookies([...this.markerCookies]).catch((err: unknown) => {
+        this.log.warn('marker cookie not set', { err: serializeError(err) });
+      });
+    }
+  }
+
+  /** The host was left with no window (not an operator stop): what Chrome dropped comes back. */
+  private zeroWindows(kind: ZeroWindows): void {
+    if (this.closing) return;
+    const closedAt = Date.now();
+    if ((kind === 'sign_in_closed' || this.recording) && this.signInCookies.length > 0) {
+      // A sign-in window was open: the sign-in (read every second meanwhile) stays.
+      this.track(this.cookieKeeper.putBack(this.signInCookies, closedAt));
+    }
+    void this.keepMarker();
+  }
+
+  /** While a sign-in window is open, its session cookies are read every second (review #91 M2). */
+  private watchSignIn(): void {
+    if (this.signInTimer !== null || !this.recording) return;
+    const read = async () => {
+      if (!this.recording || this.closing) return;
+      const now = await this.cookieKeeper.snapshot();
+      // Read while a window is open: after the last one closed the jar no longer holds them.
+      if (this.targets.livePageCount() > 0) this.signInCookies = now;
+    };
+    void read();
+    this.signInTimer = setInterval(() => void read(), SIGN_IN_COOKIES_MS);
+    if (typeof this.signInTimer === 'object' && 'unref' in this.signInTimer) {
+      this.signInTimer.unref();
+    }
+    // A response may set a cookie: read right after it too, so a sign-in the operator closes the
+    // window on at once is still kept (verify #91 N3).
+    let pending = false;
+    const onResponse = (): void => {
+      if (pending || !this.recording) return;
+      pending = true;
+      setTimeout(() => {
+        pending = false;
+        void read();
+      }, 20);
+    };
+    this.context.on('response', onResponse);
+    this.offSignInResponses = () => this.context.off('response', onResponse);
+  }
+
+  private stopSignInWatch(): void {
+    if (this.recording) return;
+    if (this.signInTimer !== null) clearInterval(this.signInTimer);
+    this.signInTimer = null;
+    this.offSignInResponses?.();
+    this.offSignInResponses = null;
+  }
+
+  /**
+   * A headless host keeps one invisible page open as its active window (D-78): on macOS a
+   * browser whose only windows are never-activated background ones renders them slowly or not at
+   * all (a smooth scroll stalled, 24 animation frames per second on CI). A headless browser shows
+   * nothing, so the anchor costs no screen and takes no focus. It belongs to no session, is not a
+   * listed parked page, keeps the host from reaching zero windows (so Chrome keeps its session
+   * cookies), and is opened again if it ever goes. Headed hosts have none.
+   */
+  async openAnchor(): Promise<void> {
+    if (!this.headless || this.closing) return;
+    try {
+      await this.openWindow(null, false, undefined, true);
+    } catch (err) {
+      this.anchorTarget = null;
+      this.log.warn('anchor page not opened', { err: serializeError(err) });
+    }
+  }
+
+  /** The anchor page, when this headless host has one (tests). */
+  get anchorPage(): Page | null {
+    return this.anchorTarget === null ? null : (this.byTarget.get(this.anchorTarget)?.page ?? null);
+  }
+
   viewClosed(sessionId: string): void {
     this.views.delete(sessionId);
+    this.stopSignInWatch();
   }
 
   viewIds(): readonly string[] {
@@ -278,16 +484,48 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
   }
 
   async jar(): Promise<readonly Cookie[]> {
+    await this.restoring;
     return await this.context.cookies();
   }
 
+  /**
+   * A checkpoint's read. With no window open, Playwright opens and closes a page of its own for the
+   * visited origins: the last window closes, so the session cookies are kept around it (review #91
+   * H1).
+   */
   async storageState(): Promise<TemplateState> {
-    return await hostState.readStorageState(this.context);
+    return await this.keepSessionCookies(0, () => hostState.readStorageState(this.context));
   }
 
+  /**
+   * A restore's or seed's apply. With no window open, Playwright's own page closing drops the
+   * state's session cookies right after it set them: those are set again, with the marker.
+   */
   async setStorageState(state: TemplateState): Promise<void> {
+    const alone = !this.closing && this.targets.livePageCount() === 0;
     await hostState.applyStorageState(this.context, state);
     for (const origin of state.origins) this.origins.add(origin.origin);
+    if (alone) await this.restoreStateSessionCookies(state);
+  }
+
+  private async restoreStateSessionCookies(state: TemplateState): Promise<void> {
+    const wanted = state.cookies.filter((c) => c.expires === -1);
+    const key = (c: { name: string; domain: string; path: string }) =>
+      `${c.name}\t${c.domain}\t${c.path}`;
+    const until = Date.now() + 1_000;
+    for (;;) {
+      const jar = new Set((await this.context.cookies().catch(() => [])).map(key));
+      const lost = wanted.filter((c) => !jar.has(key(c)));
+      if (lost.length > 0) {
+        await this.context.addCookies(lost.map((c) => ({ ...c }))).catch((err: unknown) => {
+          this.log.warn('session cookies lost', { err: serializeError(err) });
+        });
+        break;
+      }
+      if (Date.now() >= until) break;
+      await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    }
+    await this.keepMarker();
   }
 
   pageSites(): ReadonlySet<string> {
@@ -316,24 +554,41 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
   }
 
   async clearSignIn(domain: string): Promise<SignInRemoval> {
-    const page = this.keeper.page ?? this.context.pages()[0];
-    const removal = await ops.clearSignIn(
-      {
-        context: this.context,
-        dispatcher: this.dispatcher,
-        targets: this.targets,
-        committedOrigins: this.origins,
-        userDataDir: this.userDataDir,
-        log: this.log,
-        storageSession: () =>
-          page === undefined
-            ? Promise.reject(new Error('no page'))
-            : this.context.newCDPSession(page),
-      },
-      domain,
+    // With no window, the removal's own window is the last one to close: the other sites' session
+    // cookies are kept around it, the removed domain's are not (review #91 H1).
+    return await this.keepSessionCookies(
+      0,
+      () => this.clearSignInNow(domain),
+      (cookie) => registrableDomain(cookie.domain.replace(/^\./, '')) === domain,
     );
-    for (const origin of removal.origins) this.cleared.add(origin);
-    return removal;
+  }
+
+  private async clearSignInNow(domain: string): Promise<SignInRemoval> {
+    // `Storage.clearDataForOrigin` needs a page target's session (the browser-level one answers
+    // "Internal error", measured on Chromium 153); it acts on the profile, not on the page. A host
+    // with no window (D-78) gets a parked background window for it, closed right after.
+    const open = this.context.pages().find((p) => !p.isClosed());
+    const own = open === undefined ? await this.openWindow(null, !this.headless) : null;
+    const page = open ?? own;
+    try {
+      const removal = await ops.clearSignIn(
+        {
+          context: this.context,
+          dispatcher: this.dispatcher,
+          targets: this.targets,
+          committedOrigins: this.origins,
+          userDataDir: this.userDataDir,
+          log: this.log,
+          storageSession: () =>
+            page === null ? Promise.reject(new Error('no page')) : this.context.newCDPSession(page),
+        },
+        domain,
+      );
+      for (const origin of removal.origins) this.cleared.add(origin);
+      return removal;
+    } finally {
+      await own?.close({ runBeforeUnload: false }).catch(() => undefined);
+    }
   }
 
   async stepAside(page: Page): Promise<void> {
@@ -415,21 +670,45 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
     ops.watchOrigins(page, this.origins);
     // A popup's first request can precede the context's listener seeing its page (review #85 M4).
     this.pageSitesWatch.record(page.url());
+    this.byTarget.set(facts.targetId, { page, owner, opened: facts.openerId !== null });
+    this.lastAdoptedAt = Date.now();
+    this.closeWatch.pageAdopted();
     if (this.waiters.committed(page, owner, facts)) return;
-    if (owner.kind !== 'parked' || page === this.keeper.page) return;
+    if (owner.kind !== 'parked' || facts.targetId === this.anchorTarget) return;
     this.parked.add(page, facts.targetId);
   }
 
+  /**
+   * The browser went away without BrowserHive closing it: a crash or a kill (its pipe closed). After
+   * an operator stop the supervisor is already closing the browser, so its exit is not reported.
+   */
   private exited(reason: string): void {
     if (this.closing) return;
     this.closing = true;
-    const at = this.clock.now();
-    const operatorStop = this.keeper.operatorStop(at);
-    this.log.warn('template host exited', { reason, operatorStop });
     this.dispose();
+    if (this.closeWatch.stopped) return;
+    this.log.warn('template host exited', { reason, operatorStop: false });
+    this.notifyExit({ reason, operatorStop: false });
+  }
+
+  /**
+   * The operator quit the browser (its last window closed by hand, or the menu's Exit): Chromium
+   * keeps the process with no window, so the supervisor stops the host cleanly (sessions closed
+   * `operator`, a checkpoint, then the browser). Without a listener the host closes itself.
+   */
+  private operatorStopped(reason: string): void {
+    this.log.info('host stopped by operator', { reason });
+    if (this.exitListeners.size === 0) {
+      void this.close(OPERATOR_CLOSE_MS);
+      return;
+    }
+    this.notifyExit({ reason, operatorStop: true });
+  }
+
+  private notifyExit(exit: TemplateHostExit): void {
     for (const listener of [...this.exitListeners]) {
       try {
-        listener({ reason, operatorStop });
+        listener(exit);
       } catch (err) {
         this.log.error('exit listener threw', { err: serializeError(err) });
       }
@@ -437,6 +716,8 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
   }
 
   private dispose(): void {
+    if (this.signInTimer !== null) clearInterval(this.signInTimer);
+    this.signInTimer = null;
     this.minimizedWindows.dispose();
     this.dispatcher.dispose();
     this.waiters.cancelAll();

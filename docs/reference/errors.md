@@ -2515,7 +2515,7 @@ Details:
 | Field | Type | Required | Constraints |
 |---|---|---|---|
 | `template_id` | `string` | yes | — |
-| `reason` | one of `host_failed`, `no_display`, `proxy_unreachable`, `sandbox_unavailable` | yes | — |
+| `reason` | one of `host_failed`, `no_display`, `proxy_unreachable`, `sandbox_unavailable`, `launch_args` | yes | — |
 | `attempts` | `integer` | yes | ≥ 0 |
 
 <a id="PREFLIGHTS_NOT_ENFORCED"></a>

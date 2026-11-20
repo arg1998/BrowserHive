@@ -11,7 +11,9 @@ type JsonObject = { [key: string]: unknown };
 /**
  * The preferences of spec 13 §3.1, as Chromium's nested `Preferences` keys. Chrome then offers no
  * "Save password?" or "Sign in to Chrome", autofills nothing, and never offers to restore pages
- * after a crash (`session.restore_on_startup: 5` opens the New Tab page).
+ * after a crash (`session.restore_on_startup: 5` opens the New Tab page). `1` ("Continue where you
+ * left off") was measured for D-78: it kept session cookies across a restart on Linux only, not on
+ * the macOS and Windows CI runners, so it is not used (deferred D67).
  */
 export const TEMPLATE_PREFERENCES: JsonObject = {
   credentials_enable_service: false,

@@ -62,6 +62,8 @@ export class FakeTargets {
   timing: 'claimFirst' | 'adoptFirst' = 'claimFirst';
   lost: ((facts: TargetFacts) => void) | null = null;
   destroyed: ((targetId: string) => void) | null = null;
+  /** Targets Chromium destroyed ({@link destroy}). */
+  readonly gone = new Set<string>();
   private next = 0;
 
   constructor(private readonly context: FakeHostContext) {}
@@ -121,6 +123,22 @@ export class FakeTargets {
   async closeTarget(targetId: string): Promise<void> {
     this.closedTargets.push(targetId);
   }
+
+  /** Chromium destroys a target (its window closed in the browser, or a close answered). */
+  destroy(targetId: string): void {
+    this.gone.add(targetId);
+    this.destroyed?.(targetId);
+  }
+
+  livePageCount(): number {
+    let live = 0;
+    for (const facts of this.facts.values()) if (!this.gone.has(facts.targetId)) live += 1;
+    return live;
+  }
+
+  closedByHost(targetId: string): boolean {
+    return this.closedTargets.includes(targetId);
+  }
   async minimize(targetId: string): Promise<void> {
     this.minimized.push(targetId);
   }
@@ -148,7 +166,8 @@ export function fakeTemplateHost(
 ) {
   const context = new FakeHostContext();
   const targets = new FakeTargets(context);
-  for (let i = 0; i < (options.startPages ?? 1); i++) targets.page(`S${i}`, null, false);
+  // A host starts with no window (D-78); `startPages` are pages Chromium restored anyway.
+  for (let i = 0; i < (options.startPages ?? 0); i++) targets.page(`S${i}`, null, false);
   const logger = createCollectingLogger();
   const clock = new FakeClock();
   const host = new PlaywrightTemplateHost({

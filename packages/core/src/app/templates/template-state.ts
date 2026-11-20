@@ -15,6 +15,7 @@ import type {
   TemplateSiteRecord,
   TemplateVersionReason,
 } from '../../ports/persistence/index.ts';
+import type { TemplateHost } from '../../ports/template-host.ts';
 import type { StateSlot, TemplateState } from '../../ports/template-state.ts';
 import { KeyedQueue } from './keyed-queue.ts';
 import { inTemplateSpan } from './spans.ts';
@@ -90,24 +91,25 @@ export class TemplateStateService {
   /**
    * Rewrites the rolling checkpoint from the running host (interval, clean stop, shutdown) and
    * writes the `signin_change` or `daily` version it calls for. Never throws: a failure is the
-   * `TEMPLATE_CHECKPOINT_FAILED` degradation and the previous file and row stay.
+   * `TEMPLATE_CHECKPOINT_FAILED` degradation and the previous file and row stay. `host` is the
+   * host a clean stop is closing: it is `draining` then, so it is no longer the running one.
    */
-  checkpoint(templateId: string): Promise<CheckpointOutcome> {
+  checkpoint(templateId: string, host?: TemplateHost): Promise<CheckpointOutcome> {
     if (!this.writable) return Promise.resolve({ written: false, why: 'no_key' });
     return this.#queue.run(templateId, () =>
       inTemplateSpan(
         'template.checkpoint',
         { 'browserhive.template_id': templateId },
-        () => this.#checkpointNow(templateId),
+        () => this.#checkpointNow(templateId, host),
         (out) =>
           out.written && out.version !== null ? { 'browserhive.version': out.version } : {},
       ),
     );
   }
 
-  async #checkpointNow(templateId: string): Promise<CheckpointOutcome> {
+  async #checkpointNow(templateId: string, closing?: TemplateHost): Promise<CheckpointOutcome> {
     {
-      const host = this.#deps.hostOf(templateId);
+      const host = closing ?? this.#deps.hostOf(templateId);
       if (host === null) return { written: false, why: 'not_running' };
       const loaded = await this.#load(templateId);
       if (loaded === null) return { written: false, why: 'gone' };

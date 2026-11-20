@@ -248,4 +248,38 @@ describe('MinimizedWindows', () => {
     expect(kept.restoredByOperator(1)).toBe(true);
     kept.dispose();
   });
+  it("re-minimizes a kept window that its first navigation restored (emulated viewport), not an operator's", async () => {
+    const { windows, kept, advance } = keeper();
+    windows.open('first', 3, 'normal');
+    await kept.pageOpened('first');
+    expect(windows.states.get(3)).toBe('minimized');
+    // Chromium restores it around the first navigation (outside any tool call).
+    advance(RESTORE_QUIET_MS + 1);
+    windows.states.set(3, 'normal');
+    await kept.firstCommit('first');
+    expect(windows.states.get(3)).toBe('minimized');
+    // A window the operator restored is left alone, also on a later first commit of another page.
+    windows.open('other', 4, 'normal');
+    await kept.pageOpened('other');
+    advance(RESTORE_QUIET_MS + 1);
+    windows.states.set(4, 'normal');
+    await kept.poll();
+    expect(kept.restoredByOperator(4)).toBe(true);
+    await kept.firstCommit('other');
+    expect(windows.states.get(4)).toBe('normal');
+    kept.dispose();
+  });
+  it("respects an operator's restore made just before the first navigation (verify #91 N2)", async () => {
+    const { windows, kept, advance } = keeper();
+    windows.open('first', 5, 'normal');
+    await kept.pageOpened('first');
+    advance(RESTORE_QUIET_MS + 1);
+    // The operator restores it from the taskbar, then the agent's first goto starts and commits.
+    windows.states.set(5, 'normal');
+    await kept.navigationStarting('first');
+    await kept.firstCommit('first');
+    expect(windows.states.get(5)).toBe('normal');
+    expect(kept.restoredByOperator(5)).toBe(true);
+    kept.dispose();
+  });
 });

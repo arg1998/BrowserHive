@@ -103,12 +103,15 @@ export async function scrollInPage(args: ScrollScriptArgs): Promise<ScrollScript
     scroller.scrollTo({ left: args.x, top: args.y, behavior: args.behavior });
   }
   if (args.mode !== 'read' && args.behavior === 'smooth') {
-    // A smooth scroll moves over several frames: report where it settles (≤ 1 s).
-    let last = read();
+    // A smooth scroll moves over several frames: report where it settles (≤ 1 s). Its first frame
+    // can come late in a background window (macOS CI): no movement yet is not settled before 500 ms.
+    const start = read();
+    let last = start;
     for (let waited = 0; waited < 1_000; waited += 50) {
       await new Promise((resolve) => setTimeout(resolve, 50));
       const now = read();
-      if (now.x === last.x && now.y === last.y && waited >= 100) break;
+      const moved = now.x !== start.x || now.y !== start.y;
+      if (now.x === last.x && now.y === last.y && waited >= (moved ? 100 : 500)) break;
       last = now;
     }
   }

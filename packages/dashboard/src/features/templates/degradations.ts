@@ -21,6 +21,8 @@ const FAILURE: Readonly<Record<string, string>> = {
   proxy_unreachable: 'its proxy did not answer',
   sandbox_unavailable: 'Chromium’s sandbox is unavailable here',
   host_failed: 'it failed several times in a row',
+  launch_args:
+    'BrowserHive could not build its command line safely (its proxy, sandbox or a required setting was missing)',
 };
 
 /** A sentence about a template degradation (`name`: the template's display name), or `null`. */

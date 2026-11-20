@@ -57,6 +57,11 @@ export interface TemplateViewHost extends SessionHost {
   keepMinimizedAround<T>(pages: readonly Page[], run: () => Promise<T>): Promise<T>;
   /** Resizes the window of `page` on a headed host (never moves it). */
   resizeWindow(page: Page, width: number, height: number): Promise<void>;
+  /**
+   * Runs `close` on `count` pages; when they are the browser's last windows, puts back the
+   * session-only cookies Chrome drops when its last window closes (D-78).
+   */
+  keepSessionCookies<T>(count: number, close: () => Promise<T>): Promise<T>;
   /** The end of the browser (crash or operator stop); not called for a supervisor close. */
   onExit(listener: (exit: TemplateHostExit) => void): () => void;
   /** The view closed: the host forgets it. */
@@ -163,6 +168,11 @@ export class TemplateSessionView implements SessionView {
     return page;
   }
 
+  /** `close_tab`: the session cookies Chrome drops with the browser's last window stay (D-78). */
+  closePage(page: Page): Promise<void> {
+    return this.owner.keepSessionCookies(1, () => page.close());
+  }
+
   /** A tool call: with `agent_windows: minimized`, a window it restored is minimized again (D-77). */
   aroundAction<T>(run: () => Promise<T>): Promise<T> {
     if (!this.keptMinimized() || this.owner.recording) return run();
@@ -257,16 +267,18 @@ export class TemplateSessionView implements SessionView {
     const pages = dispatcher.pagesOf(this.sessionId);
     const perPage = Math.min(PAGE_CLOSE_MS, deadlineMs);
     const stillOpen: Page[] = [];
-    await Promise.all(
-      pages.map(async (page) => {
-        if (signal?.aborted === true) return;
-        const closed = page.close({ runBeforeUnload: false }).then(
-          () => true,
-          () => true,
-        );
-        const done = await Promise.race([closed, delay(perPage).then(() => false)]);
-        if (!done) stillOpen.push(page);
-      }),
+    await this.owner.keepSessionCookies(pages.length, () =>
+      Promise.all(
+        pages.map(async (page) => {
+          if (signal?.aborted === true) return;
+          const closed = page.close({ runBeforeUnload: false }).then(
+            () => true,
+            () => true,
+          );
+          const done = await Promise.race([closed, delay(perPage).then(() => false)]);
+          if (!done) stillOpen.push(page);
+        }),
+      ),
     );
     this.owner.viewClosed(this.sessionId);
     // Still attributed to this (released) session: no other session can ever reach them.

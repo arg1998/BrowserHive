@@ -89,7 +89,7 @@ Decisions: D-05 (wire), D-06 (config), D-23 (code and database).
 | **Auth state** | A saved login snapshot under `auth-states/`: a Playwright storage state or a full persistent profile. |
 | **Data dir** | The directory holding everything BrowserHive stores (D-24): database, backups, session directories, auth states, uploads, session templates, site-pack caches. |
 | **Session template** (template) | An operator-recorded, named browser identity signed in to one or more sites, with a pinned fingerprint, network and locale, a policy, encrypted versions and per-site health; agents launch sessions from it with `launch_session({template})` (spec 13, D-49). |
-| **Template host** | The one shared browser of a session template, with a sentinel window that keeps it alive without sessions; the only writer of the template (D-50). |
+| **Template host** | The one shared browser of a session template, started with no window and kept alive by Chromium without sessions (D-78); the only writer of the template (D-50). |
 | **Sealing** | The default restriction of template sessions that keeps the raw session material out of agent results: cookie values hidden and redacted, `evaluate` off, cookie writes, state exports and vault fills refused, unless the operator unseals the template (D-51). It does not stop an agent from acting as the account. |
 | **Site pack** | Signed, versioned per-site data (sign-in and signed-in detection, guards, challenges, pacing, write policy, requirements, strategy selections) applied to template sessions; data only, never code (D-54). |
 | **Strategy** | A per-site behaviour compiled into the binary that a site pack may select and parameterise within fixed bounds (spec 13 §9.4). |

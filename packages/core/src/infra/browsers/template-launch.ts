@@ -1,8 +1,8 @@
-/** @module infra/browsers/template-launch — starts a template host (spec 13 §3.1): proxy reachability, profile preferences, the persistent context with the template's identity and sandbox policy, the host's interception chain, the parked sentinel and the identity applier. */
+/** @module infra/browsers/template-launch — starts a template host (spec 13 §3.1): proxy reachability, profile preferences, the persistent context with the template's identity and sandbox policy started with no window (`--no-startup-window`, D-78), the host's interception chain and the identity applier. */
 
 import { mkdir } from 'node:fs/promises';
 import { connect } from 'node:net';
-import type { BrowserContext, BrowserContextOptions, BrowserType, Page } from 'patchright';
+import type { BrowserContext, BrowserContextOptions, BrowserType, LaunchOptions } from 'patchright';
 import { webrtcPolicyOfFlags } from '../../domain/site-packs/host-flags.ts';
 import { AppError, isAppError } from '../../kernel/errors/app-error.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
@@ -24,6 +24,7 @@ import {
 import { applyClipboardPolicy } from './clipboard-policy.ts';
 import { suppressInjectRoute } from './driver.ts';
 import { contextOptionsFor, deriveFingerprint, scriptPayloadFor } from './fingerprint.ts';
+import { hostArgv } from './host-argv.ts';
 import type { HostFacts } from './host-facts.ts';
 import { hostOwnerResolver, selfOriginHandler, templateHostCookies } from './host-interception.ts';
 import { IdentityApplier } from './identity-applier.ts';
@@ -34,6 +35,7 @@ import { applyTemplatePreferences } from './profile-preferences.ts';
 import type { SandboxPolicy, SandboxTarget } from './sandbox-policy.ts';
 import { sandboxedFramesArgs } from './sandboxed-frames.ts';
 import { deviceMemoryPayload } from './stealth-identity.ts';
+import { backgroundStorageStatePages, quietStoragePageInterception } from './storage-state-page.ts';
 import { PlaywrightTemplateHost } from './template-host.ts';
 import { HostTargets } from './template-targets.ts';
 
@@ -81,10 +83,10 @@ export function isNoDisplayError(err: unknown): boolean {
 }
 
 /**
- * Launches the template's persistent context and wraps it in a {@link PlaywrightTemplateHost}.
- * Nothing is admitted before it resolves: the chain is installed (fail-closed: without it the
- * self-origin guard would be missing, so the start fails), restored pages are closed, the sentinel
- * is parked and the identity is applied.
+ * Launches the template's persistent context with no window (D-78) and wraps it in a
+ * {@link PlaywrightTemplateHost}. Nothing is admitted before it resolves: the chain is installed
+ * (fail-closed: without it the self-origin guard would be missing, so the start fails), any page
+ * present at start is closed and the identity is applied.
  */
 export async function launchTemplateHostWith(
   ctx: TemplateLaunchContext,
@@ -102,26 +104,6 @@ export async function launchTemplateHostWith(
   // Read before the browser holds the files (spec 13 §3.1).
   const profileSecrets = profileHasSecrets(spec.userDataDir);
 
-  const kwargs = launchKwargsForChannel(spec.channel, {
-    incognito: false,
-    headless: spec.headless,
-  });
-  const launch = buildLaunchOptions({
-    kwargs,
-    stealth: spec.stealth,
-    // Pack strategy switches come only from the compiled-in table (spec 13 §9.10); sandboxed
-    // frames stay in process where an init script must reach every frame (verify #84 N1).
-    launchOptions: {
-      args: [
-        '--disable-sync',
-        ...(spec.hostFlags ?? []),
-        ...sandboxedFramesArgs(spec),
-        ...spec.testingArgs,
-      ],
-    },
-    proxy: spec.proxy,
-    downloadsDir: spec.downloadsDir,
-  });
   const fingerprint = deriveFingerprint({
     seed: spec.identity.seed,
     hostPlatform: ctx.host.platform,
@@ -133,16 +115,14 @@ export async function launchTemplateHostWith(
     assertDisplay,
   );
   const open = async (sandboxed: boolean): Promise<BrowserContext> => {
-    const { chromiumSandbox: _ignored, ...rest } = launch.options;
+    const options = hostLaunchOptions(spec, contextOptions, sandboxed);
+    // The whole command line is BrowserHive's (D-78): Patchright's own argv for these options with
+    // `--no-startup-window` instead of its first page, checked before anything starts.
+    const args = await hostArgv(options, spec.userDataDir, { proxy: spec.proxy, sandboxed });
     return ctx.browserType.launchPersistentContext(spec.userDataDir, {
-      ...rest,
-      // The daemon's own shutdown drains and closes hosts (spec 13 §3.2); Playwright's signal
-      // handlers would quit the browser first, which a host reads as the operator quitting it.
-      handleSIGINT: false,
-      handleSIGTERM: false,
-      handleSIGHUP: false,
-      ...(sandboxed && { chromiumSandbox: true }),
-      ...contextOptions,
+      ...options,
+      ignoreDefaultArgs: true,
+      args,
     });
   };
   let context: BrowserContext;
@@ -171,14 +151,20 @@ export async function launchTemplateHostWith(
     // Before anything navigates: every request to BrowserHive carries the marker the daemon
     // refuses, redirect hops included (spec 13 §3.8).
     await context.addCookies(templateHostCookies(spec.selfOrigins));
-    const anchor = context.pages()[0] ?? (await context.newPage());
+    // No page exists: Chromium started with no window, and none is opened for the start.
     await applyClipboardPolicy(context, spec.denyClipboardWrites === true, log, 'start');
-    const targets = await HostTargets.open(context, anchor, log);
+    const targets = await HostTargets.open(context, log);
+    // A checkpoint's storage read opens Playwright's own page for origins with no open page: on a
+    // headed host it becomes a minimized background window instead of a foreground tab (§3.9).
+    if (!spec.headless) backgroundStorageStatePages(context, log);
+    quietStoragePageInterception(context);
     const guard = (await ctx.requestGuard?.(spec.templateId)) ?? null;
     const host = buildHost(ctx, spec, context, targets, { sandboxed, profileSecrets, guard });
     await installHostChain(host);
     await host.adoptStartPages();
-    if (spec.stealth) await applyIdentity(ctx, spec, host, anchor, log);
+    // Headless only: one invisible anchor page as the active window (D-78).
+    await host.openAnchor();
+    if (spec.stealth) await applyIdentity(ctx, spec, host, log);
     log.info('template host started', {
       driver: ctx.driver,
       channel: spec.channel,
@@ -198,6 +184,51 @@ export async function launchTemplateHostWith(
           { message: `template host start failed: ${serializeError(err).message}`, cause: err },
         );
   }
+}
+
+/**
+ * The launch options of a host before its command line is derived (spec 13 §3.1): channel,
+ * headless, the stealth flags and `ignoreDefaultArgs` of 11 §2.2, `--disable-sync`, pack host
+ * flags, the sandboxed-frames switch, the testing seam's switches, the pinned proxy, the downloads
+ * directory, the sandbox attempt and the identity's context options. Exported for the argv test,
+ * which launches with these options the way hosts did before D-78 and compares the command lines.
+ */
+export function hostLaunchOptions(
+  spec: TemplateHostSpec,
+  contextOptions: BrowserContextOptions,
+  sandboxed: boolean,
+): LaunchOptions & BrowserContextOptions {
+  const kwargs = launchKwargsForChannel(spec.channel, {
+    incognito: false,
+    headless: spec.headless,
+  });
+  const launch = buildLaunchOptions({
+    kwargs,
+    stealth: spec.stealth,
+    // Pack strategy switches come only from the compiled-in table (spec 13 §9.10); sandboxed
+    // frames stay in process where an init script must reach every frame (verify #84 N1).
+    launchOptions: {
+      args: [
+        '--disable-sync',
+        ...(spec.hostFlags ?? []),
+        ...sandboxedFramesArgs(spec),
+        ...spec.testingArgs,
+      ],
+    },
+    proxy: spec.proxy,
+    downloadsDir: spec.downloadsDir,
+  });
+  const { chromiumSandbox: _ignored, ...rest } = launch.options;
+  return {
+    ...rest,
+    // The daemon's own shutdown drains and closes hosts (spec 13 §3.2); Playwright's signal
+    // handlers would quit the browser first, which a host reads as the operator quitting it.
+    handleSIGINT: false,
+    handleSIGTERM: false,
+    handleSIGHUP: false,
+    ...(sandboxed && { chromiumSandbox: true }),
+    ...contextOptions,
+  };
 }
 
 function buildHost(
@@ -258,6 +289,7 @@ function buildHost(
     window: spec.window,
     profileSecrets: facts.profileSecrets,
     userDataDir: spec.userDataDir,
+    markerCookies: templateHostCookies(spec.selfOrigins),
     ...(ctx.pageWatcher !== undefined && { pageWatcher: ctx.pageWatcher }),
     clock: ctx.clock,
     logger: ctx.logger,
@@ -282,7 +314,6 @@ async function applyIdentity(
   ctx: TemplateLaunchContext,
   spec: TemplateHostSpec,
   host: PlaywrightTemplateHost,
-  anchor: Page,
   log: Logger,
 ): Promise<void> {
   const applier = new IdentityApplier(host.context, {
@@ -291,7 +322,9 @@ async function applyIdentity(
     openProbePage: () => host.openProbePage(),
   });
   try {
-    const identity = await applier.apply(anchor, { geo: spec.identity.geo, display: null });
+    // No page yet: the version comes from the browser session, and every page gets the override
+    // as it opens.
+    const identity = await applier.apply(null, { geo: spec.identity.geo, display: null });
     host.attachIdentity(identity, applier);
   } catch (err) {
     const warning: LaunchWarning = {

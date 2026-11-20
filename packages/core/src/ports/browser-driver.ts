@@ -290,6 +290,12 @@ export interface SessionView {
    */
   aroundAction?<T>(run: () => Promise<T>): Promise<T>;
   /**
+   * Closes one of the session's pages (`close_tab`). A virtual session whose page is its template
+   * browser's last window keeps the session-only cookies Chrome drops with that window (D-78).
+   * Absent for exclusive sessions (`page.close()`).
+   */
+  closePage?(page: Page): Promise<void>;
+  /**
    * What `save_storage_state` reads: the session's context, or for a virtual session the template's
    * (one jar), which only an unsealed `state_export` reaches (spec 13 §5.4); `null` when none exists.
    */

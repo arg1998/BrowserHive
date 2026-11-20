@@ -1,20 +1,28 @@
-/** @module infra/browsers/template-host.test — `PlaywrightTemplateHost` and `TemplateSessionView` over fakes (PR #76 F9): claims around `createTarget`, released sessions, CDP scoping, the parked bound, restored pages, maintenance pages, the new-tab path. */
+/** @module infra/browsers/template-host.test — `PlaywrightTemplateHost` and `TemplateSessionView` over fakes (PR #76 F9): claims around `createTarget`, released sessions, CDP scoping, the parked bound, pages present at start, maintenance pages, the new-tab path, and the operator quitting the browser (its last window closed in the browser, D-78). */
 
 import { describe, expect, it } from 'bun:test';
 import type { Page } from 'patchright';
 import { FakeCdp, fakeTemplateHost } from '../../../test/helpers/fake-host-targets.ts';
 import { asPage } from '../../../test/helpers/fake-page.ts';
-import { MAX_PARKED_PAGES, SENTINEL_GRACE_MS } from './template-host.ts';
+import type { TemplateHostExit } from '../../ports/template-host.ts';
+import { MAX_PARKED_PAGES, OPERATOR_CLOSE_WINDOW_MS } from './template-host.ts';
+
+/** The exits a host reports, in order. */
+function exitsOf(host: { onExit(listener: (exit: TemplateHostExit) => void): () => void }) {
+  const exits: TemplateHostExit[] = [];
+  host.onExit((exit) => exits.push(exit));
+  return exits;
+}
 
 async function settle(): Promise<void> {
   for (let i = 0; i < 5; i++) await new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
 describe('PlaywrightTemplateHost over fakes', () => {
-  it('closes restored pages at start and keeps the first as the parked sentinel', async () => {
-    const { host, context } = fakeTemplateHost({ startPages: 3 });
+  it('starts with no window: any page present at start (a restored window) is closed', async () => {
+    const { host, context } = fakeTemplateHost({ startPages: 2 });
     await host.adoptStartPages();
-    expect(context.fakePages.map((p) => p.isClosed())).toEqual([false, true, true]);
+    expect(context.fakePages.map((p) => p.isClosed())).toEqual([true, true]);
     expect(host.parkedPages()).toEqual([]);
   });
 
@@ -128,16 +136,6 @@ describe('PlaywrightTemplateHost over fakes', () => {
     await expect(a.newPage(null)).rejects.toThrow('cap');
   });
 
-  it('recreates the sentinel when Chromium reports it closed in the browser', async () => {
-    const { host, targets } = fakeTemplateHost({ startPages: 1 });
-    await host.adoptStartPages();
-    await host.openView('alpha', { windowState: 'normal' });
-    const before = targets.created.length;
-    targets.destroyed?.('S0');
-    await settle();
-    expect(targets.created.length).toBe(before + 1);
-  });
-
   it("new_tab opens a window when the session's page sits in another session's window (PR #76 F11)", async () => {
     const { host, context, targets } = fakeTemplateHost();
     await host.adoptStartPages();
@@ -173,18 +171,6 @@ describe('PlaywrightTemplateHost over fakes', () => {
     expect(targets.minimized).toEqual([alphaTarget]);
     await host.openView('bravo', { windowState: 'normal' });
     expect(targets.created.at(-1)?.minimized).toBe(true);
-  });
-
-  it('gives a host left without windows a new sentinel after the grace (macOS, PR #76 F15)', async () => {
-    const { host, context, targets } = fakeTemplateHost({ startPages: 1 });
-    await host.adoptStartPages();
-    const [sentinel] = context.fakePages;
-    await sentinel?.close();
-    const before = targets.created.length;
-    targets.destroyed?.('S0');
-    await new Promise<void>((resolve) => setTimeout(resolve, SENTINEL_GRACE_MS + 100));
-    await settle();
-    expect(targets.created.length).toBe(before + 1);
   });
 
   it('closes a parked page that commits a data: document', async () => {
@@ -309,5 +295,137 @@ describe('PlaywrightTemplateHost over fakes', () => {
       false,
     );
     expect(view.owns(page)).toBe(true);
+  });
+  it("the operator closing the host's last window is an operator stop; the browser is left to the supervisor", async () => {
+    const { host, targets, context } = fakeTemplateHost({ headless: false });
+    await host.adoptStartPages();
+    const exits = exitsOf(host);
+    const view = await host.openView('alpha', { windowState: 'normal' });
+    targets.destroy(host.dispatcher.targetIdOf(view.page) ?? '');
+    expect(exits).toEqual([
+      { reason: 'the last window was closed in the browser', operatorStop: true },
+    ]);
+    // The browser itself is not closed by the host: the supervisor stops it (checkpoint first).
+    expect(context.closed).toBe(false);
+    // Reported once, and the browser's exit afterwards is not a crash.
+    context.emit('close', context);
+    expect(exits).toHaveLength(1);
+  });
+
+  it('a window BrowserHive closes is never an operator stop (page.close or its own closeTarget)', async () => {
+    const { host, targets } = fakeTemplateHost();
+    await host.adoptStartPages();
+    const exits = exitsOf(host);
+    const alpha = await host.openView('alpha', { windowState: 'normal' });
+    const alphaTarget = host.dispatcher.targetIdOf(alpha.page) ?? '';
+    await alpha.close(1_000);
+    targets.destroy(alphaTarget);
+    const bravo = await host.openView('bravo', { windowState: 'normal' });
+    const bravoTarget = host.dispatcher.targetIdOf(bravo.page) ?? '';
+    await targets.closeTarget(bravoTarget);
+    targets.destroy(bravoTarget);
+    expect(exits).toEqual([]);
+  });
+
+  it('a window closed by hand while another window is open is not a stop', async () => {
+    const { host, targets } = fakeTemplateHost();
+    await host.adoptStartPages();
+    const exits = exitsOf(host);
+    const alpha = await host.openView('alpha', { windowState: 'normal' });
+    await host.openView('bravo', { windowState: 'normal' });
+    targets.destroy(host.dispatcher.targetIdOf(alpha.page) ?? '');
+    expect(exits).toEqual([]);
+  });
+
+  it('the sign-in window closed by hand leaves the browser up; Exit closing it with an agent window stops', async () => {
+    const { host, targets, clock } = fakeTemplateHost();
+    await host.adoptStartPages();
+    const exits = exitsOf(host);
+    const signIn = await host.openView('recording-1', {
+      windowState: 'normal',
+      maintenance: true,
+      recording: true,
+    });
+    targets.destroy(host.dispatcher.targetIdOf(signIn.page) ?? '');
+    expect(exits).toEqual([]);
+    // Later: an agent window and a new sign-in window close in one burst (the menu's Exit).
+    await clock.advance(OPERATOR_CLOSE_WINDOW_MS + 1);
+    const alpha = await host.openView('alpha', { windowState: 'normal' });
+    const again = await signIn.newPage(null);
+    targets.destroy(host.dispatcher.targetIdOf(alpha.page) ?? '');
+    targets.destroy(host.dispatcher.targetIdOf(again) ?? '');
+    expect(exits.map((e) => e.operatorStop)).toEqual([true]);
+  });
+
+  it("a target no page was read for (Playwright's own storage page) is never an operator stop", async () => {
+    const { host, targets } = fakeTemplateHost();
+    await host.adoptStartPages();
+    const exits = exitsOf(host);
+    targets.destroy('storage-page');
+    expect(exits).toEqual([]);
+  });
+
+  it('a browser that exits on its own is a crash', async () => {
+    const { host, context } = fakeTemplateHost();
+    await host.adoptStartPages();
+    const exits = exitsOf(host);
+    await host.openView('alpha', { windowState: 'normal' });
+    context.emit('close', context);
+    expect(exits).toEqual([{ reason: 'context closed', operatorStop: false }]);
+  });
+
+  it('removing a sign-in on a host with no window opens a parked window for it and closes it', async () => {
+    const { host, context, targets } = fakeTemplateHost();
+    await host.adoptStartPages();
+    context.cookieJar = [{ name: 'sid', domain: '.idp.test' }];
+    const removed = await host.clearSignIn('idp.test');
+    expect(removed.unclearedOrigins).toEqual([]);
+    expect(targets.created).toHaveLength(1);
+    expect(context.fakePages.every((p) => p.isClosed())).toBe(true);
+  });
+  it("a site's popup closing itself as the last window is never an operator stop (review #91 M1)", async () => {
+    const { host, targets } = fakeTemplateHost();
+    await host.adoptStartPages();
+    const exits = exitsOf(host);
+    const alpha = await host.openView('alpha', { windowState: 'normal' });
+    const alphaTarget = host.dispatcher.targetIdOf(alpha.page) ?? '';
+    // The site opens a popup; the agent closes its first tab; the popup's script closes it.
+    targets.page('P1', alphaTarget);
+    await settle();
+    await alpha.page.close();
+    targets.destroy(alphaTarget);
+    targets.destroy('P1');
+    expect(exits).toEqual([]);
+  });
+
+  it("the operator closing the last window is a stop even when BrowserHive's close of another lands just after (review #91 L1)", async () => {
+    const { host, targets } = fakeTemplateHost();
+    await host.adoptStartPages();
+    const exits = exitsOf(host);
+    const alpha = await host.openView('alpha', { windowState: 'normal' });
+    const bravo = await host.openView('bravo', { windowState: 'normal' });
+    targets.destroy(host.dispatcher.targetIdOf(bravo.page) ?? '');
+    expect(exits).toEqual([]);
+    const alphaTarget = host.dispatcher.targetIdOf(alpha.page) ?? '';
+    await alpha.page.close();
+    targets.destroy(alphaTarget);
+    expect(exits.map((e) => e.operatorStop)).toEqual([true]);
+  });
+
+  it('an operator close followed by a new window is not a stop when that window later closes', async () => {
+    const { host, targets, clock } = fakeTemplateHost();
+    await host.adoptStartPages();
+    const exits = exitsOf(host);
+    const alpha = await host.openView('alpha', { windowState: 'normal' });
+    const bravo = await host.openView('bravo', { windowState: 'normal' });
+    targets.destroy(host.dispatcher.targetIdOf(bravo.page) ?? '');
+    const charlie = await host.openView('charlie', { windowState: 'normal' });
+    await clock.advance(1);
+    for (const view of [alpha, charlie]) {
+      const id = host.dispatcher.targetIdOf(view.page) ?? '';
+      await view.page.close();
+      targets.destroy(id);
+    }
+    expect(exits).toEqual([]);
   });
 });

@@ -117,11 +117,12 @@ export class IdentityApplier {
   /**
    * Derive the identity from the real browser (`Browser.getVersion` over CDP) and apply it to
    * `page` **before first navigation**; then hook `context.on('page')` so every later page is
-   * covered. Throws when the first application fails so the launcher can record `STEALTH_INIT_FAILED`.
+   * covered. `page` is `null` for a browser with no page yet (a template host starts with no
+   * window, D-78): the version is read on a browser-level session and only later pages get it.
+   * Throws when the first application fails so the launcher can record `STEALTH_INIT_FAILED`.
    */
-  async apply(page: Page, input: ApplyIdentityInput): Promise<AppliedIdentity> {
-    const cdp = await this.context.newCDPSession(page);
-    const version = BrowserVersion.parse(await cdp.send('Browser.getVersion'));
+  async apply(page: Page | null, input: ApplyIdentityInput): Promise<AppliedIdentity> {
+    const version = BrowserVersion.parse(await this.browserVersion(page));
     const product = version.product ?? '';
     const userAgent = version.userAgent ?? '';
     // Edge only: its `Chromium` brand version is not in `Browser.getVersion`, so read Edge's own
@@ -141,8 +142,11 @@ export class IdentityApplier {
       native,
     });
     this.override = derived.override;
-    await cdp.send('Emulation.setUserAgentOverride', cdpParamsFor(derived.override));
-    this.track(page, { cdp, ready: Promise.resolve() });
+    if (page !== null) {
+      const cdp = await this.context.newCDPSession(page);
+      await cdp.send('Emulation.setUserAgentOverride', cdpParamsFor(derived.override));
+      this.track(page, { cdp, ready: Promise.resolve() });
+    }
 
     // Cover every page opened from here on — agent tabs and site-opened popups alike.
     this.context.on('page', (opened) => {
@@ -172,6 +176,26 @@ export class IdentityApplier {
     const state: PageState = { cdp: null, ready: this.applyToPage(page) };
     this.pages.set(page, state);
     return state.ready;
+  }
+
+  /** `Browser.getVersion` on the page's session, or on a short browser-level session. */
+  private async browserVersion(page: Page | null): Promise<unknown> {
+    if (page !== null) {
+      const cdp = await this.context.newCDPSession(page);
+      try {
+        return await cdp.send('Browser.getVersion');
+      } finally {
+        await cdp.detach().catch(() => undefined);
+      }
+    }
+    const browser = this.context.browser();
+    if (browser === null) throw new Error('no browser to read the version from');
+    const cdp = await browser.newBrowserCDPSession();
+    try {
+      return await cdp.send('Browser.getVersion');
+    } finally {
+      await cdp.detach().catch(() => undefined);
+    }
   }
 
   /** Detach every live CDP session (harmless if the context is already tearing down). */

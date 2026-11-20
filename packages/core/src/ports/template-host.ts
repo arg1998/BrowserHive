@@ -1,4 +1,4 @@
-/** @module ports/template-host — the shared browser of a session template and its launcher (spec 13 §3.1, §3.3, §3.13): one persistent context, a sentinel window, one background window set per virtual session, attribution of every page before any session sees it. */
+/** @module ports/template-host — the shared browser of a session template and its launcher (spec 13 §3.1, §3.3, §3.13): one persistent context started with no window (D-78), one background window set per virtual session, attribution of every page before any session sees it. */
 
 import type { Channel } from '@browserhive/contracts/enums';
 import type { Page } from 'patchright';
@@ -51,8 +51,10 @@ export interface TemplateHostSpec {
 export interface TemplateHostExit {
   readonly reason: string;
   /**
-   * The browser exited within 10 s after its sentinel window was closed by hand: the operator quit
-   * the browser (spec 13 §3.2), not a crash.
+   * The operator quit the browser (spec 13 §3.2, D-78): Chromium destroyed the host's last window
+   * and BrowserHive had not closed it (closed by hand, taskbar Close, the menu's Exit). The browser
+   * process is still running then (Chromium keeps a host with no window); the supervisor stops the
+   * host cleanly. `false`: the browser exited on its own (a crash or a kill).
    */
   readonly operatorStop: boolean;
 }
@@ -138,8 +140,8 @@ export interface SharedWindowInfo {
  * narrow `SessionHost`.
  *
  * @remarks Invariant (spec 13 §3.4, D-50): every page is attributed to at most one session before
- * any session sees it, an attribution never changes, and a parked page (the sentinel, pages the
- * operator or a service worker opened, restored pages, BrowserHive's probe pages) is in no view.
+ * any session sees it, an attribution never changes, and a parked page (pages the operator or a
+ * service worker opened, restored pages, BrowserHive's probe pages) is in no view.
  */
 export interface TemplateHost extends BrowserHost {
   readonly kind: 'template';
@@ -155,11 +157,14 @@ export interface TemplateHost extends BrowserHost {
   agentPageCount(): number;
   /** Open pages of one session. */
   sessionPageCount(sessionId: string): number;
-  /** Open parked pages, the sentinel excluded, oldest first. */
+  /** Open parked pages, oldest first. */
   parkedPages(): readonly ParkedPageInfo[];
   /** Ids of sessions with an open view. */
   viewIds(): readonly string[];
-  /** Subscribes to the end of the browser (crash or operator stop); not called for `close()`. */
+  /**
+   * Subscribes to the end of the browser (crash) and to the operator quitting it (operator stop,
+   * the browser still running); not called for `close()`.
+   */
   onExit(listener: (exit: TemplateHostExit) => void): () => void;
   /**
    * Saved passwords or autofill data were in the profile when this host started (spec 13 §3.1);
@@ -204,7 +209,7 @@ export interface TemplateHost extends BrowserHost {
    */
   pageHeaps(activeOf?: ActivePageOf): Promise<readonly PageHeap[]>;
   /**
-   * Closes one page by target id: a parked page (`parked`, never the sentinel) or an agent session's
+   * Closes one page by target id: a parked page (`parked`) or an agent session's
    * page (`session`, the memory trim). False when no such page is open.
    */
   closePage(targetId: string, scope: 'parked' | 'session'): Promise<boolean>;
@@ -232,11 +237,14 @@ export interface TemplatePageWatcher {
 /** Starts template hosts (the browser driver, Patchright; spec 13 §3.1). */
 export interface TemplateHostLauncher {
   /**
-   * Launches the persistent context of a template, prepares its profile preferences, installs the
-   * host's interception chain, parks the sentinel and closes restored pages.
+   * Launches the persistent context of a template with no window (`--no-startup-window`, D-78),
+   * prepares its profile preferences, installs the host's interception chain and closes any page
+   * present at start.
    *
    * @throws AppError `SANDBOX_UNAVAILABLE`, `BROWSER_NOT_INSTALLED`, or `INTERNAL_ERROR` with
-   *   `ref` `no_display` (Chromium's display errors), `proxy_unreachable` or `browser-launch`.
+   *   `ref` `no_display` (Chromium's display errors), `proxy_unreachable`, `launch_args` (the
+   *   browser's command line lacked the proxy, the sandbox setting or a required switch) or
+   *   `browser-launch`.
    */
   launchTemplateHost(spec: TemplateHostSpec, signal?: AbortSignal): Promise<TemplateHost>;
   /**

@@ -354,8 +354,8 @@ export class TemplateHostSupervisor implements TemplateRuntime {
         return cap === null || this.deps.sessions.occupiedSlots() < cap;
       },
       closeTimeoutMs: this.deps.config.closeTimeoutMs,
-      beforeClose: async () => {
-        await this.checkpoints?.checkpoint(template.templateId);
+      beforeClose: async (host) => {
+        await this.checkpoints?.checkpoint(template.templateId, host);
       },
       changed: (id) => this.publishHost(id),
     });
@@ -372,7 +372,7 @@ export class TemplateHostSupervisor implements TemplateRuntime {
       );
   }
 
-  /** In use: an agent session, a recording or re-login, or a parked page other than the sentinel. */
+  /** In use: an agent session, a recording or re-login, or a parked page (an operator's window). */
   private inUse(templateId: string, host: TemplateHost): boolean {
     const working = this.sessionsOf(templateId, null).some(
       (s) => s.template?.mode === 'live' || s.slug !== SYSTEM_MAINTENANCE_SLUG,
