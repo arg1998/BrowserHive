@@ -99,9 +99,9 @@ FLAGS — sessions
                                     rewritten; versions are written at milestones only. default: 15m
   --templateVersionsKeep <n>        Versions kept per template, plus every pinned version and the
                                     newest one with every site signed in. default: 10
-  --templateRecycleRss <bytes>      A template browser's memory (proportional set size on Linux,
-                                    resident elsewhere) above which the heaviest session's largest
-                                    background tab is closed, then the browser is drained and
+  --templateRecycleRss <bytes>      A template browser's memory (PSS on Linux, RSS elsewhere) above
+                                    which the heaviest session's largest background tab is closed, a
+                                    minute later all its tabs, then the browser is drained and
                                     restarted. default: 3GiB
   --templateHostIdleTimeout <duration>
                                     How long a template's browser stays open with no session before

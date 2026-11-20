@@ -327,7 +327,7 @@
       ]
     },
     "templateRecycleRss": {
-      "description": "A template browser's memory (proportional set size on Linux, resident elsewhere) above which the heaviest session's largest background tab is closed, then the browser is drained and restarted.",
+      "description": "A template browser's memory (PSS on Linux, RSS elsewhere) above which the heaviest session's largest background tab is closed, a minute later all its tabs, then the browser is drained and restarted.",
       "default": "3GiB",
       "x-browserhive-env": "BROWSERHIVE_TEMPLATE_RECYCLE_RSS",
       "x-browserhive-cli": "--templateRecycleRss",

@@ -106,6 +106,13 @@ for (const stealth of STEALTH_LEGS) {
       expect(image(ok(await call('screenshot')))).toBe(true);
       const after = JSON.parse(textOf(ok(await call('list_tabs')))) as { url: string }[];
       expect(after.map((t) => new URL(t.url).pathname)).toEqual(['/landing']);
+      // `to` on a layout that overflows sideways still moves the feed (review #88 L2).
+      ok(await call('navigate', { url: w.sites.url('site-a.test', '/inner-feed?wide') }));
+      expect(await json('scroll', { mode: 'to', x: 0, y: 300 })).toMatchObject({
+        y: 300,
+        target: 'element',
+        element: 'main#feed',
+      });
     });
 
     it('a minimized window after a popup, a dialog and a download still yields a screenshot within 15 s', async () => {

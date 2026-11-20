@@ -70,6 +70,16 @@ describe('TabRegistry', () => {
     expect(tabNotFound('s', ACTIVE_TAB_SENTINEL).message).toBe(
       "Tab '<active>' not found in session 's'. The session has no open tab; open one with new_tab.",
     );
+    // After the memory backstop the message says why, until a tab opens again (review #88 M2).
+    tabs.noteAllClosed('Memory stayed too high.');
+    expect(() => tabs.resolve()).toThrow(
+      "Tab '<active>' not found in session 'shop-00000001'. Memory stayed too high. The session has no open tab; open one with new_tab.",
+    );
+    tabs.add(new FakePage().page);
+    tabs.remove(tabs.activeTabId() ?? '');
+    expect(() => tabs.resolve()).toThrow(
+      "Tab '<active>' not found in session 'shop-00000001'. The session has no open tab; open one with new_tab.",
+    );
   });
 
   it('setActive changes the active tab and throws for unknown ids', () => {

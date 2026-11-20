@@ -1,4 +1,4 @@
-/** @module domain/templates/redaction — the cookie-value redaction of sealed template sessions (spec 13 §5.4, D-51): every value of a cookie in the template's browser (and every storage value of its sites) that could be a secret — at least 12 characters and not plain text (§5.4 "What counts as a secret") — becomes `[sealed]` wherever it occurs in agent-facing text; only the matching text is replaced. */
+/** @module domain/templates/redaction — the cookie-value redaction of sealed template sessions (spec 13 §5.4, D-51): every value of a cookie in the template's browser (and every storage value of its sites) of at least 12 characters becomes `[sealed]` wherever it occurs in agent-facing text, unless it is one of the session's own identity values or matches a strict grammar of public forms (§5.4 "What counts as a secret": deny by default, review #88 H1); only the matching text is replaced. */
 
 /** What a redacted value is replaced with. */
 export const SEALED_MARK = '[sealed]';
@@ -7,59 +7,118 @@ export const SEALED_MARK = '[sealed]';
 export const MIN_SEALED_VALUE_LENGTH = 12;
 
 /**
- * The characters plain text is made of: letters, digits, whitespace and common punctuation of
- * words, URLs, paths, time zones and language lists. A value with any other character (quotes,
- * backslashes, angle brackets, braces, control characters) is never plain.
+ * A number: up to 10 integer digits (counters, seconds timestamps) or a 13-digit millisecond
+ * timestamp from 2001 to 2033, with at most 6 fraction digits. 11–15-digit ids redact.
  */
-const PLAIN_CHARACTERS = /^[\p{L}\p{N}\s\-_.,:;/#?&=+()!'@~%*]+$/u;
-
-/** A run of letters and digits as a word, number or short unit shows it (see {@link isPlainRun}). */
-const PLAIN_RUNS: readonly RegExp[] = [
-  /^\p{Nd}{1,4}$/u, // a year, a small number, a version part
-  /^\p{Lu}?\p{Ll}{1,19}$/u, // a word, lower case or capitalized
-  /^\p{Lu}{1,5}$/u, // an acronym, a region code
-  /^\p{Lu}?\p{Ll}+(?:\p{Lu}\p{Ll}{2,}){1,4}$/u, // camelCase or PascalCase words
-  /^\p{Lo}{1,20}$/u, // a word of a script without case
-  /^\p{L}{1,3}\p{Nd}{1,3}$/u, // v2, u0, h264, utf8
-  /^\p{Nd}{1,3}\p{L}{1,3}$/u, // 5px, 2nd, 100vh
-];
-
-/** A whole number shorter than 16 digits (counters, timestamps, ids); a longer one may be a token. */
-const PLAIN_NUMBER = /^[+-]?\p{Nd}{1,15}(?:\.\p{Nd}+)?$/u;
+const PUBLIC_NUMBER = /^[+-]?(?:\d{1,10}|1\d{12})(?:\.\d{1,6})?$/;
 
 /** An ISO 8601 date or date-time. */
 const ISO_DATE =
   /^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/;
 
-function isPlainRun(run: string): boolean {
-  return PLAIN_RUNS.some((re) => re.test(run));
+/** A path or fragment segment of a public URL: a word, a number of ≤ 4 digits, or a short unit. */
+const URL_SEGMENT = /^(?:[a-z]{1,20}|[A-Z][a-z]{1,19}|\d{1,4}|[a-z]{1,3}\d{1,3})$/;
+
+/** Digits a public URL may carry outside its host. */
+const URL_MAX_DIGITS = 8;
+
+let zones: ReadonlySet<string> | null = null;
+
+/** The IANA time-zone names this runtime knows (`Intl.supportedValuesOf`). */
+function timeZones(): ReadonlySet<string> {
+  if (zones === null) {
+    let names: string[] = [];
+    try {
+      names = Intl.supportedValuesOf('timeZone');
+    } catch {
+      // A runtime without the list: no value is a time zone, so every one redacts.
+    }
+    zones = new Set(names);
+  }
+  return zones;
+}
+
+/** A real IANA time-zone name (an alias such as `Asia/Calcutta` too, when the runtime accepts it). */
+function isTimeZone(value: string): boolean {
+  if (timeZones().has(value)) return true;
+  if (!/^[A-Z][A-Za-z_]+(?:\/[A-Z][A-Za-z0-9_+-]+){1,2}$/.test(value)) return false;
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
- * True when `value` is plain text, never a secret: a number, an ISO date, or words, URLs, paths,
- * time zones (`America/Toronto`), language tags and lists (`en-US,en;q=0.9`) — only
- * {@link PLAIN_CHARACTERS}, and every run of letters and digits a word, a number of at most four
- * digits or a short unit ({@link PLAIN_RUNS}). Tokens mix letters and digits, or run longer.
+ * An Accept-Language list: each entry a valid BCP-47 tag of language, optional script and optional
+ * region (`en`, `en-US`, `zh-Hant-TW`), with an optional `q=` weight.
  */
-export function isPlainValue(value: string): boolean {
-  const trimmed = value.trim();
-  if (PLAIN_NUMBER.test(trimmed) || ISO_DATE.test(trimmed)) return true;
-  if (!PLAIN_CHARACTERS.test(value)) return false;
-  return value
-    .split(/[^\p{L}\p{N}]+/u)
-    .filter((run) => run.length > 0)
-    .every(isPlainRun);
+function isLanguageList(value: string): boolean {
+  return value.split(',').every((entry) => {
+    const [tag, weight, ...rest] = entry.trim().split(';');
+    if (tag === undefined || tag.length === 0 || tag.length > 12 || rest.length > 0) return false;
+    if (weight !== undefined && !/^q=(?:0(?:\.\d{1,3})?|1(?:\.0{1,3})?)$/.test(weight.trim())) {
+      return false;
+    }
+    // language[-Script][-REGION] only: variants and extensions would let a letters token through.
+    if (!/^[a-z]{2,3}(?:-[a-z]{4})?(?:-(?:[a-z]{2}|\d{3}))?$/i.test(tag)) return false;
+    try {
+      return Intl.getCanonicalLocales(tag).length === 1;
+    } catch {
+      return false;
+    }
+  });
+}
+
+/**
+ * An http(s) URL with no user info and no query, whose every path and fragment segment is a
+ * {@link URL_SEGMENT} and which carries at most {@link URL_MAX_DIGITS} digits outside its host.
+ * A letters-only token as a path segment (`/reset/kqzvhxwpjtmrbnfd`) still passes: the known gap.
+ */
+function isPublicUrl(value: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+  if (url.username !== '' || url.password !== '' || url.search !== '') return false;
+  if (!value.toLowerCase().startsWith(`${url.protocol}//${url.host}`)) return false;
+  const segments = `${url.pathname}/${url.hash.replace(/^#/, '')}`
+    .split(/[/\-_.]+/)
+    .filter((s) => s.length > 0);
+  if (!segments.every((s) => URL_SEGMENT.test(s))) return false;
+  const digits = (s: string): number => (s.match(/\d/g) ?? []).length;
+  return digits(value) - digits(url.host) <= URL_MAX_DIGITS;
+}
+
+/**
+ * True when `value` is a known public form, never a secret: one of `identity` (the session's own
+ * time zone, locale and languages, exactly), a {@link PUBLIC_NUMBER}, an ISO date, a real IANA
+ * time zone, an Accept-Language list, or a public URL ({@link isPublicUrl}). Everything else of
+ * {@link MIN_SEALED_VALUE_LENGTH} or more characters is redacted (deny by default).
+ */
+export function isPublicValue(value: string, identity: readonly string[] = []): boolean {
+  if (identity.includes(value)) return true;
+  return (
+    PUBLIC_NUMBER.test(value) ||
+    ISO_DATE.test(value) ||
+    isTimeZone(value) ||
+    isLanguageList(value) ||
+    isPublicUrl(value)
+  );
 }
 
 /**
  * True when a cookie or storage value could be a secret and is redacted: at least
- * {@link MIN_SEALED_VALUE_LENGTH} characters and not plain text ({@link isPlainValue}). Values
- * such as `0`, `true`, `en-US`, `America/Toronto` or `https://mail.example/mail/u/0/#inbox` are
- * not, so they never blank out a URL, a time zone or page text.
+ * {@link MIN_SEALED_VALUE_LENGTH} characters and not a public form ({@link isPublicValue}).
  */
-export function couldBeSecret(value: string): boolean {
-  return value.length >= MIN_SEALED_VALUE_LENGTH && !isPlainValue(value);
+export function couldBeSecret(value: string, identity: readonly string[] = []): boolean {
+  return value.length >= MIN_SEALED_VALUE_LENGTH && !isPublicValue(value, identity);
 }
+
 /** `value` as it appears inside a JSON string (quotes, backslashes and control characters escaped). */
 function jsonEscaped(value: string): string {
   return JSON.stringify(value).slice(1, -1);
@@ -99,13 +158,16 @@ export function sealedForms(value: string): readonly string[] {
 
 /**
  * The strings worth redacting for `values` (cookie and storage values): each value that could be a
- * secret ({@link couldBeSecret}) in every form of {@link sealedForms}, de-duplicated, longest first
+ * secret ({@link couldBeSecret}, with the session's `identity` values public) in every form of {@link sealedForms}, de-duplicated, longest first
  * so a value that contains another is replaced whole.
  */
-export function sealedValues(values: Iterable<string>): readonly string[] {
+export function sealedValues(
+  values: Iterable<string>,
+  identity: readonly string[] = [],
+): readonly string[] {
   const kept = new Set<string>();
   for (const value of values) {
-    if (!couldBeSecret(value)) continue;
+    if (!couldBeSecret(value, identity)) continue;
     for (const form of sealedForms(value)) kept.add(form);
   }
   return [...kept].sort((a, b) => b.length - a.length || (a < b ? -1 : a > b ? 1 : 0));

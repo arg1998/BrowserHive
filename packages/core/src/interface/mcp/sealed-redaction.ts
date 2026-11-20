@@ -1,4 +1,4 @@
-/** @module interface/mcp/sealed-redaction — the dispatcher's redaction in sealed template sessions (spec 13 §5.4, §14): before an agent-facing text result leaves the dispatcher, and before it is stored, every cookie value of the template's browser and every storage value of its sites that could be a secret (≥ 12 characters and not plain text: `couldBeSecret`), in every escaped or encoded form, becomes `[sealed]`; only the matching text is replaced. */
+/** @module interface/mcp/sealed-redaction — the dispatcher's redaction in sealed template sessions (spec 13 §5.4, §14): before an agent-facing text result leaves the dispatcher, and before it is stored, every cookie value of the template's browser and every storage value of its sites that could be a secret (≥ 12 characters and not a public form or the session's identity: `couldBeSecret`), in every escaped or encoded form, becomes `[sealed]`; only the matching text is replaced. */
 
 import type { Session } from '../../domain/session/session.ts';
 import {
@@ -16,8 +16,18 @@ export const SEALED_VALUE_MEMORY_MS = 10 * 60_000;
 /** Values remembered per template at most (newest kept). */
 export const SEALED_VALUES_MAX = 2_000;
 
-/** What redaction needs from a session: its template and the jar its view reads. */
-type SealedSession = Pick<Session, 'template' | 'view'>;
+/** What redaction needs from a session: its template, the jar its view reads, and its identity. */
+type SealedSession = Pick<Session, 'template' | 'view'> & Partial<Pick<Session, 'identity'>>;
+
+/**
+ * The session's own identity values (time zone, locale, languages): BrowserHive chose them and
+ * every page can read them, so a cookie equal to one never blanks them (workload test B1).
+ */
+export function identityValues(session: SealedSession): readonly string[] {
+  const geo = session.identity?.geo;
+  if (geo === null || geo === undefined) return [];
+  return [geo.timezoneId, geo.locale, ...geo.languages, geo.languages.join(',')];
+}
 
 /**
  * Per template, the cookie values agents of sealed sessions must never see. The jar is read once
@@ -61,6 +71,7 @@ export class SealedRedaction {
 
   async #values(templateId: string, session: SealedSession): Promise<readonly string[]> {
     const now = this.#clock.now();
+    const identity = identityValues(session);
     let known = this.#seen.get(templateId);
     if (known === undefined) {
       known = new Map();
@@ -81,8 +92,9 @@ export class SealedRedaction {
     if (view !== null) {
       try {
         for (const cookie of await view.cookies()) {
-          // Plain values (`0`, `en-US`, a time zone, a plain URL) are never redacted, nor remembered.
-          if (!couldBeSecret(cookie.value)) continue;
+          // Public values (the identity, a time zone, a language list, a public URL) are neither
+          // redacted nor remembered.
+          if (!couldBeSecret(cookie.value, identity)) continue;
           current.add(cookie.value);
           if (sites.has(registrableDomain(cookie.domain.replace(/^\./, '')))) {
             known.set(cookie.value, now);
@@ -93,7 +105,7 @@ export class SealedRedaction {
       }
       // The sites' storage values, from the session's own pages on them (spec 13 §14).
       for (const value of await storageValues(view.pages(), isSite, MIN_SEALED_VALUE_LENGTH)) {
-        if (couldBeSecret(value)) known.set(value, now);
+        if (couldBeSecret(value, identity)) known.set(value, now);
       }
     }
     for (const [value, at] of known) {
@@ -104,6 +116,6 @@ export class SealedRedaction {
       known.clear();
       for (const [value, at] of newest) known.set(value, at);
     }
-    return sealedValues([...current, ...known.keys()]);
+    return sealedValues([...current, ...known.keys()], identity);
   }
 }

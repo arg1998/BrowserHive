@@ -32,8 +32,21 @@ export async function scrollInPage(args: ScrollScriptArgs): Promise<ScrollScript
   const doc = document.scrollingElement ?? document.documentElement;
   const scrolls = (overflow: string): boolean =>
     overflow === 'auto' || overflow === 'scroll' || overflow === 'overlay';
-  const axes: ('x' | 'y')[] =
-    args.mode === 'to' ? ['y', 'x'] : args.dy !== 0 ? ['y'] : args.dx !== 0 ? ['x'] : ['y'];
+  // The axes the call moves: for `to`, those whose target differs from the document's offset, so
+  // a few pixels of horizontal overflow never make the document the target of a vertical move
+  // (review #88 L2).
+  const moved: ('x' | 'y')[] =
+    args.mode === 'to'
+      ? [
+          ...(args.y !== scrollY ? (['y'] as const) : []),
+          ...(args.x !== scrollX ? (['x'] as const) : []),
+        ]
+      : args.dy !== 0
+        ? ['y']
+        : args.dx !== 0
+          ? ['x']
+          : [];
+  const axes: ('x' | 'y')[] = moved.length > 0 ? moved : ['y'];
   const documentScrolls = (axis: 'x' | 'y'): boolean => {
     const prop = axis === 'y' ? 'overflowY' : 'overflowX';
     let overflow = getComputedStyle(document.documentElement)[prop];
