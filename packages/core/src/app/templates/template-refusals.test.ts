@@ -12,7 +12,7 @@ import {
   templateSiteRecord,
 } from '../../../test/persistence/helpers.ts';
 import { isAppError } from '../../kernel/errors/app-error.ts';
-import { refusalOf, TemplateRefusals } from './template-refusals.ts';
+import { REFUSAL_FLUSH_MS, refusalOf, TemplateRefusals } from './template-refusals.ts';
 import type { TemplateCaller } from './template-service.ts';
 
 const LAUNCH = {
@@ -213,11 +213,23 @@ describe('recording through the template service', () => {
 });
 
 describe('TemplateRefusals', () => {
-  it('coalesces a burst into one write and counts every refusal', async () => {
+  it('holds a minute of refusals and writes them as one job; the timer, a read or the shutdown flushes (review #93 L1)', async () => {
     const repos = new InMemoryRepositories();
     await repos.templates.insert(templateRecord());
     const queue = new InMemoryWriteQueue(repos);
-    const refusals = new TemplateRefusals({ queue, repos, logger: new CollectingLogger() });
+    const timers: { ms: number; fn: () => void; cancelled: boolean }[] = [];
+    const refusals = new TemplateRefusals({
+      queue,
+      repos,
+      logger: new CollectingLogger(),
+      timer: (ms, fn) => {
+        const t = { ms, fn, cancelled: false };
+        timers.push(t);
+        return () => {
+          t.cancelled = true;
+        };
+      },
+    });
     const one = refusalOf(
       templateRecord(),
       'principal_not_allowed',
@@ -228,19 +240,30 @@ describe('TemplateRefusals', () => {
     if (one === null) throw new Error('expected a refusal');
     for (let i = 0; i < 50; i++) refusals.note({ ...one, firstAt: 10 + i, lastAt: 10 + i });
     refusals.note({ ...one, reason: 'harness_not_allowed', firstAt: 99, lastAt: 99 });
+    refusals.note({ ...one, kind: 'launch', firstAt: 99, lastAt: 99 });
+    // Nothing is written per call: one timer holds them all.
+    expect(queue.operations).toEqual([]);
+    expect(timers.map((t) => t.ms)).toEqual([REFUSAL_FLUSH_MS]);
+    timers[0]?.fn();
     expect(queue.operations).toEqual(['template_refusals.record']);
-    const [row] = (await refusals.list(TEMPLATE_ID)).data;
-    expect(row).toMatchObject({
+    const rows = (await refusals.list(TEMPLATE_ID)).data;
+    expect(rows.find((r) => r.kind === 'list')).toMatchObject({
       count: 51,
       first_at: 10,
       last_at: 99,
       reason: 'harness_not_allowed',
     });
-    // A later refusal is a new write into the same row.
+    expect(queue.operations).toEqual(['template_refusals.record']);
+    // The operator's read flushes what is held (and cancels its timer); so does the shutdown.
     refusals.note({ ...one, firstAt: 200, lastAt: 200 });
     const [again] = (await refusals.list(TEMPLATE_ID)).data;
-    expect(again).toMatchObject({ count: 52, first_at: 10, last_at: 200 });
-    expect(queue.operations).toEqual(['template_refusals.record', 'template_refusals.record']);
+    expect(again).toMatchObject({ kind: 'list', count: 52, first_at: 10, last_at: 200 });
+    expect(timers[1]?.cancelled).toBe(true);
+    refusals.note({ ...one, firstAt: 300, lastAt: 300 });
+    refusals.stop();
+    await queue.drain();
+    expect(queue.operations).toHaveLength(3);
+    expect(timers[2]?.cancelled).toBe(true);
   });
 
   it('keeps at most maxRows rows per template, dropping the one seen longest ago', async () => {

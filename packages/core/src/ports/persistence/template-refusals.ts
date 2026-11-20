@@ -37,10 +37,13 @@ export interface TemplateRefusalRepository {
   /**
    * Adds `delta` (one or more refusals of one row, coalesced by the caller) into its row: a new row
    * on first sight, else `count` grows, `last_at` moves forward and `reason` becomes the delta's.
-   * Then keeps at most `maxRows` rows for the template, dropping the ones seen longest ago. Records
-   * nothing for a template that no longer exists.
+   * A harness name (slug and declared name) past the principal's first `namesPerPrincipal` on the
+   * template is counted in the principal's `*` row instead (review #93 L2). Records nothing for a
+   * template that no longer exists.
    */
-  record(delta: TemplateRefusalRecord, maxRows: number): Promise<void>;
+  record(delta: TemplateRefusalRecord, namesPerPrincipal: number): Promise<void>;
+  /** Keeps at most `maxRows` rows for the template, dropping the ones seen longest ago. */
+  prune(templateId: string, maxRows: number): Promise<void>;
   /** One template's rows, newest `lastAt` first. */
   list(templateId: string): Promise<readonly TemplateRefusalRecord[]>;
 }

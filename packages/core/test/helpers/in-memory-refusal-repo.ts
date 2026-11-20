@@ -1,5 +1,6 @@
-/** @module test/helpers/in-memory-refusal-repo — `template_refusals` in memory (deferred D60): the same aggregation, bound and order as the SQLite repository; rows of a template that no longer exists are dropped as the foreign key cascade would. */
+/** @module test/helpers/in-memory-refusal-repo — `template_refusals` in memory (deferred D60): the same aggregation, folding of further harness names, bound and order as the SQLite repository; rows of a template that no longer exists are dropped as the foreign key cascade would. */
 
+import { REFUSAL_OTHER_HARNESSES } from '@browserhive/contracts/http';
 import type {
   TemplateRefusalRecord,
   TemplateRefusalRepository,
@@ -20,21 +21,38 @@ export class InMemoryTemplateRefusalRepository implements TemplateRefusalReposit
     this.#exists = exists;
   }
 
-  async record(delta: TemplateRefusalRecord, maxRows: number): Promise<void> {
+  async record(delta: TemplateRefusalRecord, namesPerPrincipal: number): Promise<void> {
     if (!this.#exists(delta.templateId)) return;
-    const key = keyOf(delta);
+    const declared = delta.harnessDeclared ?? '';
+    const names = new Set(
+      [...this.rows.values()]
+        .filter(
+          (r) =>
+            r.templateId === delta.templateId &&
+            r.principal === delta.principal &&
+            r.harness !== REFUSAL_OTHER_HARNESSES,
+        )
+        .map((r) => `${r.harness}\u0000${r.harnessDeclared ?? ''}`),
+    );
+    const fold = !names.has(`${delta.harness}\u0000${declared}`) && names.size >= namesPerPrincipal;
+    const effective: TemplateRefusalRecord = fold
+      ? { ...delta, harness: REFUSAL_OTHER_HARNESSES, harnessDeclared: null }
+      : { ...delta, harnessDeclared: declared === '' ? null : declared };
+    const key = keyOf(effective);
     const row = this.rows.get(key);
     this.#order += 1;
     this.rows.set(key, {
-      ...delta,
-      harnessDeclared: delta.harnessDeclared === '' ? null : delta.harnessDeclared,
+      ...effective,
       count: (row?.count ?? 0) + delta.count,
       firstAt: Math.min(row?.firstAt ?? delta.firstAt, delta.firstAt),
       lastAt: Math.max(row?.lastAt ?? delta.lastAt, delta.lastAt),
       order: row?.order ?? this.#order,
     });
+  }
+
+  async prune(templateId: string, maxRows: number): Promise<void> {
     const own = [...this.rows.entries()]
-      .filter(([, r]) => r.templateId === delta.templateId)
+      .filter(([, r]) => r.templateId === templateId)
       .sort(([, a], [, b]) => b.lastAt - a.lastAt || b.order - a.order);
     for (const [k] of own.slice(maxRows)) this.rows.delete(k);
   }

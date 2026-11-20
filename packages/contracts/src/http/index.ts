@@ -411,6 +411,8 @@ export {
   TemplateOkResponse,
 } from './template-recording.ts';
 export {
+  REFUSAL_NAMES_PER_PRINCIPAL,
+  REFUSAL_OTHER_HARNESSES,
   TEMPLATE_REFUSALS_MAX,
   TemplateRefusalKind,
   TemplateRefusalReason,

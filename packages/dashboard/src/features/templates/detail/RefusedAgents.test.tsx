@@ -37,6 +37,14 @@ async function section(): Promise<HTMLElement> {
 }
 
 describe('Access tab: Refused agents', () => {
+  it("names a client's further harness names together (review #93 L2)", async () => {
+    mount(refusalsPage([refusalRow({ harness: '*', harness_declared: null, count: 40 })]));
+    const panel = await section();
+    const table = await within(panel).findByRole('table');
+    expect(within(table).getByText('Other harness names')).toBeDefined();
+    expect(within(table).getByText('40')).toBeDefined();
+  });
+
   it('lists each refused client with harness, what, why, times and last seen; axe clean', async () => {
     const view = mount(
       refusalsPage([

@@ -1,4 +1,4 @@
-/** @module interface/mcp/tools/template-refusals.test — a refused agent's view does not change when its refusal is recorded (deferred D60): through the real server and dispatcher, `list_templates` and `launch_session({template})` answer byte for byte what they answer when no template exists, and they return before the refusal is written. */
+/** @module interface/mcp/tools/template-refusals.test — a refused agent's view does not change when its refusal is recorded (deferred D60): through the real server and dispatcher, `list_templates` and `launch_session({template})` answer byte for byte what they answer when no template exists, and they return before the refusal is even queued. */
 
 import { afterEach, describe, expect, it } from 'bun:test';
 import { createToolHarness, type ToolHarness } from '../../../../test/helpers/fake-transport.ts';
@@ -38,8 +38,10 @@ describe('a refused agent sees exactly what it sees without the template', () =>
       const refused = await harness(rule);
       const absent = await harness();
       const seen = await agentView(refused);
-      // The answers are back while the refusals still wait in the write queue (fire-and-forget).
-      expect(refused.templates.queue.depth).toBe(2);
+      // The answers are back while the refusals are only held in memory (written within a minute,
+      // review #93 L1): nothing on the agent's path waits for storage.
+      expect(refused.templates.queue.depth).toBe(0);
+      expect(refused.templates.queue.operations).toEqual([]);
       expect(seen).toEqual(await agentView(absent));
       expect(JSON.parse(seen[0] ?? '')).toMatchObject({ structuredContent: { templates: [] } });
       expect(seen[1]).toContain(

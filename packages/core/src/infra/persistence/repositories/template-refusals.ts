@@ -1,5 +1,6 @@
-/** @module infra/persistence/repositories/template-refusals — SQLite `TemplateRefusalRepository` (deferred D60): an upsert per refusal, bounded per template, deleted with the template by the foreign key. */
+/** @module infra/persistence/repositories/template-refusals — SQLite `TemplateRefusalRepository` (deferred D60): an upsert per coalesced refusal, a principal's further harness names folded into one row, bounded per template, deleted with the template by the foreign key. */
 
+import { REFUSAL_OTHER_HARNESSES } from '@browserhive/contracts/http';
 import { type Kysely, type Selectable, sql } from 'kysely';
 import {
   TEMPLATE_REFUSAL_KINDS,
@@ -33,14 +34,27 @@ export class SqliteTemplateRefusalRepository implements TemplateRefusalRepositor
     this.#db = db;
   }
 
-  async record(delta: TemplateRefusalRecord, maxRows: number): Promise<void> {
+  async record(delta: TemplateRefusalRecord, namesPerPrincipal: number): Promise<void> {
     const declared = delta.harnessDeclared ?? '';
+    const names = await this.#db
+      .selectFrom('template_refusals')
+      .select(['harness', 'harness_declared'])
+      .distinct()
+      .where('template_id', '=', delta.templateId)
+      .where('principal_id', '=', delta.principal)
+      .where('harness', '!=', REFUSAL_OTHER_HARNESSES)
+      .execute();
+    const known = names.some((n) => n.harness === delta.harness && n.harness_declared === declared);
+    // A name past the principal's first few is counted in its `*` row (review #93 L2).
+    const fold = !known && names.length >= namesPerPrincipal;
+    const harness = fold ? REFUSAL_OTHER_HARNESSES : delta.harness;
+    const name = fold ? '' : declared;
     // `INSERT … SELECT … WHERE EXISTS`: a template deleted since the refusal records nothing (no
     // foreign key error inside the write queue's batch).
     await sql`
       INSERT INTO template_refusals
         (template_id, principal_id, harness, harness_declared, kind, reason, count, first_at, last_at)
-      SELECT ${delta.templateId}, ${delta.principal}, ${delta.harness}, ${declared}, ${delta.kind},
+      SELECT ${delta.templateId}, ${delta.principal}, ${harness}, ${name}, ${delta.kind},
         ${delta.reason}, ${delta.count}, ${delta.firstAt}, ${delta.lastAt}
       WHERE EXISTS (SELECT 1 FROM templates WHERE template_id = ${delta.templateId})
       ON CONFLICT (template_id, principal_id, harness, harness_declared, kind) DO UPDATE SET
@@ -49,11 +63,14 @@ export class SqliteTemplateRefusalRepository implements TemplateRefusalRepositor
         first_at = MIN(first_at, excluded.first_at),
         last_at = MAX(last_at, excluded.last_at)
     `.execute(this.#db);
+  }
+
+  async prune(templateId: string, maxRows: number): Promise<void> {
     await sql`
       DELETE FROM template_refusals
-      WHERE template_id = ${delta.templateId}
+      WHERE template_id = ${templateId}
         AND rowid NOT IN (
-          SELECT rowid FROM template_refusals WHERE template_id = ${delta.templateId}
+          SELECT rowid FROM template_refusals WHERE template_id = ${templateId}
           ORDER BY last_at DESC, rowid DESC LIMIT ${maxRows}
         )
     `.execute(this.#db);

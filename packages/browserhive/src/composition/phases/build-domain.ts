@@ -382,6 +382,7 @@ async function buildDomain(
       // Template hosts close after their sessions, within what is left (spec 13 §3.2).
       await tpl.supervisor?.stopAll(Math.max(1_000, deadlineMs - 500 - (clock.now() - began)));
       await layer.strategies?.state?.stop(); // budgets and spacings outlive the restart (D53)
+      templateRefusals.stop(); // held refusals go to the write queue (review #93 L1)
       await operators.broker.shutdown();
       operators.vaultRedaction.closeAll();
       offClosed();

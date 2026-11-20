@@ -1,5 +1,5 @@
 /** @module features/templates/detail/RefusedAgents — the Access tab's "Refused agents" (deferred D60): every client the saved access rule turned away, one row per principal, harness and kind (a listing or a launch) with how often and when it was last refused, the rule that refused it and where to allow it; the agent itself saw no template. Re-read on focus and every 30 s. */
-import type { TemplateRefusalRow } from '@browserhive/contracts/http';
+import { REFUSAL_OTHER_HARNESSES, type TemplateRefusalRow } from '@browserhive/contracts/http';
 import { useId } from 'react';
 import { Chip } from '@/components/shared/Chip.tsx';
 import { DataTable } from '@/components/shared/DataTable.tsx';
@@ -30,6 +30,10 @@ function times(n: number): string {
 }
 
 function HarnessCell({ row }: { readonly row: TemplateRefusalRow }) {
+  // A client's harness names past its first few are counted together (review #93 L2).
+  if (row.harness === REFUSAL_OTHER_HARNESSES) {
+    return <span className="text-sm text-muted-foreground">Other harness names</span>;
+  }
   return (
     <span className="flex min-w-0 flex-col gap-0.5">
       <HarnessName harness={row.harness} className="self-start" />
