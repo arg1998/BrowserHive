@@ -248,8 +248,14 @@ for (const stealth of STEALTH_LEGS) {
       const { entries, currentIndex } = await cdp.send('Page.getNavigationHistory');
       const back = entries[currentIndex - 1];
       if (back === undefined) throw new Error('no history entry');
+      // The logger is the file's: only a record from this restore counts (the stealth-off leg logs
+      // one first, which let the standard leg click before its own patch ran, D30 m).
+      const logged = logger.records.length;
       await cdp.send('Page.navigateToHistoryEntry', { entryId: back.id });
-      await until(() => logger.records.some((r) => r.msg === 'clipboard restore patched'), 10_000);
+      await until(
+        () => logger.records.slice(logged).some((r) => r.msg === 'clipboard restore patched'),
+        10_000,
+      );
       // The document from before the change, as it was (not a new load), every frame patched.
       expect(await evaluate('window.__persisted')).toBe('yes');
       await clipboard.seed('operator text', page);
