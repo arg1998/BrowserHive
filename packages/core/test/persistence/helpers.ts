@@ -66,6 +66,15 @@ export class FakeLogger implements Logger {
   }
 }
 
+/**
+ * Limit of a test that upgrades a fixture database on disk (copy, `VACUUM INTO` backup, every
+ * migration since the fixture's version): about 35 ms locally, but each commit and the backup wait
+ * for `fsync`, and a CI runner's disk stalls for seconds at a time (D30 l: on ubuntu CI one such
+ * test took 5.8 s and its neighbours 1–2.6 s, the file-key and other on-disk tests alike, while
+ * bun's default limit is 5 s).
+ */
+export const DISK_MIGRATION_TEST_MS = 30_000;
+
 /** Creates a temp directory removed by the returned disposer. */
 export function tempDir(prefix = 'bh-persist-'): { path: string; dispose(): void } {
   const path = mkdtempSync(join(tmpdir(), prefix));
