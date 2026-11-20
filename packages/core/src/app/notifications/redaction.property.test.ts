@@ -1,4 +1,4 @@
-/** @module app/notifications/redaction.property.test — the redaction invariant for notifications (spec 10 §9, D-32): a sentinel secret registered in the `SecretRegistry` and routed through every producer input never appears in the stored message, the in-app row or payload, the channel delivery, or the delivery log. Seeded generator, 1 000 cases. */
+/** @module app/notifications/redaction.property.test — the redaction invariant for notifications (spec 10 §9, D-32): a sentinel secret registered in the `SecretRegistry` and routed through every producer input (the session-template producers included, review #81 L-9) never appears in the stored message, the in-app row or payload, the channel delivery, or the delivery log. Seeded generator, 1 000 cases. */
 
 import { describe, expect, it } from 'bun:test';
 import { CollectingLogger } from '../../../test/helpers/collecting-logger.ts';
@@ -22,6 +22,12 @@ import {
   toolCalled,
   vaultConfirmCreated,
 } from './test-fixtures.ts';
+import {
+  type TemplateTexts,
+  templateHostFailedEvent,
+  templateReloginFailedEvent,
+  templateSigninEvent,
+} from './test-fixtures-templates.ts';
 
 /** Deterministic PRNG (mulberry32). */
 function rng(seed: number): () => number {
@@ -54,7 +60,20 @@ function around(next: () => number, secret: string): string {
 function events(next: () => number, secret: string): ProducedEvent[] {
   const path = next() < 0.5;
   const text = around(next, secret);
+  // The three template producers (spec 13 §8.6, review #81 L-9): each free-text field may carry it.
+  const tpl: TemplateTexts = {
+    display: next() < 0.5 ? text : 'Job hunt',
+    name: next() < 0.3 ? `job-${secret}` : 'job-hunt',
+    reason: next() < 0.5 ? `cookies_${secret}` : 'cookies_absent',
+    machine: next() < 0.5 ? text : 'studio-mac',
+    // The provider is a registrable domain and keys the thread, like ids: not free text.
+    provider: 'example.com',
+    ...(next() < 0.5 && { session: 'demo-00000001' }),
+  };
   const picks: ProducedEvent[][] = [
+    [templateSigninEvent(next() < 0.5 ? 'signed_out' : 'challenged', tpl)],
+    [templateReloginFailedEvent(tpl, next() < 0.5 ? text : 'timed_out')],
+    [templateHostFailedEvent(tpl, text)],
     [
       attentionCreated('a-000000000001', next() < 0.5 ? 'takeover' : 'notify', {
         reason: text,
