@@ -1,29 +1,20 @@
 /** @module composition/phases/build-domain — phase 4: clock/ids/bus, degradations, sessions, operators, vault, auth (seed flow), notifications, schedulers, startup reconcile, tools. */
 
-import { join } from 'node:path';
 import {
   CHANNEL_RENDERERS,
-  type CursorStore,
   channelFactories,
   createDiscordSetup,
-  createNotificationImageStore,
   createTelegramSetup,
   createUrlProbe,
-  DiscordGatewayHub,
-  TelegramUpdatesHub,
 } from '@browserhive/core/notifications';
-import type { DomainEvents, Logger } from '@browserhive/core/runtime';
+import type { DomainEvents } from '@browserhive/core/runtime';
 import {
   createNanoidIdGenerator,
   DegradationService,
-  describeReservedSubjects,
-  findReservedSubjects,
-  hasReservedSubjects,
   isInsecurePublicUrl,
   serializeError,
 } from '@browserhive/core/runtime';
 import {
-  type ActionExecutor,
   createPlaywrightPageActions,
   InProcessEventBus,
   reloginActionExecutor,
@@ -32,24 +23,25 @@ import {
 import { notificationCounters } from '../adapters/metrics.ts';
 import { asyncTick, createTimers } from '../adapters/timers.ts';
 import { createAuthStack } from '../auth-stack.ts';
-import { type BootContext, part, type SeedNotice } from '../context.ts';
+import { type BootContext, part } from '../context.ts';
 import { hostFactsOf } from '../host.ts';
 import { createNotificationSnapshots } from '../notification-snapshots.ts';
 import { buildSiteActions } from '../site-pack-actions.ts';
 import { attachSitePackEnforcement, buildSitePackLayer } from '../site-pack-layer.ts';
 import type { PhaseHandle } from '../unwind.ts';
+import { seedCredentials, warnReservedSubjects } from './domain-credentials.ts';
+import { notificationParts } from './domain-notifications.ts';
 import { buildOperators } from './domain-operators.ts';
 import { buildOps, reconcile } from './domain-ops.ts';
 import { buildSessions } from './domain-sessions.ts';
 import { buildTemplates, templatesDirOf } from './domain-templates.ts';
 import { buildTools } from './domain-tools.ts';
 
+export { warnReservedSubjects } from './domain-credentials.ts';
+export { IMAGE_KEEP_MS, IMAGE_PRUNE_INTERVAL_MS } from './domain-notifications.ts';
+
 /** How often expired auth sessions, grants and rate buckets are swept. */
 export const AUTH_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
-/** Notification screenshots are kept this long (retries last at most 24 h, D-34). */
-export const IMAGE_KEEP_MS = 7 * 24 * 60 * 60 * 1000;
-/** How often old notification screenshots are pruned. */
-export const IMAGE_PRUNE_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 /** Phase `build-domain`. Stop drains sessions (the 15 s budget) and settles operator requests. */
 export async function buildDomainPhase(ctx: BootContext): Promise<PhaseHandle> {
@@ -147,46 +139,15 @@ async function buildDomain(
     logger.warn('timer callback failed', { err: serializeError(err) }),
   );
 
-  const images = createNotificationImageStore(join(config.dataDir, 'notifications', 'images'));
-  const instanceId = ids.opaque(16);
-  // Act buttons (D-41): one Telegram poller and one Discord gateway connection per bot token,
-  // shared by that bot's channels and its setup flow; their offsets live in notification_cursors.
-  const cursors: CursorStore = {
-    get: (key) => repos.notificationCursors.get(key),
-    set: (key, value) => repos.notificationCursors.set(key, value, clock.now()),
-  };
-  const telegramUpdates = new TelegramUpdatesHub({ cursors, logger });
-  const discordGateway = new DiscordGatewayHub({ logger });
-  undo.push(() => {
-    telegramUpdates.stop();
-    discordGateway.stop();
-  });
-  // What an act-button press runs: the services behind the dashboard's resolve routes.
-  const actionExecutors = new Map<string, ActionExecutor>();
-  const attention = operators.attention;
-  if (attention !== null) {
-    actionExecutors.set('attention.resolve', {
-      scope: 'attention:resolve',
-      async run(args, actor) {
-        const id = String(args['request_id'] ?? '');
-        if (args['decision'] === 'reject') {
-          await attention.reject(id, actor);
-          return 'Rejected. The agent was told.';
-        }
-        await attention.resolve(id, actor);
-        return 'Marked resolved. The agent continues.';
-      },
-    });
-  }
-  actionExecutors.set('vault.confirm.resolve', {
-    scope: 'vault:confirm',
-    async run(args, actor) {
-      const id = String(args['request_id'] ?? '');
-      const approve = args['decision'] === 'approve';
-      await operators.vault.resolveConfirm(id, approve ? 'approve' : 'deny', actor);
-      return approve ? 'Approved. The fill goes ahead.' : 'Denied. Nothing was filled.';
-    },
-  });
+  const {
+    images,
+    instanceId,
+    cursors,
+    telegramUpdates,
+    discordGateway,
+    actionExecutors,
+    stopImagePrune,
+  } = notificationParts({ config, repos, clock, ids, logger, operators, timers, undo });
   const ops = buildOps({
     // `browserhive.notifications.*` (spec 10 §7): no-ops unless telemetry is on.
     ...notificationCounters(telemetry.instruments),
@@ -241,16 +202,6 @@ async function buildDomain(
   if (isInsecurePublicUrl(config.publicUrl)) {
     logger.warn('publicUrl is plain http', { public_url: config.publicUrl });
   }
-  const stopImagePrune = timers.every(
-    asyncTick(
-      async () => {
-        await images.prune(clock.now() - IMAGE_KEEP_MS);
-      },
-      (err) => logger.warn('image prune failed', { err: serializeError(err) }),
-    ),
-    IMAGE_PRUNE_INTERVAL_MS,
-  );
-  undo.push(stopImagePrune);
   const templatesDir = templatesDirOf(config.dataDir);
   await reconcile({ repos, clock, logger, degradations, broker: operators.broker, templatesDir });
   // Requests settled while nothing listened (the last shutdown, the orphan recovery above) revise
@@ -442,70 +393,3 @@ async function buildDomain(
     },
   };
 }
-
-/**
- * Spec 13 T0f: tokens issued before token creation refused reserved subjects keep working, so say
- * so once per boot, naming them, and let the operator revoke them. Nothing is revoked here. A
- * failed listing never fails the boot.
- */
-export async function warnReservedSubjects(
-  logger: Logger,
-  auth: { listTokens: () => Promise<Parameters<typeof findReservedSubjects>[0]> },
-  authTokens: readonly string[],
-): Promise<void> {
-  try {
-    const findings = findReservedSubjects(await auth.listTokens(), authTokens);
-    if (!hasReservedSubjects(findings)) return;
-    logger.warn('reserved subjects in use', {
-      detail: describeReservedSubjects(findings),
-      tokens: findings.tokens.map((t) => ({
-        subject: t.subject,
-        credential_id: t.credentialId,
-        public_prefix: t.publicPrefix,
-      })),
-      auth_token_names: [...findings.configNames],
-    });
-  } catch (err) {
-    logger.warn('reserved check failed', { err: serializeError(err) });
-  }
-}
-
-/**
- * Seed flow (D-09): the first http start with `admin=true` creates the operator with a one-time
- * password; `auth=token` without stored or configured tokens mints `agent-1`'s token. Secrets are
- * returned for the banner only (never logged). Nothing is seeded under stdio.
- */
-async function seedCredentials(
-  ctx: BootContext,
-  auth: {
-    seedAdmin: () => Promise<SeedAdminResult>;
-    seedAgentToken: () => Promise<SeedTokenResult>;
-  },
-): Promise<SeedNotice> {
-  if (ctx.transport !== 'http') return { adminPassword: null, agentToken: null };
-  let adminPassword: SeedNotice['adminPassword'] = null;
-  if (ctx.config.admin) {
-    const seed = await auth.seedAdmin();
-    if (seed.seeded) {
-      adminPassword = { password: seed.password.reveal(), path: seed.credentialsPath };
-    }
-  }
-  let agentToken: SeedNotice['agentToken'] = null;
-  if (ctx.config.auth === 'token') {
-    const seed = await auth.seedAgentToken();
-    if (seed.seeded) agentToken = { principalId: seed.principalId, token: seed.token.reveal() };
-  }
-  return { adminPassword, agentToken };
-}
-
-type SeedAdminResult =
-  | { readonly seeded: false }
-  | {
-      readonly seeded: true;
-      readonly password: { reveal(): string };
-      readonly credentialsPath: string;
-    };
-
-type SeedTokenResult =
-  | { readonly seeded: false }
-  | { readonly seeded: true; readonly principalId: string; readonly token: { reveal(): string } };
