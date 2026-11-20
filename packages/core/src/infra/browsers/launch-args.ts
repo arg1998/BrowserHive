@@ -1,10 +1,18 @@
-/** @module infra/browsers/launch-args — stealth flags, `ignoreDefaultArgs` merge rule and the channel → stealth → user arg merge order (spec 11 §2.2). */
+/** @module infra/browsers/launch-args — stealth flags, `ignoreDefaultArgs` merge rule and the channel → stealth → user arg merge order, with one `--disable-features` switch last (spec 11 §2.2). */
 
 import type { LaunchOptions } from 'patchright';
 import type { LaunchWarning, ProxySpec } from '../../ports/browser-driver.ts';
 import type { LaunchKwargs } from './channel.ts';
+import {
+  foldDisableFeatures,
+  keepsDriverDisableFeatures,
+  sandboxedFramesArgs,
+} from './sandboxed-frames.ts';
 
-/** Launch flag that projects `navigator.webdriver = false`. Not deny-listed; injected only for stealth. */
+/**
+ * Launch flag that projects `navigator.webdriver = false`. Not deny-listed; injected only for
+ * stealth, together with the sandboxed-frames switch (`sandboxedFramesArgs`, D-79).
+ */
 export const STEALTH_ARGS: readonly string[] = ['--disable-blink-features=AutomationControlled'];
 /** Playwright default arg that advertises automation; suppressed for stealth sessions. */
 export const AUTOMATION_ARG = '--enable-automation';
@@ -47,6 +55,11 @@ export interface BuiltLaunchOptions {
  * user's `LaunchOptions` pass-through. The controlled fields win; args are merged in the order
  * channel args → stealth args → user args (so a user override still wins where the deny-list
  * permits it, and the internally-injected stealth arg is never deny-checked).
+ *
+ * A stealth launch also keeps sandboxed `srcdoc` frames in their parent's process (the
+ * sandboxed-frames switch, D-79), so the stealth init script reaches them. Every
+ * `--disable-features` switch, from any source, is then folded into one, last
+ * ({@link foldDisableFeatures}): Chromium keeps only the last such switch.
  */
 export function buildLaunchOptions(input: BuildLaunchOptionsInput): BuiltLaunchOptions {
   const {
@@ -55,8 +68,13 @@ export function buildLaunchOptions(input: BuildLaunchOptionsInput): BuiltLaunchO
     channel: _channel,
     ...restLaunchOptions
   } = input.launchOptions ?? {};
-  const stealthArgs = input.stealth ? [...STEALTH_ARGS] : [];
-  const mergedArgs = [...(input.kwargs.args ?? []), ...stealthArgs, ...(userArgs ?? [])];
+  const stealthArgs = input.stealth
+    ? [...STEALTH_ARGS, ...sandboxedFramesArgs({ stealth: true })]
+    : [];
+  const mergedArgs = foldDisableFeatures(
+    [...(input.kwargs.args ?? []), ...stealthArgs, ...(userArgs ?? [])],
+    keepsDriverDisableFeatures(restLaunchOptions.ignoreDefaultArgs),
+  );
 
   // When the caller overrides `executablePath`, channel routing no longer applies: a
   // named channel and an explicit binary conflict, so the explicit binary wins.
@@ -74,7 +92,7 @@ export function buildLaunchOptions(input: BuildLaunchOptionsInput): BuiltLaunchO
     ...(input.stealth && {
       ignoreDefaultArgs: mergeIgnoreDefaultArgs(restLaunchOptions.ignoreDefaultArgs),
     }),
-    ...(mergedArgs.length > 0 && { args: mergedArgs }),
+    ...(mergedArgs.length > 0 && { args: [...mergedArgs] }),
     // The typed proxy (BYO normalised upstream, with the forced loopback bypass) replaces any raw
     // `proxy` that rode in through the pass-through, so there is exactly one owner of egress.
     ...(input.proxy !== null && { proxy: playwrightProxyFor(input.proxy) }),
