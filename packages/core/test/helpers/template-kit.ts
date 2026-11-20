@@ -1,5 +1,6 @@
 /** @module test/helpers/template-kit — a `TemplateService` over in-memory repositories, a fake runtime with scriptable host facts and launch, and fake template files. */
 
+import { TemplateRefusals } from '../../src/app/templates/template-refusals.ts';
 import {
   TemplateService,
   type TemplateServiceConfig,
@@ -20,7 +21,7 @@ import {
   type TemplateLaunchRequest,
   type TemplateRuntime,
 } from '../../src/ports/template-runtime.ts';
-import { InMemoryRepositories, InMemoryUnitOfWork } from './in-memory-repos.ts';
+import { InMemoryRepositories, InMemoryUnitOfWork, InMemoryWriteQueue } from './in-memory-repos.ts';
 import { InMemoryOperatorActionRepository } from './in-memory-vault-repos.ts';
 
 /**
@@ -143,6 +144,9 @@ export interface TemplateKit {
   readonly runtime: TemplateRuntime;
   readonly files: FakeTemplateFiles;
   readonly degradations: RecordingDegradations;
+  /** The refused agents (D60), written through {@link queue}. */
+  readonly refusals: TemplateRefusals;
+  readonly queue: InMemoryWriteQueue;
 }
 
 /** Builds a {@link TemplateKit}. */
@@ -153,7 +157,10 @@ export function createTemplateKit(options: TemplateKitOptions): TemplateKit {
   const files = new FakeTemplateFiles();
   const runtime = options.runtime ?? new FakeTemplateRuntime();
   const degradations = new RecordingDegradations();
+  const queue = new InMemoryWriteQueue(bundle);
+  const refusals = new TemplateRefusals({ queue, repos: bundle, logger: options.logger });
   const service = new TemplateService({
+    refusals,
     repos: bundle,
     uow: new InMemoryUnitOfWork(bundle),
     runtime,
@@ -178,5 +185,5 @@ export function createTemplateKit(options: TemplateKitOptions): TemplateKit {
       ...options.config,
     },
   });
-  return { service, repos, actions, runtime, files, degradations };
+  return { service, repos, actions, runtime, files, degradations, refusals, queue };
 }

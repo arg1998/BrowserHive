@@ -1,7 +1,12 @@
 /** @module interface/http/routes/templates.test — the T1a template routes over the real app (spec 13 §11.1): problem codes and statuses, the auth=token access rule, the detail and delete shapes. */
 
 import { describe, expect, it } from 'bun:test';
-import { ProblemDetails, TemplateDetailResponse, TemplatesPage } from '@browserhive/contracts/http';
+import {
+  ProblemDetails,
+  TemplateDetailResponse,
+  TemplateRefusalsResponse,
+  TemplatesPage,
+} from '@browserhive/contracts/http';
 import { createHttpKit } from '../../../../test/helpers/http-kit.ts';
 import { TEMPLATE_BODY } from '../../../../test/helpers/http-route-cases.ts';
 
@@ -88,5 +93,57 @@ describe('template routes', () => {
       deleted_bytes: 0,
     });
     expect((await kit.request('GET', `/api/v1/templates/${id}`, { cookie })).status).toBe(404);
+  });
+});
+
+describe('GET /templates/{id}/refusals (D60)', () => {
+  it('lists the agents the access rule refused, newest first; 404 for an unknown template', async () => {
+    const { kit, cookie } = await kitWithCookie();
+    const created = await kit.request('POST', '/api/v1/templates', { cookie, body: TEMPLATE_BODY });
+    const { template } = (await created.json()) as { template: { template_id: string } };
+    const id = template.template_id;
+    const empty = await kit.request('GET', `/api/v1/templates/${id}/refusals`, { cookie });
+    expect(empty.status).toBe(200);
+    expect(await empty.json()).toEqual({ data: [], max_rows: 100 });
+
+    // Ready and closed to this principal: one listing and two launches refused.
+    const stored = await kit.repos.templates.get(id);
+    if (stored === null) throw new Error('template missing');
+    await kit.repos.templates.update(
+      id,
+      { status: 'ready', authorizedPrincipals: ['p-owner'] },
+      stored.version,
+    );
+    const refused = { principal: { subject: 'p-agent' }, client: null };
+    await kit.templates.listForAgent(refused);
+    kit.clock.advance(1_000);
+    for (let i = 0; i < 2; i++) {
+      await kit.templates
+        .launch(
+          'job-hunt',
+          {
+            slug: 'jobs',
+            channel: 'chromium',
+            incognito: false,
+            headless: true,
+            disableEvaluate: false,
+            vaultEnabled: false,
+          },
+          refused,
+        )
+        .catch(() => undefined);
+    }
+    const page = TemplateRefusalsResponse.parse(
+      await (await kit.request('GET', `/api/v1/templates/${id}/refusals`, { cookie })).json(),
+    );
+    expect(page.data.map((r) => [r.kind, r.principal, r.harness, r.reason, r.count])).toEqual([
+      ['launch', 'p-agent', 'unknown', 'principal_not_allowed', 2],
+      ['list', 'p-agent', 'unknown', 'principal_not_allowed', 1],
+    ]);
+    const missing = await kit.request('GET', '/api/v1/templates/tp-unknown000/refusals', {
+      cookie,
+    });
+    expect(missing.status).toBe(404);
+    expect(ProblemDetails.parse(await missing.json()).code).toBe('TEMPLATE_NOT_FOUND');
   });
 });

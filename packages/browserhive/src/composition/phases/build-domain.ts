@@ -27,6 +27,7 @@ import {
   createPlaywrightPageActions,
   InProcessEventBus,
   reloginActionExecutor,
+  TemplateRefusals,
 } from '@browserhive/core/server';
 import { notificationCounters } from '../adapters/metrics.ts';
 import { asyncTick, createTimers } from '../adapters/timers.ts';
@@ -274,8 +275,15 @@ async function buildDomain(
   });
   const sitePacks = layer.registry;
   const sitePackPages = layer.pages;
+  // Refused agents (D60): written through the recorder's queue, never awaited by an agent's call.
+  const templateRefusals = new TemplateRefusals({
+    queue: storage.queue,
+    repos: storage.uow.repos,
+    logger,
+  });
   const tpl = await buildTemplates({
     config,
+    refusals: templateRefusals,
     bus,
     sitePacks,
     keyFromFlag: ctx.input.resolved.provenance['templateKey']?.source === 'cli',
@@ -392,6 +400,7 @@ async function buildDomain(
     templates,
     sitePacks,
     templateRecording: tpl.recording,
+    templateRefusals,
     templateParts: tpl,
     sitePackPages,
     strategyState: layer.strategies?.state ?? null,

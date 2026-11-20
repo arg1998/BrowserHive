@@ -466,6 +466,18 @@ export interface TemplateProbes {
   trigger: string;
 }
 
+export interface TemplateRefusals {
+  count: number;
+  first_at: number;
+  harness: string;
+  harness_declared: Generated<string>;
+  kind: string;
+  last_at: number;
+  principal_id: string;
+  reason: string;
+  template_id: string;
+}
+
 export interface Templates {
   agent_windows: Generated<string>;
   authorized_principals_json: Generated<string>;
@@ -653,6 +665,7 @@ export interface DB {
   site_pack_state: SitePackState;
   system_events: SystemEvents;
   template_probes: TemplateProbes;
+  template_refusals: TemplateRefusals;
   template_sites: TemplateSites;
   template_strategy_state: TemplateStrategyState;
   template_versions: TemplateVersions;

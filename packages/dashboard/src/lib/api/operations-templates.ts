@@ -41,6 +41,7 @@ import {
   TemplatePatchInput,
   TemplateProbesPage,
   TemplateProbesQuery,
+  TemplateRefusalsResponse,
   TemplateReloginSiteParams,
   TemplateResponse,
   TemplateSiteParams,
@@ -141,6 +142,8 @@ export const TEMPLATE_OPERATIONS = {
     query: TemplateProbesQuery,
     response: TemplateProbesPage,
   },
+  // D60: the agents the access rules refused
+  listTemplateRefusals: { params: TemplateIdParams, response: TemplateRefusalsResponse },
   startTemplateRelogin: {
     params: TemplateIdParams,
     body: StartReloginRequest,

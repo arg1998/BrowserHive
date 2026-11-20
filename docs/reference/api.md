@@ -2,7 +2,7 @@
 
 # REST API reference
 
-The admin REST API served under `/api/v1` on the same port as MCP and the dashboard when `--admin` is on (164 operations), generated from `HTTP_ENDPOINTS` in `@browserhive/contracts/http`. Request and response schemas are in the OpenAPI 3.1 document the server serves at `/api/v1/openapi.json`, with an interactive reference UI at `/api/v1/docs`.
+The admin REST API served under `/api/v1` on the same port as MCP and the dashboard when `--admin` is on (165 operations), generated from `HTTP_ENDPOINTS` in `@browserhive/contracts/http`. Request and response schemas are in the OpenAPI 3.1 document the server serves at `/api/v1/openapi.json`, with an interactive reference UI at `/api/v1/docs`.
 
 Summaries come from `packages/contracts/generated/openapi.json`.
 
@@ -255,6 +255,7 @@ Summaries come from `packages/contracts/generated/openapi.json`.
 | POST | `/api/v1/templates/{template_id}/data-dir/reveal` | `revealTemplateDataDir` | `templates:write` | cookie, bearer | Open the template's data directory in the host file manager (honest result). |
 | POST | `/api/v1/templates/{template_id}/probe` | `probeTemplate` | `templates:write` | cookie, bearer | Check now: probe the template's sites (every enabled site, or the ones given), starting its browser when it is stopped; waits at most 120 s. |
 | GET | `/api/v1/templates/{template_id}/probes` | `listTemplateProbes` | `templates:read` | cookie, bearer | The template's probe history, newest first, filterable by site, outcome, trigger and time. |
+| GET | `/api/v1/templates/{template_id}/refusals` | `listTemplateRefusals` | `templates:read` | cookie, bearer | The agents the template's access rules refused, one row per principal, harness and kind (listing or launch) with a count and when it was first and last refused, newest first. The agents themselves saw no template. |
 | POST | `/api/v1/templates/{template_id}/relogin` | `startTemplateRelogin` | `templates:login` | cookie, bearer | Re-login a site: `window` opens a window at the site on the machine running BrowserHive (the template's agents wait meanwhile unless let_agents_continue); `vault` fills the linked vault binding in the background as template:<id>. |
 | POST | `/api/v1/templates/{template_id}/relogin/confirm` | `confirmTemplateRelogin` | `templates:login` | cookie, bearer | I'm signed in, for a site without a pack: the cookie names that appeared on it since the re-login window opened become its learned sign-in cookies, and the re-login finishes. With requested_at, only that re-login (409 when another replaced it). |
 | DELETE | `/api/v1/templates/{template_id}/relogin` | `cancelTemplateRelogin` | `templates:login` | cookie, bearer | Cancel the queued or open re-login: its window closes and agents continue. With requested_at, only that re-login (409 when another replaced it). |

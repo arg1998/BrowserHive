@@ -10,6 +10,7 @@ import type {
   TemplatesQuery,
 } from '@browserhive/contracts/http';
 import type { AgentTemplate } from '@browserhive/contracts/tools';
+import type { AccessSubject } from '../../domain/policies/access-rule.ts';
 import type { SessionClientInfo } from '../../domain/session/client-info.ts';
 import type { CreateSessionInput } from '../../domain/session/create-request.ts';
 import type { SessionPrincipal } from '../../domain/session/principal.ts';
@@ -23,6 +24,7 @@ import {
   type PageCaps,
   pageCaps,
   sealingFor,
+  type TemplateRefusal,
   templateGate,
 } from '../../domain/templates/model.ts';
 import type { Clock } from '../../ports/clock.ts';
@@ -58,6 +60,7 @@ import { pageTemplates } from './template-list.ts';
 import { TemplateLocks } from './template-locks.ts';
 import { NO_PACKS, type TemplatePacks } from './template-packs.ts';
 import { publishTemplateChanged, readTemplates, removeTemplateFiles } from './template-reads.ts';
+import { refusalOf, type TemplateRefusalSink } from './template-refusals.ts';
 import { toAgentTemplate, toTemplateSummary } from './views.ts';
 
 /** Server configuration the service reads. */
@@ -93,6 +96,8 @@ export interface TemplateServiceDeps {
   readonly versions?: Pick<TemplateVersionRepository, 'list'>;
   /** Site packs: approval on first use and the sites' packs (T3a); absent = none. */
   readonly packs?: TemplatePacks;
+  /** Records the agents the access rules refused (D60); absent = not recorded. */
+  readonly refusals?: TemplateRefusalSink;
 }
 
 /** The caller of an agent-facing operation: the principal and the call's resolved client (harness). */
@@ -258,7 +263,11 @@ export class TemplateService {
     const subject = this.#subject(caller);
     const out: AgentTemplate[] = [];
     for (const template of templates) {
-      if (!templateGate(template, subject).allowed) continue;
+      const gate = templateGate(template, subject);
+      if (!gate.allowed) {
+        this.#refused(template, gate.reason, subject, 'list');
+        continue;
+      }
       const own = sites.get(template.templateId) ?? [];
       const host = this.#deps.runtime.host(template.templateId);
       const sealing = sealingFor(template.unseal, caller.principal.subject);
@@ -296,6 +305,7 @@ export class TemplateService {
     if (template === null) throw notFoundForAgent(name);
     const gate = templateGate(template, this.#subject(caller));
     if (!gate.allowed) {
+      this.#refused(template, gate.reason, this.#subject(caller), 'launch');
       this.#log.info('template launch refused', {
         templateId: template.templateId,
         reason: gate.reason,
@@ -355,7 +365,18 @@ export class TemplateService {
 
   // --- helpers ----------------------------------------------------------------------------------
 
-  #subject(caller: TemplateCaller) {
+  /** Notes a refusal for the operator (fire-and-forget: the agent's answer does not change). */
+  #refused(
+    template: TemplateRecord,
+    reason: TemplateRefusal,
+    subject: AccessSubject,
+    kind: 'list' | 'launch',
+  ): void {
+    const refusal = refusalOf(template, reason, subject, kind, this.#deps.clock.now());
+    if (refusal !== null) this.#deps.refusals?.note(refusal);
+  }
+
+  #subject(caller: TemplateCaller): AccessSubject {
     return {
       principal: caller.principal.subject,
       harness: launchHarnessOf(caller.client),

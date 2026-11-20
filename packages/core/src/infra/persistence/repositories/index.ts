@@ -44,6 +44,7 @@ import {
 } from './site-packs.ts';
 import { SqliteStrategyStateRepository } from './strategy-state.ts';
 import { SqliteTemplateProbeRepository } from './template-probes.ts';
+import { SqliteTemplateRefusalRepository } from './template-refusals.ts';
 import { SqliteTemplateVersionRepository } from './template-versions.ts';
 import { SqliteTemplateRepository, SqliteTemplateSiteRepository } from './templates.ts';
 import { SqliteToolCallRepository } from './tool-calls.ts';
@@ -87,6 +88,7 @@ export function createRepositories(db: Kysely<DB>): Repositories {
     templateSites: new SqliteTemplateSiteRepository(db),
     templateVersions: new SqliteTemplateVersionRepository(db),
     templateProbes: new SqliteTemplateProbeRepository(db),
+    templateRefusals: new SqliteTemplateRefusalRepository(db),
     sitePackState: new SqliteSitePackStateRepository(db),
     sitePackChanges: new SqliteSitePackChangeRepository(db),
     siteGuardHits: new SqliteSiteGuardHitRepository(db),

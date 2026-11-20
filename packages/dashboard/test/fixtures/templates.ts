@@ -1,4 +1,4 @@
-/** @module dashboard/test/fixtures/templates — typed builders for template DTOs (list rows, the template, its detail, sites, versions, re-logins, probes) used by the templates page tests; shaped by the contracts schemas  */
+/** @module dashboard/test/fixtures/templates — typed builders for template DTOs (list rows, the template, its detail, sites, versions, re-logins, probes, refused agents) used by the templates page tests; shaped by the contracts schemas  */
 import type {
   HostView,
   ReloginView,
@@ -6,6 +6,8 @@ import type {
   TemplateDetailResponse,
   TemplateProbeRow,
   TemplateProbesPage,
+  TemplateRefusalRow,
+  TemplateRefusalsResponse,
   TemplateSiteView,
   TemplateSummary,
   TemplatesPage,
@@ -315,4 +317,24 @@ export function probesPage(
     applied: { filters: {}, sort: { key: 'at', dir: 'desc' } },
     meta: { now: TT0 },
   };
+}
+
+/** One refused agent (D60). */
+export function refusalRow(patch: Partial<TemplateRefusalRow> = {}): TemplateRefusalRow {
+  return {
+    principal: 'agent:research',
+    harness: 'cursor',
+    harness_declared: null,
+    kind: 'list',
+    reason: 'principal_not_allowed',
+    count: 1,
+    first_at: TT0 - 3_600_000,
+    last_at: TT0 - 60_000,
+    ...patch,
+  };
+}
+
+/** `GET /templates/{id}/refusals` body. */
+export function refusalsPage(rows: readonly TemplateRefusalRow[]): TemplateRefusalsResponse {
+  return { data: [...rows], max_rows: 100 };
 }

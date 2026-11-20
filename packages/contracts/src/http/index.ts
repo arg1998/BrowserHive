@@ -410,6 +410,13 @@ export {
   TemplateDomainParams,
   TemplateOkResponse,
 } from './template-recording.ts';
+export {
+  TEMPLATE_REFUSALS_MAX,
+  TemplateRefusalKind,
+  TemplateRefusalReason,
+  TemplateRefusalRow,
+  TemplateRefusalsResponse,
+} from './template-refusals.ts';
 export { ReloginView, TemplateMachine } from './template-relogin-view.ts';
 export {
   PatchTemplateVersionRequest,

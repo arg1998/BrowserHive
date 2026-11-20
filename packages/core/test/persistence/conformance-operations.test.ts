@@ -436,6 +436,7 @@ describe('SchemaMigrationRepository', () => {
       [10, 'site-packs'],
       [11, 'template-clipboard'],
       [12, 'strategy-state'],
+      [13, 'template-refusals'],
     ]);
     expect(await t.repos.schemaMigrations.currentVersion()).toBe(SCHEMA_VERSION);
   });

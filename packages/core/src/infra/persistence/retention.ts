@@ -56,6 +56,7 @@ class Sweep {
       | 'resource_samples'
       | 'logs'
       | 'template_probes'
+      | 'template_refusals'
       | 'vault_access'
       | 'blocked_requests'
       | 'auth_events'
@@ -118,6 +119,10 @@ class Sweep {
   async pruneAudit(cutoff: number): Promise<void> {
     await this.step('vault_access', () => this.deleteWhere('vault_access', 'ts', cutoff));
     await this.step('blocked_requests', () => this.deleteWhere('blocked_requests', 'ts', cutoff));
+    // Refused agents (deferred D60): audit of the access rules, by when each client was last refused.
+    await this.step('template_refusals', () =>
+      this.deleteWhere('template_refusals', 'last_at', cutoff),
+    );
     await this.step('auth_events', () => this.deleteWhere('auth_events', 'occurred_at', cutoff));
     await this.step('operator_actions', () =>
       this.deleteWhere('operator_actions', 'occurred_at', cutoff),

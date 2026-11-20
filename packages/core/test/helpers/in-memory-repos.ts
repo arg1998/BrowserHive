@@ -33,6 +33,7 @@ import {
   InMemoryNotificationDeliveryRepository,
 } from './in-memory-notification-repos.ts';
 import { InMemoryTemplateProbeRepository } from './in-memory-probe-repo.ts';
+import { InMemoryTemplateRefusalRepository } from './in-memory-refusal-repo.ts';
 import {
   InMemoryNotificationRepository,
   InMemorySystemEventRepository,
@@ -363,6 +364,9 @@ export class InMemoryRepositories implements Repositories {
   readonly siteGuardHits = new InMemorySiteGuardHitRepository();
   readonly strategyState = new InMemoryStrategyStateRepository();
   readonly templates = new InMemoryTemplateRepository(this.templateSites, this.templateVersions);
+  readonly templateRefusals = new InMemoryTemplateRefusalRepository((id) =>
+    this.templates.rows.has(id),
+  );
 
   constructor() {
     this.sessions = new InMemorySessionRepository((sessionId) => this.countsFor(sessionId));

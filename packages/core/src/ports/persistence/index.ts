@@ -279,6 +279,14 @@ export type {
   StrategyStateRepository,
 } from './strategy-state.ts';
 export type {
+  TemplateRefusalEvent,
+  TemplateRefusalKind,
+  TemplateRefusalReason,
+  TemplateRefusalRecord,
+  TemplateRefusalRepository,
+} from './template-refusals.ts';
+export { TEMPLATE_REFUSAL_KINDS, TEMPLATE_REFUSAL_REASONS } from './template-refusals.ts';
+export type {
   TemplateProbeQuery,
   TemplateProbeRepository,
   TemplateRepository,

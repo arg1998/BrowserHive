@@ -25865,6 +25865,75 @@
           "now"
         ]
       },
+      "TemplateRefusalsResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "principal": {
+                  "type": "string"
+                },
+                "harness": {
+                  "type": "string"
+                },
+                "harness_declared": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "list",
+                    "launch"
+                  ]
+                },
+                "reason": {
+                  "type": "string",
+                  "enum": [
+                    "principal_not_allowed",
+                    "harness_not_allowed"
+                  ]
+                },
+                "count": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                "first_at": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "last_at": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "principal",
+                "harness",
+                "harness_declared",
+                "kind",
+                "reason",
+                "count",
+                "first_at",
+                "last_at"
+              ]
+            }
+          },
+          "max_rows": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          }
+        },
+        "required": [
+          "data",
+          "max_rows"
+        ]
+      },
       "DeleteTemplateResponse": {
         "type": "object",
         "properties": {
@@ -48333,6 +48402,107 @@
           },
           "413": {
             "description": "PAYLOAD_TOO_LARGE",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/templates/{template_id}/refusals": {
+      "get": {
+        "operationId": "listTemplateRefusals",
+        "tags": [
+          "templates"
+        ],
+        "summary": "The agents the template's access rules refused, one row per principal, harness and kind (listing or launch) with a count and when it was first and last refused, newest first. The agents themselves saw no template.",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-browserhive-scope": "templates:read",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^tp-[A-Za-z0-9_-]{10}$"
+            },
+            "required": true,
+            "name": "template_id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The agents the template's access rules refused, one row per principal, harness and kind (listing or launch) with a count and when it was first and last refused, newest first. The agents themselves saw no template.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateRefusalsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, PASSWORD_CHANGE_REQUIRED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "TEMPLATE_NOT_FOUND",
             "content": {
               "application/problem+json": {
                 "schema": {

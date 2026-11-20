@@ -153,6 +153,21 @@ export async function seedFixture(uow: SqliteUnitOfWork): Promise<void> {
       durationMs: 3,
       at,
     });
+    // Schema v13: one refused agent (deferred D60).
+    await r.templateRefusals.record(
+      {
+        templateId: TEMPLATE_ID,
+        principal: 'p-refused',
+        harness: 'other',
+        harnessDeclared: 'Nightly Scraper',
+        kind: 'launch',
+        reason: 'harness_not_allowed',
+        count: 3,
+        firstAt: at,
+        lastAt: at + 1_000,
+      },
+      100,
+    );
     await r.sessions.insert(
       sessionRecord({
         sessionId: 'jobs-t1t2t3t4',

@@ -36,6 +36,7 @@ import {
   TemplateHostSupervisor,
   TemplateOperations,
   TemplateRecordingService,
+  type TemplateRefusalSink,
   TemplateService,
   TemplateStateService,
   UnavailableTemplateHostOps,
@@ -83,6 +84,8 @@ export interface TemplatesInput {
   readonly probers?: (supervisor: TemplateHostSupervisor) => ProberSelector;
   /** The host-side pack strategies (T3b: `webrtc-policy`, `keep-alive`, `device-bound-session`). */
   readonly siteStrategies?: SiteStrategies;
+  /** Records the agents the access rules refused (D60). */
+  readonly refusals?: TemplateRefusalSink;
 }
 
 /** How often template hosts are checked for idleness, age and memory (spec 13 §3.2). */
@@ -271,6 +274,7 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
     bus: input.bus,
     versions: input.uow.repos.templateVersions,
     ...packs,
+    ...(input.refusals !== undefined && { refusals: input.refusals }),
     degradations: input.degradations,
     ids: input.ids,
     clock: input.clock,

@@ -45,6 +45,7 @@ import type {
   TemplateHealthPort,
   TemplateOperationsPort,
   TemplateRecordingPort,
+  TemplateRefusalsPort,
   TemplatesPort,
   TemplateVersionsPort,
 } from './services-templates.ts';
@@ -56,6 +57,7 @@ export type {
   TemplateHealthPort,
   TemplateOperationsPort,
   TemplateRecordingPort,
+  TemplateRefusalsPort,
   TemplatesPort,
   TemplateVersionsPort,
 } from './services-templates.ts';
@@ -342,6 +344,8 @@ export interface HttpServices {
   readonly sitePacks: SitePacksPort;
   /** **Clear stop** (spec 13 §9.5, T3a). */
   readonly templateSiteStops: Pick<TemplateSiteStops, 'clear'>;
+  /** The agents a template's access rules refused (D60). */
+  readonly templateRefusals: TemplateRefusalsPort;
 }
 
 /** The notification channels API (a structural slice of `ChannelService`). */

@@ -25,6 +25,7 @@ import { TemplateActions } from '../../src/app/templates/template-actions.ts';
 import { TemplateEditService } from '../../src/app/templates/template-edit.ts';
 import { TemplateOperations } from '../../src/app/templates/template-operations.ts';
 import { TemplateRecordingService } from '../../src/app/templates/template-recording.ts';
+import { TemplateRefusals } from '../../src/app/templates/template-refusals.ts';
 import { TemplateService } from '../../src/app/templates/template-service.ts';
 import { TemplateStateService } from '../../src/app/templates/template-state.ts';
 import { VaultService } from '../../src/app/vault/vault-service.ts';
@@ -55,7 +56,7 @@ import {
   SYSTEM_FACTS,
 } from './http-fakes.ts';
 import { SYSTEM_INFO, seedDataset } from './http-fixtures.ts';
-import { InMemoryRepositories, InMemoryUnitOfWork } from './in-memory-repos.ts';
+import { InMemoryRepositories, InMemoryUnitOfWork, InMemoryWriteQueue } from './in-memory-repos.ts';
 import { createMemorySitePacks } from './in-memory-site-packs.ts';
 import { createVaultRepos } from './in-memory-vault-repos.ts';
 import { RecordingEventBus } from './recording-event-bus.ts';
@@ -251,7 +252,13 @@ export async function createHttpKit(options: HttpKitOptions = {}) {
     clock,
     logger,
   });
+  const templateRefusals = new TemplateRefusals({
+    queue: new InMemoryWriteQueue(templateRepos),
+    repos: templateRepos,
+    logger,
+  });
   const templates = new TemplateService({
+    refusals: templateRefusals,
     repos: templateRepos,
     uow: new InMemoryUnitOfWork(templateRepos),
     runtime: templateRuntime,
@@ -369,6 +376,7 @@ export async function createHttpKit(options: HttpKitOptions = {}) {
       logger,
       bus: events,
     }),
+    templateRefusals,
   };
   if (options.seed !== false) await seedDataset(repos, vaultRepos, files, sessionDirs);
   const http: HttpApp = createHttpApp({

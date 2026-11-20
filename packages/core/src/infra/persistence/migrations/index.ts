@@ -12,6 +12,7 @@ import { templates } from './0009-templates.ts';
 import { sitePacks } from './0010-site-packs.ts';
 import { templateClipboard } from './0011-template-clipboard.ts';
 import { strategyState } from './0012-strategy-state.ts';
+import { templateRefusals } from './0013-template-refusals.ts';
 import type { Migration } from './migration.ts';
 
 export type { Migration } from './migration.ts';
@@ -30,6 +31,7 @@ export const MIGRATIONS: readonly Migration[] = [
   sitePacks,
   templateClipboard,
   strategyState,
+  templateRefusals,
 ];
 
 /** The schema version this binary writes. */
@@ -60,6 +62,7 @@ export const TABLES: readonly string[] = [
   'notification_cursors',
   'template_strategy_state',
   'template_probes',
+  'template_refusals',
   'template_versions',
   'template_sites',
   'sessions',
