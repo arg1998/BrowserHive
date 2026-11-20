@@ -62,6 +62,8 @@ export interface TemplateViewHost extends SessionHost {
    * session-only cookies Chrome drops when its last window closes (D-78).
    */
   keepSessionCookies<T>(count: number, close: () => Promise<T>): Promise<T>;
+  /** A tab BrowserHive opened with `window.open` (it has an opener, but no site opened it). */
+  ownTab(page: Page): void;
   /** The end of the browser (crash or operator stop); not called for a supervisor close. */
   onExit(listener: (exit: TemplateHostExit) => void): () => void;
   /** The view closed: the host forgets it. */
@@ -168,11 +170,12 @@ export class TemplateSessionView implements SessionView {
     return page;
   }
 
-  /** A tool call: with `agent_windows: minimized`, a window it restored is minimized again (D-77). */
+  /** `close_tab`: the session cookies Chrome drops with the browser's last window stay (D-78). */
   closePage(page: Page): Promise<void> {
     return this.owner.keepSessionCookies(1, () => page.close());
   }
 
+  /** A tool call: with `agent_windows: minimized`, a window it restored is minimized again (D-77). */
   aroundAction<T>(run: () => Promise<T>): Promise<T> {
     if (!this.keptMinimized() || this.owner.recording) return run();
     return this.owner.keepMinimizedAround(this.pages(), run);
@@ -345,7 +348,10 @@ export class TemplateSessionView implements SessionView {
         contextId,
         userGesture: true,
       });
-      return await opened;
+      const tab = await opened;
+      // BrowserHive's own tab: closing it by hand is the operator's close, not a site's (D-78).
+      if (tab !== null) this.owner.ownTab(tab);
+      return tab;
     } catch (err) {
       // A chrome-error:// or PDF page, a closed page: a window is opened instead.
       this.log.debug('tab open failed', { err: serializeError(err) });

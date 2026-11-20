@@ -143,10 +143,11 @@ export class SiteActionStrategies {
       return await run();
     } finally {
       turn?.release();
+      await this.#focusAfter(call, template);
+      // The dwell counts from the end of the whole action, its focus hand-back included.
       if (pack !== null) {
         this.#dwell.record(call.session.id, pack.packId, this.#deps.clock.now());
       }
-      await this.#focusAfter(call, template);
     }
   }
 

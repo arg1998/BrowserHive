@@ -28,6 +28,11 @@ export interface TemplateHostInput {
   readonly profileSecrets?: boolean;
   /** The profile directory (a sign-in removal finds origins stored by earlier starts). */
   readonly userDataDir?: string;
+  /**
+   * BrowserHive's marker cookies (spec 13 §3.8), set at start and re-asserted whenever the host
+   * may have lost them (Chrome drops session cookies with its last window, D-78).
+   */
+  readonly markerCookies?: Parameters<BrowserContext['addCookies']>[0];
   /** The watcher of attributed pages and host responses (spec 13 §9.4, §9.5), read per event. */
   readonly pageWatcher?: () => TemplatePageWatcher | null;
   readonly clock: Clock;

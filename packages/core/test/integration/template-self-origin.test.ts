@@ -2,6 +2,7 @@
 
 import { afterEach, describe, expect, it } from 'bun:test';
 import { createHttpKit } from '../helpers/http-kit.ts';
+import { templateSiteRecord } from '../persistence/helpers.ts';
 import { STEALTH_LEGS, type TemplateWorld, templateWorld } from './template-fixture.ts';
 
 let world: TemplateWorld | null = null;
@@ -108,3 +109,66 @@ for (const stealth of STEALTH_LEGS) {
     });
   });
 }
+
+describe('the marker cookie on a host with no window (review #91 H1, D-78)', () => {
+  for (const operation of ['checkpoint', 'sign-in removal'] as const) {
+    it(`a ${operation} at zero windows keeps the marker (a redirect hop is still refused) and the session cookies`, async () => {
+      const daemon = await startDaemon();
+      world = await templateWorld('standard', { selfOrigins: daemon.origins });
+      const w = world;
+      const alpha = await w.launch('alpha');
+      await alpha.view?.page.goto(w.sites.url('site-a.test'));
+      await w.host().context.addCookies([
+        { name: 'bh_session_only', value: '1', url: 'https://site-a.test/', secure: true },
+        { name: 'other_session', value: '1', url: 'https://site-b.test/', secure: true },
+      ]);
+      await w.sessions.close(alpha.id);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      // The host idles with no window; the operation opens and closes a page of its own.
+      if (operation === 'checkpoint') await w.host().storageState();
+      else await w.host().clearSignIn('site-b.test');
+      await new Promise((resolve) => setTimeout(resolve, 1_500));
+      const jar = await w.host().jar();
+      expect(jar.filter((c) => c.name === 'browserhive_template_host').length).toBeGreaterThan(0);
+      expect(jar.find((c) => c.name === 'bh_session_only')?.value).toBe('1');
+      // The removed domain's session cookie is not brought back.
+      if (operation === 'sign-in removal') {
+        expect(jar.some((c) => c.name === 'other_session')).toBe(false);
+      }
+      const bravo = await w.launch('bravo');
+      const to = `http://localhost:${daemon.port}/via-redirect`;
+      await bravo.view?.page
+        .goto(w.sites.url('site-a.test', `/redir?to=${encodeURIComponent(to)}`))
+        .catch(() => null);
+      expect(daemon.hits.length).toBeGreaterThan(0);
+      for (const hit of daemon.hits) {
+        expect(hit.cookie).toContain('browserhive_template_host=1');
+        expect(hit.status).toBe(403);
+      }
+    });
+  }
+
+  it("Chrome's drop after the operator closed a sign-in window leaves the marker in place", async () => {
+    const daemon = await startDaemon();
+    world = await templateWorld('standard', { selfOrigins: daemon.origins });
+    const w = world;
+    const signIn = await w.supervisor.launchMaintenance({
+      template: w.template,
+      sites: [templateSiteRecord()],
+      slug: 'recording',
+      principal: { subject: 'operator' },
+      recording: true,
+    });
+    const page = signIn.view?.page;
+    const browser = w.host().context.browser();
+    const targetId = page === undefined ? undefined : w.host().dispatcher.targetIdOf(page);
+    if (browser === null || targetId === undefined) throw new Error('no window');
+    const cdp = await browser.newBrowserCDPSession();
+    await cdp.send('Target.closeTarget', { targetId });
+    await cdp.detach();
+    await new Promise((resolve) => setTimeout(resolve, 1_500));
+    expect(w.supervisor.host(w.template.templateId).state).toBe('running');
+    const jar = await w.host().jar();
+    expect(jar.filter((c) => c.name === 'browserhive_template_host').length).toBeGreaterThan(0);
+  });
+});

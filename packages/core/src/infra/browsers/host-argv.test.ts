@@ -140,6 +140,21 @@ describe('host argv (D-78)', () => {
     });
   }
 
+  it('refuses a second resolver rule with a SOCKS proxy (it would replace the DNS rule)', async () => {
+    const socks: ProxySpec = { server: 'socks5://proxy.test:1080', label: 'socks' };
+    const c: Case = {
+      channel: 'chromium',
+      headless: true,
+      stealth: 'standard',
+      proxy: socks,
+      sandboxed: false,
+    };
+    // The spec's testing seam adds its own rule: refused with SOCKS.
+    await expect(hostArgv(optionsOf(c), DIR, { proxy: socks, sandboxed: false })).rejects.toThrow(
+      /host-resolver-rules/,
+    );
+  });
+
   it('normalizes the proxy server as the driver does', () => {
     expect(normalizeProxyServer('http://proxy.test:3128/')).toBe('http://proxy.test:3128');
     expect(normalizeProxyServer('proxy.test:3128')).toBe('http://proxy.test:3128');
@@ -186,6 +201,26 @@ describe('host argv (D-78)', () => {
       });
     }
     expect(refusal([...good, 'about:blank'])).toMatchObject({ ref: 'launch_args' });
+    // Switches that override the proxy or open another DevTools door (review #91 L2).
+    for (const extra of [
+      '--no-proxy-server',
+      '--proxy-server=direct://',
+      '--proxy-pac-url=http://pac.test/p.pac',
+      '--proxy-auto-detect',
+      '--remote-debugging-port=0',
+      '--remote-debugging-address=0.0.0.0',
+      '--proxy-bypass-list=*',
+      `--user-data-dir=${DIR}`,
+      '--remote-debugging-pipe',
+    ]) {
+      expect(refusal([...good, extra])).toMatchObject({ ref: 'launch_args' });
+    }
+    expect(
+      refusal(
+        good.filter((a) => a !== '--remote-debugging-pipe').concat('--remote-debugging-port=0'),
+        { proxy: PROXY, sandboxed: false },
+      ),
+    ).toMatchObject({ ref: 'launch_args' });
     expect(refusal(good.filter((a) => !a.startsWith('--user-data-dir')))).toMatchObject({
       ref: 'launch_args',
     });

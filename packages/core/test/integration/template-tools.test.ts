@@ -84,11 +84,14 @@ for (const stealth of STEALTH_LEGS) {
       expect(smooth).toMatchObject({ target: 'element' });
       // The tool reports where the animation stands after at most 1 s; the test waits for its end.
       let settled = smooth;
-      for (let i = 0; i < 50 && settled['y'] !== 1400; i++) {
+      // A device-pixel round can leave it a pixel short (macOS: 1399).
+      const at = (r: Record<string, unknown>) => Math.abs(Number(r['y']) - 1400) <= 1;
+      for (let i = 0; i < 50 && !at(settled); i++) {
         await new Promise((resolve) => setTimeout(resolve, 100));
         settled = await json('scroll', { mode: 'by', dy: 0 });
       }
-      expect(settled).toMatchObject({ y: 1400, target: 'element' });
+      expect(at(settled)).toBe(true);
+      expect(settled).toMatchObject({ target: 'element' });
       expect(await json('scroll', { mode: 'to', x: 0, y: 100 })).toMatchObject({ y: 100 });
       // B2: PageDown, replaceState and pushState rewrites keep the session's one tab.
       ok(await call('click', { selector: '#feed article >> nth=2' }));

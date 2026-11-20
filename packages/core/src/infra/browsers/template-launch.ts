@@ -287,6 +287,7 @@ function buildHost(
     window: spec.window,
     profileSecrets: facts.profileSecrets,
     userDataDir: spec.userDataDir,
+    markerCookies: templateHostCookies(spec.selfOrigins),
     ...(ctx.pageWatcher !== undefined && { pageWatcher: ctx.pageWatcher }),
     clock: ctx.clock,
     logger: ctx.logger,

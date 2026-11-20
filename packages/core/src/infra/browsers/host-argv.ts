@@ -20,6 +20,20 @@ export const REQUIRED_HOST_SWITCHES: readonly string[] = Object.freeze([
   NO_STARTUP_WINDOW,
 ]);
 
+/** Switches that send requests around a configured proxy (refused when the template has one). */
+export const PROXY_OVERRIDES: readonly string[] = Object.freeze([
+  '--no-proxy-server',
+  '--proxy-pac-url',
+  '--proxy-auto-detect',
+  '--winhttp-proxy-resolver',
+]);
+
+/** Switches that open a DevTools endpoint besides the pipe (refused on every host). */
+export const DEBUGGING_OVERRIDES: readonly string[] = Object.freeze([
+  '--remote-debugging-port',
+  '--remote-debugging-address',
+]);
+
 /** The first page a persistent launch opens (Patchright's `defaultArgs`, persistent only). */
 const FIRST_PAGE = 'about:blank';
 
@@ -102,8 +116,10 @@ export interface HostArgvFacts {
  * own, so a template whose argv lacked its proxy switch would send every request from the
  * machine's own IP. The start is refused (`INTERNAL_ERROR`, `ref: 'launch_args'`, the host goes
  * `failed` with `TEMPLATE_HOST_FAILED` `reason: 'launch_args'`) when the builder is missing, when
- * the proxy switch for the template's proxy is absent, when `--no-sandbox` disagrees with the
- * sandbox attempt, or when a required switch is missing.
+ * the proxy switch for the template's proxy is absent or repeated, when a switch overrides the
+ * proxy (`--no-proxy-server`, a PAC URL, auto-detection, a second SOCKS resolver rule), when a
+ * DevTools port is opened, when `--no-sandbox` disagrees with the sandbox attempt, when a required
+ * switch is missing, or when `--user-data-dir` or the pipe is repeated.
  */
 export async function hostArgv(
   options: LaunchOptions,
@@ -131,11 +147,29 @@ export function assertHostArgv(
   userDataDir: string,
   facts: HostArgvFacts,
 ): void {
+  const named = (name: string) => argv.filter((arg) => arg === name || arg.startsWith(`${name}=`));
   if (facts.proxy !== null) {
     const expected = `--proxy-server=${normalizeProxyServer(facts.proxy.server)}`;
-    if (!argv.includes(expected)) throw argvRefused('the proxy switch is missing');
-  } else if (argv.some((arg) => arg.startsWith('--proxy-server'))) {
+    const servers = named('--proxy-server');
+    if (!servers.includes(expected)) throw argvRefused('the proxy switch is missing');
+    // Chromium keeps the last of a repeated switch: exactly one, the template's.
+    if (servers.length !== 1) throw argvRefused('the proxy switch is repeated');
+    for (const bypass of PROXY_OVERRIDES) {
+      if (named(bypass).length > 0) throw argvRefused(`${bypass} overrides the proxy`);
+    }
+    // Patchright's SOCKS rule keeps DNS on the proxy; a second rule would replace it.
+    if (expected.startsWith('--proxy-server=socks') && named('--host-resolver-rules').length > 1) {
+      throw argvRefused('a second --host-resolver-rules replaces the SOCKS DNS rule');
+    }
+  } else if (named('--proxy-server').length > 0) {
     throw argvRefused('a proxy switch is present for a template without a proxy');
+  }
+  if (named('--proxy-bypass-list').length > 1) throw argvRefused('the proxy bypass is repeated');
+  for (const forbidden of DEBUGGING_OVERRIDES) {
+    if (named(forbidden).length > 0) throw argvRefused(`${forbidden} opens another DevTools door`);
+  }
+  for (const once of ['--user-data-dir', '--remote-debugging-pipe']) {
+    if (named(once).length > 1) throw argvRefused(`${once} is repeated`);
   }
   if (argv.includes('--no-sandbox') === facts.sandboxed) {
     throw argvRefused(

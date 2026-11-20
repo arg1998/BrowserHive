@@ -320,6 +320,14 @@ describe(`the sign-in window closed by hand (D-78${HEADED ? ', headed' : ''})`, 
     if (recording === undefined || recording.view === null) throw new Error('no recording');
     await until(() => tabUrls(recording).some((u) => u.startsWith('https://site-a.test/')), 10_000);
     await signIn(tabOn(recording, 'site-a.test'), 'operator@example.test');
+    // A site that keeps its sign-in in a session-only cookie (PHPSESSID, JSESSIONID, …).
+    await w
+      .host()
+      .context.addCookies([
+        { name: 'PHPSESSID', value: 'signed-in', url: 'https://site-a.test/', secure: true },
+      ]);
+    // The sign-in window's session cookies are read every second while it is open.
+    await new Promise((resolve) => setTimeout(resolve, 1_300));
     // The operator closes the sign-in window (every tab of it) in the browser, not through BrowserHive.
     const browser = w.host().context.browser();
     if (browser === null) throw new Error('no browser');
@@ -333,6 +341,9 @@ describe(`the sign-in window closed by hand (D-78${HEADED ? ', headed' : ''})`, 
     await new Promise((resolve) => setTimeout(resolve, 500));
     expect(w.supervisor.host(w.template.templateId).state).toBe('running');
     expect(w.hosts).toHaveLength(1);
+    // Chrome dropped the session cookies with the last window; the sign-in's are back (review #91 M2).
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    expect((await w.host().jar()).find((c) => c.name === 'PHPSESSID')?.value).toBe('signed-in');
     // The sign-in can still be confirmed: the browser and its jar are still there.
     const site = await service.confirm(w.template.templateId, 'site-a.test', 'operator');
     expect(site.health.state).toBe('signed_in');
@@ -341,5 +352,11 @@ describe(`the sign-in window closed by hand (D-78${HEADED ? ', headed' : ''})`, 
     expect(again.session_id).toBe(recording.id);
     await until(() => (recording.view?.pages().length ?? 0) > 0, 5_000, 'a new window');
     expect(await recording.view.pages()[0]?.title()).toStartWith(RECORDING_TITLE_PREFIX);
+    // Finish still sees the session-cookie sign-in.
+    const done = await service.finish(w.template.templateId, {}, 'operator');
+    expect(done.template.status).toBe('ready');
+    // Finish closed the last window; the cookies Chrome dropped come back within moments.
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    expect((await w.host().jar()).find((c) => c.name === 'PHPSESSID')?.value).toBe('signed-in');
   });
 });

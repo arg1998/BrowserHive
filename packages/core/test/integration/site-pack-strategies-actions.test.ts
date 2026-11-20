@@ -163,11 +163,19 @@ describe('human-dwell', () => {
     world = await strategyWorld([{ id: 'human-dwell', params: { min_ms: 1_500, max_ms: 1_500 } }]);
     const a = await world.session();
     ok(await a.call('navigate', { url: url('/strategy/input') }));
-    const startedAt = Date.now();
+    // Measured in the page, independent of how late a reply reaches the test (a slow runner): the
+    // navigation's load ends before the navigate action did, and the click lands only after the
+    // dwell has passed since that action ended.
+    const loaded = await a.page().evaluate(() => {
+      const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming;
+      document.getElementById('btn')?.addEventListener('click', () => {
+        document.body.dataset['clickedAt'] = String(performance.timeOrigin + performance.now());
+      });
+      return performance.timeOrigin + nav.loadEventEnd;
+    });
     ok(await a.call('click', { selector: '#btn' }));
-    // The dwell counts from the end of the previous action, a little before `startedAt` (the
-    // navigate's reply still has to reach the test): allow for that on slow runners (Windows CI 1443 ms).
-    expect(Date.now() - startedAt).toBeGreaterThanOrEqual(1_300);
+    const clickedAt = Number(await a.page().evaluate(() => document.body.dataset['clickedAt']));
+    expect(clickedAt - loaded).toBeGreaterThanOrEqual(1_500);
     // Another site is not delayed.
     ok(await a.call('navigate', { url: 'https://site-b.test/landing' }));
     const other = Date.now();
