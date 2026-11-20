@@ -1,7 +1,8 @@
-# gitleaks: the default rules, plus the one deliberate key in the tree.
+# gitleaks: the default rules, plus the deliberate test-only values in the history.
 [extend]
 useDefault = true
 
 [allowlist]
-description = "The test-only TLS key of the *.test fixture sites (spec 13 §14); it protects nothing."
+description = "The test-only TLS key of the *.test fixture sites (spec 13 §14), and the fake 32-character redaction-test token committed in #88 (043ccf4; the tests now build their tokens at run time). Neither protects anything. Allowlisted by the owner on 2026-11-20."
 paths = ['''packages/core/test/fixtures/tls/test\.key''']
+regexes = ['''^Q7f2Kx9LmZ0pR4tV8wY1bN6cH3jD5sGa$''']
