@@ -343,9 +343,11 @@ function probeResult(site: string, outcome: ProbeResult['outcome'], reason: stri
   return { site_id: site, outcome, reason, duration_ms: 40 };
 }
 
-function withProbe(server: FakeServer, results: readonly ProbeResult[]): void {
+function withProbe(server: FakeServer, results: readonly ProbeResult[], cutShort = false): void {
   server.routes = (method, path) =>
-    method === 'POST' && path === `${BASE}/${ID}/probe` ? [200, { results }] : undefined;
+    method === 'POST' && path === `${BASE}/${ID}/probe`
+      ? [200, { results, cut_short: cutShort }]
+      : undefined;
 }
 
 describe('templates probe', () => {
@@ -400,7 +402,24 @@ describe('templates probe', () => {
     withProbe(server, results);
     const result = await run(server, ['probe', 'job-hunt', '--json', ...URL_FLAGS]);
     expect(result.code).toBe(2);
-    expect(JSON.parse(result.stdout)).toEqual({ results });
+    expect(JSON.parse(result.stdout)).toEqual({ results, cut_short: false });
+  });
+
+  it('a check the 2-minute cap cut short lists what finished, says so and exits 2', async () => {
+    const server = fakeServer({ 'a.test': 'signed_in', 'b.test': 'signed_in' });
+    withProbe(server, [probeResult('a.test', 'signed_in', 'learned_cookies')], true);
+    const result = await run(server, ['probe', 'job-hunt', ...URL_FLAGS]);
+    expect(result.code).toBe(2);
+    expect(result.stdout).toContain('a.test  ✓ signed in');
+    expect(result.stdout).toContain(
+      'Stopped after 2 minutes: a site not listed above was not checked',
+    );
+    const none = fakeServer({ 'a.test': 'signed_in' });
+    withProbe(none, [], true);
+    const empty = await run(none, ['probe', 'job-hunt', ...URL_FLAGS]);
+    expect(empty.code).toBe(2);
+    expect(empty.stdout).not.toContain('No enabled site to check.');
+    expect(empty.stdout).toContain('Stopped after 2 minutes');
   });
 
   it('an unknown site, an invalid one and an API error', async () => {

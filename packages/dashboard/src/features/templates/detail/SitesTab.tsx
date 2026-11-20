@@ -7,7 +7,7 @@ import { Button, buttonVariants } from '@/components/ui/button.tsx';
 import { Spinner } from '@/components/ui/spinner.tsx';
 import { ICONS } from '@/lib/icons.ts';
 import { useProbePending, useTemplateHealth } from '../api-health.ts';
-import { needsSignIn, signInGroups } from '../model.ts';
+import { CUT_SHORT, needsSignIn, signInGroups } from '../model.ts';
 import { SiteCard } from './SiteCard.tsx';
 
 /** `6 hours`, `30 minutes`, `day` (after "every"). */
@@ -45,7 +45,13 @@ export function SitesTab({
         // "Couldn't tell" is not "not signed in" (owner 2026-11-17): it is counted apart.
         const unsure = result.results.filter((r) => r.outcome === 'inconclusive').length;
         const checked = `Checked ${n} ${n === 1 ? 'site' : 'sites'}`;
-        if (out === 0 && unsure === 0) toast.success({ title: `${checked}: all signed in` });
+        // The 2-minute cap passed first (review #81 L-4): say so, whatever was found by then.
+        if (result.cut_short) {
+          toast.warning({
+            title: `${checked}, then stopped after 2 minutes`,
+            description: CUT_SHORT,
+          });
+        } else if (out === 0 && unsure === 0) toast.success({ title: `${checked}: all signed in` });
         else {
           const parts = [
             ...(out > 0 ? [`${out} not signed in`] : []),

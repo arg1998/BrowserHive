@@ -77,6 +77,7 @@ export class FakeTemplateHealth implements TemplateHealthPort {
           duration_ms: 3,
         },
       ],
+      cut_short: false,
     };
   }
 

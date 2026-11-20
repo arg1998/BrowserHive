@@ -15,7 +15,7 @@ import type { IdGenerator } from '../../ports/id-generator.ts';
 import type { Repositories } from '../../ports/persistence/index.ts';
 import type { ReloginLinkInput, ReloginLinks } from './relogin-link.ts';
 import { disabled, notFoundForOperator } from './template-errors.ts';
-import type { TemplateHealthService } from './template-health.ts';
+import type { SiteProbeResult, TemplateHealthService } from './template-health.ts';
 import type { TemplateReloginService } from './template-relogin.ts';
 
 /** How long **Check now** waits for its probes (spec 13 §11.1). */
@@ -48,26 +48,44 @@ export class TemplateHealthFacade {
     const template = await this.#deps.repos.templates.get(templateId);
     if (template === null) throw notFoundForOperator(templateId);
     if (template.status === 'disabled') throw disabled(template.name);
+    // The cap bounds the whole wait: a run queued behind a scheduled one, a slow browser start and
+    // the sites themselves (review #81 L-4). Past it the answer has what finished, `cut_short`.
     const controller = new AbortController();
+    const cap = { timedOut: false };
     const timer = this.#deps.clock
       .sleep(PROBE_ROUTE_WAIT_MS, controller.signal)
-      .then(() => controller.abort())
+      .then(() => {
+        cap.timedOut = true;
+        controller.abort();
+      })
       .catch(() => undefined);
+    const capped = new Promise<'capped'>((resolve) =>
+      controller.signal.addEventListener('abort', () => resolve('capped'), { once: true }),
+    );
+    const done: SiteProbeResult[] = [];
     try {
-      const run = await this.#deps.health.probe(templateId, {
+      const run = this.#deps.health.probe(templateId, {
         trigger: 'manual',
         start: 'always',
         signal: controller.signal,
+        onResult: (result) => done.push(result),
         ...(siteIds !== undefined && { siteIds }),
       });
-      await this.#audit(by, 'template.probe', templateId, { site_ids: siteIds ?? null });
+      // Once the cap answered, the run ends on its own (its refusals are nobody's now).
+      run.catch(() => undefined);
+      await Promise.race([run, capped]);
+      await this.#audit(by, 'template.probe', templateId, {
+        site_ids: siteIds ?? null,
+        ...(cap.timedOut && { cut_short: true }),
+      });
       return {
-        results: (run ?? []).map((r) => ({
+        results: done.map((r) => ({
           site_id: r.siteId,
           outcome: r.outcome,
           reason: r.reason,
           duration_ms: r.durationMs,
         })),
+        cut_short: cap.timedOut,
       };
     } finally {
       controller.abort();

@@ -172,3 +172,7 @@ export function hostOnSites(host: string, sites: readonly string[]): boolean {
   const h = host.toLowerCase().replace(/\.$/, '');
   return sites.some((site) => h === site || h.endsWith(`.${site}`));
 }
+
+/** A Check now the 2-minute cap cut short (review #81 L-4): what was not checked keeps its result. */
+export const CUT_SHORT =
+  'Sites without a result weren’t checked; their last result stands. Check again later.';

@@ -414,7 +414,7 @@ A site with a pack can also come out **! check needed** (`challenged`): a securi
 - **A stopped browser is checked from its last checkpoint** when every site is generic. The cookie check needs only the cookie names, so when the template's browser is stopped, BrowserHive reads them from the encrypted checkpoint written when it stopped (nothing starts, no window can take your focus). Only when there is no checkpoint (no template key, or the browser never stopped cleanly) does a scheduled check start the browser: its windows open in the background and minimized, but a headed browser shows its first window for a moment and can take the keyboard focus once (see [the template's browser](#the-templates-browser)); keystrokes that land there reach no agent, and when every browser slot is taken (`maxSessions`) the check waits for the next interval. **Check now** starts a stopped browser only in that case too.
 - **After events:** every site is checked whenever the template's browser starts, after a [restore](#restoring-a-version) or a [seed](#seeding-from-a-storage-state), and when an [attention request](#through-an-attention-request) of one of the template's sessions is resolved.
 - **Before a launch,** see below.
-- **On demand:** **Check now** on the template page, `browserhive templates probe <name> [--site <site>]`, or `POST …/probe`. It waits for the result (at most 2 minutes) and starts a stopped browser.
+- **On demand:** **Check now** on the template page, `browserhive templates probe <name> [--site <site>]`, or `POST …/probe`. It waits for the result (at most 2 minutes, counting a check already running and the browser's start) and starts a stopped browser. When the 2 minutes pass first, it shows the sites checked by then and says it stopped; the other sites keep their last result.
 
 `GET /api/v1/templates/{id}/probes` lists past checks, newest first, with the site, result, reason, what triggered it (`schedule`, `prelaunch`, `recording`, `relogin`, `manual`, `host_start`, `attention`, `restore`), how long it took and when.
 
@@ -474,7 +474,7 @@ A site can have a [vault](vault.md) login linked to it. BrowserHive then fills i
 
 | Call | Scope | Result |
 |---|---|---|
-| `POST /templates/{id}/probe` `{site_ids?}` | `templates:write` | `{results: [{site_id, outcome, reason, duration_ms}]}` after at most 2 minutes. |
+| `POST /templates/{id}/probe` `{site_ids?}` | `templates:write` | `{results: [{site_id, outcome, reason, duration_ms}], cut_short}` after at most 2 minutes; `cut_short: true` when the 2 minutes passed first and `results` holds only the sites checked by then. |
 | `GET /templates/{id}/probes` | `templates:read` | Past checks, newest first (filters `site_id`, `outcome`, `trigger`, `since`, `until`). |
 | `POST /templates/{id}/relogin` `{site_id, method?, let_agents_continue?}` | `templates:login` | `{session_id, relogin}`. `method` is `window` (default) or `vault`. |
 | `POST /templates/{id}/relogin/confirm` `{site_id, requested_at?}` | `templates:login` | **I'm signed in**. `409 CONFLICT` when no new cookie appeared on the site, or when `requested_at` (the re-login's `requested_at` you saw) names a re-login another one replaced. |

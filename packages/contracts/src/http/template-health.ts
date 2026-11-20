@@ -30,8 +30,15 @@ export const ProbeResult = z.object({
 /** One probe's result. */
 export type ProbeResult = z.infer<typeof ProbeResult>;
 
-/** `POST /templates/{template_id}/probe` body (**Check now**; waits at most 120 s). */
-export const ProbeTemplateResponse = z.object({ results: z.array(ProbeResult) });
+/**
+ * `POST /templates/{template_id}/probe` body (**Check now**; waits at most 120 s, queued behind
+ * another check and a browser start included). `cut_short`: the 120 s passed first, so `results`
+ * holds only the sites checked by then.
+ */
+export const ProbeTemplateResponse = z.object({
+  results: z.array(ProbeResult),
+  cut_short: z.boolean(),
+});
 /** `POST …/probe` body. */
 export type ProbeTemplateResponse = z.infer<typeof ProbeTemplateResponse>;
 

@@ -27216,10 +27216,14 @@
                 "duration_ms"
               ]
             }
+          },
+          "cut_short": {
+            "type": "boolean"
           }
         },
         "required": [
-          "results"
+          "results",
+          "cut_short"
         ]
       },
       "ProbeTemplateRequest": {

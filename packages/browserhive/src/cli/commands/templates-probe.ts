@@ -45,6 +45,10 @@ function printHints(context: CommandContext, name: string, results: readonly Pro
   }
 }
 
+/** The line of a check the 2-minute cap cut short. */
+export const CUT_SHORT_TEXT =
+  'Stopped after 2 minutes: a site not listed above was not checked (its last result stands). Check again later.';
+
 /**
  * `templates probe <name> [--site <site>]`: `POST …/probe` (waits up to 2 minutes; starts a stopped
  * browser) and one line per site.
@@ -79,18 +83,20 @@ export async function runTemplatesProbe(
     out.diagnostic('browserhive: the server answered with an unexpected probe result.');
     return EXIT.fatal;
   }
-  const { results } = parsed.data;
-  const signedIn = results.every((r) => r.outcome === 'signed_in');
+  const { results, cut_short: cutShort } = parsed.data;
+  const signedIn = !cutShort && results.every((r) => r.outcome === 'signed_in');
   if (json) {
     out.json(parsed.data);
     return signedIn ? EXIT.ok : EXIT.warnings;
   }
-  if (results.length === 0) {
+  if (results.length === 0 && !cutShort) {
     out.line('No enabled site to check.');
     return EXIT.ok;
   }
-  const width = Math.max(...results.map((r) => r.site_id.length));
+  const width = Math.max(0, ...results.map((r) => r.site_id.length));
   for (const r of results) out.line(resultLine(context, r, width));
+  // The 2-minute cap passed first (review #81 L-4): what is not listed was not checked.
+  if (cutShort) out.line(CUT_SHORT_TEXT);
   printHints(context, name, results);
   return signedIn ? EXIT.ok : EXIT.warnings;
 }

@@ -68,7 +68,10 @@ export interface ProbeOptions {
   readonly start: ProbeStart;
   /** A pause between two sites (the schedule's 5–20 s gap). */
   readonly gapMs?: () => number;
+  /** Aborted: the run stops between sites, and a run still queued behind another never starts. */
   readonly signal?: AbortSignal;
+  /** Each site's result as soon as it is applied (a caller that stops waiting keeps them). */
+  readonly onResult?: (result: SiteProbeResult) => void;
 }
 
 /** Hooks other services attach after composition. */
@@ -142,7 +145,8 @@ export class TemplateHealthService {
     this.#inFlight.set(templateId, (this.#inFlight.get(templateId) ?? 0) + 1);
     const run = (this.#tails.get(templateId) ?? Promise.resolve())
       .catch(() => undefined)
-      .then(() => this.#run(template, chosen, options));
+      // Aborted while it waited for the run before it (Check now's cap, review #81 L-4).
+      .then(() => (options.signal?.aborted === true ? [] : this.#run(template, chosen, options)));
     this.#tails.set(templateId, run);
     try {
       return await run;
@@ -220,12 +224,14 @@ export class TemplateHealthService {
       const verdict = await this.#probeOne(template, site, source, options.signal);
       const durationMs = Math.max(0, this.#deps.clock.now() - started);
       await this.#apply(template, site.siteId, verdict, options.trigger, durationMs);
-      results.push({
+      const result: SiteProbeResult = {
         siteId: site.siteId,
         outcome: verdict.outcome,
         reason: verdict.reason,
         durationMs,
-      });
+      };
+      results.push(result);
+      options.onResult?.(result);
     }
     return results;
   }
