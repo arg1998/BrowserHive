@@ -100,6 +100,8 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
     string,
     { readonly page: Page; readonly owner: PageOwner; readonly opened: boolean }
   >();
+  /** A headless host's invisible anchor page (D-78): its target id, `null` on a headed host. */
+  private anchorTarget: string | null = null;
   /** Tabs BrowserHive itself opened with `window.open` (`new_tab`, sign-in tabs). */
   private readonly ownTabs = new Set<string>();
   /** Puts back the session cookies Chrome drops with the last window (D-78). */
@@ -184,6 +186,12 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
     this.targets.onCreated(() => this.minimizedWindows.targetCreated());
     this.targets.onLostTarget((facts) => this.dispatcher.adoptClosedTarget(facts));
     this.targets.onDestroyed((targetId) => {
+      if (targetId === this.anchorTarget) {
+        this.anchorTarget = null;
+        this.byTarget.delete(targetId);
+        void this.openAnchor();
+        return;
+      }
       this.closeWatch.targetDestroyed(targetId);
       this.byTarget.delete(targetId);
       this.ownTabs.delete(targetId);
@@ -262,12 +270,18 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
     sessionId: string | null,
     minimized: boolean,
     signal?: AbortSignal,
+    anchor = false,
   ): Promise<Page> {
     const owner: PageOwner = sessionId === null ? PARKED : sessionOwner(sessionId);
     const settle = this.dispatcher.beginCreate();
     let targetId: string;
     try {
-      targetId = await this.targets.createWindow({ ...this.window, minimized });
+      targetId = await this.targets.createWindow({
+        ...this.window,
+        minimized,
+        ...(anchor && { foreground: true }),
+      });
+      if (anchor) this.anchorTarget = targetId;
     } catch (err) {
       settle();
       throw ops.windowUnavailable('window not created', err);
@@ -400,6 +414,29 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
     if (this.recording) return;
     if (this.signInTimer !== null) clearInterval(this.signInTimer);
     this.signInTimer = null;
+  }
+
+  /**
+   * A headless host keeps one invisible page open as its active window (D-78): on macOS a
+   * browser whose only windows are never-activated background ones renders them slowly or not at
+   * all (a smooth scroll stalled, 24 animation frames per second on CI). A headless browser shows
+   * nothing, so the anchor costs no screen and takes no focus. It belongs to no session, is not a
+   * listed parked page, keeps the host from reaching zero windows (so Chrome keeps its session
+   * cookies), and is opened again if it ever goes. Headed hosts have none.
+   */
+  async openAnchor(): Promise<void> {
+    if (!this.headless || this.closing) return;
+    try {
+      await this.openWindow(null, false, undefined, true);
+    } catch (err) {
+      this.anchorTarget = null;
+      this.log.warn('anchor page not opened', { err: serializeError(err) });
+    }
+  }
+
+  /** The anchor page, when this headless host has one (tests). */
+  get anchorPage(): Page | null {
+    return this.anchorTarget === null ? null : (this.byTarget.get(this.anchorTarget)?.page ?? null);
   }
 
   ownTab(page: Page): void {
@@ -627,7 +664,7 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
     this.lastAdoptedAt = Date.now();
     this.closeWatch.pageAdopted();
     if (this.waiters.committed(page, owner, facts)) return;
-    if (owner.kind !== 'parked') return;
+    if (owner.kind !== 'parked' || facts.targetId === this.anchorTarget) return;
     this.parked.add(page, facts.targetId);
   }
 

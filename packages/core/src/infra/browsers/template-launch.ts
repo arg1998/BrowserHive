@@ -162,6 +162,8 @@ export async function launchTemplateHostWith(
     const host = buildHost(ctx, spec, context, targets, { sandboxed, profileSecrets, guard });
     await installHostChain(host);
     await host.adoptStartPages();
+    // Headless only: one invisible anchor page as the active window (D-78).
+    await host.openAnchor();
     if (spec.stealth) await applyIdentity(ctx, spec, host, log);
     log.info('template host started', {
       driver: ctx.driver,

@@ -237,12 +237,14 @@ for (const stealth of STEALTH_LEGS) {
       expect(world.sites.requests.some((r) => r.host.startsWith('cdn-a.test'))).toBe(false);
     });
 
-    it('the host has no window of its own: every page is a session page', async () => {
+    it('the host has no window of its own (a headless one only its invisible anchor page)', async () => {
       world = await templateWorld(stealth);
       const a = await world.launch('alpha');
       const host = world.host();
       const own = new Set(a.view?.pages() ?? []);
-      expect(host.context.pages().filter((p) => !own.has(p))).toEqual([]);
+      const anchor = host.anchorPage;
+      expect(anchor === null).toBe(HEADED);
+      expect(host.context.pages().filter((p) => !own.has(p) && p !== anchor)).toEqual([]);
       expect(host.parkedPages()).toEqual([]);
       await pageOf(a).goto(world.sites.url('site-a.test'));
       expect(world.supervisor.host(world.template.templateId).state).toBe('running');

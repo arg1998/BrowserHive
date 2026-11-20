@@ -28,6 +28,8 @@ const LINUX = process.platform === 'linux';
 const X = HEADED && LINUX;
 /** A window manager runs (openbox): window lists, closing by hand and the menu's Exit. */
 const WM = X && process.env['BROWSERHIVE_HEADED_WM'] === '1';
+/** A headless host keeps one invisible anchor page (D-78); a headed host has none. */
+const ANCHOR = HEADED ? 0 : 1;
 
 let world: TemplateWorld | null = null;
 afterEach(async () => {
@@ -196,8 +198,10 @@ describe(`template host with no window (${HEADED ? 'headed' : 'headless'})`, () 
       const desktop = watchDesktop();
       const host = await startHost(world);
       // A started host has nothing to show: no page target, so no window.
-      expect(host.context.pages()).toHaveLength(0);
-      expect(await pageTargets(host)).toBe(0);
+      expect(host.context.pages()).toHaveLength(ANCHOR);
+      expect(await pageTargets(host)).toBe(ANCHOR);
+      expect(host.anchorPage !== null).toBe(!HEADED);
+      expect(host.parkedPages()).toEqual([]);
       await new Promise((resolve) => setTimeout(resolve, 2_000));
       const seen = await desktop.stop();
       if (X) expect([...seen.foci]).toEqual([operator?.id ?? '']);
@@ -215,9 +219,9 @@ describe(`template host with no window (${HEADED ? 'headed' : 'headless'})`, () 
       // A session's window closed by BrowserHive (close_session) leaves the browser up with none.
       const alpha = await world.launch('alpha');
       await world.sessions.close(alpha.id);
-      await until(() => host.context.pages().length === 0, 5_000, 'no page left');
+      await until(() => host.context.pages().length === ANCHOR, 5_000, 'no page left');
       await new Promise((resolve) => setTimeout(resolve, 1_000));
-      expect(await pageTargets(host)).toBe(0);
+      expect(await pageTargets(host)).toBe(ANCHOR);
       expect(world.supervisor.host(world.template.templateId).state).toBe('running');
       const bravo = await world.launch('bravo');
       expect(world.hosts).toHaveLength(1);
@@ -248,47 +252,53 @@ describe(`template host with no window (${HEADED ? 'headed' : 'headless'})`, () 
     expect(alpha.closedReason).toBeNull();
   });
 
-  it("the operator closing the browser's last window stops it: sessions end (operator), a checkpoint first, then the browser", async () => {
-    world = await templateWorld('standard');
-    const w = world;
-    const checkpoints: { connected: boolean; pages: number }[] = [];
-    w.supervisor.attachCheckpoints({
-      checkpoint: async (_id, host) => {
-        const state = await host?.storageState();
-        checkpoints.push({
-          connected:
-            (host as PlaywrightTemplateHost | undefined)?.context.browser()?.isConnected() === true,
-          pages: state === undefined ? -1 : state.cookies.length,
-        });
-      },
-      checkpointIfDue: async () => undefined,
-    });
-    const alpha = await w.launch('alpha');
-    const bravo = await w.launch('bravo');
-    await pageOf(alpha).goto(w.sites.url('site-a.test'));
-    const pid = await pidOf(w.host());
-    // One window of two closed by hand: the browser and the other session go on.
-    await closeByHand(pageOf(alpha));
-    await until(() => pageOf(alpha).isClosed(), 5_000, "alpha's window closed");
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    expect(w.supervisor.host(w.template.templateId).state).toBe('running');
-    expect(bravo.closedReason).toBeNull();
-    // The last one: an operator stop.
-    await closeByHand(pageOf(bravo));
-    const id = w.template.templateId;
-    await until(() => w.supervisor.host(id).state === 'stopped', 15_000, 'the operator stop');
-    expect(alpha.closedReason).toBe('operator');
-    expect(bravo.closedReason).toBe('operator');
-    // The checkpoint ran on the browser while it was still up, before it closed.
-    expect(checkpoints).toHaveLength(1);
-    expect(checkpoints[0]?.connected).toBe(true);
-    await until(() => !alive(pid), 10_000, 'the browser process exits');
-    expect(w.hosts).toHaveLength(1);
-    expect(w.degradations.reports).toEqual([]);
-    // Nothing restarts until the next launch, which starts a new browser.
-    await w.launch('charlie');
-    expect(w.hosts).toHaveLength(2);
-  }, 60_000);
+  // A headless host has no window an operator could close (and keeps its anchor page).
+  it.if(HEADED)(
+    "the operator closing the browser's last window stops it: sessions end (operator), a checkpoint first, then the browser",
+    async () => {
+      world = await templateWorld('standard');
+      const w = world;
+      const checkpoints: { connected: boolean; pages: number }[] = [];
+      w.supervisor.attachCheckpoints({
+        checkpoint: async (_id, host) => {
+          const state = await host?.storageState();
+          checkpoints.push({
+            connected:
+              (host as PlaywrightTemplateHost | undefined)?.context.browser()?.isConnected() ===
+              true,
+            pages: state === undefined ? -1 : state.cookies.length,
+          });
+        },
+        checkpointIfDue: async () => undefined,
+      });
+      const alpha = await w.launch('alpha');
+      const bravo = await w.launch('bravo');
+      await pageOf(alpha).goto(w.sites.url('site-a.test'));
+      const pid = await pidOf(w.host());
+      // One window of two closed by hand: the browser and the other session go on.
+      await closeByHand(pageOf(alpha));
+      await until(() => pageOf(alpha).isClosed(), 5_000, "alpha's window closed");
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      expect(w.supervisor.host(w.template.templateId).state).toBe('running');
+      expect(bravo.closedReason).toBeNull();
+      // The last one: an operator stop.
+      await closeByHand(pageOf(bravo));
+      const id = w.template.templateId;
+      await until(() => w.supervisor.host(id).state === 'stopped', 15_000, 'the operator stop');
+      expect(alpha.closedReason).toBe('operator');
+      expect(bravo.closedReason).toBe('operator');
+      // The checkpoint ran on the browser while it was still up, before it closed.
+      expect(checkpoints).toHaveLength(1);
+      expect(checkpoints[0]?.connected).toBe(true);
+      await until(() => !alive(pid), 10_000, 'the browser process exits');
+      expect(w.hosts).toHaveLength(1);
+      expect(w.degradations.reports).toEqual([]);
+      // Nothing restarts until the next launch, which starts a new browser.
+      await w.launch('charlie');
+      expect(w.hosts).toHaveLength(2);
+    },
+    60_000,
+  );
 
   it("closing the browser's last session keeps the session-only cookies Chrome drops with its last window", async () => {
     world = await templateWorld('standard');
@@ -318,7 +328,7 @@ describe(`template host with no window (${HEADED ? 'headed' : 'headless'})`, () 
     if (tabId === undefined) throw new Error('no tab');
     await w.sessions.closeTab(alpha, tabId);
     await new Promise((resolve) => setTimeout(resolve, 1_500));
-    expect(await pageTargets(w.host())).toBe(0);
+    expect(await pageTargets(w.host())).toBe(ANCHOR);
     expect((await w.host().jar()).find((c) => c.name === 'bh_session_only')?.value).toBe('1');
   });
 
@@ -364,18 +374,21 @@ describe(`template host with no window (${HEADED ? 'headed' : 'headless'})`, () 
     expect(alpha.closedReason).toBeNull();
   });
 
-  it("the operator closing the last window is a stop even when an agent's close_tab lands just after (review #91 L1)", async () => {
-    world = await templateWorld('standard');
-    const w = world;
-    const alpha = await w.launch('alpha');
-    const bravo = await w.launch('bravo');
-    await closeByHand(pageOf(bravo));
-    const tab = alpha.tabs.activeTabId();
-    if (tab === undefined) throw new Error('no tab');
-    await w.sessions.closeTab(alpha, tab);
-    const id = w.template.templateId;
-    await until(() => w.supervisor.host(id).state === 'stopped', 15_000, 'the operator stop');
-  });
+  it.if(HEADED)(
+    "the operator closing the last window is a stop even when an agent's close_tab lands just after (review #91 L1)",
+    async () => {
+      world = await templateWorld('standard');
+      const w = world;
+      const alpha = await w.launch('alpha');
+      const bravo = await w.launch('bravo');
+      await closeByHand(pageOf(bravo));
+      const tab = alpha.tabs.activeTabId();
+      if (tab === undefined) throw new Error('no tab');
+      await w.sessions.closeTab(alpha, tab);
+      const id = w.template.templateId;
+      await until(() => w.supervisor.host(id).state === 'stopped', 15_000, 'the operator stop');
+    },
+  );
 
   it('the sign-in window closed by hand leaves the browser up with no window', async () => {
     world = await templateWorld('standard');

@@ -25,6 +25,8 @@ export interface WindowRequest {
   readonly width: number;
   readonly height: number;
   readonly minimized: boolean;
+  /** Activated (`background: false`): only a headless host's anchor page (D-78). */
+  readonly foreground?: boolean;
 }
 
 /**
@@ -174,7 +176,7 @@ export class HostTargets implements WindowControl {
     const base = {
       url: 'about:blank',
       newWindow: true,
-      background: true,
+      background: request.foreground !== true,
       ...(this.browserContextId !== null && { browserContextId: this.browserContextId }),
       width: request.width,
       height: request.height,
