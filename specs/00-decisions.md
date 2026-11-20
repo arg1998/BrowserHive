@@ -1356,12 +1356,12 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 
 ## D-76 Strategy waits re-check the gates; a site turned off below its floor is an error degradation
 
-**Status:** Accepted (lead decision for PR T3b review fixes; the owner may veto)
+**Status:** Accepted (lead decision for PR T3b review fixes; the severity confirmed by the owner 2026-11-20: `TEMPLATE_SITE_BELOW_FLOOR` stays `error`)
 
 **Decision.**
 - After a `human-dwell` or `serialize-site` wait (and after an `entry-warmup`, before the agent's own navigation), the dispatcher runs the sign-in pause, site-hold, stop and guard checks again; a call that did not wait skips the second check (its window is the pre-T3b one). Guard decisions already acted on (a warn row, a consumed one-time pass) are not repeated. A call that meets a sign-in pause at the re-check keeps its turn while it waits (at most the pause's bound).
 - `serialize-site` is FIFO across sessions: a session's concurrent calls share its turn only while nobody else is queued.
-- A site that BrowserHive turns off because a change no operator applied (a deleted local file, a revocation fallback) put its template below the pack's stealth floor is reported as the degradation `TEMPLATE_SITE_BELOW_FLOOR` at severity `error`, like `TEMPLATE_HOST_FAILED`: it notifies, and `/health` answers `degraded` until the operator removes the site or template or a lower floor applies (sites the operator turned off themselves do not count, review #84 N5). A deployment that restarts on an unhealthy check would restart in a loop until then; the owner may prefer `warn` (no notification).
+- A site that BrowserHive turns off because a change no operator applied (a deleted local file, a revocation fallback) put its template below the pack's stealth floor is reported as the degradation `TEMPLATE_SITE_BELOW_FLOOR` at severity `error`, like `TEMPLATE_HOST_FAILED`: it notifies, and `/health` answers `degraded` until the operator removes the site or template or a lower floor applies (sites the operator turned off themselves do not count, review #84 N5). A deployment that restarts on an unhealthy check would restart in a loop until then. *Owner decision 2026-11-20 ("stealth and security are first class"):* it stays `error` (a notification and degraded health), not `warn`.
 
 ## D-77 Headed windows start minimized by default (`headedWindows`)
 
