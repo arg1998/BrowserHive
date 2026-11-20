@@ -192,7 +192,7 @@ describe('profile preferences', () => {
       profile: { password_manager_enabled: false, exited_cleanly: true },
       autofill: { profile_enabled: false, credit_card_enabled: false },
       signin: { allowed: false },
-      session: { restore_on_startup: 5 },
+      session: { restore_on_startup: 1 },
     });
   });
 });

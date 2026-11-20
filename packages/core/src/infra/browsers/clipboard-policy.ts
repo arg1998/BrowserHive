@@ -3,6 +3,7 @@
 import type { BrowserContext, CDPSession, Disposable } from 'patchright';
 import type { Logger } from '../../ports/logger.ts';
 import { patchOpenDocuments, RestoredDocumentsWatch } from './clipboard-frames.ts';
+import { defaultContextIdOf } from './template-targets.ts';
 
 // Core compiles without the DOM lib; the page globals the init script touches.
 declare const Document: { readonly prototype: object };
@@ -233,11 +234,19 @@ class ClipboardPolicy {
     return this.#cdp;
   }
 
-  /** The context's id from any open page's target info (as `HostTargets.open` reads it). */
+  /**
+   * The context's id: from an open page's target info, or (a host starts with no window, D-78)
+   * the default browser context's, which is the persistent profile's.
+   */
   async #browserContextId(): Promise<string> {
     if (this.#contextId !== null) return this.#contextId;
     const page = this.#context.pages().find((p) => !p.isClosed());
-    if (page === undefined) throw new Error('the template browser has no open page');
+    if (page === undefined) {
+      const id = await defaultContextIdOf(await this.#browserSession(), this.#log);
+      if (id === null) throw new Error('the template browser names no default context');
+      this.#contextId = id;
+      return id;
+    }
     const cdp = await this.#context.newCDPSession(page);
     try {
       const { targetInfo } = await cdp.send('Target.getTargetInfo');

@@ -1,5 +1,5 @@
 /// <reference lib="dom" />
-/** @module test/integration/templates-live.test — three virtual sessions on one real template host, with template stealth off and standard on Patchright (D-65), on the HTTPS fixture sites (spec 13 §3.3–§3.8, §17 T1a acceptance): background windows, isolation of `list_tabs`, every site-opened page in its opener's session, parked pages, close, crash fan-out and restart, the sentinel, page caps and the self-origin guard. */
+/** @module test/integration/templates-live.test — three virtual sessions on one real template host, with template stealth off and standard on Patchright (D-65), on the HTTPS fixture sites (spec 13 §3.3–§3.8, §17 T1a acceptance): background windows, isolation of `list_tabs`, every site-opened page in its opener's session, parked pages, close, crash fan-out and restart, a host with no window of its own (D-78), page caps and the self-origin guard. */
 
 import { afterEach, describe, expect, it } from 'bun:test';
 import { spawnSync } from 'node:child_process';
@@ -63,12 +63,10 @@ for (const stealth of STEALTH_LEGS) {
       const operator = operatorWindow();
       try {
         if (operator !== null) expect(focusedWindow()).toBe(operator.id);
-        // Known exception (spec 13 §3.3): starting a headed host shows Chromium's first window
-        // (the sentinel) as an active window before it is minimized, which can take the focus.
-        await world.launch('alpha');
-        if (operator !== null) spawnSync('xdotool', ['windowfocus', '--sync', operator.id]);
         const before = focusedWindow();
-        if (operator !== null) expect(before).toBe(operator.id);
+        // The host starts with no window (D-78): its start takes no focus either.
+        await world.launch('alpha');
+        expect(focusedWindow()).toBe(before);
         await world.launch('bravo');
         expect(focusedWindow()).toBe(before);
         await world.launch('charlie');
@@ -239,19 +237,12 @@ for (const stealth of STEALTH_LEGS) {
       expect(world.sites.requests.some((r) => r.host.startsWith('cdn-a.test'))).toBe(false);
     });
 
-    it('closing the sentinel by hand recreates it; the host survives', async () => {
+    it('the host has no window of its own: every page is a session page', async () => {
       world = await templateWorld(stealth);
       const a = await world.launch('alpha');
       const host = world.host();
       const own = new Set(a.view?.pages() ?? []);
-      const sentinel = host.context.pages().find((p) => !own.has(p));
-      if (sentinel === undefined) throw new Error('no sentinel');
-      await sentinel.close();
-      await until(
-        () => host.context.pages().some((p) => p !== sentinel && !own.has(p)),
-        5_000,
-        'a new sentinel',
-      );
+      expect(host.context.pages().filter((p) => !own.has(p))).toEqual([]);
       expect(host.parkedPages()).toEqual([]);
       await pageOf(a).goto(world.sites.url('site-a.test'));
       expect(world.supervisor.host(world.template.templateId).state).toBe('running');

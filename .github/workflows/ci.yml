@@ -257,7 +257,7 @@ jobs:
       - if: env.RUN == 'true' && runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends xvfb xdotool x11-utils openbox
+          sudo apt-get install -y --no-install-recommends xvfb xdotool x11-utils openbox wmctrl
       - if: env.RUN == 'true' && runner.os == 'Linux'
         timeout-minutes: 20
         env:
@@ -271,8 +271,10 @@ jobs:
           packages/core/test/integration/template-sealing.test.ts
           packages/core/test/integration/template-recording.test.ts
           packages/core/test/integration/template-tools.test.ts
-      # Headed windows kept minimized (D-77): minimizing is the window manager's job on X11, so this
-      # suite runs on a virtual display with openbox (the other suites keep a bare display).
+          packages/core/test/integration/template-no-window.test.ts
+      # Headed windows kept minimized (D-77) and template browsers with no window (D-78): minimizing,
+      # the window list, closing a window by hand and the menu's Exit are the window manager's, so
+      # these suites run on a virtual display with openbox (the other suites keep a bare display).
       - if: env.RUN == 'true' && runner.os == 'Linux'
         timeout-minutes: 10
         env:
@@ -281,7 +283,15 @@ jobs:
         run: >-
           xvfb-run -a sh -c 'openbox &
           until xprop -root _NET_SUPPORTING_WM_CHECK | grep -q window; do sleep 0.1; done;
-          bun run test:integration packages/core/test/integration/headed-windows.test.ts'
+          bun run test:integration packages/core/test/integration/headed-windows.test.ts
+          packages/core/test/integration/template-no-window.test.ts'
+      # macOS and Windows runners have a desktop: a headed template browser starts there with no
+      # window, survives having none and closes cleanly (D-78); the foreground app is logged only.
+      - if: env.RUN == 'true' && runner.os != 'Linux'
+        timeout-minutes: 10
+        env:
+          BROWSERHIVE_TEMPLATES_HEADED: '1'
+        run: bun run test:integration packages/core/test/integration/template-no-window.test.ts
 
   ntfy:
     # The ntfy adapter against a real ntfy server (binwiederhier/ntfy): publish, read back, upload

@@ -35,13 +35,19 @@ export interface WindowRequest {
  * follow) through {@link onLostTarget}.
  */
 export class HostTargets implements WindowControl {
-  readonly browserContextId: string;
+  /**
+   * The persistent context's id: Chromium's default browser context (a persistent launch has no
+   * other). `null` when this Chromium does not name it: every page target is the host's then.
+   */
+  readonly browserContextId: string | null;
   private readonly cdp: CDPSession;
   private readonly context: BrowserContext;
   private readonly log: Logger;
   private readonly discovered = new Map<string, DiscoveredTarget>();
   /** Target ids a page's facts read returned (so a destroyed one is not a lost target). */
   private readonly matched = new Set<string>();
+  /** Targets this session closed itself (`closeTarget`): never an operator's close. */
+  private readonly ownCloses = new Set<string>();
   /** Openers of tabs Chromium opens without one (modifier clicks), by URL (spec 13 §3.4). */
   readonly newTabs = new NewTabRequests(() => Date.now());
   private lost: ((facts: TargetFacts) => void) | null = null;
@@ -52,7 +58,7 @@ export class HostTargets implements WindowControl {
   private constructor(
     cdp: CDPSession,
     context: BrowserContext,
-    browserContextId: string,
+    browserContextId: string | null,
     logger: Logger,
   ) {
     this.cdp = cdp;
@@ -62,10 +68,11 @@ export class HostTargets implements WindowControl {
   }
 
   /**
-   * Opens the browser session of `context` and starts discovery. `anchor` is any open page of the
-   * context (the sentinel): its target info names the context's `browserContextId`.
+   * Opens the browser session of `context` and starts discovery. The host has no page at this
+   * point (it starts with no window, D-78): the context is Chromium's default browser context,
+   * named by `Target.getBrowserContexts`.
    */
-  static async open(context: BrowserContext, anchor: Page, logger: Logger): Promise<HostTargets> {
+  static async open(context: BrowserContext, logger: Logger): Promise<HostTargets> {
     const browser = context.browser();
     if (browser === null) {
       throw new AppError(
@@ -74,31 +81,21 @@ export class HostTargets implements WindowControl {
         { message: 'a template host needs a browser-level DevTools session' },
       );
     }
-    const pageCdp = await context.newCDPSession(anchor);
-    let browserContextId: string | undefined;
-    try {
-      const { targetInfo } = await pageCdp.send('Target.getTargetInfo');
-      browserContextId = targetInfo.browserContextId;
-    } finally {
-      await pageCdp.detach().catch(() => undefined);
-    }
-    if (browserContextId === undefined) {
-      throw new AppError('INTERNAL_ERROR', { ref: 'template-host-context-id' });
-    }
     const cdp = await browser.newBrowserCDPSession();
-    return HostTargets.attach(cdp, context, browserContextId, logger);
+    return HostTargets.attach(cdp, context, await defaultContextIdOf(cdp, logger), logger);
   }
 
   /** Starts discovery on an open browser-level session (also the unit tests' entry). */
   static async attach(
     cdp: CDPSession,
     context: BrowserContext,
-    browserContextId: string,
+    browserContextId: string | null,
     logger: Logger,
   ): Promise<HostTargets> {
     const targets = new HostTargets(cdp, context, browserContextId, logger);
     const ours = (info: { type: string; browserContextId?: string }) =>
-      info.type === 'page' && info.browserContextId === browserContextId;
+      info.type === 'page' &&
+      (browserContextId === null || info.browserContextId === browserContextId);
     cdp.on('Target.targetCreated', ({ targetInfo }) => {
       if (!ours(targetInfo)) return;
       targets.createdListener?.();
@@ -119,6 +116,18 @@ export class HostTargets implements WindowControl {
    */
   onDestroyed(listener: (targetId: string) => void): void {
     this.destroyedListener = listener;
+  }
+
+  /** Page targets of the host Chromium has created and not destroyed (windows being created too). */
+  livePageCount(): number {
+    let count = 0;
+    for (const target of this.discovered.values()) if (!target.destroyed) count += 1;
+    return count;
+  }
+
+  /** True when this session closed `targetId` itself ({@link closeTarget}). */
+  closedByHost(targetId: string): boolean {
+    return this.ownCloses.has(targetId);
   }
 
   /** Called when Chromium reports a new page target of the host (it may have restored a window). */
@@ -161,7 +170,7 @@ export class HostTargets implements WindowControl {
       url: 'about:blank',
       newWindow: true,
       background: true,
-      browserContextId: this.browserContextId,
+      ...(this.browserContextId !== null && { browserContextId: this.browserContextId }),
       width: request.width,
       height: request.height,
     };
@@ -225,6 +234,7 @@ export class HostTargets implements WindowControl {
 
   /** Closes a target that was never handed to anyone (an adoption that failed). */
   async closeTarget(targetId: string): Promise<void> {
+    this.ownCloses.add(targetId);
     try {
       await this.cdp.send('Target.closeTarget', { targetId });
     } catch (err) {
@@ -266,6 +276,7 @@ export class HostTargets implements WindowControl {
       if (target.destroyed) {
         this.discovered.delete(id);
         this.matched.delete(id);
+        this.ownCloses.delete(id);
       }
     }
   }
@@ -305,5 +316,19 @@ export class HostTargets implements WindowControl {
     } catch (err) {
       this.log.debug('new tabs not watched', { err: serializeError(err) });
     }
+  }
+}
+
+/**
+ * The id of Chromium's default browser context (the persistent profile's), from the browser
+ * session; `null` when this Chromium does not report it (`defaultBrowserContextId` is optional).
+ */
+export async function defaultContextIdOf(cdp: CDPSession, logger: Logger): Promise<string | null> {
+  try {
+    const { defaultBrowserContextId } = await cdp.send('Target.getBrowserContexts');
+    return defaultBrowserContextId ?? null;
+  } catch (err) {
+    logger.debug('default context unnamed', { err: serializeError(err) });
+    return null;
   }
 }

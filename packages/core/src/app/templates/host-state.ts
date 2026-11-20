@@ -10,7 +10,8 @@ export type HostFailure =
   | 'host_failed'
   | 'no_display'
   | 'proxy_unreachable'
-  | 'sandbox_unavailable';
+  | 'sandbox_unavailable'
+  | 'launch_args';
 
 /** Restart delays after consecutive crashes or failed starts (spec 13 §3.2). */
 export const RESTART_BACKOFF_MS: readonly number[] = [5_000, 15_000, 45_000, 135_000, 405_000];
@@ -61,7 +62,8 @@ export class FailureWindow {
 
 /**
  * A failed start that no restart can fix (spec 13 §3.2 `failed`): no display, an unreachable proxy,
- * no sandbox under `sandbox=on`. `null`: an ordinary failure that counts toward the window.
+ * no sandbox under `sandbox=on`, an unsafe browser command line. `null`: an ordinary failure that
+ * counts toward the window.
  */
 export function permanentFailure(err: unknown): HostFailure | null {
   if (!isAppError(err)) return null;
@@ -69,6 +71,8 @@ export function permanentFailure(err: unknown): HostFailure | null {
   const ref: unknown = (err.details as { readonly ref?: unknown } | undefined)?.ref;
   if (ref === 'no_display') return 'no_display';
   if (ref === 'proxy_unreachable') return 'proxy_unreachable';
+  // The browser's command line lacked the proxy, the sandbox setting or a required switch (D-78).
+  if (ref === 'launch_args') return 'launch_args';
   return null;
 }
 

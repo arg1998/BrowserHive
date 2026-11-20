@@ -263,13 +263,28 @@ describe('TemplateHostSupervisor host lifecycle', () => {
     });
   });
 
-  it('an operator stop closes the sessions with reason operator and restarts nothing', async () => {
+  it('an operator stop closes the sessions (operator), checkpoints, closes the browser and restarts nothing (D-78)', async () => {
     const { supervisor, launcher, sessions, clock } = setup();
+    const calls: string[] = [];
+    supervisor.attachCheckpoints({
+      checkpoint: async (id, host) => {
+        calls.push(
+          `checkpoint:${id}:closed=${launcher.hosts[0]?.closed ?? -1}:${host === launcher.hosts[0]}`,
+        );
+      },
+      checkpointIfDue: async () => undefined,
+    });
     const template = templateRecord();
     const a = await supervisor.launch(request(template, 'one'));
-    launcher.last.exit({ reason: 'browser disconnected', operatorStop: true });
+    // Chromium keeps the browser with no window: the host reports the stop, the browser is still up.
+    launcher.last.exit({ reason: 'the last window was closed in the browser', operatorStop: true });
     await clock.advance(1);
+    for (let i = 0; i < 50 && launcher.last.closed === 0; i++) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    }
     expect(a.closedReason).toBe('operator');
+    expect(calls).toEqual([`checkpoint:${template.templateId}:closed=0:true`]);
+    expect(launcher.last.closed).toBe(1);
     expect(supervisor.host(template.templateId).state).toBe('stopped');
     await clock.advance(10 * 60_000);
     expect(launcher.hosts).toHaveLength(1);
@@ -479,8 +494,11 @@ describe('T1b: holds, checkpoints and memory (spec 13 §3.2, §3.9, §3.12)', ()
     const { supervisor, launcher } = setup();
     const calls: string[] = [];
     supervisor.attachCheckpoints({
-      checkpoint: async (id) => {
-        calls.push(`checkpoint:${id}:closed=${launcher.hosts[0]?.closed ?? -1}`);
+      checkpoint: async (id, host) => {
+        // The host being stopped is handed over: it is draining, so no longer the running one.
+        calls.push(
+          `checkpoint:${id}:closed=${launcher.hosts[0]?.closed ?? -1}:${host !== undefined}`,
+        );
       },
       checkpointIfDue: async (id) => void calls.push(`due:${id}`),
     });
@@ -489,7 +507,7 @@ describe('T1b: holds, checkpoints and memory (spec 13 §3.2, §3.9, §3.12)', ()
     await supervisor.tick();
     expect(calls).toEqual([`due:${template.templateId}`]);
     await supervisor.stopHost(template.templateId, 'operator');
-    expect(calls.at(-1)).toBe(`checkpoint:${template.templateId}:closed=0`);
+    expect(calls.at(-1)).toBe(`checkpoint:${template.templateId}:closed=0:true`);
     await supervisor.launch(request(template, 'again'));
     const before = calls.length;
     await supervisor.shutdown(template.templateId);

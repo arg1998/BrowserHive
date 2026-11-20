@@ -91,6 +91,8 @@ export class FakePage {
     down: (): Promise<void> => this.run('mouse.down', []),
     up: (): Promise<void> => this.run('mouse.up', []),
   };
+  /** Playwright's own mark of a `page.close()` call (read by the host's operator-close watch). */
+  _closeWasCalled = false;
   private currentUrl: string;
   private closed = false;
   private viewport: { width: number; height: number } | null = { width: 1280, height: 720 };
@@ -229,6 +231,7 @@ export class FakePage {
   // --- lifecycle -------------------------------------------------------------------------------
 
   async close(): Promise<void> {
+    this._closeWasCalled = true;
     await this.run('close', []);
     if (this.closed) return;
     this.closed = true;

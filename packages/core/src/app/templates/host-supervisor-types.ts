@@ -12,7 +12,7 @@ import type {
   TemplateSiteRecord,
 } from '../../ports/persistence/index.ts';
 import type { SitePackLookup } from '../../ports/site-packs.ts';
-import type { TemplateHostLauncher } from '../../ports/template-host.ts';
+import type { TemplateHost, TemplateHostLauncher } from '../../ports/template-host.ts';
 import type { DomainEvents } from '../events/catalog.ts';
 import type { SessionService } from '../sessions/session-service.ts';
 import type { StrategyStateStore } from '../site-packs/strategy-state.ts';
@@ -34,8 +34,11 @@ export interface HostSupervisorConfig {
 
 /** The checkpoints the supervisor drives (spec 13 §3.9; `TemplateStateService`). */
 export interface HostCheckpoints {
-  /** Rewrites the checkpoint now (clean stop, shutdown). Never throws. */
-  checkpoint(templateId: string): Promise<unknown>;
+  /**
+   * Rewrites the checkpoint now (clean stop, shutdown); `host` is the host being stopped (it is
+   * `draining`, no longer the running one). Never throws.
+   */
+  checkpoint(templateId: string, host?: TemplateHost): Promise<unknown>;
   /** Rewrites it when `templateCheckpointInterval` has passed. Never throws. */
   checkpointIfDue(templateId: string, startedAt: number | null): Promise<unknown>;
 }

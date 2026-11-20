@@ -288,7 +288,13 @@ export const BOOT_ERRORS = {
     hint: 'Fix the cause on the template page, then restart its browser.',
     details: z.object({
       template_id: z.string(),
-      reason: z.enum(['host_failed', 'no_display', 'proxy_unreachable', 'sandbox_unavailable']),
+      reason: z.enum([
+        'host_failed',
+        'no_display',
+        'proxy_unreachable',
+        'sandbox_unavailable',
+        'launch_args',
+      ]),
       attempts: z.number().int().nonnegative(),
     }),
     docs: true,

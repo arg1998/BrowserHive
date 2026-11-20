@@ -5,7 +5,7 @@ import type { Clock } from '../../ports/clock.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type { ParkedPageInfo } from '../../ports/template-host.ts';
 
-/** Parked pages kept open per host, the sentinel excluded (spec 13 §3.4). */
+/** Parked pages kept open per host (spec 13 §3.4). */
 export const MAX_PARKED_PAGES = 10;
 
 /** True for a URL whose scheme is `data:` (case-insensitive, as Chromium reports it). */
@@ -39,11 +39,6 @@ export class ParkedPages {
     this.pages.delete(oldest.value);
     this.log.info('parked page closed', { reason: 'limit', limit: MAX_PARKED_PAGES });
     void oldest.value.close({ runBeforeUnload: false }).catch(() => undefined);
-  }
-
-  /** Forgets a page (it became the sentinel). */
-  delete(page: Page): void {
-    this.pages.delete(page);
   }
 
   /** The open parked page with `targetId`, if any (operator **Close**, spec 13 §11.1). */

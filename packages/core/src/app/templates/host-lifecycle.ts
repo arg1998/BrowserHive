@@ -243,18 +243,21 @@ export class HostLifecycle {
 
   private onExit(host: TemplateHost, exit: TemplateHostExit): void {
     if (this.instance !== host) return;
+    if (exit.operatorStop) {
+      // The operator quit the browser (D-78): Chromium keeps it running with no window, so it is
+      // stopped cleanly: its sessions end (`operator`), a final checkpoint, then the browser.
+      // Nothing restarts until the next launch.
+      if (this.state !== 'running') return;
+      this.stop('operator', 'operator').catch((err: unknown) => {
+        this.log.warn('operator stop failed', { err: serializeError(err) });
+      });
+      return;
+    }
     this.detach();
     const ranFor = this.startedAt === null ? 0 : this.deps.clock.now() - this.startedAt;
     this.startedAt = null;
     // A crash after a healthy run is not one more in a row (spec 13 §3.2 "consecutive").
     if (ranFor >= HEALTHY_RUN_MS) this.failures.clear();
-    if (exit.operatorStop) {
-      // The operator quit the browser: its sessions end, nothing restarts until the next launch.
-      this.enter('stopped');
-      this.log.info('template host stopped', { reason: 'operator' });
-      void this.deps.closeSessions(host.viewIds(), 'operator');
-      return;
-    }
     this.lastError = exit.reason;
     this.failed(null);
   }

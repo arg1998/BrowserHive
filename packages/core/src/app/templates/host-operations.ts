@@ -196,7 +196,7 @@ export class TemplateHostOperations implements TemplateHostOps {
   async openRecording(request: RecordingRequest): Promise<Session> {
     const open = this.recordingOf(request.template.templateId);
     if (open !== null) {
-      await raise(open.view?.page);
+      await raise(await this.#signInPage(open, request.siteIds));
       return open;
     }
     return this.openSignInWindow(request, RECORDING_SLUG);
@@ -239,7 +239,29 @@ export class TemplateHostOperations implements TemplateHostOps {
 
   /** Raises a sign-in window (**Show window**: an explicit operator action, spec 13 §3.3). */
   async raiseWindow(session: Session): Promise<void> {
-    await raise(session.view?.page);
+    await raise(await this.#signInPage(session, null));
+  }
+
+  /**
+   * A page of the sign-in window to show: an open one, or, when the operator closed the window by
+   * hand (the browser stays up with no window, D-78), a new window with the instructions.
+   */
+  async #signInPage(
+    session: Session,
+    siteIds: readonly string[] | null,
+  ): Promise<Page | undefined> {
+    const view = session.view;
+    if (view === null) return undefined;
+    const open = [view.page, ...view.pages()].find((page) => !page.isClosed());
+    if (open !== undefined) return open;
+    try {
+      const { page } = await this.#deps.sessions.newTab(session);
+      if (siteIds !== null) await page.setContent(recordingPage(siteIds));
+      return page;
+    } catch (err) {
+      this.#log.debug('sign-in window not opened', { err: serializeError(err) });
+      return undefined;
+    }
   }
 
   async closeRecording(templateId: string): Promise<void> {
