@@ -7,7 +7,7 @@ import type { Logger } from '../../ports/logger.ts';
 /** How long after a close Chrome may still drop session cookies (measured: about 20 ms). */
 export const DROP_WATCH_MS = 3_000;
 /** The watch goes on at least this long after the close (the drop is still to come, or repeats). */
-const DROP_SETTLE_MS = 500;
+const DROP_SETTLE_MS = 250;
 
 /** A cookie partition (CHIPS) as DevTools reports it. */
 interface PartitionKey {
@@ -126,7 +126,7 @@ export class SessionCookieKeeper {
       if (restored > 0 && watched >= DROP_SETTLE_MS) break;
       if (Date.now() >= until) break;
       if (watched >= DROP_SETTLE_MS && this.host.adoptedSince(closedAt)) break;
-      await new Promise<void>((resolve) => setTimeout(resolve, 25));
+      await new Promise<void>((resolve) => setTimeout(resolve, 50));
     }
     if (restored > 0) this.host.log.info('session cookies kept', { count: restored });
     return restored;

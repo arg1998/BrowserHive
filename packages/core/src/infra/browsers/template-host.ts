@@ -48,8 +48,8 @@ import { TemplateSessionView, type TemplateViewHost } from './template-view.ts';
 export const ADOPTION_DEADLINE_MS = 10_000;
 /** The close deadline of a host the operator quit while nobody listened for it. */
 const OPERATOR_CLOSE_MS = 10_000;
-/** How long the marker cookie is watched after the host was left with no window. */
-const MARKER_WATCH_MS = 500;
+/** When the marker cookie is looked at after the host was left with no window (ms after). */
+const MARKER_LOOKS_MS: readonly number[] = [0, 100, 300];
 /** How often an open sign-in window's session cookies are read (review #91 M2). */
 const SIGN_IN_COOKIES_MS = 1_000;
 
@@ -289,7 +289,7 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
       );
     }
     // Before the window navigates: the marker may have gone with the last window (D-78).
-    await this.keepMarker(0);
+    await this.keepMarker([0]);
     return page;
   }
 
@@ -335,7 +335,8 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
       return await close();
     } finally {
       const closedAt = Date.now();
-      this.track(this.cookieKeeper.putBack(before, closedAt).then(() => this.keepMarker()));
+      this.track(this.cookieKeeper.putBack(before, closedAt));
+      void this.keepMarker();
     }
   }
 
@@ -351,21 +352,20 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
    * the last window. Watched for a moment, since the drop can land after the close is reported.
    * The marker is BrowserHive's own, so re-adding it never brings back a site's state.
    */
-  private async keepMarker(watchMs = MARKER_WATCH_MS): Promise<void> {
+  private async keepMarker(looks: readonly number[] = MARKER_LOOKS_MS): Promise<void> {
     if (this.markerCookies.length === 0) return;
     const names = new Set(this.markerCookies.map((c) => c.name));
-    const until = Date.now() + watchMs;
-    for (;;) {
+    const started = Date.now();
+    for (const at of looks) {
+      const wait = started + at - Date.now();
+      if (wait > 0) await new Promise<void>((resolve) => setTimeout(resolve, wait));
       if (this.closing) return;
       const jar = await this.context.cookies().catch(() => null);
       const present = jar?.filter((c) => names.has(c.name)).length ?? 0;
-      if (present < this.markerCookies.length) {
-        await this.context.addCookies([...this.markerCookies]).catch((err: unknown) => {
-          this.log.warn('marker cookie not set', { err: serializeError(err) });
-        });
-      }
-      if (Date.now() >= until) return;
-      await new Promise<void>((resolve) => setTimeout(resolve, 50));
+      if (present >= this.markerCookies.length) continue;
+      await this.context.addCookies([...this.markerCookies]).catch((err: unknown) => {
+        this.log.warn('marker cookie not set', { err: serializeError(err) });
+      });
     }
   }
 
@@ -377,7 +377,7 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
       // A sign-in window was open: the sign-in (read every second meanwhile) stays.
       this.track(this.cookieKeeper.putBack(this.signInCookies, closedAt));
     }
-    this.track(this.keepMarker());
+    void this.keepMarker();
   }
 
   /** While a sign-in window is open, its session cookies are read every second (review #91 M2). */
