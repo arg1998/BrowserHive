@@ -169,6 +169,10 @@ export class TemplateSessionView implements SessionView {
   }
 
   /** A tool call: with `agent_windows: minimized`, a window it restored is minimized again (D-77). */
+  closePage(page: Page): Promise<void> {
+    return this.owner.keepSessionCookies(1, () => page.close());
+  }
+
   aroundAction<T>(run: () => Promise<T>): Promise<T> {
     if (!this.keptMinimized() || this.owner.recording) return run();
     return this.owner.keepMinimizedAround(this.pages(), run);

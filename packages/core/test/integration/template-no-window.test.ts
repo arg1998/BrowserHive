@@ -305,6 +305,44 @@ describe(`template host with no window (${HEADED ? 'headed' : 'headless'})`, () 
     expect((await w.host().jar()).find((c) => c.name === 'bh_session_only')?.value).toBe('1');
   });
 
+  it("close_tab of the browser's last tab keeps the session-only cookies too", async () => {
+    world = await templateWorld('standard');
+    const w = world;
+    const alpha = await w.launch('alpha');
+    await w
+      .host()
+      .context.addCookies([
+        { name: 'bh_session_only', value: '1', url: 'https://site-a.test/', secure: true },
+      ]);
+    const tabId = alpha.tabs.activeTabId();
+    if (tabId === undefined) throw new Error('no tab');
+    await w.sessions.closeTab(alpha, tabId);
+    await new Promise((resolve) => setTimeout(resolve, 1_500));
+    expect(await pageTargets(w.host())).toBe(0);
+    expect((await w.host().jar()).find((c) => c.name === 'bh_session_only')?.value).toBe('1');
+  });
+
+  it("the host's only window renders at full rate (its first window is no longer the sentinel)", async () => {
+    world = await templateWorld('standard');
+    const page = pageOf(await world.launch('alpha'));
+    await page.goto(world.sites.url('site-a.test'));
+    const frames = await page.evaluate(
+      () =>
+        new Promise<number>((resolve) => {
+          let n = 0;
+          const t0 = performance.now();
+          const tick = () => {
+            n += 1;
+            if (performance.now() - t0 < 1_000) requestAnimationFrame(tick);
+            else resolve(n);
+          };
+          requestAnimationFrame(tick);
+        }),
+    );
+    process.stderr.write(`animation frames in 1 s of the host's only window: ${frames}\n`);
+    expect(frames).toBeGreaterThanOrEqual(20);
+  });
+
   it('the sign-in window closed by hand leaves the browser up with no window', async () => {
     world = await templateWorld('standard');
     const signIn = await world.supervisor.launchMaintenance({

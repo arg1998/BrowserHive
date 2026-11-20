@@ -25,6 +25,12 @@ export interface WindowRequest {
   readonly width: number;
   readonly height: number;
   readonly minimized: boolean;
+  /**
+   * Created without activating it (`background: true`): every headed host's window. A headless
+   * host has no desktop focus to keep, and its window is its browser's only one now that it starts
+   * with none (D-78), so it is created in the foreground like the first window it replaced.
+   */
+  readonly background: boolean;
 }
 
 /**
@@ -161,7 +167,7 @@ export class HostTargets implements WindowControl {
   }
 
   /**
-   * Creates a background window at `about:blank` in the host's context (navigated afterwards: under
+   * Creates a window at `about:blank` in the host's context (background on a headed host; navigated afterwards: under
    * Patchright a headed `createTarget` given a URL misses the context's init scripts). Returns its
    * target id; the page arrives through Playwright's adoption.
    */
@@ -169,7 +175,7 @@ export class HostTargets implements WindowControl {
     const base = {
       url: 'about:blank',
       newWindow: true,
-      background: true,
+      background: request.background,
       ...(this.browserContextId !== null && { browserContextId: this.browserContextId }),
       width: request.width,
       height: request.height,

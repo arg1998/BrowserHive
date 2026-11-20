@@ -232,7 +232,11 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
     const settle = this.dispatcher.beginCreate();
     let targetId: string;
     try {
-      targetId = await this.targets.createWindow({ ...this.window, minimized });
+      targetId = await this.targets.createWindow({
+        ...this.window,
+        minimized,
+        background: !this.headless,
+      });
     } catch (err) {
       settle();
       throw ops.windowUnavailable('window not created', err);

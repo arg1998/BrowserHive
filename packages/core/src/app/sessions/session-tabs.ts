@@ -51,7 +51,8 @@ export class SessionTabs {
     const page = session.tabs.resolve(tabId);
     session.tabs.remove(tabId);
     try {
-      await page.close();
+      const view = session.view;
+      await (view?.closePage !== undefined ? view.closePage(page) : page.close());
     } catch (err) {
       this.deps.logger.debug('tab close failed', {
         sessionId: session.id,
