@@ -36,6 +36,48 @@ const PROBE_SCRIPT = `
   document.getElementById('probe').textContent = JSON.stringify(out);
 `;
 
+/** The identity values a frame reads (the `/sandboxed-frames` page compares them across frames). */
+const FRAME_IDENTITY = `({
+  userAgent: navigator.userAgent,
+  uaPlatform: navigator.userAgentData ? navigator.userAgentData.platform : null,
+  brands: navigator.userAgentData ? navigator.userAgentData.brands.map((b) => b.brand) : null,
+  webdriver: navigator.webdriver,
+  deviceMemory: navigator.deviceMemory,
+  hardwareConcurrency: navigator.hardwareConcurrency,
+  screen: { width: screen.width, height: screen.height, availWidth: screen.availWidth, availHeight: screen.availHeight },
+  outer: { width: outerWidth, height: outerHeight },
+  screenWidthGetter: Object.getOwnPropertyDescriptor(Screen.prototype, 'width').get.toString(),
+})`;
+
+/** A string as a JS literal that is safe inside an inline `<script>` (no `</` closes it). */
+const scriptLiteral = (text: string): string => JSON.stringify(text).replaceAll('</', '<\\/');
+
+/** A frame document that posts its identity to `target` and appends `child` (a sandboxed `srcdoc`). */
+function sandboxedFrameDoc(frame: string, target: 'parent' | 'top', child?: string): string {
+  const post = `${target}.postMessage({ frame: ${JSON.stringify(frame)}, probe: ${FRAME_IDENTITY} }, '*');`;
+  const append =
+    child === undefined
+      ? ''
+      : `const f = document.createElement('iframe'); f.sandbox = 'allow-scripts'; f.srcdoc = ${scriptLiteral(child)}; document.documentElement.appendChild(f);`;
+  return `<script>${post}${append}</script>`;
+}
+
+/**
+ * `/sandboxed-frames`: the main frame's identity (read at `load`, once the window has its size) in
+ * `window.__frames.main`, a sandboxed `srcdoc`
+ * frame without `allow-same-origin` (opaque origin) in `.sandboxed` and a sandboxed `srcdoc` frame
+ * nested in it in `.nested` (both post theirs, as a page's own frames would).
+ */
+const SANDBOXED_FRAMES_PAGE = `<script>
+  window.__frames = {};
+  addEventListener('message', (event) => { window.__frames[event.data.frame] = event.data.probe; });
+  addEventListener('load', () => { window.__frames.main = ${FRAME_IDENTITY}; });
+  const f = document.createElement('iframe');
+  f.sandbox = 'allow-scripts';
+  f.srcdoc = ${scriptLiteral(sandboxedFrameDoc('sandboxed', 'parent', sandboxedFrameDoc('nested', 'top')))};
+  document.body.appendChild(f);
+</script>`;
+
 /**
  * An attachment whose first 2 KiB go out at once (enough for Chromium to start the download without
  * waiting to sniff more) and whose remainder is up to `rest`. Bun sends nothing, not even the
@@ -238,6 +280,8 @@ export function startFixtureServer(): FixtureServer {
           return new Response(JSON.stringify(headers), {
             headers: { 'content-type': 'application/json' },
           });
+        case '/sandboxed-frames':
+          return html(SANDBOXED_FRAMES_PAGE);
         case '/elements':
           return html(
             `<h1 id="h">Elements</h1>

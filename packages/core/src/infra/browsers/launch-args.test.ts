@@ -1,4 +1,4 @@
-/** @module infra/browsers/launch-args.test — arg merge order, ignoreDefaultArgs rule and deny-list interplay. */
+/** @module infra/browsers/launch-args.test — arg merge order, the sandboxed-frames switch of a stealth launch and its one `--disable-features` switch, ignoreDefaultArgs rule and deny-list interplay. */
 
 import { describe, expect, it } from 'bun:test';
 import { DENIED_LAUNCH_ARG_KEYS } from '../../kernel/deny-list.ts';
@@ -12,6 +12,12 @@ import {
   STEALTH_ARGS,
 } from './launch-args.ts';
 import { assertLaunchOptionsAllowed, parseLaunchOptions } from './pass-through.ts';
+import {
+  ISOLATE_SANDBOXED_IFRAMES,
+  PATCHRIGHT_DISABLE_FEATURES_ARG,
+  PATCHRIGHT_DISABLED_FEATURES,
+  SANDBOXED_FRAMES_IN_PROCESS_ARG,
+} from './sandboxed-frames.ts';
 
 const chrome = launchKwargsForChannel('chrome', { incognito: true, headless: true });
 const chromium = launchKwargsForChannel('chromium', { incognito: false, headless: false });
@@ -35,7 +41,12 @@ describe('buildLaunchOptions', () => {
       proxy: null,
       downloadsDir: '/tmp/dl',
     });
-    expect(options.args).toEqual(['--incognito', ...STEALTH_ARGS, '--mute-audio']);
+    expect(options.args).toEqual([
+      '--incognito',
+      ...STEALTH_ARGS,
+      '--mute-audio',
+      SANDBOXED_FRAMES_IN_PROCESS_ARG,
+    ]);
     // The controlled fields are re-applied by BrowserHive, never taken from the user.
     expect(options.headless).toBe(true);
     expect(options.channel).toBe('chrome');
@@ -98,6 +109,58 @@ describe('buildLaunchOptions', () => {
   });
 });
 
+describe('buildLaunchOptions: one --disable-features switch (D-79)', () => {
+  const build = (stealth: boolean, args?: string[], ignoreDefaultArgs?: string[] | boolean) =>
+    buildLaunchOptions({
+      kwargs: chromium,
+      stealth,
+      launchOptions: {
+        ...(args !== undefined && { args }),
+        ...(ignoreDefaultArgs !== undefined && { ignoreDefaultArgs }),
+      },
+      proxy: null,
+      downloadsDir: '/tmp/dl',
+    }).options.args ?? [];
+  const switches = (args: readonly string[]) =>
+    args.filter((arg) => /^--?disable-features(=|$)/.test(arg));
+
+  it('a stealth launch keeps sandboxed frames in process; a plain one keeps the defaults', () => {
+    expect(build(true)).toEqual([...STEALTH_ARGS, SANDBOXED_FRAMES_IN_PROCESS_ARG]);
+    expect(build(false)).toEqual([]);
+    expect(build(false, ['--mute-audio'])).toEqual(['--mute-audio']);
+  });
+
+  it("merges a user's own --disable-features with the stealth switch, last on the line", () => {
+    for (const spelled of ['--disable-features', '-disable-features']) {
+      const args = build(true, [`${spelled}=Foo, Bar`, '--mute-audio']);
+      expect(switches(args)).toEqual([
+        `--disable-features=${[...PATCHRIGHT_DISABLED_FEATURES, ISOLATE_SANDBOXED_IFRAMES, 'Foo', 'Bar'].join(',')}`,
+      ]);
+      expect(args.at(-1)).toBe(switches(args)[0]);
+      expect(args).toContain('--mute-audio');
+    }
+  });
+
+  it("keeps Patchright's list under a user's own switch on a plain launch too", () => {
+    expect(build(false, ['-disable-features=Foo'])).toEqual([
+      `--disable-features=${[...PATCHRIGHT_DISABLED_FEATURES, 'Foo'].join(',')}`,
+    ]);
+    // A bare switch is an empty list: it would turn Patchright's off; folded, it changes nothing.
+    expect(build(false, ['--disable-features'])).toEqual([PATCHRIGHT_DISABLE_FEATURES_ARG]);
+  });
+
+  it("leaves Patchright's list out when ignoreDefaultArgs drops Patchright's switch", () => {
+    expect(switches(build(true, undefined, true))).toEqual([
+      `--disable-features=${ISOLATE_SANDBOXED_IFRAMES}`,
+    ]);
+    expect(
+      switches(build(true, ['--disable-features=Foo'], [PATCHRIGHT_DISABLE_FEATURES_ARG])),
+    ).toEqual([`--disable-features=${ISOLATE_SANDBOXED_IFRAMES},Foo`]);
+    // Other ignored defaults keep it.
+    expect(switches(build(true, undefined, ['--x']))).toEqual([SANDBOXED_FRAMES_IN_PROCESS_ARG]);
+  });
+});
+
 describe('deny-list interplay', () => {
   it('rejects every deny-listed key passed through user args, while stealth args bypass the check', () => {
     for (const key of DENIED_LAUNCH_ARG_KEYS) {
@@ -105,6 +168,8 @@ describe('deny-list interplay', () => {
     }
     // The internally-injected stealth arg is never deny-checked and never denied.
     expect(() => assertLaunchOptionsAllowed({ args: [...STEALTH_ARGS] })).not.toThrow();
+    // The sandboxed-frames switch is BrowserHive's own, added after the check: a caller cannot pass it.
+    expect(() => assertLaunchOptionsAllowed({ args: [SANDBOXED_FRAMES_IN_PROCESS_ARG] })).toThrow();
   });
 
   it('refuses the sibling loose fields with UNSAFE_LAUNCH_ARG naming the field', () => {
