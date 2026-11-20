@@ -55,24 +55,27 @@ export function staleTemplatePids(
 
 /**
  * Terminates stale template browsers and removes dead `SingletonLock`s (`<host>-<pid>` symlinks).
- * Returns the pids it terminated. Never throws.
+ * Returns the pids it terminated. Never throws. Without a template profile (no `templatesDir`, or
+ * an empty one) no browser can be on one, so the process table is not read: on Windows that read
+ * is a PowerShell `Win32_Process` query of several seconds on every start (D30 e).
  */
 export async function sweepStaleTemplateBrowsers(
   templatesDir: string,
   deps: StaleSweepDeps = platformSweepDeps(),
 ): Promise<readonly number[]> {
+  let ids: string[];
+  try {
+    ids = await readdir(templatesDir);
+  } catch {
+    return [];
+  }
+  if (ids.length === 0) return [];
   const pids = staleTemplatePids(
     await deps.listProcesses().catch(() => []),
     templatesDir,
     process.pid,
   );
   for (const pid of pids) deps.kill(pid);
-  let ids: string[] = [];
-  try {
-    ids = await readdir(templatesDir);
-  } catch {
-    return pids;
-  }
   for (const id of ids) {
     const lock = join(templatesDir, id, 'userdata', 'SingletonLock');
     let target: string;
