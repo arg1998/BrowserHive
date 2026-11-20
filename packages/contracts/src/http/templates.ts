@@ -214,6 +214,10 @@ export const HostView = z.object({
   /** Agent pages open in the host. */
   pages: Count,
   parked_pages: Count,
+  /**
+   * The browser's memory, all its processes: PSS (proportional set size) on Linux, resident (RSS)
+   * elsewhere; what `templateRecycleRss` is compared with. Named `rss_bytes` for compatibility.
+   */
   rss_bytes: Bytes.optional(),
   recycle_at: EpochMs.optional(),
   /** `null` until the host has started. */
@@ -241,6 +245,7 @@ export const TemplateHostSummary = z.object({
   state: TemplateHostState,
   since: EpochMs.nullable(),
   pages: Count,
+  /** The browser's memory: PSS on Linux, RSS elsewhere (see {@link HostView}). */
   rss_bytes: Bytes.optional(),
 });
 

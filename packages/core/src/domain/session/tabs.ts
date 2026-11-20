@@ -13,12 +13,17 @@ export const NO_OPEN_TAB_TEXT = 'The session has no open tab; open one with new_
  * Builds the typed `TAB_NOT_FOUND` error with its public message text; for {@link ACTIVE_TAB_SENTINEL}
  * (no open tab) the message says how to recover.
  */
-export function tabNotFound(sessionId: string, tabId: string): AppError<'TAB_NOT_FOUND'> {
+export function tabNotFound(
+  sessionId: string,
+  tabId: string,
+  why?: string,
+): AppError<'TAB_NOT_FOUND'> {
   const base = `Tab '${tabId}' not found in session '${sessionId}'.`;
+  const hint = why === undefined ? NO_OPEN_TAB_TEXT : `${why} ${NO_OPEN_TAB_TEXT}`;
   return new AppError(
     'TAB_NOT_FOUND',
     { session_id: sessionId, tab_id: tabId },
-    { publicMessage: tabId === ACTIVE_TAB_SENTINEL ? `${base} ${NO_OPEN_TAB_TEXT}` : base },
+    { publicMessage: tabId === ACTIVE_TAB_SENTINEL ? `${base} ${hint}` : base },
   );
 }
 
@@ -40,6 +45,8 @@ export class TabRegistry {
   /** Page → tab_id, so pages that close (or arrive via events) resolve back to their id. */
   private readonly idByPage = new Map<Page, string>();
   private activeId: string | undefined;
+  /** Why every tab was closed (the memory backstop), until a tab opens again. */
+  private allClosedNote: string | undefined;
   private readonly activeListeners = new Set<(tabId: string | undefined) => void>();
 
   constructor(
@@ -56,6 +63,7 @@ export class TabRegistry {
     const existing = this.idByPage.get(page);
     if (existing !== undefined) return existing;
     const id = this.mintId();
+    this.allClosedNote = undefined;
     this.byId.set(id, page);
     this.idByPage.set(page, id);
     if (this.activeId === undefined) this.setActiveId(id);
@@ -65,6 +73,14 @@ export class TabRegistry {
       page.on('close', () => this.remove(id));
     }
     return id;
+  }
+
+  /**
+   * Notes why BrowserHive is closing every tab (the memory backstop): until a tab opens again, a
+   * page tool without a tab says so.
+   */
+  noteAllClosed(why: string): void {
+    this.allClosedNote = why;
   }
 
   /** The id of the active tab, or `undefined` when no tabs are open. */
@@ -85,7 +101,9 @@ export class TabRegistry {
   resolve(tabId?: string): Page {
     if (tabId === undefined) {
       const active = this.activePage();
-      if (active === undefined) throw tabNotFound(this.sessionId, ACTIVE_TAB_SENTINEL);
+      if (active === undefined) {
+        throw tabNotFound(this.sessionId, ACTIVE_TAB_SENTINEL, this.allClosedNote);
+      }
       return active;
     }
     const page = this.byId.get(tabId);

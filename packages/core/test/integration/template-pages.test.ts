@@ -2,11 +2,16 @@
 /** @module test/integration/template-pages.test — pages a site or a modified click opens in a template session (PR #76 F5, F6): a session's site cannot take the shared browser's pages, and Ctrl/Cmd/Shift- and middle-click tabs, which Chromium opens without an opener, still belong to the clicking session. Stealth off and standard on Patchright (D-65), real Chromium. */
 
 import { afterEach, describe, expect, it } from 'bun:test';
-import { HostMemoryGuard } from '../../src/app/templates/host-memory.ts';
+import {
+  closeSessionTabs,
+  HostMemoryGuard,
+  MEMORY_BACKSTOP_AFTER_MS,
+} from '../../src/app/templates/host-memory.ts';
 import type { Session } from '../../src/domain/session/session.ts';
 import { createSystemClock } from '../../src/infra/clock/system-clock.ts';
 import { createCollectingLogger } from '../../src/infra/logging/collecting-logger.ts';
 import { isAppError } from '../../src/kernel/errors/app-error.ts';
+import { FakeClock } from '../helpers/fake-clock.ts';
 import {
   STEALTH_LEGS,
   type TemplateWorld,
@@ -60,19 +65,19 @@ for (const stealth of STEALTH_LEGS) {
       world = await templateWorld(stealth);
       const a = await world.launch('alpha');
       await pageOf(a).goto(world.sites.url('site-a.test'));
-      const warned: boolean[] = [];
+      const warned: string[] = [];
       const sessions = world.sessions;
       const guard = () =>
         new HostMemoryGuard({
           limitBytes: 1,
           clock: createSystemClock(),
           logger: createCollectingLogger(),
-          warn: (_id, _details, closed) => void warned.push(closed),
+          warn: (_id, _details, action) => void warned.push(action),
           activeOf: (id) => sessions.peek(id)?.tabs.activePage(),
         });
       // One tab only: it is the active one, so nothing is closed (the session keeps its page).
       expect(await guard().check(world.template.templateId, 2, world.host())).toBe('trimmed');
-      expect(warned).toEqual([false]);
+      expect(warned).toEqual(['none']);
       expect(a.tabs.size()).toBe(1);
       // A second tab in the background: that one goes, the active tab stays.
       const active = a.tabs.activeTabId();
@@ -81,9 +86,49 @@ for (const stealth of STEALTH_LEGS) {
       await until(() => a.tabs.size() === 2, 5_000, 'two tabs');
       expect(await guard().check(world.template.templateId, 2, world.host())).toBe('trimmed');
       await until(() => a.tabs.size() === 1, 5_000, 'the background tab closed');
-      expect(warned).toEqual([false, true]);
+      expect(warned).toEqual(['none', 'background']);
       expect(a.tabs.activeTabId()).toBe(active);
       expect(a.tabs.activePage()?.url()).toContain('site-a.test');
+    });
+
+    it('the memory backstop closes every tab of an active-only hog and says why (review #88 M2)', async () => {
+      world = await templateWorld(stealth);
+      const a = await world.launch('alpha');
+      const b = await world.launch('bravo');
+      await pageOf(a).goto(world.sites.url('site-a.test'));
+      const sessions = world.sessions;
+      const clock = new FakeClock();
+      const actions: string[] = [];
+      const guard = new HostMemoryGuard({
+        limitBytes: 1,
+        clock,
+        logger: createCollectingLogger(),
+        warn: (id, _details, action) => void actions.push(`${id === a.id ? 'a' : 'b'}:${action}`),
+        activeOf: (id) => sessions.peek(id)?.tabs.activePage(),
+        closeAll: (id) => closeSessionTabs(sessions, id),
+      });
+      // Make alpha the heaviest for sure.
+      await pageOf(a).evaluate(() => {
+        (globalThis as { hog?: unknown }).hog = Array.from({ length: 2e6 }, (_, i) => ({ i }));
+      });
+      expect(await guard.check(world.template.templateId, 2, world.host())).toBe('trimmed');
+      expect(a.tabs.size()).toBe(1);
+      await clock.advance(MEMORY_BACKSTOP_AFTER_MS);
+      expect(await guard.check(world.template.templateId, 2, world.host())).toBe('trimmed');
+      await until(() => a.tabs.size() === 0, 5_000, 'alpha has no tab');
+      expect(actions).toEqual(['a:none', 'a:all']);
+      expect(b.tabs.size()).toBe(1);
+      let message = '';
+      try {
+        a.tabs.resolve();
+      } catch (err) {
+        message = err instanceof Error ? err.message : String(err);
+      }
+      expect(message).toContain('Memory stayed too high');
+      expect(message).toContain('open one with new_tab');
+      // A new tab clears the note and works.
+      await world.sessions.newTab(a);
+      expect(a.tabs.size()).toBe(1);
     });
 
     it('modifier- and middle-click tabs belong to the clicking session, never parked', async () => {

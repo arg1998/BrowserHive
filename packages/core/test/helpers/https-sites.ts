@@ -91,7 +91,10 @@ function route(host: string, path: string, method = 'GET', search = ''): Respons
           });
         </script>
         <script type="speculationrules">{"prerender":[{"source":"list","urls":["/landing?prerendered"]}]}</script>`,
-        '<style>html,body{margin:0;height:100%;overflow:hidden}</style>',
+        // `?wide`: the document overflows a little sideways and still does not scroll vertically.
+        search.includes('wide')
+          ? '<style>html,body{margin:0;height:100%}html{overflow-y:hidden}body::after{content:"";display:block;width:110vw;height:1px}</style>'
+          : '<style>html,body{margin:0;height:100%;overflow:hidden}</style>',
       );
     case '/popup':
       return page(

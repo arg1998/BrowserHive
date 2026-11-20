@@ -93,7 +93,7 @@ export const TEMPLATE_KEYS = {
     defaultText: '3GiB',
     group: 'sessions',
     describe:
-      "A template browser's memory (proportional set size on Linux, resident elsewhere) above which the heaviest session's largest background tab is closed, then the browser is drained and restarted.",
+      "A template browser's memory (PSS on Linux, RSS elsewhere) above which the heaviest session's largest background tab is closed, a minute later all its tabs, then the browser is drained and restarted.",
   }),
   templateHostIdleTimeout: key(zDuration, {
     default: ONE_HOUR_MS,

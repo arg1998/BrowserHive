@@ -18,9 +18,10 @@ import { HostEvents, PendingLaunches, sampleRss } from './host-events.ts';
 import { TemplateHolds } from './host-holds.ts';
 import { HostLifecycle } from './host-lifecycle.ts';
 import {
+  closeSessionTabs,
   HostMemoryGuard,
-  RESOURCE_LIMIT_KEPT_MESSAGE,
-  RESOURCE_LIMIT_MESSAGE,
+  MEMORY_DRAIN_TIMEOUT_MS,
+  resourceLimitMessage,
   warnSession,
 } from './host-memory.ts';
 import { IdentityObserver, stopHosts } from './host-shutdown.ts';
@@ -104,15 +105,16 @@ export class TemplateHostSupervisor implements TemplateRuntime {
       limitBytes: deps.config.recycleRssBytes ?? 0,
       clock: deps.clock,
       logger: deps.logger,
-      warn: (id, details, closed) =>
+      warn: (id, details, action) =>
         warnSession(
           deps.sessions,
           id,
           'SESSION_RESOURCE_LIMIT',
-          closed ? RESOURCE_LIMIT_MESSAGE : RESOURCE_LIMIT_KEPT_MESSAGE,
+          resourceLimitMessage(action),
           details,
         ),
       activeOf: (id) => deps.sessions.peek(id)?.tabs.activePage(),
+      closeAll: (id) => closeSessionTabs(deps.sessions, id),
     });
   }
 
@@ -274,7 +276,9 @@ export class TemplateHostSupervisor implements TemplateRuntime {
         const memory =
           rss === null ? 'ok' : await this.memory.check(lifecycle.templateId, rss, host);
         if ((due !== null && now >= due) || memory === 'drain') {
-          void this.recycle(lifecycle, 'shutdown');
+          // A memory drain gives sessions a minute, not `templateDrainTimeout` (review #88 M2).
+          const timeout = Math.min(this.deps.config.drainTimeoutMs, MEMORY_DRAIN_TIMEOUT_MS);
+          void this.recycle(lifecycle, 'shutdown', memory === 'drain' ? timeout : undefined);
           continue;
         }
         await this.checkpoints?.checkpointIfDue(lifecycle.templateId, lifecycle.startedAt);
@@ -289,12 +293,12 @@ export class TemplateHostSupervisor implements TemplateRuntime {
   }
 
   /** Drains and stops a host (recycle, operator restart); new launches answer `TEMPLATE_UNAVAILABLE`. */
-  async recycle(lifecycle: HostLifecycle, reason: ClosedReason): Promise<void> {
-    await lifecycle.drain(
-      () => this.liveSessions(lifecycle.templateId),
-      this.deps.config.drainTimeoutMs,
-      reason,
-    );
+  async recycle(
+    lifecycle: HostLifecycle,
+    reason: ClosedReason,
+    drainTimeoutMs = this.deps.config.drainTimeoutMs,
+  ): Promise<void> {
+    await lifecycle.drain(() => this.liveSessions(lifecycle.templateId), drainTimeoutMs, reason);
     // The maintenance session closes with its host.
     await this.closeSessions(
       this.sessionsOf(lifecycle.templateId, null).map((s) => s.id),

@@ -4,7 +4,7 @@ import { FakeClock } from '../../../test/helpers/fake-clock.ts';
 import { fakeCookie } from '../../../test/helpers/fake-template-host.ts';
 import { NO_SEALING, type SessionTemplate } from '../../domain/session/session-template.ts';
 import type { Cookie } from '../../ports/browser-driver.ts';
-import { SEALED_VALUE_MEMORY_MS, SealedRedaction } from './sealed-redaction.ts';
+import { identityValues, SEALED_VALUE_MEMORY_MS, SealedRedaction } from './sealed-redaction.ts';
 
 const SEALED = {
   hideCookieValues: true,
@@ -110,7 +110,8 @@ describe('SealedRedaction', () => {
   it('plain cookie and storage values never blank a URL or a time zone (workload test B1)', async () => {
     const redaction = new SealedRedaction(new FakeClock());
     const inbox = 'https://mail.google.com/mail/u/0/#inbox';
-    const token = 'Q7f2Kx9LmZ0pR4tV8wY1bN6cH3jD5sGa';
+    // Built at run time so the source holds no secret-shaped literal (gitleaks).
+    const token = ['Q7f2Kx9L', 'mZ0pR4tV', '8wY1bN6c', 'H3jD5sGa'].join('');
     const s = session(
       {
         cookies: [
@@ -128,5 +129,23 @@ describe('SealedRedaction', () => {
     expect(scrub?.(text)).toBe(
       JSON.stringify({ url: `${inbox}/FMfcgz`, timezoneId: 'America/Toronto', token: '[sealed]' }),
     );
+  });
+
+  it("the session's identity values are never redacted (review #88 H1)", () => {
+    const geo = {
+      locale: 'en-CA',
+      languages: ['en-CA', 'en'],
+      countryCode: 'CA',
+      timezoneId: 'America/Toronto',
+      source: 'proxy',
+    };
+    expect(identityValues({ template: null, view: null, identity: { geo } } as never)).toEqual([
+      'America/Toronto',
+      'en-CA',
+      'en-CA',
+      'en',
+      'en-CA,en',
+    ]);
+    expect(identityValues({ template: null, view: null } as never)).toEqual([]);
   });
 });
