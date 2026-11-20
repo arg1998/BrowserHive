@@ -269,4 +269,17 @@ describe('MinimizedWindows', () => {
     expect(windows.states.get(4)).toBe('normal');
     kept.dispose();
   });
+  it("respects an operator's restore made just before the first navigation (verify #91 N2)", async () => {
+    const { windows, kept, advance } = keeper();
+    windows.open('first', 5, 'normal');
+    await kept.pageOpened('first');
+    advance(RESTORE_QUIET_MS + 1);
+    // The operator restores it from the taskbar, then the agent's first goto starts and commits.
+    windows.states.set(5, 'normal');
+    await kept.navigationStarting('first');
+    await kept.firstCommit('first');
+    expect(windows.states.get(5)).toBe('normal');
+    expect(kept.restoredByOperator(5)).toBe(true);
+    kept.dispose();
+  });
 });

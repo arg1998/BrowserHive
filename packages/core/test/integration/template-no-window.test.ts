@@ -390,6 +390,25 @@ describe(`template host with no window (${HEADED ? 'headed' : 'headless'})`, () 
     },
   );
 
+  it("a site closing an agent's new_tab tab, the browser's last window, does not stop it (verify #91 N1)", async () => {
+    world = await templateWorld('standard', { template: { agentWindows: 'normal' } });
+    const w = world;
+    const alpha = await w.launch('alpha');
+    const bravo = await w.launch('bravo');
+    await pageOf(alpha).goto(w.sites.url('site-a.test'));
+    const { tabId, page: tab } = await w.sessions.newTab(alpha);
+    await tab.goto(w.sites.url('site-b.test', '/landing'));
+    const first = alpha.tabs.entries().find(([id]) => id !== tabId)?.[0];
+    if (first === undefined) throw new Error('no first tab');
+    await w.sessions.closeTab(alpha, first);
+    await w.sessions.close(bravo.id);
+    // The site's own script closes the tab (Chrome allows it: `new_tab` opened it with window.open).
+    await tab.evaluate(() => window.close()).catch(() => undefined);
+    await new Promise((resolve) => setTimeout(resolve, 1_500));
+    expect(w.supervisor.host(w.template.templateId).state).toBe('running');
+    expect(alpha.closedReason).toBeNull();
+  });
+
   it('the sign-in window closed by hand leaves the browser up with no window', async () => {
     world = await templateWorld('standard');
     const signIn = await world.supervisor.launchMaintenance({
@@ -481,7 +500,10 @@ async function closedPort(): Promise<number> {
 async function commandLine(context: BrowserContext): Promise<string[]> {
   const pid = await readBrowserPid(context.browser(), createCollectingLogger());
   if (pid === null) throw new Error('no browser pid');
-  return readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0').filter(Boolean).slice(1);
+  const raw = readFileSync(`/proc/${pid}/cmdline`, 'utf8');
+  // Chromium may rewrite its process title into one space-joined string (seen on Linux 7.0).
+  const parts = raw.split('\0').filter(Boolean);
+  return (parts.length > 1 ? parts : raw.trim().split(' ').filter(Boolean)).slice(1);
 }
 
 describe.if(LINUX)("a host's real command line (D-78)", () => {

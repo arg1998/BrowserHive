@@ -147,7 +147,11 @@ export function assertHostArgv(
   userDataDir: string,
   facts: HostArgvFacts,
 ): void {
-  const named = (name: string) => argv.filter((arg) => arg === name || arg.startsWith(`${name}=`));
+  // Chromium honours a switch with one leading dash too (`-no-proxy-server`, measured): every
+  // check reads the argv with such a switch spelled with two (verify #91 N4).
+  const spelled = argv.map((arg) => (/^-[^-]/.test(arg) ? `-${arg}` : arg));
+  const named = (name: string) =>
+    spelled.filter((arg) => arg === name || arg.startsWith(`${name}=`));
   if (facts.proxy !== null) {
     const expected = `--proxy-server=${normalizeProxyServer(facts.proxy.server)}`;
     const servers = named('--proxy-server');
@@ -171,15 +175,15 @@ export function assertHostArgv(
   for (const once of ['--user-data-dir', '--remote-debugging-pipe']) {
     if (named(once).length > 1) throw argvRefused(`${once} is repeated`);
   }
-  if (argv.includes('--no-sandbox') === facts.sandboxed) {
+  if (spelled.includes('--no-sandbox') === facts.sandboxed) {
     throw argvRefused(
       facts.sandboxed ? '--no-sandbox is present on a sandboxed start' : '--no-sandbox is missing',
     );
   }
   for (const required of REQUIRED_HOST_SWITCHES) {
-    if (!argv.includes(required)) throw argvRefused(`${required} is missing`);
+    if (!spelled.includes(required)) throw argvRefused(`${required} is missing`);
   }
-  if (!argv.includes(`--user-data-dir=${userDataDir}`)) {
+  if (!spelled.includes(`--user-data-dir=${userDataDir}`)) {
     throw argvRefused('--user-data-dir is missing');
   }
   if (argv.some((arg) => !arg.startsWith('-'))) {

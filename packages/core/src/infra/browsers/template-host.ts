@@ -51,7 +51,7 @@ const OPERATOR_CLOSE_MS = 10_000;
 /** When the marker cookie is looked at after the host was left with no window (ms after). */
 const MARKER_LOOKS_MS: readonly number[] = [0, 100, 300];
 /** How often an open sign-in window's session cookies are read (review #91 M2). */
-const SIGN_IN_COOKIES_MS = 1_000;
+const SIGN_IN_COOKIES_MS = 250;
 
 export { OPERATOR_CLOSE_WINDOW_MS } from './host-closes.ts';
 export { MAX_PARKED_PAGES } from './parked-pages.ts';
@@ -102,8 +102,6 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
   >();
   /** A headless host's invisible anchor page (D-78): its target id, `null` on a headed host. */
   private anchorTarget: string | null = null;
-  /** Tabs BrowserHive itself opened with `window.open` (`new_tab`, sign-in tabs). */
-  private readonly ownTabs = new Set<string>();
   /** Puts back the session cookies Chrome drops with the last window (D-78). */
   private readonly cookieKeeper: SessionCookieKeeper;
   /** BrowserHive's marker cookies (spec 13 §3.8), re-asserted after the last window closed. */
@@ -113,6 +111,7 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
   /** The open sign-in window's session cookies, read every second (review #91 M2). */
   private signInCookies: RawCookie[] = [];
   private signInTimer: ReturnType<typeof setInterval> | null = null;
+  private offSignInResponses: (() => void) | null = null;
   /** The session cookies being put back after the last window closed (readers wait for it). */
   private restoring: Promise<unknown> = Promise.resolve();
   /** Agent windows of sessions whose windows stay minimized (`agent_windows`, D-77). */
@@ -166,7 +165,9 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
         return {
           page: known.page,
           maintenance,
-          opened: known.opened && !this.ownTabs.has(targetId),
+          // A tab with an opener may be closed by its own page's script (`window.close()`), BrowserHive's
+          // `new_tab` tabs too (`window.open`): never an operator close (verify #91 N1).
+          opened: known.opened,
         };
       },
       operatorStop: (reason) => this.operatorStopped(reason),
@@ -194,7 +195,6 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
       }
       this.closeWatch.targetDestroyed(targetId);
       this.byTarget.delete(targetId);
-      this.ownTabs.delete(targetId);
     });
     this.browser?.on('disconnected', () => this.exited('browser disconnected'));
     this.context.on('close', () => this.exited('context closed'));
@@ -408,12 +408,27 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
     if (typeof this.signInTimer === 'object' && 'unref' in this.signInTimer) {
       this.signInTimer.unref();
     }
+    // A response may set a cookie: read right after it too, so a sign-in the operator closes the
+    // window on at once is still kept (verify #91 N3).
+    let pending = false;
+    const onResponse = (): void => {
+      if (pending || !this.recording) return;
+      pending = true;
+      setTimeout(() => {
+        pending = false;
+        void read();
+      }, 20);
+    };
+    this.context.on('response', onResponse);
+    this.offSignInResponses = () => this.context.off('response', onResponse);
   }
 
   private stopSignInWatch(): void {
     if (this.recording) return;
     if (this.signInTimer !== null) clearInterval(this.signInTimer);
     this.signInTimer = null;
+    this.offSignInResponses?.();
+    this.offSignInResponses = null;
   }
 
   /**
@@ -437,11 +452,6 @@ export class PlaywrightTemplateHost implements TemplateHost, TemplateViewHost {
   /** The anchor page, when this headless host has one (tests). */
   get anchorPage(): Page | null {
     return this.anchorTarget === null ? null : (this.byTarget.get(this.anchorTarget)?.page ?? null);
-  }
-
-  ownTab(page: Page): void {
-    const targetId = this.dispatcher.targetIdOf(page);
-    if (targetId !== undefined) this.ownTabs.add(targetId);
   }
 
   viewClosed(sessionId: string): void {

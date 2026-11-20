@@ -1,6 +1,6 @@
 /** @module infra/browsers/headed-windows — headed windows kept minimized (`headedWindows=minimized`, D-77; spec 13 §3.3): the keeper that minimizes every new page's window and minimizes again a window BrowserHive's own actions restored, while a window the operator restored by hand is left alone; and the browser-level control of an exclusive session's windows (its first window and new tabs created in the background, popups minimized). */
 
-import type { Browser, BrowserContext, CDPSession, Frame, Page } from 'patchright';
+import type { Browser, BrowserContext, CDPSession, Frame, Page, Request } from 'patchright';
 import { AppError } from '../../kernel/errors/app-error.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { Logger } from '../../ports/logger.ts';
@@ -184,6 +184,25 @@ export class MinimizedWindows {
    * plain `goto`), outside any tool call: the window is BrowserHive's still, so it is minimized
    * again now and at the late looks, unless the operator restored it. Never throws.
    */
+  /**
+   * A kept page's first navigation is starting: a window found normal now, while BrowserHive is
+   * not acting on it, was restored by the operator (before the navigation could restore it), and
+   * is left alone from now on, also by {@link firstCommit} (verify #91 N2). Never throws.
+   */
+  async navigationStarting(targetId: string): Promise<void> {
+    if (this.disposed) return;
+    try {
+      const windowId = await this.control.windowOf(targetId);
+      if (windowId === null) return;
+      const kept = this.windows.get(windowId);
+      if (kept === undefined || kept.owner === 'operator') return;
+      const state = await this.control.stateOf(windowId);
+      if (state === 'normal' && !this.actingOnNow(kept)) this.restoredByHand(windowId, kept);
+    } catch (err) {
+      this.log.debug('window state unread', { err: serializeError(err) });
+    }
+  }
+
   async firstCommit(targetId: string): Promise<void> {
     if (this.disposed) return;
     try {
@@ -230,6 +249,11 @@ export class MinimizedWindows {
     this.disposed = true;
     this.stopPolling();
     this.windows.clear();
+  }
+
+  /** BrowserHive is acting on the window or acted on it a moment ago (page creations aside). */
+  private actingOnNow(kept: KeptWindow): boolean {
+    return kept.busy > 0 || this.now() - kept.touchedAt < RESTORE_QUIET_MS;
   }
 
   /** BrowserHive is acting on the window, or acted on it (or created a page) a moment ago. */
@@ -392,13 +416,24 @@ export class ExclusiveWindows implements WindowControl {
     }
   }
 
-  /** On `page`'s first committed document (not `about:blank`), its window is kept minimized. */
+  /**
+   * On `page`'s first committed document (not `about:blank`), its window is kept minimized; an
+   * operator's restore seen when that navigation starts is respected.
+   */
   private watchFirstCommit(page: Page, targetId: string): void {
+    let started: Promise<void> | null = null;
+    const onRequest = (request: Request): void => {
+      if (!request.isNavigationRequest() || request.frame() !== page.mainFrame()) return;
+      page.off('request', onRequest);
+      started = this.keeper.navigationStarting(targetId);
+    };
     const onNavigated = (frame: Frame): void => {
       if (frame !== page.mainFrame() || frame.url() === 'about:blank') return;
       page.off('framenavigated', onNavigated);
-      void this.keeper.firstCommit(targetId);
+      page.off('request', onRequest);
+      void (started ?? Promise.resolve()).then(() => this.keeper.firstCommit(targetId));
     };
+    page.on('request', onRequest);
     page.on('framenavigated', onNavigated);
   }
 

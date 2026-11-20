@@ -212,9 +212,21 @@ describe('host argv (D-78)', () => {
       '--proxy-bypass-list=*',
       `--user-data-dir=${DIR}`,
       '--remote-debugging-pipe',
+      // Chromium honours single-dash spellings too (verify #91 N4).
+      '-no-proxy-server',
+      '-proxy-server=direct://',
+      '-remote-debugging-port=0',
     ]) {
       expect(refusal([...good, extra])).toMatchObject({ ref: 'launch_args' });
     }
+    // A sandboxed start whose argv turns the sandbox off with one dash.
+    const sandboxedArgv = good.filter((a) => a !== '--no-sandbox');
+    expect(refusal(sandboxedArgv, { proxy: PROXY, sandboxed: true })).toBeNull();
+    expect(
+      refusal([...sandboxedArgv, '-no-sandbox'], { proxy: PROXY, sandboxed: true }),
+    ).toMatchObject({
+      ref: 'launch_args',
+    });
     expect(
       refusal(
         good.filter((a) => a !== '--remote-debugging-pipe').concat('--remote-debugging-port=0'),
