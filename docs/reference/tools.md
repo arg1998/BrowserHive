@@ -1319,7 +1319,7 @@ Errors: [`VAULT_NOT_CONFIGURED`](errors.md#VAULT_NOT_CONFIGURED), [`VAULT_LOCKED
 
 **List templates** · capability `read` · since 0.3.0
 
-> List the session templates you may use. A session launched with a template's name as `template` starts signed in to the template's sites. The sign-ins belong to the operator: do not sign out, and do not change account, security or privacy settings; such actions may be blocked or need the operator's approval. Sign-ins and site data the session changes are kept in the template and carried into later sessions from it. Cookie values are hidden, and evaluate and saving the login are unavailable unless the operator allows them.
+> List the session templates you may use. A session launched with a template's name as `template` starts signed in to the template's sites. The sign-ins belong to the operator: do not sign out, and do not change account, security or privacy settings; such actions may be blocked or need the operator's approval. A site covers its subdomains (google.com covers mail.google.com and drive.google.com); `checked_ago_s` says how many seconds ago its sign-in was last checked. Sign-ins and site data the session changes are kept in the template and carried into later sessions from it. Cookie values are hidden, and evaluate and saving the login are unavailable unless the operator allows them.
 
 Annotations: readOnly yes · destructive no · idempotent yes · openWorld no
 

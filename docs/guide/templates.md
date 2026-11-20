@@ -169,8 +169,8 @@ It asks you to type the name again (or pass `--yes` in scripts), refuses while s
 | Field | Meaning |
 |---|---|
 | `name` | What the agent passes as `template`. |
-| `display_name`, `description` | Your text. Write the description for the agent: what the template is for. |
-| `sites[]` | `site`, `title`, `status` (`signed_in`, `signed_out`, `challenged`, `inconclusive`, `unknown`) and `checked_at`. A site you confirmed while signing in is `signed_in`, one you did not is `signed_out`; after that the status is the result of the newest [health check](#health-checks), so it can be up to the template's check interval old. |
+| `display_name`, `description` | Your text. Write the description for the agent: what the template is for. Without one, agents read "Starts signed in to LinkedIn (linkedin.com) and indeed.com." |
+| `sites[]` | `site`, `title`, `status` (`signed_in`, `signed_out`, `challenged`, `inconclusive`, `unknown`), `checked_at` and `checked_ago_s` (seconds since that check, so an agent needs no clock). A site covers its subdomains (`google.com` covers Gmail and Drive). A site you confirmed while signing in is `signed_in`, one you did not is `signed_out`; after that the status is the result of the newest [health check](#health-checks), so it can be up to the template's check interval old. |
 | `availability` | `available` (a launch would be admitted now; a stopped browser counts as available), `busy` (at its cap), `needs_login` (every site is signed out), `unavailable` (not ready, or cannot run until you act). |
 | `sealed` | Whether sessions of this template are sealed for this agent. |
 

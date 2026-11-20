@@ -1,7 +1,7 @@
 {
   "name": "list_templates",
   "title": "List templates",
-  "description": "List the session templates you may use. A session launched with a template's name as `template` starts signed in to the template's sites. The sign-ins belong to the operator: do not sign out, and do not change account, security or privacy settings; such actions may be blocked or need the operator's approval. Sign-ins and site data the session changes are kept in the template and carried into later sessions from it. Cookie values are hidden, and evaluate and saving the login are unavailable unless the operator allows them.",
+  "description": "List the session templates you may use. A session launched with a template's name as `template` starts signed in to the template's sites. The sign-ins belong to the operator: do not sign out, and do not change account, security or privacy settings; such actions may be blocked or need the operator's approval. A site covers its subdomains (google.com covers mail.google.com and drive.google.com); `checked_ago_s` says how many seconds ago its sign-in was last checked. Sign-ins and site data the session changes are kept in the template and carried into later sessions from it. Cookie values are hidden, and evaluate and saving the login are unavailable unless the operator allows them.",
   "inputSchema": {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "type": "object",
@@ -52,13 +52,26 @@
                       "number",
                       "null"
                     ]
+                  },
+                  "checked_ago_s": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 },
                 "required": [
                   "site",
                   "title",
                   "status",
-                  "checked_at"
+                  "checked_at",
+                  "checked_ago_s"
                 ],
                 "additionalProperties": false
               }

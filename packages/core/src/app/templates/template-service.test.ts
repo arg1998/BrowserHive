@@ -452,7 +452,15 @@ describe('TemplateService.listForAgent', () => {
       name: 'alpha',
       display_name: 'Job hunt',
       description: 'A',
-      sites: [{ site: 'site-a.test', title: 'site-a.test', status: 'unknown', checked_at: null }],
+      sites: [
+        {
+          site: 'site-a.test',
+          title: 'site-a.test',
+          status: 'unknown',
+          checked_at: null,
+          checked_ago_s: null,
+        },
+      ],
       availability: 'available',
       sealed: true,
     });

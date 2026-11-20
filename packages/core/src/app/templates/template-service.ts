@@ -56,7 +56,7 @@ import {
 } from './template-errors.ts';
 import { pageTemplates } from './template-list.ts';
 import { TemplateLocks } from './template-locks.ts';
-import type { TemplatePacks } from './template-packs.ts';
+import { NO_PACKS, type TemplatePacks } from './template-packs.ts';
 import { publishTemplateChanged, readTemplates, removeTemplateFiles } from './template-reads.ts';
 import { toAgentTemplate, toTemplateSummary } from './views.ts';
 
@@ -268,7 +268,8 @@ export class TemplateService {
           own,
           availabilityOf(template, own, host, this.#deps.runtime.cap?.(template, own)),
           isSessionSealed(sealing),
-          this.#deps.packs,
+          this.#deps.packs ?? NO_PACKS,
+          this.#deps.clock.now(),
         ),
       );
     }

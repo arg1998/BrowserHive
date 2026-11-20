@@ -640,7 +640,9 @@ A context-level setting is the template's, never a session's. The table fixes, f
 
 | Tool | Input | Output | Errors | RO/D/I/OW |
 |---|---|---|---|---|
-| `list_templates` | `{}` (`z.object({}).strict()`) | `{ templates: [{ name, display_name, description, sites: [{ site, title, status: 'signed_in'\|'signed_out'\|'challenged'\|'inconclusive'\|'unknown', checked_at: number\|null }], availability: 'available'\|'busy'\|'needs_login'\|'unavailable', sealed: boolean }] }` sorted by `name` | `TOOL_NOT_AVAILABLE` (when `templates=false`) | yes/no/yes/no |
+| `list_templates` | `{}` (`z.object({}).strict()`) | `{ templates: [{ name, display_name, description, sites: [{ site, title, status: 'signed_in'\|'signed_out'\|'challenged'\|'inconclusive'\|'unknown', checked_at: number\|null, checked_ago_s: number\|null }], availability: 'available'\|'busy'\|'needs_login'\|'unavailable', sealed: boolean }] }` sorted by `name` | `TOOL_NOT_AVAILABLE` (when `templates=false`) | yes/no/yes/no |
+
+*As built (D62, workload test 2026-11-17).* `checked_ago_s` is the seconds since `checked_at` when the list is read (`null` when never checked, never negative); an empty `description` reads "Starts signed in to <site titles and domains>."; the tool description says a site covers its subdomains. A text or selector mode for `get_content` is left to the page-reading work (`get_text`, `get_content` `selector`), not this program.
 
 - **Only templates the caller may launch are listed** (§6.1); a template the caller may not use is absent, never marked. `site` is the registrable domain; `title` the pack's title or the domain; disabled sites are omitted.
 - `availability`: `available` (a launch would be admitted now; a stopped host counts as available, it starts on launch); `busy` (the template is at capacity, or a strategy defers launches, §9.4); `needs_login` (every enabled site is `signed_out` or `challenged`); `unavailable` (the template is not `ready`, or cannot run until the operator acts). No count of sessions, no `mode` and nothing about other sessions is returned (D-09, §5).
