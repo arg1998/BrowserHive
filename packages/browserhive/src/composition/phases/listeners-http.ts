@@ -291,6 +291,7 @@ export async function openHttpListener(
         templateHealth: domain.templateParts.healthRoutes,
         sitePacks: domain.sitePacks,
         templateSiteStops: domain.sitePackPages.stops,
+        templateRefusals: domain.templateRefusals,
         traceViewerAvailable: traceViewer.available,
       },
       adminAuthenticator: domain.adminAuthenticator,

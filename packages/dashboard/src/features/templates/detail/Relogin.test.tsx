@@ -96,7 +96,10 @@ describe('re-login progress', () => {
     await click(within(progress).getByRole('button', { name: 'I’m signed in: indeed.com' }));
     await waitFor(() => {
       const confirmCall = view.requests.find((r) => r.path.endsWith('/relogin/confirm'));
-      expect(confirmCall?.body).toEqual({ site_id: 'indeed.com' });
+      expect(confirmCall?.body).toEqual({
+        site_id: 'indeed.com',
+        requested_at: reloginView().requested_at,
+      });
     });
   });
 

@@ -69,6 +69,8 @@ describe('schema fingerprint', () => {
       'site_pack_state',
       'site_pack_changes',
       'site_guard_hits',
+      'template_strategy_state',
+      'template_refusals',
     ]) {
       expect(names).toContain(table);
     }

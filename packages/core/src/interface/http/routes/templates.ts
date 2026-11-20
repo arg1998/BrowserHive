@@ -1,4 +1,4 @@
-/** @module interface/http/routes/templates — session templates for operators: list, create, read and delete (spec 13 §11.1; recording and the T1a host routes are in `template-recording.ts`, the rest arrive with T1b). */
+/** @module interface/http/routes/templates — session templates for operators: list, create, read, delete and the refused agents (spec 13 §11.1, D60; recording and the T1a host routes are in `template-recording.ts`, the rest arrive with T1b). */
 
 import {
   DeleteTemplateQuery,
@@ -6,6 +6,7 @@ import {
   TemplateDetailResponse,
   TemplateIdParams,
   TemplateInput,
+  TemplateRefusalsResponse,
   TemplateResponse,
   TemplatesPage,
   TemplatesQuery,
@@ -56,6 +57,18 @@ export const TEMPLATE_ROUTES = [
     errors: ['TEMPLATE_NOT_FOUND'],
     async handler({ input, services }) {
       return reply(200, await services.templates.get(input.params.template_id));
+    },
+  }),
+  defineRoute({
+    operationId: 'listTemplateRefusals',
+    tags,
+    summary:
+      "The agents the template's access rules refused, one row per principal, harness and kind (listing or launch) with a count and when it was first and last refused, newest first. The agents themselves saw no template.",
+    request: { params: TemplateIdParams },
+    responses: { 200: TemplateRefusalsResponse },
+    errors: ['TEMPLATE_NOT_FOUND'],
+    async handler({ input, services }) {
+      return reply(200, await services.templateRefusals.list(input.params.template_id));
     },
   }),
   defineRoute({

@@ -1,5 +1,6 @@
 /** @module lib/api/operations-templates — the session-template operations of `HTTP_ENDPOINTS` (spec 13 §11.1, T1a–T2), spread into `OPERATIONS` */
 import {
+  CancelReloginQuery,
   ConfirmRecordingRequest,
   ConfirmRecordingResponse,
   ConfirmReloginRequest,
@@ -40,6 +41,7 @@ import {
   TemplatePatchInput,
   TemplateProbesPage,
   TemplateProbesQuery,
+  TemplateRefusalsResponse,
   TemplateReloginSiteParams,
   TemplateResponse,
   TemplateSiteParams,
@@ -140,6 +142,8 @@ export const TEMPLATE_OPERATIONS = {
     query: TemplateProbesQuery,
     response: TemplateProbesPage,
   },
+  // D60: the agents the access rules refused
+  listTemplateRefusals: { params: TemplateIdParams, response: TemplateRefusalsResponse },
   startTemplateRelogin: {
     params: TemplateIdParams,
     body: StartReloginRequest,
@@ -150,7 +154,11 @@ export const TEMPLATE_OPERATIONS = {
     body: ConfirmReloginRequest,
     response: ReloginResponse,
   },
-  cancelTemplateRelogin: { params: TemplateIdParams, response: ReloginResponse },
+  cancelTemplateRelogin: {
+    params: TemplateIdParams,
+    query: CancelReloginQuery,
+    response: ReloginResponse,
+  },
   showTemplateWindow: { params: TemplateIdParams, response: ShowTemplateWindowResponse },
   continueTemplateAgents: { params: TemplateIdParams, response: ContinueAgentsResponse },
   putTemplateReloginLink: {

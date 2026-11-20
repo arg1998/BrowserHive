@@ -5,7 +5,7 @@ import type {
   SitePackRegistry,
   TemplateHostSupervisor,
 } from '@browserhive/core/server';
-import { selectGenericProber } from '@browserhive/core/server';
+import { StrategyState, selectGenericProber } from '@browserhive/core/server';
 import type { SitePackEnforcement, SitePackEnforcementInput } from './site-pack-enforcement.ts';
 import { buildSitePackEnforcement } from './site-pack-enforcement.ts';
 import {
@@ -40,8 +40,11 @@ export async function buildSitePackLayer(
   input.undo.push(pages.stop);
   // `sitePacks=false` (or `templates=false`) turns the whole layer off (spec 13 §9.6).
   const on = input.config.templates && input.config.sitePacks;
-  const strategies = buildSiteStrategies({ ...input, registry });
+  // Read back before any strategy decides: a restart keeps budgets and spacings (D53).
+  const state = on ? await restoreStrategyState(input) : null;
+  const strategies = buildSiteStrategies({ ...input, registry, state });
   if (strategies !== null) input.undo.push(strategies.stop);
+  if (state !== null) input.undo.push(() => state.stop());
   return {
     registry,
     pages,
@@ -50,17 +53,33 @@ export async function buildSitePackLayer(
   };
 }
 
+/** The persisted strategy state, read back (never throws: an unreadable table starts empty). */
+async function restoreStrategyState(input: SitePacksInput): Promise<StrategyState> {
+  const state = new StrategyState({
+    repo: input.repos.strategyState,
+    clock: input.clock,
+    logger: input.logger,
+    bus: input.bus,
+  });
+  await state.restore();
+  return state;
+}
+
 /**
  * The network enforcement (the request guard on every template host, security intercepts) and
  * its attachment to the page enforcement; `null` when packs are off.
  */
 export function attachSitePackEnforcement(
   layer: SitePackLayer,
-  input: Omit<SitePackEnforcementInput, 'lookup'> & {
+  input: Omit<SitePackEnforcementInput, 'lookup' | 'state'> & {
     readonly undo: (() => void | Promise<void>)[];
   },
 ): SitePackEnforcement | null {
-  const enforcement = buildSitePackEnforcement({ ...input, lookup: layer.registry });
+  const enforcement = buildSitePackEnforcement({
+    ...input,
+    lookup: layer.registry,
+    state: layer.strategies?.state ?? null,
+  });
   if (enforcement === null) return null;
   input.undo.push(enforcement.stop);
   layer.pages.attach({

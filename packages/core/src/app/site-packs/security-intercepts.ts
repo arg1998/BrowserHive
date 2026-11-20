@@ -128,7 +128,8 @@ export class SecurityInterceptService implements SecurityIntercepts {
   }
 
   async raiseChallenge(input: ChallengeInput): Promise<string | null> {
-    await markChallenged(this.#ctx, input);
+    // Under stdio no operator can answer: health only, and the notification only watches.
+    await markChallenged(this.#ctx, input, this.confirmer !== null);
     if (this.confirmer === null) return null;
     return openSiteCheck(this.#ctx, input);
   }

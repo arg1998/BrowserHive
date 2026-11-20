@@ -43,6 +43,14 @@ describe('takeover gate', () => {
     const notify = request({ mode: 'notify', request_id: 'r-01HZX000000000000000000002' as never });
     expect(takeoverRequest({ live: true }, [notify, takeover])).toBe(takeover);
   });
+
+  it("a site check's takeover opens the input too (spec 13 §9.5, review #93 M1)", () => {
+    const check = request({ kind: 'security_intercept' });
+    expect(takeoverRequest({ live: true }, [check])).toBe(check);
+    expect(
+      takeoverRequest({ live: true }, [request({ kind: 'security_intercept', mode: 'notify' })]),
+    ).toBeNull();
+  });
 });
 
 describe('live status pill', () => {

@@ -787,6 +787,15 @@ export const ROUTE_CASES: readonly RouteCase[] = [
     invalid: { path: api('/templates/bad') },
   },
   {
+    operationId: 'listTemplateRefusals',
+    setup: template,
+    success: {
+      path: (ctx) => api(`/templates/${ctx.state['template'] ?? ''}/refusals`),
+      status: 200,
+    },
+    invalid: { path: api('/templates/bad/refusals') },
+  },
+  {
     operationId: 'deleteTemplate',
     setup: template,
     success: {

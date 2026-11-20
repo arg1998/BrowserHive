@@ -10,7 +10,7 @@ import { keys } from '@/lib/api/keys.ts';
 import { ICONS } from '@/lib/icons.ts';
 import { SITE_HEALTH } from '@/lib/status-registry.ts';
 import { useTemplateHealth } from '../api-health.ts';
-import { healthReasonText, inconclusiveWarning, needsSignIn } from '../model.ts';
+import { CUT_SHORT, healthReasonText, inconclusiveWarning, needsSignIn } from '../model.ts';
 
 /** The toast of a check's outcome: green only when signed in (review #81 L-18). */
 export function checkToastKind(outcome: TemplateHealthState): 'success' | 'warning' | 'info' {
@@ -34,7 +34,16 @@ export function useCheckNow(templateId: string, site: TemplateSiteView) {
     health.probe.mutate([site.site_id], {
       onSuccess: (result) => {
         const mine = result.results.find((r) => r.site_id === site.site_id);
-        if (mine === undefined) return;
+        if (mine === undefined) {
+          // The 2-minute cap passed before this site was checked (review #81 L-4).
+          if (result.cut_short) {
+            toast.warning({
+              title: `${site.title}: check stopped after 2 minutes`,
+              description: CUT_SHORT,
+            });
+          }
+          return;
+        }
         const why = healthReasonText(mine.reason);
         toast[checkToastKind(mine.outcome)]({
           title: `${site.title}: ${SITE_HEALTH[mine.outcome].label.toLowerCase()}`,

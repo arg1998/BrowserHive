@@ -1,4 +1,4 @@
-/** @module features/templates/detail/AccessTab — the Access tab (spec 13 §6, §5.4, §11.4): who may use the template, the Harnesses field (D-48, reused from the vault), the session cap, and sealing ("Sign-ins protected": each Allow … switch with its editor text and the principals it applies to); a local draft saved with If-Match, confirming unseal flags and changes that can close live sessions; the access tester */
+/** @module features/templates/detail/AccessTab — the Access tab (spec 13 §6, §5.4, §11.4): who may use the template, the Harnesses field (D-48, reused from the vault), the session cap, and sealing ("Sign-ins protected": each Allow … switch with its editor text and the principals it applies to); a local draft saved with If-Match, confirming unseal flags and changes that can close live sessions; the access tester; the agents the rule refused (D60) */
 import type { TemplateDetailResponse } from '@browserhive/contracts/http';
 import { useId, useState } from 'react';
 import { useConfirm } from '@/app/providers/ConfirmProvider.tsx';
@@ -32,6 +32,7 @@ import {
   UNSEAL_TEXT,
   type UnsealFlag,
 } from './access-draft.ts';
+import { ACCESS_RULES_ID, RefusedAgents } from './RefusedAgents.tsx';
 
 const CAP = { min: 1, max: 20 } as const;
 
@@ -124,7 +125,7 @@ export function AccessTab({ detail }: { readonly detail: TemplateDetailResponse 
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
-      <Panel>
+      <Panel className="scroll-mt-20" anchorId={ACCESS_RULES_ID}>
         <div className="flex flex-col gap-6">
           <WhoMayUse
             headingLevel={2}
@@ -230,6 +231,7 @@ export function AccessTab({ detail }: { readonly detail: TemplateDetailResponse 
         </Button>
       </div>
       <AccessTester templateId={template.template_id} />
+      <RefusedAgents templateId={template.template_id} />
     </div>
   );
 }

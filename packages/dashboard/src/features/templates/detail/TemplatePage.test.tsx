@@ -33,6 +33,7 @@ function mount(url: string, routes: Record<string, unknown> = {}) {
         }),
       ]),
       [`GET /templates/${ID}/versions`]: versionsPage([versionRow(2), versionRow(1)]),
+      [`GET /templates/${ID}/refusals`]: { data: [], max_rows: 100 },
       'GET /system': { vault: { enabled: false, backend: null } },
       ...routes,
     },

@@ -256,6 +256,8 @@ describe('SecurityInterceptService — transport=stdio', () => {
     });
     expect(await w.intercepts.raiseChallenge(challenge(s))).toBeNull();
     expect(w.health.map((h) => h.verdict.outcome)).toEqual(['challenged']);
+    // No site check opens: the notification only offers to watch the session (review #93 M1).
+    expect(w.healthSessions).toEqual([{ id: s, takeover: false }]);
     expect(w.broker.listOpen()).toHaveLength(0);
   });
 });
@@ -283,6 +285,7 @@ describe('SecurityInterceptService — site checks', () => {
         },
       },
     ]);
+    expect(w.healthSessions).toEqual([{ id: s, takeover: true }]);
     expect(w.intercepts.holdOf(s)).toEqual({
       requestId: id ?? '',
       site: 'site-a.test',

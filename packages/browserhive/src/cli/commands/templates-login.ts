@@ -124,15 +124,24 @@ function showChange(
   }
 }
 
-/** `GET /templates/{id}`: the template's re-login, which must still be this site's. */
+/** `GET /templates/{id}`: the template's re-login, which must still be the one this command started. */
 async function readRelogin(
   context: CommandContext,
   target: LoginTarget,
+  requestedAt: number,
 ): Promise<ReloginView | ExitCode> {
   const detail = await fetchTemplateDetail(context, target.remote, target.templateId);
   if (typeof detail === 'number') return detail;
   const view = detail.relogin;
-  if (view !== null && view.site_id === target.site) return view;
+  if (view !== null && view.site_id === target.site && view.requested_at === requestedAt) {
+    return view;
+  }
+  if (view !== null && view.requested_at !== requestedAt) {
+    context.out.diagnostic(
+      `browserhive: another re-login of ${target.name} replaced this one. Check the template page.`,
+    );
+    return EXIT.fatal;
+  }
   context.out.diagnostic(
     `browserhive: the re-login of ${target.site} is no longer known to the server (it may have restarted). Check the template page.`,
   );
@@ -143,13 +152,15 @@ async function readRelogin(
 async function confirm(
   context: CommandContext,
   target: LoginTarget,
+  requestedAt: number,
 ): Promise<ReloginView | null | ExitCode> {
+  // `requested_at`: only this re-login, never one someone started after it (review #81 L-2).
   const answer = await remoteRequest(
     context,
     target.remote,
     'POST',
     `/templates/${target.templateId}/relogin/confirm`,
-    { site_id: target.site },
+    { site_id: target.site, requested_at: requestedAt },
   );
   if (answer.ok) {
     const parsed = parseRelogin(context, answer.json);
@@ -203,12 +214,12 @@ async function follow(
       if (next === 'interrupt') return next;
       let after: ReloginView | null | ExitCode;
       if (next === 'enter') {
-        after = await confirm(context, target);
+        after = await confirm(context, target, view.requested_at);
         read?.cancel();
         read = wait.readLine();
         enter = enterOf(read);
       } else {
-        after = await readRelogin(context, target);
+        after = await readRelogin(context, target, first.requested_at);
       }
       if (typeof after === 'number') return after;
       if (after === null) continue;
@@ -225,8 +236,10 @@ async function follow(
 async function cancel(
   context: CommandContext,
   target: LoginTarget,
+  requestedAt: number,
 ): Promise<ReloginResponse | ExitCode> {
-  const path = `/templates/${target.templateId}/relogin`;
+  // Only this re-login: an interrupted CLI never cancels a newer one (review #81 L-2).
+  const path = `/templates/${target.templateId}/relogin?requested_at=${requestedAt}`;
   const result = await remoteCall(context, target.remote, 'DELETE', path);
   if (!result.ok) return result.code;
   return parseRelogin(context, result.json);
@@ -322,7 +335,7 @@ export async function runTemplatesLogin(
   const outcome = await follow(context, target, started.relogin, invocation.timeoutMs);
   if (typeof outcome === 'number') return outcome;
   if (typeof outcome === 'object') return report(context, target, outcome);
-  const cancelled = await cancel(context, target);
+  const cancelled = await cancel(context, target, started.relogin.requested_at);
   if (typeof cancelled === 'number') return cancelled;
   if (json) out.json(cancelled);
   if (outcome === 'timeout') {

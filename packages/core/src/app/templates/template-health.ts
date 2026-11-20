@@ -68,7 +68,16 @@ export interface ProbeOptions {
   readonly start: ProbeStart;
   /** A pause between two sites (the schedule's 5–20 s gap). */
   readonly gapMs?: () => number;
+  /** Aborted: the run stops between sites, and a run still queued behind another never starts. */
   readonly signal?: AbortSignal;
+  /** Each site's result as soon as it is applied (a caller that stops waiting keeps them). */
+  readonly onResult?: (result: SiteProbeResult) => void;
+}
+
+/** The agent session that met a challenge; `takeover`: a takeover request was opened on it. */
+export interface ChallengeSession {
+  readonly id: string;
+  readonly takeover: boolean;
 }
 
 /** Hooks other services attach after composition. */
@@ -142,7 +151,8 @@ export class TemplateHealthService {
     this.#inFlight.set(templateId, (this.#inFlight.get(templateId) ?? 0) + 1);
     const run = (this.#tails.get(templateId) ?? Promise.resolve())
       .catch(() => undefined)
-      .then(() => this.#run(template, chosen, options));
+      // Aborted while it waited for the run before it (Check now's cap, review #81 L-4).
+      .then(() => (options.signal?.aborted === true ? [] : this.#run(template, chosen, options)));
     this.#tails.set(templateId, run);
     try {
       return await run;
@@ -156,19 +166,22 @@ export class TemplateHealthService {
 
   /**
    * Records a sign-in state BrowserHive learned outside a probe (a re-login that signed the site in)
-   * as a probe row with its trigger, and applies it like one.
+   * as a probe row with its trigger, and applies it like one. `session` names the agent session
+   * that met a challenge and whether a takeover request was opened on it (its notification links
+   * to that session, spec 13 §8.6).
    */
   async record(
     template: TemplateRecord,
     siteId: string,
     verdict: ProbeVerdict,
     trigger: TemplateProbeTrigger,
+    session?: ChallengeSession,
   ): Promise<void> {
     // On the template's probe chain, so it never interleaves with a probe's read-modify-write.
     const id = template.templateId;
     const run = (this.#tails.get(id) ?? Promise.resolve())
       .catch(() => undefined)
-      .then(() => this.#apply(template, siteId, verdict, trigger, 0));
+      .then(() => this.#apply(template, siteId, verdict, trigger, 0, session));
     this.#tails.set(id, run);
     try {
       await run;
@@ -218,12 +231,14 @@ export class TemplateHealthService {
       const verdict = await this.#probeOne(template, site, source, options.signal);
       const durationMs = Math.max(0, this.#deps.clock.now() - started);
       await this.#apply(template, site.siteId, verdict, options.trigger, durationMs);
-      results.push({
+      const result: SiteProbeResult = {
         siteId: site.siteId,
         outcome: verdict.outcome,
         reason: verdict.reason,
         durationMs,
-      });
+      };
+      results.push(result);
+      options.onResult?.(result);
     }
     return results;
   }
@@ -260,6 +275,7 @@ export class TemplateHealthService {
     verdict: ProbeVerdict,
     trigger: TemplateProbeTrigger,
     durationMs: number,
+    session?: ChallengeSession,
   ): Promise<void> {
     const { repos, clock, bus } = this.#deps;
     const now = clock.now();
@@ -301,7 +317,9 @@ export class TemplateHealthService {
       type: 'template.health',
       template_id: template.templateId,
       site: view,
-      ...(changed && { transition: this.#transition(template, site, updated, after, now) }),
+      ...(changed && {
+        transition: this.#transition(template, site, updated, after, now, session),
+      }),
     });
     if (!changed) return;
     this.#log.info('site sign-in changed', {
@@ -327,6 +345,7 @@ export class TemplateHealthService {
     after: TemplateSiteRecord,
     sites: readonly TemplateSiteRecord[],
     now: number,
+    session: ChallengeSession | undefined,
   ): SigninTransition {
     const lookup = providerLookup(this.#deps.packs ?? NO_PACKS);
     const provider = providerOf(after, lookup);
@@ -341,6 +360,10 @@ export class TemplateHealthService {
       provider_signed_in: group.length > 0 && group.every((s) => s.health.state === 'signed_in'),
       machine: this.#deps.machine,
       at: now,
+      ...(session !== undefined && {
+        session_id: session.id,
+        session_takeover: session.takeover,
+      }),
     };
   }
 

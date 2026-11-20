@@ -49,14 +49,18 @@ function withRelogin(server: FakeServer, started: Partial<ReloginView> = {}): vo
       return [200, { session_id: server.relogin.session_id, relogin: server.relogin }];
     }
     if (method === 'POST' && path === `${RELOGIN}/confirm`) {
-      const site = (body as { site_id: string }).site_id;
+      const { site_id: site, requested_at } = body as { site_id: string; requested_at?: number };
+      // The CLI names the re-login it started (review #81 L-2).
+      if (requested_at !== server.relogin?.requested_at) {
+        return [409, problem(409, 'CONFLICT', 'another re-login replaced this one')];
+      }
       if (server.refuse.has(site)) {
         return [409, problem(409, 'CONFLICT', 'no sign-in cookie came back on this site')];
       }
       server.relogin = finished(server, 'signed_in', { version: 7 });
       return [200, { session_id: null, relogin: server.relogin }];
     }
-    if (method === 'DELETE' && path === RELOGIN) {
+    if (method === 'DELETE' && path === `${RELOGIN}?requested_at=${server.relogin?.requested_at}`) {
       server.relogin = finished(server, 'cancelled');
       return [200, { session_id: null, relogin: server.relogin }];
     }
@@ -235,7 +239,7 @@ describe('templates login: window', () => {
     withRelogin(timed);
     const late = await run(timed, [...LOGIN, '--timeout', '5s', ...URL_FLAGS]);
     expect(late.code).toBe(2);
-    expect(paths(timed).at(-1)).toBe(`DELETE ${RELOGIN}`);
+    expect(paths(timed).at(-1)).toBe(`DELETE ${RELOGIN}?requested_at=1`);
     expect(late.stderr).toContain(
       'Timed out after 5s: the re-login of a.test was cancelled and its window closed.',
     );
@@ -248,8 +252,22 @@ describe('templates login: window', () => {
     };
     const result = await run(stopped, [...LOGIN, ...URL_FLAGS], { op });
     expect(result.code).toBe(1);
-    expect(paths(stopped).at(-1)).toBe(`DELETE ${RELOGIN}`);
+    expect(paths(stopped).at(-1)).toBe(`DELETE ${RELOGIN}?requested_at=1`);
     expect(result.stderr).toContain('Stopped: the re-login of a.test was cancelled');
+  });
+
+  it('a re-login someone started after this one is neither followed nor cancelled (1)', async () => {
+    const server = fakeServer({ 'a.test': 'signed_out' });
+    withRelogin(server);
+    server.onPoll = (poll) => {
+      if (poll === 1 && server.relogin !== null) {
+        server.relogin = view({ ...server.relogin, requested_at: 2, requested_by: 'op2' });
+      }
+    };
+    const result = await run(server, [...LOGIN, ...URL_FLAGS]);
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('another re-login of job-hunt replaced this one');
+    expect(paths(server).some((p) => p.startsWith('DELETE'))).toBe(false);
   });
 
   it('a refused start is an API error (1)', async () => {
@@ -325,9 +343,11 @@ function probeResult(site: string, outcome: ProbeResult['outcome'], reason: stri
   return { site_id: site, outcome, reason, duration_ms: 40 };
 }
 
-function withProbe(server: FakeServer, results: readonly ProbeResult[]): void {
+function withProbe(server: FakeServer, results: readonly ProbeResult[], cutShort = false): void {
   server.routes = (method, path) =>
-    method === 'POST' && path === `${BASE}/${ID}/probe` ? [200, { results }] : undefined;
+    method === 'POST' && path === `${BASE}/${ID}/probe`
+      ? [200, { results, cut_short: cutShort }]
+      : undefined;
 }
 
 describe('templates probe', () => {
@@ -382,7 +402,24 @@ describe('templates probe', () => {
     withProbe(server, results);
     const result = await run(server, ['probe', 'job-hunt', '--json', ...URL_FLAGS]);
     expect(result.code).toBe(2);
-    expect(JSON.parse(result.stdout)).toEqual({ results });
+    expect(JSON.parse(result.stdout)).toEqual({ results, cut_short: false });
+  });
+
+  it('a check the 2-minute cap cut short lists what finished, says so and exits 2', async () => {
+    const server = fakeServer({ 'a.test': 'signed_in', 'b.test': 'signed_in' });
+    withProbe(server, [probeResult('a.test', 'signed_in', 'learned_cookies')], true);
+    const result = await run(server, ['probe', 'job-hunt', ...URL_FLAGS]);
+    expect(result.code).toBe(2);
+    expect(result.stdout).toContain('a.test  ✓ signed in');
+    expect(result.stdout).toContain(
+      'Stopped after 2 minutes: a site not listed above was not checked',
+    );
+    const none = fakeServer({ 'a.test': 'signed_in' });
+    withProbe(none, [], true);
+    const empty = await run(none, ['probe', 'job-hunt', ...URL_FLAGS]);
+    expect(empty.code).toBe(2);
+    expect(empty.stdout).not.toContain('No enabled site to check.');
+    expect(empty.stdout).toContain('Stopped after 2 minutes');
   });
 
   it('an unknown site, an invalid one and an API error', async () => {

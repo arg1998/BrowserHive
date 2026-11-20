@@ -1,14 +1,22 @@
 /** @module infra/persistence/open.test — PRAGMAs, application_id, integrity and compat window on open (spec 09 §3.2). */
 
 import { Database } from 'bun:sqlite';
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, setDefaultTimeout } from 'bun:test';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { FakeClock, FakeLogger, tempDir } from '../../../test/persistence/helpers.ts';
+import {
+  DISK_MIGRATION_TEST_MS,
+  FakeClock,
+  FakeLogger,
+  tempDir,
+} from '../../../test/persistence/helpers.ts';
 import { isAppError } from '../../kernel/errors/app-error.ts';
 import { APPLICATION_ID, MIGRATIONS, SCHEMA_VERSION } from './migrations/index.ts';
 import { closeRaw, openDatabase, REQUIRED_PRAGMAS } from './open.ts';
 import { pragmaNumber, pragmaString } from './pragma.ts';
+
+// Each case opens a database on disk: fsync stalls on CI runners (D30 l, helpers.ts).
+setDefaultTimeout(DISK_MIGRATION_TEST_MS);
 
 const clock = new FakeClock();
 

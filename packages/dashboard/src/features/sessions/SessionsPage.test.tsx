@@ -174,6 +174,18 @@ describe('SessionsPage', () => {
     expect(within(table).queryByText('headless')).toBeNull();
   });
 
+  it('gives a headed session browser label room on wide tables and its full text on hover (D33)', async () => {
+    mount('/sessions', [sessionSummary(1, { channel: 'chrome', headless: false })]);
+    const table = await screen.findByRole('region', { name: 'Sessions' });
+    const label = within(table).getByText('· chrome · headed');
+    expect(label.getAttribute('title')).toBe('chrome · headed');
+    // From a 70rem table the Session column keeps the id, browser and copy button in full.
+    const cell = label.closest('td');
+    expect(cell?.className).toContain('@min-[70rem]:min-w-[16.5rem]');
+    const header = within(table).getByRole('columnheader', { name: /Session/ });
+    expect(header.className).toContain('@min-[70rem]:min-w-[16.5rem]');
+  });
+
   it('patches rows from session.updated events', async () => {
     const view = mount('/sessions');
     await screen.findByRole('region', { name: 'Sessions' });

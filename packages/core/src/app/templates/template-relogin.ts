@@ -3,6 +3,7 @@
 import type { ReloginResponse, ReloginView } from '@browserhive/contracts/http';
 import type { SessionPrincipal } from '../../domain/session/principal.ts';
 import { cookieSite, learnedCookieNames } from '../../domain/templates/sign-ins.ts';
+import type { AppError } from '../../kernel/errors/app-error.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import { registrableDomain } from '../../kernel/url.ts';
 import type { IdGenerator } from '../../ports/id-generator.ts';
@@ -168,14 +169,23 @@ export class TemplateReloginService {
    * were already there): learns the names that appeared since the window opened (or keeps the
    * present ones) and finishes the re-login.
    *
-   * @throws AppError `CONFLICT` (no window open for the site, or no sign-in cookie on it).
+   * `requestedAt` (the re-login the caller saw) must still be the current one (review #81 L-2).
+   *
+   * @throws AppError `CONFLICT` (no window open for the site, another re-login replaced the one
+   *   given, or no sign-in cookie on it).
    */
-  async confirm(templateId: string, siteId: string, by: string): Promise<ReloginResponse> {
+  async confirm(
+    templateId: string,
+    siteId: string,
+    by: string,
+    requestedAt?: number,
+  ): Promise<ReloginResponse> {
     const { template, site } = await this.#load(templateId, siteId);
     const run = this.#runs.active(templateId);
     if (run === null || run.view.state !== 'open' || run.view.site_id !== site.siteId) {
       throw healthConflict(`No re-login window is open for ${site.siteId}.`);
     }
+    if (requestedAt !== undefined && run.view.requested_at !== requestedAt) throw replaced();
     const jar = (await this.#deps.ops.jar(templateId)) ?? [];
     const learned = learnedCookieNames(run.baseline?.names ?? new Set(), jar, site.siteId);
     const present = new Set(jar.filter((c) => cookieSite(c) === site.siteId).map((c) => c.name));
@@ -191,10 +201,15 @@ export class TemplateReloginService {
     return this.#response(run);
   }
 
-  /** `DELETE /templates/{id}/relogin`: closes the window, or drops a queued re-login. */
-  async cancel(templateId: string, by: string): Promise<ReloginResponse> {
+  /**
+   * `DELETE /templates/{id}/relogin`: closes the window, or drops a queued re-login. With
+   * `requestedAt`, only that re-login (a stale tab or an interrupted CLI never cancels a newer one,
+   * review #81 L-2).
+   */
+  async cancel(templateId: string, by: string, requestedAt?: number): Promise<ReloginResponse> {
     const run = this.#runs.active(templateId);
     if (run === null) throw healthConflict('No re-login is queued or open for this template.');
+    if (requestedAt !== undefined && run.view.requested_at !== requestedAt) throw replaced();
     await this.#runs.end(run, 'cancelled', null);
     await this.#audit(by, templateId, { site_id: run.view.site_id, cancelled: true });
     return this.#response(run);
@@ -368,4 +383,11 @@ export class TemplateReloginService {
       occurredAt: this.#deps.clock.now(),
     });
   }
+}
+
+/** The re-login a caller named was replaced by a newer one (review #81 L-2). */
+function replaced(): AppError<'CONFLICT'> {
+  return healthConflict(
+    'Another re-login replaced the one you started; reload to see the current one.',
+  );
 }

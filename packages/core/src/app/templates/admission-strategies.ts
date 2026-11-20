@@ -1,4 +1,4 @@
-/** @module app/templates/admission-strategies — the template-scoped strategies of `TemplateAdmission` (spec 13 §3.7, §6.3, §9.4, §9.6 "Admission of a virtual session"): the pack `concurrency.max_sessions` and `ramp-up` lower the cap; `active-hours` and `launch-spacing` refuse or space a launch. They come from the template's enabled sites' approved packs, the strictest site wins, and nothing applies under `sitePacks=false` (no lookup). Spacing state is in memory per process and per template: a restart resets it. Agents only ever see `TEMPLATE_BUSY` `capacity` with `retry_after_ms`. */
+/** @module app/templates/admission-strategies — the template-scoped strategies of `TemplateAdmission` (spec 13 §3.7, §6.3, §9.4, §9.6 "Admission of a virtual session"): the pack `concurrency.max_sessions` and `ramp-up` lower the cap; `active-hours` and `launch-spacing` refuse or space a launch. They come from the template's enabled sites' approved packs, the strictest site wins, and nothing applies under `sitePacks=false` (no lookup). The `launch-spacing` turn of each template is written through to the database and read back after a restart, so a restart never resets the spacing (D53). Agents only ever see `TEMPLATE_BUSY` `capacity` with `retry_after_ms`. */
 
 import { msUntilActive } from '../../domain/site-packs/active-hours.ts';
 import { rampFactor } from '../../domain/site-packs/strategy-params.ts';
@@ -8,6 +8,7 @@ import type { Logger } from '../../ports/logger.ts';
 import type { TemplateRecord, TemplateSiteRecord } from '../../ports/persistence/index.ts';
 import type { SitePackLookup } from '../../ports/site-packs.ts';
 import { packOfSite, templateStrategies } from '../site-packs/strategy-scope.ts';
+import type { StrategyStateStore } from '../site-packs/strategy-state.ts';
 import { templateBusy } from './template-admission.ts';
 
 /** The longest a launch waits for its `launch-spacing` turn (spec 13 §3.7). */
@@ -23,6 +24,8 @@ export interface AdmissionStrategiesDeps {
   readonly lookup?: () => SitePackLookup | null;
   /** In [0, 1); the `launch-spacing` jitter. */
   readonly random?: () => number;
+  /** Persists the `launch-spacing` turns across a restart (D53); absent: in memory only. */
+  readonly state?: StrategyStateStore;
 }
 
 /** The template-scoped admission strategies of every template. */
@@ -108,10 +111,13 @@ export class AdmissionStrategies {
     const id = template.templateId;
     if (gapS === 0) {
       this.#nextTurn.delete(id);
+      this.#deps.state?.delete('launch-spacing', { templateId: id });
       return 0;
     }
     const now = this.#deps.clock.now();
-    const turn = Math.max(now, this.#nextTurn.get(id) ?? now);
+    const saved =
+      this.#nextTurn.get(id) ?? this.#deps.state?.get('launch-spacing', { templateId: id })?.nextAt;
+    const turn = Math.max(now, saved ?? now);
     const wait = turn - now;
     if (wait > Math.min(LAUNCH_SPACING_MAX_WAIT_MS, Math.max(0, budgetMs))) {
       this.#deps.logger.info('launch spacing refused', { templateId: id, retryAfterMs: wait });
@@ -119,7 +125,9 @@ export class AdmissionStrategies {
     }
     const jitterPct = Math.max(0, ...spacing.map((s) => s.params.jitterPct));
     const jitter = Math.min(0.999_999, Math.max(0, this.#random())) * (jitterPct / 100);
-    this.#nextTurn.set(id, turn + Math.round(gapS * 1000 * (1 + jitter)));
+    const nextAt = turn + Math.round(gapS * 1000 * (1 + jitter));
+    this.#nextTurn.set(id, nextAt);
+    this.#deps.state?.set('launch-spacing', { templateId: id }, { nextAt }, 'now');
     return wait;
   }
 

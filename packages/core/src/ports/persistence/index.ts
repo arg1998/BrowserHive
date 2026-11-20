@@ -274,6 +274,19 @@ export {
   SITE_PACK_SOURCES,
 } from './site-packs.ts';
 export type {
+  StrategyStateKey,
+  StrategyStateRecord,
+  StrategyStateRepository,
+} from './strategy-state.ts';
+export type {
+  TemplateRefusalEvent,
+  TemplateRefusalKind,
+  TemplateRefusalReason,
+  TemplateRefusalRecord,
+  TemplateRefusalRepository,
+} from './template-refusals.ts';
+export { TEMPLATE_REFUSAL_KINDS, TEMPLATE_REFUSAL_REASONS } from './template-refusals.ts';
+export type {
   TemplateProbeQuery,
   TemplateProbeRepository,
   TemplateRepository,

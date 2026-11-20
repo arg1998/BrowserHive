@@ -36,6 +36,7 @@ import {
   TemplateHostSupervisor,
   TemplateOperations,
   TemplateRecordingService,
+  type TemplateRefusalSink,
   TemplateService,
   TemplateStateService,
   UnavailableTemplateHostOps,
@@ -83,6 +84,8 @@ export interface TemplatesInput {
   readonly probers?: (supervisor: TemplateHostSupervisor) => ProberSelector;
   /** The host-side pack strategies (T3b: `webrtc-policy`, `keep-alive`, `device-bound-session`). */
   readonly siteStrategies?: SiteStrategies;
+  /** Records the agents the access rules refused (D60). */
+  readonly refusals?: TemplateRefusalSink;
 }
 
 /** How often template hosts are checked for idleness, age and memory (spec 13 §3.2). */
@@ -205,6 +208,9 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
         bus: input.bus,
         onTemplateChanged: (id) => changed(id),
         sitePacks: () => (input.sitePacks?.enabled === true ? input.sitePacks : null),
+        ...(input.siteStrategies?.state != null && {
+          strategyState: input.siteStrategies.state,
+        }),
         ...(reader !== null && {
           // Proportional memory where the platform reports it (Linux), so the memory limit is not
           // reached by memory the browser's processes share (workload test B2).
@@ -268,6 +274,7 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
     bus: input.bus,
     versions: input.uow.repos.templateVersions,
     ...packs,
+    ...(input.refusals !== undefined && { refusals: input.refusals }),
     degradations: input.degradations,
     ids: input.ids,
     clock: input.clock,
@@ -316,6 +323,9 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
     bus: input.bus,
     ...packs,
     ...common,
+    // A removed site names its sign-out thread's provider in `template.changed` (D34).
+    changed: (id: string, removed?: Parameters<typeof service.publishChanged>[1]) =>
+      service.publishChanged(id, removed),
     clipboardWrites,
   });
   const actions = new TemplateActions({

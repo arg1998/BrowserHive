@@ -53,6 +53,31 @@ describe('stale template browsers', () => {
   });
 });
 
+describe('stale template browsers: no template profile (D30 e)', () => {
+  it('reads no process table when the templates directory is missing or empty', async () => {
+    const parent = await mkdtemp(join(tmpdir(), 'bh-stale-none-'));
+    const root = join(parent, 'templates');
+    let listed = 0;
+    const deps = {
+      listProcesses: async () => {
+        listed += 1;
+        return [{ pid: 93, command: `chrome --user-data-dir=${join(root, 'tp-a', 'userdata')}` }];
+      },
+      kill: () => undefined,
+      alive: () => false,
+      host: 'box',
+    };
+    expect(await sweepStaleTemplateBrowsers(root, deps)).toEqual([]);
+    await mkdir(root);
+    expect(await sweepStaleTemplateBrowsers(root, deps)).toEqual([]);
+    expect(listed).toBe(0);
+    // A profile appears: the table is read again.
+    await mkdir(join(root, 'tp-a', 'userdata'), { recursive: true });
+    expect(await sweepStaleTemplateBrowsers(root, deps)).toEqual([93]);
+    expect(listed).toBe(1);
+  });
+});
+
 describe('stale template browsers: paths with spaces (PR #76 F8)', () => {
   it('finds a stale host under the macOS default data dir', () => {
     const root = '/Users/amir/Library/Application Support/BrowserHive/templates';

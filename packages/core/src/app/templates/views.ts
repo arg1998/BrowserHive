@@ -262,23 +262,41 @@ export function toAgentTemplate(
   sites: readonly TemplateSiteRecord[],
   availability: Availability,
   sealed: boolean,
-  packs: SitePackReader = NO_PACKS,
+  packs: SitePackReader,
+  now: number,
 ): AgentTemplate {
+  const shown = sites
+    .filter((s) => s.enabled)
+    .map((s) => ({
+      site: s.siteId,
+      title: siteTitle(s, packs),
+      status: s.health.state,
+      checked_at: s.health.checkedAt,
+      checked_ago_s:
+        s.health.checkedAt === null
+          ? null
+          : Math.max(0, Math.round((now - s.health.checkedAt) / 1_000)),
+    }));
   return {
     name: template.name,
     display_name: template.displayName,
-    description: template.description,
-    sites: sites
-      .filter((s) => s.enabled)
-      .map((s) => ({
-        site: s.siteId,
-        title: siteTitle(s, packs),
-        status: s.health.state,
-        checked_at: s.health.checkedAt,
-      })),
+    // An operator who wrote no description still gives the agent a hint of what it is for (D62).
+    description: template.description.trim() === '' ? describeSites(shown) : template.description,
+    sites: shown,
     availability,
     sealed,
   };
+}
+
+/** "Starts signed in to LinkedIn (linkedin.com) and indeed.com." */
+function describeSites(
+  sites: readonly { readonly site: string; readonly title: string }[],
+): string {
+  const names = sites.map((s) => (s.title === s.site ? s.site : `${s.title} (${s.site})`));
+  if (names.length === 0) return '';
+  const list =
+    names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+  return `Starts signed in to ${list}.`;
 }
 
 /** The drift the last start saw: the running process's, else the one stored with the row (deferred D23). */

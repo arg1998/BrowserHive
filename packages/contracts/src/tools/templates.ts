@@ -23,6 +23,8 @@ export const AgentTemplateSite = z.object({
   title: z.string(),
   status: TemplateHealthState,
   checked_at: z.number().nullable(),
+  /** Seconds since `checked_at` when the list was read, so an agent needs no clock (D62). */
+  checked_ago_s: z.number().int().nonnegative().nullable(),
 });
 /** Parsed {@link AgentTemplateSite}. */
 export type AgentTemplateSite = z.infer<typeof AgentTemplateSite>;
@@ -55,7 +57,9 @@ export const LIST_TEMPLATES_DESCRIPTION =
   "List the session templates you may use. A session launched with a template's name as `template` " +
   "starts signed in to the template's sites. The sign-ins belong to the operator: do not sign out, and " +
   'do not change account, security or privacy settings; such actions may be blocked or need the ' +
-  "operator's approval. Sign-ins and site data the session changes are kept in the template and " +
+  "operator's approval. A site covers its subdomains (google.com covers mail.google.com and " +
+  'drive.google.com); `checked_ago_s` says how many seconds ago its sign-in was last checked. ' +
+  'Sign-ins and site data the session changes are kept in the template and ' +
   'carried into later sessions from it. Cookie values are hidden, and evaluate and saving the login ' +
   'are unavailable unless the operator allows them.';
 

@@ -41,7 +41,7 @@ export const TEMPLATE_HEALTH_CASES: readonly RouteCase[] = [
     success: {
       method: 'POST',
       path: tpl('/relogin/confirm'),
-      body: { site_id: 'site-a.test' },
+      body: { site_id: 'site-a.test', requested_at: 1_700_000_000_000 },
       status: 200,
     },
     invalid: { method: 'POST', path: tpl('/relogin/confirm'), body: {} },
@@ -49,8 +49,8 @@ export const TEMPLATE_HEALTH_CASES: readonly RouteCase[] = [
   {
     operationId: 'cancelTemplateRelogin',
     setup: template,
-    success: { method: 'DELETE', path: tpl('/relogin'), status: 200 },
-    invalid: { method: 'DELETE', path: api('/templates/bad/relogin') },
+    success: { method: 'DELETE', path: tpl('/relogin?requested_at=1700000000000'), status: 200 },
+    invalid: { method: 'DELETE', path: tpl('/relogin?requested_at=soon') },
   },
   {
     operationId: 'showTemplateWindow',

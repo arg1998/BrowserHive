@@ -42,7 +42,13 @@ describe('list_templates', () => {
           display_name: 'Job hunt',
           description: 'Signed in to the job sites.',
           sites: [
-            { site: 'site-a.test', title: 'site-a.test', status: 'unknown', checked_at: null },
+            {
+              site: 'site-a.test',
+              title: 'site-a.test',
+              status: 'unknown',
+              checked_at: null,
+              checked_ago_s: null,
+            },
           ],
           availability: 'available',
           sealed: true,

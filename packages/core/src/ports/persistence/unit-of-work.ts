@@ -38,6 +38,8 @@ import type {
   SitePackChangeRepository,
   SitePackStateRepository,
 } from './site-packs.ts';
+import type { StrategyStateRepository } from './strategy-state.ts';
+import type { TemplateRefusalRepository } from './template-refusals.ts';
 import type {
   TemplateProbeRepository,
   TemplateRepository,
@@ -84,9 +86,11 @@ export interface Repositories {
   readonly templateSites: TemplateSiteRepository;
   readonly templateVersions: TemplateVersionRepository;
   readonly templateProbes: TemplateProbeRepository;
+  readonly templateRefusals: TemplateRefusalRepository;
   readonly sitePackState: SitePackStateRepository;
   readonly sitePackChanges: SitePackChangeRepository;
   readonly siteGuardHits: SiteGuardHitRepository;
+  readonly strategyState: StrategyStateRepository;
 }
 
 /**

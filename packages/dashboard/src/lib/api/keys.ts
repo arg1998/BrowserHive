@@ -150,6 +150,8 @@ export const keys = {
       ['templates', 'probes', id, stableParams(params)] as const,
     /** Every probe query of one template (invalidation prefix). */
     probesOf: (id: string) => ['templates', 'probes', id] as const,
+    /** The agents one template's access rules refused (`GET /templates/{id}/refusals`, D60). */
+    refusals: (id: string) => ['templates', 'refusals', id] as const,
     /** The **Check now** mutation of one template (a mutation key: every button shares its pending state). */
     probeRun: (id: string) => ['templates', 'probe-run', id] as const,
   },

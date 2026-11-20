@@ -26,6 +26,7 @@ let bus: RecordingEventBus<DomainEvents>;
 let stops: TemplateSiteStops;
 let raised: ChallengeInput[];
 let recorded: { siteId: string; verdict: ProbeVerdict }[];
+let recordedSessions: unknown[];
 let withIntercepts: boolean;
 let mode: 'live' | 'maintenance' | undefined;
 let transport: 'http' | 'stdio';
@@ -48,6 +49,7 @@ beforeEach(async () => {
   });
   raised = [];
   recorded = [];
+  recordedSessions = [];
   withIntercepts = true;
   mode = 'live';
   transport = 'http';
@@ -68,8 +70,9 @@ function outcomes(): ChallengeOutcomes {
     modeOf: () => mode,
     repos,
     health: () => ({
-      record: async (_t, siteId, verdict) => {
+      record: async (_t, siteId, verdict, _trigger, session) => {
         recorded.push({ siteId, verdict });
+        recordedSessions.push(session);
       },
     }),
     stops,
@@ -136,6 +139,8 @@ describe('ChallengeOutcomes', () => {
         },
       },
     ]);
+    // A notify challenge opens no takeover: its notification only watches (review #93 M1).
+    expect(recordedSessions).toEqual([{ id: 's-1', takeover: false }]);
     await outcomes().handle(detected(DEFAULT_CHALLENGES[0] ?? notify));
     expect(raised[0]?.packId).toBeNull();
   });

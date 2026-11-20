@@ -303,3 +303,24 @@ describe('automatic re-login (review #81 M-4, L-3)', () => {
     expect((await h.repos.templateSites.list(h.id))[0]?.autoReloginAt).toBeNull();
   });
 });
+
+describe('requested_at precondition (review #81 L-2)', () => {
+  it('a stale tab or CLI names the re-login it saw: a newer one is neither cancelled nor confirmed', async () => {
+    const h = await harness();
+    const old = await h.svc.start(h.id, { siteId: SITE, method: 'window' }, { subject: 'op1' });
+    await h.svc.cancel(h.id, 'op1', old.relogin.requested_at);
+    await h.clock.advance(1_000);
+    const current = await h.svc.start(h.id, { siteId: SITE, method: 'window' }, { subject: 'op2' });
+    expect(current.relogin.requested_at).not.toBe(old.relogin.requested_at);
+    expect(await codeOf(h.svc.cancel(h.id, 'op1', old.relogin.requested_at))).toBe('CONFLICT');
+    expect(await codeOf(h.svc.confirm(h.id, SITE, 'op1', old.relogin.requested_at))).toBe(
+      'CONFLICT',
+    );
+    expect(h.svc.view(h.id)?.state).toBe('open');
+    expect(h.open()).toHaveLength(1);
+    // The current one, named or not, is cancelled.
+    await h.svc.cancel(h.id, 'op2', current.relogin.requested_at);
+    expect(h.svc.view(h.id)?.state).toBe('cancelled');
+    expect(h.open()).toEqual([]);
+  });
+});

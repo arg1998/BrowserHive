@@ -184,7 +184,17 @@ export type DomainEvents = {
   readonly 'delivery.updated': z.infer<typeof DeliveryUpdatedEvent>;
   readonly 'action.recorded': z.infer<typeof ActionRecordedEvent>;
   // templates (the `templates` topic, spec 13 §11.3)
-  readonly 'template.changed': z.infer<typeof TemplateChangedEvent>;
+  readonly 'template.changed': z.infer<typeof TemplateChangedEvent> & {
+    /**
+     * Internal (spec 13 §8.6, D34): a site was removed; its identity provider and the providers of
+     * the sites left, so the sign-out thread of a provider no site uses any more goes `final`.
+     */
+    readonly site_removed?: {
+      readonly provider: string;
+      readonly providers: readonly string[];
+      readonly at: number;
+    };
+  };
   readonly 'template.removed': z.infer<typeof TemplateRemovedEvent>;
   readonly 'template.host': z.infer<typeof TemplateHostEvent> & {
     /** Internal (the host notifications): the template's names and the state it left. */
@@ -277,6 +287,10 @@ export interface SigninTransition {
   /** The machine sign-in windows open on ("Re-login on <machine>"). */
   readonly machine: string;
   readonly at: number;
+  /** The agent session that met the challenge (a session challenge, spec 13 §9.5). */
+  readonly session_id?: string;
+  /** A takeover request was opened on that session (an `attention`/`stop` challenge over http). */
+  readonly session_takeover?: boolean;
 }
 
 /** Every event name. */

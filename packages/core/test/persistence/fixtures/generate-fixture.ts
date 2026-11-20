@@ -133,6 +133,15 @@ export async function seedFixture(uow: SqliteUnitOfWork): Promise<void> {
         addedAt: at + 1,
       }),
     );
+    // v12: a `launch-spacing` turn survives the upgrade (D53).
+    await r.strategyState.put({
+      templateId: TEMPLATE_ID,
+      strategy: 'launch-spacing',
+      packId: '',
+      scopeKey: '',
+      stateJson: JSON.stringify({ next_at: at + 10_000 }),
+      updatedAt: at,
+    });
     await r.templateProbes.insert({
       seq: 0,
       templateId: TEMPLATE_ID,
@@ -144,6 +153,21 @@ export async function seedFixture(uow: SqliteUnitOfWork): Promise<void> {
       durationMs: 3,
       at,
     });
+    // Schema v13: one refused agent (deferred D60).
+    await r.templateRefusals.record(
+      {
+        templateId: TEMPLATE_ID,
+        principal: 'p-refused',
+        harness: 'other',
+        harnessDeclared: 'Nightly Scraper',
+        kind: 'launch',
+        reason: 'harness_not_allowed',
+        count: 3,
+        firstAt: at,
+        lastAt: at + 1_000,
+      },
+      100,
+    );
     await r.sessions.insert(
       sessionRecord({
         sessionId: 'jobs-t1t2t3t4',

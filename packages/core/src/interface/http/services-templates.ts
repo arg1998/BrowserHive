@@ -7,6 +7,7 @@ import type { TemplateActions } from '../../app/templates/template-actions.ts';
 import type { TemplateEditService } from '../../app/templates/template-edit.ts';
 import type { TemplateOperations } from '../../app/templates/template-operations.ts';
 import type { TemplateRecordingService } from '../../app/templates/template-recording.ts';
+import type { TemplateRefusals } from '../../app/templates/template-refusals.ts';
 import type { TemplateService } from '../../app/templates/template-service.ts';
 
 /** The site-pack routes' service (a structural slice of `SitePackRegistry`). */
@@ -73,3 +74,6 @@ export type TemplateRecordingPort = Pick<
 
 /** The template routes' service (a structural slice of `TemplateService`). */
 export type TemplatesPort = Pick<TemplateService, 'list' | 'get' | 'create' | 'remove'>;
+
+/** The refused agents of a template (a structural slice of `TemplateRefusals`, D60). */
+export type TemplateRefusalsPort = Pick<TemplateRefusals, 'list'>;

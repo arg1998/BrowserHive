@@ -1,4 +1,4 @@
-/** @module features/templates/api — template queries and the T1a mutations over `useApi()` + `keys.templates.*` (spec 13 §11.1, spec 04 §5): list, detail, create, delete, recording (start, I'm signed in, finish, cancel), removing an unlisted sign-in, clearing saved passwords; live through `useTemplatesLive` */
+/** @module features/templates/api — template queries and the T1a mutations over `useApi()` + `keys.templates.*` (spec 13 §11.1, spec 04 §5): list, detail, refused agents, create, delete, recording (start, I'm signed in, finish, cancel), removing an unlisted sign-in, clearing saved passwords; live through `useTemplatesLive` */
 import type { TemplateInput } from '@browserhive/contracts/http';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useApi } from '@/app/providers/AuthProvider.tsx';
@@ -51,6 +51,19 @@ export function useTemplateDetail(
     enabled: id !== undefined,
     retry: (count, error) => toAppError(error).status !== 404 && count < 2,
     ...(options.poll === true && { refetchInterval: SIGN_IN_POLL_MS }),
+  });
+}
+
+/** How often the Access tab re-reads its refused agents while open (focus also re-reads them). */
+export const REFUSALS_POLL_MS = 30_000;
+
+/** `GET /templates/{id}/refusals`: the agents the access rules refused (D60), newest first. */
+export function useTemplateRefusals(id: string) {
+  const api = useApi();
+  return useQuery({
+    queryKey: keys.templates.refusals(id),
+    queryFn: () => api.listTemplateRefusals({ params: { template_id: id } }),
+    refetchInterval: REFUSALS_POLL_MS,
   });
 }
 

@@ -53,9 +53,12 @@ async function expectBootError(promise: Promise<unknown>, code: ErrorCode): Prom
 
 describe('bootServer', () => {
   let dir = tempDir();
+  // A case that failed with its server still running (a timeout) keeps its dir busy and locked:
+  // the next case still gets a fresh one, so one failure does not fail every case after it (D30 e).
   afterEach(() => {
-    dir.cleanup();
+    const used = dir;
     dir = tempDir();
+    used.cleanup();
   });
   afterAll(() => dir.cleanup());
 

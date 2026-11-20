@@ -363,6 +363,7 @@ export {
 } from './template-edit.ts';
 export {
   BindingProblem,
+  CancelReloginQuery,
   ConfirmReloginRequest,
   ContinueAgentsResponse,
   ProbeResult,
@@ -409,6 +410,15 @@ export {
   TemplateDomainParams,
   TemplateOkResponse,
 } from './template-recording.ts';
+export {
+  REFUSAL_NAMES_PER_PRINCIPAL,
+  REFUSAL_OTHER_HARNESSES,
+  TEMPLATE_REFUSALS_MAX,
+  TemplateRefusalKind,
+  TemplateRefusalReason,
+  TemplateRefusalRow,
+  TemplateRefusalsResponse,
+} from './template-refusals.ts';
 export { ReloginView, TemplateMachine } from './template-relogin-view.ts';
 export {
   PatchTemplateVersionRequest,

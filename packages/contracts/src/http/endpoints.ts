@@ -257,6 +257,8 @@ export const HTTP_ENDPOINTS: readonly HttpEndpoint[] = [
   // spec 13 §8 health and re-login (T2)
   ep('probeTemplate', 'post', '/templates/{template_id}/probe', 'templates:write'),
   ep('listTemplateProbes', 'get', '/templates/{template_id}/probes', 'templates:read'),
+  // deferred D60: the agents the access rules refused
+  ep('listTemplateRefusals', 'get', '/templates/{template_id}/refusals', 'templates:read'),
   ep('startTemplateRelogin', 'post', '/templates/{template_id}/relogin', 'templates:login'),
   ep(
     'confirmTemplateRelogin',

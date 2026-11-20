@@ -30,8 +30,15 @@ export const ProbeResult = z.object({
 /** One probe's result. */
 export type ProbeResult = z.infer<typeof ProbeResult>;
 
-/** `POST /templates/{template_id}/probe` body (**Check now**; waits at most 120 s). */
-export const ProbeTemplateResponse = z.object({ results: z.array(ProbeResult) });
+/**
+ * `POST /templates/{template_id}/probe` body (**Check now**; waits at most 120 s, queued behind
+ * another check and a browser start included). `cut_short`: the 120 s passed first, so `results`
+ * holds only the sites checked by then.
+ */
+export const ProbeTemplateResponse = z.object({
+  results: z.array(ProbeResult),
+  cut_short: z.boolean(),
+});
 /** `POST …/probe` body. */
 export type ProbeTemplateResponse = z.infer<typeof ProbeTemplateResponse>;
 
@@ -92,10 +99,26 @@ export const ReloginResponse = z.object({
 /** A re-login route's body. */
 export type ReloginResponse = z.infer<typeof ReloginResponse>;
 
-/** `POST /templates/{template_id}/relogin/confirm` request: **I'm signed in** for a site without a pack. */
-export const ConfirmReloginRequest = z.strictObject({ site_id: TemplateSiteHost });
+/**
+ * `POST /templates/{template_id}/relogin/confirm` request: **I'm signed in** for a site without a
+ * pack. `requested_at` (the `relogin.requested_at` the caller saw) is a precondition: when another
+ * re-login replaced that one meanwhile, the route answers 409 `CONFLICT` and confirms nothing.
+ */
+export const ConfirmReloginRequest = z.strictObject({
+  site_id: TemplateSiteHost,
+  requested_at: EpochMs.optional(),
+});
 /** `POST …/relogin/confirm` request. */
 export type ConfirmReloginRequest = z.infer<typeof ConfirmReloginRequest>;
+
+/**
+ * `DELETE /templates/{template_id}/relogin` query: `requested_at` (the `relogin.requested_at` the
+ * caller saw) is a precondition: when another re-login replaced that one meanwhile, the route
+ * answers 409 `CONFLICT` and cancels nothing.
+ */
+export const CancelReloginQuery = z.strictObject({ requested_at: QueryEpochMs.optional() });
+/** `DELETE …/relogin` query. */
+export type CancelReloginQuery = z.infer<typeof CancelReloginQuery>;
 
 /** `POST /templates/{template_id}/host/show` body: which queued or open window was raised. */
 export const ShowTemplateWindowResponse = z.object({

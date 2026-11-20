@@ -25865,6 +25865,75 @@
           "now"
         ]
       },
+      "TemplateRefusalsResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "principal": {
+                  "type": "string"
+                },
+                "harness": {
+                  "type": "string"
+                },
+                "harness_declared": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "list",
+                    "launch"
+                  ]
+                },
+                "reason": {
+                  "type": "string",
+                  "enum": [
+                    "principal_not_allowed",
+                    "harness_not_allowed"
+                  ]
+                },
+                "count": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                "first_at": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "last_at": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "principal",
+                "harness",
+                "harness_declared",
+                "kind",
+                "reason",
+                "count",
+                "first_at",
+                "last_at"
+              ]
+            }
+          },
+          "max_rows": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          }
+        },
+        "required": [
+          "data",
+          "max_rows"
+        ]
+      },
       "DeleteTemplateResponse": {
         "type": "object",
         "properties": {
@@ -27216,10 +27285,14 @@
                 "duration_ms"
               ]
             }
+          },
+          "cut_short": {
+            "type": "boolean"
           }
         },
         "required": [
-          "results"
+          "results",
+          "cut_short"
         ]
       },
       "ProbeTemplateRequest": {
@@ -27578,6 +27651,10 @@
             "minLength": 1,
             "maxLength": 253,
             "pattern": "^[a-z0-9.-]+$"
+          },
+          "requested_at": {
+            "type": "integer",
+            "minimum": 0
           }
         },
         "required": [
@@ -48356,6 +48433,107 @@
         }
       }
     },
+    "/api/v1/templates/{template_id}/refusals": {
+      "get": {
+        "operationId": "listTemplateRefusals",
+        "tags": [
+          "templates"
+        ],
+        "summary": "The agents the template's access rules refused, one row per principal, harness and kind (listing or launch) with a count and when it was first and last refused, newest first. The agents themselves saw no template.",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-browserhive-scope": "templates:read",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^tp-[A-Za-z0-9_-]{10}$"
+            },
+            "required": true,
+            "name": "template_id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The agents the template's access rules refused, one row per principal, harness and kind (listing or launch) with a count and when it was first and last refused, newest first. The agents themselves saw no template.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateRefusalsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, PASSWORD_CHANGE_REQUIRED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "TEMPLATE_NOT_FOUND",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/templates/{template_id}/domains/{domain}/remove-sign-in": {
       "post": {
         "operationId": "removeTemplateSignIn",
@@ -49531,7 +49709,7 @@
         "tags": [
           "templates"
         ],
-        "summary": "Cancel the queued or open re-login: its window closes and agents continue.",
+        "summary": "Cancel the queued or open re-login: its window closes and agents continue. With requested_at, only that re-login (409 when another replaced it).",
         "security": [
           {
             "cookieAuth": []
@@ -49550,11 +49728,23 @@
             "required": true,
             "name": "template_id",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "required": false,
+            "name": "requested_at",
+            "in": "query"
           }
         ],
         "responses": {
           "200": {
-            "description": "Cancel the queued or open re-login: its window closes and agents continue.",
+            "description": "Cancel the queued or open re-login: its window closes and agents continue. With requested_at, only that re-login (409 when another replaced it).",
             "content": {
               "application/json": {
                 "schema": {
@@ -49642,7 +49832,7 @@
         "tags": [
           "templates"
         ],
-        "summary": "I'm signed in, for a site without a pack: the cookie names that appeared on it since the re-login window opened become its learned sign-in cookies, and the re-login finishes.",
+        "summary": "I'm signed in, for a site without a pack: the cookie names that appeared on it since the re-login window opened become its learned sign-in cookies, and the re-login finishes. With requested_at, only that re-login (409 when another replaced it).",
         "security": [
           {
             "cookieAuth": []
@@ -49675,7 +49865,7 @@
         },
         "responses": {
           "200": {
-            "description": "I'm signed in, for a site without a pack: the cookie names that appeared on it since the re-login window opened become its learned sign-in cookies, and the re-login finishes.",
+            "description": "I'm signed in, for a site without a pack: the cookie names that appeared on it since the re-login window opened become its learned sign-in cookies, and the re-login finishes. With requested_at, only that re-login (409 when another replaced it).",
             "content": {
               "application/json": {
                 "schema": {

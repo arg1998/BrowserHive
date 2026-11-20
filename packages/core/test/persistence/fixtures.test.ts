@@ -1,12 +1,15 @@
 /** @module test/persistence/fixtures.test — every shipped fixture DB upgrades to head and fingerprints like a fresh install. */
 
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, setDefaultTimeout } from 'bun:test';
 import { copyFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { SCHEMA_VERSION } from '../../src/infra/persistence/migrations/index.ts';
 import { openDatabase } from '../../src/infra/persistence/open.ts';
 import { schemaFingerprint } from './fingerprint.ts';
-import { FakeClock, FakeLogger, tempDir } from './helpers.ts';
+import { DISK_MIGRATION_TEST_MS, FakeClock, FakeLogger, tempDir } from './helpers.ts';
+
+// Each case opens a database on disk: fsync stalls on CI runners (D30 l, helpers.ts).
+setDefaultTimeout(DISK_MIGRATION_TEST_MS);
 
 const FIXTURES = join(import.meta.dir, 'fixtures');
 const fixtures = readdirSync(FIXTURES).filter((f) => /^v\d+\.db$/.test(f));

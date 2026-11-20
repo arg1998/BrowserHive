@@ -1,7 +1,7 @@
 /** @module test/persistence/templates-migration.test — schema v9 (`0009-templates`) over a v8 database: the four template tables with their frozen CHECK lists, the session's template columns (nothing backfilled), the operator-token rewrite of the 0.2.x full scope list, the minimum reader unchanged, and the repositories round-tripping every column (spec 13 §2.5, D-49). */
 
 import { Database } from 'bun:sqlite';
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, setDefaultTimeout } from 'bun:test';
 import { copyFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Scope } from '@browserhive/contracts/enums';
@@ -10,6 +10,7 @@ import { openDatabase } from '../../src/infra/persistence/open.ts';
 import { SqliteUnitOfWork } from '../../src/infra/persistence/unit-of-work.ts';
 import { isAppError } from '../../src/kernel/errors/app-error.ts';
 import {
+  DISK_MIGRATION_TEST_MS,
   FakeClock,
   FakeLogger,
   sessionRecord,
@@ -18,6 +19,9 @@ import {
   templateRecord,
   templateSiteRecord,
 } from './helpers.ts';
+
+// Each case opens a database on disk: fsync stalls on CI runners (D30 l, helpers.ts).
+setDefaultTimeout(DISK_MIGRATION_TEST_MS);
 
 const FIXTURES = join(import.meta.dir, 'fixtures');
 

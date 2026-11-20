@@ -55,7 +55,11 @@ export function SessionTitleCell({
           <span className="shrink-0 font-mono">{idSuffix(session)}</span>
         </Hint>
         <ActivityInline session={session} />
-        {browser !== null ? <span className="truncate">· {browser}</span> : null}
+        {browser !== null ? (
+          <span className="min-w-0 truncate" title={browser}>
+            · {browser}
+          </span>
+        ) : null}
         {showOwner ? <span className="truncate">· {session.owner}</span> : null}
         <CopyButton
           value={session.session_id}
@@ -188,7 +192,9 @@ export function sessionColumns(
       sortAliases: { channel: 'channel', owner: 'owner', persistence: 'persistence' },
       priority: 1,
       className:
-        'w-[14rem] min-w-[14rem] max-w-[18rem] py-1.5 @min-[44rem]:min-w-[14.5rem] @min-[56rem]:min-w-0 @min-[64rem]:w-[15rem]',
+        // From 70rem the table has room for the second line's id, browser and copy button in full
+        // (`t9s2gs2o · chrome · headed`, D33); narrower, the Last URL column needs the space.
+        'w-[14rem] min-w-[14rem] max-w-[18rem] py-1.5 @min-[44rem]:min-w-[14.5rem] @min-[56rem]:min-w-0 @min-[64rem]:w-[15rem] @min-[70rem]:w-[16.5rem] @min-[70rem]:min-w-[16.5rem] @min-[70rem]:max-w-[20rem]',
       cell: (s) => <SessionTitleCell session={s} showOwner={options.showOwner} />,
     },
     {

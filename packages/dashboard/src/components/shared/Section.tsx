@@ -91,6 +91,8 @@ export interface PanelProps {
   readonly padding?: 'default' | 'none';
   readonly className?: string;
   readonly bodyClassName?: string;
+  /** The section's own `id` (an in-page link or scroll target). */
+  readonly anchorId?: string;
 }
 
 /** Card surface with an optional header row. One hairline, never nested inside another panel. */
@@ -104,11 +106,13 @@ export function Panel({
   padding = 'default',
   className,
   bodyClassName,
+  anchorId,
 }: PanelProps) {
   const id = useId();
   const hasHeader = title !== undefined || actions !== undefined;
   return (
     <section
+      id={anchorId}
       aria-labelledby={title !== undefined ? id : undefined}
       className={cn(
         'flex min-w-0 flex-col rounded-xl border bg-card text-card-foreground shadow-xs dark:shadow-none',

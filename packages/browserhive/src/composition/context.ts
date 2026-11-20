@@ -48,8 +48,10 @@ import type {
   RuntimeFacts,
   SessionService,
   SitePackRegistry,
+  StrategyState,
   SystemStatusService,
   TemplateRecordingService,
+  TemplateRefusals,
   TemplateService,
   ToolDispatcher,
   VaultRedaction,
@@ -141,6 +143,8 @@ export interface DomainPart {
   readonly templates: TemplateService;
   /** Recording a template's sign-ins and the T1a host routes (spec 13 §7.1, §11.1). */
   readonly templateRecording: TemplateRecordingService;
+  /** The agents a template's access rules refused (D60). */
+  readonly templateRefusals: TemplateRefusals;
   /** Template edits, actions, versions and operations (T1b). */
   readonly templateParts: Pick<
     TemplatesParts,
@@ -150,6 +154,8 @@ export interface DomainPart {
   readonly sitePacks: SitePackRegistry;
   /** Site pack enforcement on pages and tools (spec 13 §9.3, §9.5; T3a). */
   readonly sitePackPages: SitePackPagesParts;
+  /** The strategy state a restart keeps (D53); `null` when templates or site packs are off. */
+  readonly strategyState: StrategyState | null;
   /** Random per start; `GET /health` reports it (D-37). */
   readonly instanceId: string;
   readonly preferences: PreferenceService;

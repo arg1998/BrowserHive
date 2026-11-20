@@ -9,7 +9,11 @@ import { join } from 'node:path';
 import type { HeadedWindows } from '@browserhive/contracts/enums';
 import type { CDPSession, Page } from 'patchright';
 import { evaluateMainWorld } from '../../src/infra/browsers/evaluate.ts';
-import { RESTORE_POLL_MS, RESTORE_QUIET_MS } from '../../src/infra/browsers/headed-windows.ts';
+import {
+  LATE_RESTORE_MS,
+  RESTORE_POLL_MS,
+  RESTORE_QUIET_MS,
+} from '../../src/infra/browsers/headed-windows.ts';
 import { PlaywrightBrowserDriver } from '../../src/infra/browsers/playwright-browser-driver.ts';
 import { createSystemClock } from '../../src/infra/clock/system-clock.ts';
 import { createCollectingLogger } from '../../src/infra/logging/collecting-logger.ts';
@@ -56,7 +60,17 @@ function operatorWindow(): { readonly id: string; close(): void } {
     child.kill();
     throw new Error('xmessage/xdotool unavailable on the headed-windows leg');
   }
-  spawnSync('xdotool', ['windowactivate', '--sync', id], { timeout: 10_000 });
+  // The window manager may still be starting (CI starts openbox right before the suite, D30 n):
+  // activate until the window really holds the focus, rather than once.
+  const deadline = Date.now() + 10_000;
+  while (focusedWindow() !== id) {
+    if (Date.now() > deadline) {
+      child.kill();
+      throw new Error(`the operator window ${id} never got the focus (${focusedWindow()})`);
+    }
+    spawnSync('xdotool', ['windowactivate', '--sync', id], { timeout: 2_000 });
+    if (focusedWindow() !== id) Bun.sleepSync(50);
+  }
   return { id, close: () => child.kill() };
 }
 
@@ -244,10 +258,21 @@ describe.skipIf(!WM)('headed windows kept minimized (headedWindows=minimized, D-
       await s.page.goto(sites?.url('site-a.test') ?? '');
       const around = s.view.aroundAction?.bind(s.view);
       if (around === undefined) throw new Error('no aroundAction');
+      // Chromium restores the window a moment after the press or the resize returns, so the read
+      // at the end of the call can still say minimized; the keeper's second looks
+      // (LATE_RESTORE_MS) minimize it again, which is what the call guarantees (D30 n: measured
+      // under openbox, 1 click in 12 read normal right after the call).
+      const minimizedAgain = () =>
+        eventually(
+          () => s.windows.stateOf(s.page),
+          (v) => v === 'minimized',
+          Math.max(...LATE_RESTORE_MS) + 700,
+          'the window minimized again',
+        );
       await around(() => s.page.click('#site'));
-      expect(await s.windows.stateOf(s.page)).toBe('minimized');
+      await minimizedAgain();
       await around(() => s.page.setViewportSize({ width: 700, height: 500 }));
-      expect(await s.windows.stateOf(s.page)).toBe('minimized');
+      await minimizedAgain();
       expect(s.page.viewportSize()).toEqual({ width: 700, height: 500 });
     });
   }

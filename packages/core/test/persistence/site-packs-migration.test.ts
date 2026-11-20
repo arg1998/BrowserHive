@@ -1,14 +1,17 @@
 /** @module test/persistence/site-packs-migration.test — schema v10 (`0010-site-packs`) over a v9 database (spec 13 §9.9, §17 T3a): the `operator_requests` rebuild keeps every row, column and index, the CHECK grows `security_intercept`, `template_id` round-trips, `meta.min_reader_version` becomes 10, v1's DDL is unchanged, and an older binary refuses the upgraded database naming the pre-upgrade backup. */
 
 import { Database } from 'bun:sqlite';
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, setDefaultTimeout } from 'bun:test';
 import { copyFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { MIGRATIONS, SCHEMA_VERSION } from '../../src/infra/persistence/migrations/index.ts';
 import { type DatabaseHandle, openDatabase } from '../../src/infra/persistence/open.ts';
 import { SqliteUnitOfWork } from '../../src/infra/persistence/unit-of-work.ts';
 import { isAppError } from '../../src/kernel/errors/app-error.ts';
-import { FakeClock, FakeLogger, TEMPLATE_ID, tempDir } from './helpers.ts';
+import { DISK_MIGRATION_TEST_MS, FakeClock, FakeLogger, TEMPLATE_ID, tempDir } from './helpers.ts';
+
+// Each case opens a database on disk: fsync stalls on CI runners (D30 l, helpers.ts).
+setDefaultTimeout(DISK_MIGRATION_TEST_MS);
 
 const FIXTURES = join(import.meta.dir, 'fixtures');
 const V9_COLUMNS =

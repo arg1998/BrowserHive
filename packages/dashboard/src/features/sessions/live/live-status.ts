@@ -123,10 +123,16 @@ export function streamStats(
   return rows;
 }
 
+/** Request kinds whose `takeover` mode opens the input gate (the server's `ATTENTION_QUEUE_KINDS`). */
+const TAKEOVER_KINDS: ReadonlySet<OperatorRequestRow['kind']> = new Set([
+  'attention',
+  'security_intercept',
+]);
+
 /**
  * The open takeover request that lets the operator drive the browser, or `null`. The server's input
- * gate requires a *pending* attention request with `mode === 'takeover'`; `notify`
- * requests and `session.counts.attention_open` are not enough.
+ * gate requires a *pending* attention request or site check (`security_intercept`, spec 13 §9.5)
+ * with `mode === 'takeover'`; `notify` requests and `session.counts.attention_open` are not enough.
  */
 export function takeoverRequest(
   session: Pick<SessionSummary, 'live'>,
@@ -136,7 +142,9 @@ export function takeoverRequest(
   return (
     pending.find(
       (request) =>
-        request.kind === 'attention' && request.status === 'pending' && request.mode === 'takeover',
+        TAKEOVER_KINDS.has(request.kind) &&
+        request.status === 'pending' &&
+        request.mode === 'takeover',
     ) ?? null
   );
 }

@@ -1,6 +1,7 @@
 /** @module interface/http/routes/template-health — template health and re-login (spec 13 §8, §11.1, PR T2): **Check now**, the probe history, re-login by window or vault, **I'm signed in**, **Show window**, **Let agents continue** and the vault link for auto-relogin. */
 
 import {
+  CancelReloginQuery,
   ConfirmReloginRequest,
   ContinueAgentsResponse,
   ProbeTemplateRequest,
@@ -99,7 +100,7 @@ export const TEMPLATE_HEALTH_ROUTES = [
     operationId: 'confirmTemplateRelogin',
     tags,
     summary:
-      "I'm signed in, for a site without a pack: the cookie names that appeared on it since the re-login window opened become its learned sign-in cookies, and the re-login finishes.",
+      "I'm signed in, for a site without a pack: the cookie names that appeared on it since the re-login window opened become its learned sign-in cookies, and the re-login finishes. With requested_at, only that re-login (409 when another replaced it).",
     request: { params: TemplateIdParams, body: ConfirmReloginRequest },
     responses: { 200: ReloginResponse },
     errors: ['TEMPLATE_NOT_FOUND', 'VALIDATION_FAILED', 'CONFLICT'],
@@ -110,6 +111,7 @@ export const TEMPLATE_HEALTH_ROUTES = [
           input.params.template_id,
           input.body.site_id,
           requirePrincipal(principal).subject,
+          input.body.requested_at,
         ),
       );
     },
@@ -117,8 +119,9 @@ export const TEMPLATE_HEALTH_ROUTES = [
   defineRoute({
     operationId: 'cancelTemplateRelogin',
     tags,
-    summary: 'Cancel the queued or open re-login: its window closes and agents continue.',
-    request: { params: TemplateIdParams },
+    summary:
+      'Cancel the queued or open re-login: its window closes and agents continue. With requested_at, only that re-login (409 when another replaced it).',
+    request: { params: TemplateIdParams, query: CancelReloginQuery },
     responses: { 200: ReloginResponse },
     errors: ['TEMPLATE_NOT_FOUND', 'CONFLICT'],
     async handler({ input, principal, services }) {
@@ -127,6 +130,7 @@ export const TEMPLATE_HEALTH_ROUTES = [
         await services.templateHealth.cancelRelogin(
           input.params.template_id,
           requirePrincipal(principal).subject,
+          input.query.requested_at,
         ),
       );
     },

@@ -93,17 +93,36 @@ function pageOf(session: Session): Page {
   return page;
 }
 
+/**
+ * Resolves once the browser's cookie jar holds `sid` with `value` (`null`: no `sid`). A page's
+ * `document.cookie` write reaches the jar asynchronously (the renderer posts it to the network
+ * service), so a capture right after the write can miss it; measured: 2 in 300 deletions still
+ * visible to `context.cookies()` straight after the write (D30 c).
+ */
+async function jarHas(page: Page, value: string | null): Promise<void> {
+  const deadline = Date.now() + 5_000;
+  for (;;) {
+    const sid = (await page.context().cookies('https://site-a.test')).find((c) => c.name === 'sid');
+    if ((sid?.value ?? null) === value) return;
+    if (Date.now() > deadline) throw new Error(`the jar never showed sid=${String(value)}`);
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+}
+
+/** Sets (or, with `null`, removes) the `sid` cookie from the page, as a site's script would. */
+async function setSid(page: Page, value: string | null): Promise<void> {
+  await page.evaluate((v) => {
+    // biome-ignore lint/suspicious/noDocumentCookie: the site's own script sets its sign-in cookie
+    document.cookie = `sid=${v ?? ''}; Max-Age=${v === null ? 0 : 86400}; Path=/; Secure; SameSite=Lax`;
+  }, value);
+  await jarHas(page, value);
+}
+
 /** Signs in on site-a: a `sid` cookie and a localStorage token, as a site's own scripts would. */
 async function signIn(page: Page, sid: string): Promise<void> {
   await page.goto('https://site-a.test/landing');
-  await page.evaluate(
-    ([value, token]) => {
-      // biome-ignore lint/suspicious/noDocumentCookie: the site's own script sets its sign-in cookie
-      document.cookie = `sid=${value}; Max-Age=86400; Path=/; Secure; SameSite=Lax`;
-      localStorage.setItem('auth', token);
-    },
-    [sid, LOCAL_TOKEN] as const,
-  );
+  await page.evaluate((token) => localStorage.setItem('auth', token), LOCAL_TOKEN);
+  await setSid(page, sid);
 }
 
 async function storage(page: Page): Promise<{ cookie: string; token: string | null }> {
@@ -175,10 +194,7 @@ for (const stealth of STEALTH_LEGS) {
       await signIn(pageOf(alpha), 'value-one-00000000000');
       expect(await state.saveVersion(id, { reason: 'recording', by: 'operator' })).toBe(1);
       // The site rolls its cookie: same name, new value.
-      await pageOf(alpha).evaluate(() => {
-        // biome-ignore lint/suspicious/noDocumentCookie: the site's own script sets its sign-in cookie
-        document.cookie = 'sid=value-two-00000000000; Max-Age=86400; Path=/; Secure; SameSite=Lax';
-      });
+      await setSid(pageOf(alpha), 'value-two-00000000000');
       expect(await state.checkpoint(id)).toEqual({ written: true, version: null });
       // A new browser process that never visits the site: the checkpoint carries its storage.
       await w.supervisor.stopHost(id, 'test restart');
@@ -190,11 +206,8 @@ for (const stealth of STEALTH_LEGS) {
       ).toContainEqual({ name: 'auth', value: LOCAL_TOKEN });
       // The sign-in cookie disappears: a version records the change.
       await pageOf(bravo).goto('https://site-a.test/landing');
-      await pageOf(bravo).evaluate(() => {
-        // biome-ignore lint/suspicious/noDocumentCookie: the site's own script sets its sign-in cookie
-        document.cookie = 'sid=; Max-Age=0; Path=/; Secure; SameSite=Lax';
-        localStorage.removeItem('auth');
-      });
+      await pageOf(bravo).evaluate(() => localStorage.removeItem('auth'));
+      await setSid(pageOf(bravo), null);
       expect(await state.checkpoint(id)).toEqual({ written: true, version: 2 });
       expect((await repos.templateVersions.get(id, 2))?.reason).toBe('signin_change');
       // Restore version 1 as an operation: the session closes, the sign-in comes back.

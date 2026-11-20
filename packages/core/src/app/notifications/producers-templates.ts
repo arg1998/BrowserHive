@@ -19,6 +19,8 @@ export function hostThread(templateId: string): string {
   return `template-host:${templateId}`;
 }
 
+/** The kinds of a provider's sign-in thread. */
+const SIGNIN_KINDS = ['template.signed_out', 'template.challenged'] as const;
 const LABEL_MAX = 40;
 const TITLE_MAX = 120;
 
@@ -69,11 +71,30 @@ export function signinDraft(payload: DomainEvents['template.health']): Notificat
       fallback: { label: 'Open template', path },
     });
   }
+  // A session's challenge (spec 13 §8.6, D45): with a takeover request open on it the operator can
+  // take over its page; a `notify` challenge opened none, so the session can only be watched
+  // (review #93 M1).
+  const session = signedOut ? undefined : t.session_id;
+  const takeover = session !== undefined && t.session_takeover === true;
+  if (session !== undefined) {
+    const live = `/sessions/${encodeURIComponent(session)}?live=1`;
+    actions.push(
+      takeover
+        ? {
+            kind: 'open',
+            id: 'take-over',
+            label: 'Take over',
+            style: 'primary',
+            path: `${live}&takeover=1`,
+          }
+        : { kind: 'open', id: 'watch-live', label: 'Watch live', style: 'default', path: live },
+    );
+  }
   actions.push({
     kind: 'open',
     id: 'open-template',
     label: 'Open template',
-    style: signedOut ? 'default' : 'primary',
+    style: signedOut || takeover ? 'default' : 'primary',
     path,
   });
   return {
@@ -84,11 +105,11 @@ export function signinDraft(payload: DomainEvents['template.health']): Notificat
     thread: providerThread(id, t.provider),
     title,
     body: summary,
-    sessionId: null,
+    sessionId: session ?? null,
     target: path,
     sourceEventId: null,
     dedupKey: `tpl-${t.to}:${id}:${site}:${t.at}`,
-    once: { kinds: ['template.signed_out', 'template.challenged'] },
+    once: { kinds: SIGNIN_KINDS },
     content: (): MessageContent => ({
       blocks: [
         {
@@ -105,7 +126,10 @@ export function signinDraft(payload: DomainEvents['template.health']): Notificat
         },
       ],
       actions,
-      entities: entities(id, t.template.name, site),
+      entities: {
+        ...entities(id, t.template.name, site),
+        ...(session !== undefined && { session_id: session }),
+      },
     }),
   };
 }
@@ -116,13 +140,46 @@ export function signinRevision(payload: DomainEvents['template.health']): Thread
   if (t === undefined || t.to !== 'signed_in' || !t.provider_signed_in) return null;
   return {
     thread: providerThread(payload.template_id, t.provider),
-    kinds: ['template.signed_out', 'template.challenged'],
+    kinds: SIGNIN_KINDS,
     dedupKey: `tpl-in:${payload.template_id}:${t.provider}:${t.at}`,
     change: {
       state: 'resolved',
       summary: `Signed in again: ${providerText(t)}.`,
       fields: [{ label: 'Signed in', value: [time(t.at)] }],
     },
+  };
+}
+
+/**
+ * `template.removed`: every sign-out and challenge thread of the template goes `final` (spec 13
+ * §8.6, D34); nothing can sign it in again.
+ */
+export function templateGoneRevision(payload: DomainEvents['template.removed']): ThreadRevision {
+  return {
+    thread: providerThread(payload.template_id, ''),
+    prefix: { except: [] },
+    kinds: SIGNIN_KINDS,
+    dedupKey: `tpl-gone:${payload.template_id}`,
+    change: { state: 'final', summary: 'The template was deleted.' },
+  };
+}
+
+/**
+ * `template.changed` after a site's removal: the sign-out and challenge thread of its identity
+ * provider goes `final` when no site left uses that provider (spec 13 §8.6, D34). A pack's provider
+ * changing for a site that stays closes nothing (review #93 L3).
+ */
+export function sitesGoneRevision(
+  payload: DomainEvents['template.changed'],
+): ThreadRevision | null {
+  const removed = payload.site_removed;
+  if (removed === undefined || removed.providers.includes(removed.provider)) return null;
+  const id = payload.template.template_id;
+  return {
+    thread: providerThread(id, removed.provider),
+    kinds: SIGNIN_KINDS,
+    dedupKey: `tpl-site-gone:${id}:${removed.provider}:${removed.at}`,
+    change: { state: 'final', summary: 'The site is no longer part of this template.' },
   };
 }
 

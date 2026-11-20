@@ -8,7 +8,11 @@ import {
   tid,
 } from '../../../../test/fixtures/templates.ts';
 import { expectNoA11yViolations } from '../../../../test/helpers/axe.ts';
-import { problem, renderPage } from '../../../../test/helpers/page-harness.tsx';
+import {
+  problem,
+  type RecordedRequest,
+  renderPage,
+} from '../../../../test/helpers/page-harness.tsx';
 import { act, fireEvent, screen, waitFor, within } from '../../../../test/helpers/render.tsx';
 import { templatePageSearch } from '../search.ts';
 import { TemplatePage } from './TemplatePage.tsx';
@@ -146,7 +150,10 @@ describe('Done when the cookies were already there (M-5)', () => {
     await click(within(progress).getByRole('button', { name: 'Done: indeed.com' }));
     await waitFor(() => {
       const call = view.requests.find((r) => r.path.endsWith('/relogin/confirm'));
-      expect(call?.body).toEqual({ site_id: 'indeed.com' });
+      expect(call?.body).toEqual({
+        site_id: 'indeed.com',
+        requested_at: reloginView().requested_at,
+      });
     });
   });
 });
@@ -175,7 +182,9 @@ describe('refusals, focus and the banners', () => {
     mount({
       [`GET /templates/${ID}`]: () =>
         detailWith(reloginView(cancelled ? { state: 'cancelled', agents_paused: false } : {})),
-      [`DELETE /templates/${ID}/relogin`]: () => {
+      [`DELETE /templates/${ID}/relogin`]: (request: RecordedRequest) => {
+        // Only the re-login this tab shows (review #81 L-2).
+        expect(request.query.get('requested_at')).toBe(String(reloginView().requested_at));
         cancelled = true;
         return { session_id: null, relogin: reloginView({ state: 'cancelled' }) };
       },

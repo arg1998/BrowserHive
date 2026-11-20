@@ -37,6 +37,46 @@ async function click(element: HTMLElement) {
   });
 }
 
+describe('Sites tab: a check cut short (review #81 L-4)', () => {
+  it('Check all now says it stopped after 2 minutes, with what it checked', async () => {
+    mount({
+      [`GET /templates/${ID}`]: templateDetail(),
+      [`POST /templates/${ID}/probe`]: {
+        cut_short: true,
+        results: [
+          {
+            site_id: 'linkedin.com',
+            outcome: 'signed_in',
+            reason: 'learned_cookies',
+            duration_ms: 9,
+          },
+        ],
+      },
+    });
+    await click(await screen.findByRole('button', { name: 'Check all now' }));
+    expect(
+      (await screen.findAllByText('Checked 1 site, then stopped after 2 minutes')).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getAllByText(/weren’t checked; their last result stands/).length).toBeGreaterThan(
+      0,
+    );
+  });
+
+  it('Check now on a site the cap stopped before says so', async () => {
+    mount({
+      [`GET /templates/${ID}`]: templateDetail(),
+      [`POST /templates/${ID}/probe`]: { cut_short: true, results: [] },
+    });
+    const card = (await screen.findByRole('heading', { level: 2, name: 'indeed.com' })).closest(
+      'section',
+    ) as HTMLElement;
+    await click(within(card).getByRole('button', { name: 'Check now: indeed.com' }));
+    expect(
+      (await screen.findAllByText('indeed.com: check stopped after 2 minutes')).length,
+    ).toBeGreaterThan(0);
+  });
+});
+
 describe('Sites tab: health', () => {
   it('shows each site’s reason and last check, and Check now probes that site; axe clean', async () => {
     const view = mount({
@@ -44,6 +84,7 @@ describe('Sites tab: health', () => {
         sites: [signedInSite('linkedin.com'), signedOutSite('indeed.com')],
       }),
       [`POST /templates/${ID}/probe`]: {
+        cut_short: false,
         results: [
           {
             site_id: 'indeed.com',
@@ -72,6 +113,7 @@ describe('Sites tab: health', () => {
     const view = mount({
       [`GET /templates/${ID}`]: templateDetail(),
       [`POST /templates/${ID}/probe`]: {
+        cut_short: false,
         results: [
           {
             site_id: 'linkedin.com',
@@ -128,6 +170,7 @@ describe('Sites tab: health', () => {
     await expectNoA11yViolations(view.container, AXE);
     await act(async () => {
       release({
+        cut_short: false,
         results: [
           {
             site_id: 'indeed.com',
@@ -190,6 +233,7 @@ describe('Sites tab: health', () => {
         ],
       }),
       [`POST /templates/${ID}/probe`]: {
+        cut_short: false,
         results: [
           {
             site_id: 'indeed.com',

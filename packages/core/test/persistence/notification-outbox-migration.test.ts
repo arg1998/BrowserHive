@@ -1,14 +1,17 @@
 /** @module test/persistence/notification-outbox-migration.test — schema v5 (`0005-notification-outbox`) over a v4 database: the backfill from facts only, rows an older reader writes, the CHECKs, the delivery idempotency key, the cascades, and `purge` inventorying an older database (03 §7, §9; D-32, D-34). */
 
 import { Database } from 'bun:sqlite';
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, setDefaultTimeout } from 'bun:test';
 import { copyFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { SqliteMaintenanceService } from '../../src/infra/persistence/maintenance.ts';
 import { SCHEMA_VERSION } from '../../src/infra/persistence/migrations/index.ts';
 import { openDatabase } from '../../src/infra/persistence/open.ts';
 import { SqliteUnitOfWork } from '../../src/infra/persistence/unit-of-work.ts';
-import { FakeClock, FakeLogger, tempDir } from './helpers.ts';
+import { DISK_MIGRATION_TEST_MS, FakeClock, FakeLogger, tempDir } from './helpers.ts';
+
+// Each case opens a database on disk: fsync stalls on CI runners (D30 l, helpers.ts).
+setDefaultTimeout(DISK_MIGRATION_TEST_MS);
 
 const FIXTURES = join(import.meta.dir, 'fixtures');
 

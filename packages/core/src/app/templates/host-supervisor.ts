@@ -81,6 +81,7 @@ export class TemplateHostSupervisor implements TemplateRuntime {
       logger: this.log,
       ...(deps.sitePacks !== undefined && { lookup: deps.sitePacks }),
       ...(deps.random !== undefined && { random: deps.random }),
+      ...(deps.strategyState !== undefined && { state: deps.strategyState }),
     });
     deps.sessions.setHostSlots(() => this.slots());
     this.identity = new IdentityObserver({

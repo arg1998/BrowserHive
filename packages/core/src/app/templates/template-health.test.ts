@@ -360,6 +360,20 @@ describe('serialization and record()', () => {
     expect(changed).toEqual([ID]);
   });
 
+  it("record() of a session's challenge names the session in the transition (D45)", async () => {
+    const health = service();
+    const verdict = { outcome: 'challenged', reason: 'challenge:captcha', finalUrl: null } as const;
+    await health.record(templateRecord(), 'site-b.test', verdict, 'attention', {
+      id: 'demo-00000001',
+      takeover: true,
+    });
+    expect(payloads('template.health')[0]?.transition).toMatchObject({
+      to: 'challenged',
+      session_id: 'demo-00000001',
+      session_takeover: true,
+    });
+  });
+
   it('record() of a removed site writes nothing', async () => {
     await service().record(
       templateRecord(),
