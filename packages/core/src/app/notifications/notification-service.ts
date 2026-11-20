@@ -52,6 +52,7 @@ import {
   type SettledRequestFacts,
   type ThreadRevision,
 } from './producers.ts';
+import { writeConfirmCaughtUp } from './producers-site-packs.ts';
 
 /** Days a read or dismissed notification is kept (spec 03 §7.1). */
 export const NOTIFICATION_SEEN_DAYS = 30;
@@ -63,6 +64,8 @@ export const DEDUP_WINDOW = 2000;
 const BULK_EVENT_LIMIT = 500;
 /** Kinds whose notification follows an operator request (the startup catch-up). */
 const RECONCILED_KINDS = ['attention.requested', 'vault.confirm'] as const;
+/** Kinds whose open thread resolves at startup once its request is settled (D46). */
+const WRITE_CONFIRM_KINDS = ['site_pack.write_confirm'] as const;
 /** The in-app channel needs no absolute links. */
 const INBOX_LINKS: LinkBuilder = { local: true, url: (path) => path };
 
@@ -359,6 +362,14 @@ export class NotificationService {
       });
       if (revision !== null) revised += (await this.revise(revision)).length;
     }
+    // Write confirmations (D46): their thread resolves once its request is no longer pending.
+    for (const row of await this.deps.repo.listUnsettled(WRITE_CONFIRM_KINDS, BULK_EVENT_LIMIT)) {
+      if (row.sourceEventId === null) continue;
+      const request = await requests.get(row.sourceEventId);
+      if (request?.status === 'pending') continue;
+      const revision = writeConfirmCaughtUp(row.thread, row.sourceEventId);
+      revised += (await this.revise(revision)).length;
+    }
     if (revised > 0) this.log.info('notifications caught up', { revised });
     return revised;
   }
@@ -544,6 +555,7 @@ export class NotificationService {
   private async revise(revision: ThreadRevision): Promise<readonly Notification[]> {
     if (this.seen.has(revision.dedupKey)) return [];
     this.remember(revision.dedupKey);
+    if (revision.prefix !== undefined) return this.reviseUnder(revision, revision.prefix.except);
     const out: Notification[] = [];
     let primary = true;
     for (const principalId of (this.deps.recipients ?? (() => [null]))()) {
@@ -582,6 +594,29 @@ export class NotificationService {
       await this.inbox('edit', dto, message ?? transientMessage(updated));
       this.kick(jobs);
       out.push(dto);
+    }
+    return out;
+  }
+
+  /**
+   * A prefix revision (D34): every thread under `revision.thread` with an open row of its kinds,
+   * except the kept ones, is revised on its own.
+   */
+  private async reviseUnder(
+    revision: ThreadRevision,
+    except: readonly string[],
+  ): Promise<readonly Notification[]> {
+    const keep = new Set(except);
+    const threads = new Set<string>();
+    for (const row of await this.deps.repo.listUnsettled(revision.kinds ?? [], BULK_EVENT_LIMIT)) {
+      if (row.thread.startsWith(revision.thread) && !keep.has(row.thread)) threads.add(row.thread);
+    }
+    const { prefix: _prefix, ...exact } = revision;
+    const out: Notification[] = [];
+    for (const thread of threads) {
+      out.push(
+        ...(await this.revise({ ...exact, thread, dedupKey: `${revision.dedupKey}|${thread}` })),
+      );
     }
     return out;
   }

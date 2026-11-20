@@ -156,19 +156,21 @@ export class TemplateHealthService {
 
   /**
    * Records a sign-in state BrowserHive learned outside a probe (a re-login that signed the site in)
-   * as a probe row with its trigger, and applies it like one.
+   * as a probe row with its trigger, and applies it like one. `sessionId` names the agent session
+   * that met a challenge (its notification links to that session's takeover, spec 13 §8.6).
    */
   async record(
     template: TemplateRecord,
     siteId: string,
     verdict: ProbeVerdict,
     trigger: TemplateProbeTrigger,
+    sessionId?: string,
   ): Promise<void> {
     // On the template's probe chain, so it never interleaves with a probe's read-modify-write.
     const id = template.templateId;
     const run = (this.#tails.get(id) ?? Promise.resolve())
       .catch(() => undefined)
-      .then(() => this.#apply(template, siteId, verdict, trigger, 0));
+      .then(() => this.#apply(template, siteId, verdict, trigger, 0, sessionId));
     this.#tails.set(id, run);
     try {
       await run;
@@ -260,6 +262,7 @@ export class TemplateHealthService {
     verdict: ProbeVerdict,
     trigger: TemplateProbeTrigger,
     durationMs: number,
+    sessionId?: string,
   ): Promise<void> {
     const { repos, clock, bus } = this.#deps;
     const now = clock.now();
@@ -301,7 +304,9 @@ export class TemplateHealthService {
       type: 'template.health',
       template_id: template.templateId,
       site: view,
-      ...(changed && { transition: this.#transition(template, site, updated, after, now) }),
+      ...(changed && {
+        transition: this.#transition(template, site, updated, after, now, sessionId),
+      }),
     });
     if (!changed) return;
     this.#log.info('site sign-in changed', {
@@ -327,6 +332,7 @@ export class TemplateHealthService {
     after: TemplateSiteRecord,
     sites: readonly TemplateSiteRecord[],
     now: number,
+    sessionId: string | undefined,
   ): SigninTransition {
     const lookup = providerLookup(this.#deps.packs ?? NO_PACKS);
     const provider = providerOf(after, lookup);
@@ -341,6 +347,7 @@ export class TemplateHealthService {
       provider_signed_in: group.length > 0 && group.every((s) => s.health.state === 'signed_in'),
       machine: this.#deps.machine,
       at: now,
+      ...(sessionId !== undefined && { session_id: sessionId }),
     };
   }
 

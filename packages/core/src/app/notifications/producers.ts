@@ -24,6 +24,8 @@ import {
   reloginFailedDraft,
   signinDraft,
   signinRevision,
+  sitesGoneRevision,
+  templateGoneRevision,
 } from './producers-templates.ts';
 
 export type {
@@ -69,6 +71,8 @@ export const PRODUCED_EVENTS = [
   'template.health',
   'template.relogin',
   'template.host',
+  'template.changed',
+  'template.removed',
   'site_pack.confirm',
   'site_pack.status',
 ] as const satisfies readonly DomainEventName[];
@@ -128,6 +132,8 @@ export function draftFor(event: ProducedEvent): NotificationDraft | null {
     case 'attention.resolved':
     case 'vault.confirm.resolved':
     case 'system.recovered':
+    case 'template.changed':
+    case 'template.removed':
       return null;
     default:
       return assertNever(event);
@@ -167,6 +173,10 @@ export function revisionFor(event: ProducedEvent): ThreadRevision | null {
       return signinRevision(event.payload);
     case 'template.host':
       return hostRevision(event.payload);
+    case 'template.changed':
+      return sitesGoneRevision(event.payload);
+    case 'template.removed':
+      return templateGoneRevision(event.payload);
     case 'site_pack.status':
       return updatesRevision(event.payload);
     default:

@@ -1,5 +1,6 @@
 /** @module app/templates/template-reads — reading every template with its sites, optionally skipping rows this binary cannot read so one bad row never hides every template from agents (spec 13 §5.1). */
 
+import { providerOf } from '../../domain/templates/probe.ts';
 import { TRACKER_DOMAINS } from '../../domain/templates/sign-ins.ts';
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import type { DegradationReporter } from '../../ports/degradation-reporter.ts';
@@ -79,7 +80,8 @@ export function publishTemplateChanged(
     readonly repos: Pick<Repositories, 'templates' | 'templateSites'>;
     readonly runtime: Pick<TemplateRuntime, 'host' | 'cap'>;
     readonly bus?: EventPublisher<DomainEvents> | undefined;
-    readonly packs?: SitePackReader | undefined;
+    readonly packs?: (SitePackReader & Partial<Pick<TemplatePacks, 'providerOf'>>) | undefined;
+    readonly clock: { now(): number };
   },
   templateId: string,
   log: Logger,
@@ -90,8 +92,13 @@ export function publishTemplateChanged(
     const template = await deps.repos.templates.get(templateId);
     if (template === null) return;
     const sites = await deps.repos.templateSites.list(templateId);
+    const lookup = deps.packs?.providerOf?.bind(deps.packs) ?? (() => null);
     bus.publish('template.changed', {
       type: 'template.changed',
+      providers: {
+        ids: [...new Set(sites.map((s) => providerOf(s, lookup)))],
+        at: deps.clock.now(),
+      },
       template: toTemplateSummary(
         template,
         sites,

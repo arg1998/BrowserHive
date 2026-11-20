@@ -64,7 +64,14 @@ export interface NotificationGroup {
 
 /** A lifecycle revision of the notification that owns `thread` (spec 03 §9.1). */
 export interface ThreadRevision {
+  /** The thread, or with {@link ThreadRevision.prefix} the prefix of the threads to revise. */
   readonly thread: string;
+  /**
+   * `thread` is a prefix: the newest row of each open thread under it is revised, except the
+   * threads listed (a template's sign-out threads once their site or the template is gone, spec 13
+   * §8.6). Needs `kinds`.
+   */
+  readonly prefix?: { readonly except: readonly string[] };
   /** Revise the newest row of these kinds only (a thread several kinds share, spec 13 §8.6). */
   readonly kinds?: readonly NotificationKind[];
   readonly change: LifecycleChange;

@@ -45,6 +45,7 @@ export interface ChallengeOutcomesDeps {
       siteId: string,
       verdict: ProbeVerdict,
       trigger: TemplateProbeTrigger,
+      sessionId?: string,
     ): Promise<void>;
   } | null;
   readonly stops: Pick<TemplateSiteStops, 'stop'>;
@@ -144,6 +145,6 @@ export class ChallengeOutcomes {
       reason: challengeReason(rule.kind),
       finalUrl: pageUrl,
     };
-    await this.#deps.health()?.record(template, site.siteId, verdict, CHALLENGE_TRIGGER);
+    await this.#deps.health()?.record(template, site.siteId, verdict, CHALLENGE_TRIGGER, sessionId);
   }
 }

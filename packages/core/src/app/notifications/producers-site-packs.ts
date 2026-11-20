@@ -125,3 +125,19 @@ export function writeConfirmRevision(e: SiteConfirmEvent): ThreadRevision | null
     },
   };
 }
+
+/**
+ * Startup catch-up (D46): a write-confirmation thread still open after a restart, whose request
+ * the previous shutdown or the orphan recovery settled (no request survives a restart), resolves.
+ */
+export function writeConfirmCaughtUp(thread: string, requestId: string): ThreadRevision {
+  return {
+    thread,
+    kinds: KINDS,
+    dedupKey: `spc-res:${requestId}`,
+    change: {
+      state: 'resolved',
+      summary: 'BrowserHive restarted: no write on this site waits for approval any more.',
+    },
+  };
+}

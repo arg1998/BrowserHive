@@ -28,6 +28,7 @@ export async function markChallenged(ctx: InterceptContext, input: ChallengeInpu
         finalUrl: input.pageUrl,
       },
       'attention',
+      input.sessionId,
     );
   } catch (error) {
     ctx.log.warn('challenge not recorded', { err: serializeError(error) });
