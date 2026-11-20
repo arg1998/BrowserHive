@@ -30,6 +30,8 @@ function record(value: unknown): Json {
 class LiveSocket {
   readonly texts: Json[] = [];
   readonly frames: ScreencastFrameHeader[] = [];
+  /** For each text frame, how many binary frames had arrived before it. */
+  readonly framesBeforeText: number[] = [];
   private readonly ws: WebSocket;
   private corr = 0;
 
@@ -43,6 +45,7 @@ class LiveSocket {
       const data: unknown = event.data;
       if (typeof data === 'string') {
         this.texts.push(record(JSON.parse(data)));
+        this.framesBeforeText.push(this.frames.length);
         return;
       }
       if (data instanceof ArrayBuffer) {
@@ -263,23 +266,31 @@ describe('screencast over WS against Chromium', () => {
       );
       const ordinal = Number(record(reply['payload'])['ordinal']);
       await waitFor(async () => socket.frames.find((f) => f.ordinal === ordinal) ?? null);
-      await Bun.sleep(300);
-      const beforeNewTab = socket.frames.length;
       const metasBefore = socket.texts.length;
+      // `navigate` right after `new_tab`: the bridge moves to the new tab while its first
+      // navigation commits, the window in which DevTools refused the screencast (D30 d).
       const opened = await tool('new_tab', { session_id: sessionId });
       await tool('navigate', {
         session_id: sessionId,
         tab_id: String(opened['tab_id']),
         url: `http://127.0.0.1:${pages?.port}/blue`,
       });
-      // The old tab is static, so frames after this point can only come from the new tab.
-      await waitFor(async () => (socket.frames.length > beforeNewTab ? true : null));
-      await waitFor(async () =>
-        socket.texts.slice(metasBefore).some((t) => record(t['payload'])['type'] === 'meta')
-          ? true
-          : null,
-      );
-      expect(socket.frames.slice(beforeNewTab).every((f) => f.ordinal === ordinal)).toBe(true);
+      // The move re-sends meta (the viewer's meta is reset) and then a frame of the new tab; a
+      // `failed` stream event ends the wait at once with its message.
+      const payloads = () => socket.texts.slice(metasBefore).map((t) => record(t['payload']));
+      const metaAt = await waitFor(async () => {
+        const failed = payloads().find((p) => p['type'] === 'failed');
+        if (failed !== undefined)
+          throw new Error(`screencast failed: ${String(failed['message'])}`);
+        const at = socket.texts.findIndex(
+          (t, i) => i >= metasBefore && record(t['payload'])['type'] === 'meta',
+        );
+        return at < 0 ? null : (socket.framesBeforeText[at] ?? null);
+      });
+      // A frame after that meta: the new tab's.
+      await waitFor(async () => (socket.frames.length > metaAt ? true : null));
+      expect(payloads().filter((p) => p['type'] === 'failed')).toEqual([]);
+      expect(socket.frames.every((f) => f.ordinal === ordinal)).toBe(true);
       socket.close();
       await tool('close_session', { session_id: sessionId });
     },
