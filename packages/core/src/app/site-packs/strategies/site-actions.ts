@@ -1,4 +1,4 @@
-/** @module app/site-packs/strategies/site-actions — the before-action strategies of site packs (spec 13 §9.4, §9.6 "Before navigation and element actions"): `serialize-site`, `human-dwell`, `entry-warmup`, `humanize-input` (with `stealth-profile.humanize`) and `single-focus`, for agents' live template sessions only, scoped by the approved pack owning the page's URL and counted per template. Waits look like latency; the only refusal is `TEMPLATE_BUSY` `pace`. State is in memory, per process (lead decision 1). */
+/** @module app/site-packs/strategies/site-actions — the before-action strategies of site packs (spec 13 §9.4, §9.6 "Before navigation and element actions"): `serialize-site`, `human-dwell`, `entry-warmup`, `humanize-input` (with `stealth-profile.humanize`) and `single-focus`, for agents' live template sessions only, scoped by the approved pack owning the page's URL and counted per template. Waits look like latency; the only refusal is `TEMPLATE_BUSY` `pace`. State is in memory, per process (lead decision 1), except the `human-dwell` last actions a restart carries over (`dwellMemory`, D53). */
 
 import type { Session } from '../../../domain/session/session.ts';
 import type { SessionTemplate } from '../../../domain/session/session-template.ts';
@@ -13,7 +13,7 @@ import type { TemplateSiteRecord } from '../../../ports/persistence/index.ts';
 import type { EffectivePack, SitePackLookup } from '../../../ports/site-packs.ts';
 import { pageStrategy } from '../strategy-scope.ts';
 import { actionKindOf, URL_TARGET_TOOLS } from './action-tools.ts';
-import { SiteDwell } from './dwell.ts';
+import { type DwellMemory, SiteDwell } from './dwell.ts';
 import { EntryWarmup, warmupBudget, warmupPlan } from './entry-warmup.ts';
 import { templatePaced } from './pace-busy.ts';
 import { SingleFocus } from './single-focus.ts';
@@ -62,6 +62,8 @@ export interface SiteActionStrategiesDeps {
   readonly logger: Logger;
   /** Test seam: the `serialize-site` wait (production: 30 s). */
   readonly serializeWaitMs?: number;
+  /** The `human-dwell` last actions across a restart (D53); absent: in memory only. */
+  readonly dwellMemory?: DwellMemory;
 }
 
 /** The runner the dispatcher wraps tool handlers in. */
@@ -81,7 +83,7 @@ export class SiteActionStrategies {
     this.#deps = deps;
     this.#log = deps.logger.child({ module: 'site-packs.actions' });
     this.#slots = new SiteSlots(deps.clock, deps.serializeWaitMs);
-    this.#dwell = new SiteDwell(deps.random);
+    this.#dwell = new SiteDwell(deps.random, deps.dwellMemory ?? null);
     this.#warmup = new EntryWarmup(deps.clock, this.#log);
     const focus = deps.focus;
     this.#focus =

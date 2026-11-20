@@ -205,6 +205,9 @@ export async function buildTemplates(input: TemplatesInput): Promise<TemplatesPa
         bus: input.bus,
         onTemplateChanged: (id) => changed(id),
         sitePacks: () => (input.sitePacks?.enabled === true ? input.sitePacks : null),
+        ...(input.siteStrategies?.state != null && {
+          strategyState: input.siteStrategies.state,
+        }),
         ...(reader !== null && {
           // Proportional memory where the platform reports it (Linux), so the memory limit is not
           // reached by memory the browser's processes share (workload test B2).

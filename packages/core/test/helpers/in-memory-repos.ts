@@ -42,6 +42,7 @@ import {
   InMemorySitePackChangeRepository,
   InMemorySitePackStateRepository,
 } from './in-memory-site-pack-repos.ts';
+import { InMemoryStrategyStateRepository } from './in-memory-strategy-state-repo.ts';
 
 export { InMemoryNotificationRepository, InMemorySystemEventRepository };
 
@@ -360,6 +361,7 @@ export class InMemoryRepositories implements Repositories {
   readonly sitePackState = new InMemorySitePackStateRepository();
   readonly sitePackChanges = new InMemorySitePackChangeRepository();
   readonly siteGuardHits = new InMemorySiteGuardHitRepository();
+  readonly strategyState = new InMemoryStrategyStateRepository();
   readonly templates = new InMemoryTemplateRepository(this.templateSites, this.templateVersions);
 
   constructor() {

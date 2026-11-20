@@ -11,8 +11,10 @@ import type {
 import {
   type AgentNavigations,
   CdpPageFocus,
+  persistedDwell,
   type SessionService,
   SiteActionStrategies,
+  type StrategyState,
 } from '@browserhive/core/server';
 
 /** Inputs of {@link buildSiteActions}. */
@@ -26,6 +28,8 @@ export interface SiteActionsInput {
   readonly clock: Clock;
   readonly logger: Logger;
   readonly undo: (() => void | Promise<void>)[];
+  /** The persisted strategy state (the dwell across a restart, D53); `null`: in memory. */
+  readonly state?: StrategyState | null;
 }
 
 /** Builds the runner the dispatcher wraps template sessions' tools in. */
@@ -42,6 +46,12 @@ export function buildSiteActions(input: SiteActionsInput): SiteActionStrategies 
     clock: input.clock,
     random: Math.random,
     logger,
+    ...(input.state != null && {
+      dwellMemory: persistedDwell(
+        input.state,
+        (id) => sessions.peek(id)?.template?.templateId ?? null,
+      ),
+    }),
   });
   const offClosed = input.bus.subscribe('session.closed', ({ payload }) =>
     strategies.sessionClosed(payload.session_id),

@@ -133,6 +133,15 @@ export async function seedFixture(uow: SqliteUnitOfWork): Promise<void> {
         addedAt: at + 1,
       }),
     );
+    // v12: a `launch-spacing` turn survives the upgrade (D53).
+    await r.strategyState.put({
+      templateId: TEMPLATE_ID,
+      strategy: 'launch-spacing',
+      packId: '',
+      scopeKey: '',
+      stateJson: JSON.stringify({ next_at: at + 10_000 }),
+      updatedAt: at,
+    });
     await r.templateProbes.insert({
       seq: 0,
       templateId: TEMPLATE_ID,

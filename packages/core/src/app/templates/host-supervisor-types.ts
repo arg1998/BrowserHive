@@ -15,6 +15,7 @@ import type { SitePackLookup } from '../../ports/site-packs.ts';
 import type { TemplateHostLauncher } from '../../ports/template-host.ts';
 import type { DomainEvents } from '../events/catalog.ts';
 import type { SessionService } from '../sessions/session-service.ts';
+import type { StrategyStateStore } from '../site-packs/strategy-state.ts';
 import type { HostSpecDeps } from './host-spec.ts';
 
 /** The slug of the per-host system maintenance session; it does not keep a host from idling. */
@@ -59,6 +60,8 @@ export interface HostSupervisorDeps {
   readonly sitePacks?: () => SitePackLookup | null;
   /** In [0, 1): the `launch-spacing` jitter (tests inject it). */
   readonly random?: () => number;
+  /** Persists the `launch-spacing` turns across a restart (D53). */
+  readonly strategyState?: StrategyStateStore;
 }
 
 /** What a launch learned from the pre-launch check (spec 13 §8.2). */

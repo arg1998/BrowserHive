@@ -12,6 +12,7 @@ import {
   SecurityInterceptService,
   type SessionService,
   SiteGuardHitsWriter,
+  type StrategyState,
   type TemplateHealthParts,
   TemplateWritePolicies,
   templateRequestGuard,
@@ -30,6 +31,8 @@ export interface SitePackEnforcementInput {
   readonly health: TemplateHealthParts | null;
   /** The registry's read side (WP-R); `null` until it is wired: only `DEFAULT_GUARDS` apply. */
   readonly lookup: SitePackLookup | null;
+  /** The persisted strategy state (pace buckets across a restart, D53); `null`: in memory. */
+  readonly state: StrategyState | null;
   readonly bus: EventBus<DomainEvents>;
   readonly ids: IdGenerator;
   readonly clock: Clock;
@@ -103,6 +106,7 @@ export function buildSitePackEnforcement(
     random: Math.random,
     bus: input.bus,
     logger: input.logger,
+    ...(input.state !== null && { state: input.state }),
   });
   input.driver.setTemplateRequestGuard(
     templateRequestGuard({

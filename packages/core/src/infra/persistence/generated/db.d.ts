@@ -523,6 +523,15 @@ export interface TemplateSites {
   write_policy: string | null;
 }
 
+export interface TemplateStrategyState {
+  pack_id: Generated<string>;
+  scope_key: Generated<string>;
+  state_json: string;
+  strategy: string;
+  template_id: string;
+  updated_at: number;
+}
+
 export interface TemplateVersions {
   created_at: number;
   created_by: string | null;
@@ -645,6 +654,7 @@ export interface DB {
   system_events: SystemEvents;
   template_probes: TemplateProbes;
   template_sites: TemplateSites;
+  template_strategy_state: TemplateStrategyState;
   template_versions: TemplateVersions;
   templates: Templates;
   tool_calls: ToolCalls;

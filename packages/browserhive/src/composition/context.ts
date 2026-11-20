@@ -48,6 +48,7 @@ import type {
   RuntimeFacts,
   SessionService,
   SitePackRegistry,
+  StrategyState,
   SystemStatusService,
   TemplateRecordingService,
   TemplateService,
@@ -150,6 +151,8 @@ export interface DomainPart {
   readonly sitePacks: SitePackRegistry;
   /** Site pack enforcement on pages and tools (spec 13 §9.3, §9.5; T3a). */
   readonly sitePackPages: SitePackPagesParts;
+  /** The strategy state a restart keeps (D53); `null` when templates or site packs are off. */
+  readonly strategyState: StrategyState | null;
   /** Random per start; `GET /health` reports it (D-37). */
   readonly instanceId: string;
   readonly preferences: PreferenceService;

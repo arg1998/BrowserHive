@@ -38,6 +38,7 @@ import type {
   SitePackChangeRepository,
   SitePackStateRepository,
 } from './site-packs.ts';
+import type { StrategyStateRepository } from './strategy-state.ts';
 import type {
   TemplateProbeRepository,
   TemplateRepository,
@@ -87,6 +88,7 @@ export interface Repositories {
   readonly sitePackState: SitePackStateRepository;
   readonly sitePackChanges: SitePackChangeRepository;
   readonly siteGuardHits: SiteGuardHitRepository;
+  readonly strategyState: StrategyStateRepository;
 }
 
 /**

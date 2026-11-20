@@ -50,7 +50,9 @@ export type { PendingUpdate, SitePackRegistryDeps } from '../app/site-packs/regi
 export { SecurityInterceptService } from '../app/site-packs/security-intercepts.ts';
 export { TemplateSiteStops } from '../app/site-packs/site-stops.ts';
 export { AgentSiteVisits } from '../app/site-packs/site-visits.ts';
+export { persistedDwell } from '../app/site-packs/strategies/dwell.ts';
 export { SiteActionStrategies } from '../app/site-packs/strategies/site-actions.ts';
+export { StrategyState } from '../app/site-packs/strategy-state.ts';
 export { SiteToolGate } from '../app/site-packs/tool-gate.ts';
 export { ToolGuardHits } from '../app/site-packs/tool-guard-hits.ts';
 export { HostFlagsWatch } from '../app/site-packs/webrtc-host-flags.ts';

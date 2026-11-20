@@ -1,4 +1,4 @@
-/** @module app/site-packs/pacer — `pace-writes` with `ramp-up` (spec 13 §9.4, lead decision 5): one token bucket per (template, pack, pace rule), refilled continuously at `limit × ramp factor` per period, shared by every session of the template. A guarded write of kind `write` whose pack selects `pace-writes` and has pace rules naming its guard is held for its token (≤ 60 s, plus 0–20 % jitter) or refused. In memory: a restart refills every bucket, and a deleted template's buckets go (`template.removed`). */
+/** @module app/site-packs/pacer — `pace-writes` with `ramp-up` (spec 13 §9.4, lead decision 5): one token bucket per (template, pack, pace rule), refilled continuously at `limit × ramp factor` per period, shared by every session of the template. A guarded write of kind `write` whose pack selects `pace-writes` and has pace rules naming its guard is held for its token (≤ 60 s, plus 0–20 % jitter) or refused. With a `state` store the buckets are written through to the database and read back after a restart, so a restart never refills a budget (D53); a deleted template's buckets go (`template.removed`). */
 
 import type { PackPaceRule } from '@browserhive/contracts/site-packs';
 import {
@@ -21,6 +21,7 @@ import type { SitePackLookup } from '../../ports/site-packs.ts';
 import type { WritePaceRequest, WritePaceVerdict, WritePacing } from '../../ports/write-pacing.ts';
 import type { DomainEvents } from '../events/catalog.ts';
 import { templateStrategies } from './strategy-scope.ts';
+import type { StrategyScope, StrategyStateStore } from './strategy-state.ts';
 
 /** Collaborators of {@link WritePacer}. */
 export interface WritePacerDeps {
@@ -36,11 +37,13 @@ export interface WritePacerDeps {
   /** `template.removed`: a deleted template's buckets go. */
   readonly bus: Pick<EventBus<DomainEvents>, 'subscribe'>;
   readonly logger: Logger;
+  /** Persists the buckets across a restart (D53); absent: in memory only (tests). */
+  readonly state?: StrategyStateStore;
 }
 
 const PASS: WritePaceVerdict = Object.freeze({ kind: 'pass' });
 
-/** The write budgets of every template, in memory. */
+/** The write budgets of every template. */
 export class WritePacer implements WritePacing {
   readonly #deps: WritePacerDeps;
   readonly #log: Logger;
@@ -72,15 +75,17 @@ export class WritePacer implements WritePacing {
     const now = clock.now();
     const entries = rules.rules.map((rule) => ({
       key: `${request.templateId}\u0000${rules.packId}\u0000${rule.id}`,
+      scope: { templateId: request.templateId, packId: rules.packId, scopeKey: rule.id },
       budget: budgetOf(rule, factor),
     }));
     const { plan, buckets } = planWrite(
-      entries.map((e) => ({ bucket: this.#buckets.get(e.key), budget: e.budget })),
+      entries.map((e) => ({ bucket: this.#bucket(e.key, e.scope), budget: e.budget })),
       now,
     );
+    // A refusal took no token: nothing to save.
     entries.forEach((e, i) => {
       const bucket = buckets[i];
-      if (bucket !== undefined) this.#buckets.set(e.key, bucket);
+      if (bucket !== undefined) this.#store(e, bucket, plan.kind !== 'refuse');
     });
     switch (plan.kind) {
       case 'go':
@@ -97,9 +102,7 @@ export class WritePacer implements WritePacing {
             released = true;
             for (const e of entries) {
               const bucket = this.#buckets.get(e.key);
-              if (bucket !== undefined) {
-                this.#buckets.set(e.key, refund(bucket, e.budget, clock.now()));
-              }
+              if (bucket !== undefined) this.#store(e, refund(bucket, e.budget, clock.now()), true);
             }
           },
         };
@@ -107,6 +110,26 @@ export class WritePacer implements WritePacing {
       default:
         return assertNever(plan, 'pace plan');
     }
+  }
+
+  /** A bucket from memory, else as the last run left it (D53). */
+  #bucket(key: string, scope: StrategyScope): PaceBucket | undefined {
+    const live = this.#buckets.get(key);
+    if (live !== undefined) return live;
+    const saved = this.#deps.state?.get('pace-writes', scope);
+    return saved === undefined ? undefined : { tokens: saved.tokens, at: saved.at };
+  }
+
+  /** Keeps a bucket; `save` writes it through at once (a taken or refunded token). */
+  #store(
+    entry: { key: string; scope: StrategyScope; budget: PaceBudget },
+    bucket: PaceBucket,
+    save: boolean,
+  ): void {
+    this.#buckets.set(entry.key, bucket);
+    if (!save) return;
+    const { capacity, periodMs } = entry.budget;
+    this.#deps.state?.set('pace-writes', entry.scope, { ...bucket, capacity, periodMs }, 'now');
   }
 
   /** The pace rules governing a rule id, or `null` when the write is not paced. */

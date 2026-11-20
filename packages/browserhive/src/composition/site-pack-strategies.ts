@@ -23,6 +23,7 @@ import {
   type SessionService,
   SiteKeeper,
   type SitePackRegistry,
+  type StrategyState,
   type TemplateHealthParts,
   type TemplateHostOperations,
   type TemplateHostSupervisor,
@@ -43,6 +44,8 @@ export interface SiteStrategiesInput {
   readonly logger: Logger;
   /** Uniform in `[0, 1)` (test seam). */
   readonly random?: () => number;
+  /** The persisted strategy state, read back at boot (D53); `null` or absent: in memory only. */
+  readonly state?: StrategyState | null;
 }
 
 /** What the templates attach once their supervisor, operations and health exist. */
@@ -62,6 +65,8 @@ export interface SiteStrategies {
   /** Joins the site-pack page watcher: agent loads (keeper) and responses (device binding). */
   readonly pageWatcher: TemplatePageWatcher;
   attach(parts: SiteStrategyAttachment): void;
+  /** The persisted strategy state the admission, pacer and dwell use; `null`: in memory only. */
+  readonly state: StrategyState | null;
   readonly stop: () => void;
 }
 
@@ -99,6 +104,7 @@ export function buildSiteStrategies(input: SiteStrategiesInput): SiteStrategies 
   );
   const stops: (() => void)[] = [() => flags.stop(), () => binding.stop(), offRemoved];
   return {
+    state: input.state ?? null,
     hostFlags: (template) => flags.hostFlags(template),
     pageWatcher: {
       pageAttributed: (templateId, page, sessionId) =>

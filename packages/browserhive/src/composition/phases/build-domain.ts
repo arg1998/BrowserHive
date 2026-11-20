@@ -338,6 +338,7 @@ async function buildDomain(
         sessions,
         lookup: sitePacks,
         navigations: sitePackPages.navigations,
+        state: layer.strategies?.state ?? null,
         bus,
         clock,
         logger,
@@ -393,6 +394,7 @@ async function buildDomain(
     templateRecording: tpl.recording,
     templateParts: tpl,
     sitePackPages,
+    strategyState: layer.strategies?.state ?? null,
     instanceId,
     preferences: ops.preferences,
     recorder: ops.recorder,
@@ -419,6 +421,7 @@ async function buildDomain(
       await sessions.closeAll('shutdown', Math.max(1_000, deadlineMs - 500));
       // Template hosts close after their sessions, within what is left (spec 13 §3.2).
       await tpl.supervisor?.stopAll(Math.max(1_000, deadlineMs - 500 - (clock.now() - began)));
+      await layer.strategies?.state?.stop(); // budgets and spacings outlive the restart (D53)
       await operators.broker.shutdown();
       operators.vaultRedaction.closeAll();
       offClosed();
