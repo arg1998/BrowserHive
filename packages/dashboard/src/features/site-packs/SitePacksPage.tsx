@@ -157,7 +157,7 @@ function PacksTab({
                     kind="zero-data"
                     icon="sitePacks"
                     title="No site packs yet"
-                    description="This BrowserHive bundles none, the registry lists none yet and the local folder is empty. Press Check now, put a pack file in the local folder and press Reload local packs, or use Import…."
+                    description="This BrowserHive bundles none, the registry lists none yet and the local folder is empty. Press Check now, put a pack file in the local folder and press Reload local packs, or use Import…"
                   />
                 )
               }

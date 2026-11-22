@@ -132,7 +132,7 @@ export function PendingUpdateCard({
       heading={from === null ? `v${pending.version}` : `v${from} → v${pending.version}`}
       badge={
         <span className="flex flex-wrap items-center gap-1.5">
-          {revoked ? null : <Chip tone="accent">{from === null ? 'New' : 'Update'}</Chip>}
+          {revoked || from === null ? null : <Chip tone="accent">Update</Chip>}
           {available ? (
             <Chip tone="muted">Not downloaded</Chip>
           ) : (
