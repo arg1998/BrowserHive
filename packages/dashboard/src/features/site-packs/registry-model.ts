@@ -76,6 +76,10 @@ export function downloadBlocked(status: SitePackRegistryStatus | undefined): str
 /** A client range as words: `0.4.0` and `>=0.4.0` read "≥ 0.4.0". */
 export function clientRangeText(range: string): string {
   const r = range.trim();
+  // The server's forms (`neededClient`): "0.4.0 or later", "0.1.0 to 0.2.9".
+  const later = /^(\S+) or later$/.exec(r);
+  if (later !== null) return `≥ ${later[1]}`;
+  if (/^\S+ to \S+$/.test(r)) return r;
   if (/^\d/.test(r)) return `≥ ${r}`;
   return r.replace(/>=\s*/g, '≥ ').replace(/<=\s*/g, '≤ ').replace(/\s+/g, ' ');
 }

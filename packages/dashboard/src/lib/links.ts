@@ -60,7 +60,7 @@ export const DOCS_PAGES = {
   sitePacksFloor: { page: 'guide/site-packs', anchor: 'when-a-version-raises-the-stealth-floor' },
   sitePacksLocal: { page: 'guide/site-packs', anchor: 'local-packs' },
   /** Registry updates; the guide's "Updates" heading lands with the T4b docs (until then, the sources section). */
-  sitePacksUpdates: { page: 'guide/site-packs', anchor: 'where-packs-come-from' },
+  sitePacksUpdates: { page: 'guide/site-packs', anchor: 'updates-from-the-registry' },
   sitePacksWriting: { page: 'guide/site-packs', anchor: 'writing-a-local-pack' },
   sitePacksWritePolicies: {
     page: 'guide/site-packs',

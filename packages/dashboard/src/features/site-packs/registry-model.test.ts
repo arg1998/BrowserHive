@@ -57,6 +57,8 @@ describe('the check line', () => {
 
 describe('what the index lists for a pack', () => {
   it('reads client ranges as words', () => {
+    expect(clientRangeText('0.4.0 or later')).toBe('≥ 0.4.0');
+    expect(clientRangeText('0.1.0 to 0.2.9')).toBe('0.1.0 to 0.2.9');
     expect(clientRangeText('0.4.0')).toBe('≥ 0.4.0');
     expect(clientRangeText('>=0.4.0')).toBe('≥ 0.4.0');
     expect(clientRangeText('>=0.4.0 <=0.5.0')).toBe('≥ 0.4.0 ≤ 0.5.0');
