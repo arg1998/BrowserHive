@@ -29,6 +29,9 @@ const PASS = `pass-${Math.random().toString(36).slice(2)}-phrase`;
 const NODE = process.env['BHDEV_NODE'] ?? 'node';
 const TRUST_ROOT = join('packages', 'core', 'src', 'infra', 'site-packs', 'trust-root.ts');
 
+/** The key id a foreign signer claims (built at run time; a literal would read as a secret to gitleaks). */
+const FOREIGN_ID = 'f'.repeat(16);
+
 /** An index edit that changes nothing (the layout is only re-signed). */
 const unchanged = (_index: Record<string, unknown>): void => undefined;
 
@@ -236,7 +239,7 @@ describe('registry-build → registry-sign', () => {
       const cases: [string, string, string][] = [
         [
           'foreign',
-          doctored('foreign', live, unchanged, privateKey, '0123456789abcdef'),
+          doctored('foreign', live, unchanged, privateKey, FOREIGN_ID),
           'signed by no online key',
         ],
         [
@@ -350,7 +353,7 @@ describe('registry-build → registry-sign', () => {
       writeFileSync(join(broken, index.packs[0].versions[0].path), '{}');
       expect(signer(['carry', '--from', broken, '--out', join(work, 'broken-out')]).code).toBe(1);
       const { privateKey } = generateKeyPairSync('ed25519');
-      const foreign = doctored('carry-foreign', live, unchanged, privateKey, '0123456789abcdef');
+      const foreign = doctored('carry-foreign', live, unchanged, privateKey, FOREIGN_ID);
       expect(signer(['carry', '--from', foreign, '--out', join(work, 'foreign-out')]).code).toBe(1);
       // A newer keys.json in the commit (a rotation or revocation): the old layout is not carried.
       const paths = { pubDir: join(repo, 'registry', 'keys'), trustRoot: null, test: false };
