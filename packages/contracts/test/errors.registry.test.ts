@@ -175,6 +175,12 @@ const SPEC_CODES = [
   'SITE_PACED',
   // Real CORS preflights in routed browsers (spec 13 §3.8, D-66).
   'PREFLIGHTS_NOT_ENFORCED',
+  // The site-pack registry client (spec 13 §10, §12, PR T4b).
+  'SITE_PACKS_STALE',
+  'SITE_PACKS_FETCH_FAILED',
+  'SITE_PACK_NOT_LISTED',
+  'SITE_PACK_DOWNLOAD_FAILED',
+  'SITE_PACKS_REGISTRY_UNAVAILABLE',
 ] as const;
 
 describe('ERROR_REGISTRY completeness', () => {

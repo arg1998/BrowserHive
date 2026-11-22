@@ -1,4 +1,4 @@
-/** Tests of the registry client's check (spec 13 §10.3, §10.4, D69): exactly the four signed files, the floors, conditional requests that never depend on ETag semantics, every refusal leaving the state unchanged, stale and failed degradations, and the schedule. */
+/** @module app/site-packs/client/registry-client.test — Tests of the registry client's check (spec 13 §10.3, §10.4, D69): exactly the four signed files, the floors, conditional requests that never depend on ETag semantics, every refusal leaving the state unchanged, stale and failed degradations, and the schedule. */
 
 import { describe, expect, it } from 'bun:test';
 import { FakeClock } from '../../../../test/helpers/fake-clock.ts';

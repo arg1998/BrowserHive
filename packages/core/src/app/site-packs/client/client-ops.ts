@@ -11,6 +11,7 @@ import type { RegistryIndexV1, RegistryPackVersion } from '@browserhive/contract
 import type { z } from 'zod';
 import { autoApplyHold } from '../../../domain/site-packs/auto-update.ts';
 import { bestUsable } from '../../../domain/site-packs/registry-listing.ts';
+import { serializeError } from '../../../kernel/errors/serialize-error.ts';
 import type { Logger } from '../../../ports/logger.ts';
 import type { SitePackChangeRecord } from '../../../ports/persistence/site-packs.ts';
 import type { SkippedPackVersion, SourcePackVersion } from '../../../ports/site-packs.ts';
@@ -166,7 +167,7 @@ async function autoUpdate(ctx: ClientContext): Promise<void> {
         decided.newDomains,
       );
       if (hold !== null) {
-        ctx.log.info('auto-update waits for an operator', { packId: entry.packId, version, hold });
+        ctx.log.info('auto-update waits', { packId: entry.packId, version, hold });
         continue;
       }
       await registry.apply(entry.packId, version, SYSTEM, { auto: true });
@@ -175,7 +176,7 @@ async function autoUpdate(ctx: ClientContext): Promise<void> {
       ctx.log.warn('auto-update skipped', {
         packId: entry.packId,
         version,
-        detail: err instanceof Error ? err.message : String(err),
+        err: serializeError(err),
       });
     }
   }
@@ -370,12 +371,7 @@ function errorDetails(err: unknown): { reason: string; detail: string } {
       : {};
   return {
     reason: typeof details['reason'] === 'string' ? details['reason'] : 'failed',
-    detail:
-      typeof details['detail'] === 'string'
-        ? details['detail']
-        : err instanceof Error
-          ? err.message
-          : String(err),
+    detail: typeof details['detail'] === 'string' ? details['detail'] : serializeError(err).message,
   };
 }
 
@@ -519,7 +515,7 @@ export async function importLocalLayouts(
       }
       await importFiles(ctx, files, { origin: 'local', name: dir });
     } catch (err) {
-      skips.push(layoutSkip(dir, err instanceof Error ? err.message : String(err)));
+      skips.push(layoutSkip(dir, serializeError(err).message));
     }
   }
   return skips;

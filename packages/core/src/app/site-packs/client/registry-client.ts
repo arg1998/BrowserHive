@@ -14,6 +14,7 @@ import {
   REGISTRY_SIG_MAX_BYTES,
 } from '@browserhive/contracts/site-packs';
 import type { z } from 'zod';
+import { serializeError } from '../../../kernel/errors/serialize-error.ts';
 import type { Logger } from '../../../ports/logger.ts';
 import type { SitePackProvenanceRecord } from '../../../ports/persistence/site-packs.ts';
 import type { HeldLayoutFile, RegistryFetchResult } from '../../../ports/site-pack-registry.ts';
@@ -485,7 +486,7 @@ export class SitePackRegistryClient implements RemoteFacts {
     const floors = { keysVersion: snap.keysVersion, indexVersion: snap.indexVersion };
     await writeFloors(this.#deps.meta, floors);
     this.#floors = floors;
-    this.#log.info('registry floors from the release snapshot', { ...floors });
+    this.#log.info('floors from the snapshot', { ...floors });
   }
 
   // --- downloads, imports, export (client-ops.ts) ---------------------------------------------
@@ -551,9 +552,7 @@ export class SitePackRegistryClient implements RemoteFacts {
     try {
       await this.check();
     } catch (err) {
-      this.#log.warn('update check failed', {
-        detail: err instanceof Error ? err.message : String(err),
-      });
+      this.#log.warn('update check failed', { err: serializeError(err) });
     }
     this.#scheduleNext(this.#nextDelay());
   }

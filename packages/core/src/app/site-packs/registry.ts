@@ -16,6 +16,7 @@ import type {
   SitePackView,
   TemplateSitePack,
 } from '@browserhive/contracts/http';
+import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import { registrableDomain } from '../../kernel/url.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type { EffectivePack, SitePackLookup, SourceCatalog } from '../../ports/site-packs.ts';
@@ -247,9 +248,7 @@ export class SitePackRegistry implements SitePackLookup {
     const layouts = this.#snapshot.local.layouts ?? [];
     if (this.#remote?.importLocalLayouts !== undefined) {
       await this.#remote.importLocalLayouts(layouts).catch((err: unknown) => {
-        this.#log.warn('local signed layouts failed', {
-          detail: err instanceof Error ? err.message : String(err),
-        });
+        this.#log.warn('local layouts failed', { err: serializeError(err) });
       });
     }
     return stats;

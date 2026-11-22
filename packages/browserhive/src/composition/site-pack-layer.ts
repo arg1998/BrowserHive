@@ -99,7 +99,7 @@ async function startClient(
     input.undo.push(() => client.stop());
     return client;
   } catch (err) {
-    input.logger.warn('site-pack registry client not started', { err: serializeError(err) });
+    input.logger.warn('registry client failed', { err: serializeError(err) });
     return null;
   }
 }

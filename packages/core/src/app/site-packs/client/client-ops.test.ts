@@ -1,4 +1,4 @@
-/** Tests of what the registry client does with a verified index (spec 13 §9.7, §10.3 step 3, §10.5, §10.6, §17 T4b acceptance): Download & review of exactly one file, Apply and Revert, swapped and oversized files refused, Download all, auto-update (tightening applied, loosening waits, the D74 cap), revocations (D52), signed imports, export then import offline, and signed layouts in the local folder. */
+/** @module app/site-packs/client/client-ops.test — Tests of what the registry client does with a verified index (spec 13 §9.7, §10.3 step 3, §10.5, §10.6, §17 T4b acceptance): Download & review of exactly one file, Apply and Revert, swapped and oversized files refused, Download all, auto-update (tightening applied, loosening waits, the D74 cap), revocations (D52), signed imports, export then import offline, and signed layouts in the local folder. */
 
 import { describe, expect, it } from 'bun:test';
 import type { SitePackV1Input } from '@browserhive/contracts/site-packs';

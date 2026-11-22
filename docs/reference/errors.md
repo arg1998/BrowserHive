@@ -2,7 +2,7 @@
 
 # Error reference
 
-Every error code BrowserHive can produce (146 codes), generated from `ERROR_REGISTRY` in `@browserhive/contracts/errors`. Each code has a stable anchor: `errors.md#<CODE>`, which is also the `type` URL of HTTP problem responses (`https://browserhive.ai/docs/errors#<CODE>`).
+Every error code BrowserHive can produce (151 codes), generated from `ERROR_REGISTRY` in `@browserhive/contracts/errors`. Each code has a stable anchor: `errors.md#<CODE>`, which is also the `type` URL of HTTP problem responses (`https://browserhive.ai/docs/errors#<CODE>`).
 
 ## How errors reach you
 
@@ -104,6 +104,9 @@ Returned by tools and the REST API when a request cannot be served (unknown sess
 | [`SITE_PACK_NO_LOCAL_FILE`](#SITE_PACK_NO_LOCAL_FILE) | No local pack file | 404 | never |
 | [`SITE_PACK_APPROVAL_REQUIRED`](#SITE_PACK_APPROVAL_REQUIRED) | Site pack needs review | 409 | different_args |
 | [`SITE_PACK_BELOW_FLOOR`](#SITE_PACK_BELOW_FLOOR) | Templates below the pack's stealth floor | 409 | after_operator |
+| [`SITE_PACK_NOT_LISTED`](#SITE_PACK_NOT_LISTED) | Version not in the registry index | 409 | never |
+| [`SITE_PACK_DOWNLOAD_FAILED`](#SITE_PACK_DOWNLOAD_FAILED) | Pack download failed | 502 | backoff |
+| [`SITE_PACKS_REGISTRY_UNAVAILABLE`](#SITE_PACKS_REGISTRY_UNAVAILABLE) | Registry not available | 409 | after_operator |
 
 <a id="SESSION_NOT_FOUND"></a>
 ### `SESSION_NOT_FOUND`
@@ -2010,6 +2013,83 @@ Details:
 | `templates` | `object[]` | yes | each item: keys `template_id`, `name`, `issues` |
 | `templates_text` | `string` | yes | — |
 
+<a id="SITE_PACK_NOT_LISTED"></a>
+### `SITE_PACK_NOT_LISTED`
+
+| Property | Value |
+|---|---|
+| Title | Version not in the registry index |
+| HTTP status | 409 |
+| Category | `domain` |
+| Retryable | `never` (do not retry; the request cannot succeed as sent) |
+
+Message: `Version {version} of site pack '{pack_id}' is not listed for this BrowserHive in the registry's signed index.`
+
+Hint: Press Check now, then download a version the Site packs page lists as available.
+
+Cause: Download & review fetches only a version the last verified index lists with its size and SHA-256 (spec 13 §10.3): the version is not listed, is revoked, or needs another BrowserHive (`min_client`/`max_client`).
+
+Resolution: Check for updates and pick a listed version; a version for a newer BrowserHive needs an upgrade.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `pack_id` | `string` | yes | — |
+| `version` | `integer` | yes | — |
+
+<a id="SITE_PACK_DOWNLOAD_FAILED"></a>
+### `SITE_PACK_DOWNLOAD_FAILED`
+
+| Property | Value |
+|---|---|
+| Title | Pack download failed |
+| HTTP status | 502 |
+| Category | `domain` |
+| Retryable | `backoff` (retry later with backoff) |
+
+Message: `Version {version} of site pack '{pack_id}' could not be downloaded or did not verify ({reason}): {detail}. Nothing changed.`
+
+Hint: Try again later; a file that does not match the signed index is never used.
+
+Cause: The registry did not answer, or the file's size, SHA-256, schema, refinements or client range is not the one the signed index lists (a swapped, truncated or oversized file; spec 13 §10.3 step 3).
+
+Resolution: Retry when the registry is reachable; if it persists, the mirror serves wrong files: use the default `sitePacksUrl` or import a verified export.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `pack_id` | `string` | yes | — |
+| `version` | `integer` | yes | — |
+| `reason` | `string` | yes | — |
+| `detail` | `string` | yes | — |
+
+<a id="SITE_PACKS_REGISTRY_UNAVAILABLE"></a>
+### `SITE_PACKS_REGISTRY_UNAVAILABLE`
+
+| Property | Value |
+|---|---|
+| Title | Registry not available |
+| HTTP status | 409 |
+| Category | `domain` |
+| Retryable | `after_operator` (retry after an operator acts (unlock the vault, resolve a request, change policy)) |
+
+Message: `The site-pack registry cannot be used here: {reason_text}`
+
+Hint: Import a signed export instead (browserhive sitepacks import <dir>), or turn the update check on.
+
+Cause: A download needs a fresh, verified index and permission to reach the registry: site packs are off (`sitePacks=false`), the update check is off (`sitePacksUpdateCheck=false`, so BrowserHive makes no request), this build pins no registry keys yet, no index has verified yet, or the held index expired (`SITE_PACKS_STALE`: an expired index is never used for new content).
+
+Resolution: Turn the update check on and check again, or on an air-gapped host import a signed export from a connected one.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `reason` | one of `packs_off`, `update_check_off`, `no_trust_root`, `no_index`, `stale` | yes | — |
+| `reason_text` | `string` | yes | — |
+
 ## Boot errors
 
 Stop the process before it serves anything. The CLI prints `[CODE] message` and exits with the listed exit code.
@@ -2043,6 +2123,8 @@ Stop the process before it serves anything. The CLI prints `[CODE] message` and 
 | [`TEMPLATE_SITE_BELOW_FLOOR`](#TEMPLATE_SITE_BELOW_FLOOR) | A site turned off below its pack's stealth floor | 500 | never |
 | [`SITE_PACKS_STATE_CORRUPT`](#SITE_PACKS_STATE_CORRUPT) | Site pack state unreadable | 500 | never |
 | [`SITE_PACKS_LOAD_FAILED`](#SITE_PACKS_LOAD_FAILED) | Site packs not loaded | 500 | never |
+| [`SITE_PACKS_STALE`](#SITE_PACKS_STALE) | Site-pack index out of date | 500 | never |
+| [`SITE_PACKS_FETCH_FAILED`](#SITE_PACKS_FETCH_FAILED) | Site-pack update check failing | 500 | backoff |
 
 <a id="ADMIN_REQUIRES_HTTP"></a>
 ### `ADMIN_REQUIRES_HTTP`
@@ -2757,6 +2839,60 @@ Details:
 | Field | Type | Required | Constraints |
 |---|---|---|---|
 | `reason` | `string` | yes | — |
+
+<a id="SITE_PACKS_STALE"></a>
+### `SITE_PACKS_STALE`
+
+| Property | Value |
+|---|---|
+| Title | Site-pack index out of date |
+| HTTP status | 500 |
+| Category | `boot` |
+| Retryable | `never` (do not retry; the request cannot succeed as sent) |
+| Exit code | 1 |
+
+Message: `The site-pack registry index (version {index_version}) expired {expired_at} and no fresh one verified; the last good index stays in force and nothing new is downloaded from it.{clock_text}`
+
+Hint: Check the registry URL and the network, then press Check now on the Site packs page (or browserhive sitepacks check).
+
+Cause: The registry re-signs its index every week with a 14-day expiry (spec 13 §10.2). Every check since the held index expired either failed or was refused, so no newer signed index is known. A registry that withholds updates (a CDN serving old files) looks the same. When the registry's `Date` header is more than an hour from this machine's clock, the message says to check the system clock: a wrong clock makes a valid index look expired or not yet issued.
+
+Resolution: Make the registry reachable (`sitePacksUrl`, proxy, firewall) or fix the system clock, then check again; on an air-gapped host import a fresh export (`browserhive sitepacks import <dir>`). Approved packs keep applying meanwhile. The record resolves when a fresh index verifies.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `index_version` | `integer` | yes | — |
+| `expired_at` | `string` | yes | — |
+| `clock_skew_ms` | `integer` | no | — |
+| `clock_text` | `string` | yes | — |
+
+<a id="SITE_PACKS_FETCH_FAILED"></a>
+### `SITE_PACKS_FETCH_FAILED`
+
+| Property | Value |
+|---|---|
+| Title | Site-pack update check failing |
+| HTTP status | 500 |
+| Category | `boot` |
+| Retryable | `backoff` (retry later with backoff) |
+| Exit code | 1 |
+
+Message: `The site-pack update check failed {failures} times in a row: {last_error}. Approved packs keep applying.`
+
+Hint: Check the registry URL (sitePacksUrl) and the network; browserhive sitepacks check retries now.
+
+Cause: Three or more consecutive update checks could not fetch the signed index, or fetched files that did not verify (a wrong or expired signature, a rolled-back or fast-forwarded version, an oversized file; spec 13 §10.3). Nothing changes on a failed check: the last good index and every approved pack stay as they were. Checks back off (1 h, 2 h, 4 h, … up to the 24 h schedule).
+
+Resolution: Fix the network or the URL; a refused file names the reason in the log and in the Site packs page's Registry card. Set `sitePacksUpdateCheck` to false on hosts that must not reach the registry. The record resolves after the next good check.
+
+Details:
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `failures` | `integer` | yes | — |
+| `last_error` | `string` | yes | — |
 
 ## Authentication errors
 

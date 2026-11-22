@@ -1,4 +1,4 @@
-/** Tests of auto-update's own limits (spec 13 §9.7, D74) and of what an index lists for this binary (§10.3 step 3). */
+/** @module domain/site-packs/auto-update.test — Tests of auto-update's own limits (spec 13 §9.7, D74) and of what an index lists for this binary (§10.3 step 3). */
 
 import { describe, expect, it } from 'bun:test';
 import type { RegistryIndexPack, SitePackV1 } from '@browserhive/contracts/site-packs';

@@ -83,6 +83,10 @@ const SPEC_KEYS = [
   'templateCheckpointInterval',
   'templateVersionsKeep',
   'templateRecycleRss',
+  // spec 08 §5.9, the registry client (templates T4b)
+  'sitePacksUpdateCheck',
+  'sitePacksAutoUpdate',
+  'sitePacksUrl',
 ] as const;
 
 describe('CONFIG_KEYS', () => {
