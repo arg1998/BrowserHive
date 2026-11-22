@@ -1,6 +1,8 @@
 /** @module test/composition/site-pack-client.test — the registry client in a real server (spec 13 §10.4, §17 T4b acceptance) against a `Bun.serve` fake registry reached through the testing seam: the automatic check runs after its first delay with no template and fetches only the four signed files; with `sitePacksUpdateCheck=false`, or with this build's pinned (empty) root, a registry that fails on any request sees none; the seam accepts only a loopback registry. */
 
 import { afterAll, afterEach, describe, expect, it } from 'bun:test';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { signRegistry } from '@browserhive/core/test/registry-client-kit';
 import { sitePack } from '@browserhive/core/test/site-pack-kit';
 import type { BootContext } from '../../src/composition/context.ts';
@@ -119,6 +121,34 @@ describe('the registry client in a server', () => {
       await Bun.sleep(300);
       expect(fake.paths).toEqual([]);
       expect(seen.ctx?.domain?.sitePacks.status().check_off).toBe('no_trust_root');
+    } finally {
+      await server.stop();
+    }
+  });
+
+  it('a signed layout dropped into the local folder is queued like an import (air-gapped)', async () => {
+    const data = `${dir.path}/local`;
+    for (const [path, bytes] of registry.files) {
+      const target = join(data, 'site-packs', 'local', 'usb-export', path);
+      mkdirSync(dirname(target), { recursive: true });
+      writeFileSync(target, bytes);
+    }
+    const seen: { ctx: BootContext | null } = { ctx: null };
+    const server = await bootServer(
+      {
+        ...bootInputFor(data, { sitePacksUpdateCheck: false }),
+        // The pack needs BrowserHive 0.1.0 or later; the suites' default binary is 0.0.0-test.
+        appVersion: '0.3.0',
+        sitePacksTrustRoot: registry.trustRoot,
+      },
+      { phases: capturing(seen) },
+    );
+    try {
+      const packs = seen.ctx?.domain?.sitePacks;
+      expect(packs?.status()).toMatchObject({ index_version: 10, index_origin: 'local' });
+      expect(packs?.get('pack-z.test')?.pending).toEqual([
+        expect.objectContaining({ version: 1, state: 'downloaded', source: 'import' }),
+      ]);
     } finally {
       await server.stop();
     }
