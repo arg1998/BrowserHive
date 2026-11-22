@@ -1,4 +1,4 @@
-/** @module cli/registry-sitepacks — the `sitepacks` command as registry data: list, show, diff, apply, reject, revert, pin, unpin, follow, approve-local, enable, disable, reload and import over a running server's REST API (spec 13 §9.6, §10.5, §10.6, §11.5) */
+/** @module cli/registry-sitepacks — the `sitepacks` command as registry data: list, show, check, download, diff, apply, reject, revert, pin, unpin, follow, approve-local, enable, disable, reload, import and export over a running server's REST API, and the offline verify (spec 13 §9.6, §10.4–§10.6, §11.5) */
 
 import { jsonFlag, serverFlags, sub } from './registry-parts.ts';
 import type { ArgumentDescriptor, CommandDescriptor, FlagDescriptor } from './registry-types.ts';
@@ -49,6 +49,34 @@ const readSubcommands = [
       flags: remoteJson,
     },
   ),
+  sub(['check'], 'Check the online registry for new versions now (the signed index only)', {
+    flags: remoteJson,
+  }),
+  sub(['download'], 'Download & review: fetch a listed version, verify it, show its diff', {
+    args: [
+      {
+        name: 'pack',
+        required: false,
+        describe:
+          'The pack id: the registrable domain the pack is for (linkedin.com). Omit it with --all.',
+      },
+      {
+        name: 'version',
+        required: false,
+        describe:
+          'A version the registry index lists. Without it, the pending available version, else the newest one this BrowserHive can use.',
+      },
+    ],
+    flags: [
+      {
+        name: 'all',
+        kind: 'boolean',
+        describe:
+          'Download every listed version this server lacks, for every pack, so the registry cannot tell which pack you care about.',
+      },
+      ...remoteJson,
+    ],
+  }),
   sub(['diff'], 'Show the classified field changes from the approved version to a candidate', {
     args: [packArg],
     flags: [
@@ -105,25 +133,33 @@ const decisionSubcommands = [
   }),
 ];
 
-/** `reload | import`: the local folder. */
+/** `reload | import | export | verify`: the local folder, signed layouts and offline checks. */
 const localSubcommands = [
   sub(['reload'], 'Read the bundled packs and the local folder (sitePacksDir) again', {
     flags: remoteJson,
   }),
-  sub(
-    ['import'],
-    'Send an unsigned pack file, byte for byte, to the local folder; approve it afterwards',
-    {
-      args: [
-        {
-          name: 'file',
-          required: true,
-          describe: 'One pack JSON file (≤ 1 MiB). Signed layouts arrive with a later release.',
-        },
-      ],
-      flags: remoteJson,
-    },
-  ),
+  sub(['import'], 'Import a signed registry layout, or one unsigned pack file, byte for byte', {
+    args: [
+      {
+        name: 'path',
+        required: true,
+        describe:
+          'A folder holding a signed layout (keys.json, index.json, their .sig files and packs/, as export writes): verified with the keys built into this release, its versions queued for review. Or one pack JSON file: stored in the local folder, approved afterwards with approve-local. At most 1 MiB.',
+      },
+    ],
+    flags: remoteJson,
+  }),
+  sub(['export'], "Write the server's verified signed layout to a folder, for an offline host", {
+    args: [
+      {
+        name: 'dir',
+        required: true,
+        describe:
+          'The folder to write: new or empty, or one that already holds a layout (only its layout files are replaced).',
+      },
+    ],
+    flags: remoteJson,
+  }),
   sub(['verify'], 'Check a site pack file or a signed registry layout offline', {
     args: [
       {
@@ -142,7 +178,7 @@ export const SITEPACKS_COMMAND: CommandDescriptor = {
   name: 'sitepacks',
   summary: 'List, review, approve and manage site packs',
   description:
-    'Talks to a running server over its REST API (--url, default the configured host and port) with an operator bearer (--token) or the dashboard cookie (--cookie). A pack applies only once an operator approved its version: adding a site to a template approves what it shows; later versions wait as pending updates until you apply them. Local files in sitePacksDir need approval once per content (SHA-256). apply, revert, approve-local and disable ask for confirmation on a terminal and refuse without one unless --yes. list --pending exits 2 when an update or a local file waits for you.',
+    'Talks to a running server over its REST API (--url, default the configured host and port) with an operator bearer (--token) or the dashboard cookie (--cookie). A pack applies only once an operator approved its version: adding a site to a template approves what it shows; later versions wait as pending updates until you apply them. Registry versions are listed as available from the signed index; download fetches and verifies one so you can review its diff. Local files in sitePacksDir need approval once per content (SHA-256). apply, revert, approve-local and disable ask for confirmation on a terminal and refuse without one unless --yes. check and list --pending exit 2 when an update or a local file waits for you.',
   flags: [],
   configKeys: ['host', 'port', 'config', 'color'],
   subcommands: [...readSubcommands, ...decisionSubcommands, ...localSubcommands],

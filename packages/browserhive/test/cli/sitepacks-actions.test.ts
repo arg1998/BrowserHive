@@ -420,13 +420,30 @@ describe('sitepacks import', () => {
     expect(result.stdout).not.toContain('differs');
   });
 
-  it('a signed layout folder or file is explained and not sent', async () => {
+  it('a folder without keys.json, or one file of a layout, is explained and not sent', async () => {
     const server = fakePackServer();
-    for (const path of ['/work/layout', '/work/layout/index.json']) {
-      const result = await run(server, ['import', path, ...URL_FLAGS], { fs: fs() });
-      expect(result.code).toBe(1);
-      expect(result.stderr).toContain('Signed layouts arrive with a later release');
-    }
+    const folder = await run(server, ['import', '/work/layout', ...URL_FLAGS], { fs: fs() });
+    expect(folder.code).toBe(1);
+    expect(folder.stderr).toContain('is a folder without keys.json, so not a signed layout');
+    const part = await run(server, ['import', '/work/layout/index.json', ...URL_FLAGS], {
+      fs: fs(),
+    });
+    expect(part.code).toBe(1);
+    expect(part.stderr).toContain(
+      'is part of a signed layout. Import the whole folder: browserhive sitepacks import /work/layout',
+    );
+    expect(server.calls).toEqual([]);
+  });
+
+  it('a file that is not UTF-8 is refused locally (its bytes would change as text)', async () => {
+    const server = fakePackServer();
+    const memory = new MemoryFs();
+    memory.put('/work/latin1.json', new Uint8Array([0x7b, 0x22, 0xe9, 0x22, 0x7d]));
+    const result = await run(server, ['import', '/work/latin1.json', ...URL_FLAGS], {
+      fs: memory,
+    });
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('is not UTF-8 JSON');
     expect(server.calls).toEqual([]);
   });
 
@@ -435,7 +452,7 @@ describe('sitepacks import', () => {
     const missing = await run(server, ['import', '/work/none.json', ...URL_FLAGS], { fs: fs() });
     expect(missing.code).toBe(1);
     const broken = await run(server, ['import', '/work/broken.json', ...URL_FLAGS], { fs: fs() });
-    expect(broken.stderr).toContain('is not JSON');
+    expect(broken.stderr).toContain('is not UTF-8 JSON');
     expect(server.calls).toEqual([]);
     server.routes = () => [
       400,

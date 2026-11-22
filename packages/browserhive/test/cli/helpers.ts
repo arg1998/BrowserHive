@@ -3,7 +3,7 @@
 import { posix } from 'node:path';
 import type { Channel } from '@browserhive/contracts/enums';
 import type { ConfigFs } from '@browserhive/core/config';
-import type { FileStat, FileSystem } from '@browserhive/core/ports/file-system';
+import type { FileStat } from '@browserhive/core/ports/file-system';
 import type { HostEnvironment } from '@browserhive/core/ports/host-environment';
 import type { SitePackStateRecord } from '@browserhive/core/ports/persistence/site-packs';
 import type { ProcessRunner, ProcessRunResult } from '@browserhive/core/ports/process-runner';
@@ -16,6 +16,7 @@ import type {
 import type {
   BrowserInstall,
   CliDeps,
+  CliFileSystem,
   CliStorage,
   DatabaseFileInfo,
   DatabaseStatus,
@@ -97,12 +98,14 @@ export function fakeHost(overrides: Partial<HostEnvironment> = {}): HostEnvironm
 interface Entry {
   kind: 'file' | 'dir';
   data: string;
+  /** Exact bytes, when written or put as bytes (`data` is then their lossy UTF-8 view). */
+  bytes?: Uint8Array;
   mode: number;
   mtimeMs: number;
 }
 
-/** In-memory filesystem implementing both `FileSystem` and `ConfigFs`. */
-export class MemoryFs implements FileSystem {
+/** In-memory filesystem implementing both `CliFileSystem` and `ConfigFs`. */
+export class MemoryFs implements CliFileSystem {
   readonly entries = new Map<string, Entry>();
   readonly writes: string[] = [];
 
@@ -112,10 +115,20 @@ export class MemoryFs implements FileSystem {
 
   // Every path is keyed POSIX-style ({@link posixPath}): the suites inspect `entries` and `writes`
   // with POSIX paths, and on Windows the CLI hands in native ones.
-  put(at: string, data: string, mode = 0o600): void {
+  put(at: string, data: string | Uint8Array, mode = 0o600): void {
     const path = posixPath(at);
     this.ensureDir(posix.dirname(path));
-    this.entries.set(path, { kind: 'file', data, mode, mtimeMs: 1_700_000_000_000 });
+    const entry: Entry =
+      typeof data === 'string'
+        ? { kind: 'file', data, mode, mtimeMs: 1_700_000_000_000 }
+        : {
+            kind: 'file',
+            data: new TextDecoder().decode(data),
+            bytes: new Uint8Array(data),
+            mode,
+            mtimeMs: 1_700_000_000_000,
+          };
+    this.entries.set(path, entry);
   }
 
   ensureDir(at: string, mode = 0o700): void {
@@ -131,7 +144,7 @@ export class MemoryFs implements FileSystem {
     return {
       isFile: entry.kind === 'file',
       isDirectory: entry.kind === 'dir',
-      sizeBytes: entry.kind === 'file' ? entry.data.length : 0,
+      sizeBytes: entry.kind === 'file' ? (entry.bytes?.byteLength ?? entry.data.length) : 0,
       mtimeMs: entry.mtimeMs,
     };
   }
@@ -168,6 +181,22 @@ export class MemoryFs implements FileSystem {
     const entry = this.entries.get(posixPath(path));
     if (entry?.kind !== 'file') throw new Error(`ENOENT: ${path}`);
     return entry.data;
+  }
+
+  async readBytes(path: string): Promise<Uint8Array> {
+    const entry = this.entries.get(posixPath(path));
+    if (entry?.kind !== 'file') throw new Error(`ENOENT: ${path}`);
+    return new Uint8Array(entry.bytes ?? new TextEncoder().encode(entry.data));
+  }
+
+  async writeBytes(
+    at: string,
+    data: Uint8Array,
+    options?: { readonly mode?: number },
+  ): Promise<void> {
+    const path = posixPath(at);
+    this.writes.push(`write ${path}`);
+    this.put(path, data, this.entries.get(path)?.mode ?? options?.mode ?? 0o644);
   }
 
   async writeFile(at: string, data: string, options?: { readonly mode?: number }): Promise<void> {
@@ -212,6 +241,8 @@ export interface StorageState {
   sitePackStates: SitePackStateRecord[];
   /** Packs whose state row reads as corrupt. */
   sitePackUnreadable: string[];
+  /** `meta` rows (`site_packs.client`, doctor). */
+  meta: Record<string, string>;
   /** Version rows `templates rekey` updated, in order. */
   versionFiles: { templateId: string; version: number; file: TemplateFileRecord }[];
   backups: string[];
@@ -241,6 +272,7 @@ export function storageState(overrides: Partial<StorageState> = {}): StorageStat
     templateRows: [],
     sitePackStates: [],
     sitePackUnreadable: [],
+    meta: {},
     versionFiles: [],
     backups: [],
     quickCheckOk: true,
@@ -310,6 +342,7 @@ function fakeStorage(
       rows: state.sitePackStates,
       unreadable: state.sitePackUnreadable,
     }),
+    metaValue: async (key) => state.meta[key] ?? null,
     updateTemplateVersionFile: async (templateId, version, file) => {
       state.versionFiles.push({ templateId, version, file });
       return true;

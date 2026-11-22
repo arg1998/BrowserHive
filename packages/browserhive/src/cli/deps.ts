@@ -17,6 +17,17 @@ import type {
 import type { CliOutputSinks, Output } from './output/output.ts';
 import type { Prompter } from './output/process-io.ts';
 
+/**
+ * The CLI's filesystem: the core port plus exact byte reads and writes, for files whose bytes are
+ * signed or hashed (a signed registry layout, review #97 D80): a UTF-8 round trip could change them.
+ */
+export interface CliFileSystem extends FileSystem {
+  /** Reads a file's exact bytes. */
+  readBytes(path: string): Promise<Uint8Array>;
+  /** Writes exact bytes (mode applies to a new file only). */
+  writeBytes(path: string, data: Uint8Array, options?: { readonly mode?: number }): Promise<void>;
+}
+
 /** Structural `BootInput` of the composition seam (the fields the CLI provides). */
 export interface ServeBootInput {
   readonly resolved: ResolvedConfigBundle;
@@ -180,6 +191,11 @@ export interface CliStorage {
     readonly unreadable: readonly string[];
   }>;
   /**
+   * One `meta` row's value (`site_packs.client`, the registry client's status, spec 13 §10.3), or
+   * `null` when the row or the table is absent.
+   */
+  metaValue(key: string): Promise<string | null>;
+  /**
    * Records a re-encrypted version file in its `template_versions` row (`templates rekey`).
    *
    * @returns `false` when no row matched.
@@ -321,7 +337,7 @@ export interface CliDeps {
   readonly cwd: string;
   readonly host: HostEnvironment;
   readonly configFs: ConfigFs;
-  readonly fs: FileSystem;
+  readonly fs: CliFileSystem;
   readonly streams: {
     readonly stdout: (chunk: string) => void;
     readonly stderr: (chunk: string) => void;
@@ -359,7 +375,7 @@ export interface CliDeps {
   /** SQLite `application_id` BrowserHive stamps (`0x42484956`). */
   readonly applicationId: number;
   /**
-   * The registry root keys `sitepacks verify` checks a signed layout against. Absent in every real
+   * The registry root keys `sitepacks verify` and `doctor` check a signed layout against. Absent in every real
    * run (the keys pinned in this binary); BrowserHive's suites inject a test root here. No flag,
    * configuration key or environment variable sets it (spec 13 §10.2).
    */

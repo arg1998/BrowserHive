@@ -16,6 +16,9 @@ const REGISTRY = resolve(import.meta.dir, '..', '..', '..', '..', 'registry', 'p
 const GITHUB = readFileSync(join(REGISTRY, 'github.com.json'), 'utf8');
 const LOCAL = `${DATA_DIR}/site-packs/local`;
 
+/** What this build says while it pins no root keys (the key ceremony has not run, D71). */
+const NO_KEYS = 'this build pins no registry keys yet: no update check runs';
+
 const Row = z.object({ check: z.string(), status: z.string(), detail: z.string() });
 
 function sha(text: string): string {
@@ -56,7 +59,7 @@ describe('doctor: site packs', () => {
     expect(await row({ [`${BUNDLED}/github.com.json`]: GITHUB })).toEqual({
       check: 'site packs',
       status: 'ok',
-      detail: '0 bundled packs (1 need a newer BrowserHive)',
+      detail: `0 bundled packs (1 need a newer BrowserHive), ${NO_KEYS}, no registry snapshot in this build`,
     });
   });
 
@@ -100,7 +103,8 @@ describe('doctor: site packs', () => {
     );
     expect(found?.status).toBe('warn');
     expect(found?.detail).toContain('local files skipped: broken.test');
-    expect(found?.detail).toContain('1 signed layout');
+    // T4b reads signed layouts: one in the folder is no longer a warning.
+    expect(found?.detail).not.toContain('signed layout');
     // The binary in the harness is older than the pack's min_client: it is skipped, not compared.
     const approved = await row(
       { [`${LOCAL}/github.com.json`]: GITHUB },
@@ -123,7 +127,10 @@ describe('doctor: site packs', () => {
       { [`${LOCAL}/github.com.json`]: current },
       { approvals: [{ packId: 'github.com', sha256: sha(current) }] },
     );
-    expect(ok).toMatchObject({ status: 'ok', detail: '0 bundled packs, 1 approved local file' });
+    expect(ok).toMatchObject({
+      status: 'ok',
+      detail: `0 bundled packs, 1 approved local file, ${NO_KEYS}, no registry snapshot in this build`,
+    });
   });
 
   it('sitePacks=false is ✓ and reads nothing', async () => {

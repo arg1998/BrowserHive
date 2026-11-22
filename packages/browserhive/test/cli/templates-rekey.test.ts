@@ -6,7 +6,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SCHEMA_VERSION } from '@browserhive/core/persistence';
-import { createLogger, createNodeFileSystem, createSystemClock } from '@browserhive/core/runtime';
+import { createLogger, createSystemClock } from '@browserhive/core/runtime';
 import {
   decodeTemplateKey,
   FileTemplateStateStore,
@@ -14,6 +14,7 @@ import {
   templateKeyOf,
 } from '@browserhive/core/server';
 import type { CliDeps } from '../../src/cli/deps.ts';
+import { createCliFileSystem } from '../../src/cli/production/file-system.ts';
 import { openCliStorage } from '../../src/cli/production/storage.ts';
 import { nodeConfigFs } from '../../src/composition/config-fs.ts';
 import { acquireDataDirLock, readLiveLock } from '../../src/composition/lock-file.ts';
@@ -114,7 +115,7 @@ describe('templates rekey (temp data dir, real database)', () => {
     });
     const context = { logger, appVersion: '0.1.0', clock };
     return {
-      fs: createNodeFileSystem(),
+      fs: createCliFileSystem(),
       configFs: nodeConfigFs,
       openStorage: (input) => openCliStorage(input, context),
       schemaVersion: SCHEMA_VERSION,

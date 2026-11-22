@@ -3,6 +3,8 @@ browserhive sitepacks — List, review, approve and manage site packs
 USAGE
   browserhive sitepacks list [flags]
   browserhive sitepacks show <pack> [flags]
+  browserhive sitepacks check [flags]
+  browserhive sitepacks download [pack] [version] [flags]
   browserhive sitepacks diff <pack> [flags]
   browserhive sitepacks apply <pack> [version] [flags]
   browserhive sitepacks reject <pack> [version] [flags]
@@ -14,37 +16,44 @@ USAGE
   browserhive sitepacks enable <pack> [flags]
   browserhive sitepacks disable <pack> [flags]
   browserhive sitepacks reload [flags]
-  browserhive sitepacks import <file> [flags]
+  browserhive sitepacks import <path> [flags]
+  browserhive sitepacks export <dir> [flags]
   browserhive sitepacks verify <path> [flags]
 
 Talks to a running server over its REST API (--url, default the configured host and port) with an
 operator bearer (--token) or the dashboard cookie (--cookie). A pack applies only once an operator
 approved its version: adding a site to a template approves what it shows; later versions wait as
-pending updates until you apply them. Local files in sitePacksDir need approval once per content
-(SHA-256). apply, revert, approve-local and disable ask for confirmation on a terminal and refuse
-without one unless --yes. list --pending exits 2 when an update or a local file waits for you.
+pending updates until you apply them. Registry versions are listed as available from the signed
+index; download fetches and verifies one so you can review its diff. Local files in sitePacksDir
+need approval once per content (SHA-256). apply, revert, approve-local and disable ask for
+confirmation on a terminal and refuse without one unless --yes. check and list --pending exit 2 when
+an update or a local file waits for you.
 
 COMMANDS
-  list                     List site packs with their approved version, local file and pending
-                           updates
-  show <pack>              Show a pack: approval, local file, classified pending versions, rules,
-                           strategies
-  diff <pack>              Show the classified field changes from the approved version to a
-                           candidate
-  apply <pack> [version]   Approve a pending version: every template using the pack follows it
-  reject <pack> [version]  Dismiss a pending version (a newer one appears again)
-  revert <pack>            Go back to the previous approved version
-  pin <pack> <version>     Keep a pack at its approved version; newer versions are listed, not
-                           offered
-  unpin <pack>             Stop pinning a pack
-  follow <pack> <setting>  Choose whether a pack lists pending updates and notifies about them
-  approve-local <pack>     Approve the local file's current content (prints its diff first)
-  enable <pack>            Enable a disabled pack
-  disable <pack>           Disable a pack: its sites become generic, its rules stop applying
-  reload                   Read the bundled packs and the local folder (sitePacksDir) again
-  import <file>            Send an unsigned pack file, byte for byte, to the local folder; approve
-                           it afterwards
-  verify <path>            Check a site pack file or a signed registry layout offline
+  list                       List site packs with their approved version, local file and pending
+                             updates
+  show <pack>                Show a pack: approval, local file, classified pending versions, rules,
+                             strategies
+  check                      Check the online registry for new versions now (the signed index only)
+  download [pack] [version]  Download & review: fetch a listed version, verify it, show its diff
+  diff <pack>                Show the classified field changes from the approved version to a
+                             candidate
+  apply <pack> [version]     Approve a pending version: every template using the pack follows it
+  reject <pack> [version]    Dismiss a pending version (a newer one appears again)
+  revert <pack>              Go back to the previous approved version
+  pin <pack> <version>       Keep a pack at its approved version; newer versions are listed, not
+                             offered
+  unpin <pack>               Stop pinning a pack
+  follow <pack> <setting>    Choose whether a pack lists pending updates and notifies about them
+  approve-local <pack>       Approve the local file's current content (prints its diff first)
+  enable <pack>              Enable a disabled pack
+  disable <pack>             Disable a pack: its sites become generic, its rules stop applying
+  reload                     Read the bundled packs and the local folder (sitePacksDir) again
+  import <path>              Import a signed registry layout, or one unsigned pack file, byte for
+                             byte
+  export <dir>               Write the server's verified signed layout to a folder, for an offline
+                             host
+  verify <path>              Check a site pack file or a signed registry layout offline
 
 FLAGS
   --host <address>             Bind address. A non-loopback host requires auth=token or
@@ -68,6 +77,22 @@ FLAGS — list
   --cookie <value>                  Dashboard session cookie value for --url (browserhive_session).
 
 FLAGS — show
+  --json            Print machine-readable JSON instead of text.
+  --url <url>       The running server to talk to, over its REST API. default: the configured host
+                    and port, http://127.0.0.1:9876
+  --token <bearer>  Operator bearer token for --url (bh_operator_…).
+  --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
+
+FLAGS — check
+  --json            Print machine-readable JSON instead of text.
+  --url <url>       The running server to talk to, over its REST API. default: the configured host
+                    and port, http://127.0.0.1:9876
+  --token <bearer>  Operator bearer token for --url (bh_operator_…).
+  --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
+
+FLAGS — download
+  --all             Download every listed version this server lacks, for every pack, so the registry
+                    cannot tell which pack you care about.
   --json            Print machine-readable JSON instead of text.
   --url <url>       The running server to talk to, over its REST API. default: the configured host
                     and port, http://127.0.0.1:9876
@@ -158,6 +183,13 @@ FLAGS — reload
   --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
 
 FLAGS — import
+  --json            Print machine-readable JSON instead of text.
+  --url <url>       The running server to talk to, over its REST API. default: the configured host
+                    and port, http://127.0.0.1:9876
+  --token <bearer>  Operator bearer token for --url (bh_operator_…).
+  --cookie <value>  Dashboard session cookie value for --url (browserhive_session).
+
+FLAGS — export
   --json            Print machine-readable JSON instead of text.
   --url <url>       The running server to talk to, over its REST API. default: the configured host
                     and port, http://127.0.0.1:9876

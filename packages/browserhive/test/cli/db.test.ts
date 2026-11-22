@@ -6,9 +6,10 @@ import { copyFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SCHEMA_VERSION } from '@browserhive/core/persistence';
-import { createLogger, createNodeFileSystem, createSystemClock } from '@browserhive/core/runtime';
+import { createLogger, createSystemClock } from '@browserhive/core/runtime';
 import { z } from 'zod';
 import type { CliDeps } from '../../src/cli/deps.ts';
+import { createCliFileSystem } from '../../src/cli/production/file-system.ts';
 import { inspectDatabaseFile, openCliStorage } from '../../src/cli/production/storage.ts';
 import { nodeConfigFs } from '../../src/composition/config-fs.ts';
 import { acquireDataDirLock, readLiveLock } from '../../src/composition/lock-file.ts';
@@ -27,7 +28,7 @@ function realDeps(): Partial<CliDeps> {
   });
   const context = { logger, appVersion: '0.1.0', clock };
   return {
-    fs: createNodeFileSystem(),
+    fs: createCliFileSystem(),
     configFs: nodeConfigFs,
     openStorage: (input) => openCliStorage(input, context),
     inspectDatabase: (path, mode) => inspectDatabaseFile(path, context, mode),

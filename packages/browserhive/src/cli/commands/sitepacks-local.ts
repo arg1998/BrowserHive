@@ -1,5 +1,5 @@
-/** @module cli/commands/sitepacks-local — `browserhive sitepacks reload` and `sitepacks import <file>`: the local folder over a running server's REST API. An import sends the file's text unchanged, so the SHA-256 the server stores and asks to approve is the file's own (the one `sitepacks verify` prints) (spec 13 §10.5, §11.5) */
-import { basename } from 'node:path';
+/** @module cli/commands/sitepacks-local — `browserhive sitepacks reload` and `sitepacks import <dir|file>`: the local folder over a running server's REST API. A folder holding `keys.json` is a signed layout (`sitepacks-layout.ts`); a file is one unsigned pack whose exact bytes are sent as text (they must be UTF-8), so the SHA-256 the server stores and asks to approve is the file's own (the one `sitepacks verify` prints) (spec 13 §10.5, §11.5) */
+import { basename, dirname, join } from 'node:path';
 import {
   SITE_PACK_IMPORT_MAX_BYTES,
   SitePackImportResponse,
@@ -10,6 +10,7 @@ import type { CommandContext } from '../deps.ts';
 import { EXIT, type ExitCode, type SitePacksAction } from '../invocation.ts';
 import { size } from './common.ts';
 import { type SitePacksTarget, sitePackCall, unexpected } from './sitepacks-common.ts';
+import { runSitePacksImportLayout } from './sitepacks-layout.ts';
 
 type Of<K extends SitePacksAction['kind']> = Extract<SitePacksAction, { readonly kind: K }>;
 
@@ -53,8 +54,9 @@ function isSignedLayoutFile(path: string): boolean {
 }
 
 /**
- * `sitepacks import <file>`: sends one unsigned pack file's text, byte for byte; the server stores
- * it in the local folder, where it waits for approval. Signed layouts are refused here (a later release).
+ * `sitepacks import <dir|file>`: a folder with `keys.json` is a signed layout, verified by the server
+ * and queued for review; a file is one unsigned pack whose text is sent byte for byte; the server
+ * stores it in the local folder, where it waits for approval.
  *
  * @returns 0, or 1 on a failure.
  */
@@ -71,9 +73,17 @@ export async function runSitePacksImport(
   };
   const info = await deps.fs.stat(path);
   if (info === null) return refuse('does not exist.');
-  if (info.isDirectory || isSignedLayoutFile(path)) {
+  if (info.isDirectory) {
+    if ((await deps.fs.stat(join(path, 'keys.json')))?.isFile === true) {
+      return runSitePacksImportLayout(context, target, path);
+    }
     return refuse(
-      'looks like a signed layout (keys.json, index.json, packs/). Signed layouts arrive with a later release; import one pack file (<pack id>.json) instead.',
+      'is a folder without keys.json, so not a signed layout. Import a folder written by browserhive sitepacks export (or downloaded from the registry), or one pack file (<pack id>.json).',
+    );
+  }
+  if (isSignedLayoutFile(path)) {
+    return refuse(
+      `is part of a signed layout. Import the whole folder: browserhive sitepacks import ${dirname(path)}`,
     );
   }
   if (!info.isFile) return refuse('is not a file.');
@@ -82,14 +92,17 @@ export async function runSitePacksImport(
       `is ${size(info.sizeBytes)}; an import may be at most ${size(SITE_PACK_IMPORT_MAX_BYTES)}.`,
     );
   }
-  const text = await deps.fs.readFile(path);
+  // The file's exact bytes (review #97 D80): sent as text only when they are UTF-8, BOM kept, so
+  // the server validates, hashes and stores exactly these bytes.
+  const bytes = await deps.fs.readBytes(path);
+  let text: string;
   try {
+    text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
     JSON.parse(text);
   } catch {
-    return refuse('is not JSON. Expected one site pack (schema 1).');
+    return refuse('is not UTF-8 JSON. Expected one site pack (schema 1).');
   }
-  // The file's text as it is: the server validates, hashes and stores exactly these bytes.
-  const fileSha256 = sha256Hex(new TextEncoder().encode(text));
+  const fileSha256 = sha256Hex(bytes);
   const result = await sitePackCall(context, target.remote, 'POST', '/site-packs/import', { text });
   if (!result.ok) return result.code;
   const parsed = SitePackImportResponse.safeParse(result.json);

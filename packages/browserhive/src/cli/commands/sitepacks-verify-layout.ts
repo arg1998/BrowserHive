@@ -1,8 +1,8 @@
 /** @module cli/commands/sitepacks-verify-layout — `browserhive sitepacks verify <dir>` for a signed registry layout (spec 13 §10.1, §11.5, T4a): `keys.json` against the root keys pinned in this binary, `index.json` against its online keys, every listed pack file against the index, with the same verifier a fetch uses (`verifySignedLayout`). Offline; no stored floors (the server keeps those). A layout signed by any other root (a pull-request preview's test key) is refused. */
 import { join } from 'node:path';
 import type { SitePacksTrustRoot } from '@browserhive/core/ports/site-packs';
-import { PINNED_TRUST_ROOT, verifySignedLayout } from '@browserhive/core/server';
-import type { CommandContext } from '../deps.ts';
+import { type LayoutReader, PINNED_TRUST_ROOT, verifySignedLayout } from '@browserhive/core/server';
+import type { CliFileSystem, CommandContext } from '../deps.ts';
 import { EXIT, type ExitCode } from '../invocation.ts';
 import { printable } from '../output/printable.ts';
 
@@ -40,6 +40,22 @@ export interface LayoutReport {
   }[];
 }
 
+/**
+ * A reader over a layout folder that returns each file's exact bytes (signatures and hashes are
+ * over bytes; review #97 D80), `null` when absent, `'too_large'` past the cap.
+ *
+ * @returns The reader.
+ */
+export function layoutReader(fs: CliFileSystem, dir: string): LayoutReader {
+  return async (rel, maxBytes) => {
+    const file = join(dir, ...rel.split('/'));
+    const stat = await fs.stat(file).catch(() => null);
+    if (stat === null || !stat.isFile) return null;
+    if (stat.sizeBytes > maxBytes) return 'too_large';
+    return fs.readBytes(file);
+  };
+}
+
 /** Whether `path` is a folder (a layout) rather than a pack file. */
 export async function isLayoutDir(context: CommandContext, path: string): Promise<boolean> {
   const stat = await context.deps.fs.stat(path).catch(() => null);
@@ -52,17 +68,9 @@ export async function isLayoutDir(context: CommandContext, path: string): Promis
  * @returns The report, every string made printable (the files may be hostile).
  */
 export async function verifyLayoutDir(context: CommandContext, dir: string): Promise<LayoutReport> {
-  const { fs } = context.deps;
   const root: SitePacksTrustRoot = context.deps.sitePacksTrustRoot ?? PINNED_TRUST_ROOT;
-  const read = async (rel: string, maxBytes: number) => {
-    const file = join(dir, ...rel.split('/'));
-    const stat = await fs.stat(file).catch(() => null);
-    if (stat === null || !stat.isFile) return null;
-    if (stat.sizeBytes > maxBytes) return 'too_large' as const;
-    return new TextEncoder().encode(await fs.readFile(file));
-  };
   const report = await verifySignedLayout({
-    read,
+    read: layoutReader(context.deps.fs, dir),
     root,
     now: context.deps.clock.now(),
     binaryVersion: context.deps.appVersion,
