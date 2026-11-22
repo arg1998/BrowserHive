@@ -52,6 +52,16 @@ describe('requestedProxy', () => {
     expect(bare?.label).toBe('--proxy-pac-url');
   });
 
+  it('detects a raw proxy arg in every switch spelling Chromium accepts', () => {
+    for (const arg of [
+      '-proxy-server=http://raw.example:3128',
+      '/Proxy-Server=http://raw.example:3128',
+    ]) {
+      expect(requestedProxy({ args: [arg] }, undefined)?.label).toBe('raw.example:3128');
+    }
+    expect(requestedProxy({ args: ['-proxy-pac-url'] }, undefined)?.label).toBe('--proxy-pac-url');
+  });
+
   it('label is host:port without credentials', () => {
     expect(proxyLabelFor('http://user:secret@proxy.example:8080')).toBe('proxy.example:8080');
     expect(proxyLabelFor('proxy.example:8080')).toBe('proxy.example:8080');

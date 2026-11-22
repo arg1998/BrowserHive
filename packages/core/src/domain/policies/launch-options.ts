@@ -2,14 +2,16 @@
 
 import type { BrowserContextOptions, LaunchOptions } from 'playwright';
 import { z } from 'zod';
-import { assertLaunchArgsAllowed } from '../../kernel/deny-list.ts';
+import { assertLaunchArgsAllowed, isAllowedIgnoreDefaultArgs } from '../../kernel/deny-list.ts';
 import { AppError } from '../../kernel/errors/app-error.ts';
 
 /**
  * Loose fields that bypass the intent of the deny-list and are refused with `UNSAFE_LAUNCH_ARG`
  * naming the field (spec 11 §4): `env` leaks the host environment into the browser, `downloadsPath`
  * escapes the managed session directory, `recordVideo` writes outside it. `chromiumSandbox: false`
- * is checked separately (only the `false` value is unsafe).
+ * is checked separately (only the `false` value is unsafe), and so is `ignoreDefaultArgs`: it may
+ * only drop `--enable-automation` (`DROPPABLE_DEFAULT_ARG_KEYS`), because Playwright's other
+ * defaults carry the managed profile dir, the debugging pipe, the proxy and the keyring guards.
  */
 export const UNSAFE_LAUNCH_OPTION_FIELDS: readonly string[] = [
   'env',
@@ -56,6 +58,7 @@ export function parseLaunchOptions(input: unknown): ParsedLaunchOptions | undefi
     if (parsed[field] !== undefined) throw unsafe(field);
   }
   if (parsed['chromiumSandbox'] === false) throw unsafe('chromiumSandbox');
+  if (!isAllowedIgnoreDefaultArgs(parsed['ignoreDefaultArgs'])) throw unsafe('ignoreDefaultArgs');
   return parsed;
 }
 

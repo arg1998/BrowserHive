@@ -34,6 +34,18 @@ describe('parseLaunchOptions', () => {
     }
   });
 
+  it('refuses deny-listed args in every switch spelling Chromium accepts', () => {
+    for (const arg of ['-no-sandbox', '/user-data-dir=/tmp/x', '--Remote-Debugging-Port=0', '--']) {
+      try {
+        parseLaunchOptions({ args: ['--ok', arg] });
+        throw new Error('expected throw');
+      } catch (err) {
+        expect(isAppError(err, 'UNSAFE_LAUNCH_ARG')).toBe(true);
+        if (isAppError(err, 'UNSAFE_LAUNCH_ARG')) expect(err.details.arg).toBe(arg);
+      }
+    }
+  });
+
   it('refuses each unsafe sibling field and chromiumSandbox:false', () => {
     for (const field of UNSAFE_LAUNCH_OPTION_FIELDS) {
       try {
@@ -44,6 +56,18 @@ describe('parseLaunchOptions', () => {
         if (isAppError(err, 'UNSAFE_LAUNCH_ARG')) expect(err.details.arg).toBe(field);
       }
     }
+    for (const ignoreDefaultArgs of [true, ['--user-data-dir'], ['-Headless']]) {
+      try {
+        parseLaunchOptions({ ignoreDefaultArgs });
+        throw new Error('expected throw');
+      } catch (err) {
+        expect(isAppError(err, 'UNSAFE_LAUNCH_ARG')).toBe(true);
+        if (isAppError(err, 'UNSAFE_LAUNCH_ARG')) expect(err.details.arg).toBe('ignoreDefaultArgs');
+      }
+    }
+    expect(parseLaunchOptions({ ignoreDefaultArgs: ['--enable-automation'] })).toEqual({
+      ignoreDefaultArgs: ['--enable-automation'],
+    });
     expect(() => parseLaunchOptions({ chromiumSandbox: false })).toThrow();
     expect(parseLaunchOptions({ chromiumSandbox: true })).toEqual({ chromiumSandbox: true });
   });

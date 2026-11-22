@@ -343,7 +343,7 @@ Message: `Launch arg '{arg}' is on the deny-list and would break session isolati
 
 Hint: Remove the argument from launch_options.args.
 
-Cause: A Chromium flag that changes the profile directory, sandbox or debugging surface was passed.
+Cause: A Chromium flag that changes the profile directory, sandbox or debugging surface was passed, in any spelling Chromium accepts (`--`, `-` or `/` prefix, any letter case), or a bare `--`; or a launch option that bypasses the deny-list (`chromiumSandbox: false`, `env`, `downloadsPath`, `recordVideo`, an `ignoreDefaultArgs` other than `--enable-automation`).
 
 Resolution: Use the persistence modes and channel options instead of raw isolation-breaking flags.
 
