@@ -110,6 +110,12 @@ export const SitePackView = z.object({
       provenance: SitePackProvenance,
     })
     .nullable(),
+  /**
+   * The publisher revoked the approved version (`revoked: true` in the signed index) and it is still
+   * in force: its fallback is looser or stricter in a way that waits for an operator (a pending row
+   * classified `revoked`), or there is no fallback (spec 13 §9.7).
+   */
+  approved_revoked: z.boolean(),
   previous: z.object({ version: z.number().int(), source: SitePackSourceKind }).nullable(),
   pinned_version: z.number().int().nullable(),
   follow: z.object({ setting: z.enum(['auto', 'on', 'off']), effective: z.boolean() }),

@@ -37,6 +37,7 @@ export function packView(overrides: Partial<SitePackView> = {}): SitePackView {
     identity_provider: null,
     sources: ['bundled'],
     online: null,
+    approved_revoked: false,
     approved: {
       version: 3,
       sha256: SHA_A,

@@ -54,6 +54,7 @@ export function toSitePackView(
     identity_provider: display?.identity_provider ?? null,
     sources: [],
     online: null,
+    approved_revoked: false,
     approved: approvedOf(entry),
     offer:
       entry.offer === null
