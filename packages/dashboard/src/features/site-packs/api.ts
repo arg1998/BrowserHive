@@ -7,6 +7,7 @@ import { useToast } from '@/app/providers/ToastProvider.tsx';
 import { toAppError } from '@/lib/api/errors.ts';
 import { keys } from '@/lib/api/keys.ts';
 import type { SitePackImportBody } from '@/lib/api/operations-site-packs.ts';
+import { registryName } from './model.ts';
 import { type SitePacksSearch, toSitePacksQuery } from './search.ts';
 
 /** Rows per page of the history and guard hits. */
@@ -114,6 +115,11 @@ export function useRegistryStatus(): SitePackRegistryStatus | undefined {
   return useSitePackCatalog().data?.status;
 }
 
+/** The registry's name for provenance lines: "<host of sitePacksUrl> registry" (review #100 L12). */
+export function useRegistryName(): string {
+  return registryName(useRegistryStatus()?.url);
+}
+
 /** Refresh every pack query and the templates (their sites show the pack in force). */
 function useSettle() {
   const qc = useQueryClient();
@@ -146,6 +152,15 @@ export function useSitePackActions(packId: string) {
     ...common,
     onSuccess: (result: { readonly view: SitePackView }) => patchCachedView(qc, result.view),
   } as const;
+  // A decided version is no longer pending: drop its diff before the refresh, which would answer
+  // 409 for it (review #100 L3).
+  const decided = {
+    ...common,
+    onSuccess: (result: { readonly view: SitePackView }, version: number) => {
+      dropDiff(qc, packId, version);
+      patchCachedView(qc, result.view);
+    },
+  } as const;
   return {
     /** **Download & review**: the verified file and its classified diff, cached for the card at once. */
     download: useMutation({
@@ -159,11 +174,11 @@ export function useSitePackActions(packId: string) {
     }),
     apply: useMutation({
       mutationFn: (version: number) => api.applySitePack({ params, body: { version } }),
-      ...viewed,
+      ...decided,
     }),
     reject: useMutation({
       mutationFn: (version: number) => api.rejectSitePack({ params, body: { version } }),
-      ...viewed,
+      ...decided,
     }),
     pin: useMutation({
       mutationFn: (version: number | null) => api.pinSitePack({ params, body: { version } }),
@@ -218,6 +233,7 @@ export function useApplySelected() {
             params: { pack_id: item.packId },
             body: { version: item.version },
           });
+          dropDiff(qc, item.packId, item.version);
           patchCachedView(qc, view);
           applied.push(item);
         } catch (error) {
@@ -293,6 +309,13 @@ export function useImportSitePack() {
     mutationFn: (body: z.input<typeof SitePackImportBody>) => api.importSitePack({ body }),
     onSettled: settle,
   });
+}
+
+/** Forget the diff of a decided version (no refetch of a version that is no longer pending). */
+function dropDiff(qc: ReturnType<typeof useQueryClient>, packId: string, version: number): void {
+  const queryKey = keys.sitePacks.diff(packId, String(version));
+  void qc.cancelQueries({ queryKey, exact: true });
+  qc.removeQueries({ queryKey, exact: true });
 }
 
 /** Put a returned view into the cached lists, the catalog and the pack's page at once (the refetch follows). */

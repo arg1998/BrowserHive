@@ -121,7 +121,7 @@ test.describe('site packs in the dashboard', () => {
         .filter({ has: page.getByRole('heading', { level: 3, name: /GitHub/ }) });
       await expect(card).toBeVisible();
       await expect(
-        card.getByText(/browserhive\.ai registry · key .+ · signature verified · index \d+/),
+        card.getByText(/registry · key .+ · signature verified · index \d+/),
       ).toBeVisible();
       const download = card.getByRole('button', { name: /Download & review/ });
       if (await download.isVisible()) {
@@ -140,10 +140,10 @@ test.describe('site packs in the dashboard', () => {
       await dialog.getByRole('button', { name: /^Apply v\d+$/ }).click();
       await expect(card).toHaveCount(0);
     }
-    // Applied from the registry: the table names where it came from.
+    // Applied from the registry: the table names where it came from (the registry's own host).
     const row = table.getByRole('row').filter({ hasText: 'GitHub' });
     await expect(
-      row.getByText('browserhive.ai registry', { exact: true }).filter({ visible: true }),
+      row.getByText(/^\S+ registry$/).filter({ visible: true }),
     ).toHaveCount(1);
     expect(await violations(page)).toEqual([]);
   });

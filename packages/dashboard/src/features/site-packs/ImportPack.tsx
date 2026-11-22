@@ -1,12 +1,15 @@
 /** @module features/site-packs/ImportPack — **Import…** (spec 13 §10.5, `POST /site-packs/import`, ≤ 1 MiB): one unsigned pack file sent as its exact `{text}` (it waits for approval like any local file, a toast says so), or a signed folder (a folder picker, or several files including `keys.json`) sent as `{files, name}` and verified with the pinned keys exactly as a fetch; the page shows what a signed folder became (the index accepted, each version's state) and why an import was refused, every `SITE_PACK_INVALID` issue listed by field. The pickers live once per page (`useImportPicker`); the header and the Registry card share them through `ImportMenu` */
+
 import {
   SITE_PACK_IMPORT_MAX_BYTES,
   type SitePackImportResponse,
 } from '@browserhive/contracts/http';
+import { Link } from '@tanstack/react-router';
 import { type ReactNode, useRef } from 'react';
 import { useToast } from '@/app/providers/ToastProvider.tsx';
 import { Callout } from '@/components/shared/Callout.tsx';
 import { Chip } from '@/components/shared/Chip.tsx';
+import { Plain } from '@/components/shared/Plain.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import {
   DropdownMenu,
@@ -16,13 +19,14 @@ import {
 } from '@/components/ui/dropdown-menu.tsx';
 import { Spinner } from '@/components/ui/spinner.tsx';
 import { toAppError } from '@/lib/api/errors.ts';
+import { printable } from '@/lib/format/printable.ts';
 import { ICONS } from '@/lib/icons.ts';
 import { useImportSitePack } from './api.ts';
 import { isLayout, layoutBody, pickedFile } from './import-layout.ts';
 import {
-  IMPORT_STATE_TEXT,
   importCounts,
   importLayoutTitle,
+  importStateText,
   importStateTone,
 } from './registry-model.ts';
 
@@ -233,7 +237,7 @@ function LayoutResult({
       <div className="flex flex-col gap-2">
         <p>
           {response.layout !== undefined
-            ? `Signed by ${response.layout.signed_by}, keys version ${response.layout.keys_version}. `
+            ? `Signed by ${printable(response.layout.signed_by)}, keys version ${response.layout.keys_version}. `
             : ''}
           {importCounts(response)}
         </p>
@@ -244,9 +248,18 @@ function LayoutResult({
                 key={`${i.pack_id}:${i.version}:${i.sha256}`}
                 className="flex flex-wrap items-center gap-x-2 gap-y-1"
               >
-                <bdi className="font-medium">{i.pack_id}</bdi>
+                <Plain className="font-medium">{i.pack_id}</Plain>
                 <span className="tabular-nums">v{i.version}</span>
-                <Chip tone={importStateTone(i.state)}>{IMPORT_STATE_TEXT[i.state] ?? i.state}</Chip>
+                <Chip tone={importStateTone(i.state)}>{importStateText(i)}</Chip>
+                {i.state === 'downloaded' && i.followed === false ? (
+                  <Link
+                    to="/site-packs/$id"
+                    params={{ id: i.pack_id }}
+                    className="text-sm text-link underline decoration-link/40 underline-offset-2 hover:decoration-link focus-ring rounded-sm"
+                  >
+                    Open <Plain>{i.pack_id}</Plain>
+                  </Link>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -280,10 +293,10 @@ function ProblemResult({
             <li key={`${issue.path}:${issue.message}`} className="[overflow-wrap:anywhere]">
               {issue.path !== '' ? (
                 <>
-                  <bdi className="font-mono text-xs">{issue.path}</bdi>:{' '}
+                  <Plain className="font-mono text-xs">{issue.path}</Plain>:{' '}
                 </>
               ) : null}
-              <bdi>{issue.message}</bdi>
+              <Plain>{issue.message}</Plain>
             </li>
           ))}
         </ul>

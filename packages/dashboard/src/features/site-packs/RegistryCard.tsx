@@ -1,16 +1,19 @@
 /** @module features/site-packs/RegistryCard — where packs come from (spec 13 §10.4, §10.5, §10.9, §11.4): the update check with the configuration key that controls it, the registry URL, the last and next check, auto-update; the held signed index (version, issued, expiry, signing key, where it came from, keys version); what a check sends (D-55); why no check runs (update check off, no trusted registry); the release snapshot, bundled packs and the local folder; every version skipped and why; **Import…** and **Reload local packs**. `RegistryAlert` puts an out-of-date index (with a clock hint) and a failing check on top of the page */
+
 import type { SitePackRegistryStatus } from '@browserhive/contracts/http';
 import type { ReactNode } from 'react';
 import { Callout } from '@/components/shared/Callout.tsx';
 import { KeyValue, type KeyValueItem } from '@/components/shared/KeyValue.tsx';
+import { Plain } from '@/components/shared/Plain.tsx';
 import { RelativeTime } from '@/components/shared/RelativeTime.tsx';
 import { Panel } from '@/components/shared/Section.tsx';
+import { printable } from '@/lib/format/printable.ts';
 import { formatDuration } from '@/lib/format/time.ts';
 import { ICONS } from '@/lib/icons.ts';
 import { configKeyDocsUrl, docsUrl } from '@/lib/links.ts';
 import { ImportMenu, type ImportPicker } from './ImportPack.tsx';
 import { SKIP_REASON_TEXT, SOURCE_LABEL } from './model.ts';
-import { CHECK_OFF_TEXT, CHECK_SENDS } from './registry-model.ts';
+import { CHECK_OFF_TEXT, CHECK_SENDS, checkErrorText, sentence } from './registry-model.ts';
 
 const LINK =
   'text-link underline decoration-link/40 underline-offset-2 hover:decoration-link focus-ring rounded-sm';
@@ -118,8 +121,14 @@ export function RegistryAlert({ status }: { readonly status: SitePackRegistrySta
         }
       >
         <p className="text-pretty">
-          {status.last_error !== null ? <bdi>{status.last_error.message}</bdi> : null}
-          {status.last_error !== null ? ' ' : null}
+          {status.last_error !== null ? (
+            <>
+              {sentence(checkErrorText(status.last_error))}{' '}
+              <span className="text-foreground/70">
+                (<Plain>{sentence(status.last_error.message)}</Plain>)
+              </span>{' '}
+            </>
+          ) : null}
           Nothing changed: the last good index and every approved pack stay as they were.
           {status.next_check_at !== null ? (
             <>
@@ -183,7 +192,9 @@ function checkItems(status: SitePackRegistryStatus): KeyValueItem[] {
         status.url === null ? (
           <span className="text-muted-foreground">None</span>
         ) : (
-          <span className="font-mono text-sm [overflow-wrap:anywhere]">{status.url}</span>
+          <span className="font-mono text-sm [overflow-wrap:anywhere]">
+            {printable(status.url)}
+          </span>
         ),
     },
     {
@@ -209,8 +220,8 @@ function checkItems(status: SitePackRegistryStatus): KeyValueItem[] {
                 <span>{status.failures} in a row</span>
                 {status.last_error !== null ? (
                   <span className="text-sm text-muted-foreground [overflow-wrap:anywhere]">
-                    <bdi>{status.last_error.message}</bdi>{' '}
-                    <code className="font-mono text-xs">{status.last_error.code}</code>
+                    {sentence(checkErrorText(status.last_error))}{' '}
+                    <Plain>{sentence(status.last_error.message)}</Plain>
                   </span>
                 ) : null}
               </span>
@@ -286,8 +297,8 @@ function indexItems(status: SitePackRegistryStatus): KeyValueItem[] {
           <span className="text-muted-foreground">Unknown</span>
         ) : (
           <span>
-            Key <span className="font-mono text-sm">{status.index_signed_by}</span> · signature
-            verified
+            Key <span className="font-mono text-sm">{printable(status.index_signed_by)}</span> ·
+            signature verified
           </span>
         ),
     },
@@ -304,7 +315,7 @@ function hostItems(status: SitePackRegistryStatus): KeyValueItem[] {
   return [
     {
       key: 'Bundled',
-      value: `${bundled.count} ${bundled.count === 1 ? 'pack' : 'packs'} with BrowserHive ${bundled.version}`,
+      value: `${bundled.count} ${bundled.count === 1 ? 'pack' : 'packs'} with BrowserHive ${printable(bundled.version)}`,
     },
     {
       key: 'Release snapshot',
@@ -319,7 +330,7 @@ function hostItems(status: SitePackRegistryStatus): KeyValueItem[] {
             </span>
             {snapshot.detail !== null ? (
               <span className="text-sm text-muted-foreground [overflow-wrap:anywhere]">
-                <bdi>{snapshot.detail}</bdi>
+                <Plain>{snapshot.detail}</Plain>
               </span>
             ) : null}
           </span>
@@ -329,7 +340,7 @@ function hostItems(status: SitePackRegistryStatus): KeyValueItem[] {
       key: 'Local folder',
       value: (
         <span className="flex flex-col gap-0.5">
-          <span className="font-mono text-sm [overflow-wrap:anywhere]">{local.dir}</span>
+          <span className="font-mono text-sm [overflow-wrap:anywhere]">{printable(local.dir)}</span>
           <span className="text-sm text-muted-foreground">
             {local.count} {local.count === 1 ? 'file' : 'files'}
             {local.needing_approval > 0 ? ` · ${local.needing_approval} need approval` : ''}
@@ -419,13 +430,13 @@ export function RegistryCard({
                   key={`${s.source}:${s.pack_id}:${s.version ?? 'x'}`}
                   className="min-w-0 [overflow-wrap:anywhere]"
                 >
-                  <bdi className="font-medium">{s.pack_id}</bdi>
+                  <Plain className="font-medium">{s.pack_id}</Plain>
                   {s.version !== null ? ` v${s.version}` : ''} · {SOURCE_LABEL[s.source]}:{' '}
                   {SKIP_REASON_TEXT[s.reason]}
                   {s.detail !== '' ? (
                     <span className="text-muted-foreground">
                       {' '}
-                      (<bdi>{s.detail}</bdi>)
+                      (<Plain>{s.detail}</Plain>)
                     </span>
                   ) : null}
                 </li>

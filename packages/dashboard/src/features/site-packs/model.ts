@@ -6,6 +6,7 @@ import type {
   SitePacksResponse,
   SitePackView,
 } from '@browserhive/contracts/http';
+import { isolated, printable } from '@/lib/format/printable.ts';
 import type { Tone } from '@/lib/status-registry.ts';
 
 /** A pack's terms stance (`write_policy.stance`). */
@@ -14,12 +15,12 @@ export type Stance = SitePackView['stance'];
 export type WritePolicy = SitePackView['write_policy_default'];
 
 /**
- * A pack-derived string isolated for plain-text surfaces (toasts, dialog copy): wrapped in Unicode
- * FIRST STRONG ISOLATE / POP DIRECTIONAL ISOLATE, so bidi controls inside it cannot reorder the text
- * around it (review S-H4; markup uses `<bdi>`). `refinePack` refuses such controls too.
+ * A pack-derived string for plain-text surfaces (toasts, dialog copy): unprintable characters shown
+ * as U+FFFD (review #100 H1) and the whole wrapped in FIRST STRONG ISOLATE / POP DIRECTIONAL
+ * ISOLATE, so nothing inside can reorder the text around it (review S-H4; markup uses `<Plain>`).
  */
 export function iso(text: string): string {
-  return `\u2068${text}\u2069`;
+  return isolated(text);
 }
 
 /** What the UI says when a pack has no `write` guards (review S-H3): its write policy has nothing to act on. */
@@ -39,21 +40,39 @@ export const SOURCE_LABEL: { readonly [K in SitePackSourceKind]: string } = {
   local: 'Local file',
 };
 
-/** Where a version came from, as the approval was shown (spec 13 §11.4). */
+/** The registry's name in provenance lines: the host of `sitePacksUrl` ("browserhive.ai registry"). */
+export const DEFAULT_REGISTRY = 'browserhive.ai registry';
+
+/** "<host> registry" for a registry URL; the default name when the URL is unknown. */
+export function registryName(url: string | null | undefined): string {
+  if (url === null || url === undefined) return DEFAULT_REGISTRY;
+  const host = domainOf(url);
+  return host === null ? DEFAULT_REGISTRY : `${printable(host)} registry`;
+}
+
+/**
+ * Where a version came from, as the approval was shown (spec 13 §11.4): every name in it printable
+ * (review #100 H1); a signed import names its key and index (L12).
+ */
 export function provenanceText(
   provenance: SitePackProvenance | null,
   source: SitePackSourceKind,
+  registry: string = DEFAULT_REGISTRY,
 ): string {
   if (provenance === null) return SOURCE_LABEL[source];
   switch (provenance.kind) {
     case 'bundled':
-      return `Bundled with BrowserHive ${provenance.release}`;
+      return `Bundled with BrowserHive ${printable(provenance.release)}`;
     case 'remote':
-      return `browserhive.ai registry · key ${provenance.key_id} · signature verified · index ${provenance.index_version}`;
-    case 'import':
-      return `Imported file ${provenance.file}`;
+      return `${registry} · key ${printable(provenance.key_id)} · signature verified · index ${provenance.index_version}`;
+    case 'import': {
+      const file = `Imported file ${printable(provenance.file)}`;
+      return provenance.key_id !== undefined && provenance.index_version !== undefined
+        ? `${file} · key ${printable(provenance.key_id)} · signature verified · index ${provenance.index_version}`
+        : file;
+    }
     case 'local':
-      return `Local file ${provenance.path}`;
+      return `Local file ${printable(provenance.path)}`;
   }
 }
 
@@ -67,10 +86,11 @@ export function shortPath(path: string): string {
 export function shortProvenance(
   provenance: SitePackProvenance | null,
   source: SitePackSourceKind,
+  registry: string = DEFAULT_REGISTRY,
 ): string {
   return provenance?.kind === 'local'
-    ? `Local file ${shortPath(provenance.path)}`
-    : provenanceText(provenance, source);
+    ? `Local file ${printable(shortPath(provenance.path))}`
+    : provenanceText(provenance, source, registry);
 }
 
 /** A local file's state (spec 13 §10.5) with its tone. */
@@ -151,8 +171,8 @@ export const FOLLOW_LABEL: { readonly [K in SitePackView['follow']['setting']]: 
 /** A diff value as text (JSON, never markup); absent values read "(none)". */
 export function valueText(value: unknown): string {
   if (value === undefined || value === null) return '(none)';
-  if (typeof value === 'string') return value;
-  return JSON.stringify(value);
+  if (typeof value === 'string') return printable(value);
+  return printable(JSON.stringify(value));
 }
 
 /** The host of a URL shown as plain text beside it (spec 13 §9.3: the domain is shown), or `null`. */

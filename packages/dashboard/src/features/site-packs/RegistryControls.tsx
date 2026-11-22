@@ -46,11 +46,13 @@ export function WithReason({
 export function CheckMeta({
   status,
   pendingCount,
+  onlineUnfollowed = 0,
 }: {
   readonly status: SitePackRegistryStatus;
   readonly pendingCount: number;
+  readonly onlineUnfollowed?: number;
 }) {
-  const line = checkLine(status, pendingCount);
+  const line = checkLine(status, pendingCount, onlineUnfollowed);
   if (line === null) return null;
   return (
     <span
@@ -116,8 +118,7 @@ export function CheckNowButton({ status }: { readonly status: SitePackRegistrySt
           title: t.title,
           ...(t.description !== undefined && { description: t.description }),
         };
-        if (t.kind === 'error')
-          toast.error({ ...input, ...(response.error && { code: response.error.code }) });
+        if (t.kind === 'error') toast.error(input);
         else if (t.kind === 'info') toast.info(input);
         else toast.success(input);
       },

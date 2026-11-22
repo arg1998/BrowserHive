@@ -1,13 +1,18 @@
 /** @module features/site-packs/pack-columns — the packs table of `/site-packs` (spec 13 §11.4) and its card under 768px: Pack (title, domains, Turned off, "Local file overrides vN", revoked by the publisher and still in force, a version waiting for review or listed online, "Pinned at v7, v9 available", "v9 needs BrowserHive ≥ …", why a version was skipped; the source folded in under a 56rem table) · Source (provenance, every source that knows the pack, local-file state) · Approved (version, short SHA-256 with copy, by and when, auto-updated) · Templates · Follow updates · Enabled · the row menu (Revert when a previous version exists) */
+
 import type { SitePackView } from '@browserhive/contracts/http';
 import { Chip } from '@/components/shared/Chip.tsx';
+import { Plain } from '@/components/shared/Plain.tsx';
 import { RelativeTime } from '@/components/shared/RelativeTime.tsx';
 import type { DataTableColumn } from '@/components/shared/use-data-table.ts';
+import { printable } from '@/lib/format/printable.ts';
+import { useRegistryName } from './api.ts';
 import { FOLLOW_LABEL, provenanceText, shortPath, shortProvenance, skippedText } from './model.ts';
 import { LocalOverrideBadge, LocalStatePill, ShaText } from './PackBits.tsx';
 import { EnabledSwitch, FollowToggle, PackMenu } from './PackControls.tsx';
 import {
   autoUpdated,
+  declinedOnline,
   needsClientText,
   newerOnline,
   newestAvailable,
@@ -33,6 +38,8 @@ function UpdateChip({ pack }: { readonly pack: SitePackView }) {
       </Chip>
     );
   }
+  const declined = declinedOnline(pack);
+  if (declined !== null) return <Chip tone="muted">v{declined} set aside</Chip>;
   const online = newerOnline(pack);
   return online !== null ? <Chip tone="neutral">v{online} online</Chip> : null;
 }
@@ -43,7 +50,7 @@ export function PackTitleCell({ pack }: { readonly pack: SitePackView }) {
     <span className="flex min-w-0 flex-col gap-1">
       <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
         <span className="truncate text-base leading-5 font-medium text-foreground decoration-muted-foreground/60 underline-offset-4 group-hover/row:underline">
-          <bdi>{pack.title}</bdi>
+          <Plain>{pack.title}</Plain>
         </span>
         {!pack.enabled ? <Chip tone="muted">Turned off</Chip> : null}
         {pack.local_override ? (
@@ -57,14 +64,16 @@ export function PackTitleCell({ pack }: { readonly pack: SitePackView }) {
         <UpdateChip pack={pack} />
       </span>
       <span className="font-mono text-sm leading-5 text-muted-foreground [overflow-wrap:anywhere]">
-        <bdi>{pack.domains.join(', ')}</bdi>
+        <Plain>{pack.domains.join(', ')}</Plain>
       </span>
       {needsClientText(pack) !== null ? (
-        <span className="text-sm text-muted-foreground">{needsClientText(pack)}</span>
+        <span className="text-sm text-muted-foreground">
+          {printable(needsClientText(pack) ?? '')}
+        </span>
       ) : null}
       {pack.skipped !== undefined ? (
         <span className="text-sm text-warn-text text-pretty">
-          <bdi>{skippedText(pack.skipped)}</bdi>
+          <Plain>{skippedText(pack.skipped)}</Plain>
         </span>
       ) : null}
     </span>
@@ -75,6 +84,7 @@ export function PackTitleCell({ pack }: { readonly pack: SitePackView }) {
 export function PackSourceCell({ pack }: { readonly pack: SitePackView }) {
   const shown = pack.approved ?? pack.offer;
   const also = otherSources(pack, shown?.source ?? null);
+  const registry = useRegistryName();
   const remote = shown?.provenance?.kind === 'remote' ? shown.provenance : null;
   return (
     <span className="flex min-w-0 flex-col items-start gap-1 text-sm">
@@ -82,20 +92,20 @@ export function PackSourceCell({ pack }: { readonly pack: SitePackView }) {
         remote !== null ? (
           <span
             className="flex min-w-0 flex-col"
-            title={provenanceText(shown.provenance, shown.source)}
+            title={provenanceText(shown.provenance, shown.source, registry)}
           >
-            <span>browserhive.ai registry</span>
+            <span>{registry}</span>
             <span className="text-muted-foreground">
-              Key <span className="whitespace-nowrap">{remote.key_id}</span> · index{' '}
+              Key <span className="whitespace-nowrap">{printable(remote.key_id)}</span> · index{' '}
               {remote.index_version} · verified
             </span>
           </span>
         ) : (
           <span
             className="text-pretty [overflow-wrap:anywhere]"
-            title={provenanceText(shown.provenance, shown.source)}
+            title={provenanceText(shown.provenance, shown.source, registry)}
           >
-            {shortProvenance(shown.provenance, shown.source)}
+            {shortProvenance(shown.provenance, shown.source, registry)}
           </span>
         )
       ) : null}
@@ -105,9 +115,9 @@ export function PackSourceCell({ pack }: { readonly pack: SitePackView }) {
           {shown?.source !== 'local' ? (
             <span
               className="text-muted-foreground [overflow-wrap:anywhere]"
-              title={pack.local.path}
+              title={printable(pack.local.path)}
             >
-              Local file {shortPath(pack.local.path)}
+              Local file {printable(shortPath(pack.local.path))}
             </span>
           ) : null}
           <LocalStatePill local={pack.local} />

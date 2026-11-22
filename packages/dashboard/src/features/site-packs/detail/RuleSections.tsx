@@ -1,5 +1,7 @@
 /** @module features/site-packs/detail/RuleSections — a pack's guards, guarded controls and security checks as tables of text (spec 13 §9.3, §9.5): each guard's kind, address pattern, methods and resource types (or their defaults) and action (or that the pack has none); each guarded control's page, selector or role and name, action and the guard that enforces it on the network; each check's kind, what it matches and what it does */
+
 import type { SitePackV1 } from '@browserhive/contracts/site-packs';
+import { Plain } from '@/components/shared/Plain.tsx';
 import {
   CHALLENGE_ACTION_LABEL,
   CHALLENGE_KIND_LABEL,
@@ -14,7 +16,8 @@ export function GuardsSection({ pack }: { readonly pack: SitePackV1 }) {
     return (
       <PackSection title="Guards (0)" docs="sitePacksGuards">
         <p className="text-base text-muted-foreground">
-          No guards: nothing on <bdi>{pack.domains.join(', ')}</bdi> is blocked, held or flagged.
+          No guards: nothing on <Plain>{pack.domains.join(', ')}</Plain> is blocked, held or
+          flagged.
         </p>
       </PackSection>
     );
@@ -68,7 +71,7 @@ export function ElementGuardsSection({ pack }: { readonly pack: SitePackV1 }) {
                   <Code>{g.target.selector}</Code>
                 ) : (
                   <span>
-                    {g.target.role} named “<bdi>{g.target.name}</bdi>”
+                    {g.target.role} named “<Plain>{g.target.name}</Plain>”
                   </span>
                 )}
                 <span className="font-mono text-xs text-muted-foreground">{g.id}</span>
@@ -125,7 +128,7 @@ export function ChallengesSection({ pack }: { readonly pack: SitePackV1 }) {
               <ul className="flex flex-col gap-0.5">
                 {matchParts(c.match).map((part) => (
                   <li key={part}>
-                    <bdi>{part}</bdi>
+                    <Plain>{part}</Plain>
                   </li>
                 ))}
               </ul>

@@ -1,8 +1,10 @@
 /** @module features/templates/detail/SiteCard — one site of the Sites tab (spec 13 §11.4): its sign-in (state, why, last check, **Check now**, the couldn't-tell warning), its re-login in progress, the cookies that detect it, whether agents are offered it, automatic re-login with the vault, its site pack (version and source, the terms, the write policy, rule counts; or "Use the … site pack" for a generic site), what the pack asks for that the template or machine cannot apply (`SiteStrategyNotes`), **Clear stop** for a stopped site, **Re-login…** and Remove site… */
+
 import type { ReloginView, TemplateSiteView } from '@browserhive/contracts/http';
 import { useEffect, useId, useRef } from 'react';
 import { useConfirm } from '@/app/providers/ConfirmProvider.tsx';
 import { useToast } from '@/app/providers/ToastProvider.tsx';
+import { Plain } from '@/components/shared/Plain.tsx';
 import { StatusBadge } from '@/components/shared/StatusBadge.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { Switch } from '@/components/ui/switch.tsx';
@@ -133,7 +135,7 @@ export function SiteCard({
         <Row label="Detected by">
           {site.pack !== null ? (
             <p>
-              The <bdi>{site.pack.title}</bdi> site pack’s signed-in check
+              The <Plain>{site.pack.title}</Plain> site pack’s signed-in check
             </p>
           ) : cookies.length > 0 ? (
             <p>

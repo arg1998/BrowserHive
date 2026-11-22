@@ -12,10 +12,12 @@ import { SkeletonTable } from '@/components/shared/Skeletons.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { Spinner } from '@/components/ui/spinner.tsx';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs.tsx';
+import { printable } from '@/lib/format/printable.ts';
 import { ICONS } from '@/lib/icons.ts';
 import { configKeyDocsUrl } from '@/lib/links.ts';
 import { useSearchState } from '@/lib/search/use-search-state.ts';
 import { useReloadSitePacks, useSitePackCatalog, useSitePacks } from './api.ts';
+import { DecisionFocusScope, focusElement } from './decision-focus.tsx';
 import { GuardHitsTab } from './GuardHitsTab.tsx';
 import { HistoryTab } from './HistoryTabs.tsx';
 import {
@@ -29,6 +31,7 @@ import { useSitePacksLive } from './live.ts';
 import { PackCard, packColumns } from './pack-columns.tsx';
 import { RegistryAlert, RegistryCard } from './RegistryCard.tsx';
 import { CheckMeta, CheckNowButton, DownloadAllButton } from './RegistryControls.tsx';
+import { unfollowedOnlineCount } from './registry-model.ts';
 import {
   hasPackFilters,
   PACK_SOURCE_CHIP_LABEL,
@@ -38,7 +41,7 @@ import {
   type SitePacksSearch,
   type SitePackTab,
 } from './search.ts';
-import { UpdatesSection } from './UpdatesSection.tsx';
+import { pendingDecisions, UpdatesSection } from './UpdatesSection.tsx';
 
 const TAB_LABEL: { readonly [K in SitePackTab]: string } = {
   packs: 'Packs',
@@ -88,9 +91,12 @@ function ReloadButton({ size = 'default' }: { readonly size?: 'default' | 'sm' }
 function PacksTab({
   search,
   picker,
+  unfollowed,
 }: {
   readonly search: SitePacksSearch;
   readonly picker: ImportPicker;
+  /** Newer versions online that no followed pack shows (review #100 M1). */
+  readonly unfollowed: number;
 }) {
   const { set, clear } = useSearchState<SitePacksSearch>();
   const list = useSitePacks(search);
@@ -132,9 +138,22 @@ function PacksTab({
         }
         onClear={onClear}
       />
+      {unfollowed > 0 ? (
+        <p
+          className="flex min-w-0 items-start gap-2 text-sm text-muted-foreground text-pretty"
+          data-follow-note=""
+        >
+          <ICONS.info aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+          <span>
+            {unfollowed}{' '}
+            {unfollowed === 1 ? 'pack lists a newer version' : 'packs list newer versions'} online.
+            Packs follow updates while a template uses them; turn Follow on to review one now.
+          </span>
+        </p>
+      ) : null}
       <DataPanel query={list} skeleton={<SkeletonTable />} isEmpty={() => false} empty={null}>
         {(page) => (
-          <div className="@container min-w-0">
+          <div className="@container min-w-0" data-site-packs-table="">
             <DataTable<SitePackView>
               label="Site packs"
               columns={columns}
@@ -143,7 +162,7 @@ function PacksTab({
               getRowId={(row) => row.pack_id}
               onStateChange={() => undefined}
               rowHref={(row) => `/site-packs/${encodeURIComponent(row.pack_id)}`}
-              rowLabel={(row) => row.title}
+              rowLabel={(row) => printable(row.title)}
               emptyState={
                 filtered ? (
                   <EmptyState
@@ -188,9 +207,18 @@ export function SitePacksPage() {
   useSitePacksLive(!off);
   const tab = search.tab;
   // When the last decision card leaves, focus moves to the Packs tab below it.
-  const onEmpty = useCallback(() => {
-    document.querySelector<HTMLElement>('[data-site-packs-tabs] [role="tab"]')?.focus();
+  // When no card is left to focus: the pack's row in the table, else the Packs tab (review #100 M5).
+  const onEmpty = useCallback((packId: string) => {
+    const links = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-site-packs-table] a[href]'),
+    ).filter((a) => a.getAttribute('href') === `/site-packs/${encodeURIComponent(packId)}`);
+    // The table's row is its tab stop (roving focus); a phone card is its own link. Only the
+    // visible one takes focus.
+    for (const link of links) if (focusElement(link.closest<HTMLElement>('tr') ?? link)) return;
+    focusElement(document.querySelector<HTMLElement>('[data-site-packs-tabs] [role="tab"]'));
   }, []);
+  const decisionKeys = pendingDecisions(catalog.data?.data ?? []).map((d) => d.key);
+  const unfollowed = unfollowedOnlineCount(catalog.data?.data ?? []);
   return (
     <Stack gap={4}>
       <PageHeader
@@ -201,7 +229,13 @@ export function SitePacksPage() {
         actionsBelowXl
         {...(status !== undefined &&
           !off && {
-            meta: <CheckMeta status={status} pendingCount={catalog.data?.pending_count ?? 0} />,
+            meta: (
+              <CheckMeta
+                status={status}
+                pendingCount={catalog.data?.pending_count ?? 0}
+                onlineUnfollowed={unfollowed}
+              />
+            ),
           })}
         {...(status !== undefined &&
           !off && {
@@ -232,35 +266,41 @@ export function SitePacksPage() {
           {outcome !== null ? (
             <ImportOutcomeCallout outcome={outcome} onDismiss={() => setOutcome(null)} />
           ) : null}
-          {catalog.data !== undefined ? (
-            <UpdatesSection packs={catalog.data.data} status={status} onEmpty={onEmpty} />
-          ) : null}
-          <Tabs
-            value={tab}
-            onValueChange={(value) => set({ tab: value === 'packs' ? undefined : value })}
-          >
-            <TabsList
-              variant="line"
-              aria-label="Site pack sections"
-              className="shrink-0"
-              data-site-packs-tabs=""
+          <DecisionFocusScope keys={decisionKeys} fallback={onEmpty}>
+            {catalog.data !== undefined ? (
+              <UpdatesSection packs={catalog.data.data} status={status} />
+            ) : null}
+            <Tabs
+              value={tab}
+              onValueChange={(value) => set({ tab: value === 'packs' ? undefined : value })}
             >
-              {SITE_PACK_TABS.map((t) => (
-                <TabsTrigger key={t} value={t} className="flex-none">
-                  {TAB_LABEL[t]}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-            <TabsContent value={tab} className="pt-4">
-              {tab === 'packs' ? (
-                <PacksTab search={search} picker={picker} />
-              ) : tab === 'history' ? (
-                <HistoryTab />
-              ) : (
-                <GuardHitsTab />
-              )}
-            </TabsContent>
-          </Tabs>
+              <TabsList
+                variant="line"
+                aria-label="Site pack sections"
+                className="shrink-0"
+                data-site-packs-tabs=""
+              >
+                {SITE_PACK_TABS.map((t) => (
+                  <TabsTrigger key={t} value={t} className="flex-none">
+                    {TAB_LABEL[t]}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+              <TabsContent value={tab} className="pt-4">
+                {tab === 'packs' ? (
+                  <PacksTab
+                    search={search}
+                    picker={picker}
+                    unfollowed={(catalog.data?.pending_count ?? 0) === 0 ? unfollowed : 0}
+                  />
+                ) : tab === 'history' ? (
+                  <HistoryTab />
+                ) : (
+                  <GuardHitsTab />
+                )}
+              </TabsContent>
+            </Tabs>
+          </DecisionFocusScope>
         </>
       )}
     </Stack>

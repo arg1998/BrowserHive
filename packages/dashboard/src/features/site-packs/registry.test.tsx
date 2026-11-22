@@ -241,7 +241,10 @@ describe('pending versions', () => {
     const c = await card(/LinkedIn/);
     expect(within(c).getAllByText('Tightens rules').length).toBeGreaterThan(0);
     await expectNoA11yViolations(view.container, AXE);
-    await click(within(c).getByRole('button', { name: 'Reject' }));
+    await click(within(c).getByRole('button', { name: 'Reject…' }));
+    await click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Reject v4' }),
+    );
     await waitFor(() =>
       expect(view.requests.find((r) => r.path.endsWith('/reject'))?.body).toEqual({ version: 4 }),
     );
@@ -268,7 +271,8 @@ describe('pending versions', () => {
     const c = await card(/LinkedIn/);
     expect(within(c).getByText('Not downloaded')).toBeDefined();
     expect(
-      within(c).getByText(/the registry learns that your address downloaded this pack version/),
+      // Said once, under the section heading (review #100 L13).
+      screen.getByText(/the registry learns that your address downloaded this pack version/),
     ).toBeDefined();
     expect(within(c).queryByRole('button', { name: 'Apply…' })).toBeNull();
     await expectNoA11yViolations(view.container, AXE);
