@@ -1,5 +1,18 @@
 # browserhive
 
+## 0.2.4
+
+### Patch Changes
+
+- [#95](https://github.com/arg1998/BrowserHive/pull/95) [`01b08ad`](https://github.com/arg1998/BrowserHive/commit/01b08ad934efecf8d895b87ff5a550604ae1411e) Thanks [@arg1998](https://github.com/arg1998)! - Launch arguments are now checked in every spelling Chromium accepts. `launch_options.args` entries on the deny-list are refused with `UNSAFE_LAUNCH_ARG` whether they start with `--`, `-` or `/` and in any letter case (`-no-sandbox`, `/User-Data-Dir=…`), and a bare `--` is refused too. Raw proxy arguments are recognised in the same spellings.
+
+  `launch_options.ignoreDefaultArgs` may now only drop `--enable-automation`. `true` and any other entry are refused with `UNSAFE_LAUNCH_ARG`, because Playwright's default arguments carry the managed profile directory, the debugging pipe, the proxy settings and the sandbox switch.
+
+- [#86](https://github.com/arg1998/BrowserHive/pull/86) [`a5e8d0d`](https://github.com/arg1998/BrowserHive/commit/a5e8d0d0157d5feeb63c1ec576e88782d41c7dd1) Thanks [@arg1998](https://github.com/arg1998)! - Dashboard: Websites moves into Overview, and Attention is now Attentions.
+
+  - The sidebar no longer lists Websites. A new **Websites** card at the bottom of the Overview sums up browsing in the selected window: navigations, distinct domains, the top domain and its share, visits to destinations that are not public web pages, and the most visited domains. **View all websites** opens the full Websites page, which works as before at the same address. While you are on it, the breadcrumb reads Overview › Websites and the sidebar keeps Overview highlighted. **Go to Websites** in the command palette still opens it.
+  - The sidebar item, page title, command palette and Help menu now say **Attentions**. The address stays `/attention`.
+
 ## 0.2.3
 
 ### Patch Changes
