@@ -40,7 +40,9 @@ function serve(files: ReadonlyMap<string, Uint8Array>, refuseAll = false) {
       paths.push(url.pathname + url.search);
       if (refuseAll) return new Response('no request may arrive', { status: 500 });
       const bytes = files.get(url.pathname.replace(/^\/registry\/v1\//, ''));
-      return bytes === undefined ? new Response(null, { status: 404 }) : new Response(new Uint8Array(bytes));
+      return bytes === undefined
+        ? new Response(null, { status: 404 })
+        : new Response(new Uint8Array(bytes));
     },
   });
   servers.push(server);
@@ -107,7 +109,10 @@ describe('the registry client in a server', () => {
     const fake = serve(registry.files, true);
     const seen: { ctx: BootContext | null } = { ctx: null };
     const server = await bootServer(
-      { ...bootInputFor(`${dir.path}/pinned`), sitePacksTesting: { url: fake.url, firstCheckMs: 10 } },
+      {
+        ...bootInputFor(`${dir.path}/pinned`),
+        sitePacksTesting: { url: fake.url, firstCheckMs: 10 },
+      },
       { phases: capturing(seen) },
     );
     try {
@@ -120,10 +125,12 @@ describe('the registry client in a server', () => {
   });
 
   it('the testing seam accepts only a loopback registry', () => {
-    expect(testingRegistryProblem({ sitePacksRegistry: { url: 'http://127.0.0.1:1/r/' } })).toBeNull();
-    expect(testingRegistryProblem({ sitePacksRegistry: { url: 'http://example.test/r/' } })).toContain(
-      'https',
-    );
+    expect(
+      testingRegistryProblem({ sitePacksRegistry: { url: 'http://127.0.0.1:1/r/' } }),
+    ).toBeNull();
+    expect(
+      testingRegistryProblem({ sitePacksRegistry: { url: 'http://example.test/r/' } }),
+    ).toContain('https');
     expect(testingRegistryProblem(undefined)).toBeNull();
   });
 });
