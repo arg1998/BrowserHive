@@ -22,6 +22,7 @@ const nav = (to: string, requires?: NavItem['requires'], parent?: string): NavIt
   keywords: [],
   key: undefined,
   parent,
+  children: [],
 });
 const caps = (vault: boolean | null, templates: boolean | null = null) => ({
   vault,

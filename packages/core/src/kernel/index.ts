@@ -24,6 +24,8 @@ export {
   assertLaunchArgsAllowed,
   classifyLaunchArgs,
   DENIED_LAUNCH_ARG_KEYS,
+  DROPPABLE_DEFAULT_ARG_KEYS,
+  isAllowedIgnoreDefaultArgs,
   isDeniedLaunchArg,
   launchArgKey,
   type UnsafeLaunchArgDetails,

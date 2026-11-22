@@ -131,7 +131,7 @@ describe('buildLaunchOptions: one --disable-features switch (D-79)', () => {
   });
 
   it("merges a user's own --disable-features with the stealth switch, last on the line", () => {
-    for (const spelled of ['--disable-features', '-disable-features']) {
+    for (const spelled of ['--disable-features', '-disable-features', '--Disable-Features']) {
       const args = build(true, [`${spelled}=Foo, Bar`, '--mute-audio']);
       expect(switches(args)).toEqual([
         `--disable-features=${[...PATCHRIGHT_DISABLED_FEATURES, ISOLATE_SANDBOXED_IFRAMES, 'Foo', 'Bar'].join(',')}`,
@@ -165,6 +165,7 @@ describe('deny-list interplay', () => {
   it('rejects every deny-listed key passed through user args, while stealth args bypass the check', () => {
     for (const key of DENIED_LAUNCH_ARG_KEYS) {
       expect(() => assertLaunchOptionsAllowed({ args: [`${key}=x`] })).toThrow();
+      expect(() => assertLaunchOptionsAllowed({ args: [`-${key.slice(2)}=x`] })).toThrow();
     }
     // The internally-injected stealth arg is never deny-checked and never denied.
     expect(() => assertLaunchOptionsAllowed({ args: [...STEALTH_ARGS] })).not.toThrow();
@@ -182,6 +183,14 @@ describe('deny-list interplay', () => {
         if (isAppError(err, 'UNSAFE_LAUNCH_ARG')) expect(err.details.arg).toBe(field);
       }
     }
+    for (const ignoreDefaultArgs of [
+      true,
+      ['--remote-debugging-pipe'],
+      ['--password-store=basic'],
+    ]) {
+      expect(() => parseLaunchOptions({ ignoreDefaultArgs })).toThrow();
+    }
+    expect(() => parseLaunchOptions({ ignoreDefaultArgs: ['--enable-automation'] })).not.toThrow();
     expect(() => parseLaunchOptions({ chromiumSandbox: false })).toThrow();
     expect(() => parseLaunchOptions({ chromiumSandbox: true })).not.toThrow();
   });

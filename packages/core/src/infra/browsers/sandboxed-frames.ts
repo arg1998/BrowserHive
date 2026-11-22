@@ -1,5 +1,7 @@
 /** @module infra/browsers/sandboxed-frames — keeps sandboxed `srcdoc` frames in their parent's renderer process in a browser whose init scripts are a protection or an identity: a template host with stealth or "Deny clipboard writes" (spec 13 §2.1, §3.1; D18; verify #84 N1) and an exclusive stealth session (spec 11 §2.2; D-79, D58). With Chromium's `IsolateSandboxedIframes` such a frame runs out of process, no DevTools session can pause it before its first script, and the context's init scripts never reach it. Also folds every `--disable-features` switch of a command line into one (Chromium keeps only the last). */
 
+import { launchArgKey } from '../../kernel/deny-list.ts';
+
 /**
  * Patchright 1.63's own `--disable-features` list (`chromiumSwitches.ts`, always on its command
  * line). Chromium keeps only the last `--disable-features` switch (measured on Chromium 153: an
@@ -72,10 +74,17 @@ export function sandboxedFramesArgs(facts: SandboxedFramesFacts): readonly strin
 }
 
 /**
- * A `--disable-features` switch, spelled as Chromium reads it: one or two leading dashes (Chromium
- * honours `-switch` too, verify #91 N4) and an optional value (a bare switch is an empty list).
+ * The feature list of a `--disable-features` switch in any spelling Chromium accepts (`--`, `-` or
+ * `/` prefix, any letter case: {@link launchArgKey}, the deny-list's own reading), `''` for a bare
+ * switch (an empty list), or `null` when `arg` is another switch or no switch.
  */
-const DISABLE_FEATURES_SWITCH = /^--?disable-features(?:=(.*))?$/s;
+function disableFeaturesList(arg: string): string | null {
+  if (launchArgKey(arg) !== DISABLE_FEATURES) return null;
+  const eq = arg.indexOf('=');
+  return eq === -1 ? '' : arg.slice(eq + 1).trim();
+}
+
+const DISABLE_FEATURES = '--disable-features';
 
 /**
  * `args` with every `--disable-features` switch folded into one, last: the driver's own list (when
@@ -91,9 +100,9 @@ export function foldDisableFeatures(
   const rest: string[] = [];
   const lists: string[] = [];
   for (const arg of args) {
-    const match = DISABLE_FEATURES_SWITCH.exec(arg);
-    if (match === null) rest.push(arg);
-    else lists.push(match[1] ?? '');
+    const list = disableFeaturesList(arg);
+    if (list === null) rest.push(arg);
+    else lists.push(list);
   }
   if (lists.length === 0) return args;
   const features = new Set<string>(driverSwitchKept ? PATCHRIGHT_DISABLED_FEATURES : []);

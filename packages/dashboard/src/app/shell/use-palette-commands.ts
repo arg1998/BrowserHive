@@ -1,4 +1,4 @@
-/** @module app/shell/use-palette-commands — palette entries: This page / Sessions (via `/search`) / Attention (pending) / Pages / Actions / Recent, plus the substring filter */
+/** @module app/shell/use-palette-commands — palette entries: This page / Sessions (via `/search`) / Attentions (pending) / Pages (sidebar items and pages declaring a palette icon, e.g. Websites) / Actions / Recent, plus the substring filter */
 
 import { parseSessionId } from '@browserhive/contracts/ids';
 import { useQuery } from '@tanstack/react-query';
@@ -13,10 +13,10 @@ import { readStorageJson, writeStorageJson } from '@/lib/storage.ts';
 import { useTheme } from '@/theme/ThemeProvider.tsx';
 import type { PageAction } from './page-actions.tsx';
 import { useSidebarPreference } from './sidebar-state.ts';
-import { useNavItems } from './use-route-table.ts';
+import { usePalettePages } from './use-route-table.ts';
 
 /** Palette section. */
-export type PaletteGroup = 'Recent' | 'This page' | 'Sessions' | 'Attention' | 'Pages' | 'Actions';
+export type PaletteGroup = 'Recent' | 'This page' | 'Sessions' | 'Attentions' | 'Pages' | 'Actions';
 
 /** One palette entry. */
 export interface PaletteCommand {
@@ -42,7 +42,7 @@ export const PALETTE_GROUPS: readonly PaletteGroup[] = [
   'Recent',
   'This page',
   'Sessions',
-  'Attention',
+  'Attentions',
   'Pages',
   'Actions',
 ];
@@ -157,7 +157,7 @@ export function usePaletteCommands(
   const { logout } = useAuth();
   const theme = useTheme();
   const [sidebar, setSidebar] = useSidebarPreference();
-  const items = useNavItems();
+  const items = usePalettePages();
   const search = useQuery({
     queryKey: keys.search(debouncedQuery),
     queryFn: () => api.search({ query: { q: debouncedQuery, limit: 6 } }),
@@ -245,7 +245,7 @@ export function usePaletteCommands(
           }));
     const requests: PaletteCommand[] = (attention.data?.data ?? []).map((r) => ({
       id: `attention:${r.request_id}`,
-      group: 'Attention',
+      group: 'Attentions',
       label: r.reason,
       hint: r.session_slug,
       icon: 'attention',

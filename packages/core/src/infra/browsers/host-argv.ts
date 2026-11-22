@@ -2,6 +2,7 @@
 
 import { createRequire } from 'node:module';
 import type { LaunchOptions } from 'patchright';
+import { launchArgKey } from '../../kernel/deny-list.ts';
 import { AppError } from '../../kernel/errors/app-error.ts';
 import type { ProxySpec } from '../../ports/browser-driver.ts';
 
@@ -147,9 +148,10 @@ export function assertHostArgv(
   userDataDir: string,
   facts: HostArgvFacts,
 ): void {
-  // Chromium honours a switch with one leading dash too (`-no-proxy-server`, measured): every
-  // check reads the argv with such a switch spelled with two (verify #91 N4).
-  const spelled = argv.map((arg) => (/^-[^-]/.test(arg) ? `-${arg}` : arg));
+  // Chromium honours a switch with one leading dash too (`-no-proxy-server`, measured; verify #91
+  // N4), and `/` or any letter case on Windows: every check reads the argv with each switch in the
+  // deny-list's canonical `--name` spelling (`launchArgKey`, spec 11 §4).
+  const spelled = argv.map(canonicalSwitch);
   const named = (name: string) =>
     spelled.filter((arg) => arg === name || arg.startsWith(`${name}=`));
   if (facts.proxy !== null) {
@@ -189,6 +191,15 @@ export function assertHostArgv(
   if (argv.some((arg) => !arg.startsWith('-'))) {
     throw argvRefused('the argv opens a page');
   }
+}
+
+/** `arg` with its switch name as {@link launchArgKey} reads it, its value untouched; a non-switch as is. */
+function canonicalSwitch(arg: string): string {
+  const key = launchArgKey(arg);
+  if (key === null) return arg;
+  const trimmed = arg.trim();
+  const eq = trimmed.indexOf('=');
+  return eq === -1 ? key : `${key}${trimmed.slice(eq)}`;
 }
 
 /** The refusal of a host start whose command line is not the one it must be. */

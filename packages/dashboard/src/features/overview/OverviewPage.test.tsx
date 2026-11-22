@@ -1,4 +1,4 @@
-/** @module features/overview/OverviewPage.test — chart maths (nice scale, axis labels, bucket wording), tile grid, links (domains, failures, chart buckets), tiles from the fake API, live `system.capacity` patch, time-range URL rules, degradations callout, axe clean */
+/** @module features/overview/OverviewPage.test — chart maths (nice scale, axis labels, bucket wording), tile grid, links (domains, failures, chart buckets), tiles from the fake API, live `system.capacity` patch, time-range URL rules, degradations callout, the Websites card (summary figures, last on the page, View all websites keeps the window), axe clean (the first render test covers the whole page) */
 
 import { describe, expect, it } from 'bun:test';
 import { stripSearchParams } from '@tanstack/react-router';
@@ -24,15 +24,29 @@ import {
   sparkPoints,
   tileGridClass,
 } from './components/OverviewTiles.tsx';
-import { domainHref, OverviewPage } from './OverviewPage.tsx';
+import { websitesSummary } from './components/WebsitesStatsCard.tsx';
+import { domainHref, OverviewPage, websitesSearchFor } from './OverviewPage.tsx';
 import { OVERVIEW_DEFAULTS, overviewSearch } from './search.ts';
 
 const routes = (system = systemInfo()) => ({
   'GET /activity': activity(),
   'GET /system': system,
   'GET /pages/recent': { data: [pageRow(1)], now: NOW },
+  'GET /pages': envelope([pageRow(1)], {
+    page: { next_cursor: null, limit: 1, total: 12 },
+    facets: {
+      category: [
+        { value: 'public', count: 9 },
+        { value: 'ip', count: 2 },
+        { value: 'local', count: 1 },
+      ],
+    },
+  }),
   'GET /pages/domains': {
-    data: [{ domain: 'example1.com', count: 3 }],
+    data: [
+      { domain: 'example1.com', count: 3 },
+      { domain: 'example2.com', count: 1 },
+    ],
     window: { since: null, until: null },
     now: NOW,
   },
@@ -210,7 +224,60 @@ describe('activity chart maths', () => {
     expect(domainHref('a.example', { range: '24h', since: undefined, until: undefined })).toBe(
       '/websites?domain=a.example&range=24h',
     );
+    expect(domainHref('a.example', { range: '7d', since: 10, until: 20 })).toBe(
+      '/websites?domain=a.example&since=10&until=20',
+    );
+    expect(websitesSearchFor({ range: '7d', since: undefined, until: undefined })).toEqual({});
+    expect(websitesSearchFor({ range: '30d', since: undefined, until: undefined })).toEqual({
+      range: '30d',
+    });
     expect(failureHref('shop-a1b2c3d4')).toBe('/sessions/shop-a1b2c3d4?kinds=tool&errors_only=1');
+  });
+});
+
+describe('websites summary', () => {
+  const page = (total: number | undefined, category: { value: string; count: number }[]) => ({
+    page: { next_cursor: null, limit: 1, ...(total !== undefined && { total }) },
+    facets: { category },
+  });
+
+  it('counts domains, the top share and non-public visits in registry order', () => {
+    const summary = websitesSummary(
+      page(10, [
+        { value: 'local', count: 1 },
+        { value: 'public', count: 6 },
+        { value: 'ip', count: 3 },
+      ]),
+      {
+        data: [
+          { domain: 'a.example', count: 4 },
+          { domain: 'b.example', count: 2 },
+        ],
+      },
+    );
+    expect(summary.navigations).toBe(10);
+    expect(summary.domains).toEqual({ count: 2, capped: false });
+    expect(summary.top).toEqual({ domain: 'a.example', share: 0.4 });
+    expect(summary.notPublic).toEqual({
+      count: 4,
+      parts: [
+        { label: 'IP address', count: 3 },
+        { label: 'Local', count: 1 },
+      ],
+    });
+  });
+
+  it('marks a full domain list as capped and has no top domain without navigations', () => {
+    const full = {
+      data: [
+        { domain: 'a', count: 1 },
+        { domain: 'b', count: 1 },
+      ],
+    };
+    expect(websitesSummary(page(2, []), full, 2).domains).toEqual({ count: 2, capped: true });
+    const empty = websitesSummary(page(undefined, []), undefined);
+    expect(empty).toMatchObject({ navigations: 0, top: null, notPublic: { count: 0, parts: [] } });
+    expect(empty.domains).toEqual({ count: 0, capped: false });
   });
 });
 
@@ -321,5 +388,28 @@ describe('OverviewPage', () => {
     const failuresCall = view.requests.find((r) => r.path === '/api/v1/tool-calls');
     expect(failuresCall?.query.get('has_session')).toBe('true');
     expect(view.container.querySelector('[aria-label="Quick actions"]')).toBeNull();
+  });
+
+  it('ends with the Websites card: window figures, domains and a link to the detail page', async () => {
+    const view = mount('/overview?range=30d');
+    const heading = await screen.findByText('Websites', { selector: 'h2' });
+    const card = heading.closest('section');
+    if (!(card instanceof HTMLElement)) throw new Error('Websites card not found');
+    // Last on the page.
+    expect(card.parentElement?.lastElementChild === card).toBe(true);
+    await waitFor(() => expect(card.textContent).toContain('Navigations12Pages opened · 30d'));
+    expect(card.textContent).toContain('Domains2Distinct sites');
+    expect(card.textContent).toContain('Top domainexample1.com25% of navigations');
+    expect(card.textContent).toContain('Not public3IP address 2 · Local 1');
+    expect(card.querySelector('a[aria-label="example1.com: 3"]')?.getAttribute('href')).toBe(
+      '/websites?domain=example1.com&range=30d',
+    );
+    expect(within(card).getByText('View all websites').closest('a')?.getAttribute('href')).toBe(
+      '/websites?range=30d',
+    );
+    const summaryCall = view.requests.find((r) => r.path === '/api/v1/pages');
+    expect(summaryCall?.query.get('limit')).toBe('1');
+    expect(summaryCall?.query.get('total')).toBe('true');
+    expect(summaryCall?.query.get('since')).not.toBeNull();
   });
 });

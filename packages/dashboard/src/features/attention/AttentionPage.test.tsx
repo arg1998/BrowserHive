@@ -78,9 +78,10 @@ describe('AttentionPage', () => {
     );
     const notify = screen.getByRole('article', { name: 'Approve the 2FA prompt' });
     expect(within(notify).getByRole('link', { name: 'Open session' })).toBeTruthy();
-    // The explainer lives once in the header, never per card; no duplicate "Attention" heading.
+    // The explainer lives once in the header, never per card; no duplicate "Attentions" heading.
     expect(screen.queryByText(/lease is frozen while it waits/)).toBeNull();
     expect(screen.getAllByRole('heading', { name: /^Attention/ }).length).toBe(1);
+    expect(screen.getByRole('heading', { level: 1, name: /^Attentions/ })).toBeTruthy();
     const history = await screen.findByRole('region', { name: 'Settled requests' });
     expect(within(history).getByText('Old one')).toBeTruthy();
     expect(within(history).getByText('“done”')).toBeTruthy();

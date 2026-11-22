@@ -157,7 +157,7 @@ export const SESSION_ERRORS = {
     details: z.object({ arg: z.string() }),
     docs: true,
     cause:
-      'A Chromium flag that changes the profile directory, sandbox or debugging surface was passed.',
+      'A Chromium flag that changes the profile directory, sandbox or debugging surface was passed, in any spelling Chromium accepts (`--`, `-` or `/` prefix, any letter case), or a bare `--`; or a launch option that bypasses the deny-list (`chromiumSandbox: false`, `env`, `downloadsPath`, `recordVideo`, an `ignoreDefaultArgs` other than `--enable-automation`).',
     resolution:
       'Use the persistence modes and channel options instead of raw isolation-breaking flags.',
   }),
@@ -369,7 +369,7 @@ export const SESSION_ERRORS = {
     cause:
       "The session's template has a site pack that handed something to a person (spec 13 §9.3, §9.5): a security check (a challenge page or CAPTCHA) the operator has to solve, a write the operator has to approve (`confirm` write policy or guard), or a site the operator stopped after a terminal check (`stop`). Every tool except the read-only ones answers this until the request settles.",
     resolution:
-      'Resolve or reject the request on the Attention page (a "Site check" or "Write approval"); for a stopped site, press **Clear stop** on the template\'s Sites tab once the account is fine.',
+      'Resolve or reject the request on the Attentions page (a "Site check" or "Write approval"); for a stopped site, press **Clear stop** on the template\'s Sites tab once the account is fine.',
   }),
   SITE_ACTION_BLOCKED: defineError({
     code: 'SITE_ACTION_BLOCKED',

@@ -216,6 +216,9 @@ describe('host argv (D-78)', () => {
       '-no-proxy-server',
       '-proxy-server=direct://',
       '-remote-debugging-port=0',
+      // …and any letter case, read the way the deny-list reads a switch (spec 11 §4).
+      '--No-Proxy-Server',
+      '-REMOTE-DEBUGGING-PORT=0',
     ]) {
       expect(refusal([...good, extra])).toMatchObject({ ref: 'launch_args' });
     }

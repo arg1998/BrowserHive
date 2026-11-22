@@ -29,12 +29,19 @@ export interface RouteStaticData {
   /** Object pages show a breadcrumb instead of the title. */
   readonly crumb?: (params: Record<string, string>) => string;
   /**
+   * Sidebar page this page belongs to when it has no sidebar entry of its own (`/websites` →
+   * `/overview`): the breadcrumb starts there and that sidebar item stays highlighted. Not to be
+   * confused with `nav.parent`, which indents one sidebar item under another.
+   */
+  readonly parent?: string;
+  /**
    * Capability the page needs; when off, the item moves to the "Not enabled" group with a lock
    * glyph (`vault` from `/system`, `templates` from the `templates` config key, `sitePacks` from the
    * `sitePacks` config key).
    */
   readonly requires?: 'vault' | 'admin' | 'templates' | 'sitePacks';
-  readonly palette?: { readonly keywords: readonly string[] };
+  /** Palette "Go to" entry; `icon` is needed only on pages without a sidebar entry. */
+  readonly palette?: { readonly keywords: readonly string[]; readonly icon?: IconName };
 }
 
 declare module '@tanstack/react-router' {

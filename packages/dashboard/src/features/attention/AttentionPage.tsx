@@ -56,7 +56,7 @@ export function AttentionPage() {
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
-        title="Attention"
+        title="Attentions"
         badge={
           openCount > 0 ? (
             <TonePill entry={{ label: `${formatNumber(openCount)} open`, tone: 'warn' }} pulse />

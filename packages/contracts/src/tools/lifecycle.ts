@@ -12,7 +12,8 @@ export const SLUG_RE = /^[a-z][a-z0-9-]{1,31}$/;
 
 /**
  * Playwright `LaunchOptions` pass-through. Unknown keys are forwarded verbatim for forward-compat;
- * `args[]` entries are checked against the deny-list (`UNSAFE_LAUNCH_ARG`) before any browser spawns.
+ * `args[]` entries are checked against the deny-list (`UNSAFE_LAUNCH_ARG`) before any browser spawns;
+ * `ignoreDefaultArgs` may only drop `--enable-automation`.
  */
 export const LaunchOptions = z.looseObject({
   args: z.array(z.string()).optional(),

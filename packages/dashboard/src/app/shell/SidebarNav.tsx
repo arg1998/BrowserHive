@@ -1,10 +1,10 @@
-/** @module app/shell/SidebarNav — nav items from the route table: expanded rows or 40px rail buttons with tooltips, badges (dot in the rail), "Not enabled" group only once `/system` is known */
-import { Link } from '@tanstack/react-router';
+/** @module app/shell/SidebarNav — nav items from the route table: expanded rows or 40px rail buttons with tooltips, badges (dot in the rail), "Not enabled" group only once `/system` is known; an item stays active on the pages that name it as `parent` */
+import { Link, useRouterState } from '@tanstack/react-router';
 import { Hint } from '@/components/ui/tooltip.tsx';
 import { ICONS } from '@/lib/icons.ts';
 import { cn } from '@/lib/utils.ts';
 import { groupNavItems, useNavSignals } from './nav-signals.ts';
-import { type NavItem, useNavItems } from './use-route-table.ts';
+import { isUnder, type NavItem, useNavItems } from './use-route-table.ts';
 
 export {
   groupNavItems,
@@ -106,6 +106,9 @@ function NavLink({
   readonly locked?: boolean;
   readonly onNavigate?: () => void;
 }) {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  // The router marks the item's own path; pages filed under it (`parent`) are marked here.
+  const childActive = item.children.some((path) => isUnder(pathname, path));
   const Icon = ICONS[item.icon];
   const Lock = ICONS.lock;
   const badgeText = badge > 99 ? '99+' : String(badge);
@@ -131,7 +134,9 @@ function NavLink({
         child && !collapsed && 'ml-5 h-8 pl-2.5 text-sm',
         // Locked items stay readable (≥ 4.5:1) and look like any active item once opened.
         locked && 'text-muted-foreground',
+        childActive && 'active font-medium',
       )}
+      {...(childActive && { 'aria-current': 'page' as const })}
       activeProps={{ 'aria-current': 'page', className: 'active font-medium' }}
     >
       <Icon

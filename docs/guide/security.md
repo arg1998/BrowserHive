@@ -182,7 +182,7 @@ Ubuntu 23.10 and later only let programs with an AppArmor profile create the use
 
 `browserhive doctor` shows, per installed browser, whether it can run sandboxed here and, when your configured browser cannot, the options for your machine. The dashboard's System page lists the browsers and each one's sandbox state, and a session's Details tab shows whether that session ran sandboxed. That is recorded when its browser launches and kept with the session, so you can still check it after the session closed (`browser.sandboxed` in `GET /api/v1/sessions/{id}`). Sessions from before BrowserHive 0.2 show "not recorded".
 
-An agent can ask for the sandbox for one session (`launch_options: { chromiumSandbox: true }`); if the browser cannot provide it, the launch fails with `SANDBOX_UNAVAILABLE` instead of starting unsandboxed. An agent can never turn the sandbox off: `chromiumSandbox: false` is refused.
+An agent can ask for the sandbox for one session (`launch_options: { chromiumSandbox: true }`); if the browser cannot provide it, the launch fails with `SANDBOX_UNAVAILABLE` instead of starting unsandboxed. An agent can never turn the sandbox off: `chromiumSandbox: false` is refused, and so is `--no-sandbox` in `launch_options.args`, in any spelling Chromium accepts (see [Launch-argument guard](stealth.md#launch-argument-guard)).
 
 ## Session templates
 

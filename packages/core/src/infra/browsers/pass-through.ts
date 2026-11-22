@@ -2,7 +2,11 @@
 
 import type { BrowserContextOptions, LaunchOptions } from 'patchright';
 import { z } from 'zod';
-import { assertLaunchArgsAllowed } from '../../kernel/deny-list.ts';
+import {
+  assertLaunchArgsAllowed,
+  isAllowedIgnoreDefaultArgs,
+  launchArgKey,
+} from '../../kernel/deny-list.ts';
 import { AppError } from '../../kernel/errors/app-error.ts';
 import type { ProxySpec } from '../../ports/browser-driver.ts';
 
@@ -16,9 +20,10 @@ import type { ProxySpec } from '../../ports/browser-driver.ts';
  *   - `args[]` entries are checked against the deny-list (`kernel/deny-list.ts`) before any browser
  *     is spawned.
  *   - `executablePath` is allowed but flagged: overriding it means channel routing no longer applies.
- *   - `chromiumSandbox: false`, `env`, `downloadsPath` and `recordVideo` bypass the *intent* of the
- *     deny-list through loose fields, so {@link assertLaunchOptionsAllowed} refuses them
- *     (`UNSAFE_LAUNCH_ARG` naming the field).
+ *   - `chromiumSandbox: false`, `env`, `downloadsPath`, `recordVideo` and an `ignoreDefaultArgs` that
+ *     drops anything but `--enable-automation` bypass the *intent* of the deny-list through loose
+ *     fields, so {@link assertLaunchOptionsAllowed} refuses them (`UNSAFE_LAUNCH_ARG` naming the
+ *     field).
  *   - `userDataDir` collisions with managed persistence are rejected structurally, handled where
  *     persistence mode is resolved.
  */
@@ -42,7 +47,10 @@ export const LaunchOptionsSchema = z.looseObject({
   executablePath: z.string().optional(),
   /** BYO proxy at launch level. Normalised into `LaunchSpec.proxy` by {@link extractByoProxy}. */
   proxy: ProxyOptionSchema.optional(),
-  /** Suppress Playwright default args; merged with the stealth rule in `launch-args.ts`. */
+  /**
+   * Suppress Playwright default args; only `--enable-automation` may be dropped (`true` and any other
+   * entry are refused). Merged with the stealth rule in `launch-args.ts`.
+   */
   ignoreDefaultArgs: z.union([z.boolean(), z.array(z.string())]).optional(),
 });
 
@@ -100,7 +108,7 @@ export const UNSAFE_LAUNCH_OPTION_FIELDS: readonly string[] = [
 
 /**
  * Refuse deny-listed `args` and the sibling loose fields (`chromiumSandbox: false`, `env`,
- * `downloadsPath`, `recordVideo`) that bypass the deny-list's intent — a correctness fix, not a
+ * `downloadsPath`, `recordVideo`, a protective `ignoreDefaultArgs`) that bypass the deny-list's intent — a correctness fix, not a
  * behavior an agent could rely on (spec 11 §4).
  *
  * @throws `UNSAFE_LAUNCH_ARG` with the arg or field name.
@@ -109,6 +117,8 @@ export function assertLaunchOptionsAllowed(options: ParsedLaunchOptions | undefi
   if (options === undefined) return;
   assertLaunchArgsAllowed(options.args);
   if (options['chromiumSandbox'] === false) throw unsafeField('chromiumSandbox');
+  if (!isAllowedIgnoreDefaultArgs(options.ignoreDefaultArgs))
+    throw unsafeField('ignoreDefaultArgs');
   for (const field of UNSAFE_LAUNCH_OPTION_FIELDS) {
     if (options[field] !== undefined) throw unsafeField(field);
   }
@@ -124,7 +134,10 @@ function unsafeField(field: string): AppError<'UNSAFE_LAUNCH_ARG'> {
   );
 }
 
-/** Chromium flags that configure egress at the command line, bypassing the structured `proxy` option. */
+/**
+ * Chromium flags that configure egress at the command line, bypassing the structured `proxy` option.
+ * Matched on {@link launchArgKey}, so every spelling Chromium accepts (`-proxy-server=…`) counts.
+ */
 export const PROXY_ARG_PREFIXES: readonly string[] = [
   '--proxy-server',
   '--proxy-pac-url',
@@ -133,8 +146,8 @@ export const PROXY_ARG_PREFIXES: readonly string[] = [
 
 /**
  * Whether the caller brought their own egress proxy, by any of the routes Playwright and Chromium
- * accept: `launchOptions.proxy`, `contextOptions.proxy`, a raw `--proxy-*` launch arg, or (D-13) a
- * typed `LaunchSpec.proxy`.
+ * accept: `launchOptions.proxy`, `contextOptions.proxy`, a raw `--proxy-*` launch arg (in any switch
+ * spelling Chromium accepts), or (D-13) a typed `LaunchSpec.proxy`.
  *
  * This is the trigger for the **downgrade rule**. A host-derived seed asserted over someone else's
  * exit IP is the "US identity over a DE proxy" case — trivially caught, and strictly worse than the
@@ -155,7 +168,10 @@ export function byoProxyPresent(
   if (contextOptions?.proxy !== undefined) return true;
   const args = launchOptions?.args;
   if (!Array.isArray(args)) return false;
-  return args.some((arg) => PROXY_ARG_PREFIXES.some((prefix) => arg.startsWith(prefix)));
+  return args.some((arg) => {
+    const key = launchArgKey(arg);
+    return key !== null && PROXY_ARG_PREFIXES.includes(key);
+  });
 }
 
 /**

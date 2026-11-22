@@ -236,7 +236,7 @@ export const WARNING_ERRORS = {
   SITE_WRITE_HELD: warning(
     'SITE_WRITE_HELD',
     'A write is waiting for approval',
-    'A request matched a site pack guard or write policy that needs confirmation (spec 13 §9.3); it is held until an operator approves or denies the "Write approval" on the Attention page, or until its deadline.',
-    'Approve or deny it on the Attention page.',
+    'A request matched a site pack guard or write policy that needs confirmation (spec 13 §9.3); it is held until an operator approves or denies the "Write approval" on the Attentions page, or until its deadline.',
+    'Approve or deny it on the Attentions page.',
   ),
 } as const;

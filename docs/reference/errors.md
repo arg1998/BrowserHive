@@ -363,7 +363,7 @@ Message: `Launch arg '{arg}' is on the deny-list and would break session isolati
 
 Hint: Remove the argument from launch_options.args.
 
-Cause: A Chromium flag that changes the profile directory, sandbox or debugging surface was passed.
+Cause: A Chromium flag that changes the profile directory, sandbox or debugging surface was passed, in any spelling Chromium accepts (`--`, `-` or `/` prefix, any letter case), or a bare `--`; or a launch option that bypasses the deny-list (`chromiumSandbox: false`, `env`, `downloadsPath`, `recordVideo`, an `ignoreDefaultArgs` other than `--enable-automation`).
 
 Resolution: Use the persistence modes and channel options instead of raw isolation-breaking flags.
 
@@ -666,7 +666,7 @@ Hint: Wait with get_attention_result for the request id, or close the session. D
 
 Cause: The session's template has a site pack that handed something to a person (spec 13 §9.3, §9.5): a security check (a challenge page or CAPTCHA) the operator has to solve, a write the operator has to approve (`confirm` write policy or guard), or a site the operator stopped after a terminal check (`stop`). Every tool except the read-only ones answers this until the request settles.
 
-Resolution: Resolve or reject the request on the Attention page (a "Site check" or "Write approval"); for a stopped site, press **Clear stop** on the template's Sites tab once the account is fine.
+Resolution: Resolve or reject the request on the Attentions page (a "Site check" or "Write approval"); for a stopped site, press **Clear stop** on the template's Sites tab once the account is fine.
 
 Details:
 
@@ -3831,9 +3831,9 @@ Message: `{message}`
 
 Hint: Session warning: logged and broadcast on session:<id>, never thrown.
 
-Cause: A request matched a site pack guard or write policy that needs confirmation (spec 13 §9.3); it is held until an operator approves or denies the "Write approval" on the Attention page, or until its deadline.
+Cause: A request matched a site pack guard or write policy that needs confirmation (spec 13 §9.3); it is held until an operator approves or denies the "Write approval" on the Attentions page, or until its deadline.
 
-Resolution: Approve or deny it on the Attention page.
+Resolution: Approve or deny it on the Attentions page.
 
 Details:
 

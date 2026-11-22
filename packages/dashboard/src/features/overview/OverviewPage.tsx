@@ -1,10 +1,9 @@
-/** @module features/overview/OverviewPage — fleet health: header + range, degradations callout, KPI row, activity chart, then two columns from 1280px (recent sessions + websites visited | recent failures + most visited domains + harnesses) (spec 04 §12.1) */
+/** @module features/overview/OverviewPage — fleet health: header + range, degradations callout, KPI row, activity chart, two columns from 1280px (recent sessions + websites visited | recent failures + harnesses), then the full-width Websites card last (window stats and most visited domains → `/websites`) (spec 04 §12.1) */
 import { useTopic } from '@/app/providers/SocketProvider.tsx';
 import { ErrorState } from '@/components/shared/ErrorState.tsx';
 import { PageHeader } from '@/components/shared/PageHeader.tsx';
 import { TimeRangeControl } from '@/components/shared/time-range-control.tsx';
 import { HarnessesCard } from '@/features/harness/HarnessesCard.tsx';
-import { TopDomainsCard } from '@/features/websites/components/TopDomainsCard.tsx';
 import { toAppError } from '@/lib/api/errors.ts';
 import { useSearchState } from '@/lib/search/use-search-state.ts';
 import {
@@ -17,6 +16,7 @@ import {
   useSystemStatus,
   useTopDomains,
   useVaultFills,
+  useWebsitesSummary,
 } from './api.ts';
 import { ActivityCard } from './components/ActivityCard.tsx';
 import { DegradationsCallout } from './components/DegradationsCallout.tsx';
@@ -24,10 +24,25 @@ import { FailuresCard } from './components/FailuresCard.tsx';
 import { OverviewTiles, OverviewTilesSkeleton } from './components/OverviewTiles.tsx';
 import { RecentSessionsCard } from './components/RecentSessionsCard.tsx';
 import { WebsitesCard } from './components/WebsitesCard.tsx';
+import {
+  DOMAINS_FETCHED,
+  type WebsitesLinkSearch,
+  WebsitesStatsCard,
+} from './components/WebsitesStatsCard.tsx';
 import type { OverviewSearch } from './search.ts';
 
-/** Domains shown on the Overview. */
-const TOP_DOMAINS = 8;
+/** `/websites` search keeping the Overview window (the 7d default stays out of the URL). */
+export function websitesSearchFor(
+  search: Pick<OverviewSearch, 'range' | 'since' | 'until'>,
+): WebsitesLinkSearch {
+  if (search.since !== undefined || search.until !== undefined) {
+    return {
+      ...(search.since !== undefined && { since: search.since }),
+      ...(search.until !== undefined && { until: search.until }),
+    };
+  }
+  return search.range !== '7d' ? { range: search.range } : {};
+}
 
 /** `/websites` link filtered to one domain, keeping the Overview window. */
 export function domainHref(
@@ -35,11 +50,8 @@ export function domainHref(
   search: Pick<OverviewSearch, 'range' | 'since' | 'until'>,
 ): string {
   const params = new URLSearchParams({ domain });
-  if (search.since !== undefined || search.until !== undefined) {
-    if (search.since !== undefined) params.set('since', String(search.since));
-    if (search.until !== undefined) params.set('until', String(search.until));
-  } else if (search.range !== '7d') {
-    params.set('range', search.range);
+  for (const [key, value] of Object.entries(websitesSearchFor(search))) {
+    params.set(key, String(value));
   }
   return `/websites?${params.toString()}`;
 }
@@ -53,7 +65,8 @@ export function OverviewPage() {
   const recentPages = useRecentPages();
   const recentSessions = useRecentSessions();
   const failures = useRecentFailures(window);
-  const domains = useTopDomains(window, TOP_DOMAINS);
+  const domains = useTopDomains(window, DOMAINS_FETCHED);
+  const websites = useWebsitesSummary(window);
   const harnesses = useHarnessMetrics(window);
   const vaultEnabled = system.data?.vault.enabled === true;
   const vaultFills = useVaultFills(window, vaultEnabled);
@@ -126,15 +139,16 @@ export function OverviewPage() {
         </div>
         <div className="flex min-w-0 flex-col gap-6 xl:col-span-5">
           <FailuresCard query={failures} rangeLabel={window.label} />
-          <TopDomainsCard
-            query={domains}
-            rangeLabel={window.label}
-            top={TOP_DOMAINS}
-            hrefFor={(domain) => domainHref(domain, search)}
-          />
           <HarnessesCard query={harnesses} rangeLabel={window.label} window={window} />
         </div>
       </div>
+      <WebsitesStatsCard
+        summary={websites}
+        domains={domains}
+        rangeLabel={window.label}
+        search={websitesSearchFor(search)}
+        hrefFor={(domain) => domainHref(domain, search)}
+      />
     </div>
   );
 }

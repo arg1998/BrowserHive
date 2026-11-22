@@ -29,7 +29,7 @@ Theme follows the system, or pick light or dark. Filters, sorting and pagination
 
 ## Overview
 
-Fleet health over 24 h, 3 d, 7 d, 14 d or 30 d: live sessions, sessions and tool calls in the window (with sparklines), open attention requests, errors with the error rate, active live views, and blocked URLs. The activity chart shows calls per bucket with errors stacked; click a bar to open the sessions of that time slice. Below it, a live feed of websites visited, the most frequent recent failures, and **Harnesses**: sessions and tool calls per agent in the window, with Unknown always listed; click one to see its sessions.
+Fleet health over 24 h, 3 d, 7 d, 14 d or 30 d: live sessions, sessions and tool calls in the window (with sparklines), open attention requests, errors with the error rate, active live views, and blocked URLs. The activity chart shows calls per bucket with errors stacked; click a bar to open the sessions of that time slice. Below it, recent sessions, a live feed of websites visited, the most frequent recent failures, and **Harnesses**: sessions and tool calls per agent in the window, with Unknown always listed; click one to see its sessions. The **Websites** card at the bottom sums up browsing in the window: navigations, distinct domains, the top domain and its share, and visits to destinations that are not public web pages (IP addresses, local hosts, other schemes), followed by the most visited domains. Click a domain to see its navigations, or **View all websites** for the full history.
 
 ## Sessions
 
@@ -92,13 +92,13 @@ A pack's page shows every section as text: the sign-in page in full, the signed-
 
 With `sitePacks` set to `false` the page says so and every template site is a generic site: BrowserHive learns its sign-in cookies when you press **I'm signed in**.
 
-## Attention
+## Attentions
 
-The human-in-the-loop queue. Each pending request shows the agent's reason, the mode (takeover or notify), how long the agent has waited, any options it attached, and a message box. **Resolve** or **Reject** sends your message back to the agent; **Open live & take over** jumps to the live view. Requests a site pack raises are labelled: **Site check** (a page only a person can clear; take over, clear it, then **Resolve**) and **Write approval** (a request the site's write policy holds, with the site, the guard and its kind, the method and address as text, and the tool; **Approve** lets it through, **Deny** drops it). Sign-out, account, credential and destructive requests can only be decided here, not from a notification. Below the queue, the history of settled requests with outcome, wait time and who resolved them.
+The human-in-the-loop queue, listed in the sidebar as **Attentions**. Each pending request shows the agent's reason, the mode (takeover or notify), how long the agent has waited, any options it attached, and a message box. **Resolve** or **Reject** sends your message back to the agent; **Open live & take over** jumps to the live view. Requests a site pack raises are labelled: **Site check** (a page only a person can clear; take over, clear it, then **Resolve**) and **Write approval** (a request the site's write policy holds, with the site, the guard and its kind, the method and address as text, and the tool; **Approve** lets it through, **Deny** drops it). Sign-out, account, credential and destructive requests can only be decided here, not from a notification. Below the queue, the history of settled requests with outcome, wait time and who resolved them.
 
 ## Websites
 
-Every URL any agent visited, with the most visited domains, category tags for non-public destinations (IP addresses, local hosts, FTP), and filters by session, domain and time window.
+Every URL any agent visited, with the most visited domains, category tags for non-public destinations (IP addresses, local hosts, FTP), and filters by session, domain and time window. Websites has no sidebar entry: open it from the Websites card on the Overview (or **Go to Websites** in the command palette). While you are on it, the breadcrumb reads **Overview › Websites** and the sidebar keeps Overview highlighted.
 
 ## Blocklist
 

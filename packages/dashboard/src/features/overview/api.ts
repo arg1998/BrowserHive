@@ -197,3 +197,17 @@ export function useTopDomains(window: ResolvedWindow, limit: number) {
     placeholderData: keepPreviousData,
   });
 }
+
+/**
+ * Navigations in the window: the total and visits per URL category (one row asked for; the total is
+ * bumped live by `page.visited` because the key sits under the websites history prefix).
+ */
+export function useWebsitesSummary(window: ResolvedWindow) {
+  const api = useApi();
+  const query = { ...windowParams(window), limit: 1, total: true } as const;
+  return useQuery({
+    queryKey: keys.websites.history(query),
+    queryFn: () => api.listPages({ query }),
+    placeholderData: keepPreviousData,
+  });
+}
