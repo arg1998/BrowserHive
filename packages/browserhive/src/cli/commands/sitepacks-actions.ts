@@ -113,12 +113,16 @@ export async function runSitePacksReject(
     body: { version },
   });
   if (typeof view === 'number') return view;
+  // A registry version is set aside: a newer one, or downloading it again, brings it back (review #100 M4).
+  const registry = detail.view.pending.find((p) => p.version === version)?.source === 'remote';
   return done(
     context,
     target,
     view,
     `rejected v${version} of ${packId}`,
-    'a newer version is offered again',
+    registry
+      ? `set aside: a newer version brings it back, or browserhive sitepacks download ${packId} ${version}`
+      : 'a newer version is offered again',
   );
 }
 
@@ -156,7 +160,16 @@ export async function runSitePacksRevert(
     body: {},
   });
   if (typeof view === 'number') return view;
-  return done(context, target, view, `reverted ${packId} to v${previous.version}`);
+  // The version reverted from is set aside like a rejected one (review #100 M4).
+  return done(
+    context,
+    target,
+    view,
+    `reverted ${packId} to v${previous.version}`,
+    approved?.source === 'remote'
+      ? `v${approved.version} is set aside: a newer version brings it back, or browserhive sitepacks download ${packId} ${approved.version}`
+      : undefined,
+  );
 }
 
 /**

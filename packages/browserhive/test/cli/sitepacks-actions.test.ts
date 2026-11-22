@@ -100,6 +100,45 @@ describe('sitepacks reject and revert', () => {
     });
   });
 
+  it('a rejected or reverted-from registry version is set aside, and the CLI says how to bring it back (review #100 M4)', async () => {
+    const remote = {
+      ...pendingItem(4),
+      source: 'remote' as const,
+      provenance: { kind: 'remote' as const, key_id: 'k', index_version: 12 },
+    };
+    const rejected = await run(fakePackServer(packView({ pending: [remote] })), [
+      'reject',
+      'linkedin.com',
+      ...URL_FLAGS,
+    ]);
+    expect(rejected.stdout).toContain(
+      'set aside: a newer version brings it back, or browserhive sitepacks download linkedin.com 4',
+    );
+    const bundled = await run(fakePackServer(), ['reject', 'linkedin.com', ...URL_FLAGS]);
+    expect(bundled.stdout).toContain('a newer version is offered again');
+    const fromRegistry = packView({
+      previous: { version: 2, source: 'bundled' },
+      approved: {
+        version: 3,
+        sha256: SHA_A,
+        source: 'remote',
+        provenance: { kind: 'remote', key_id: 'k', index_version: 12 },
+        by: 'admin',
+        at: 1,
+      },
+    });
+    const reverted = await run(fakePackServer(fromRegistry), [
+      'revert',
+      'linkedin.com',
+      '--yes',
+      ...URL_FLAGS,
+    ]);
+    expect(reverted.code).toBe(0);
+    expect(reverted.stdout).toContain(
+      'v3 is set aside: a newer version brings it back, or browserhive sitepacks download linkedin.com 3',
+    );
+  });
+
   it('revert needs a previous version and a confirmation', async () => {
     const none = await run(fakePackServer(), ['revert', 'linkedin.com', '--yes', ...URL_FLAGS]);
     expect(none.code).toBe(1);

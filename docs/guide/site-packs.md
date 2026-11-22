@@ -149,11 +149,12 @@ The check always fetches the whole index, for every pack. **Follow updates** (au
 - the pack is followed, approved, not pinned, and has no local file in force;
 - the version is classified **Tightens rules** or **No rule change**: nothing relaxes a rule and nothing can stop the site;
 - it adds or removes no domain;
-- it adds no challenge and no element guard (a button or link agents must not use);
-- it adds no guard over a whole host, and makes at most three guards newly block or ask;
-- it does not turn on **sign-in by a person only** (`human_only`);
-- it does not lower how many sessions the site allows at once (`concurrency`, `max_sessions`);
-- it slows launches and writes by at most half: a launch gap or pacing period at most twice as long as before.
+- it adds, removes or changes no challenge and no element guard (a button or link agents must not use);
+- it adds no blocking guard over a whole host, and makes at most three network guards newly block or ask;
+- it does not turn on **sign-in by a person only** (`sign_in.human_only`);
+- it does not lower how many sessions the site allows at once (`concurrency.max_sessions`);
+- it slows agents by at most a factor of 2: no new pace rule and no change to a rule's period or guard, a pace limit at least half the old one, and a launch gap (`pacing.min_launch_gap_s`) at most twice the old one (or 30 seconds, if that is more);
+- it adds or removes no strategy, moves no numeric strategy parameter by more than a factor of 2 either way, and changes no other strategy parameter.
 
 Such a decision is recorded as made by `browserhive` ("Applied automatically"). Anything else is downloaded and waits for you, with the badge and the notification. Versions that relax rules or can stop a site, domain changes, bundled versions, imports and local files are never applied automatically, and the stealth floor is checked as on any Apply. A stolen signing key can therefore at most make small tightening changes to followed packs, and only with automatic updates on.
 

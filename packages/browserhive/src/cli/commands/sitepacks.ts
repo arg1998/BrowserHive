@@ -126,7 +126,7 @@ function declinedText(view: SitePackView, version: number): string {
  * "v4 (relaxes rules)": pending versions with their classification (spec 13 §9.7); a registry
  * version not downloaded yet is "v5 (available)".
  */
-function pendingText(view: SitePackView): string {
+function pendingText(view: SitePackView, withAside = true): string {
   const versions = view.pending
     .map((p) => {
       if (p.state === 'available') return `v${p.version} (available)`;
@@ -136,7 +136,7 @@ function pendingText(view: SitePackView): string {
         : `v${p.version} (${CLASS_WORDS[cls]})`;
     })
     .join(', ');
-  const aside = declinedVersion(view);
+  const aside = withAside ? declinedVersion(view) : null;
   if (aside !== null) {
     const text = `v${aside} set aside`;
     return versions === '' ? text : `${versions}, ${text}`;
@@ -300,7 +300,7 @@ function viewPairs(view: SitePackView): [string, string][] {
     if (local.sha256 !== null) pairs.push(['local sha-256', local.sha256]);
     if (local.problem !== null) pairs.push(['local problem', local.problem]);
   }
-  pairs.push(['pending', pendingText(view)]);
+  pairs.push(['pending', pendingText(view, false)]);
   for (const line of pendingLines(view)) pairs.push(['', line]);
   pairs.push(['follow', followText(view)]);
   pairs.push(['enabled', view.enabled ? 'yes' : 'no']);
