@@ -111,9 +111,7 @@ export function assertDomainsFree(
  * else the approved version), else for a pack nothing approved yet the bundled version first use
  * would approve (review #100 M2); `null` for a pack only the registry lists.
  */
-export function baselineOf(
-  entry: PackEntry,
-): {
+export function baselineOf(entry: PackEntry): {
   readonly content: SourcePackVersion;
   readonly version: number;
   readonly source: SitePackSourceId;
