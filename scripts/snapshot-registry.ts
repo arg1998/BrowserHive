@@ -1,4 +1,4 @@
-/** @module scripts/snapshot-registry — the release's signed registry snapshot (spec 13 §10.9): downloads the live signed layout (`keys.json`, `keys.json.sig`, `index.json`, `index.json.sig` and every pack file the index lists) from `--url` with the registry client's request hygiene (User-Agent `BrowserHive`, no query, no cookie, no redirect, keep-alive off, timeouts, size caps while streaming), verifies it with core's `verifySignedLayout` under the root keys pinned in this build, and only then writes it to `--out` (default `packages/browserhive/dist/site-packs/registry/v1/`). Anything that does not verify fails the release with nothing written; while the build pins no root keys (before the key ceremony, D71) it refuses before any request. `bun run release:publish` runs it after `bun run build` (which recreates `dist/site-packs`) and before `package:check`.
+/** @module scripts/snapshot-registry — the release's signed registry snapshot (spec 13 §10.9): downloads the live signed layout (`keys.json`, `keys.json.sig`, `index.json`, `index.json.sig` and every pack file the index lists) from `--url` with the registry client's request hygiene (User-Agent `BrowserHive`, no query, no cookie, no redirect, keep-alive off, `Accept-Encoding: identity` with Bun's decompression off and any other `Content-Encoding` refused, timeouts, size caps while streaming), verifies it with core's `verifySignedLayout` under the root keys pinned in this build, and only then writes it to `--out` (default `packages/browserhive/dist/site-packs/registry/v1/`). Anything that does not verify fails the release with nothing written; while the build pins no root keys (before the key ceremony, D71) it refuses before any request. `bun run release:publish` runs it after `bun run build` (which recreates `dist/site-packs`) and before `package:check`.
  *
  *   bun scripts/snapshot-registry.ts [--url <https://…/registry/v1/>] [--out <dir>] [--test-root <root.pub>]…
  *
@@ -123,7 +123,10 @@ async function get(url: URL, maxBytes: number): Promise<Uint8Array> {
   try {
     response = await fetch(url, {
       method: 'GET',
-      headers: { 'user-agent': 'BrowserHive', accept: '*/*' },
+      // Uncompressed bodies only (review #100 H1): Bun would otherwise advertise and inflate
+      // gzip, br and zstd before the cap below sees a byte, so a few KB could expand to GiB.
+      headers: { 'user-agent': 'BrowserHive', accept: '*/*', 'accept-encoding': 'identity' },
+      decompress: false,
       redirect: 'manual',
       keepalive: false,
       signal: AbortSignal.any([total, headers.signal]),
@@ -137,6 +140,13 @@ async function get(url: URL, maxBytes: number): Promise<Uint8Array> {
     await response.body?.cancel().catch(() => undefined);
     throw new Refusal(
       `${url.href} answered ${response.status}${response.status >= 300 && response.status < 400 ? ' (redirects are not followed)' : ''}`,
+    );
+  }
+  const encoding = (response.headers.get('content-encoding') ?? 'identity').trim().toLowerCase();
+  if (encoding !== '' && encoding !== 'identity') {
+    await response.body?.cancel().catch(() => undefined);
+    throw new Refusal(
+      `${url.href} answered with Content-Encoding ${encoding}; only uncompressed files are accepted`,
     );
   }
   const declared = Number(response.headers.get('content-length') ?? '0');

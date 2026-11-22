@@ -1,5 +1,5 @@
 /** @module cli/commands/sitepacks-verify — `browserhive sitepacks verify <path>`: checks a site pack file offline (size, JSON, known strategies, the `SitePackV1` schema and the refinements of spec 13 §9.10) and prints its issues and warnings, or, for a folder, a whole signed registry layout against the pinned root keys (`sitepacks-verify-layout.ts`); exit 0 when valid, 1 otherwise (spec 13 §11.5). A pack file's `min_client` range is not checked: a pack may target another release. */
-import { basename } from 'node:path';
+import { basename, dirname } from 'node:path';
 import { SITE_PACK_MAX_BYTES } from '@browserhive/contracts/site-packs';
 import { loadPackBytes } from '@browserhive/core/server';
 import type { CommandContext } from '../deps.ts';
@@ -17,16 +17,26 @@ export interface VerifyReport {
   readonly version: number | null;
   readonly sha256: string | null;
   readonly size: number | null;
-  /** Why the file was refused (`invalid`, `too_large`, `unknown_strategy`, `id_mismatch`, `unreadable`). */
+  /** Why the file was refused (`invalid`, `too_large`, `unknown_strategy`, `id_mismatch`, `hash_mismatch`, `unreadable`). */
   readonly reason: string | null;
   readonly issues: readonly { readonly path: string; readonly message: string }[];
   readonly warnings: readonly string[];
 }
 
-/** The pack id the file name promises (`linkedin.com.json` → `linkedin.com`). */
-function expectedIdOf(path: string): string | null {
+const CONTENT_ADDRESSED = /^([0-9a-f]{64})\.json$/;
+
+/**
+ * What the file name promises: `linkedin.com.json` → the id `linkedin.com`; a signed layout's
+ * content-addressed `packs/<id>/<sha256>.json` → the id of its folder and that SHA-256 (review #100 L7).
+ */
+function expectedOf(path: string): { readonly id: string | null; readonly sha256: string | null } {
   const name = basename(path);
-  return name.endsWith('.json') ? name.slice(0, -'.json'.length) : null;
+  const addressed = CONTENT_ADDRESSED.exec(name);
+  const folder = dirname(path);
+  if (addressed !== null && basename(dirname(folder)) === 'packs') {
+    return { id: basename(folder), sha256: addressed[1] ?? null };
+  }
+  return { id: name.endsWith('.json') ? name.slice(0, -'.json'.length) : null, sha256: null };
 }
 
 /**
@@ -54,17 +64,18 @@ export async function verifyPackFile(context: CommandContext, path: string): Pro
       `${stat.sizeBytes} bytes; a pack is at most ${SITE_PACK_MAX_BYTES}`,
     );
   }
-  let text: string;
+  let bytes: Uint8Array;
   try {
-    text = await context.deps.fs.readFile(path);
+    // The exact bytes: the SHA-256 printed is the file's own (review #97 D80).
+    bytes = await context.deps.fs.readBytes(path);
   } catch {
     return refused('unreadable', `cannot read ${path}`);
   }
-  const bytes = new TextEncoder().encode(text);
+  const expected = expectedOf(path);
   const loaded = loadPackBytes(bytes, {
     origin: path,
     binaryVersion: null,
-    expectedId: expectedIdOf(path),
+    expectedId: expected.id,
   });
   if (!loaded.ok) {
     return {
@@ -80,6 +91,18 @@ export async function verifyPackFile(context: CommandContext, path: string): Pro
     };
   }
   const { pack, sha256, size, warnings } = loaded.value;
+  if (expected.sha256 !== null && expected.sha256 !== sha256) {
+    return {
+      ...refused(
+        'hash_mismatch',
+        `the file is named for SHA-256 ${expected.sha256} but its content hashes to ${sha256}`,
+      ),
+      pack_id: pack.id,
+      version: pack.version,
+      sha256,
+      size,
+    };
+  }
   return {
     path,
     ok: true,

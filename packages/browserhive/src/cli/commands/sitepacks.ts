@@ -6,7 +6,7 @@ import {
 } from '@browserhive/contracts/http';
 import type { CommandContext } from '../deps.ts';
 import { EXIT, type ExitCode, type Invocation, type SitePacksAction } from '../invocation.ts';
-import { formatTimestamp, size } from './common.ts';
+import { formatTimestamp } from './common.ts';
 import {
   runSitePacksApply,
   runSitePacksApproveLocal,
@@ -19,6 +19,7 @@ import {
   fetchDetail,
   fetchDiff,
   LOCAL_TEXT,
+  packSize,
   printPairs,
   provenanceText,
   type SitePacksTarget,
@@ -107,6 +108,20 @@ function sourceText(view: SitePackView): string {
   return source === undefined ? '—' : sourceWord(source);
 }
 
+/** The usable registry version an operator set aside (rejected, or reverted from), else `null` (review #100 M4). */
+function declinedVersion(view: SitePackView): number | null {
+  const online = view.online;
+  if (online === null || !online.declined || online.usable_version === null) return null;
+  return view.pending.some((p) => p.version === online.usable_version)
+    ? null
+    : online.usable_version;
+}
+
+/** "v3 set aside · `browserhive sitepacks download github.com 3` reviews it again". */
+function declinedText(view: SitePackView, version: number): string {
+  return `v${version} set aside · browserhive sitepacks download ${view.pack_id} ${version} reviews it again`;
+}
+
 /**
  * "v4 (relaxes rules)": pending versions with their classification (spec 13 §9.7); a registry
  * version not downloaded yet is "v5 (available)".
@@ -121,6 +136,11 @@ function pendingText(view: SitePackView): string {
         : `v${p.version} (${CLASS_WORDS[cls]})`;
     })
     .join(', ');
+  const aside = declinedVersion(view);
+  if (aside !== null) {
+    const text = `v${aside} set aside`;
+    return versions === '' ? text : `${versions}, ${text}`;
+  }
   if (view.pinned_version !== null) {
     return `pinned at v${view.pinned_version}${versions === '' ? '' : `, ${versions} available`}`;
   }
@@ -187,6 +207,11 @@ async function runSitePacksList(
       ]),
     );
   }
+  for (const view of packs) {
+    const aside = declinedVersion(view);
+    if (aside !== null)
+      out.line(`  ${out.style.dim(`${view.pack_id}:`)} ${declinedText(view, aside)}`);
+  }
   for (const skipped of status.skipped) {
     const version = skipped.version === null ? '' : ` v${skipped.version}`;
     out.line(
@@ -211,7 +236,7 @@ async function runSitePacksList(
 
 /** "v6 · 2.0 KiB · released 2026-11-20 · usable: v5": what the held registry index lists. */
 function onlineText(online: NonNullable<SitePackView['online']>): string {
-  const parts = [`v${online.version}`, size(online.size), `released ${online.released}`];
+  const parts = [`v${online.version}`, packSize(online.size), `released ${online.released}`];
   if (online.revoked) parts.push('revoked');
   if (online.needs_client !== null) parts.push(`needs BrowserHive ${online.needs_client}`);
   if (online.usable_version !== online.version) {
@@ -230,8 +255,10 @@ function pendingLines(view: SitePackView): string[] {
     const parts = [
       p.state === 'available' ? 'available (not downloaded)' : 'downloaded',
       provenanceText(p.source, p.provenance),
-      p.size === null ? null : size(p.size),
+      p.size === null ? null : packSize(p.size),
       p.released === null ? null : `released ${p.released}`,
+      p.from == null ? null : `compared with ${sourceWord(p.from.source)} v${p.from.version}`,
+      p.refused == null ? null : `last download refused: ${p.refused.reason} (${p.refused.detail})`,
     ].filter((x): x is string => x !== null);
     const notes = p.notes === null || p.notes === '' ? '' : ` — ${p.notes}`;
     return `v${p.version}: ${parts.join(' · ')}${notes}`;
@@ -265,6 +292,8 @@ function viewPairs(view: SitePackView): [string, string][] {
     pairs.push(['previous', `v${view.previous.version} (${sourceWord(view.previous.source)})`]);
   }
   if (view.online !== null) pairs.push(['registry', onlineText(view.online)]);
+  const aside = declinedVersion(view);
+  if (aside !== null) pairs.push(['set aside', declinedText(view, aside)]);
   if (view.local !== null) {
     const local = view.local;
     pairs.push(['local file', `${local.path} · ${LOCAL_TEXT[local.state]}`]);

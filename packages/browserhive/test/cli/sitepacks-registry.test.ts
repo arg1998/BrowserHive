@@ -85,7 +85,7 @@ describe('sitepacks check', () => {
     expect(result.stdout).toContain(
       'Update check: https://browserhive.ai/registry/v1/ every 24 h (signed index only)',
     );
-    expect(result.stdout).toContain('1 pending update(s) of followed packs');
+    expect(result.stdout).toContain('1 pending version(s) in all packs · 1 of followed packs');
     expect(result.stdout).toContain('browserhive sitepacks list --pending');
   });
 
@@ -154,6 +154,32 @@ describe('sitepacks check', () => {
     expect(result.stdout).toContain('no check made');
     expect(result.stdout).toContain(text);
     expect(result.stdout).toContain('Registry index: none held yet');
+  });
+
+  it('counts come from the catalog, so a check that made no request still shows what waits (review #100 L8)', async () => {
+    const server = fakePackServer(
+      packView({ follow: { setting: 'auto', effective: false }, pending: [available(5)] }),
+    );
+    server.routes = (method, path) => {
+      if (method === 'POST' && path === '/api/v1/site-packs/check') {
+        return [
+          200,
+          checkBody('disabled', registryStatus({ check_off: 'update_check_off' }), {
+            available: 0,
+          }),
+        ];
+      }
+      if (method === 'GET' && path === '/api/v1/site-packs') {
+        return [200, { ...catalogBody([server.view]), pending_count: 0 }];
+      }
+      return undefined;
+    };
+    const result = await run(server, ['check', ...URL_FLAGS]);
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain('1 pending version(s) in all packs · 0 of followed packs');
+    expect(result.stdout).not.toContain('0 newer version(s)');
+    // The disabled outcome is said once, not again as the "Update check" line.
+    expect(result.stdout.match(/sitePacksUpdateCheck=false/g)).toHaveLength(1);
   });
 
   it('a refusal (rate limit) exits 1 with the server code and reads nothing else', async () => {
@@ -398,12 +424,88 @@ describe('the registry state in list and show', () => {
     const result = await run(server, ['show', 'linkedin.com', ...URL_FLAGS]);
     expect(result.code).toBe(0);
     expect(result.stdout).toContain(
-      'v6 · 2.0 kB · released 2026-11-21 · needs BrowserHive >=0.9.0 · newest usable here: v5',
+      'v6 · 2.0 KB · released 2026-11-21 · needs BrowserHive >=0.9.0 · newest usable here: v5',
     );
     expect(result.stdout).toContain('the publisher revoked the approved version');
     expect(result.stdout).toContain(
       'v5: available (not downloaded) · registry (key ab12ab12ab12ab12, index 12, signature verified)',
     );
     expect(result.stdout).toContain('— Blocks the new sign-out address.');
+  });
+
+  it('a usable version set aside (rejected, or reverted from) says how to review it again (review #100 M4)', async () => {
+    const view = packView({
+      pending: [],
+      online: {
+        version: 3,
+        sha256: SHA_B,
+        size: 4000,
+        released: '2026-11-20',
+        notes: 'n',
+        revoked: false,
+        needs_client: null,
+        usable_version: 3,
+        declined: true,
+      },
+    });
+    const listed = fakePackServer(view);
+    const list = await run(listed, ['list', ...URL_FLAGS]);
+    expect(list.code).toBe(0);
+    expect(list.stdout).toMatch(/linkedin\.com\s+v3\s+bundled\s+—\s+v3 set aside/);
+    expect(list.stdout).toContain(
+      'linkedin.com: v3 set aside · browserhive sitepacks download linkedin.com 3 reviews it again',
+    );
+    const show = await run(fakePackServer(view), ['show', 'linkedin.com', ...URL_FLAGS]);
+    expect(show.stdout).toMatch(
+      /set aside\s+v3 set aside · browserhive sitepacks download linkedin\.com 3 reviews it again/,
+    );
+    // Sizes in the dashboard's units: 4000 bytes is 3.9 KB (review #100 L9).
+    expect(show.stdout).toContain('v3 · 3.9 KB · released 2026-11-20');
+    // Without a version, download takes the set-aside one (the server re-opens it).
+    const again = fakePackServer(view);
+    const seen: unknown[] = [];
+    downloadRoutes(again, seen);
+    expect((await run(again, ['download', 'linkedin.com', ...URL_FLAGS])).code).toBe(0);
+    expect(seen).toEqual([{ version: 3 }]);
+  });
+
+  it('a pending version shows what it is compared with and a refused download (review #100 M2, L1)', async () => {
+    const server = fakePackServer(
+      packView({
+        approved: null,
+        pending: [
+          {
+            ...available(5),
+            from: { version: 2, source: 'bundled' },
+            refused: { reason: 'invalid_pack', detail: 'description: control character' },
+          },
+        ],
+      }),
+    );
+    const show = await run(server, ['show', 'linkedin.com', ...URL_FLAGS]);
+    expect(show.stdout).toContain('compared with bundled v2');
+    expect(show.stdout).toContain(
+      'last download refused: invalid_pack (description: control character)',
+    );
+  });
+
+  it('a signed import names its key and index (review #100 L12)', async () => {
+    const server = fakePackServer(
+      packView({
+        approved: {
+          version: 4,
+          sha256: SHA_B,
+          source: 'import',
+          provenance: { kind: 'import', file: 'export2', key_id: KEY_ID, index_version: 15 },
+          by: 'admin',
+          at: CHECKED_AT,
+        },
+        pending: [],
+      }),
+    );
+    const show = await run(server, ['show', 'linkedin.com', ...URL_FLAGS]);
+    expect(show.stdout).toContain(
+      `v4 · imported file export2 (key ${KEY_ID}, index 15, signature verified)`,
+    );
   });
 });

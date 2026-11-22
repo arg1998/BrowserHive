@@ -1,4 +1,4 @@
-/** @module scripts/registry/snapshot-registry.test — the release snapshot (spec 13 §10.9) against a local `Bun.serve` registry holding a layout signed at run time with throwaway keys (registry-kit), never browserhive.ai: a verified layout is written byte for byte with only the listed files fetched and the client's request hygiene (User-Agent `BrowserHive`, no query, no cookie); a tampered pack file, a tampered index, a redirect, an oversized file, an unlisted signer and a build that pins no root keys are refused with nothing written; a target that is not a layout is never replaced; the CLI entry exits 1 with the message.
+/** @module scripts/registry/snapshot-registry.test — the release snapshot (spec 13 §10.9) against a local `Bun.serve` registry holding a layout signed at run time with throwaway keys (registry-kit), never browserhive.ai: a verified layout is written byte for byte with only the listed files fetched and the client's request hygiene (User-Agent `BrowserHive`, no query, no cookie); a tampered pack file, a tampered index, a redirect, an oversized file, a compressed body (a small Brotli bomb: refused on its `Content-Encoding`, never inflated, memory flat; review #100 H1), an unlisted signer and a build that pins no root keys are refused with nothing written; a target that is not a layout is never replaced; the CLI entry exits 1 with the message.
  *
  * Timeouts: one case starts a Bun child process (it loads core); Windows starts processes slowly, so
  * that case gets 60 s.
@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { constants, createBrotliCompress } from 'node:zlib';
 import { PINNED_TRUST_ROOT, trustsNothing } from '@browserhive/core/server';
 import {
   buildLayout,
@@ -42,7 +43,15 @@ interface Served {
   files: Map<string, Uint8Array>;
   /** Paths answered with a redirect. */
   redirects: Set<string>;
-  requests: { path: string; search: string; agent: string | null; cookie: string | null }[];
+  /** Paths answered with this body and `Content-Encoding`. */
+  encoded: Map<string, { body: Uint8Array; encoding: string }>;
+  requests: {
+    path: string;
+    search: string;
+    agent: string | null;
+    cookie: string | null;
+    acceptEncoding: string | null;
+  }[];
 }
 
 let work: string;
@@ -53,11 +62,12 @@ const layout: TestLayout = buildLayout({
   now: NOW,
   packs: [pack('site-a.test', 2), pack('site-b.test', 5)],
 });
-const served: Served = { files: new Map(), redirects: new Set(), requests: [] };
+const served: Served = { files: new Map(), redirects: new Set(), encoded: new Map(), requests: [] };
 
 function serve(files: ReadonlyMap<string, Uint8Array> = layout.files): void {
   served.files = new Map(files);
   served.redirects = new Set();
+  served.encoded = new Map();
   served.requests = [];
 }
 
@@ -78,10 +88,15 @@ beforeAll(() => {
         search: url.search,
         agent: request.headers.get('user-agent'),
         cookie: request.headers.get('cookie'),
+        acceptEncoding: request.headers.get('accept-encoding'),
       });
       const path = url.pathname.replace(/^\/registry\/v1\//, '');
       if (served.redirects.has(path)) {
         return new Response(null, { status: 302, headers: { location: '/elsewhere' } });
+      }
+      const encoded = served.encoded.get(path);
+      if (encoded !== undefined) {
+        return new Response(encoded.body, { headers: { 'content-encoding': encoded.encoding } });
       }
       const bytes = served.files.get(path);
       return bytes === undefined ? new Response('not found', { status: 404 }) : new Response(bytes);
@@ -119,6 +134,7 @@ describe('snapshot-registry', () => {
       expect(request.agent).toBe('BrowserHive');
       expect(request.cookie).toBeNull();
       expect(request.search).toBe('');
+      expect(request.acceptEncoding).toBe('identity');
     }
     // A second run replaces its own earlier snapshot.
     expect((await snapshot(out)).code).toBe(0);
@@ -167,6 +183,31 @@ describe('snapshot-registry', () => {
     expect(result.lines[0]).toContain('answered 302 (redirects are not followed)');
     expect(served.requests).toHaveLength(1);
   });
+
+  it('refuses a compressed body without inflating it (a Brotli bomb: memory stays flat)', async () => {
+    // 256 MiB of zeros compress to a few hundred bytes; inflated, they would pass every byte cap
+    // only after the memory is gone (review #100 H1).
+    const chunks: Buffer[] = [];
+    const compressor = createBrotliCompress({ params: { [constants.BROTLI_PARAM_QUALITY]: 1 } });
+    compressor.on('data', (chunk: Buffer) => chunks.push(chunk));
+    const done = new Promise((resolveDone) => compressor.on('end', resolveDone));
+    const zeros = Buffer.alloc(1024 * 1024);
+    for (let i = 0; i < 256; i += 1) compressor.write(zeros);
+    compressor.end();
+    await done;
+    const bomb = new Uint8Array(Buffer.concat(chunks));
+    expect(bomb.byteLength).toBeLessThan(64 * 1024);
+    serve();
+    served.encoded.set('keys.json', { body: bomb, encoding: 'br' });
+    Bun.gc(true);
+    const before = process.memoryUsage().rss;
+    const result = await snapshot(outDir('bomb'));
+    const grown = process.memoryUsage().rss - before;
+    expect(result.code).toBe(1);
+    expect(result.lines[0]).toContain('Content-Encoding br; only uncompressed files are accepted');
+    expect(grown).toBeLessThan(64 * 1024 * 1024);
+    expect(served.requests).toHaveLength(1);
+  }, 30_000);
 
   it('refuses an oversized file while it streams', async () => {
     const files = new Map(layout.files);

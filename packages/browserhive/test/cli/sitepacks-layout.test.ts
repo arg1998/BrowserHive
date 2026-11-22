@@ -153,6 +153,27 @@ describe('sitepacks export <dir>', () => {
     expect(fs.writes).toEqual([]);
   });
 
+  it('names the listed versions it does not hold and exits 0 (review #100 L6)', async () => {
+    const body = {
+      ...exportBody(),
+      missing: [
+        { pack_id: 'facebook.com', version: 3 },
+        { pack_id: 'x.com', version: 7 },
+      ],
+    };
+    const fs = new MemoryFs();
+    const result = await run(exportServer(body), ['export', OUT, ...URL_FLAGS], { fs });
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain('2 listed version(s) not held, so not in the folder');
+    expect(result.stdout).toContain(
+      'facebook.com v3, x.com v7; run browserhive sitepacks download --all first to include them',
+    );
+    const json = await run(exportServer(body), ['export', `${OUT}2`, '--json', ...URL_FLAGS], {
+      fs,
+    });
+    expect((JSON.parse(json.stdout) as { missing: unknown[] }).missing).toHaveLength(2);
+  });
+
   it('nothing held yet: the server refusal is printed, exit 1', async () => {
     const server = fakePackServer();
     server.routes = () => [
@@ -293,6 +314,58 @@ describe('sitepacks import <dir> (a signed layout)', () => {
     expect(result.code).toBe(1);
     expect(result.stderr).toContain('Copy the folder into sitePacksDir instead');
     expect(server.calls).toEqual([]);
+  });
+
+  it('states: revoked by the publisher; a downloaded version of an unfollowed pack says how to review it; counts match the table (review #100 M7, L8)', async () => {
+    const answer: SitePackImportResponse = {
+      imported: [
+        { pack_id: 'github.com', version: 3, state: 'revoked', sha256: 'a'.repeat(64) },
+        {
+          pack_id: 'reddit.com',
+          version: 4,
+          state: 'downloaded',
+          sha256: 'b'.repeat(64),
+          followed: false,
+        },
+        { pack_id: 'facebook.com', version: 3, state: 'available', sha256: 'c'.repeat(64) },
+      ],
+      layout: { outcome: 'updated', index_version: 15, keys_version: 1, signed_by: 'x' },
+    };
+    const result = await run(importServer([], answer), ['import', '/work/l', ...URL_FLAGS], {
+      fs: layoutFs('/work/l'),
+    });
+    expect(result.code).toBe(0);
+    expect(result.stdout).toMatch(/github\.com\s+v3\s+revoked by the publisher/);
+    expect(result.stdout).toMatch(
+      /reddit\.com\s+v4\s+downloaded; browserhive sitepacks follow reddit\.com on to review it/,
+    );
+    expect(result.stdout).toContain('1 listed version(s) have no file in the folder');
+    // Nothing followed waits: no "review them" hint pointing at an empty Updates list.
+    expect(result.stdout).not.toContain('Review them');
+  });
+
+  it('a layout signed by an untrusted root: a full stop and the verify hint for the folder (review #100 L8)', async () => {
+    const server = fakePackServer();
+    server.routes = () => [
+      400,
+      {
+        ...(problem(
+          400,
+          'SITE_PACK_INVALID',
+          'keys.json: unknown_key (signed by no trusted key',
+        ) as object),
+        hint: 'Fix the listed fields; `browserhive sitepacks verify <file>` shows them.',
+      },
+    ];
+    const result = await run(server, ['import', '/work/l', ...URL_FLAGS], {
+      fs: layoutFs('/work/l'),
+    });
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain(
+      'the signed layout /work/l was not imported: [SITE_PACK_INVALID] keys.json: unknown_key (signed by no trusted key.',
+    );
+    expect(result.stderr).toContain('Check it offline: browserhive sitepacks verify /work/l');
+    expect(result.stderr).not.toContain('Fix the listed fields');
   });
 
   it('the server refusal (a layout this release does not trust) exits 1', async () => {

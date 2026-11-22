@@ -8,8 +8,7 @@ import {
 import { sha256Hex } from '@browserhive/core/server';
 import type { CommandContext } from '../deps.ts';
 import { EXIT, type ExitCode, type SitePacksAction } from '../invocation.ts';
-import { size } from './common.ts';
-import { type SitePacksTarget, sitePackCall, unexpected } from './sitepacks-common.ts';
+import { packSize, type SitePacksTarget, sitePackCall, unexpected } from './sitepacks-common.ts';
 import { runSitePacksImportLayout } from './sitepacks-layout.ts';
 
 type Of<K extends SitePacksAction['kind']> = Extract<SitePacksAction, { readonly kind: K }>;
@@ -89,7 +88,7 @@ export async function runSitePacksImport(
   if (!info.isFile) return refuse('is not a file.');
   if (info.sizeBytes > SITE_PACK_IMPORT_MAX_BYTES) {
     return refuse(
-      `is ${size(info.sizeBytes)}; an import may be at most ${size(SITE_PACK_IMPORT_MAX_BYTES)}.`,
+      `is ${packSize(info.sizeBytes)}; an import may be at most ${packSize(SITE_PACK_IMPORT_MAX_BYTES)}.`,
     );
   }
   // The file's exact bytes (review #97 D80): sent as text only when they are UTF-8, BOM kept, so

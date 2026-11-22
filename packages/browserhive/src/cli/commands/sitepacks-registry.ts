@@ -10,11 +10,12 @@ import {
 } from '@browserhive/contracts/http';
 import type { CommandContext } from '../deps.ts';
 import { EXIT, type ExitCode, type SitePacksAction } from '../invocation.ts';
-import { formatTimestamp, size } from './common.ts';
+import { formatTimestamp } from './common.ts';
 import { printDiff } from './sitepacks-classes.ts';
 import {
   fetchDetail,
   packPath,
+  packSize,
   type SitePacksTarget,
   sitePackCall,
   unexpected,
@@ -180,8 +181,11 @@ export async function runSitePacksCheck(
     if (check.outcome !== 'disabled' || !line.startsWith('Update check:')) out.line(`  ${line}`);
   }
   for (const [label, detail] of registryWarnings(shown)) out.status('warn', label, detail);
+  // Counted from the catalog, not the check's answer: a check that made no request (or failed)
+  // still knows what an earlier check or an import offered (review #100 L8).
+  const waitingAll = catalog.data.reduce((n, view) => n + view.pending.length, 0);
   out.line(
-    `  ${check.available} newer version(s) listed (all packs) · ${catalog.pending_count} pending update(s) of followed packs · ${catalog.local_needing_approval} local file(s) waiting for approval`,
+    `  ${waitingAll} pending version(s) in all packs · ${catalog.pending_count} of followed packs · ${catalog.local_needing_approval} local file(s) waiting for approval`,
   );
   if (waiting > 0) out.line('  Review them: browserhive sitepacks list --pending');
   return code;
@@ -253,7 +257,7 @@ export async function runSitePacksDownload(
   const { view, diff } = parsed.data;
   const row = view.pending.find((p) => p.version === version);
   const facts = [
-    row?.size == null ? null : size(row.size),
+    row?.size == null ? null : packSize(row.size),
     row?.released == null ? null : `released ${row.released}`,
     'signature and hash verified',
   ].filter((f): f is string => f !== null);
