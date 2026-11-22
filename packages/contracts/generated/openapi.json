@@ -28197,6 +28197,9 @@
                         "integer",
                         "null"
                       ]
+                    },
+                    "declined": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -28207,7 +28210,8 @@
                     "notes",
                     "revoked",
                     "needs_client",
-                    "usable_version"
+                    "usable_version",
+                    "declined"
                   ]
                 },
                 "approved": {
@@ -28285,6 +28289,12 @@
                             },
                             "file": {
                               "type": "string"
+                            },
+                            "key_id": {
+                              "type": "string"
+                            },
+                            "index_version": {
+                              "type": "integer"
                             }
                           },
                           "required": [
@@ -28413,6 +28423,12 @@
                             },
                             "file": {
                               "type": "string"
+                            },
+                            "key_id": {
+                              "type": "string"
+                            },
+                            "index_version": {
+                              "type": "integer"
                             }
                           },
                           "required": [
@@ -28607,6 +28623,48 @@
                           "local_override"
                         ]
                       },
+                      "from": {
+                        "type": [
+                          "object",
+                          "null"
+                        ],
+                        "properties": {
+                          "version": {
+                            "type": "integer"
+                          },
+                          "source": {
+                            "type": "string",
+                            "enum": [
+                              "bundled",
+                              "remote",
+                              "import",
+                              "local"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "version",
+                          "source"
+                        ]
+                      },
+                      "refused": {
+                        "type": [
+                          "object",
+                          "null"
+                        ],
+                        "properties": {
+                          "reason": {
+                            "type": "string"
+                          },
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "reason",
+                          "detail"
+                        ]
+                      },
                       "new_domains": {
                         "type": "array",
                         "items": {
@@ -28675,6 +28733,12 @@
                               },
                               "file": {
                                 "type": "string"
+                              },
+                              "key_id": {
+                                "type": "string"
+                              },
+                              "index_version": {
+                                "type": "integer"
                               }
                             },
                             "required": [
@@ -30308,13 +30372,32 @@
           "packs": {
             "type": "integer",
             "minimum": 0
+          },
+          "missing": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "pack_id": {
+                  "type": "string"
+                },
+                "version": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "pack_id",
+                "version"
+              ]
+            }
           }
         },
         "required": [
           "files",
           "index_version",
           "keys_version",
-          "packs"
+          "packs",
+          "missing"
         ]
       },
       "SitePackImportResponse": {
@@ -30348,7 +30431,8 @@
                         "available",
                         "current",
                         "refused",
-                        "other_client"
+                        "other_client",
+                        "revoked"
                       ]
                     }
                   ]
@@ -30356,6 +30440,9 @@
                 "sha256": {
                   "type": "string",
                   "pattern": "^[0-9a-f]{64}$"
+                },
+                "followed": {
+                  "type": "boolean"
                 }
               },
               "required": [
@@ -30471,6 +30558,9 @@
                       "integer",
                       "null"
                     ]
+                  },
+                  "declined": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -30481,7 +30571,8 @@
                   "notes",
                   "revoked",
                   "needs_client",
-                  "usable_version"
+                  "usable_version",
+                  "declined"
                 ]
               },
               "approved": {
@@ -30559,6 +30650,12 @@
                           },
                           "file": {
                             "type": "string"
+                          },
+                          "key_id": {
+                            "type": "string"
+                          },
+                          "index_version": {
+                            "type": "integer"
                           }
                         },
                         "required": [
@@ -30687,6 +30784,12 @@
                           },
                           "file": {
                             "type": "string"
+                          },
+                          "key_id": {
+                            "type": "string"
+                          },
+                          "index_version": {
+                            "type": "integer"
                           }
                         },
                         "required": [
@@ -30881,6 +30984,48 @@
                         "local_override"
                       ]
                     },
+                    "from": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "version": {
+                          "type": "integer"
+                        },
+                        "source": {
+                          "type": "string",
+                          "enum": [
+                            "bundled",
+                            "remote",
+                            "import",
+                            "local"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "version",
+                        "source"
+                      ]
+                    },
+                    "refused": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "reason": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "reason",
+                        "detail"
+                      ]
+                    },
                     "new_domains": {
                       "type": "array",
                       "items": {
@@ -30949,6 +31094,12 @@
                             },
                             "file": {
                               "type": "string"
+                            },
+                            "key_id": {
+                              "type": "string"
+                            },
+                            "index_version": {
+                              "type": "integer"
                             }
                           },
                           "required": [
@@ -32263,6 +32414,9 @@
                       "integer",
                       "null"
                     ]
+                  },
+                  "declined": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -32273,7 +32427,8 @@
                   "notes",
                   "revoked",
                   "needs_client",
-                  "usable_version"
+                  "usable_version",
+                  "declined"
                 ]
               },
               "approved": {
@@ -32351,6 +32506,12 @@
                           },
                           "file": {
                             "type": "string"
+                          },
+                          "key_id": {
+                            "type": "string"
+                          },
+                          "index_version": {
+                            "type": "integer"
                           }
                         },
                         "required": [
@@ -32479,6 +32640,12 @@
                           },
                           "file": {
                             "type": "string"
+                          },
+                          "key_id": {
+                            "type": "string"
+                          },
+                          "index_version": {
+                            "type": "integer"
                           }
                         },
                         "required": [
@@ -32673,6 +32840,48 @@
                         "local_override"
                       ]
                     },
+                    "from": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "version": {
+                          "type": "integer"
+                        },
+                        "source": {
+                          "type": "string",
+                          "enum": [
+                            "bundled",
+                            "remote",
+                            "import",
+                            "local"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "version",
+                        "source"
+                      ]
+                    },
+                    "refused": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "reason": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "reason",
+                        "detail"
+                      ]
+                    },
                     "new_domains": {
                       "type": "array",
                       "items": {
@@ -32741,6 +32950,12 @@
                             },
                             "file": {
                               "type": "string"
+                            },
+                            "key_id": {
+                              "type": "string"
+                            },
+                            "index_version": {
+                              "type": "integer"
                             }
                           },
                           "required": [
@@ -33094,6 +33309,9 @@
                       "integer",
                       "null"
                     ]
+                  },
+                  "declined": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -33104,7 +33322,8 @@
                   "notes",
                   "revoked",
                   "needs_client",
-                  "usable_version"
+                  "usable_version",
+                  "declined"
                 ]
               },
               "approved": {
@@ -33182,6 +33401,12 @@
                           },
                           "file": {
                             "type": "string"
+                          },
+                          "key_id": {
+                            "type": "string"
+                          },
+                          "index_version": {
+                            "type": "integer"
                           }
                         },
                         "required": [
@@ -33310,6 +33535,12 @@
                           },
                           "file": {
                             "type": "string"
+                          },
+                          "key_id": {
+                            "type": "string"
+                          },
+                          "index_version": {
+                            "type": "integer"
                           }
                         },
                         "required": [
@@ -33504,6 +33735,48 @@
                         "local_override"
                       ]
                     },
+                    "from": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "version": {
+                          "type": "integer"
+                        },
+                        "source": {
+                          "type": "string",
+                          "enum": [
+                            "bundled",
+                            "remote",
+                            "import",
+                            "local"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "version",
+                        "source"
+                      ]
+                    },
+                    "refused": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "reason": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "reason",
+                        "detail"
+                      ]
+                    },
                     "new_domains": {
                       "type": "array",
                       "items": {
@@ -33572,6 +33845,12 @@
                             },
                             "file": {
                               "type": "string"
+                            },
+                            "key_id": {
+                              "type": "string"
+                            },
+                            "index_version": {
+                              "type": "integer"
                             }
                           },
                           "required": [

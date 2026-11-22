@@ -5908,6 +5908,9 @@
                                     "type": "null"
                                   }
                                 ]
+                              },
+                              "declined": {
+                                "type": "boolean"
                               }
                             },
                             "required": [
@@ -5918,7 +5921,8 @@
                               "notes",
                               "revoked",
                               "needs_client",
-                              "usable_version"
+                              "usable_version",
+                              "declined"
                             ],
                             "additionalProperties": false
                           },
@@ -6003,6 +6007,14 @@
                                           },
                                           "file": {
                                             "type": "string"
+                                          },
+                                          "key_id": {
+                                            "type": "string"
+                                          },
+                                          "index_version": {
+                                            "type": "integer",
+                                            "minimum": -9007199254740991,
+                                            "maximum": 9007199254740991
                                           }
                                         },
                                         "required": [
@@ -6143,6 +6155,14 @@
                                       },
                                       "file": {
                                         "type": "string"
+                                      },
+                                      "key_id": {
+                                        "type": "string"
+                                      },
+                                      "index_version": {
+                                        "type": "integer",
+                                        "minimum": -9007199254740991,
+                                        "maximum": 9007199254740991
                                       }
                                     },
                                     "required": [
@@ -6381,6 +6401,60 @@
                                 "local_override"
                               ]
                             },
+                            "from": {
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "version": {
+                                      "type": "integer",
+                                      "minimum": -9007199254740991,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "source": {
+                                      "type": "string",
+                                      "enum": [
+                                        "bundled",
+                                        "remote",
+                                        "import",
+                                        "local"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "version",
+                                    "source"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "refused": {
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "reason": {
+                                      "type": "string"
+                                    },
+                                    "detail": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "reason",
+                                    "detail"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
                             "new_domains": {
                               "type": "array",
                               "items": {
@@ -6449,6 +6523,14 @@
                                         },
                                         "file": {
                                           "type": "string"
+                                        },
+                                        "key_id": {
+                                          "type": "string"
+                                        },
+                                        "index_version": {
+                                          "type": "integer",
+                                          "minimum": -9007199254740991,
+                                          "maximum": 9007199254740991
                                         }
                                       },
                                       "required": [
@@ -13007,6 +13089,9 @@
                             "type": "null"
                           }
                         ]
+                      },
+                      "declined": {
+                        "type": "boolean"
                       }
                     },
                     "required": [
@@ -13017,7 +13102,8 @@
                       "notes",
                       "revoked",
                       "needs_client",
-                      "usable_version"
+                      "usable_version",
+                      "declined"
                     ],
                     "additionalProperties": false
                   },
@@ -13102,6 +13188,14 @@
                                   },
                                   "file": {
                                     "type": "string"
+                                  },
+                                  "key_id": {
+                                    "type": "string"
+                                  },
+                                  "index_version": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
                                   }
                                 },
                                 "required": [
@@ -13242,6 +13336,14 @@
                               },
                               "file": {
                                 "type": "string"
+                              },
+                              "key_id": {
+                                "type": "string"
+                              },
+                              "index_version": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
                               }
                             },
                             "required": [
@@ -13480,6 +13582,60 @@
                         "local_override"
                       ]
                     },
+                    "from": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "version": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "source": {
+                              "type": "string",
+                              "enum": [
+                                "bundled",
+                                "remote",
+                                "import",
+                                "local"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "version",
+                            "source"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "refused": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "reason": {
+                              "type": "string"
+                            },
+                            "detail": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "reason",
+                            "detail"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "new_domains": {
                       "type": "array",
                       "items": {
@@ -13548,6 +13704,14 @@
                                 },
                                 "file": {
                                   "type": "string"
+                                },
+                                "key_id": {
+                                  "type": "string"
+                                },
+                                "index_version": {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991
                                 }
                               },
                               "required": [
