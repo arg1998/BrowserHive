@@ -8,6 +8,7 @@ import {
   type PackChangeClassification,
   type UsingTemplate,
 } from '../../domain/site-packs/classify.ts';
+import { newDomains } from '../../domain/site-packs/diff.ts';
 import { packFloorIssues, type StealthFloorIssue } from '../../domain/site-packs/stealth-floor.ts';
 import type { Repositories } from '../../ports/persistence/index.ts';
 import type {
@@ -16,6 +17,7 @@ import type {
   SitePackClassificationValue,
 } from '../../ports/persistence/site-packs.ts';
 import { withUsage } from './registry-build.ts';
+import { baselineOf } from './registry-core.ts';
 import type { RegistrySnapshot } from './registry-types.ts';
 
 /** The repositories the usage reads. */
@@ -146,13 +148,27 @@ export async function reclassifyPending(
         pending.push(row);
         continue;
       }
-      const next = classifyForRow(entry.approved?.pack ?? null, to, usage(packId));
-      if (!classificationChanged(row, next)) {
+      const base = baselineOf(entry);
+      const next = classifyForRow(base?.content.pack ?? null, to, usage(packId));
+      const fromVersion = base?.version ?? null;
+      const domains = [...newDomains(base?.content.pack ?? null, to)];
+      const baselineMoved =
+        row.fromVersion !== fromVersion || row.newDomains.join() !== domains.join();
+      if (!classificationChanged(row, next) && !baselineMoved) {
         pending.push(row);
         continue;
       }
-      await repo.classify(row.eventId, next.classification, next.diff);
-      pending.push({ ...row, classification: next.classification, diff: next.diff });
+      await repo.classify(row.eventId, next.classification, next.diff, {
+        fromVersion,
+        newDomains: domains,
+      });
+      pending.push({
+        ...row,
+        classification: next.classification,
+        diff: next.diff,
+        fromVersion,
+        newDomains: domains,
+      });
       moved = true;
     }
     if (!moved) continue;

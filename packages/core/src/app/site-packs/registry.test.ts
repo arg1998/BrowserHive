@@ -162,6 +162,8 @@ describe('a newer bundled release', () => {
         sha256: packSha(v2),
         state: 'downloaded',
         size: expect.any(Number),
+        from: { version: 1, source: 'bundled' },
+        refused: null,
         released: null,
         notes: null,
         classification: 'neutral',

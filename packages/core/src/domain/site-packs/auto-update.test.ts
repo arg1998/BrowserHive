@@ -58,7 +58,65 @@ describe('autoApplyHold', () => {
         },
       ],
     };
-    expect(autoApplyHold(base, broad, 'tightening', [])).toBe('broad_element_guard');
+    expect(autoApplyHold(base, broad, 'tightening', [])).toBe('element_guards');
+  });
+
+  it('holds what can stop agents on a site (review #100 M1, L3; D-87)', () => {
+    // A1: 28 attention challenges that cover neither the probe nor the sign-in page.
+    const challenged: SitePackV1 = {
+      ...base,
+      version: 2,
+      challenges: 'bcdefghijkmnopqrstuvwxyz0123'.split('').map((c, i) => ({
+        id: `ch-${i}`,
+        kind: 'checkpoint' as const,
+        match: { url: `www.${ID}/${c}*` },
+        action: 'attention' as const,
+      })),
+    } as SitePackV1;
+    expect(autoApplyHold(base, challenged, 'tightening', [])).toBe('challenges');
+    // A2: element guards with a two-letter role name.
+    const roles: SitePackV1 = {
+      ...base,
+      version: 2,
+      element_guards: [
+        {
+          id: 'r',
+          kind: 'write',
+          page: `www.${ID}/feed*`,
+          target: { role: 'button', name: 'en' },
+          action: 'block',
+        },
+      ],
+    };
+    expect(autoApplyHold(base, roles, 'tightening', [])).toBe('element_guards');
+    // A3: human_only on, max_sessions 2, a one-hour launch gap.
+    const signIn = base.sign_in ?? {
+      url: { host: `www.${ID}`, path: '/login' },
+      human_only: false,
+    };
+    expect(
+      autoApplyHold(base, { ...base, sign_in: { ...signIn, human_only: true } }, 'tightening', []),
+    ).toBe('human_only');
+    const capped: SitePackV1 = {
+      ...base,
+      concurrency: {
+        max_sessions: 2,
+        source: { url: 'https://www.pack-a.test/terms', kind: 'official' },
+      },
+    } as SitePackV1;
+    expect(autoApplyHold(base, capped, 'tightening', [])).toBe('concurrency');
+    const slow: SitePackV1 = { ...base, pacing: { rules: [], min_launch_gap_s: 3600 } };
+    expect(autoApplyHold(base, slow, 'tightening', [])).toBe('pacing');
+  });
+
+  it('applies small throttling steps (at most 2× slower)', () => {
+    const gap = (s: number): SitePackV1 => ({
+      ...base,
+      pacing: { rules: [], min_launch_gap_s: s },
+    });
+    expect(autoApplyHold(base, gap(20), 'tightening', [])).toBeNull();
+    expect(autoApplyHold(gap(60), gap(120), 'tightening', [])).toBeNull();
+    expect(autoApplyHold(gap(60), gap(121), 'tightening', [])).toBe('pacing');
   });
 
   it('counts an existing guard made blocking like a new one', () => {

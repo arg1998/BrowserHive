@@ -129,10 +129,18 @@ export class SqliteSitePackChangeRepository implements SitePackChangeRepository 
     eventId: string,
     classification: SitePackClassificationValue,
     diff: readonly SitePackChangeFieldRecord[] | null,
+    baseline?: { readonly fromVersion: number | null; readonly newDomains: readonly string[] },
   ): Promise<void> {
     await this.#db
       .updateTable('site_pack_changes')
-      .set({ classification, diff_json: diffToJson(diff) })
+      .set({
+        classification,
+        diff_json: diffToJson(diff),
+        ...(baseline !== undefined && {
+          from_version: baseline.fromVersion,
+          new_domains_json: JSON.stringify(baseline.newDomains),
+        }),
+      })
       .where('event_id', '=', eventId)
       .execute();
   }

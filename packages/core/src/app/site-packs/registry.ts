@@ -323,10 +323,15 @@ export class SitePackRegistry implements SitePackLookup {
   }
 
   /** A publisher revoked `version` (§9.7, `registry-revoke.ts`); for the T4b registry client. */
-  async revoke(packId: string, version: number, by: string): Promise<RevokeResult> {
+  async revoke(
+    packId: string,
+    version: number,
+    by: string,
+    sha256?: string,
+  ): Promise<RevokeResult> {
     let outcome: RevocationOutcome = { outcome: 'not_in_force' };
     const run = async () => {
-      outcome = await revokeVersion(this.#core(), packId, version, by);
+      outcome = await revokeVersion(this.#core(), packId, version, by, sha256);
     };
     const view = await this.#act(packId, run);
     return { ...outcome, view };
@@ -401,6 +406,7 @@ export class SitePackRegistry implements SitePackLookup {
       held: this.#snapshot.held,
       binaryVersion: this.#deps.binaryVersion,
       provenance: (source, sha) => this.#remote?.provenance(source, entry.packId, sha) ?? null,
+      refusal: (sha) => this.#remote?.refusal?.(sha) ?? null,
     });
   }
 

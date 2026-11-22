@@ -32,7 +32,7 @@ import {
   writeFloors,
 } from './client-state.ts';
 import type { HeldState, RegistryClientDeps } from './client-types.ts';
-import { loadHeld, readSnapshot, type SnapshotFacts } from './held.ts';
+import { loadHeld, plainHeld, readSnapshot, type SnapshotFacts } from './held.ts';
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -84,6 +84,8 @@ export class SitePackRegistryClient implements RemoteFacts {
   #cancel: (() => void) | null = null;
   #stopped = false;
   #tail: Promise<unknown> = Promise.resolve();
+  /** Content-addressed files whose download was refused (never fetched again). */
+  readonly #refusals = new Map<string, { readonly reason: string; readonly detail: string }>();
 
   constructor(deps: RegistryClientDeps) {
     this.#deps = deps;
@@ -155,10 +157,18 @@ export class SitePackRegistryClient implements RemoteFacts {
     const held = this.#held;
     if (source === 'import') {
       const name = held !== null && held.origin !== 'registry' ? held.originName : null;
-      return { kind: 'import', file: name ?? 'a signed export' };
+      return {
+        kind: 'import',
+        file: name ?? 'a signed export',
+        ...(held !== null && { keyId: held.signedBy, indexVersion: held.index.version }),
+      };
     }
     if (held === null) return null;
     return { kind: 'remote', keyId: held.signedBy, indexVersion: held.index.version };
+  }
+
+  refusal(sha256: string): { readonly reason: string; readonly detail: string } | null {
+    return this.#refusals.get(sha256) ?? null;
   }
 
   status(): RemoteStatusPart {
@@ -194,7 +204,15 @@ export class SitePackRegistryClient implements RemoteFacts {
               verified: snapshot.verified,
               detail: snapshot.detail,
             },
-      layoutSkips: this.#layoutSkips,
+      layoutSkips: [
+        ...this.#layoutSkips,
+        ...(held?.unsafe ?? []).map((u) => ({
+          packId: u.packId,
+          version: u.version,
+          reason: 'invalid' as const,
+          detail: `left out of the registry index: ${u.detail}`,
+        })),
+      ],
     };
   }
 
@@ -228,9 +246,12 @@ export class SitePackRegistryClient implements RemoteFacts {
       const acceptance = acceptLayout({
         verifier: deps.verifier,
         files: fetched.files,
-        heldIndexSha256: this.#held === null ? null : deps.sha256(this.#held.files.index),
+        heldIndexSha256:
+          this.#held === null ? this.#record.index_sha256 : deps.sha256(this.#held.files.index),
         sha256: deps.sha256,
         floors: this.#floors,
+        pendingIndexFloor: this.#record.pending_index_floor,
+        nothingHeld: this.#held === null,
         now,
       });
       const applied = await this.#acceptFetched(acceptance, fetched.files);
@@ -311,6 +332,10 @@ export class SitePackRegistryClient implements RemoteFacts {
       case 'refused': {
         const { refusal } = acceptance;
         this.#log.warn('registry file refused', { ...refusal });
+        // A newer root-signed keys.json is kept even when the index fails under it (L1).
+        if (acceptance.keys !== undefined) {
+          await this.#storeKeys(acceptance.keys.value, files, acceptance.pendingIndexFloor ?? null);
+        }
         return {
           outcome: 'failed',
           error: { code: refusal.reason, message: `${refusal.file}: ${refusal.detail}` },
@@ -318,7 +343,7 @@ export class SitePackRegistryClient implements RemoteFacts {
         };
       }
       case 'stale':
-        await this.#storeKeys(acceptance.keys.value, files);
+        await this.#storeKeys(acceptance.keys.value, files, acceptance.pendingIndexFloor);
         return {
           outcome: 'failed',
           error: {
@@ -328,7 +353,15 @@ export class SitePackRegistryClient implements RemoteFacts {
           stale: true,
         };
       case 'not_modified':
-        await this.#storeKeys(acceptance.keys.value, files);
+        if (this.#held === null) {
+          // The recorded index again after its held file was lost (L2): held once more.
+          await this.adopt(acceptance, files, {
+            origin: this.#record.index_origin ?? 'registry',
+            name: this.#record.origin_name,
+          });
+          return { outcome: 'not_modified', stale: false };
+        }
+        await this.#storeKeys(acceptance.keys.value, files, acceptance.pendingIndexFloor);
         return { outcome: 'not_modified', stale: false };
       case 'updated':
         await this.adopt(acceptance, files, { origin: 'registry', name: null });
@@ -336,24 +369,50 @@ export class SitePackRegistryClient implements RemoteFacts {
     }
   }
 
-  /** Keeps a newer `keys.json` of an unchanged index (its floor only ever rises). */
-  async #storeKeys(keys: HeldState['keys'], files: LayoutFiles): Promise<void> {
+  /**
+   * Keeps an accepted `keys.json` newer than the stored one (§10.3 step 1: its floor only ever
+   * rises), with its `index_floor` pending until an index is accepted under it (review #100 M2). A
+   * held index whose signer the newer keys no longer list, or list as expired, leaves force (L1).
+   */
+  async #storeKeys(
+    keys: HeldState['keys'],
+    files: LayoutFiles,
+    pendingIndexFloor: number | null,
+  ): Promise<void> {
+    const { deps } = this;
+    const stored = this.#floors.keysVersion;
+    if (stored !== null && keys.version <= stored) return;
+    await deps.held.write({ 'keys.json': files.keys, 'keys.json.sig': files.keysSig });
+    this.#floors = { ...this.#floors, keysVersion: keys.version };
+    if (this.#floors.indexVersion !== null) {
+      await writeFloors(deps.meta, {
+        keysVersion: keys.version,
+        indexVersion: this.#floors.indexVersion,
+      });
+    } else {
+      await deps.meta.set('site_packs.keys_version', String(keys.version));
+    }
     const held = this.#held;
-    const keysVersion = keys.version;
-    if (held === null || keysVersion === held.keys.version) return;
-    await this.#deps.held.write({ 'keys.json': files.keys, 'keys.json.sig': files.keysSig });
-    this.#held = {
-      ...held,
-      keys,
-      files: { ...held.files, keys: files.keys, keysSig: files.keysSig },
+    const now = deps.clock.now();
+    const signer = held === null ? undefined : keys.online.find((k) => k.key_id === held.signedBy);
+    const stillSigned = signer !== undefined && Date.parse(signer.not_after) > now;
+    if (held !== null && stillSigned) {
+      this.#held = {
+        ...held,
+        keys,
+        files: { ...held.files, keys: files.keys, keysSig: files.keysSig },
+      };
+    } else if (held !== null) {
+      this.#log.warn('held index signer revoked', { key_id: held.signedBy });
+      this.#held = null;
+    }
+    this.#record = {
+      ...this.#record,
+      keys_sha256: deps.sha256(files.keys),
+      pending_index_floor: pendingIndexFloor,
+      ...(held !== null && !stillSigned && { index_sha256: null, signed_by: null }),
     };
-    this.#floors = { ...this.#floors, keysVersion };
-    await writeFloors(this.#deps.meta, {
-      keysVersion,
-      indexVersion: this.#floors.indexVersion ?? held.index.version,
-    });
-    this.#record = { ...this.#record, keys_sha256: this.#deps.sha256(files.keys) };
-    await writeClient(this.#deps.meta, this.#record);
+    await writeClient(deps.meta, this.#record);
   }
 
   /** Makes an accepted, newer layout the held one: files, floors, the record (fetch or import). */
@@ -370,16 +429,8 @@ export class SitePackRegistryClient implements RemoteFacts {
       'index.json.sig': files.indexSig,
     });
     const floors = floorsAfter(acceptance);
-    await writeFloors(deps.meta, floors);
-    this.#floors = floors;
-    this.#held = {
-      files,
-      keys: acceptance.keys.value,
-      index: acceptance.index.value,
-      signedBy: acceptance.index.signedBy,
-      origin: from.origin,
-      originName: from.name,
-    };
+    // The record (with the held hash) first: a crash before the floors leaves a held index the
+    // next start trusts, never a floor without its index (review #100 L2).
     this.#record = {
       ...this.#record,
       index_sha256: deps.sha256(files.index),
@@ -387,8 +438,19 @@ export class SitePackRegistryClient implements RemoteFacts {
       signed_by: acceptance.index.signedBy,
       index_origin: from.origin,
       origin_name: from.name,
+      pending_index_floor: null,
     };
     await writeClient(deps.meta, this.#record);
+    await writeFloors(deps.meta, floors);
+    this.#floors = floors;
+    this.#held = {
+      files,
+      keys: acceptance.keys.value,
+      ...plainHeld(acceptance.index.value),
+      signedBy: acceptance.index.signedBy,
+      origin: from.origin,
+      originName: from.name,
+    };
     this.#log.info('registry index accepted', {
       version: acceptance.index.value.version,
       keys_version: acceptance.keys.value.version,
@@ -531,6 +593,7 @@ export class SitePackRegistryClient implements RemoteFacts {
         await writeClient(this.#deps.meta, record);
       },
       adopt: (acceptance, files, from) => this.adopt(acceptance, files, from),
+      refusals: this.#refusals,
     };
   }
 

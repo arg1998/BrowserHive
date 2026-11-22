@@ -107,7 +107,20 @@ describe('Download & review, Apply, Revert', () => {
       await expect(kit.client.download(PACK, 2, 'admin')).rejects.toMatchObject({
         code: 'SITE_PACK_DOWNLOAD_FAILED',
       });
-      expect(kit.registry.get(PACK)).toEqual(before);
+      // Nothing changed but the refusal shown on the card; the file is not fetched again.
+      const after = kit.registry.get(PACK);
+      const cleared =
+        after === null
+          ? null
+          : { ...after, pending: after.pending.map((p) => ({ ...p, refused: null })) };
+      expect(cleared as unknown).toEqual(before as unknown);
+      expect(after?.pending[0]?.refused?.reason).toBeDefined();
+      const fetcher = kit.fetcher as MemoryFetcher;
+      fetcher.requests.length = 0;
+      await expect(kit.client.download(PACK, 2, 'admin')).rejects.toMatchObject({
+        code: 'SITE_PACK_DOWNLOAD_FAILED',
+      });
+      expect(fetcher.requests).toEqual([]);
     }
   });
 
@@ -188,6 +201,23 @@ describe('auto-update', () => {
       ],
     };
     const { kit } = await kitWith([{ pack: many }], { autoUpdate: true });
+    await kit.client.check();
+    expect(kit.registry.get(PACK)?.approved?.version).toBe(1);
+    expect(kit.registry.get(PACK)?.pending[0]?.state).toBe('downloaded');
+  });
+
+  it('never applies a version that can stop agents on the site (review #100 M1, D-87)', async () => {
+    const base = sitePack(PACK, 2);
+    const challenged: SitePackV1Input = {
+      ...base,
+      challenges: 'bcdefghijkmnopqrstuvwxyz0123'.split('').map((c, i) => ({
+        id: `ch-${i}`,
+        kind: 'checkpoint' as const,
+        match: { url: `www.${PACK}/${c}*` },
+        action: 'attention' as const,
+      })),
+    };
+    const { kit } = await kitWith([{ pack: challenged }], { autoUpdate: true });
     await kit.client.check();
     expect(kit.registry.get(PACK)?.approved?.version).toBe(1);
     expect(kit.registry.get(PACK)?.pending[0]?.state).toBe('downloaded');
@@ -284,7 +314,7 @@ describe('signed imports and export', () => {
         classification,
       }));
     expect(b).toEqual(a);
-    expect(offline.registry.get(PACK)?.pending[0]?.provenance).toEqual({
+    expect(offline.registry.get(PACK)?.pending[0]?.provenance).toMatchObject({
       kind: 'import',
       file: 'usb-export',
     });
@@ -324,5 +354,98 @@ describe('signed imports and export', () => {
     expect(kit.registry.status().skipped).toEqual([
       expect.objectContaining({ pack_id: '/mem/local/notes', reason: 'layout_refused' }),
     ]);
+  });
+});
+
+describe('review #100 surfaces', () => {
+  it('leaves out index entries whose notes or title are not plain text (UI H1)', async () => {
+    const registry = signRegistry({
+      now: NOW,
+      versions: [
+        { pack: tighter(2), notes: 'Tightens. \u202Eegnahc yfirev\u202C' },
+        { pack: sitePack('pack-b.test', 1), notes: 'Colours \u001b[31mred\u001b[0m' },
+        { pack: sitePack('pack-c.test', 1, { title: 'Evil \u202E title' }) },
+      ],
+    });
+    const kit = await createClientKit({ registry, clock: new FakeClock(NOW) });
+    await kit.client.check();
+    expect(kit.registry.get(PACK)?.online).toBeNull();
+    expect(kit.registry.get('pack-b.test')).toBeNull();
+    expect(kit.registry.get('pack-c.test')).toBeNull();
+    const skipped = kit.registry.status().skipped.map((s) => [s.pack_id, s.version]);
+    expect(skipped).toEqual(
+      expect.arrayContaining([
+        [PACK, 2],
+        ['pack-b.test', 1],
+        ['pack-c.test', null],
+      ]),
+    );
+  });
+
+  it('a pack nothing approved is compared with its bundled offer, and the history follows the approval (M2, M3)', async () => {
+    const registry = signRegistry({ now: NOW, versions: [{ pack: looser(2) }] });
+    const kit = await createClientKit({ registry, clock: new FakeClock(NOW) });
+    await kit.registry.setFollow(PACK, true, 'admin');
+    await kit.client.check();
+    const { diff, view } = await kit.client.download(PACK, 2, 'admin');
+    expect(diff.from).toEqual(expect.objectContaining({ version: 1, source: 'bundled' }));
+    expect(diff.classification).toBe('loosening');
+    expect(view.pending[0]?.from).toEqual({ version: 1, source: 'bundled' });
+    // Approving the bundled v1 rewrites the row's baseline with its classification.
+    await kit.registry.approveSite(PACK, kit.registry.get(PACK)?.offer?.sha256, 'admin');
+    const rows = await kit.registry.changes({ limit: 10, pack_id: PACK });
+    const row = rows.data.find((r) => r.to_version === 2);
+    expect(row).toMatchObject({ from_version: 1, new_domains: [], classification: 'loosening' });
+  });
+
+  it('a version set aside by Revert is shown as declined and Download & review offers it again (M4)', async () => {
+    const { kit } = await kitWith([{ pack: tighter(2) }]);
+    await kit.client.check();
+    await kit.client.download(PACK, 2, 'admin');
+    await kit.registry.apply(PACK, 2, 'admin');
+    await kit.registry.revert(PACK, 'admin');
+    await kit.client.check();
+    const view = kit.registry.get(PACK);
+    expect(view?.pending).toEqual([]);
+    expect(view?.online).toMatchObject({ usable_version: 2, declined: true });
+    const again = await kit.client.download(PACK, 2, 'admin');
+    expect(again.view.pending[0]).toMatchObject({ version: 2, state: 'downloaded' });
+    expect(again.view.online?.declined).toBe(false);
+  });
+
+  it('an import names revoked versions and whether the pack is followed; export lists what it lacks (M7, L6)', async () => {
+    const root = testKey();
+    const online = testKey();
+    const registry = signRegistry({
+      now: NOW,
+      root,
+      online,
+      versions: [
+        { pack: tighter(3) },
+        { pack: tighter(2, { title: 'two' }), revoked: true },
+        { pack: sitePack('pack-b.test', 1) },
+      ],
+    });
+    const kit = await createClientKit({ registry, updateCheck: false, clock: new FakeClock(NOW) });
+    const offer = kit.registry.get(PACK)?.offer;
+    await kit.registry.approveSite(PACK, offer?.sha256, 'admin');
+    await kit.registry.setFollow(PACK, true, 'admin');
+    const result = await kit.client.importLayout(registry.files, 'usb', 'admin');
+    const byVersion = (id: string, v: number) =>
+      result.imported.find((i) => i.pack_id === id && i.version === v);
+    expect(byVersion(PACK, 2)?.state).toBe('revoked');
+    expect(byVersion(PACK, 3)).toMatchObject({ state: 'downloaded', followed: true });
+    expect(byVersion('pack-b.test', 1)).toMatchObject({ state: 'downloaded', followed: false });
+    // Export of a layout whose pack-b file this host never held.
+    const partial = new Map(registry.files);
+    for (const p of [...partial.keys()]) if (p.startsWith('packs/pack-b.test/')) partial.delete(p);
+    const other = await createClientKit({
+      trustRoot: registry.trustRoot,
+      updateCheck: false,
+      clock: new FakeClock(NOW),
+    });
+    await other.client.importLayout(partial, 'usb', 'admin');
+    const exported = await other.client.exportLayout();
+    expect(exported.missing).toEqual([{ pack_id: 'pack-b.test', version: 1 }]);
   });
 });

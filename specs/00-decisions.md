@@ -1476,7 +1476,7 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 
 ## D-85 Auto-update applies only small tightening steps
 
-**Status:** Accepted (T4b; resolves deferred D74)
+**Status:** Accepted (T4b; resolves deferred D74); narrowed by D-87
 
 **Decision.** With `sitePacksAutoUpdate=true`, a registry candidate of a followed, unpinned, approved pack without a local override is downloaded and applied by `browserhive` (decision `auto`) only when it is `tightening` or `neutral`, adds or removes no domain, adds no host-wide blocking guard (`host/*`), no blocking element guard with a bare type, universal or very short selector, and makes at most three guards newly blocking (new, or changed to `block`/`confirm`). Otherwise it stays downloaded for an operator. Bundled versions, imports and local files are never auto-applied; the stealth floor (D-71) and domain overlap are checked as on any Apply.
 
@@ -1487,3 +1487,13 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 **Status:** Accepted (T4b)
 
 **Decision.** `scripts/snapshot-registry.ts` writes the verified live layout to `packages/browserhive/dist/site-packs/registry/v1/` (a subfolder: `dist/site-packs/index.json` is the bundled index), runs in `release:publish` after the build, and refuses (nothing written, release stops) when anything does not verify under the pinned root, and before any request while the build pins no root keys. At start a fresh install (no index floor stored) verifies the snapshot as of its own `issued_at` (its integrity is the release's; freshness is the check's job) and stores its versions as the first floors. The snapshot is not used as the held index.
+
+## D-87 Auto-update applies only changes that cannot stop or block agents' work
+
+**Status:** Accepted (owner policy "stealth and security first class", review #100 M1 and L3)
+
+**Context.** Review #100 showed that a version the classifier calls tightening can still halt a site for agents: 28 `attention` challenges that avoid the probe and sign-in paths, element guards matching by a two-letter role name, `human_only` turned on, `max_sessions` lowered to 2, a one-hour launch gap. With auto-update on, a stolen online key could apply any of them by itself.
+
+**Decision.** Beyond D-85 (only `tightening` or `neutral`, no domain change, no host-wide blocking guard, at most three newly blocking network guards), auto-update leaves a version for an operator when it adds, removes or changes any challenge or any element guard, turns `sign_in.human_only` on, lowers `concurrency.max_sessions`, adds a pace rule or changes one's period or guard, raises `pacing.min_launch_gap_s` above max(2 × the old gap, 30 s), lowers a pace limit below half, adds or removes a strategy, or moves a numeric strategy parameter by more than 2× either way (or changes a non-numeric one). Every "restrictive" change already waits. The bound is `AUTO_MAX_SLOWDOWN = 2` (`domain/site-packs/auto-update.ts`).
+
+**Consequences.** Auto-update applies new guards on specific endpoints, stricter guard actions within the cap, cosmetic and metadata changes and small throttling steps; anything that can stop or slow agents materially waits in Updates available like a loosening change.

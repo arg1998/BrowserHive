@@ -27,6 +27,8 @@ export interface ClientRecord {
   readonly origin_name: string | null;
   /** The registry's `Date` minus this clock at the last check, when more than 5 minutes. */
   readonly clock_skew_ms?: number;
+  /** A newer `keys.json`'s `index_floor` not consumed yet (honoured with the next accepted index). */
+  readonly pending_index_floor: number | null;
   /** `<pack>@<version>:<sha256>` revocations already applied (never applied twice). */
   readonly revocations: readonly string[];
 }
@@ -43,6 +45,7 @@ export const EMPTY_CLIENT: ClientRecord = {
   signed_by: null,
   index_origin: null,
   origin_name: null,
+  pending_index_floor: null,
   revocations: [],
 };
 
@@ -115,6 +118,7 @@ export async function readClient(meta: SitePackMetaRepository): Promise<ClientRe
     index_origin:
       origin !== null && ORIGINS.has(origin) ? (origin as ClientRecord['index_origin']) : null,
     origin_name: strOrNull(r['origin_name']),
+    pending_index_floor: numOrNull(r['pending_index_floor']),
     ...(skew !== null && { clock_skew_ms: Math.trunc(skew) }),
     revocations: Array.isArray(r['revocations'])
       ? r['revocations'].filter((x): x is string => typeof x === 'string').slice(0, 5_000)

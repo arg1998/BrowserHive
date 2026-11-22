@@ -65,7 +65,13 @@ export type SiteGuardSourceValue = (typeof SITE_GUARD_SOURCES)[number];
 export type SitePackProvenanceRecord =
   | { readonly kind: 'bundled'; readonly release: string }
   | { readonly kind: 'remote'; readonly keyId: string; readonly indexVersion: number }
-  | { readonly kind: 'import'; readonly file: string }
+  | {
+      readonly kind: 'import';
+      readonly file: string;
+      /** A signed import: the online key and index version it verified with. */
+      readonly keyId?: string;
+      readonly indexVersion?: number;
+    }
   | { readonly kind: 'local'; readonly path: string };
 
 /** One `site_pack_state` row (configuration class: never pruned). */
@@ -192,6 +198,8 @@ export interface SitePackChangeRepository {
     eventId: string,
     classification: SitePackClassificationValue,
     diff: readonly SitePackChangeFieldRecord[] | null,
+    /** The baseline the classification compared against, rewritten with it (review #100 M3). */
+    baseline?: { readonly fromVersion: number | null; readonly newDomains: readonly string[] },
   ): Promise<void>;
   /**
    * A registry or imported candidate was downloaded and verified (spec 13 §10.6): `downloaded`

@@ -5,6 +5,7 @@ import {
   RegistryKeysV1,
   SITE_PACK_MAX_BYTES,
 } from '@browserhive/contracts/site-packs';
+import { plainListings } from '../../../domain/site-packs/registry-listing.ts';
 import type { HeldLayoutStore, RegistryVerifier } from '../../../ports/site-pack-registry.ts';
 import type { LayoutFiles } from './accept.ts';
 import type { ClientRecord } from './client-state.ts';
@@ -48,7 +49,7 @@ export async function loadHeld(
   return {
     files,
     keys: keys.data,
-    index: index.data,
+    ...plainHeld(index.data),
     signedBy: record.signed_by,
     origin: record.index_origin ?? 'registry',
     originName: record.origin_name,
@@ -102,4 +103,10 @@ export async function readSnapshot(
       ? null
       : `${checked.error.file}: ${checked.error.reason} (${checked.error.detail})`,
   };
+}
+
+/** The held index's plain listings and what was left out. */
+export function plainHeld(index: RegistryIndexV1) {
+  const plain = plainListings(index);
+  return { index: plain.index, unsafe: plain.unsafe };
 }

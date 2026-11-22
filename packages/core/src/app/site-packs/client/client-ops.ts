@@ -10,7 +10,7 @@ import type {
 import type { RegistryIndexV1, RegistryPackVersion } from '@browserhive/contracts/site-packs';
 import type { z } from 'zod';
 import { autoApplyHold } from '../../../domain/site-packs/auto-update.ts';
-import { bestUsable } from '../../../domain/site-packs/registry-listing.ts';
+import { bestUsable, plainListings } from '../../../domain/site-packs/registry-listing.ts';
 import { serializeError } from '../../../kernel/errors/serialize-error.ts';
 import type { Logger } from '../../../ports/logger.ts';
 import type { SitePackChangeRecord } from '../../../ports/persistence/site-packs.ts';
@@ -43,6 +43,8 @@ export interface ClientContext {
   checkOff(): z.infer<typeof SitePackCheckOff> | null;
   record(): ClientRecord;
   setRecord(record: ClientRecord): Promise<void>;
+  /** Content-addressed files whose download was refused (never fetched again). */
+  readonly refusals: Map<string, { readonly reason: string; readonly detail: string }>;
   adopt(
     acceptance: Extract<Acceptance, { kind: 'updated' | 'not_modified' }>,
     files: LayoutFiles,
@@ -122,7 +124,7 @@ export async function applyRevocations(ctx: ClientContext): Promise<void> {
         (p) => p.toVersion === entry.v && p.toSha256 === entry.sha256,
       );
       if (!approved && !pending) continue;
-      const result = await registry.revoke(pack.id, entry.v, SYSTEM);
+      const result = await registry.revoke(pack.id, entry.v, SYSTEM, entry.sha256);
       ctx.log.info('pack version revoked', {
         packId: pack.id,
         version: entry.v,
@@ -230,16 +232,31 @@ async function fetchVerified(
 ): Promise<SourcePackVersion> {
   const { deps } = ctx;
   const held = await deps.registry.signedCopy(packId, entry.sha256);
-  if (held !== null) return held;
+  // A held copy is checked against this entry too: the same bytes listed under another version
+  // or client range are refused (review #100 I2).
+  if (held !== null) {
+    const again = deps.verifier.verifyListedPack(held.bytes, packId, entry, deps.binaryVersion);
+    if (!again.ok) throw downloadFailed(packId, entry.v, again.error.reason, again.error.detail);
+    if ('outOfRange' in again.value) throw notListed(packId, entry.v);
+    return again.value;
+  }
+  // A file that failed verification is content-addressed: it never changes, so it is not
+  // fetched again (review #100 UI L1).
+  const refused = ctx.refusals.get(entry.sha256);
+  if (refused !== undefined) throw downloadFailed(packId, entry.v, refused.reason, refused.detail);
   const result = await deps.fetcher.fetch({ path: entry.path, maxBytes: PACK_READ_MAX });
   if (result.kind !== 'ok') {
     const reason = result.kind === 'failed' ? result.reason : 'not_modified';
     const detail = result.kind === 'failed' ? result.detail : 'unexpected 304';
+    if (reason === 'too_large' || reason === 'encoding')
+      ctx.refusals.set(entry.sha256, { reason, detail });
     throw downloadFailed(packId, entry.v, reason, detail);
   }
   const checked = deps.verifier.verifyListedPack(result.bytes, packId, entry, deps.binaryVersion);
-  if (!checked.ok)
+  if (!checked.ok) {
+    ctx.refusals.set(entry.sha256, { reason: checked.error.reason, detail: checked.error.detail });
     throw downloadFailed(packId, entry.v, checked.error.reason, checked.error.detail);
+  }
   if ('outOfRange' in checked.value) throw notListed(packId, entry.v);
   const copy = checked.value;
   await deps.registry.cachePut('remote', packId, copy.sha256, copy.bytes);
@@ -278,11 +295,17 @@ export async function download(
   if (listing === undefined && registry.get(packId) === null) throw packNotFound(packId);
   const best = listing === undefined ? null : bestUsable(listing, binaryVersion);
   if (best === null || best.v !== version) throw notListed(packId, version);
-  const pending = registry
+  let pending = registry
     .snapshotNow()
     .packs.get(packId)
     ?.pending.find((p) => p.toSha256 === best.sha256);
+  if (pending === undefined && registry.snapshotNow().packs.get(packId)?.declined === true) {
+    // An operator set this version aside (rejected, reverted from): downloading it is the
+    // explicit request to review it again (review #100 M4).
+    pending = await registry.mutate((core) => reopen(core, packId, best));
+  }
   if (pending === undefined) throw notListed(packId, version);
+  const row = pending;
   let copy: SourcePackVersion;
   try {
     copy = await fetchVerified(ctx, packId, best);
@@ -297,9 +320,9 @@ export async function download(
   }
   await registry.mutate(async (core) => {
     const entry = core.snapshot().packs.get(packId);
-    const row = entry?.pending.find((p) => p.eventId === pending.eventId);
-    if (entry !== undefined && row?.decision === 'available')
-      await markDownloaded(core, entry, row, copy);
+    const current = entry?.pending.find((p) => p.eventId === row.eventId);
+    if (entry !== undefined && current?.decision === 'available')
+      await markDownloaded(core, entry, current, copy);
   });
   await audit(ctx, by, 'site_pack.download', packId, {
     version,
@@ -309,6 +332,32 @@ export async function download(
   const view = registry.get(packId);
   if (view === null) throw packNotFound(packId);
   return { view, diff: await registry.diff(packId, { to: version }) };
+}
+
+/** A fresh `available` row for a version an operator set aside and asks to review again. */
+async function reopen(
+  core: RegistryCore,
+  packId: string,
+  entry: RegistryPackVersion,
+): Promise<SitePackChangeRecord> {
+  const current = core.snapshot().packs.get(packId);
+  return core.deps.repos.sitePackChanges.insert({
+    seq: 0,
+    eventId: core.deps.ids.eventId(),
+    packId,
+    fromVersion: current?.state?.approvedVersion ?? null,
+    toVersion: entry.v,
+    toSha256: entry.sha256,
+    source: 'remote',
+    classification: 'unclassified',
+    newDomains: [],
+    notes: entry.notes,
+    diff: null,
+    decision: 'available',
+    decidedBy: null,
+    createdAt: core.deps.clock.now(),
+    decidedAt: null,
+  });
 }
 
 /** **Download all**: every listed, non-revoked version BrowserHive lacks, of every pack. */
@@ -409,9 +458,12 @@ export async function importFiles(
   const acceptance = acceptLayout({
     verifier: deps.verifier,
     files: layout,
-    heldIndexSha256: heldState === null ? null : deps.sha256(heldState.files.index),
+    heldIndexSha256:
+      heldState === null ? ctx.record().index_sha256 : deps.sha256(heldState.files.index),
     sha256: deps.sha256,
     floors: ctx.floors(),
+    pendingIndexFloor: ctx.record().pending_index_floor,
+    nothingHeld: heldState === null,
     now: deps.clock.now(),
   });
   if (acceptance.kind === 'refused' || acceptance.kind === 'stale') {
@@ -424,12 +476,22 @@ export async function importFiles(
   if (acceptance.kind === 'updated') {
     await ctx.adopt(acceptance, layout, { origin: how.origin, name: how.name });
   }
-  const index = acceptance.index.value;
+  const index = plainListings(acceptance.index.value).index;
   const imported: SitePackImportResponse['imported'] = [];
   const shas = new Set<string>();
   for (const pack of index.packs) {
     const best = bestUsable(pack, deps.binaryVersion);
     for (const entry of pack.versions) {
+      if (entry.revoked === true) {
+        // Revoked by the publisher: never queued, whatever the folder holds (review #100 M7).
+        imported.push({
+          pack_id: pack.id,
+          version: entry.v,
+          state: 'revoked',
+          sha256: entry.sha256,
+        });
+        continue;
+      }
       const bytes = files.get(entry.path);
       if (bytes === undefined) {
         if (best?.sha256 === entry.sha256) {
@@ -476,9 +538,12 @@ export async function importFiles(
   );
   for (const item of imported) {
     if (item.state === 'current' && pendingShas.has(item.sha256)) item.state = 'downloaded';
+    const entry = snapshot.packs.get(item.pack_id);
+    item.followed = entry !== undefined && followEffective(entry);
   }
-  if (how.by !== undefined) {
-    await audit(ctx, how.by, 'site_pack.import', null, {
+  // A signed layout of the local folder is audited too, by BrowserHive (review #100 I7).
+  if (how.by !== undefined || acceptance.kind === 'updated') {
+    await audit(ctx, how.by ?? SYSTEM, 'site_pack.import', null, {
       layout: true,
       name: how.name,
       outcome: acceptance.kind,
@@ -570,10 +635,14 @@ export async function exportLayout(ctx: ClientContext): Promise<SitePackExportRe
     'index.json.sig': b64(held.files.indexSig),
   };
   let packs = 0;
+  const missing: SitePackExportResponse['missing'] = [];
   for (const pack of held.index.packs) {
     for (const entry of pack.versions) {
       const copy = await ctx.deps.registry.signedCopy(pack.id, entry.sha256);
-      if (copy === null) continue;
+      if (copy === null) {
+        if (entry.revoked !== true) missing.push({ pack_id: pack.id, version: entry.v });
+        continue;
+      }
       files[entry.path] = b64(copy.bytes);
       packs += 1;
     }
@@ -583,6 +652,6 @@ export async function exportLayout(ctx: ClientContext): Promise<SitePackExportRe
     index_version: held.index.version,
     keys_version: held.keys.version,
     packs,
-    missing: [],
+    missing,
   };
 }

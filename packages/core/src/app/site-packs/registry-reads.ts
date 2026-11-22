@@ -250,6 +250,8 @@ async function fromOf(
     if (entry.approved !== null && state?.approvedSource) {
       return { content: entry.approved, source: state.approvedSource };
     }
+    // Nothing approved yet: compared with the bundled version first use would approve (#100 M2).
+    if (entry.offer !== null) return { content: entry.offer, source: 'bundled' };
     return null;
   }
   if (

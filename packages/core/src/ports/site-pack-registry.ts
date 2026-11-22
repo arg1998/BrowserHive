@@ -30,7 +30,9 @@ export type RegistryFetchFailure =
   | 'http_status'
   | 'redirect'
   | 'too_large'
-  | 'not_modified_without_body';
+  | 'not_modified_without_body'
+  /** A `Content-Encoding` other than `identity` (compressed bodies are refused: no decompression bomb). */
+  | 'encoding';
 
 /** The outcome of one fetch. `date` is the response's `Date` header (epoch ms) when it parses. */
 export type RegistryFetchResult =

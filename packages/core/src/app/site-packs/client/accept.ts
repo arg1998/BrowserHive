@@ -18,23 +18,38 @@ export interface LayoutFiles {
 
 /** What {@link acceptLayout} decided. */
 export type Acceptance =
-  | { readonly kind: 'refused'; readonly refusal: RegistryRefusalInfo }
+  /**
+   * Refused. `keys` is set when step 1 accepted `keys.json` (a revoking `keys.json` is kept even
+   * when the index fails under it, review #100 L1); `pendingIndexFloor` is its unconsumed reset.
+   */
+  | {
+      readonly kind: 'refused';
+      readonly refusal: RegistryRefusalInfo;
+      readonly keys?: VerifiedFile<RegistryKeysV1>;
+      readonly pendingIndexFloor?: number | null;
+    }
   /** The held index, unchanged, has expired: it stays in force for what was downloaded, nothing new. */
   | {
       readonly kind: 'stale';
       readonly keys: VerifiedFile<RegistryKeysV1>;
       readonly heldIndex: RegistryIndexV1 | null;
+      readonly pendingIndexFloor: number | null;
     }
   | {
       readonly kind: 'not_modified';
       readonly keys: VerifiedFile<RegistryKeysV1>;
       readonly index: VerifiedFile<RegistryIndexV1>;
+      /**
+       * A newer `keys.json`'s `index_floor` not consumed yet: it is honoured with the next index
+       * accepted under it, never by an unchanged one (review #100 M2).
+       */
+      readonly pendingIndexFloor: number | null;
     }
   | {
       readonly kind: 'updated';
       readonly keys: VerifiedFile<RegistryKeysV1>;
       readonly index: VerifiedFile<RegistryIndexV1>;
-      /** `keys.json`'s `index_floor` replaced the stored floor for this check. */
+      /** `keys.json`'s `index_floor` replaced the stored floor for this check (consumed). */
       readonly indexFloorApplied: number | null;
     };
 
@@ -42,10 +57,17 @@ export type Acceptance =
 export interface AcceptInput {
   readonly verifier: RegistryVerifier;
   readonly files: LayoutFiles;
-  /** The SHA-256 of the held `index.json`, `null` when none is held. */
+  /**
+   * The SHA-256 of the held `index.json`, or the one recorded when the held file was lost
+   * (review #100 L2); `null` when none.
+   */
   readonly heldIndexSha256: string | null;
   readonly sha256: (bytes: Uint8Array) => string;
   readonly floors: RegistryFloorsRecord;
+  /** A reset from an earlier, newer `keys.json` not consumed yet. */
+  readonly pendingIndexFloor?: number | null;
+  /** No index is held (lost or never): an index of exactly the floor's version is accepted again. */
+  readonly nothingHeld?: boolean;
   readonly now: number;
 }
 
@@ -68,6 +90,16 @@ export function acceptLayout(input: AcceptInput): Acceptance {
     floor: floors.keysVersion,
   });
   if (!keys.ok) return { kind: 'refused', refusal: keys.error };
+  // §10.3 step 1: a newer keys.json's index_floor, else one still pending from an earlier one.
+  const reset =
+    verifier.indexFloorOf(keys.value.value, floors).applied ?? input.pendingIndexFloor ?? null;
+  const floor = reset ?? floors.indexVersion;
+  const refused = (refusal: RegistryRefusalInfo): Acceptance => ({
+    kind: 'refused',
+    refusal,
+    keys: keys.value,
+    pendingIndexFloor: reset,
+  });
   const same =
     input.heldIndexSha256 !== null && input.sha256(files.index) === input.heldIndexSha256;
   if (same) {
@@ -81,37 +113,46 @@ export function acceptLayout(input: AcceptInput): Acceptance {
       floor: null,
     });
     if (held.ok) {
-      if (floors.indexVersion !== null && held.value.value.version !== floors.indexVersion) {
-        return {
-          kind: 'refused',
-          refusal: {
-            file: 'index.json',
-            reason: 'rollback',
-            detail: `the held index (version ${held.value.value.version}) is not the one recorded (${floors.indexVersion})`,
-          },
-        };
+      if (floor !== null && held.value.value.version < floor) {
+        return refused({
+          file: 'index.json',
+          reason: 'rollback',
+          detail: `the held index (version ${held.value.value.version}) is below the floor (${floor})`,
+        });
       }
-      return { kind: 'not_modified', keys: keys.value, index: held.value };
+      return {
+        kind: 'not_modified',
+        keys: keys.value,
+        index: held.value,
+        pendingIndexFloor: reset,
+      };
     }
     if (held.error.reason === 'expired') {
-      return { kind: 'stale', keys: keys.value, heldIndex: parsedIndex(files.index) };
+      return {
+        kind: 'stale',
+        keys: keys.value,
+        heldIndex: parsedIndex(files.index),
+        pendingIndexFloor: reset,
+      };
     }
-    return { kind: 'refused', refusal: held.error };
+    return refused(held.error);
   }
-  const floor = verifier.indexFloorOf(keys.value.value, floors);
+  // With nothing held, the floor's own version is accepted again (a lost held file, review #100 L2).
+  const effective =
+    floor !== null && input.nothingHeld === true && reset === null ? floor - 1 : floor;
   const index = verifier.verifyIndex({
     bytes: files.index,
     sig: files.indexSig,
     keys: keys.value.value,
     now,
-    floor: floor.floor,
+    floor: effective,
   });
-  if (!index.ok) return { kind: 'refused', refusal: index.error };
+  if (!index.ok) return refused(index.error);
   return {
     kind: 'updated',
     keys: keys.value,
     index: index.value,
-    indexFloorApplied: floor.applied,
+    indexFloorApplied: reset,
   };
 }
 

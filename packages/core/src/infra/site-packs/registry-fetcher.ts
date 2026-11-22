@@ -1,4 +1,4 @@
-/** @module infra/site-packs/registry-fetcher — the registry client's one kind of request (spec 13 §10.4, D-55): an anonymous `GET` of a file under `sitePacksUrl` with `User-Agent: BrowserHive`, no cookie, query, body or redirect, keep-alive off, 5 s to the response headers and 30 s in all, the body capped while it streams. `If-None-Match` carries only the SHA-256 of the body BrowserHive holds (D69). */
+/** @module infra/site-packs/registry-fetcher — the registry client's one kind of request (spec 13 §10.4, D-55): an anonymous `GET` of a file under `sitePacksUrl` with `User-Agent: BrowserHive` and `Accept-Encoding: identity` (a compressed body is refused, never inflated), no cookie, query, body or redirect, keep-alive off, 5 s to the response headers and 30 s in all, the body capped while it streams. `If-None-Match` carries only the SHA-256 of the body BrowserHive holds (D69). */
 
 import type {
   RegistryFetcher,
@@ -14,7 +14,8 @@ export const HEADERS_TIMEOUT_MS = 5_000;
 export const TOTAL_TIMEOUT_MS = 30_000;
 
 /** A registry path: `keys.json`-style names or `packs/<id>/<sha256>.json`, never a query or `..`. */
-const PATH_RE = /^(?:[a-z.]+\.json(?:\.sig)?|packs\/[a-z0-9.-]+\/[0-9a-f]{64}\.json)$/;
+const PATH_RE =
+  /^(?:(?:keys|index)\.json(?:\.sig)?|packs\/[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+\/[0-9a-f]{64}\.json)$/;
 
 /** Options of {@link createRegistryFetcher}. */
 export interface RegistryFetcherOptions {
@@ -102,6 +103,9 @@ export function createRegistryFetcher(options: RegistryFetcherOptions): Registry
       const headers: Record<string, string> = {
         'User-Agent': REGISTRY_USER_AGENT,
         Accept: 'application/json',
+        // Only the identity bytes are signed and every file is a few KB: compression is never
+        // asked for or accepted (a compressed body could inflate without bound, review #100 H1).
+        'Accept-Encoding': 'identity',
       };
       if (request.heldSha256 !== undefined) headers['If-None-Match'] = `"${request.heldSha256}"`;
       const controller = new AbortController();
@@ -117,10 +121,21 @@ export function createRegistryFetcher(options: RegistryFetcherOptions): Registry
           credentials: 'omit',
           cache: 'no-store',
           keepalive: false,
+          decompress: false,
           signal: controller.signal,
         });
         clearTimeout(firstByte);
         const date = dateOf(response.headers);
+        const encoding = (response.headers.get('content-encoding') ?? '').trim().toLowerCase();
+        if (encoding !== '' && encoding !== 'identity') {
+          await response.body?.cancel().catch(() => undefined);
+          return failed(
+            'encoding',
+            `Content-Encoding ${encoding.slice(0, 40)} is refused`,
+            response.status,
+            date,
+          );
+        }
         if (response.status === 304) {
           await response.body?.cancel().catch(() => undefined);
           return request.heldSha256 === undefined

@@ -66,6 +66,8 @@ export interface RemoteFacts {
   ): SitePackProvenanceRecord | null;
   /** The client's fields of the registry status. */
   status(): RemoteStatusPart;
+  /** The last refused download of this content-addressed file (`pending[].refused`). */
+  refusal?(sha256: string): { readonly reason: string; readonly detail: string } | null;
   /** Signed layouts of the local folder, verified at each reload (after the registry's load). */
   importLocalLayouts?(paths: readonly string[]): Promise<void>;
 }
@@ -163,6 +165,8 @@ export interface PackEntry {
   readonly listing: RegistryIndexPack | null;
   /** The bundled snapshot of this release ships a version of it. */
   readonly inBundle: boolean;
+  /** The index's usable version is newer than the baseline but an operator set it aside (rejected, reverted from). */
+  readonly declined?: boolean;
   readonly usedBy: readonly string[];
   readonly skipped: SkippedPackVersion | null;
   /** The first domain this pack's content claims that another pack covers (`domain_overlap`). */

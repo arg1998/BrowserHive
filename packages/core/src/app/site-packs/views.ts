@@ -22,6 +22,7 @@ import type {
   SitePackProvenanceRecord,
 } from '../../ports/persistence/site-packs.ts';
 import type { EffectivePack } from '../../ports/site-packs.ts';
+import { baselineOf } from './registry-core.ts';
 import type {
   HeldIndex,
   PackEntry,
@@ -34,6 +35,10 @@ import type {
 export interface RemoteViewFacts {
   readonly held: HeldIndex | null;
   readonly binaryVersion: string;
+  /** The last refused download of a file. */
+  readonly refusal?: (
+    sha256: string,
+  ) => { readonly reason: string; readonly detail: string } | null;
   /** Provenance of a pending remote or imported version. */
   readonly provenance: (
     source: 'remote' | 'import',
@@ -51,7 +56,12 @@ export function toProvenance(record: SitePackProvenanceRecord): SitePackProvenan
     case 'remote':
       return { kind: 'remote', key_id: record.keyId, index_version: record.indexVersion };
     case 'import':
-      return { kind: 'import', file: record.file };
+      return {
+        kind: 'import',
+        file: record.file,
+        ...(record.keyId !== undefined && { key_id: record.keyId }),
+        ...(record.indexVersion !== undefined && { index_version: record.indexVersion }),
+      };
     case 'local':
       return { kind: 'local', path: record.path };
   }
@@ -112,7 +122,9 @@ export function toSitePackView(
             problem: local.problem?.detail ?? null,
           },
     local_override: entry.effective?.localOverride ?? false,
-    pending: entry.pending.flatMap((row) => pendingOf(row, release, sizeOf, listed, remote)),
+    pending: entry.pending.flatMap((row) =>
+      pendingOf(row, release, sizeOf, listed, remote, baselineRef(entry)),
+    ),
     used_by: [...entry.usedBy],
     human_only: display?.sign_in?.human_only ?? false,
     write_policy_default: display?.write_policy.default ?? 'allow',
@@ -164,6 +176,7 @@ function pendingOf(
   sizeOf: (sha256: string) => number | null,
   listed: (sha256: string) => { readonly size: number; readonly released: string } | null,
   remote: RemoteViewFacts,
+  from: SitePackPending['from'],
 ): SitePackPending[] {
   if (row.toVersion === null || (row.decision !== 'available' && row.decision !== 'downloaded')) {
     return [];
@@ -187,8 +200,16 @@ function pendingOf(
       new_domains: [...row.newDomains],
       source: row.source,
       provenance,
+      from,
+      refused: remote.refusal?.(row.toSha256) ?? null,
     },
   ];
+}
+
+/** What a pending version is compared with (`pending[].from`). */
+function baselineRef(entry: PackEntry): SitePackPending['from'] {
+  const base = baselineOf(entry);
+  return base === null ? null : { version: base.version, source: base.source };
 }
 
 function provenanceOrNull(record: SitePackProvenanceRecord | null): SitePackProvenance | null {
@@ -220,7 +241,7 @@ function onlineOf(entry: PackEntry, binaryVersion: string): SitePackView['online
     revoked: newest.revoked === true,
     needs_client: neededClient(newest, binaryVersion),
     usable_version: bestUsable(listing, binaryVersion)?.v ?? null,
-    declined: false,
+    declined: entry.declined === true,
   };
 }
 
