@@ -22,6 +22,7 @@ import type { ProxySpec } from '../../src/ports/browser-driver.ts';
 import type { TemplateHostSpec } from '../../src/ports/template-host.ts';
 import { templateSiteRecord } from '../persistence/helpers.ts';
 import { HEADED, type TemplateWorld, templateWorld, until } from './template-fixture.ts';
+import { type OperatorWindow, operatorWindow as xOperatorWindow } from './x-desktop.ts';
 
 const LINUX = process.platform === 'linux';
 /** `xdotool` reads the X input focus on the Linux headed legs. */
@@ -68,24 +69,12 @@ function clientWindows(): string[] {
   return sh('xprop', ['-root', '_NET_CLIENT_LIST']).match(/0x[0-9a-f]+/g) ?? [];
 }
 
-/** The operator's window: a tiny X client given the input focus (Linux headed legs). */
-function operatorWindow(): { readonly id: string; close(): void } | null {
-  if (!X) return null;
-  const child = Bun.spawn(['xmessage', '-name', 'bh-operator', 'operator window']);
-  // Polled rather than `search --sync`, which exits on X `BadWindow` when another window closes
-  // during its walk (deferred D30 g).
-  let id = '';
-  for (let i = 0; i < 100 && id === ''; i++) {
-    id = sh('xdotool', ['search', '--classname', 'bh-operator']).split('\n')[0] ?? '';
-    if (id === '') Bun.sleepSync(100);
-  }
-  if (id === '') {
-    child.kill();
-    throw new Error('xmessage/xdotool unavailable on the headed leg');
-  }
-  // Activating needs a window manager; a bare Xvfb only sets the input focus.
-  spawnSync('xdotool', [WM ? 'windowactivate' : 'windowfocus', '--sync', id], { timeout: 10_000 });
-  return { id, close: () => child.kill() };
+/**
+ * The operator's window holding the focus (Linux headed legs; `null` elsewhere): with a window
+ * manager only once the manager has activated it, so its startup is not sampled as a focus change.
+ */
+function operatorWindow(): OperatorWindow | null {
+  return X ? xOperatorWindow(WM) : null;
 }
 
 /** Samples the X focus and the new managed windows until `stop()`, without blocking the loop. */

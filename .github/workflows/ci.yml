@@ -275,6 +275,9 @@ jobs:
       # Headed windows kept minimized (D-77) and template browsers with no window (D-78): minimizing,
       # the window list, closing a window by hand and the menu's Exit are the window manager's, so
       # these suites run on a virtual display with openbox (the other suites keep a bare display).
+      # The wait matches `window id #`: before openbox is up xprop prints "no such atom on any
+      # window", so matching `window` alone never waited (D30 q). The suites' operator window also
+      # waits for openbox to activate it.
       - if: env.RUN == 'true' && runner.os == 'Linux'
         timeout-minutes: 10
         env:
@@ -282,7 +285,7 @@ jobs:
           BROWSERHIVE_TEMPLATES_HEADED: '1'
         run: >-
           xvfb-run -a sh -c 'openbox &
-          until xprop -root _NET_SUPPORTING_WM_CHECK | grep -q window; do sleep 0.1; done;
+          until xprop -root _NET_SUPPORTING_WM_CHECK | grep -q "window id #"; do sleep 0.1; done;
           bun run test:integration packages/core/test/integration/headed-windows.test.ts
           packages/core/test/integration/template-no-window.test.ts'
       # macOS and Windows runners have a desktop: a headed template browser starts there with no
