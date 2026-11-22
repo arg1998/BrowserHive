@@ -1,7 +1,9 @@
 /** @module features/site-packs/PackBits — small pieces every pack surface shares (wizard, template Sites tab, Site packs pages): the short SHA-256 with a copy button, the stance label ("What the site's terms say"), the terms clause quoted verbatim with its checked date and its URL as plain text with the domain shown (never a link, spec 13 §9.3), the "Local file overrides vN" badge and the local-file state pill */
+
 import type { SitePackView } from '@browserhive/contracts/http';
 import { Chip } from '@/components/shared/Chip.tsx';
 import { CopyButton } from '@/components/shared/CopyButton.tsx';
+import { Plain } from '@/components/shared/Plain.tsx';
 import { TonePill } from '@/components/shared/StatusBadge.tsx';
 import { cn } from '@/lib/utils.ts';
 import { domainOf, LOCAL_STATE, STANCE_TEXT, STANCE_TONE, type Stance, shortSha } from './model.ts';
@@ -50,7 +52,7 @@ export function TermsClause({
   return (
     <figure className="flex min-w-0 flex-col gap-1.5">
       <blockquote className="border-l-2 border-border pl-3 text-base text-pretty italic [overflow-wrap:anywhere]">
-        “<bdi>{clause.quote}</bdi>”
+        “<Plain>{clause.quote}</Plain>”
       </blockquote>
       <figcaption className="flex min-w-0 flex-col gap-0.5 text-sm text-muted-foreground">
         <span>Checked {clause.checked}</span>

@@ -111,10 +111,13 @@ export function strayFlagMessage(name: string, invocationName: string): string {
   // A server key that is also a command flag (`--stealth`) is accepted by more than its command.
   const serverKey = lookupKey('cli', `--${name}`).kind !== 'unknown';
   const owners = COMMAND_FLAGS.has(name) && !serverKey ? commandsAccepting(name) : [];
+  const quoted = owners.map((owner) => `'browserhive ${owner}'`);
   const where =
     owners.length === 1
-      ? `--${name} only applies to 'browserhive ${owners[0]}'.`
-      : `--${name} is not accepted by 'browserhive ${invocationName}'.`;
+      ? `--${name} only applies to ${quoted[0]}.`
+      : owners.length === 2
+        ? `--${name} only applies to ${quoted[0]} and ${quoted[1]}.`
+        : `--${name} is not accepted by 'browserhive ${invocationName}'.`;
   return `${where} Run ${helpCommand(invocationName)}.`;
 }
 

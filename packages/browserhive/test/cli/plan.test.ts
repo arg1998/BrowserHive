@@ -150,7 +150,7 @@ describe('planCli precedence', () => {
     });
     expect(exitOf(plan(['--all']))).toEqual({
       code: 64,
-      text: "browserhive: --all only applies to 'browserhive purge'. Run 'browserhive --help'.",
+      text: "browserhive: --all only applies to 'browserhive purge' and 'browserhive sitepacks download'. Run 'browserhive --help'.",
     });
   });
 

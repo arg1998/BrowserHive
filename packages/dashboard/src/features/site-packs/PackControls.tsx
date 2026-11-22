@@ -1,4 +1,4 @@
-/** @module features/site-packs/PackControls — a pack's settings as controls (spec 13 §10.6, §11.4): **Follow updates** (Auto, On, Off), **Enabled** (turning it off asks first), **Revert…** behind a confirmation classified like Apply (the diff from the version in force to the previous one, review #84 L4) when a previous version exists, a below-floor refusal of Revert explained in a dialog (D-71), and the row menu that reaches all of them from the keyboard (Shift+F10 on a table row) */
+/** @module features/site-packs/PackControls — a pack's settings as controls (spec 13 §10.6, §11.4): **Follow updates** (Auto, On, Off), **Enabled** (turning it off asks first), **Turn off…** as a button (a revoked version kept in force), **Revert…** behind a confirmation classified like Apply (the diff from the version in force to the previous one, review #84 L4) when a previous version exists, a below-floor refusal of Revert explained in a dialog (D-71), and the row menu that reaches all of them from the keyboard (Shift+F10 on a table row) */
 import type { SitePackView } from '@browserhive/contracts/http';
 import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
@@ -18,14 +18,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu.tsx';
+import { Spinner } from '@/components/ui/spinner.tsx';
 import { Switch } from '@/components/ui/switch.tsx';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group.tsx';
 import { toAppError } from '@/lib/api/errors.ts';
+import { printable } from '@/lib/format/printable.ts';
 import { ICONS } from '@/lib/icons.ts';
 import { useSitePackActions } from './api.ts';
 import { disableConfirm, revertConfirm } from './confirm-copy.ts';
+import { focusElement } from './decision-focus.tsx';
 import { type FloorDetails, FloorDialog, floorRefusalOf } from './FloorRefusal.tsx';
 import { FOLLOW_LABEL, iso } from './model.ts';
+import { declinedOnline } from './registry-model.ts';
 
 type Follow = SitePackView['follow']['setting'];
 const FOLLOWS: readonly Follow[] = ['auto', 'on', 'off'];
@@ -54,8 +58,23 @@ function usePackSettings(pack: SitePackView) {
       return undefined;
     }
   };
+  const declined = declinedOnline(pack);
   return {
     busy: actions.follow.isPending || actions.setEnabled.isPending || actions.revert.isPending,
+    declined,
+    reviewing: actions.download.isPending,
+    /** **Review again**: download the set-aside version, which re-opens it (review #100 M4). */
+    reviewAgain: () => {
+      if (declined === null || actions.download.isPending) return;
+      actions.download.mutate(declined, {
+        onSuccess: () =>
+          toast.success({
+            title: `${iso(pack.title)} v${declined} is waiting for review again`,
+            description:
+              'Its changes are on the pack’s page and under Updates available when you follow it.',
+          }),
+      });
+    },
     follow: (setting: Follow) =>
       actions.follow.mutate(followBody(setting), {
         onSuccess: () =>
@@ -64,6 +83,7 @@ function usePackSettings(pack: SitePackView) {
           }),
       }),
     setEnabled: async (enabled: boolean) => {
+      if (actions.setEnabled.isPending) return;
       // Turning a pack off drops its guards for every template using it: ask first (review S-M2).
       if (!enabled && !(await confirm(disableConfirm(pack)))) return;
       actions.setEnabled.mutate(enabled, {
@@ -72,9 +92,17 @@ function usePackSettings(pack: SitePackView) {
       });
     },
     revert: async () => {
+      if (actions.revert.isPending) return;
       if (!(await confirm(revertConfirm(pack, await revertDiff())))) return;
       actions.revert.mutate(undefined, {
-        onSuccess: () => toast.success({ title: `${iso(pack.title)} reverted` }),
+        onSuccess: () => {
+          toast.success({ title: `${iso(pack.title)} reverted` });
+          // Revert from the pack's page removes its own button: focus the page, not <body> (M5).
+          requestAnimationFrame(() => {
+            if (document.activeElement === document.body)
+              focusElement(document.querySelector<HTMLElement>('h1'));
+          });
+        },
         // A below-floor refusal is explained in a dialog, not a toast (D-71).
         onError: (error: unknown) => {
           const refusal = floorRefusalOf(toAppError(error));
@@ -122,13 +150,15 @@ export function FollowToggle({
   const tabIndex = useRowControlTabIndex();
   return (
     <ToggleGroup
-      aria-label={label ?? `Follow updates of ${pack.title}`}
+      aria-label={label ?? `Follow updates of ${printable(pack.title)}`}
       size="sm"
       spacing={0}
-      disabled={settings.busy}
+      // Never disabled while saving: a disabled control drops keyboard focus (review #100 M5).
+      aria-busy={settings.busy || undefined}
       value={[pack.follow.setting]}
       onValueChange={(next: readonly unknown[]) => {
         const value = next[0];
+        if (settings.busy) return;
         if (value === 'auto' || value === 'on' || value === 'off') settings.follow(value);
       }}
     >
@@ -151,11 +181,13 @@ export function EnabledSwitch({ pack, id }: { readonly pack: SitePackView; reado
   const tabIndex = useRowControlTabIndex();
   return (
     <Switch
-      {...(id !== undefined ? { id } : { 'aria-label': `${pack.title} enabled` })}
+      {...(id !== undefined ? { id } : { 'aria-label': `${printable(pack.title)} enabled` })}
       {...(tabIndex !== undefined && { tabIndex })}
       checked={pack.enabled}
-      disabled={settings.busy}
-      onCheckedChange={(enabled: boolean) => void settings.setEnabled(enabled)}
+      aria-busy={settings.busy || undefined}
+      onCheckedChange={(enabled: boolean) => {
+        if (!settings.busy) void settings.setEnabled(enabled);
+      }}
     />
   );
 }
@@ -170,7 +202,7 @@ export function RevertButton({ pack }: { readonly pack: SitePackView }) {
         type="button"
         variant="outline"
         size="sm"
-        disabled={settings.busy}
+        aria-disabled={settings.busy || undefined}
         onClick={() => void settings.revert()}
       >
         <ICONS.restore aria-hidden="true" />
@@ -178,6 +210,46 @@ export function RevertButton({ pack }: { readonly pack: SitePackView }) {
       </Button>
       <RevertRefusal pack={pack} settings={settings} />
     </>
+  );
+}
+
+/** "v3 set aside · Review again" (review #100 M4); nothing when no version was set aside. */
+export function SetAsideLine({ pack }: { readonly pack: SitePackView }) {
+  const settings = usePackSettings(pack);
+  if (settings.declined === null) return null;
+  return (
+    <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+      <span className="text-muted-foreground">
+        v{settings.declined} set aside: offered again only when a newer version is listed.
+      </span>
+      <Button
+        type="button"
+        variant="outline"
+        size="xs"
+        aria-busy={settings.reviewing || undefined}
+        onClick={settings.reviewAgain}
+      >
+        {settings.reviewing ? <Spinner /> : <ICONS.download aria-hidden="true" />}
+        Review again
+      </Button>
+    </span>
+  );
+}
+
+/** Turn the pack off (asks first); nothing once it is off. */
+export function TurnOffButton({ pack }: { readonly pack: SitePackView }) {
+  const settings = usePackSettings(pack);
+  if (!pack.enabled) return null;
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      aria-disabled={settings.busy || undefined}
+      onClick={() => void settings.setEnabled(false)}
+    >
+      Turn off…
+    </Button>
   );
 }
 
@@ -196,9 +268,9 @@ export function PackMenu({ pack }: { readonly pack: SitePackView }) {
               type="button"
               variant="ghost"
               size="icon-sm"
-              aria-label={`Actions for ${pack.title}`}
+              aria-label={`Actions for ${printable(pack.title)}`}
               tabIndex={tabIndex}
-              disabled={settings.busy}
+              aria-disabled={settings.busy || undefined}
             />
           }
         >
@@ -232,6 +304,12 @@ export function PackMenu({ pack }: { readonly pack: SitePackView }) {
           >
             Enabled
           </DropdownMenuCheckboxItem>
+          {settings.declined !== null ? (
+            <DropdownMenuItem onClick={settings.reviewAgain}>
+              <ICONS.download aria-hidden="true" />
+              Review v{settings.declined} again
+            </DropdownMenuItem>
+          ) : null}
           {pack.previous !== null ? (
             <DropdownMenuItem variant="destructive" onClick={() => void settings.revert()}>
               <ICONS.restore aria-hidden="true" />

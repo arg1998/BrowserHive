@@ -405,6 +405,17 @@ const SOURCES: readonly Source[] = [
     },
   },
   {
+    name: 'site-pack registry checks (site_pack.checked)',
+    drives: ['browserhive.site_pack.checks'],
+    async run(w) {
+      publish(w, 'site_pack.checked', {
+        type: 'site_pack.checked',
+        outcome: 'not_modified',
+        index_version: 10,
+      });
+    },
+  },
+  {
     name: 'site-pack guard hits (site_pack.guard_hit)',
     drives: ['browserhive.site_pack.guard_hits'],
     async run(w) {
@@ -830,6 +841,9 @@ describe('documented == recorded', () => {
     ]);
     expect(points('browserhive.site_pack.guard_hits')).toEqual([
       { value: 1, attrs: { action: 'block', kind: 'logout' } },
+    ]);
+    expect(points('browserhive.site_pack.checks')).toEqual([
+      { value: 1, attrs: { outcome: 'not_modified' } },
     ]);
     expect(points('browserhive.retention.pruned_rows')).toEqual([
       { value: 4, attrs: { table: 'tool_calls' } },

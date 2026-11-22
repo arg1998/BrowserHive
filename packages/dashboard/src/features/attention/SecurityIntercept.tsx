@@ -1,5 +1,7 @@
 /** @module features/attention/SecurityIntercept — `security_intercept` requests on `/attention` (spec 13 §9.3, §9.5, §11.4 UI vocabulary): "Site check" (a challenge) or "Write approval" (a write a site pack holds), their facts as plain text (site, guard and its kind, the challenge, method and sanitized URL, the tool), never as markup or a link, each pack-derived string bidi-isolated (`<bdi>`, review S-H4); options are parsed with `SecurityInterceptOptions`, never cast */
+
 import { type OperatorRequestRow, SecurityInterceptOptions } from '@browserhive/contracts/http';
+import { Plain } from '@/components/shared/Plain.tsx';
 import type { StatusEntry } from '@/lib/status-registry.ts';
 
 /** Parsed options of a security intercept, or `null` for any other request (or a malformed one). */
@@ -70,11 +72,11 @@ export function InterceptFacts({
     <>
       <dt className="text-muted-foreground">Site</dt>
       <dd className="min-w-0 [overflow-wrap:anywhere]">
-        <bdi>{options.site_title}</bdi>
+        <Plain>{options.site_title}</Plain>
         {options.site_title !== options.site ? (
           <span className="text-muted-foreground">
             {' '}
-            · <bdi>{options.site}</bdi>
+            · <Plain>{options.site}</Plain>
           </span>
         ) : null}
       </dd>
@@ -82,7 +84,7 @@ export function InterceptFacts({
         <>
           <dt className="text-muted-foreground">Guard</dt>
           <dd className="min-w-0 [overflow-wrap:anywhere]">
-            <bdi className="font-mono text-sm">{options.guard.id}</bdi>
+            <Plain className="font-mono text-sm">{options.guard.id}</Plain>
             <span className="text-muted-foreground"> · {GUARD_KIND[options.guard.kind]}</span>
           </dd>
         </>
@@ -105,7 +107,7 @@ export function InterceptFacts({
             {options.method !== undefined ? (
               <span className="font-semibold">{options.method} </span>
             ) : null}
-            <bdi>{options.url}</bdi>
+            <Plain>{options.url}</Plain>
           </dd>
         </>
       ) : null}
@@ -113,7 +115,7 @@ export function InterceptFacts({
         <>
           <dt className="text-muted-foreground">Tool</dt>
           <dd className="min-w-0 font-mono text-sm">
-            <bdi>{options.tool}</bdi>
+            <Plain>{options.tool}</Plain>
           </dd>
         </>
       ) : null}

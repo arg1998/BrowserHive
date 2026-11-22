@@ -90,6 +90,10 @@ export function subscribeTemplateMetrics(
     bus.subscribe('site_pack.challenge', ({ payload }) =>
       instruments.sitePackChallenges.add(1, { kind: payload.kind, action: payload.action }),
     ),
+    // One per registry update check (spec 13 §11.7); a disabled check makes no request, no point.
+    bus.subscribe('site_pack.checked', ({ payload }) =>
+      instruments.sitePackChecks.add(1, { outcome: payload.outcome }),
+    ),
     // One per `site_pack.guard_hit` (spec 13 §11.7); pack and guard ids are never attributes.
     bus.subscribe('site_pack.guard_hit', ({ payload }) =>
       instruments.sitePackGuardHits.add(1, {

@@ -206,6 +206,9 @@
               "SITE_PACK_NO_LOCAL_FILE",
               "SITE_PACK_APPROVAL_REQUIRED",
               "SITE_PACK_BELOW_FLOOR",
+              "SITE_PACK_NOT_LISTED",
+              "SITE_PACK_DOWNLOAD_FAILED",
+              "SITE_PACKS_REGISTRY_UNAVAILABLE",
               "ADMIN_REQUIRES_HTTP",
               "INSECURE_BIND_REFUSED",
               "PORT_IN_USE",
@@ -233,6 +236,8 @@
               "TEMPLATE_SITE_BELOW_FLOOR",
               "SITE_PACKS_STATE_CORRUPT",
               "SITE_PACKS_LOAD_FAILED",
+              "SITE_PACKS_STALE",
+              "SITE_PACKS_FETCH_FAILED",
               "UNAUTHORIZED",
               "INVALID_CREDENTIALS",
               "FORBIDDEN",
@@ -28143,6 +28148,72 @@
                     "null"
                   ]
                 },
+                "sources": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "bundled",
+                      "remote",
+                      "import",
+                      "local"
+                    ]
+                  }
+                },
+                "online": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "properties": {
+                    "version": {
+                      "type": "integer"
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    "size": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "released": {
+                      "type": "string"
+                    },
+                    "notes": {
+                      "type": "string"
+                    },
+                    "revoked": {
+                      "type": "boolean"
+                    },
+                    "needs_client": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "usable_version": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "declined": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "version",
+                    "sha256",
+                    "size",
+                    "released",
+                    "notes",
+                    "revoked",
+                    "needs_client",
+                    "usable_version",
+                    "declined"
+                  ]
+                },
                 "approved": {
                   "type": [
                     "object",
@@ -28218,6 +28289,12 @@
                             },
                             "file": {
                               "type": "string"
+                            },
+                            "key_id": {
+                              "type": "string"
+                            },
+                            "index_version": {
+                              "type": "integer"
                             }
                           },
                           "required": [
@@ -28346,6 +28423,12 @@
                             },
                             "file": {
                               "type": "string"
+                            },
+                            "key_id": {
+                              "type": "string"
+                            },
+                            "index_version": {
+                              "type": "integer"
                             }
                           },
                           "required": [
@@ -28380,6 +28463,12 @@
                     "source",
                     "provenance"
                   ]
+                },
+                "approved_revoked": {
+                  "type": "boolean"
+                },
+                "auto_update_paused": {
+                  "type": "boolean"
                 },
                 "previous": {
                   "type": [
@@ -28537,6 +28626,48 @@
                           "local_override"
                         ]
                       },
+                      "from": {
+                        "type": [
+                          "object",
+                          "null"
+                        ],
+                        "properties": {
+                          "version": {
+                            "type": "integer"
+                          },
+                          "source": {
+                            "type": "string",
+                            "enum": [
+                              "bundled",
+                              "remote",
+                              "import",
+                              "local"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "version",
+                          "source"
+                        ]
+                      },
+                      "refused": {
+                        "type": [
+                          "object",
+                          "null"
+                        ],
+                        "properties": {
+                          "reason": {
+                            "type": "string"
+                          },
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "reason",
+                          "detail"
+                        ]
+                      },
                       "new_domains": {
                         "type": "array",
                         "items": {
@@ -28605,6 +28736,12 @@
                               },
                               "file": {
                                 "type": "string"
+                              },
+                              "key_id": {
+                                "type": "string"
+                              },
+                              "index_version": {
+                                "type": "integer"
                               }
                             },
                             "required": [
@@ -28704,7 +28841,8 @@
                         "not_found",
                         "id_mismatch",
                         "signed_layout_unsupported",
-                        "unreadable"
+                        "unreadable",
+                        "layout_refused"
                       ]
                     },
                     "detail": {
@@ -28723,8 +28861,12 @@
                 "title",
                 "domains",
                 "identity_provider",
+                "sources",
+                "online",
                 "approved",
                 "offer",
+                "approved_revoked",
+                "auto_update_paused",
                 "previous",
                 "pinned_version",
                 "follow",
@@ -28748,6 +28890,21 @@
                 "type": "boolean"
               },
               "update_check": {
+                "type": "boolean"
+              },
+              "check_off": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "packs_off",
+                  "update_check_off",
+                  "no_trust_root",
+                  null
+                ]
+              },
+              "trusts_registry": {
                 "type": "boolean"
               },
               "auto_update": {
@@ -28786,11 +28943,47 @@
                   null
                 ]
               },
+              "last_error": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              "failures": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "next_check_at": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
               "index_version": {
                 "type": [
                   "integer",
                   "null"
                 ]
+              },
+              "index_issued_at": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
               },
               "index_expires_at": {
                 "type": [
@@ -28798,6 +28991,28 @@
                   "null"
                 ],
                 "minimum": 0
+              },
+              "index_signed_by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "index_packs": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "index_origin": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "registry",
+                  "import",
+                  "local",
+                  null
+                ]
               },
               "stale": {
                 "type": "boolean"
@@ -28809,6 +29024,31 @@
                 "type": [
                   "integer",
                   "null"
+                ]
+              },
+              "snapshot": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "index_version": {
+                    "type": "integer"
+                  },
+                  "verified": {
+                    "type": "boolean"
+                  },
+                  "detail": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "index_version",
+                  "verified",
+                  "detail"
                 ]
               },
               "bundled": {
@@ -28895,7 +29135,8 @@
                         "not_found",
                         "id_mismatch",
                         "signed_layout_unsupported",
-                        "unreadable"
+                        "unreadable",
+                        "layout_refused"
                       ]
                     },
                     "detail": {
@@ -28922,15 +29163,25 @@
             "required": [
               "enabled",
               "update_check",
+              "check_off",
+              "trusts_registry",
               "auto_update",
               "url",
               "last_check_at",
               "last_ok_at",
               "last_outcome",
+              "last_error",
+              "failures",
+              "next_check_at",
               "index_version",
+              "index_issued_at",
               "index_expires_at",
+              "index_signed_by",
+              "index_packs",
+              "index_origin",
               "stale",
               "keys_version",
+              "snapshot",
               "bundled",
               "local",
               "skipped",
@@ -29656,7 +29907,8 @@
                               "not_found",
                               "id_mismatch",
                               "signed_layout_unsupported",
-                              "unreadable"
+                              "unreadable",
+                              "layout_refused"
                             ]
                           },
                           "detail": {
@@ -29690,6 +29942,468 @@
           "stats"
         ]
       },
+      "SitePackCheckResponse": {
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "updated",
+              "not_modified",
+              "failed",
+              "disabled"
+            ]
+          },
+          "checked_at": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "available": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ]
+          },
+          "status": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "update_check": {
+                "type": "boolean"
+              },
+              "check_off": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "packs_off",
+                  "update_check_off",
+                  "no_trust_root",
+                  null
+                ]
+              },
+              "trusts_registry": {
+                "type": "boolean"
+              },
+              "auto_update": {
+                "type": "boolean"
+              },
+              "url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "last_check_at": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "last_ok_at": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "last_outcome": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "updated",
+                  "not_modified",
+                  "failed",
+                  "disabled",
+                  null
+                ]
+              },
+              "last_error": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ]
+              },
+              "failures": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "next_check_at": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "index_version": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "index_issued_at": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "index_expires_at": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "index_signed_by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "index_packs": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "index_origin": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "registry",
+                  "import",
+                  "local",
+                  null
+                ]
+              },
+              "stale": {
+                "type": "boolean"
+              },
+              "clock_skew_ms": {
+                "type": "integer"
+              },
+              "keys_version": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "snapshot": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "index_version": {
+                    "type": "integer"
+                  },
+                  "verified": {
+                    "type": "boolean"
+                  },
+                  "detail": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "index_version",
+                  "verified",
+                  "detail"
+                ]
+              },
+              "bundled": {
+                "type": "object",
+                "properties": {
+                  "version": {
+                    "type": "string"
+                  },
+                  "built_at": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0
+                  },
+                  "count": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "version",
+                  "built_at",
+                  "count"
+                ]
+              },
+              "local": {
+                "type": "object",
+                "properties": {
+                  "dir": {
+                    "type": "string"
+                  },
+                  "count": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "signed_layouts": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "needing_approval": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "dir",
+                  "count",
+                  "signed_layouts",
+                  "needing_approval"
+                ]
+              },
+              "skipped": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "pack_id": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "source": {
+                      "type": "string",
+                      "enum": [
+                        "bundled",
+                        "remote",
+                        "import",
+                        "local"
+                      ]
+                    },
+                    "reason": {
+                      "type": "string",
+                      "enum": [
+                        "invalid",
+                        "too_large",
+                        "unknown_strategy",
+                        "min_client",
+                        "domain_overlap",
+                        "not_found",
+                        "id_mismatch",
+                        "signed_layout_unsupported",
+                        "unreadable",
+                        "layout_refused"
+                      ]
+                    },
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "pack_id",
+                    "version",
+                    "source",
+                    "reason",
+                    "detail"
+                  ]
+                }
+              },
+              "last_load_at": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              }
+            },
+            "required": [
+              "enabled",
+              "update_check",
+              "check_off",
+              "trusts_registry",
+              "auto_update",
+              "url",
+              "last_check_at",
+              "last_ok_at",
+              "last_outcome",
+              "last_error",
+              "failures",
+              "next_check_at",
+              "index_version",
+              "index_issued_at",
+              "index_expires_at",
+              "index_signed_by",
+              "index_packs",
+              "index_origin",
+              "stale",
+              "keys_version",
+              "snapshot",
+              "bundled",
+              "local",
+              "skipped",
+              "last_load_at"
+            ]
+          }
+        },
+        "required": [
+          "outcome",
+          "checked_at",
+          "available",
+          "status"
+        ]
+      },
+      "SitePackDownloadAllResponse": {
+        "type": "object",
+        "properties": {
+          "downloaded": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "pack_id": {
+                  "type": "string"
+                },
+                "version": {
+                  "type": "integer"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              },
+              "required": [
+                "pack_id",
+                "version",
+                "sha256"
+              ]
+            }
+          },
+          "held": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "refused": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "pack_id": {
+                  "type": "string"
+                },
+                "version": {
+                  "type": "integer"
+                },
+                "reason": {
+                  "type": "string"
+                },
+                "detail": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "pack_id",
+                "version",
+                "reason",
+                "detail"
+              ]
+            }
+          },
+          "pending_count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "downloaded",
+          "held",
+          "refused",
+          "pending_count"
+        ]
+      },
+      "SitePackExportResponse": {
+        "type": "object",
+        "properties": {
+          "files": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "index_version": {
+            "type": "integer"
+          },
+          "keys_version": {
+            "type": "integer"
+          },
+          "packs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "missing": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "pack_id": {
+                  "type": "string"
+                },
+                "version": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "pack_id",
+                "version"
+              ]
+            }
+          }
+        },
+        "required": [
+          "files",
+          "index_version",
+          "keys_version",
+          "packs",
+          "missing"
+        ]
+      },
       "SitePackImportResponse": {
         "type": "object",
         "properties": {
@@ -29705,16 +30419,34 @@
                   "type": "integer"
                 },
                 "state": {
-                  "type": "string",
-                  "enum": [
-                    "approved",
-                    "changed",
-                    "not_approved"
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "approved",
+                        "changed",
+                        "not_approved"
+                      ]
+                    },
+                    {
+                      "type": "string",
+                      "enum": [
+                        "downloaded",
+                        "available",
+                        "current",
+                        "refused",
+                        "other_client",
+                        "revoked"
+                      ]
+                    }
                   ]
                 },
                 "sha256": {
                   "type": "string",
                   "pattern": "^[0-9a-f]{64}$"
+                },
+                "followed": {
+                  "type": "boolean"
                 }
               },
               "required": [
@@ -29724,6 +30456,33 @@
                 "sha256"
               ]
             }
+          },
+          "layout": {
+            "type": "object",
+            "properties": {
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "updated",
+                  "not_modified"
+                ]
+              },
+              "index_version": {
+                "type": "integer"
+              },
+              "keys_version": {
+                "type": "integer"
+              },
+              "signed_by": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "outcome",
+              "index_version",
+              "keys_version",
+              "signed_by"
+            ]
           }
         },
         "required": [
@@ -29752,6 +30511,72 @@
                 "type": [
                   "string",
                   "null"
+                ]
+              },
+              "sources": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "bundled",
+                    "remote",
+                    "import",
+                    "local"
+                  ]
+                }
+              },
+              "online": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "integer"
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  "size": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "released": {
+                    "type": "string"
+                  },
+                  "notes": {
+                    "type": "string"
+                  },
+                  "revoked": {
+                    "type": "boolean"
+                  },
+                  "needs_client": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "usable_version": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "declined": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "version",
+                  "sha256",
+                  "size",
+                  "released",
+                  "notes",
+                  "revoked",
+                  "needs_client",
+                  "usable_version",
+                  "declined"
                 ]
               },
               "approved": {
@@ -29829,6 +30654,12 @@
                           },
                           "file": {
                             "type": "string"
+                          },
+                          "key_id": {
+                            "type": "string"
+                          },
+                          "index_version": {
+                            "type": "integer"
                           }
                         },
                         "required": [
@@ -29957,6 +30788,12 @@
                           },
                           "file": {
                             "type": "string"
+                          },
+                          "key_id": {
+                            "type": "string"
+                          },
+                          "index_version": {
+                            "type": "integer"
                           }
                         },
                         "required": [
@@ -29991,6 +30828,12 @@
                   "source",
                   "provenance"
                 ]
+              },
+              "approved_revoked": {
+                "type": "boolean"
+              },
+              "auto_update_paused": {
+                "type": "boolean"
               },
               "previous": {
                 "type": [
@@ -30148,6 +30991,48 @@
                         "local_override"
                       ]
                     },
+                    "from": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "version": {
+                          "type": "integer"
+                        },
+                        "source": {
+                          "type": "string",
+                          "enum": [
+                            "bundled",
+                            "remote",
+                            "import",
+                            "local"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "version",
+                        "source"
+                      ]
+                    },
+                    "refused": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "reason": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "reason",
+                        "detail"
+                      ]
+                    },
                     "new_domains": {
                       "type": "array",
                       "items": {
@@ -30216,6 +31101,12 @@
                             },
                             "file": {
                               "type": "string"
+                            },
+                            "key_id": {
+                              "type": "string"
+                            },
+                            "index_version": {
+                              "type": "integer"
                             }
                           },
                           "required": [
@@ -30315,7 +31206,8 @@
                       "not_found",
                       "id_mismatch",
                       "signed_layout_unsupported",
-                      "unreadable"
+                      "unreadable",
+                      "layout_refused"
                     ]
                   },
                   "detail": {
@@ -30334,8 +31226,12 @@
               "title",
               "domains",
               "identity_provider",
+              "sources",
+              "online",
               "approved",
               "offer",
+              "approved_revoked",
+              "auto_update_paused",
               "previous",
               "pinned_version",
               "follow",
@@ -31453,7 +32349,7 @@
           "changes"
         ]
       },
-      "SitePackViewResponse": {
+      "SitePackDownloadResponse": {
         "type": "object",
         "properties": {
           "view": {
@@ -31475,6 +32371,72 @@
                 "type": [
                   "string",
                   "null"
+                ]
+              },
+              "sources": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "bundled",
+                    "remote",
+                    "import",
+                    "local"
+                  ]
+                }
+              },
+              "online": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "integer"
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  "size": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "released": {
+                    "type": "string"
+                  },
+                  "notes": {
+                    "type": "string"
+                  },
+                  "revoked": {
+                    "type": "boolean"
+                  },
+                  "needs_client": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "usable_version": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "declined": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "version",
+                  "sha256",
+                  "size",
+                  "released",
+                  "notes",
+                  "revoked",
+                  "needs_client",
+                  "usable_version",
+                  "declined"
                 ]
               },
               "approved": {
@@ -31552,6 +32514,12 @@
                           },
                           "file": {
                             "type": "string"
+                          },
+                          "key_id": {
+                            "type": "string"
+                          },
+                          "index_version": {
+                            "type": "integer"
                           }
                         },
                         "required": [
@@ -31680,6 +32648,12 @@
                           },
                           "file": {
                             "type": "string"
+                          },
+                          "key_id": {
+                            "type": "string"
+                          },
+                          "index_version": {
+                            "type": "integer"
                           }
                         },
                         "required": [
@@ -31714,6 +32688,12 @@
                   "source",
                   "provenance"
                 ]
+              },
+              "approved_revoked": {
+                "type": "boolean"
+              },
+              "auto_update_paused": {
+                "type": "boolean"
               },
               "previous": {
                 "type": [
@@ -31871,6 +32851,48 @@
                         "local_override"
                       ]
                     },
+                    "from": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "version": {
+                          "type": "integer"
+                        },
+                        "source": {
+                          "type": "string",
+                          "enum": [
+                            "bundled",
+                            "remote",
+                            "import",
+                            "local"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "version",
+                        "source"
+                      ]
+                    },
+                    "refused": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "reason": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "reason",
+                        "detail"
+                      ]
+                    },
                     "new_domains": {
                       "type": "array",
                       "items": {
@@ -31939,6 +32961,12 @@
                             },
                             "file": {
                               "type": "string"
+                            },
+                            "key_id": {
+                              "type": "string"
+                            },
+                            "index_version": {
+                              "type": "integer"
                             }
                           },
                           "required": [
@@ -32038,7 +33066,8 @@
                       "not_found",
                       "id_mismatch",
                       "signed_layout_unsupported",
-                      "unreadable"
+                      "unreadable",
+                      "layout_refused"
                     ]
                   },
                   "detail": {
@@ -32057,8 +33086,911 @@
               "title",
               "domains",
               "identity_provider",
+              "sources",
+              "online",
               "approved",
               "offer",
+              "approved_revoked",
+              "auto_update_paused",
+              "previous",
+              "pinned_version",
+              "follow",
+              "enabled",
+              "local",
+              "local_override",
+              "pending",
+              "used_by",
+              "human_only",
+              "write_policy_default",
+              "stance",
+              "write_guards",
+              "verified"
+            ]
+          },
+          "diff": {
+            "type": "object",
+            "properties": {
+              "from": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "version": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "bundled",
+                      "remote",
+                      "import",
+                      "local"
+                    ]
+                  }
+                },
+                "required": [
+                  "version",
+                  "sha256",
+                  "source"
+                ]
+              },
+              "to": {
+                "type": "object",
+                "properties": {
+                  "version": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "bundled",
+                      "remote",
+                      "import",
+                      "local"
+                    ]
+                  }
+                },
+                "required": [
+                  "version",
+                  "sha256",
+                  "source"
+                ]
+              },
+              "classification": {
+                "type": "string",
+                "enum": [
+                  "unclassified",
+                  "tightening",
+                  "restrictive",
+                  "loosening",
+                  "neutral",
+                  "new_pack",
+                  "revoked",
+                  "local_override"
+                ]
+              },
+              "new_domains": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "changes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string"
+                    },
+                    "from": {},
+                    "to": {},
+                    "class": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "enum": [
+                        "tightening",
+                        "restrictive",
+                        "loosening",
+                        "neutral",
+                        null
+                      ]
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "class"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "from",
+              "to",
+              "classification",
+              "new_domains",
+              "changes"
+            ]
+          }
+        },
+        "required": [
+          "view",
+          "diff"
+        ]
+      },
+      "SitePackDownloadRequest": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "additionalProperties": false
+      },
+      "SitePackViewResponse": {
+        "type": "object",
+        "properties": {
+          "view": {
+            "type": "object",
+            "properties": {
+              "pack_id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "domains": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "identity_provider": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sources": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "bundled",
+                    "remote",
+                    "import",
+                    "local"
+                  ]
+                }
+              },
+              "online": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "integer"
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  "size": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "released": {
+                    "type": "string"
+                  },
+                  "notes": {
+                    "type": "string"
+                  },
+                  "revoked": {
+                    "type": "boolean"
+                  },
+                  "needs_client": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "usable_version": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "declined": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "version",
+                  "sha256",
+                  "size",
+                  "released",
+                  "notes",
+                  "revoked",
+                  "needs_client",
+                  "usable_version",
+                  "declined"
+                ]
+              },
+              "approved": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "integer"
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "bundled",
+                      "remote",
+                      "import",
+                      "local"
+                    ]
+                  },
+                  "provenance": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "bundled"
+                            ]
+                          },
+                          "release": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "release"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "remote"
+                            ]
+                          },
+                          "key_id": {
+                            "type": "string"
+                          },
+                          "index_version": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "key_id",
+                          "index_version"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "import"
+                            ]
+                          },
+                          "file": {
+                            "type": "string"
+                          },
+                          "key_id": {
+                            "type": "string"
+                          },
+                          "index_version": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "file"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "local"
+                            ]
+                          },
+                          "path": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "path"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "by": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "at": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "version",
+                  "sha256",
+                  "source",
+                  "provenance",
+                  "by",
+                  "at"
+                ]
+              },
+              "offer": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "integer"
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "bundled",
+                      "remote",
+                      "import",
+                      "local"
+                    ]
+                  },
+                  "provenance": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "bundled"
+                            ]
+                          },
+                          "release": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "release"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "remote"
+                            ]
+                          },
+                          "key_id": {
+                            "type": "string"
+                          },
+                          "index_version": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "key_id",
+                          "index_version"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "import"
+                            ]
+                          },
+                          "file": {
+                            "type": "string"
+                          },
+                          "key_id": {
+                            "type": "string"
+                          },
+                          "index_version": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "file"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "local"
+                            ]
+                          },
+                          "path": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "path"
+                        ]
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "version",
+                  "sha256",
+                  "source",
+                  "provenance"
+                ]
+              },
+              "approved_revoked": {
+                "type": "boolean"
+              },
+              "auto_update_paused": {
+                "type": "boolean"
+              },
+              "previous": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "integer"
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "bundled",
+                      "remote",
+                      "import",
+                      "local"
+                    ]
+                  }
+                },
+                "required": [
+                  "version",
+                  "source"
+                ]
+              },
+              "pinned_version": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "follow": {
+                "type": "object",
+                "properties": {
+                  "setting": {
+                    "type": "string",
+                    "enum": [
+                      "auto",
+                      "on",
+                      "off"
+                    ]
+                  },
+                  "effective": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "setting",
+                  "effective"
+                ]
+              },
+              "enabled": {
+                "type": "boolean"
+              },
+              "local": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  },
+                  "sha256": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "approved",
+                      "changed",
+                      "not_approved"
+                    ]
+                  },
+                  "approved_sha256": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  "problem": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "path",
+                  "sha256",
+                  "state",
+                  "approved_sha256",
+                  "problem"
+                ]
+              },
+              "local_override": {
+                "type": "boolean"
+              },
+              "pending": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "version": {
+                      "type": "integer"
+                    },
+                    "sha256": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "available",
+                        "downloaded"
+                      ]
+                    },
+                    "size": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0
+                    },
+                    "released": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "notes": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "classification": {
+                      "type": "string",
+                      "enum": [
+                        "unclassified",
+                        "tightening",
+                        "restrictive",
+                        "loosening",
+                        "neutral",
+                        "new_pack",
+                        "revoked",
+                        "local_override"
+                      ]
+                    },
+                    "from": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "version": {
+                          "type": "integer"
+                        },
+                        "source": {
+                          "type": "string",
+                          "enum": [
+                            "bundled",
+                            "remote",
+                            "import",
+                            "local"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "version",
+                        "source"
+                      ]
+                    },
+                    "refused": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "reason": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "reason",
+                        "detail"
+                      ]
+                    },
+                    "new_domains": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "source": {
+                      "type": "string",
+                      "enum": [
+                        "bundled",
+                        "remote",
+                        "import",
+                        "local"
+                      ]
+                    },
+                    "provenance": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "bundled"
+                              ]
+                            },
+                            "release": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "release"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "remote"
+                              ]
+                            },
+                            "key_id": {
+                              "type": "string"
+                            },
+                            "index_version": {
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "key_id",
+                            "index_version"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "import"
+                              ]
+                            },
+                            "file": {
+                              "type": "string"
+                            },
+                            "key_id": {
+                              "type": "string"
+                            },
+                            "index_version": {
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "file"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "local"
+                              ]
+                            },
+                            "path": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "path"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "version",
+                    "sha256",
+                    "state",
+                    "size",
+                    "released",
+                    "notes",
+                    "source",
+                    "provenance"
+                  ]
+                }
+              },
+              "used_by": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "human_only": {
+                "type": "boolean"
+              },
+              "write_policy_default": {
+                "type": "string",
+                "enum": [
+                  "allow",
+                  "warn",
+                  "confirm"
+                ]
+              },
+              "stance": {
+                "type": "string",
+                "enum": [
+                  "prohibited",
+                  "restricted",
+                  "writes_restricted",
+                  "allowed"
+                ]
+              },
+              "write_guards": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "verified": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "skipped": {
+                "type": "object",
+                "properties": {
+                  "version": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string",
+                    "enum": [
+                      "invalid",
+                      "too_large",
+                      "unknown_strategy",
+                      "min_client",
+                      "domain_overlap",
+                      "not_found",
+                      "id_mismatch",
+                      "signed_layout_unsupported",
+                      "unreadable",
+                      "layout_refused"
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "version",
+                  "reason",
+                  "detail"
+                ]
+              }
+            },
+            "required": [
+              "pack_id",
+              "title",
+              "domains",
+              "identity_provider",
+              "sources",
+              "online",
+              "approved",
+              "offer",
+              "approved_revoked",
+              "auto_update_paused",
               "previous",
               "pinned_version",
               "follow",
@@ -50928,13 +52860,243 @@
         }
       }
     },
+    "/api/v1/site-packs/check": {
+      "post": {
+        "operationId": "checkSitePacks",
+        "tags": [
+          "site-packs"
+        ],
+        "summary": "Check for updates now: fetch the registry's signed index only (keys.json, index.json and their signatures; no cookie, query, version or install identifier), verify it with the pinned keys and the stored rollback floors, and list newer versions as available. Nothing is downloaded or applied. 'disabled' when the update check is off or this build pins no registry keys; a failed fetch or a refused file is 'failed' with the reason and changes nothing.",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-browserhive-scope": "sitepacks:write",
+        "responses": {
+          "200": {
+            "description": "Check for updates now: fetch the registry's signed index only (keys.json, index.json and their signatures; no cookie, query, version or install identifier), verify it with the pinned keys and the stored rollback floors, and list newer versions as available. Nothing is downloaded or applied. 'disabled' when the update check is off or this build pins no registry keys; a failed fetch or a refused file is 'failed' with the reason and changes nothing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SitePackCheckResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, PASSWORD_CHANGE_REQUIRED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/site-packs/download-all": {
+      "post": {
+        "operationId": "downloadAllSitePacks",
+        "tags": [
+          "site-packs"
+        ],
+        "summary": "Download all: fetch every version the verified index lists that BrowserHive lacks, of every pack, so the registry cannot tell which pack you care about. Each file is verified against the index (size, SHA-256, schema, client range); pending versions become downloaded and classified. Nothing is applied.",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-browserhive-scope": "sitepacks:write",
+        "responses": {
+          "200": {
+            "description": "Download all: fetch every version the verified index lists that BrowserHive lacks, of every pack, so the registry cannot tell which pack you care about. Each file is verified against the index (size, SHA-256, schema, client range); pending versions become downloaded and classified. Nothing is applied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SitePackDownloadAllResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, PASSWORD_CHANGE_REQUIRED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "SITE_PACKS_REGISTRY_UNAVAILABLE",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/site-packs/export": {
+      "get": {
+        "operationId": "exportSitePacks",
+        "tags": [
+          "site-packs"
+        ],
+        "summary": "The signed layout BrowserHive holds (keys.json, index.json, their signatures and every verified pack file it holds, base64 by path), for `sitepacks export` and air-gapped hosts.",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-browserhive-scope": "sitepacks:read",
+        "responses": {
+          "200": {
+            "description": "The signed layout BrowserHive holds (keys.json, index.json, their signatures and every verified pack file it holds, base64 by path), for `sitepacks export` and air-gapped hosts.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SitePackExportResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, PASSWORD_CHANGE_REQUIRED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "SITE_PACKS_REGISTRY_UNAVAILABLE",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/site-packs/import": {
       "post": {
         "operationId": "importSitePack",
         "tags": [
           "site-packs"
         ],
-        "summary": "Import one unsigned pack ({text}: the file's exact text, stored byte for byte; or {pack}: a parsed pack, stored re-serialized): it is validated, stored in the local folder as <id>.json and applies only after approve-local. Signed layouts ({files}) arrive with a later release.",
+        "summary": "Import one unsigned pack ({text}: the file's exact text, stored byte for byte; or {pack}: a parsed pack, stored re-serialized): it is validated, stored in the local folder as <id>.json and applies only after approve-local. Or a signed layout ({files}: keys.json, index.json, their signatures and packs/<id>/<sha256>.json, base64 by path): verified with the pinned keys exactly as an update check is, and its versions are queued for approval.",
         "security": [
           {
             "cookieAuth": []
@@ -50977,8 +53139,14 @@
                       "files": {
                         "type": "object",
                         "additionalProperties": {
-                          "type": "string"
+                          "type": "string",
+                          "maxLength": 1048576
                         }
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
                       }
                     },
                     "required": [
@@ -50993,7 +53161,7 @@
         },
         "responses": {
           "200": {
-            "description": "Import one unsigned pack ({text}: the file's exact text, stored byte for byte; or {pack}: a parsed pack, stored re-serialized): it is validated, stored in the local folder as <id>.json and applies only after approve-local. Signed layouts ({files}) arrive with a later release.",
+            "description": "Import one unsigned pack ({text}: the file's exact text, stored byte for byte; or {pack}: a parsed pack, stored re-serialized): it is validated, stored in the local folder as <id>.json and applies only after approve-local. Or a signed layout ({files}: keys.json, index.json, their signatures and packs/<id>/<sha256>.json, base64 by path): verified with the pinned keys exactly as an update check is, and its versions are queued for approval.",
             "content": {
               "application/json": {
                 "schema": {
@@ -51033,7 +53201,7 @@
             }
           },
           "409": {
-            "description": "SITE_PACK_DOMAIN_TAKEN",
+            "description": "SITE_PACK_DOMAIN_TAKEN, SITE_PACKS_REGISTRY_UNAVAILABLE",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -51306,6 +53474,148 @@
           },
           "500": {
             "description": "INTERNAL_ERROR",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/site-packs/{pack_id}/download": {
+      "post": {
+        "operationId": "downloadSitePack",
+        "tags": [
+          "site-packs"
+        ],
+        "summary": "Download & review: fetch exactly the version the verified index lists as available for this pack (which tells the registry this version was downloaded; Download all does not), verify its size, SHA-256, schema and client range, and classify it against the approved version. Returns the classified field-level diff; nothing is applied.",
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-browserhive-scope": "sitepacks:write",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 253
+            },
+            "required": true,
+            "name": "pack_id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SitePackDownloadRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Download & review: fetch exactly the version the verified index lists as available for this pack (which tells the registry this version was downloaded; Download all does not), verify its size, SHA-256, schema and client range, and classify it against the approved version. Returns the classified field-level diff; nothing is applied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SitePackDownloadResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_FAILED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "FORBIDDEN, PASSWORD_CHANGE_REQUIRED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "SITE_PACK_NOT_FOUND",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "SITE_PACK_NOT_LISTED, SITE_PACKS_REGISTRY_UNAVAILABLE",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "PAYLOAD_TOO_LARGE",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "RATE_LIMITED",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "SITE_PACK_DOWNLOAD_FAILED",
             "content": {
               "application/problem+json": {
                 "schema": {

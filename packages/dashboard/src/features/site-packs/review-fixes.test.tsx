@@ -62,7 +62,8 @@ describe('PR #83 review fixes: site-pack pages', () => {
     });
     const heading = await screen.findByRole('heading', { level: 3, name: /GitHub/ });
     const isolated = [...heading.querySelectorAll('bdi')].map((b) => b.textContent);
-    expect(isolated).toContain(title);
+    // Isolated, and the override itself shown as U+FFFD (review #100 H1).
+    expect(isolated).toContain('GitHub \uFFFDmoc.buhtig');
     // The label after the title is outside the isolate.
     expect(heading.querySelector('bdi')?.textContent).not.toContain('local file');
   });

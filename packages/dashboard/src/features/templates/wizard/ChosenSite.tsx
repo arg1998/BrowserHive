@@ -1,5 +1,7 @@
 /** @module features/templates/wizard/ChosenSite — one chosen site on wizard step 2 (spec 13 §7.1, §9.3, §9.6): a site a pack covers names the pack and the version creating the template approves (whether it was picked from the catalog or typed, also before the catalog loaded), says when you sign in by hand only, what the pack needs from the template's settings (a stealth floor, fingerprint noise on or off, a visible browser) and when the pack guards no writes yet, and quotes the site's terms clause with its checked date and address as text (review S-L1, S-M4); any other site is a generic site */
+
 import type { SitePackView } from '@browserhive/contracts/http';
+import { Plain } from '@/components/shared/Plain.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { useSitePack } from '@/features/site-packs/api.ts';
 import { NO_WRITE_GUARDS, packNote } from '@/features/site-packs/model.ts';
@@ -45,7 +47,7 @@ export function ChosenSite({
         <span className="truncate font-mono text-base">
           {note !== null ? (
             <>
-              <bdi>{note.pack.title}</bdi> · {site}
+              <Plain>{note.pack.title}</Plain> · {site}
             </>
           ) : (
             site

@@ -1,11 +1,48 @@
-/** @module features/site-packs/pack-columns — the packs table of `/site-packs` (spec 13 §11.4) and its card under 768px: Pack (title, domains, Turned off, "Local file overrides vN", why a version was skipped; the source folded in under a 56rem table) · Source (provenance, local-file state) · Approved (version, short SHA-256 with copy, by and when) · Templates · Follow updates · Enabled · the row menu */
+/** @module features/site-packs/pack-columns — the packs table of `/site-packs` (spec 13 §11.4) and its card under 768px: Pack (title, domains, Turned off, "Local file overrides vN", revoked by the publisher and still in force, a version waiting for review or listed online, "Pinned at v7, v9 available", "v9 needs BrowserHive ≥ …", why a version was skipped; the source folded in under a 56rem table) · Source (provenance, every source that knows the pack, local-file state) · Approved (version, short SHA-256 with copy, by and when, auto-updated) · Templates · Follow updates · Enabled · the row menu (Revert when a previous version exists) */
+
 import type { SitePackView } from '@browserhive/contracts/http';
 import { Chip } from '@/components/shared/Chip.tsx';
+import { Plain } from '@/components/shared/Plain.tsx';
 import { RelativeTime } from '@/components/shared/RelativeTime.tsx';
 import type { DataTableColumn } from '@/components/shared/use-data-table.ts';
+import { printable } from '@/lib/format/printable.ts';
+import { useRegistryName } from './api.ts';
 import { FOLLOW_LABEL, provenanceText, shortPath, shortProvenance, skippedText } from './model.ts';
 import { LocalOverrideBadge, LocalStatePill, ShaText } from './PackBits.tsx';
 import { EnabledSwitch, FollowToggle, PackMenu } from './PackControls.tsx';
+import {
+  autoUpdated,
+  declinedOnline,
+  needsClientText,
+  newerOnline,
+  newestAvailable,
+  otherSources,
+} from './registry-model.ts';
+
+/** The update chip of a pack: waiting for review, pinned with a newer version, or listed online. */
+function UpdateChip({ pack }: { readonly pack: SitePackView }) {
+  const newest = newestAvailable(pack);
+  if (pack.pinned_version !== null) {
+    return (
+      <Chip tone="neutral">
+        Pinned at v{pack.pinned_version}
+        {newest !== null ? `, v${newest} available` : ''}
+      </Chip>
+    );
+  }
+  if (pack.follow.effective && pack.pending.length > 0) {
+    const last = pack.pending.reduce((a, b) => (b.version > a.version ? b : a));
+    return (
+      <Chip tone="accent">
+        v{last.version} {last.state === 'available' ? 'available' : 'waiting for review'}
+      </Chip>
+    );
+  }
+  const declined = declinedOnline(pack);
+  if (declined !== null) return <Chip tone="muted">v{declined} set aside</Chip>;
+  const online = newerOnline(pack);
+  return online !== null ? <Chip tone="neutral">v{online} online</Chip> : null;
+}
 
 /** Pack: title (the row link's text) over its domains and what needs care. */
 export function PackTitleCell({ pack }: { readonly pack: SitePackView }) {
@@ -13,32 +50,30 @@ export function PackTitleCell({ pack }: { readonly pack: SitePackView }) {
     <span className="flex min-w-0 flex-col gap-1">
       <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
         <span className="truncate text-base leading-5 font-medium text-foreground decoration-muted-foreground/60 underline-offset-4 group-hover/row:underline">
-          <bdi>{pack.title}</bdi>
+          <Plain>{pack.title}</Plain>
         </span>
         {!pack.enabled ? <Chip tone="muted">Turned off</Chip> : null}
         {pack.local_override ? (
           <LocalOverrideBadge version={pack.approved?.version ?? null} />
         ) : null}
-        {pack.pinned_version === null && pack.follow.effective && pack.pending.length > 0 ? (
-          <Chip tone="accent">
-            v{pack.pending[pack.pending.length - 1]?.version} waiting for review
+        {pack.approved_revoked ? (
+          <Chip tone="danger" className="h-auto min-h-5.5 py-0.5 whitespace-normal">
+            Revoked by the publisher — still in force, review
           </Chip>
         ) : null}
-        {pack.pinned_version !== null ? (
-          <Chip tone="neutral">
-            Pinned at v{pack.pinned_version}
-            {pack.pending.length > 0
-              ? `, v${pack.pending[pack.pending.length - 1]?.version} available`
-              : ''}
-          </Chip>
-        ) : null}
+        <UpdateChip pack={pack} />
       </span>
       <span className="font-mono text-sm leading-5 text-muted-foreground [overflow-wrap:anywhere]">
-        <bdi>{pack.domains.join(', ')}</bdi>
+        <Plain>{pack.domains.join(', ')}</Plain>
       </span>
+      {needsClientText(pack) !== null ? (
+        <span className="text-sm text-muted-foreground">
+          {printable(needsClientText(pack) ?? '')}
+        </span>
+      ) : null}
       {pack.skipped !== undefined ? (
         <span className="text-sm text-warn-text text-pretty">
-          <bdi>{skippedText(pack.skipped)}</bdi>
+          <Plain>{skippedText(pack.skipped)}</Plain>
         </span>
       ) : null}
     </span>
@@ -48,24 +83,41 @@ export function PackTitleCell({ pack }: { readonly pack: SitePackView }) {
 /** Source: where the version in force (or on offer) came from, and the local file's state. */
 export function PackSourceCell({ pack }: { readonly pack: SitePackView }) {
   const shown = pack.approved ?? pack.offer;
+  const also = otherSources(pack, shown?.source ?? null);
+  const registry = useRegistryName();
+  const remote = shown?.provenance?.kind === 'remote' ? shown.provenance : null;
   return (
     <span className="flex min-w-0 flex-col items-start gap-1 text-sm">
       {shown !== null ? (
-        <span
-          className="text-pretty [overflow-wrap:anywhere]"
-          title={provenanceText(shown.provenance, shown.source)}
-        >
-          {shortProvenance(shown.provenance, shown.source)}
-        </span>
+        remote !== null ? (
+          <span
+            className="flex min-w-0 flex-col"
+            title={provenanceText(shown.provenance, shown.source, registry)}
+          >
+            <span>{registry}</span>
+            <span className="text-muted-foreground">
+              Key <span className="whitespace-nowrap">{printable(remote.key_id)}</span> · index{' '}
+              {remote.index_version} · verified
+            </span>
+          </span>
+        ) : (
+          <span
+            className="text-pretty [overflow-wrap:anywhere]"
+            title={provenanceText(shown.provenance, shown.source, registry)}
+          >
+            {shortProvenance(shown.provenance, shown.source, registry)}
+          </span>
+        )
       ) : null}
+      {also !== '' ? <span className="text-muted-foreground">{also}</span> : null}
       {pack.local !== null ? (
         <>
           {shown?.source !== 'local' ? (
             <span
               className="text-muted-foreground [overflow-wrap:anywhere]"
-              title={pack.local.path}
+              title={printable(pack.local.path)}
             >
-              Local file {shortPath(pack.local.path)}
+              Local file {printable(shortPath(pack.local.path))}
             </span>
           ) : null}
           <LocalStatePill local={pack.local} />
@@ -94,7 +146,18 @@ export function PackApprovedCell({ pack }: { readonly pack: SitePackView }) {
       </span>
       {approved.at !== null ? (
         <span className="text-muted-foreground">
-          {approved.by ?? 'Approved'} · <RelativeTime at={approved.at} className="text-sm" />
+          {autoUpdated(pack) ? 'Auto-updated' : (approved.by ?? 'Approved')} ·{' '}
+          <RelativeTime at={approved.at} className="text-sm" />
+        </span>
+      ) : autoUpdated(pack) ? (
+        <span className="text-muted-foreground">Auto-updated</span>
+      ) : null}
+      {pack.auto_update_paused ? (
+        <span
+          className="text-muted-foreground"
+          title="You reverted or rejected a registry version, so auto-update leaves this pack alone until you apply a version or turn Follow updates on."
+        >
+          Auto-update paused
         </span>
       ) : null}
     </span>

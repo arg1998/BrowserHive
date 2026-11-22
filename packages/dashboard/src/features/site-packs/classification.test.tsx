@@ -126,7 +126,7 @@ describe('DiffView', () => {
       />,
     );
     expect(screen.queryByText('Relaxes rules')).toBeNull();
-    expect(screen.getByText('A new pack: all 1 fields are new')).toBeDefined();
+    expect(screen.getByText(/Nothing to compare with: all 1 fields are new/)).toBeDefined();
   });
 });
 
@@ -208,7 +208,7 @@ describe('a pending version', () => {
     const card = (await screen.findByRole('heading', { level: 3, name: /LinkedIn/ })).closest(
       'article',
     ) as HTMLElement;
-    expect(within(card).getByText('Revoked')).toBeDefined();
+    expect(within(card).getByText('Revoked by the publisher')).toBeDefined();
     expect(within(card).getByText(/The publisher revoked v3, the version in force/)).toBeDefined();
     expect(within(card).queryByText('Update')).toBeNull();
   });

@@ -3,8 +3,10 @@ import { describe, expect, it } from 'bun:test';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import type { TemplateSiteRecord } from '@browserhive/core/ports/persistence/records-templates';
 import {
   emptySitePackState,
+  type SitePackChangeRecord,
   type SitePackStateRecord,
 } from '@browserhive/core/ports/persistence/site-packs';
 import { z } from 'zod';
@@ -15,6 +17,9 @@ const BUNDLED = resolveBundledPacksDir() ?? '/bundled';
 const REGISTRY = resolve(import.meta.dir, '..', '..', '..', '..', 'registry', 'packs');
 const GITHUB = readFileSync(join(REGISTRY, 'github.com.json'), 'utf8');
 const LOCAL = `${DATA_DIR}/site-packs/local`;
+
+/** What this build says while it pins no root keys (the key ceremony has not run, D71). */
+const NO_KEYS = 'this build pins no registry keys yet: no update check runs';
 
 const Row = z.object({ check: z.string(), status: z.string(), detail: z.string() });
 
@@ -29,6 +34,8 @@ async function row(
     approvals?: { packId: string; sha256: string | null }[];
     states?: SitePackStateRecord[];
     unreadable?: string[];
+    pending?: SitePackChangeRecord[];
+    sites?: TemplateSiteRecord[];
   } = {},
 ) {
   const fs = new MemoryFs({ [`${DATA_DIR}/browserhive.db`]: 'db', ...files });
@@ -45,6 +52,8 @@ async function row(
         ...(options.states ?? []),
       ],
       sitePackUnreadable: options.unreadable ?? [],
+      sitePackPending: options.pending ?? [],
+      templateSites: options.sites ?? [],
     }),
   });
   const rows = z.array(Row).parse(JSON.parse(run.stdout));
@@ -56,7 +65,7 @@ describe('doctor: site packs', () => {
     expect(await row({ [`${BUNDLED}/github.com.json`]: GITHUB })).toEqual({
       check: 'site packs',
       status: 'ok',
-      detail: '0 bundled packs (1 need a newer BrowserHive)',
+      detail: `0 bundled packs (1 need a newer BrowserHive), ${NO_KEYS}, no registry snapshot in this build`,
     });
   });
 
@@ -100,7 +109,8 @@ describe('doctor: site packs', () => {
     );
     expect(found?.status).toBe('warn');
     expect(found?.detail).toContain('local files skipped: broken.test');
-    expect(found?.detail).toContain('1 signed layout');
+    // T4b reads signed layouts: one in the folder is no longer a warning.
+    expect(found?.detail).not.toContain('signed layout');
     // The binary in the harness is older than the pack's min_client: it is skipped, not compared.
     const approved = await row(
       { [`${LOCAL}/github.com.json`]: GITHUB },
@@ -123,7 +133,10 @@ describe('doctor: site packs', () => {
       { [`${LOCAL}/github.com.json`]: current },
       { approvals: [{ packId: 'github.com', sha256: sha(current) }] },
     );
-    expect(ok).toMatchObject({ status: 'ok', detail: '0 bundled packs, 1 approved local file' });
+    expect(ok).toMatchObject({
+      status: 'ok',
+      detail: `0 bundled packs, 1 approved local file, ${NO_KEYS}, no registry snapshot in this build`,
+    });
   });
 
   it('sitePacks=false is ✓ and reads nothing', async () => {
@@ -198,5 +211,51 @@ describe('doctor: site packs', () => {
     expect(found?.detail).toContain(
       'gist.test (domain_overlap: github.com is covered by the pack github.com',
     );
+  });
+
+  it('pending updates of followed packs are warnings, as the server counts them (spec 13 §11.9, review #100 L11)', async () => {
+    const candidate = (packId: string, toVersion: number, classification = 'tightening') =>
+      ({
+        seq: 1,
+        eventId: `ev-${packId}-${toVersion}`,
+        packId,
+        fromVersion: 1,
+        toVersion,
+        toSha256: 'a'.repeat(64),
+        source: 'remote',
+        classification,
+        newDomains: [],
+        notes: null,
+        diff: null,
+        decision: 'pending',
+        decidedBy: null,
+        createdAt: 1,
+        decidedAt: null,
+      }) as unknown as SitePackChangeRecord;
+    const site = (packId: string) =>
+      ({ templateId: 'tp-1', siteId: packId, packId }) as unknown as TemplateSiteRecord;
+    const found = await row(
+      {},
+      {
+        pending: [
+          candidate('used.test', 3), // followed: a template uses it
+          candidate('on.test', 2), // followed: explicitly on
+          candidate('pinned.test', 5), // followed, but pinned
+          candidate('idle.test', 4), // not followed
+          candidate('revoked.test', 1, 'revoked'), // revoked fallbacks wait regardless
+        ],
+        sites: [site('used.test'), site('pinned.test')],
+        states: [
+          { ...emptySitePackState('on.test', 0), follow: true },
+          { ...emptySitePackState('pinned.test', 0), pinnedVersion: 2 },
+        ],
+      },
+    );
+    expect(found?.status).toBe('warn');
+    expect(found?.detail).toContain(
+      'pending updates of followed packs: on.test v2, revoked.test v1, used.test v3',
+    );
+    expect(found?.detail).not.toContain('idle.test');
+    expect(found?.detail).not.toContain('pinned.test');
   });
 });

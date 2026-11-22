@@ -65,7 +65,13 @@ export type SiteGuardSourceValue = (typeof SITE_GUARD_SOURCES)[number];
 export type SitePackProvenanceRecord =
   | { readonly kind: 'bundled'; readonly release: string }
   | { readonly kind: 'remote'; readonly keyId: string; readonly indexVersion: number }
-  | { readonly kind: 'import'; readonly file: string }
+  | {
+      readonly kind: 'import';
+      readonly file: string;
+      /** A signed import: the online key and index version it verified with. */
+      readonly keyId?: string;
+      readonly indexVersion?: number;
+    }
   | { readonly kind: 'local'; readonly path: string };
 
 /** One `site_pack_state` row (configuration class: never pruned). */
@@ -192,6 +198,20 @@ export interface SitePackChangeRepository {
     eventId: string,
     classification: SitePackClassificationValue,
     diff: readonly SitePackChangeFieldRecord[] | null,
+    /** The baseline the classification compared against, rewritten with it (review #100 M3). */
+    baseline?: { readonly fromVersion: number | null; readonly newDomains: readonly string[] },
+  ): Promise<void>;
+  /**
+   * A registry or imported candidate was downloaded and verified (spec 13 §10.6): `downloaded`
+   * with its classification, field diff and new domains, by its `event_id`.
+   */
+  markDownloaded(
+    eventId: string,
+    fields: {
+      readonly classification: SitePackClassificationValue;
+      readonly diff: readonly SitePackChangeFieldRecord[];
+      readonly newDomains: readonly string[];
+    },
   ): Promise<void>;
   /** The newest row for this candidate (pack, sha256, source), or `null`. */
   findCandidate(
@@ -254,3 +274,22 @@ export interface SiteGuardHitRepository {
   countByTemplate(templateId: string, since: number): Promise<number>;
   pruneBefore(before: number): Promise<number>;
 }
+
+/**
+ * The registry client's values in the `meta` table (spec 13 §9.9: the rollback floors
+ * `site_packs.keys_version` and `site_packs.index_version`, and the client's status), so no
+ * migration is needed. Only keys under `site_packs.` are reachable.
+ */
+export interface SitePackMetaRepository {
+  get(key: SitePackMetaKey): Promise<string | null>;
+  set(key: SitePackMetaKey, value: string): Promise<void>;
+}
+
+/** The `meta` keys of the registry client. */
+export const SITE_PACK_META_KEYS = [
+  'site_packs.keys_version',
+  'site_packs.index_version',
+  'site_packs.client',
+] as const;
+/** Element of {@link SITE_PACK_META_KEYS}. */
+export type SitePackMetaKey = (typeof SITE_PACK_META_KEYS)[number];

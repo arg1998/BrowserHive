@@ -1,5 +1,9 @@
-/** @module cli/commands/sitepacks — `browserhive sitepacks list | show | diff` (pending versions with their classification, a pack's strategies with their parameters, the classified diff) over a running server's REST API and the dispatcher of every `sitepacks` subcommand (spec 13 §9.6, §10.5, §10.6, §11.5); the decisions are in `sitepacks-actions.ts`, the shared reads and texts in `sitepacks-common.ts`. */
-import { SitePacksResponse, type SitePackView } from '@browserhive/contracts/http';
+/** @module cli/commands/sitepacks — `browserhive sitepacks list | show | diff` (pending versions with their classification and registry state, a pack's strategies with their parameters, the classified diff) over a running server's REST API and the dispatcher of every `sitepacks` subcommand (spec 13 §9.6, §10.4–§10.6, §11.5); the decisions are in `sitepacks-actions.ts`, the registry client's commands in `sitepacks-registry.ts` and `sitepacks-layout.ts`, the shared reads and texts in `sitepacks-common.ts`. */
+import {
+  type SitePackSourceKind,
+  SitePacksResponse,
+  type SitePackView,
+} from '@browserhive/contracts/http';
 import type { CommandContext } from '../deps.ts';
 import { EXIT, type ExitCode, type Invocation, type SitePacksAction } from '../invocation.ts';
 import { formatTimestamp } from './common.ts';
@@ -15,13 +19,22 @@ import {
   fetchDetail,
   fetchDiff,
   LOCAL_TEXT,
+  packSize,
   printPairs,
   provenanceText,
   type SitePacksTarget,
   sitePackCall,
   unexpected,
 } from './sitepacks-common.ts';
+import { runSitePacksExport } from './sitepacks-layout.ts';
 import { runSitePacksImport, runSitePacksReload } from './sitepacks-local.ts';
+import {
+  registryLines,
+  registryWarnings,
+  runSitePacksCheck,
+  runSitePacksDownload,
+  runSitePacksDownloadAll,
+} from './sitepacks-registry.ts';
 
 type Of<K extends SitePacksAction['kind']> = Extract<SitePacksAction, { readonly kind: K }>;
 
@@ -61,34 +74,73 @@ export async function runSitePacks(
       return runSitePacksReload(context, target);
     case 'import':
       return runSitePacksImport(context, target, action);
+    case 'check':
+      return runSitePacksCheck(context, target);
+    case 'download':
+      return runSitePacksDownload(context, target, action);
+    case 'download-all':
+      return runSitePacksDownloadAll(context, target);
+    case 'export':
+      return runSitePacksExport(context, target, action);
   }
 }
 
 function approvedText(view: SitePackView): string {
   if (view.approved !== null) {
+    const revoked = view.approved_revoked ? ' (revoked)' : '';
     return view.local_override
       ? `local (over v${view.approved.version})`
-      : `v${view.approved.version}`;
+      : `v${view.approved.version}${revoked}`;
   }
   if (view.local_override) return 'local';
   return view.offer === null ? 'not approved' : `not approved (v${view.offer.version} offered)`;
 }
 
-function sourceText(view: SitePackView): string {
-  if (view.local_override) return 'local';
-  return view.approved?.source ?? view.offer?.source ?? '—';
+/** `remote` is the online registry. */
+function sourceWord(source: SitePackSourceKind): string {
+  return source === 'remote' ? 'registry' : source;
 }
 
-/** "v4 (relaxes rules)": pending versions with their classification (spec 13 §9.7). */
-function pendingText(view: SitePackView): string {
+function sourceText(view: SitePackView): string {
+  if (view.local_override) return 'local';
+  // Nothing approved or offered: the sources that know the pack (a registry-only pack says so).
+  const source = view.approved?.source ?? view.offer?.source ?? view.sources[0];
+  return source === undefined ? '—' : sourceWord(source);
+}
+
+/** The usable registry version an operator set aside (rejected, or reverted from), else `null` (review #100 M4). */
+function declinedVersion(view: SitePackView): number | null {
+  const online = view.online;
+  if (online === null || !online.declined || online.usable_version === null) return null;
+  return view.pending.some((p) => p.version === online.usable_version)
+    ? null
+    : online.usable_version;
+}
+
+/** "v3 set aside · `browserhive sitepacks download github.com 3` reviews it again". */
+function declinedText(view: SitePackView, version: number): string {
+  return `v${version} set aside · browserhive sitepacks download ${view.pack_id} ${version} reviews it again`;
+}
+
+/**
+ * "v4 (relaxes rules)": pending versions with their classification (spec 13 §9.7); a registry
+ * version not downloaded yet is "v5 (available)".
+ */
+function pendingText(view: SitePackView, withAside = true): string {
   const versions = view.pending
     .map((p) => {
+      if (p.state === 'available') return `v${p.version} (available)`;
       const cls = p.classification;
       return cls === undefined || cls === 'unclassified'
         ? `v${p.version}`
         : `v${p.version} (${CLASS_WORDS[cls]})`;
     })
     .join(', ');
+  const aside = withAside ? declinedVersion(view) : null;
+  if (aside !== null) {
+    const text = `v${aside} set aside`;
+    return versions === '' ? text : `${versions}, ${text}`;
+  }
   if (view.pinned_version !== null) {
     return `pinned at v${view.pinned_version}${versions === '' ? '' : `, ${versions} available`}`;
   }
@@ -155,6 +207,11 @@ async function runSitePacksList(
       ]),
     );
   }
+  for (const view of packs) {
+    const aside = declinedVersion(view);
+    if (aside !== null)
+      out.line(`  ${out.style.dim(`${view.pack_id}:`)} ${declinedText(view, aside)}`);
+  }
   for (const skipped of status.skipped) {
     const version = skipped.version === null ? '' : ` v${skipped.version}`;
     out.line(
@@ -163,8 +220,10 @@ async function runSitePacksList(
   }
   out.line();
   out.line(
-    `Local folder: ${status.local.dir} · ${status.local.count} file(s) · ${status.local.needing_approval} waiting for approval`,
+    `Local folder: ${status.local.dir} · ${status.local.count} file(s) · ${status.local.needing_approval} waiting for approval${status.local.signed_layouts > 0 ? ` · ${status.local.signed_layouts} signed layout(s)` : ''}`,
   );
+  for (const line of registryLines(status)) out.line(line);
+  for (const [label, detail] of registryWarnings(status)) out.status('warn', label, detail);
   if (waiting > 0) {
     out.status(
       'warn',
@@ -173,6 +232,37 @@ async function runSitePacksList(
     );
   }
   return code;
+}
+
+/** "v6 · 2.0 KiB · released 2026-11-20 · usable: v5": what the held registry index lists. */
+function onlineText(online: NonNullable<SitePackView['online']>): string {
+  const parts = [`v${online.version}`, packSize(online.size), `released ${online.released}`];
+  if (online.revoked) parts.push('revoked');
+  if (online.needs_client !== null) parts.push(`needs BrowserHive ${online.needs_client}`);
+  if (online.usable_version !== online.version) {
+    parts.push(
+      online.usable_version === null
+        ? 'no version usable by this BrowserHive'
+        : `newest usable here: v${online.usable_version}`,
+    );
+  }
+  return parts.join(' · ');
+}
+
+/** One pending version as `show` lists it: state, provenance, size, release date, notes. */
+function pendingLines(view: SitePackView): string[] {
+  return view.pending.map((p) => {
+    const parts = [
+      p.state === 'available' ? 'available (not downloaded)' : 'downloaded',
+      provenanceText(p.source, p.provenance),
+      p.size === null ? null : packSize(p.size),
+      p.released === null ? null : `released ${p.released}`,
+      p.from == null ? null : `compared with ${sourceWord(p.from.source)} v${p.from.version}`,
+      p.refused == null ? null : `last download refused: ${p.refused.reason} (${p.refused.detail})`,
+    ].filter((x): x is string => x !== null);
+    const notes = p.notes === null || p.notes === '' ? '' : ` — ${p.notes}`;
+    return `v${p.version}: ${parts.join(' · ')}${notes}`;
+  });
 }
 
 function viewPairs(view: SitePackView): [string, string][] {
@@ -192,16 +282,32 @@ function viewPairs(view: SitePackView): [string, string][] {
     pairs.push(['offered', `v${o.version} · ${provenanceText(o.source, o.provenance)}`]);
     pairs.push(['offered sha-256', o.sha256]);
   }
-  if (view.previous !== null) {
-    pairs.push(['previous', `v${view.previous.version} (${view.previous.source})`]);
+  if (view.auto_update_paused) {
+    pairs.push([
+      'auto-update',
+      'paused after you reverted or rejected a registry version; apply a version or `sitepacks follow <id> on` to resume',
+    ]);
   }
+  if (view.approved_revoked) {
+    pairs.push([
+      'revoked',
+      'the publisher revoked the approved version; it stays in force until you decide',
+    ]);
+  }
+  if (view.previous !== null) {
+    pairs.push(['previous', `v${view.previous.version} (${sourceWord(view.previous.source)})`]);
+  }
+  if (view.online !== null) pairs.push(['registry', onlineText(view.online)]);
+  const aside = declinedVersion(view);
+  if (aside !== null) pairs.push(['set aside', declinedText(view, aside)]);
   if (view.local !== null) {
     const local = view.local;
     pairs.push(['local file', `${local.path} · ${LOCAL_TEXT[local.state]}`]);
     if (local.sha256 !== null) pairs.push(['local sha-256', local.sha256]);
     if (local.problem !== null) pairs.push(['local problem', local.problem]);
   }
-  pairs.push(['pending', pendingText(view)]);
+  pairs.push(['pending', pendingText(view, false)]);
+  for (const line of pendingLines(view)) pairs.push(['', line]);
   pairs.push(['follow', followText(view)]);
   pairs.push(['enabled', view.enabled ? 'yes' : 'no']);
   pairs.push(['templates', view.used_by.length === 0 ? 'none' : view.used_by.join(', ')]);
@@ -266,7 +372,7 @@ async function runSitePacksShow(
       [{ header: 'VERSION' }, { header: 'SOURCE' }, { header: 'STATE' }, { header: 'SHA-256' }],
       detail.versions.map((v) => [
         v.version === null ? 'local' : `v${v.version}`,
-        v.source,
+        sourceWord(v.source),
         v.state,
         v.sha256,
       ]),

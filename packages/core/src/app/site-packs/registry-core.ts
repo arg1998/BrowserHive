@@ -5,12 +5,18 @@ import type { JsonObject } from '../../ports/persistence/json.ts';
 import {
   emptySitePackState,
   type SitePackChangeRecord,
+  type SitePackSourceId,
   type SitePackStateRecord,
 } from '../../ports/persistence/site-packs.ts';
 import type { Repositories } from '../../ports/persistence/unit-of-work.ts';
 import type { SourcePackVersion } from '../../ports/site-packs.ts';
 import { domainTaken } from './registry-errors.ts';
-import type { PackEntry, RegistrySnapshot, SitePackRegistryDeps } from './registry-types.ts';
+import type {
+  PackEntry,
+  RegistrySnapshot,
+  RemoteFacts,
+  SitePackRegistryDeps,
+} from './registry-types.ts';
 
 /** The registry as its decision functions see it. */
 export interface RegistryCore {
@@ -21,6 +27,8 @@ export interface RegistryCore {
   entry(packId: string): PackEntry;
   /** Re-derives the snapshot from the current catalogs and the stored state. */
   refresh(): Promise<void>;
+  /** The registry client's facts (T4b), when attached. */
+  readonly remote?: RemoteFacts | undefined;
 }
 
 /** Appends one `site_pack.*` audit row. */
@@ -96,4 +104,27 @@ export function assertDomainsFree(
       throw domainTaken(packId, domain, owner);
     }
   }
+}
+
+/**
+ * What a candidate is classified against (spec 13 §9.7): the content in force (a local override,
+ * else the approved version), else for a pack nothing approved yet the bundled version first use
+ * would approve (review #100 M2); `null` for a pack only the registry lists.
+ */
+export function baselineOf(entry: PackEntry): {
+  readonly content: SourcePackVersion;
+  readonly version: number;
+  readonly source: SitePackSourceId;
+} | null {
+  const local = entry.local?.approved ?? null;
+  if (local !== null) return { content: local, version: local.pack.version, source: 'local' };
+  const approved = entry.approved;
+  const source = entry.state?.approvedSource ?? null;
+  if (approved !== null && source !== null) {
+    return { content: approved, version: approved.pack.version, source };
+  }
+  if (entry.offer !== null) {
+    return { content: entry.offer, version: entry.offer.pack.version, source: 'bundled' };
+  }
+  return null;
 }

@@ -49,6 +49,12 @@ function readProblem(text: string): ProblemDetails | null {
   }
 }
 
+/** `text`, ending with a full stop unless it already ends a sentence (review #100 L8). */
+export function sentence(text: string): string {
+  const trimmed = text.trimEnd();
+  return /[.!?:)]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+}
+
 function printRefusal(
   context: CommandContext,
   label: string,
@@ -58,7 +64,7 @@ function printRefusal(
   const detail =
     problem === null
       ? `HTTP ${status}`
-      : `[${problem.code}] ${problem.detail ?? problem.title}${problem.hint === undefined ? '' : ` ${problem.hint}`}`;
+      : `[${problem.code}] ${sentence(problem.detail ?? problem.title)}${problem.hint === undefined ? '' : ` ${problem.hint}`}`;
   // A problem can quote what a client sent or a pack holds: never let it drive the terminal.
   context.out.diagnostic(`browserhive: ${label} failed: ${printable(detail)}`);
   if (status === 401 || status === 403) {

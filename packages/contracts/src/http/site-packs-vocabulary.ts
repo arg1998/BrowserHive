@@ -20,7 +20,13 @@ export const SitePackSourceFilter = z.enum(['local', 'registry', 'bundled', 'imp
 export const SitePackProvenance = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('bundled'), release: z.string() }),
   z.object({ kind: z.literal('remote'), key_id: z.string(), index_version: z.number().int() }),
-  z.object({ kind: z.literal('import'), file: z.string() }),
+  z.object({
+    kind: z.literal('import'),
+    file: z.string(),
+    /** A signed import: the online key and the index version it verified with. */
+    key_id: z.string().optional(),
+    index_version: z.number().int().optional(),
+  }),
   z.object({ kind: z.literal('local'), path: z.string() }),
 ]);
 /** A provenance. */
@@ -64,6 +70,8 @@ export const SitePackSkipReason = z.enum([
   'id_mismatch',
   'signed_layout_unsupported',
   'unreadable',
+  /** A signed layout in the local folder that did not verify (spec 13 §10.5). */
+  'layout_refused',
 ]);
 /** A skip reason. */
 export type SitePackSkipReason = z.infer<typeof SitePackSkipReason>;

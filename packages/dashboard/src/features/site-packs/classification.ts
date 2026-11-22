@@ -55,7 +55,7 @@ export const CLASSIFICATION_INFO: { readonly [K in SitePackClassification]: Clas
     summary: 'A local file approved in place of the published version.',
   },
   revoked: {
-    label: 'Revoked',
+    label: 'Revoked by the publisher',
     tone: 'danger',
     icon: 'failure',
     summary:

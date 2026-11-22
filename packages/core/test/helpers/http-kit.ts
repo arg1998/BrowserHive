@@ -20,6 +20,7 @@ import { sampleAnomalyFacts, sampleDigestFacts } from '../../src/app/notificatio
 import { sessionDirLayout } from '../../src/app/sessions/profile-dir.ts';
 import { SessionService } from '../../src/app/sessions/session-service.ts';
 import { FakeSessionDirFs, testConfig } from '../../src/app/sessions/test-support.ts';
+import { SitePackRegistryClient } from '../../src/app/site-packs/client/registry-client.ts';
 import { TemplateSiteStops } from '../../src/app/site-packs/site-stops.ts';
 import { TemplateActions } from '../../src/app/templates/template-actions.ts';
 import { TemplateEditService } from '../../src/app/templates/template-edit.ts';
@@ -30,7 +31,9 @@ import { TemplateService } from '../../src/app/templates/template-service.ts';
 import { TemplateStateService } from '../../src/app/templates/template-state.ts';
 import { VaultService } from '../../src/app/vault/vault-service.ts';
 import { OperatorRequestBroker } from '../../src/domain/operator-requests/broker.ts';
+import { sha256Hex } from '../../src/domain/site-packs/load.ts';
 import { CHANNEL_RENDERERS, channelFactories } from '../../src/infra/notifications/index.ts';
+import { createRegistryVerifier } from '../../src/infra/site-packs/registry-verifier.ts';
 import { createHttpApp, type HttpApp } from '../../src/interface/http/app.ts';
 import type { HttpServices } from '../../src/interface/http/services.ts';
 import type { StaticAssets } from '../../src/ports/static-assets.ts';
@@ -60,6 +63,8 @@ import { InMemoryRepositories, InMemoryUnitOfWork, InMemoryWriteQueue } from './
 import { createMemorySitePacks } from './in-memory-site-packs.ts';
 import { createVaultRepos } from './in-memory-vault-repos.ts';
 import { RecordingEventBus } from './recording-event-bus.ts';
+import { MemoryFetcher, MemoryHeldStore, signRegistry } from './registry-client-kit.ts';
+import { sitePack } from './site-pack-kit.ts';
 import {
   FAKE_TEMPLATE_GEO,
   FakeTemplateFiles,
@@ -240,6 +245,31 @@ export async function createHttpKit(options: HttpKitOptions = {}) {
     logger,
     bus,
   });
+  // The registry client over an in-memory signed registry listing pack-a.test v2 (spec 13 §10).
+  const testRegistry = signRegistry({
+    now: clock.now(),
+    versions: [{ pack: sitePack('pack-a.test', 2, { title: 'Site A v2' }), notes: 'Version 2.' }],
+  });
+  const registryFetcher = new MemoryFetcher(testRegistry.files);
+  const sitePackClient = new SitePackRegistryClient({
+    registry: sitePacks.registry,
+    packsEnabled: true,
+    updateCheck: true,
+    autoUpdate: false,
+    fetcher: registryFetcher,
+    verifier: createRegistryVerifier(testRegistry.trustRoot),
+    held: new MemoryHeldStore(),
+    meta: repos.sitePackMeta,
+    repos: templateRepos,
+    binaryVersion: '0.3.0',
+    sha256: sha256Hex,
+    ids: auth.ids,
+    clock,
+    logger,
+    bus,
+    schedule: () => () => undefined,
+  });
+  await sitePackClient.start();
   const templateRuntime = new FakeTemplateRuntime();
   const templateFiles = new FakeTemplateFiles();
   const templateOps = new FakeTemplateHostOps();
@@ -369,6 +399,7 @@ export async function createHttpKit(options: HttpKitOptions = {}) {
     templateOperations,
     templateHealth: new FakeTemplateHealth(),
     sitePacks: sitePacks.registry,
+    sitePackClient,
     templateSiteStops: new TemplateSiteStops({
       repos: templateRepos,
       ids: auth.ids,
@@ -455,6 +486,9 @@ export async function createHttpKit(options: HttpKitOptions = {}) {
     templateStore,
     templateState,
     sitePacks,
+    sitePackClient,
+    testRegistry,
+    registryFetcher,
   };
 }
 

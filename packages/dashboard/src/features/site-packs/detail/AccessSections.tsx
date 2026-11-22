@@ -1,5 +1,7 @@
 /** @module features/site-packs/detail/AccessSections — a pack's sign-in, signed-in check and write policy as readable text (spec 13 §9.2, §9.3, §11.4): the sign-in address in full, where the sign-in form posts (`sign_in.post`, read by the classifier), sign in by hand only, the identity provider, the form's selectors, the probe and how it decides, presence-only cookie names, the keeper; the default write policy, "What the site's terms say" as a label, the clause verbatim with its checked date and address as text, and the exception */
+
 import type { SitePackV1 } from '@browserhive/contracts/site-packs';
+import { Plain } from '@/components/shared/Plain.tsx';
 import { NO_WRITE_GUARDS, WRITE_POLICY_HINT, WRITE_POLICY_LABEL } from '../model.ts';
 import { StanceLabel, TermsClause, UrlText } from '../PackBits.tsx';
 import { PROBE_KIND_LABEL, scopedUrl } from './labels.ts';
@@ -142,7 +144,7 @@ export function TermsSection({
           policy.clause !== undefined && ['Clause', <TermsClause key="c" clause={policy.clause} />],
           policy.exception !== undefined && [
             'Why the default differs',
-            <bdi key="e">{policy.exception}</bdi>,
+            <Plain key="e">{policy.exception}</Plain>,
           ],
         ]}
       />

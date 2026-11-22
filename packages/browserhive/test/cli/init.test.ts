@@ -1,6 +1,7 @@
-/** @module test/cli/init — `browserhive init`: steps with ✓/✗, idempotent re-run ("already installed"), download failure exits 1 naming the retry command */
+/** @module test/cli/init — `browserhive init`: steps with ✓/✗, idempotent re-run ("already installed"), download failure exits 1 naming the retry command, the site-pack update check's disclosure (D-55) */
 import { describe, expect, it } from 'bun:test';
 import { configFileJsonSchema } from '@browserhive/contracts/config';
+import { buildLayout } from '@browserhive/core/test/registry-kit';
 import { cliHarness, DATA_DIR, MemoryFs, probeState, storageState } from './helpers.ts';
 
 const missing = {
@@ -58,6 +59,37 @@ describe('init', () => {
     expect(run.stdout).toContain('already exists');
     expect(run.stdout).toContain('✓ Chromium for Patchright 1.63.0  already installed');
     expect(run.stdout).toContain('✓ database schema v1  up to date');
+  });
+
+  it('discloses the site-pack update check (D-55): what it fetches and how to turn it off', async () => {
+    const { trustRoot } = buildLayout({ now: Date.now() });
+    const on = await cliHarness({ argv: ['init'], overrides: { sitePacksTrustRoot: trustRoot } });
+    expect(on.code).toBe(0);
+    expect(on.stdout).toContain(
+      'Site-pack update check: every 24 h BrowserHive fetches the signed index from https://browserhive.ai/registry/v1/ (no cookie, version or install identifier; pack files only when you download one). Turn it off with sitePacksUpdateCheck=false.',
+    );
+    // The disclosure comes before the next steps.
+    expect(on.stdout.indexOf('Site-pack update check')).toBeLessThan(
+      on.stdout.indexOf('Next steps'),
+    );
+    const off = await cliHarness({
+      argv: ['init'],
+      env: { BROWSERHIVE_SITE_PACKS_UPDATE_CHECK: 'false' },
+      overrides: { sitePacksTrustRoot: trustRoot },
+    });
+    expect(off.stdout).toContain(
+      'Site-pack update check off (sitePacksUpdateCheck=false): BrowserHive makes no request to the registry.',
+    );
+    // This build pins no root keys until the key ceremony (D71): it says no request is made.
+    const pinned = await cliHarness({ argv: ['init'] });
+    expect(pinned.stdout).toContain('this build pins no registry keys yet, so it makes no request');
+    const packsOff = await cliHarness({
+      argv: ['init'],
+      env: { BROWSERHIVE_SITE_PACKS: 'false' },
+    });
+    expect(packsOff.stdout).toContain(
+      'Site packs are off (sitePacks=false): no update check runs.',
+    );
   });
 
   it('--force re-downloads', async () => {

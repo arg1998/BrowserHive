@@ -2,7 +2,7 @@
 
 # Configuration reference
 
-Every configuration key of BrowserHive (65 keys), generated from the zod schema in `@browserhive/contracts/config`. For a guided introduction see [the configuration guide](../guide/configuration.md).
+Every configuration key of BrowserHive (68 keys), generated from the zod schema in `@browserhive/contracts/config`. For a guided introduction see [the configuration guide](../guide/configuration.md).
 
 ## Precedence
 
@@ -335,6 +335,9 @@ Per-session close and trace-finalize cap.
 | [`templateRecycleAfter`](#templateRecycleAfter) | `--templateRecycleAfter` | `BROWSERHIVE_TEMPLATE_RECYCLE_AFTER` | `24h` |
 | [`templateDrainTimeout`](#templateDrainTimeout) | `--templateDrainTimeout` | `BROWSERHIVE_TEMPLATE_DRAIN_TIMEOUT` | `15m` |
 | [`sitePacks`](#sitePacks) | `--sitePacks` | `BROWSERHIVE_SITE_PACKS` | `true` |
+| [`sitePacksUpdateCheck`](#sitePacksUpdateCheck) | `--sitePacksUpdateCheck` | `BROWSERHIVE_SITE_PACKS_UPDATE_CHECK` | `true` |
+| [`sitePacksAutoUpdate`](#sitePacksAutoUpdate) | `--sitePacksAutoUpdate` | `BROWSERHIVE_SITE_PACKS_AUTO_UPDATE` | `false` |
+| [`sitePacksUrl`](#sitePacksUrl) | `--sitePacksUrl` | `BROWSERHIVE_SITE_PACKS_URL` | `https://browserhive.ai/registry/v1/` |
 | [`sitePacksDir`](#sitePacksDir) | `--sitePacksDir` | `BROWSERHIVE_SITE_PACKS_DIR` | unset |
 
 <a id="persistence"></a>
@@ -671,6 +674,48 @@ Site packs for template sites (spec 13 §9). false: no pack data is used; templa
 | Config file | `"sitePacks"` |
 | Type | a boolean: 'true', 'false', '1', '0', 'yes' or 'no' |
 | Default | `true` |
+| Notes | restart required |
+
+<a id="sitePacksUpdateCheck"></a>
+### `sitePacksUpdateCheck`
+
+The automatic site-pack update check (D-55): 5 minutes after start and then every 24 h ± 2 h, an anonymous GET of the registry's signed index only (keys.json, index.json and their signatures; no cookie, query, version or install identifier). Pack files are fetched only when an operator downloads one, or by auto-update. false: BrowserHive makes no request to the registry at all (air-gapped or opted-out hosts; import packs by hand).
+
+| Property | Value |
+|---|---|
+| CLI flag | `--sitePacksUpdateCheck` |
+| Environment | `BROWSERHIVE_SITE_PACKS_UPDATE_CHECK` |
+| Config file | `"sitePacksUpdateCheck"` |
+| Type | a boolean: 'true', 'false', '1', '0', 'yes' or 'no' |
+| Default | `true` |
+| Notes | restart required |
+
+<a id="sitePacksAutoUpdate"></a>
+### `sitePacksAutoUpdate`
+
+true: registry updates of followed packs that only tighten rules (or change nothing) are downloaded and applied without approval. Updates that relax rules or can stop a site, domain changes, bundled versions and local files always wait for an operator.
+
+| Property | Value |
+|---|---|
+| CLI flag | `--sitePacksAutoUpdate` |
+| Environment | `BROWSERHIVE_SITE_PACKS_AUTO_UPDATE` |
+| Config file | `"sitePacksAutoUpdate"` |
+| Type | a boolean: 'true', 'false', '1', '0', 'yes' or 'no' |
+| Default | `false` |
+| Notes | restart required |
+
+<a id="sitePacksUrl"></a>
+### `sitePacksUrl`
+
+The site-pack registry folder (https only). A mirror must serve the same signed files; they are verified against the keys pinned in BrowserHive whatever the URL.
+
+| Property | Value |
+|---|---|
+| CLI flag | `--sitePacksUrl` |
+| Environment | `BROWSERHIVE_SITE_PACKS_URL` |
+| Config file | `"sitePacksUrl"` |
+| Type | an absolute https: URL without credentials, query or fragment, like 'https://browserhive.ai/registry/v1/' |
+| Default | `https://browserhive.ai/registry/v1/` |
 | Notes | restart required |
 
 <a id="sitePacksDir"></a>

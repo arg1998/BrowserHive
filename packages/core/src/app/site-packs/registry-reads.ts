@@ -20,7 +20,7 @@ import type {
   SitePackChangeRepository,
 } from '../../ports/persistence/site-packs.ts';
 import type { SourcePackVersion } from '../../ports/site-packs.ts';
-import { readCached } from './registry-build.ts';
+import { readCached, readSigned } from './registry-build.ts';
 import { classifyForRow, usageOf } from './registry-classify.ts';
 import { packConflict } from './registry-errors.ts';
 import type {
@@ -29,7 +29,13 @@ import type {
   RegistrySnapshot,
   SitePackRegistryDeps,
 } from './registry-types.ts';
-import { followEffective, toChangeRow, toGuardHitRow, toRegistryStatus } from './views.ts';
+import {
+  followEffective,
+  sourcesOf,
+  toChangeRow,
+  toGuardHitRow,
+  toRegistryStatus,
+} from './views.ts';
 
 /** What the reads need besides the snapshot. */
 export interface ReadFacts {
@@ -67,12 +73,12 @@ export function listPacks(
     }
     if (query.source !== undefined && query.source.length > 0) {
       const sources = new Set(query.source);
-      const approvedSource = entry.state?.approvedSource ?? null;
+      const known = new Set(sourcesOf(entry));
       const matches =
-        (sources.has('local') && entry.local !== null) ||
-        (sources.has('bundled') && (entry.offer !== null || approvedSource === 'bundled')) ||
-        (sources.has('registry') && approvedSource === 'remote') ||
-        (sources.has('import') && approvedSource === 'import');
+        (sources.has('local') && known.has('local')) ||
+        (sources.has('bundled') && known.has('bundled')) ||
+        (sources.has('registry') && known.has('remote')) ||
+        (sources.has('import') && known.has('import'));
       if (!matches) return false;
     }
     if (query.pending !== undefined) {
@@ -156,9 +162,28 @@ export async function diffOf(
     to = { content: current, source: 'local' };
   } else {
     const version = query.to;
-    const row = entry.pending.find((p) => p.toVersion === version);
+    const row = entry.pending.find((p) => p.toVersion === version && p.decision === 'downloaded');
     const content =
-      row === undefined ? null : snapshot.bundled.packs.find((p) => p.sha256 === row.toSha256);
+      row === undefined
+        ? null
+        : (snapshot.bundled.packs.find((p) => p.sha256 === row.toSha256) ??
+          (row.classification === 'revoked'
+            ? await readCached(
+                deps.cache,
+                row.source,
+                entry.packId,
+                row.toSha256,
+                deps.binaryVersion,
+              )
+            : row.source === 'remote' || row.source === 'import'
+              ? await readSigned(
+                  deps.cache,
+                  entry.packId,
+                  row.toSha256,
+                  deps.binaryVersion,
+                  row.source,
+                )
+              : null));
     // The previous approved version too: what Revert restores, classified like Apply (review #84 L4).
     const found =
       row !== undefined && content !== undefined && content !== null
@@ -225,6 +250,8 @@ async function fromOf(
     if (entry.approved !== null && state?.approvedSource) {
       return { content: entry.approved, source: state.approvedSource };
     }
+    // Nothing approved yet: compared with the bundled version first use would approve (#100 M2).
+    if (entry.offer !== null) return { content: entry.offer, source: 'bundled' };
     return null;
   }
   if (

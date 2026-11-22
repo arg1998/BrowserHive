@@ -384,6 +384,30 @@
         "string"
       ]
     },
+    "sitePacksUpdateCheck": {
+      "description": "The automatic site-pack update check (D-55): 5 minutes after start and then every 24 h ± 2 h, an anonymous GET of the registry's signed index only (keys.json, index.json and their signatures; no cookie, query, version or install identifier). Pack files are fetched only when an operator downloads one, or by auto-update. false: BrowserHive makes no request to the registry at all (air-gapped or opted-out hosts; import packs by hand).",
+      "x-browserhive-env": "BROWSERHIVE_SITE_PACKS_UPDATE_CHECK",
+      "x-browserhive-cli": "--sitePacksUpdateCheck",
+      "type": [
+        "boolean",
+        "string"
+      ]
+    },
+    "sitePacksAutoUpdate": {
+      "description": "true: registry updates of followed packs that only tighten rules (or change nothing) are downloaded and applied without approval. Updates that relax rules or can stop a site, domain changes, bundled versions and local files always wait for an operator.",
+      "x-browserhive-env": "BROWSERHIVE_SITE_PACKS_AUTO_UPDATE",
+      "x-browserhive-cli": "--sitePacksAutoUpdate",
+      "type": [
+        "boolean",
+        "string"
+      ]
+    },
+    "sitePacksUrl": {
+      "type": "string",
+      "description": "The site-pack registry folder (https only). A mirror must serve the same signed files; they are verified against the keys pinned in BrowserHive whatever the URL.",
+      "x-browserhive-env": "BROWSERHIVE_SITE_PACKS_URL",
+      "x-browserhive-cli": "--sitePacksUrl"
+    },
     "sitePacksDir": {
       "type": "string",
       "description": "Folder of local site packs (<pack id>.json). A local file applies only after an operator approves its content, once per SHA-256. Absent = <dataDir>/site-packs/local.",

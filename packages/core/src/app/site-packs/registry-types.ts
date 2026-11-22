@@ -1,6 +1,11 @@
 /** @module app/site-packs/registry-types — the registry's collaborators and its immutable snapshot (spec 13 §9.6): per pack id the approved content (from its source or BrowserHive's copy, D-67), the local file's state, the offer for first use, the pending candidates and the templates using it; per registrable domain the owning pack. */
 
-import type { SitePackV1 } from '@browserhive/contracts/site-packs';
+import type { SitePackRegistryStatus } from '@browserhive/contracts/http';
+import type {
+  RegistryIndexPack,
+  RegistryIndexV1,
+  SitePackV1,
+} from '@browserhive/contracts/site-packs';
 import type { Clock } from '../../ports/clock.ts';
 import type { DegradationReporter } from '../../ports/degradation-reporter.ts';
 import type { EventPublisher } from '../../ports/event-bus.ts';
@@ -9,6 +14,7 @@ import type { Logger } from '../../ports/logger.ts';
 import type { Repositories, UnitOfWork } from '../../ports/persistence/index.ts';
 import type {
   SitePackChangeRecord,
+  SitePackProvenanceRecord,
   SitePackSourceId,
   SitePackStateRecord,
 } from '../../ports/persistence/site-packs.ts';
@@ -34,6 +40,74 @@ export interface BundledSource extends SitePackSource {
 export interface LocalSource extends SitePackSource {
   readonly dir: string;
 }
+
+/** The registry index the T4b client holds, as the registry's views and decisions read it. */
+export interface HeldIndex {
+  readonly index: RegistryIndexV1;
+  /** The online key whose signature verified. */
+  readonly signedBy: string;
+  /** Where it came from: a fetch, an import, or a signed layout in the local folder. */
+  readonly origin: 'registry' | 'import' | 'local';
+  /** The imported folder's name or the local layout's path (provenance of imported versions). */
+  readonly originName: string | null;
+  /** `expires` has passed: never used for new content (spec 13 §10.3 step 4). */
+  readonly stale: boolean;
+}
+
+/** What the registry client contributes to the registry (spec 13 §10.3–§10.6). */
+export interface RemoteFacts {
+  /** The held index, or `null` (none verified yet, or the client is off). */
+  held(): HeldIndex | null;
+  /** The provenance recorded when content of `source` with `sha256` is approved. */
+  provenance(
+    source: 'remote' | 'import',
+    packId: string,
+    sha256: string,
+  ): SitePackProvenanceRecord | null;
+  /** The client's fields of the registry status. */
+  status(): RemoteStatusPart;
+  /** An operator decided on a pack (auto-update's baseline and pause, D-87). */
+  operatorDecision?(
+    packId: string,
+    kind: 'apply' | 'reject' | 'revert' | 'follow_on',
+    snapshotAfter: RegistrySnapshot,
+  ): Promise<void>;
+  /** Auto-update paused for this pack (`auto_update_paused`). */
+  autoPaused?(packId: string): boolean;
+  /** The last refused download of this content-addressed file (`pending[].refused`). */
+  refusal?(sha256: string): { readonly reason: string; readonly detail: string } | null;
+  /** Signed layouts of the local folder, verified at each reload (after the registry's load). */
+  importLocalLayouts?(paths: readonly string[]): Promise<void>;
+}
+
+/** The registry-client fields of `SitePackRegistryStatus`. */
+export type RemoteStatusPart = Pick<
+  SitePackRegistryStatus,
+  | 'update_check'
+  | 'check_off'
+  | 'trusts_registry'
+  | 'auto_update'
+  | 'url'
+  | 'last_check_at'
+  | 'last_ok_at'
+  | 'last_outcome'
+  | 'last_error'
+  | 'failures'
+  | 'next_check_at'
+  | 'index_version'
+  | 'index_issued_at'
+  | 'index_expires_at'
+  | 'index_signed_by'
+  | 'index_packs'
+  | 'index_origin'
+  | 'stale'
+  | 'clock_skew_ms'
+  | 'keys_version'
+  | 'snapshot'
+> & {
+  /** Signed layouts of the local folder that did not verify. */
+  readonly layoutSkips: readonly SkippedPackVersion[];
+};
 
 /** Collaborators of `SitePackRegistry`. */
 export interface SitePackRegistryDeps {
@@ -64,6 +138,8 @@ export interface SitePackRegistryDeps {
   readonly degradations?: DegradationReporter;
   /** A template whose sites use a pack whose content in force changed (`template.changed`). */
   readonly templateChanged?: (templateId: string) => void;
+  /** The registry client (T4b); attached after construction with `attachRemote`. */
+  readonly remote?: RemoteFacts;
 }
 
 /** A local file and what of it applies (spec 13 §10.5). */
@@ -91,8 +167,14 @@ export interface PackEntry {
   readonly effective: EffectivePack | null;
   /** What the views describe: the content in force, else the approved, offered or local one. */
   readonly display: SitePackV1 | null;
-  /** Pending candidates (`downloaded`), newest version first. */
+  /** Pending candidates (`available`, `downloaded`), newest version first. */
   readonly pending: readonly SitePackChangeRecord[];
+  /** What the held registry index lists for this pack, `null` when it does not. */
+  readonly listing: RegistryIndexPack | null;
+  /** The bundled snapshot of this release ships a version of it. */
+  readonly inBundle: boolean;
+  /** The index's usable version is newer than the baseline but an operator set it aside (rejected, reverted from). */
+  readonly declined?: boolean;
   readonly usedBy: readonly string[];
   readonly skipped: SkippedPackVersion | null;
   /** The first domain this pack's content claims that another pack covers (`domain_overlap`). */
@@ -118,6 +200,8 @@ export interface RegistrySnapshot {
   /** Skips found while building (missing cached copies, overlaps). */
   readonly resolveSkips: readonly (SkippedPackVersion & { readonly source: SitePackSourceId })[];
   readonly loadedAt: number | null;
+  /** The held registry index this snapshot was built with. */
+  readonly held: HeldIndex | null;
 }
 
 /** An empty snapshot (before the first load). */
@@ -136,6 +220,7 @@ export function emptySnapshot(): RegistrySnapshot {
     local: empty('local'),
     resolveSkips: [],
     loadedAt: null,
+    held: null,
   };
 }
 

@@ -36,6 +36,7 @@ import type { SessionRepository } from './sessions.ts';
 import type {
   SiteGuardHitRepository,
   SitePackChangeRepository,
+  SitePackMetaRepository,
   SitePackStateRepository,
 } from './site-packs.ts';
 import type { StrategyStateRepository } from './strategy-state.ts';
@@ -90,6 +91,7 @@ export interface Repositories {
   readonly sitePackState: SitePackStateRepository;
   readonly sitePackChanges: SitePackChangeRepository;
   readonly siteGuardHits: SiteGuardHitRepository;
+  readonly sitePackMeta: SitePackMetaRepository;
   readonly strategyState: StrategyStateRepository;
 }
 

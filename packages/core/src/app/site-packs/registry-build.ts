@@ -1,6 +1,7 @@
 /** @module app/site-packs/registry-build — builds the registry's snapshot (spec 13 §9.6, §10.5, D-67): resolves each pack id's approved content (its source's bytes when the hash matches, else BrowserHive's copy), the local file's state and approved content, the offer for first use; then assigns registrable domains by precedence (approved local content > approved other source > offer; a pack claiming a taken domain is skipped `domain_overlap`). */
 
 import { join } from 'node:path';
+import type { RegistryIndexPack } from '@browserhive/contracts/site-packs';
 import { loadPackBytes } from '../../domain/site-packs/load.ts';
 import type {
   SitePackChangeRecord,
@@ -15,7 +16,7 @@ import type {
   SourceCatalog,
   SourcePackVersion,
 } from '../../ports/site-packs.ts';
-import type { LocalEntry, PackEntry, RegistrySnapshot } from './registry-types.ts';
+import type { HeldIndex, LocalEntry, PackEntry, RegistrySnapshot } from './registry-types.ts';
 
 /** A pack id with its contents resolved, before domains are assigned. */
 export interface ResolvedPack {
@@ -26,6 +27,11 @@ export interface ResolvedPack {
   readonly offer: SourcePackVersion | null;
   /** The bundled version this release ships (a candidate when newer than the approved one). */
   readonly bundled: SourcePackVersion | null;
+  /**
+   * A downloaded registry or imported candidate of a pack nothing approved and nothing bundles (a
+   * registry-only pack): what its views describe until it is applied.
+   */
+  readonly candidate?: SourcePackVersion | null;
   readonly skipped: SkippedPackVersion | null;
 }
 
@@ -39,6 +45,30 @@ export interface ResolveInput {
   readonly binaryVersion: string;
   /** Packs whose stored state cannot be read (review #83 C-M5): treated as not approved. */
   readonly corrupt?: ReadonlySet<string>;
+  /** Pack ids the held registry index lists (T4b). */
+  readonly listed?: readonly string[];
+  /** Pending candidates (registry-only packs show their downloaded content). */
+  readonly pending?: readonly SitePackChangeRecord[];
+}
+
+/**
+ * A registry-signed pack file BrowserHive verified and holds (`cache/remote/…` or
+ * `cache/import/…`), checked again like any pack; `null` when neither copy is there.
+ */
+export async function readSigned(
+  cache: SitePackCache,
+  packId: string,
+  sha256: string,
+  binaryVersion: string,
+  first: SitePackSourceId = 'remote',
+): Promise<SourcePackVersion | null> {
+  const order: SitePackSourceId[] =
+    first === 'import' ? ['import', 'remote'] : ['remote', 'import'];
+  for (const source of order) {
+    const found = await readCached(cache, source, packId, sha256, binaryVersion);
+    if (found !== null) return found;
+  }
+  return null;
 }
 
 /** Reads a cached copy and checks it like any pack; `null` when missing, altered or refused. */
@@ -74,6 +104,8 @@ export async function resolvePacks(input: ResolveInput): Promise<readonly Resolv
     ...localFiles.keys(),
     ...localProblems.keys(),
     ...(input.corrupt ?? []),
+    ...(input.listed ?? []),
+    ...(input.pending ?? []).map((p) => p.packId),
     ...input.states
       .filter((s) => s.approvedSha256 !== null || s.localApprovedSha256 !== null)
       .map((s) => s.packId),
@@ -94,6 +126,10 @@ export async function resolvePacks(input: ResolveInput): Promise<readonly Resolv
     if (local.missingCopy) skipped = missingCopy(packId, null);
     const approvedContent = approved === 'missing' ? null : approved;
     const nothingApproved = state?.approvedSha256 == null && local.entry?.approved == null;
+    const candidate =
+      nothingApproved && current === null && local.entry === null
+        ? await candidateOf(input, packId)
+        : null;
     out.push({
       packId,
       state,
@@ -101,10 +137,34 @@ export async function resolvePacks(input: ResolveInput): Promise<readonly Resolv
       local: local.entry,
       offer: nothingApproved ? current : null,
       bundled: current,
+      candidate,
       skipped: skipped ?? local.entry?.problem ?? null,
     });
   }
   return out;
+}
+
+/** The newest downloaded registry or imported candidate's content, for a registry-only pack. */
+async function candidateOf(input: ResolveInput, packId: string): Promise<SourcePackVersion | null> {
+  const rows = (input.pending ?? [])
+    .filter(
+      (p) =>
+        p.packId === packId &&
+        p.decision === 'downloaded' &&
+        (p.source === 'remote' || p.source === 'import'),
+    )
+    .sort((a, b) => (b.toVersion ?? 0) - (a.toVersion ?? 0));
+  for (const row of rows) {
+    const found = await readSigned(
+      input.cache,
+      packId,
+      row.toSha256,
+      input.binaryVersion,
+      row.source,
+    );
+    if (found !== null) return found;
+  }
+  return null;
 }
 
 function unreadable(packId: string): SkippedPackVersion {
@@ -179,6 +239,8 @@ export interface AssembleInput {
   readonly pending: readonly SitePackChangeRecord[];
   readonly sites: readonly TemplateSiteRecord[];
   readonly loadedAt: number | null;
+  /** The held registry index (T4b), `null` when none. */
+  readonly held?: HeldIndex | null;
 }
 
 /** When the content in force was approved (older approvals keep contested domains). */
@@ -207,6 +269,9 @@ export function assembleSnapshot(
   );
   const byDomain = new Map<string, string>();
   const packs = new Map<string, PackEntry>();
+  const listings = new Map<string, RegistryIndexPack>(
+    (input.held?.index.packs ?? []).map((p) => [p.id, p]),
+  );
   const resolveSkips: RegistrySnapshot['resolveSkips'][number][] = [];
   for (const r of ordered) {
     const content = r.local?.approved ?? r.approved ?? r.offer;
@@ -246,7 +311,7 @@ export function assembleSnapshot(
       local: r.local,
       offer: overlap === null ? r.offer : null,
       effective: claimed > 0 ? effectiveOf(r, input.enabled) : null,
-      display: (content ?? r.local?.current ?? null)?.pack ?? null,
+      display: (content ?? r.local?.current ?? r.candidate ?? null)?.pack ?? null,
       pending: input.pending
         .filter((p) => p.packId === r.packId)
         .sort((a, b) => (b.toVersion ?? 0) - (a.toVersion ?? 0)),
@@ -255,9 +320,12 @@ export function assembleSnapshot(
       ],
       skipped,
       overlap,
+      listing: listings.get(r.packId) ?? null,
+      inBundle: r.bundled !== null,
     });
   }
   return {
+    held: input.held ?? null,
     generation: input.generation,
     packs,
     byDomain,

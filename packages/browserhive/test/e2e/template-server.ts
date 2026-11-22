@@ -1,7 +1,7 @@
 /**
  * @module browserhive/test/e2e/template-server — the daemon of the templates end-to-end journey (spec 13 §17
  * T1a): a BrowserHive server from source with the internal testing seam pointing Chromium at the
- * HTTPS fixture sites (`*.test`), and those sites. Run it on a display (CI: `xvfb-run -a`) so the
+ * HTTPS fixture sites (`*.test`), and those sites, plus a signed fake site-pack registry (`fake-registry.ts`). Run it on a display (CI: `xvfb-run -a`) so the
  * template's sign-in window is a real window.
  *
  * Usage: `BHDEV_TESTING=1 bun packages/browserhive/test/e2e/template-server.ts <port> <dataDir>`; stops
@@ -10,6 +10,7 @@
 
 import { FIXTURE_SPKI, startHttpsSites } from '@browserhive/core/test/https-sites';
 import { createServer } from '../../src/index.ts';
+import { startFakeRegistry } from './fake-registry.ts';
 
 const port = Number(process.argv[2] ?? '9877');
 const dataDir = process.argv[3];
@@ -21,6 +22,8 @@ if (dataDir === undefined || !Number.isInteger(port)) {
 }
 
 const sites = startHttpsSites();
+// A signed test registry (spec 13 §10): Check now on the Site packs page finds two pending updates.
+const registry = startFakeRegistry();
 // The daemon must not inherit the e2e variables (the config rejects unknown BROWSERHIVE_* names).
 const env = Object.fromEntries(
   Object.entries(process.env).filter(([name]) => !name.startsWith('BROWSERHIVE_')),
@@ -34,6 +37,9 @@ const server = await createServer({
   testing: {
     hostResolverRules: `MAP *.test:443 127.0.0.1:${sites.port}`,
     ignoreCertificateErrorsSpkiList: FIXTURE_SPKI,
+    sitePacksTrustRoot: registry.trustRoot,
+    // Checked only when an operator presses Check now (the automatic check waits a day).
+    sitePacksRegistry: { url: registry.url, firstCheckMs: 86_400_000 },
   },
 });
 await server.listen();
@@ -42,6 +48,7 @@ process.stdout.write(`e2e-template-server: ${server.url} (fixture sites on ${sit
 const stop = async () => {
   await server.stop();
   sites.stop();
+  registry.stop();
   process.exit(0);
 };
 process.on('SIGINT', () => void stop());

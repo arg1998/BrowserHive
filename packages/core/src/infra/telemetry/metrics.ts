@@ -34,6 +34,7 @@ export const METRIC = {
   TEMPLATE_RELOGINS: 'browserhive.template.relogins',
   SITE_PACK_CHALLENGES: 'browserhive.site_pack.challenges',
   SITE_PACK_GUARD_HITS: 'browserhive.site_pack.guard_hits',
+  SITE_PACK_CHECKS: 'browserhive.site_pack.checks',
   RETENTION_PRUNED_ROWS: 'browserhive.retention.pruned_rows',
   NOTIFICATION_DELIVERIES: 'browserhive.notifications.deliveries',
   NOTIFICATION_ACTIONS: 'browserhive.notifications.actions',
@@ -199,6 +200,13 @@ export const METRIC_DEFINITIONS: readonly MetricDefinition[] = [
     ['action', 'kind'],
     'Site-pack guard decisions by action and guard kind',
   ),
+  def(
+    METRIC.SITE_PACK_CHECKS,
+    'counter',
+    '{check}',
+    ['outcome'],
+    'Site-pack registry update checks by outcome',
+  ),
   def(METRIC.RETENTION_PRUNED_ROWS, 'counter', '{row}', ['table'], 'Rows pruned by table'),
   def(
     METRIC.NOTIFICATION_DELIVERIES,
@@ -259,6 +267,8 @@ export interface Instruments {
   readonly sitePackChallenges: Counter;
   /** Site-pack guard decisions by `action` and `kind` (spec 13 §11.7). */
   readonly sitePackGuardHits: Counter;
+  /** Registry update checks by `outcome` (spec 13 §11.7). */
+  readonly sitePackChecks: Counter;
   readonly retentionPrunedRows: Counter;
   /** Outbox jobs by `channel_kind` and `status` (D-34). */
   readonly notificationDeliveries: Counter;
@@ -367,6 +377,9 @@ export function createInstruments(meter: Meter): Instruments {
     },
     get sitePackGuardHits() {
       return counter(METRIC.SITE_PACK_GUARD_HITS);
+    },
+    get sitePackChecks() {
+      return counter(METRIC.SITE_PACK_CHECKS);
     },
     get retentionPrunedRows() {
       return counter(METRIC.RETENTION_PRUNED_ROWS);

@@ -1,9 +1,11 @@
 /** @module features/site-packs/GuardHitsTab — the Guard hits tab of `/site-packs` (spec 13 §9.9, §11.4; `GET /site-packs/guard-hits`): every request or control a pack blocked, asked about, flagged, paced or held, newest first, with the guard, the method and the sanitized URL as text, the session and the tool; filterable by what happened */
+
 import { SiteGuardHitAction, type SiteGuardHitRow } from '@browserhive/contracts/http';
 import { useState } from 'react';
 import { Chip } from '@/components/shared/Chip.tsx';
 import { EmptyState } from '@/components/shared/EmptyState.tsx';
 import { FilterBar } from '@/components/shared/FilterBar.tsx';
+import { Plain } from '@/components/shared/Plain.tsx';
 import { RelativeTime } from '@/components/shared/RelativeTime.tsx';
 import { useSiteGuardHits } from './api.ts';
 import { PagedList } from './HistoryTabs.tsx';
@@ -74,16 +76,16 @@ export function GuardHitsTab() {
               <p className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
                 <span className="font-medium">{ACTION_LABEL[hit.action]}</span>
                 <Chip>{KIND_LABEL[hit.guard_kind]}</Chip>
-                <bdi className="font-mono text-sm text-muted-foreground">
-                  {hit.pack_id}#{hit.guard_id}
-                </bdi>
+                <Plain className="font-mono text-sm text-muted-foreground">
+                  {`${hit.pack_id}#${hit.guard_id}`}
+                </Plain>
                 {hit.outcome !== null ? (
                   <span className="text-sm text-muted-foreground">· {hit.outcome}</span>
                 ) : null}
               </p>
               <p className="min-w-0 font-mono text-xs text-muted-foreground [overflow-wrap:anywhere]">
                 {hit.method !== null ? `${hit.method} ` : ''}
-                <bdi>{hit.url}</bdi>
+                <Plain>{hit.url}</Plain>
               </p>
               {hit.session_id !== null || hit.tool !== null ? (
                 <p className="text-sm text-muted-foreground">

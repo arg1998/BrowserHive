@@ -1101,7 +1101,7 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 
 **Status:** Accepted
 
-**Implementation:** publishing built in PR T4a (as built: D-80, D-81, D-82); the client planned in PR T4b of spec 13 §17.
+**Implementation:** publishing built in PR T4a (as built: D-80, D-81, D-82); the client built in PR T4b (as built: D-83–D-86).
 
 **Context.** Packs go stale faster than releases, so installs that do not upgrade need fresh site knowledge. D-08 says nothing leaves the host by default; D-33 says BrowserHive runs no server. The owner's decision of 2026-11-05: browserhive.ai or a CDN hosts a static, signed registry; BrowserHive downloads configuration from it and sends no instance data; the bundled snapshot and the update check are on by default; applying an update needs the operator's approval by default, with what changed shown; auto-update is off by default; the check can be turned off; packs can be downloaded by hand into a folder or imported from a file.
 
@@ -1450,3 +1450,52 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 - Previews sign with a root and online key generated inside the job; `registry-preview-verify` proves the pinned root refuses them.
 
 **Consequences.** The first release that carries the registry client needs the ceremony first. A preview's or a test's key can never pass for the release's, and a test root reaches a server only through the testing seam (D-63).
+
+## D-83 Conditional registry requests carry only the hash of the body held; a 200 with the same bytes is "not modified"
+
+**Status:** Accepted (T4b; resolves deferred D69)
+
+**Context.** §10.4 allowed `If-None-Match` only with an ETag equal to `"<sha256 of the body held>"`, the form browserhive.ai was assumed to send. T4a measured Cloudflare Workers assets: the ETag is a 32-hex asset-manifest hash, never the body's SHA-256, so the rule would never send a conditional request there.
+
+**Decision.** The client never stores or echoes a server-given ETag. Whenever it holds a verified body for a path it sends `If-None-Match: "<sha256 hex of that body>"`, a value derived only from public content and identical on every install holding the same file. A `304` is answered with the held bytes (and a `304` for a file it does not hold is a failure); a `200` whose bytes equal the held ones is treated exactly like a `304`. Correctness never depends on ETag semantics: every byte is verified against the pinned keys and the stored floors, a held unchanged index is re-verified under the accepted `keys.json` (expiry included) without the rollback floor, and a fetched index with other bytes must pass every check.
+
+**Consequences.** On browserhive.ai each check is four unconditional `200`s of a few kilobytes; a mirror whose ETag is the body hash answers `304` and nothing is downloaded. Nothing in a request can identify an install.
+
+## D-84 The registry client as built: a held layout, candidates as rows, one download per available version
+
+**Status:** Accepted (T4b)
+
+**Decision.**
+- The last good `keys.json`, `index.json` and signatures live in `<dataDir>/site-packs/remote/`, trusted at start only when `index.json`'s SHA-256 equals the one recorded in `meta` (`site_packs.client`, beside the floors `site_packs.keys_version` and `site_packs.index_version`). Verified pack files go to the approved-copy cache (`cache/remote/…`, `cache/import/…`).
+- A verified index writes per pack the highest usable version newer than the approved one (or the bundled offer) as one `available` row of `site_pack_changes` (source `remote`, the signed notes); older registry rows become `superseded`; a version an operator approved, applied automatically or rejected is never offered again. A version BrowserHive already holds verified is recorded `downloaded`, classified. Following only decides what is pending for review, badges and notifications.
+- **Download & review** fetches exactly the version the index lists as available (`SITE_PACK_NOT_LISTED` otherwise), only with the update check on, a pinned root and a fresh index (`SITE_PACKS_REGISTRY_UNAVAILABLE` names which). **Download all** is its own route, `POST /site-packs/download-all` (the spec's `{all: true}` on a pack's route needed a pack id the CLI's `download --all` does not have), and fetches every listed non-revoked version BrowserHive lacks. `GET /site-packs/export` serves the held layout for `sitepacks export` (every CLI command goes through REST). Apply needs a `downloaded` row.
+- A pack only the registry lists has a catalog entry (title from the index); Apply of its downloaded version approves it (classification `new_pack`).
+- While the build pins no root keys (before the key ceremony) the client makes no request and reports `check_off: no_trust_root`; `sitePacksUpdateCheck=false` reports `update_check_off` and also refuses downloads; imports still work.
+- The automatic check runs 5 min after start, then every 24 h ± 2 h (uniform), after failures 1 h, 2 h, 4 h … capped by the schedule; 5 s to the response headers (Bun's `fetch` has no separate connect timeout), 30 s in all, keep-alive off, no redirect followed. Bun's `fetch` exposes no TLS session cache control, so "no TLS session resumption" is not enforced beyond a fresh connection.
+- Signed imports and signed layouts in `sitePacksDir` go through the same acceptance as a fetch (floors included, the held index again is `not_modified`) and become the held index; their files are cached under `import` with provenance "Imported file <name>". A local layout older than the held index is reported (`layout_refused`), never applied.
+
+## D-85 Auto-update applies only small tightening steps
+
+**Status:** Accepted (T4b; resolves deferred D74); narrowed by D-87
+
+**Decision.** With `sitePacksAutoUpdate=true`, a registry candidate of a followed, unpinned, approved pack without a local override is downloaded and applied by `browserhive` (decision `auto`) only when it is `tightening` or `neutral`, adds or removes no domain, adds no host-wide blocking guard (`host/*`), no blocking element guard with a bare type, universal or very short selector, and makes at most three guards newly blocking (new, or changed to `block`/`confirm`). Otherwise it stays downloaded for an operator. Bundled versions, imports and local files are never auto-applied; the stealth floor (D-71) and domain overlap are checked as on any Apply.
+
+**Consequences.** A stolen online key can still tighten a followed pack, but only by small steps that show up in History, never by blocking a whole host.
+
+## D-86 The release snapshot sits next to the bundled packs and seeds the floors
+
+**Status:** Accepted (T4b)
+
+**Decision.** `scripts/snapshot-registry.ts` writes the verified live layout to `packages/browserhive/dist/site-packs/registry/v1/` (a subfolder: `dist/site-packs/index.json` is the bundled index), runs in `release:publish` after the build, and refuses (nothing written, release stops) when anything does not verify under the pinned root, and before any request while the build pins no root keys. At start a fresh install (no index floor stored) verifies the snapshot as of its own `issued_at` (its integrity is the release's; freshness is the check's job) and stores its versions as the first floors. The snapshot is not used as the held index.
+
+## D-87 Auto-update applies only changes that cannot stop or block agents' work
+
+**Status:** Accepted (owner policy "stealth and security first class", review #100 M1 and L3)
+
+**Context.** Review #100 showed that a version the classifier calls tightening can still halt a site for agents: 28 `attention` challenges that avoid the probe and sign-in paths, element guards matching by a two-letter role name, `human_only` turned on, `max_sessions` lowered to 2, a one-hour launch gap. With auto-update on, a stolen online key could apply any of them by itself.
+
+**Decision.** Beyond D-85 (only `tightening` or `neutral`, no domain change), auto-update leaves a version for an operator when it adds or changes any network guard that can block or hold a request (`block`, `confirm`, `write_policy`, whatever its glob: a short prefix such as `api.host/v*` covers a whole API), makes the default write policy stricter, adds or changes more than three guards in all, adds, removes or changes any challenge or any element guard, turns `sign_in.human_only` on, lowers `concurrency.max_sessions`, adds a pace rule or changes one's period or guard, raises `pacing.min_launch_gap_s` above max(2 × the old gap, 30 s), lowers a pace limit below half, adds or removes a strategy, or moves a numeric strategy parameter by more than 2× either way (or changes a non-numeric one). Every "restrictive" change already waits. The bound is `AUTO_MAX_SLOWDOWN = 2` (`domain/site-packs/auto-update.ts`).
+
+Every bound is measured both against the version in force and against the last version an operator decided on (applied, or reverted to; recorded per pack in `site_packs.client`), so automatic steps cannot compound (review #100 N2). An operator's Revert, or Reject of a registry version, pauses auto-update for that pack (`auto_update_paused`) until the operator applies a version or turns Follow updates on (N3). The keep-alive interval may at most double.
+
+**Consequences.** Auto-update applies `warn` guards (within the cap), cosmetic and metadata changes and small, bounded throttling steps; anything that can stop, hold or materially slow agents waits in Updates available like a loosening change.

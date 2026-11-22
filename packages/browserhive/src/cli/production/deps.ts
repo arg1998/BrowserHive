@@ -5,7 +5,6 @@ import { APPLICATION_ID, SCHEMA_VERSION } from '@browserhive/core/persistence';
 import {
   createBunProcessRunner,
   createLogger,
-  createNodeFileSystem,
   createSystemClock,
   LOG_MODULES,
 } from '@browserhive/core/runtime';
@@ -15,6 +14,7 @@ import { acquireDataDirLock, readLiveLock } from '../../composition/lock-file.ts
 import type { CliDeps } from '../deps.ts';
 import { processStreams, terminalPrompter } from '../output/process-io.ts';
 import { runCli } from '../run.ts';
+import { createCliFileSystem } from './file-system.ts';
 import { createHostProbes } from './probes.ts';
 import { inspectDatabaseFile, openCliStorage } from './storage.ts';
 import { processWait } from './wait.ts';
@@ -44,7 +44,7 @@ export function productionDeps(argv: readonly string[]): CliDeps {
     cwd: process.cwd(),
     host,
     configFs: nodeConfigFs,
-    fs: createNodeFileSystem(),
+    fs: createCliFileSystem(),
     streams,
     prompt: streams.isTty.stdin ? terminalPrompter() : null,
     clock,

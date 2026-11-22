@@ -37,6 +37,12 @@ async function localFile(ctx: CaseContext): Promise<void> {
   await ctx.kit.sitePacks.registry.reload();
 }
 
+/** v1 approved and the registry index checked: v2 is available. */
+async function checked(ctx: CaseContext): Promise<void> {
+  await approved(ctx);
+  await ctx.kit.sitePackClient.check();
+}
+
 /** The site-pack routes. */
 export const SITE_PACK_CASES: readonly RouteCase[] = [
   {
@@ -64,6 +70,29 @@ export const SITE_PACK_CASES: readonly RouteCase[] = [
     operationId: 'reloadSitePacks',
     success: { method: 'POST', path: api('/site-packs/reload'), status: 200 },
     invalid: null,
+  },
+  {
+    operationId: 'checkSitePacks',
+    success: { method: 'POST', path: api('/site-packs/check'), status: 200 },
+    invalid: null,
+  },
+  {
+    operationId: 'downloadAllSitePacks',
+    setup: checked,
+    success: { method: 'POST', path: api('/site-packs/download-all'), status: 200 },
+    invalid: null,
+  },
+  {
+    operationId: 'exportSitePacks',
+    setup: checked,
+    success: { path: api('/site-packs/export'), status: 200 },
+    invalid: null,
+  },
+  {
+    operationId: 'downloadSitePack',
+    setup: checked,
+    success: { method: 'POST', path: pack('/download'), body: { version: 2 }, status: 200 },
+    invalid: { method: 'POST', path: pack('/download'), body: { version: 'two' } },
   },
   {
     operationId: 'importSitePack',

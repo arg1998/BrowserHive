@@ -1,4 +1,4 @@
-/** @module infra/site-packs/local-source — the local folder (`sitePacksDir`, spec 13 §10.5): unsigned single-pack files `<pack id>.json` written by the local administrator, validated like any pack and applied only after an operator approves their content. Signed layouts (`keys.json`/`index.json`, subfolders) are counted and skipped with `signed_layout_unsupported` until T4b. A missing folder is an empty catalog. */
+/** @module infra/site-packs/local-source — the local folder (`sitePacksDir`, spec 13 §10.5): unsigned single-pack files `<pack id>.json` written by the local administrator, validated like any pack and applied only after an operator approves their content. Signed layouts (`keys.json`/`index.json` at the top, or one per subfolder) are listed for the registry client, which verifies them like an import (T4b). A missing folder is an empty catalog. */
 
 import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -47,17 +47,14 @@ export class LocalPackSource implements SitePackSource {
       names = (await readdir(this.dir)).sort();
     } catch (error) {
       if (isMissing(error))
-        return ok({ source: 'local', packs: [], skipped: [], signedLayouts: 0 });
+        return ok({ source: 'local', packs: [], skipped: [], signedLayouts: 0, layouts: [] });
       return err({ source: 'local', message: `${this.dir}: ${messageOf(error)}` });
     }
     const packs: SourcePackVersion[] = [];
     const skipped: SkippedPackVersion[] = [];
-    let signedLayouts = 0;
+    const layouts: string[] = [];
     const topLayout = names.some((n) => LAYOUT_FILES.has(n));
-    if (topLayout) {
-      signedLayouts += 1;
-      skipped.push(layoutSkip(this.dir));
-    }
+    if (topLayout) layouts.push(this.dir);
     for (const name of names) {
       if (name.startsWith('.') || LAYOUT_FILES.has(name)) continue;
       const path = join(this.dir, name);
@@ -69,10 +66,7 @@ export class LocalPackSource implements SitePackSource {
       }
       if (info.isDirectory()) {
         // `packs/` belongs to the top-level layout; any other folder is a layout of its own.
-        if (!(topLayout && name === 'packs')) {
-          signedLayouts += 1;
-          skipped.push(layoutSkip(path));
-        }
+        if (!(topLayout && name === 'packs')) layouts.push(path);
         continue;
       }
       if (!info.isFile() || !name.endsWith('.json')) continue;
@@ -83,7 +77,7 @@ export class LocalPackSource implements SitePackSource {
         skipped.push({ packId: id, version: null, reason: 'unreadable', detail: messageOf(error) });
       }
     }
-    return ok({ source: 'local', packs, skipped, signedLayouts });
+    return ok({ source: 'local', packs, skipped, signedLayouts: layouts.length, layouts });
   }
 
   #one(
@@ -111,15 +105,6 @@ export class LocalPackSource implements SitePackSource {
     if (loaded.ok) packs.push(loaded.value);
     else skipped.push(loaded.error);
   }
-}
-
-function layoutSkip(path: string): SkippedPackVersion {
-  return {
-    packId: path,
-    version: null,
-    reason: 'signed_layout_unsupported',
-    detail: 'signed layouts arrive with a later release',
-  };
 }
 
 function messageOf(error: unknown): string {

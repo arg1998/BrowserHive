@@ -1,8 +1,9 @@
-/** @module cli/commands/init — `browserhive init`: data dir (0700) and subdirectories, Chromium for Patchright (the only driver, D-65), the default-browser report and choice, database creation and migration, optional schema file, next steps; idempotent, each step ✓/✗ (spec 08 §7.1, D-18) */
+/** @module cli/commands/init — `browserhive init`: data dir (0700) and subdirectories, Chromium for Patchright (the only driver, D-65), the default-browser report and choice, database creation and migration, optional schema file, the site-pack update check's disclosure (D-55), next steps; idempotent, each step ✓/✗ (spec 08 §7.1, D-18) */
 import { dirname, join } from 'node:path';
 import { configFileJsonSchema } from '@browserhive/contracts/config';
 import type { Channel } from '@browserhive/contracts/enums';
 import type { ResolvedConfigBundle } from '@browserhive/core/config';
+import { PINNED_TRUST_ROOT, trustsNothing } from '@browserhive/core/server';
 import type { CommandContext } from '../deps.ts';
 import { EXIT, type ExitCode } from '../invocation.ts';
 import { appErrorFacts, withStorage } from './common.ts';
@@ -205,6 +206,26 @@ async function stepSchema(
 }
 
 /**
+ * D-55's disclosure: the one outbound request BrowserHive makes by default, what it sends and how
+ * to turn it off (or why none is made).
+ *
+ * @returns The line.
+ */
+export function updateCheckDisclosure(
+  context: CommandContext,
+  config: ResolvedConfigBundle['config'],
+): string {
+  if (!config.sitePacks) return 'Site packs are off (sitePacks=false): no update check runs.';
+  if (!config.sitePacksUpdateCheck) {
+    return 'Site-pack update check off (sitePacksUpdateCheck=false): BrowserHive makes no request to the registry.';
+  }
+  if (trustsNothing(context.deps.sitePacksTrustRoot ?? PINNED_TRUST_ROOT)) {
+    return 'Site-pack update check: this build pins no registry keys yet, so it makes no request. Once a release does, it fetches the signed index from the registry every 24 h; sitePacksUpdateCheck=false turns it off.';
+  }
+  return `Site-pack update check: every 24 h BrowserHive fetches the signed index from ${config.sitePacksUrl} (no cookie, version or install identifier; pack files only when you download one). Turn it off with sitePacksUpdateCheck=false.`;
+}
+
+/**
  * Runs `init`.
  *
  * @returns 0 when every required step succeeded, 1 otherwise.
@@ -242,6 +263,8 @@ export async function runInit(context: CommandContext, options: InitOptions): Pr
     return EXIT.fatal;
   }
   const url = `http://${config.host}:${config.port}`;
+  out.line(updateCheckDisclosure(context, config));
+  out.line();
   out.line(out.style.bold('Next steps'));
   out.line(`  ${out.style.bold('browserhive')}           start the MCP server on ${url}/mcp`);
   out.line(`  ${out.style.bold('browserhive --admin')}   also serve the dashboard on ${url}/`);

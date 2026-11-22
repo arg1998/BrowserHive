@@ -1,0 +1,35 @@
+browserhive sitepacks export — Write the server's verified signed layout to a folder, for an offline host
+
+USAGE
+  browserhive sitepacks export <dir> [flags]
+
+Talks to a running server over its REST API (--url, default the configured host and port) with an
+operator bearer (--token) or the dashboard cookie (--cookie). A pack applies only once an operator
+approved its version: adding a site to a template approves what it shows; later versions wait as
+pending updates until you apply them. Registry versions are listed as available from the signed
+index; download fetches and verifies one so you can review its diff. Local files in sitePacksDir
+need approval once per content (SHA-256). apply, revert, approve-local and disable ask for
+confirmation on a terminal and refuse without one unless --yes. check and list --pending exit 2 when
+an update or a local file waits for you.
+
+ARGUMENTS
+  <dir>  The folder to write: new or empty, or one that already holds a layout (only its layout
+         files are replaced).
+
+FLAGS
+  --json                       Print machine-readable JSON instead of text.
+  --url <url>                  The running server to talk to, over its REST API. default: the
+                               configured host and port, http://127.0.0.1:9876
+  --token <bearer>             Operator bearer token for --url (bh_operator_…).
+  --cookie <value>             Dashboard session cookie value for --url (browserhive_session).
+  --host <address>             Bind address. A non-loopback host requires auth=token or
+                               allowInsecureBind=true. default: 127.0.0.1
+  --port <1-65535>             Bind port for MCP, REST, WebSocket and the dashboard. default: 9876
+  --config <path>              Config file path. CLI and environment only: a config file cannot
+                               point at another.
+  --color <auto|always|never>  Colour for logs and CLI output. auto honours NO_COLOR, FORCE_COLOR,
+                               TERM=dumb and TTY. default: auto
+
+GLOBAL FLAGS
+  -h, --help     Show help.
+  -v, --version  Print the version.

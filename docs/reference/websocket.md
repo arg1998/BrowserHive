@@ -437,7 +437,7 @@ Payloads of `kind: "event"` frames, discriminated on `type`. DTO fields (`sessio
 
 | Field | Type | Required | Constraints |
 |---|---|---|---|
-| `view` | `object` | yes | keys `pack_id`, `title`, `domains`, `identity_provider`, `approved`, `offer`, `previous`, `pinned_version`, `follow`, `enabled`, `local`, `local_override`, `pending`, `used_by`, `human_only`, `write_policy_default`, `stance`, `write_guards`, `verified`, `skipped` |
+| `view` | `object` | yes | keys `pack_id`, `title`, `domains`, `identity_provider`, `sources`, `online`, `approved`, `offer`, `approved_revoked`, `auto_update_paused`, `previous`, `pinned_version`, `follow`, `enabled`, `local`, `local_override`, `pending`, `used_by`, `human_only`, `write_policy_default`, `stance`, `write_guards`, `verified`, `skipped` |
 
 <a id="event-site_pack-pending"></a>
 ### `site_pack.pending`
@@ -453,7 +453,7 @@ Payloads of `kind: "event"` frames, discriminated on `type`. DTO fields (`sessio
 
 | Field | Type | Required | Constraints |
 |---|---|---|---|
-| `status` | `object` | yes | keys `enabled`, `update_check`, `auto_update`, `url`, `last_check_at`, `last_ok_at`, `last_outcome`, `index_version`, `index_expires_at`, `stale`, `clock_skew_ms`, `keys_version`, `bundled`, `local`, `skipped`, `last_load_at` |
+| `status` | `object` | yes | keys `enabled`, `update_check`, `check_off`, `trusts_registry`, `auto_update`, `url`, `last_check_at`, `last_ok_at`, `last_outcome`, `last_error`, `failures`, `next_check_at`, `index_version`, `index_issued_at`, `index_expires_at`, `index_signed_by`, `index_packs`, `index_origin`, `stale`, `clock_skew_ms`, `keys_version`, `snapshot`, `bundled`, `local`, `skipped`, `last_load_at` |
 
 <a id="event-log-record"></a>
 ### `log.record`

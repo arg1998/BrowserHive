@@ -1,8 +1,10 @@
 /** @module features/site-packs/FloorRefusal — Apply, Approve or Revert refused with `SITE_PACK_BELOW_FLOOR` (spec 13 §9.4 `stealth-profile`, §10.6; D-71), readable: a dialog naming each template below the version's stealth floor and what it lacks, with the fixes BrowserHive allows (stealth and fingerprint noise are fixed for a template's life, review #84 M3): turn the site off on that template's Sites tab, or create a new template with the settings the pack needs; or reject the version. A card keeps a line that reopens it. The dialog has one close affordance (review #84 L5) */
+
 import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
 import { z } from 'zod';
 import { Callout } from '@/components/shared/Callout.tsx';
+import { Plain } from '@/components/shared/Plain.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import {
   Dialog,
@@ -105,7 +107,7 @@ export function FloorDialog({
         {/* No corner ✕ (the footer's Close is the one way out), so the header takes the full width. */}
         <DialogHeader className="pr-0">
           <DialogTitle>
-            <bdi>{TITLE[action](title, refusal.version)}</bdi>
+            <Plain>{TITLE[action](title, refusal.version)}</Plain>
           </DialogTitle>
           <DialogDescription>
             {subject} needs stronger stealth settings than{' '}
@@ -124,7 +126,7 @@ export function FloorDialog({
                   className="flex min-w-0 flex-col gap-1.5 rounded-lg border p-3"
                 >
                   <p className="font-medium text-foreground [overflow-wrap:anywhere]">
-                    <bdi>{name}</bdi>
+                    <Plain>{name}</Plain>
                   </p>
                   <ul className="flex flex-col gap-0.5 text-sm text-foreground">
                     {t.issues.map((issue) => (
@@ -140,7 +142,7 @@ export function FloorDialog({
                     search={{ tab: 'sites' }}
                     className="self-start rounded-sm text-sm text-link underline decoration-link/40 underline-offset-2 hover:decoration-link focus-ring"
                   >
-                    Open the Sites tab of <bdi>{name}</bdi>
+                    Open the Sites tab of <Plain>{name}</Plain>
                   </Link>
                 </li>
               );

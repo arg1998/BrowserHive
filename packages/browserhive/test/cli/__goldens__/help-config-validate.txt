@@ -55,6 +55,9 @@ NAMES
   --templateRecycleAfter        BROWSERHIVE_TEMPLATE_RECYCLE_AFTER
   --templateDrainTimeout        BROWSERHIVE_TEMPLATE_DRAIN_TIMEOUT
   --sitePacks                   BROWSERHIVE_SITE_PACKS
+  --sitePacksUpdateCheck        BROWSERHIVE_SITE_PACKS_UPDATE_CHECK
+  --sitePacksAutoUpdate         BROWSERHIVE_SITE_PACKS_AUTO_UPDATE
+  --sitePacksUrl                BROWSERHIVE_SITE_PACKS_URL
   --sitePacksDir                BROWSERHIVE_SITE_PACKS_DIR
   --stealth                     BROWSERHIVE_STEALTH
   --fingerprint                 BROWSERHIVE_FINGERPRINT

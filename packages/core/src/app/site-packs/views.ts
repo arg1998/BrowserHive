@@ -11,13 +11,44 @@ import type {
   TemplateSitePack,
 } from '@browserhive/contracts/http';
 import type { SitePackV1 } from '@browserhive/contracts/site-packs';
+import {
+  bestUsable,
+  neededClient,
+  newestListed,
+} from '../../domain/site-packs/registry-listing.ts';
 import type {
   SiteGuardHitRecord,
   SitePackChangeRecord,
   SitePackProvenanceRecord,
 } from '../../ports/persistence/site-packs.ts';
 import type { EffectivePack } from '../../ports/site-packs.ts';
-import type { PackEntry, RegistrySnapshot, SourceStats } from './registry-types.ts';
+import { baselineOf } from './registry-core.ts';
+import type {
+  HeldIndex,
+  PackEntry,
+  RegistrySnapshot,
+  RemoteStatusPart,
+  SourceStats,
+} from './registry-types.ts';
+
+/** What the views read from the registry client (T4b). */
+export interface RemoteViewFacts {
+  readonly held: HeldIndex | null;
+  readonly binaryVersion: string;
+  /** Auto-update paused for a pack after an operator's revert or reject (D-87). */
+  readonly autoPaused?: (packId: string) => boolean;
+  /** The last refused download of a file. */
+  readonly refusal?: (
+    sha256: string,
+  ) => { readonly reason: string; readonly detail: string } | null;
+  /** Provenance of a pending remote or imported version. */
+  readonly provenance: (
+    source: 'remote' | 'import',
+    sha256: string,
+  ) => SitePackProvenanceRecord | null;
+}
+
+const NO_REMOTE: RemoteViewFacts = { held: null, binaryVersion: '0.0.0', provenance: () => null };
 
 /** Provenance record → wire. */
 export function toProvenance(record: SitePackProvenanceRecord): SitePackProvenance {
@@ -27,7 +58,12 @@ export function toProvenance(record: SitePackProvenanceRecord): SitePackProvenan
     case 'remote':
       return { kind: 'remote', key_id: record.keyId, index_version: record.indexVersion };
     case 'import':
-      return { kind: 'import', file: record.file };
+      return {
+        kind: 'import',
+        file: record.file,
+        ...(record.keyId !== undefined && { key_id: record.keyId }),
+        ...(record.indexVersion !== undefined && { index_version: record.indexVersion }),
+      };
     case 'local':
       return { kind: 'local', path: record.path };
   }
@@ -43,15 +79,21 @@ export function toSitePackView(
   entry: PackEntry,
   release: string,
   sizeOf: (sha256: string) => number | null = () => null,
+  remote: RemoteViewFacts = NO_REMOTE,
 ): SitePackView {
   const { state, display } = entry;
   const local = entry.local;
   const follow = state?.follow ?? null;
+  const listed = (sha: string) => entry.listing?.versions.find((v) => v.sha256 === sha) ?? null;
   return {
     pack_id: entry.packId,
-    title: display?.title ?? entry.packId,
+    title: display?.title ?? entry.listing?.title ?? entry.packId,
     domains: [...(display?.domains ?? [])],
     identity_provider: display?.identity_provider ?? null,
+    sources: sourcesOf(entry),
+    online: onlineOf(entry, remote.binaryVersion),
+    approved_revoked: approvedRevoked(entry),
+    auto_update_paused: remote.autoPaused?.(entry.packId) ?? false,
     approved: approvedOf(entry),
     offer:
       entry.offer === null
@@ -83,7 +125,9 @@ export function toSitePackView(
             problem: local.problem?.detail ?? null,
           },
     local_override: entry.effective?.localOverride ?? false,
-    pending: entry.pending.flatMap((row) => pendingOf(row, release, sizeOf)),
+    pending: entry.pending.flatMap((row) =>
+      pendingOf(row, release, sizeOf, listed, remote, baselineRef(entry)),
+    ),
     used_by: [...entry.usedBy],
     human_only: display?.sign_in?.human_only ?? false,
     write_policy_default: display?.write_policy.default ?? 'allow',
@@ -133,24 +177,86 @@ function pendingOf(
   row: SitePackChangeRecord,
   release: string,
   sizeOf: (sha256: string) => number | null,
+  listed: (sha256: string) => { readonly size: number; readonly released: string } | null,
+  remote: RemoteViewFacts,
+  from: SitePackPending['from'],
 ): SitePackPending[] {
   if (row.toVersion === null || (row.decision !== 'available' && row.decision !== 'downloaded')) {
     return [];
   }
+  const entry = listed(row.toSha256);
+  const provenance: SitePackProvenance | null =
+    row.source === 'bundled'
+      ? { kind: 'bundled', release }
+      : row.source === 'remote' || row.source === 'import'
+        ? provenanceOrNull(remote.provenance(row.source, row.toSha256))
+        : null;
   return [
     {
       version: row.toVersion,
       sha256: row.toSha256,
       state: row.decision,
-      size: sizeOf(row.toSha256),
-      released: null,
+      size: sizeOf(row.toSha256) ?? entry?.size ?? null,
+      released: entry?.released ?? null,
       notes: row.notes,
       classification: row.classification,
       new_domains: [...row.newDomains],
       source: row.source,
-      provenance: row.source === 'bundled' ? { kind: 'bundled', release } : null,
+      provenance,
+      from,
+      refused: remote.refusal?.(row.toSha256) ?? null,
     },
   ];
+}
+
+/** What a pending version is compared with (`pending[].from`). */
+function baselineRef(entry: PackEntry): SitePackPending['from'] {
+  const base = baselineOf(entry);
+  return base === null ? null : { version: base.version, source: base.source };
+}
+
+function provenanceOrNull(record: SitePackProvenanceRecord | null): SitePackProvenance | null {
+  return record === null ? null : toProvenance(record);
+}
+
+/** Every source that knows the pack (spec 13 §11.4 filter chips). */
+export function sourcesOf(entry: PackEntry): SitePackView['sources'] {
+  const out = new Set<SitePackView['sources'][number]>();
+  const approved = entry.state?.approvedSource ?? null;
+  if (entry.inBundle || approved === 'bundled') out.add('bundled');
+  if (entry.listing !== null || approved === 'remote') out.add('remote');
+  if (approved === 'import' || entry.pending.some((p) => p.source === 'import')) out.add('import');
+  if (entry.local !== null || approved === 'local') out.add('local');
+  return (['bundled', 'remote', 'import', 'local'] as const).filter((s) => out.has(s));
+}
+
+function onlineOf(entry: PackEntry, binaryVersion: string): SitePackView['online'] {
+  const listing = entry.listing;
+  if (listing === null) return null;
+  const newest = newestListed(listing);
+  if (newest === null) return null;
+  return {
+    version: newest.v,
+    sha256: newest.sha256,
+    size: newest.size,
+    released: newest.released,
+    notes: newest.notes,
+    revoked: newest.revoked === true,
+    needs_client: neededClient(newest, binaryVersion),
+    usable_version: bestUsable(listing, binaryVersion)?.v ?? null,
+    declined: entry.declined === true,
+  };
+}
+
+/** The approved version is in force and the held index marks it (same bytes) revoked. */
+export function approvedRevoked(entry: PackEntry): boolean {
+  const state = entry.state;
+  if (state?.approvedVersion == null || state.approvedSha256 === null) return false;
+  if (entry.effective === null || entry.effective.localOverride) return false;
+  const listed = entry.listing?.versions.find(
+    (v) => v.v === state.approvedVersion && v.sha256 === state.approvedSha256,
+  );
+  return listed?.revoked === true;
 }
 
 /** The registry's status (registry-client fields stay empty until T4b). */
@@ -161,23 +267,38 @@ export function toRegistryStatus(
     readonly release: string;
     readonly builtAt: number | null;
     readonly localDir: string;
+    /** The registry client's part (T4b); `null`: no client (tests, `sitePacks=false`). */
+    readonly remote?: RemoteStatusPart | null;
   },
 ): SitePackRegistryStatus {
+  const remote = facts.remote ?? null;
   const needing = [...snapshot.packs.values()].filter(
     (e) => e.local !== null && e.local.current !== null && e.local.state !== 'approved',
   ).length;
+  const { layoutSkips = [], ...client } = remote ?? {};
   return {
     enabled: facts.enabled,
     update_check: false,
+    check_off: facts.enabled ? 'update_check_off' : 'packs_off',
+    trusts_registry: false,
     auto_update: false,
     url: null,
     last_check_at: null,
     last_ok_at: null,
     last_outcome: null,
+    last_error: null,
+    failures: 0,
+    next_check_at: null,
     index_version: null,
+    index_issued_at: null,
     index_expires_at: null,
+    index_signed_by: null,
+    index_packs: 0,
+    index_origin: null,
     stale: false,
     keys_version: null,
+    snapshot: null,
+    ...client,
     bundled: {
       version: facts.release,
       built_at: facts.builtAt,
@@ -193,6 +314,7 @@ export function toRegistryStatus(
       ...snapshot.bundled.skipped.map((s) => ({ ...s, source: 'bundled' as const })),
       ...snapshot.local.skipped.map((s) => ({ ...s, source: 'local' as const })),
       ...snapshot.resolveSkips,
+      ...layoutSkips.map((s) => ({ ...s, source: 'import' as const })),
     ].map((s) => ({
       pack_id: s.packId,
       version: s.version,

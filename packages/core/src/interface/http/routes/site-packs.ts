@@ -1,4 +1,4 @@
-/** @module interface/http/routes/site-packs — the Site packs API (spec 13 §11.1, PRs T3a and T3b): the catalog with the registry's status, the strategy set, one pack, its classified field-level diff, Apply, Reject, Revert, Pin, Follow, approving a local file, enabling, reloading, importing an unsigned pack, and the change and guard-hit histories. The registry client's check and download arrive with T4b. */
+/** @module interface/http/routes/site-packs — the Site packs API (spec 13 §11.1, PRs T3a, T3b and T4b): the catalog with the registry's status, the strategy set, one pack, its classified field-level diff, Apply, Reject, Revert, Pin, Follow, approving a local file, enabling, reloading, importing an unsigned pack or a signed layout, the change and guard-hit histories, and the registry client's Check now, Download & review, Download all and export. */
 
 import {
   SITE_PACK_IMPORT_MAX_BYTES,
@@ -7,9 +7,14 @@ import {
   SitePackApproveLocalRequest,
   SitePackChangesPage,
   SitePackChangesQuery,
+  SitePackCheckResponse,
   SitePackDetailResponse,
   SitePackDiffQuery,
   SitePackDiffResponse,
+  SitePackDownloadAllResponse,
+  SitePackDownloadRequest,
+  SitePackDownloadResponse,
+  SitePackExportResponse,
   SitePackFollowRequest,
   SitePackIdParams,
   SitePackImportRequest,
@@ -22,14 +27,45 @@ import {
   SitePackViewResponse,
   SiteStrategiesResponse,
 } from '@browserhive/contracts/http';
-import { packInvalid } from '../../../app/site-packs/registry-errors.ts';
+import { packInvalid, registryUnavailable } from '../../../app/site-packs/registry-errors.ts';
 import { strategyViews } from '../../../app/site-packs/strategy-views.ts';
 import type { RequestPrincipal } from '../../../domain/auth/principal.ts';
 import { defineRoute, reply } from '../define-route.ts';
+import type { SitePackClientPort } from '../services.ts';
 import { requirePrincipal } from './common.ts';
 
 const tags = ['site-packs'];
 const by = (principal: RequestPrincipal | null): string => requirePrincipal(principal).subject;
+
+/** The registry client, or `SITE_PACKS_REGISTRY_UNAVAILABLE` (`packs_off`) when the server has none. */
+function clientOf(services: { readonly sitePackClient?: SitePackClientPort }): SitePackClientPort {
+  if (services.sitePackClient === undefined) throw registryUnavailable('packs_off');
+  return services.sitePackClient;
+}
+
+const BASE64_RE = /^[A-Za-z0-9+/]*={0,2}$/;
+
+/** A signed layout's files, decoded exactly; a path outside the layout or a bad encoding is refused. */
+function layoutFilesOf(files: Readonly<Record<string, string>>): Map<string, Uint8Array> {
+  const out = new Map<string, Uint8Array>();
+  const issues: { path: string; message: string }[] = [];
+  for (const [path, text] of Object.entries(files)) {
+    const allowed =
+      /^(?:keys|index)\.json(?:\.sig)?$/.test(path) ||
+      /^packs\/[a-z0-9.-]+\/[0-9a-f]{64}\.json$/.test(path);
+    if (!allowed) {
+      issues.push({ path, message: 'not a file of a signed layout' });
+      continue;
+    }
+    if (text.length % 4 !== 0 || !BASE64_RE.test(text)) {
+      issues.push({ path, message: 'not base64' });
+      continue;
+    }
+    out.set(path, new Uint8Array(Buffer.from(text, 'base64')));
+  }
+  if (issues.length > 0) throw packInvalid('import', issues);
+  return out;
+}
 
 /** Site-pack routes. */
 export const SITE_PACK_ROUTES = [
@@ -89,20 +125,67 @@ export const SITE_PACK_ROUTES = [
     },
   }),
   defineRoute({
+    operationId: 'checkSitePacks',
+    tags,
+    summary:
+      "Check for updates now: fetch the registry's signed index only (keys.json, index.json and their signatures; no cookie, query, version or install identifier), verify it with the pinned keys and the stored rollback floors, and list newer versions as available. Nothing is downloaded or applied. 'disabled' when the update check is off or this build pins no registry keys; a failed fetch or a refused file is 'failed' with the reason and changes nothing.",
+    request: {},
+    responses: { 200: SitePackCheckResponse },
+    rateLimit: { limit: 6, windowMs: 60_000, key: 'principal' },
+    async handler({ principal, services }) {
+      return reply(200, await clientOf(services).check(by(principal)));
+    },
+  }),
+  defineRoute({
+    operationId: 'downloadAllSitePacks',
+    tags,
+    summary:
+      'Download all: fetch every version the verified index lists that BrowserHive lacks, of every pack, so the registry cannot tell which pack you care about. Each file is verified against the index (size, SHA-256, schema, client range); pending versions become downloaded and classified. Nothing is applied.',
+    request: {},
+    responses: { 200: SitePackDownloadAllResponse },
+    errors: ['SITE_PACKS_REGISTRY_UNAVAILABLE'],
+    async handler({ principal, services }) {
+      return reply(200, await clientOf(services).downloadAll(by(principal)));
+    },
+  }),
+  defineRoute({
+    operationId: 'exportSitePacks',
+    tags,
+    summary:
+      'The signed layout BrowserHive holds (keys.json, index.json, their signatures and every verified pack file it holds, base64 by path), for `sitepacks export` and air-gapped hosts.',
+    request: {},
+    responses: { 200: SitePackExportResponse },
+    errors: ['SITE_PACKS_REGISTRY_UNAVAILABLE'],
+    async handler({ services }) {
+      return reply(200, await clientOf(services).exportLayout());
+    },
+  }),
+  defineRoute({
     operationId: 'importSitePack',
     tags,
     summary:
-      "Import one unsigned pack ({text}: the file's exact text, stored byte for byte; or {pack}: a parsed pack, stored re-serialized): it is validated, stored in the local folder as <id>.json and applies only after approve-local. Signed layouts ({files}) arrive with a later release.",
+      "Import one unsigned pack ({text}: the file's exact text, stored byte for byte; or {pack}: a parsed pack, stored re-serialized): it is validated, stored in the local folder as <id>.json and applies only after approve-local. Or a signed layout ({files}: keys.json, index.json, their signatures and packs/<id>/<sha256>.json, base64 by path): verified with the pinned keys exactly as an update check is, and its versions are queued for approval.",
     request: { body: SitePackImportRequest },
     responses: { 200: SitePackImportResponse },
-    errors: ['SITE_PACK_INVALID', 'SITE_PACK_DOMAIN_TAKEN', 'PAYLOAD_TOO_LARGE'],
+    errors: [
+      'SITE_PACK_INVALID',
+      'SITE_PACK_DOMAIN_TAKEN',
+      'SITE_PACKS_REGISTRY_UNAVAILABLE',
+      'PAYLOAD_TOO_LARGE',
+    ],
     bodyLimitBytes: SITE_PACK_IMPORT_MAX_BYTES,
     async handler({ input, principal, services }) {
       const body = input.body;
       if ('files' in body) {
-        throw packInvalid('import', [
-          { path: 'files', message: 'signed layouts arrive with a later release' },
-        ]);
+        const files = layoutFilesOf(body.files);
+        return reply(
+          200,
+          await clientOf(services).importLayout(
+            files,
+            body.name ?? 'imported layout',
+            by(principal),
+          ),
+        );
       }
       const imported =
         'text' in body
@@ -133,6 +216,26 @@ export const SITE_PACK_ROUTES = [
     errors: ['SITE_PACK_NOT_FOUND', 'CONFLICT'],
     async handler({ input, services }) {
       return reply(200, await services.sitePacks.diff(input.params.pack_id, input.query));
+    },
+  }),
+  defineRoute({
+    operationId: 'downloadSitePack',
+    tags,
+    summary:
+      'Download & review: fetch exactly the version the verified index lists as available for this pack (which tells the registry this version was downloaded; Download all does not), verify its size, SHA-256, schema and client range, and classify it against the approved version. Returns the classified field-level diff; nothing is applied.',
+    request: { params: SitePackIdParams, body: SitePackDownloadRequest },
+    responses: { 200: SitePackDownloadResponse },
+    errors: [
+      'SITE_PACK_NOT_FOUND',
+      'SITE_PACK_NOT_LISTED',
+      'SITE_PACKS_REGISTRY_UNAVAILABLE',
+      'SITE_PACK_DOWNLOAD_FAILED',
+    ],
+    async handler({ input, principal, services }) {
+      return reply(
+        200,
+        await clientOf(services).download(input.params.pack_id, input.body.version, by(principal)),
+      );
     },
   }),
   defineRoute({

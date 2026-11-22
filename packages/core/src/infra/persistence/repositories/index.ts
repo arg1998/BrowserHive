@@ -40,6 +40,7 @@ import { SqliteSessionRepository } from './sessions.ts';
 import {
   SqliteSiteGuardHitRepository,
   SqliteSitePackChangeRepository,
+  SqliteSitePackMetaRepository,
   SqliteSitePackStateRepository,
 } from './site-packs.ts';
 import { SqliteStrategyStateRepository } from './strategy-state.ts';
@@ -92,6 +93,7 @@ export function createRepositories(db: Kysely<DB>): Repositories {
     sitePackState: new SqliteSitePackStateRepository(db),
     sitePackChanges: new SqliteSitePackChangeRepository(db),
     siteGuardHits: new SqliteSiteGuardHitRepository(db),
+    sitePackMeta: new SqliteSitePackMetaRepository(db),
     strategyState: new SqliteStrategyStateRepository(db),
   };
 }

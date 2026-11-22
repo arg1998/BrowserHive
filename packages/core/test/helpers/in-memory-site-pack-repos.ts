@@ -11,6 +11,8 @@ import type {
   SitePackChangeRepository,
   SitePackClassificationValue,
   SitePackDecisionValue,
+  SitePackMetaKey,
+  SitePackMetaRepository,
   SitePackSourceId,
   SitePackStateRecord,
   SitePackStateRepository,
@@ -92,10 +94,42 @@ export class InMemorySitePackChangeRepository implements SitePackChangeRepositor
     eventId: string,
     classification: SitePackClassificationValue,
     diff: readonly SitePackChangeFieldRecord[] | null,
+    baseline?: { readonly fromVersion: number | null; readonly newDomains: readonly string[] },
   ): Promise<void> {
     const i = this.rows.findIndex((r) => r.eventId === eventId);
     const row = this.rows[i];
-    if (row !== undefined) this.rows[i] = { ...row, classification, diff };
+    if (row !== undefined) {
+      this.rows[i] = {
+        ...row,
+        classification,
+        diff,
+        ...(baseline !== undefined && {
+          fromVersion: baseline.fromVersion,
+          newDomains: [...baseline.newDomains],
+        }),
+      };
+    }
+  }
+
+  async markDownloaded(
+    eventId: string,
+    fields: {
+      readonly classification: SitePackClassificationValue;
+      readonly diff: readonly SitePackChangeFieldRecord[];
+      readonly newDomains: readonly string[];
+    },
+  ): Promise<void> {
+    const i = this.rows.findIndex((r) => r.eventId === eventId);
+    const row = this.rows[i];
+    if (row !== undefined) {
+      this.rows[i] = {
+        ...row,
+        decision: 'downloaded',
+        classification: fields.classification,
+        diff: [...fields.diff],
+        newDomains: [...fields.newDomains],
+      };
+    }
   }
 
   async findCandidate(
@@ -211,5 +245,18 @@ export class InMemorySiteGuardHitRepository implements SiteGuardHitRepository {
     const removed = this.rows.length - keep.length;
     this.rows.splice(0, this.rows.length, ...keep);
     return removed;
+  }
+}
+
+/** In-memory `meta` values of the registry client. */
+export class InMemorySitePackMetaRepository implements SitePackMetaRepository {
+  readonly values = new Map<SitePackMetaKey, string>();
+
+  async get(key: SitePackMetaKey): Promise<string | null> {
+    return this.values.get(key) ?? null;
+  }
+
+  async set(key: SitePackMetaKey, value: string): Promise<void> {
+    this.values.set(key, value);
   }
 }

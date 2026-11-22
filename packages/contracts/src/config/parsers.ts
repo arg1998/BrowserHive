@@ -193,6 +193,25 @@ export const zPublicUrl = z
   })
   .meta({ [GRAMMAR_META_KEY]: PUBLIC_URL_GRAMMAR });
 
+const REGISTRY_URL_GRAMMAR =
+  "an absolute https: URL without credentials, query or fragment, like 'https://browserhive.ai/registry/v1/'";
+const REGISTRY_URL_RE = /^https:\/\/[^\s/?#@]+(?::\d{1,5})?(?:\/[^\s?#]*)?$/i;
+
+/**
+ * Site-pack registry grammar (`sitePacksUrl`, spec 13 §10.4): an absolute `https:` URL without
+ * credentials, query or fragment. Output: the trimmed text ending in exactly one `/` (the folder
+ * that holds `keys.json`).
+ */
+export const zRegistryUrl = z
+  .string()
+  .transform((value, ctx): string => {
+    const text = value.trim();
+    return REGISTRY_URL_RE.test(text)
+      ? `${text.replace(/\/+$/, '')}/`
+      : fail(ctx, REGISTRY_URL_GRAMMAR, value);
+  })
+  .meta({ [GRAMMAR_META_KEY]: REGISTRY_URL_GRAMMAR });
+
 const STRING_GRAMMAR = 'a non-empty string';
 
 /** String grammar: as-is, but never empty (an empty value is a usage error, spec 08 §1). */

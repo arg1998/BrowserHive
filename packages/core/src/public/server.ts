@@ -38,6 +38,8 @@ export { SessionService } from '../app/sessions/session-service.ts';
 export { AgentNavigations } from '../app/site-packs/agent-navigations.ts';
 export { ChallengeOutcomes } from '../app/site-packs/challenge-outcomes.ts';
 export { ChallengeWatch } from '../app/site-packs/challenge-watch.ts';
+export type { RegistryClientDeps } from '../app/site-packs/client/client-types.ts';
+export { SitePackRegistryClient } from '../app/site-packs/client/registry-client.ts';
 export { DeviceBindingWatch } from '../app/site-packs/device-binding.ts';
 export { SiteKeeper } from '../app/site-packs/keeper.ts';
 export { WritePacer } from '../app/site-packs/pacer.ts';
@@ -184,8 +186,15 @@ export { documentGuardResolver } from '../infra/site-packs/document-guard.ts';
 export { keyIdOf, parseTrustRoot, verifyEd25519 } from '../infra/site-packs/ed25519.ts';
 export { SiteGuardHitsWriter } from '../infra/site-packs/guard-hits-writer.ts';
 export { GuardRuleCatalog, PackGuardRuleSource } from '../infra/site-packs/guard-rules.ts';
+export { createHeldLayoutStore } from '../infra/site-packs/held-layout.ts';
 export { LocalPackSource } from '../infra/site-packs/local-source.ts';
 export { createLocalPackWriter, createSitePackCache } from '../infra/site-packs/pack-cache.ts';
+export {
+  createRegistryFetcher,
+  REGISTRY_USER_AGENT,
+  registryUrlProblem,
+} from '../infra/site-packs/registry-fetcher.ts';
+export { createRegistryVerifier } from '../infra/site-packs/registry-verifier.ts';
 export { NO_SITE_PACKS, templateRequestGuard } from '../infra/site-packs/template-guard.ts';
 export { PINNED_TRUST_ROOT, trustsNothing } from '../infra/site-packs/trust-root.ts';
 export {

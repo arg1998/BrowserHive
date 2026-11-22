@@ -111,4 +111,27 @@ describe('sitepacks verify <signed layout>', () => {
     expect(run.code).toBe(1);
     expect(run.stdout).not.toContain('\u001b');
   });
+
+  it('one content-addressed pack file of the layout verifies: id from its folder, SHA-256 from its name (review #100 L7)', async () => {
+    const path = [...layout.files.keys()].find((p) => p.startsWith('packs/site-a.test/')) ?? '';
+    const ok = await cliHarness({
+      argv: ['sitepacks', 'verify', `${DIR}/${path}`],
+      files: filesOf(layout),
+    });
+    expect(ok.code).toBe(0);
+    expect(ok.stdout).toContain('site-a.test v2');
+    // The same content under another content address is refused: the name is its hash.
+    const wrong = `${DIR}/packs/site-a.test/${'0'.repeat(64)}.json`;
+    const files = { ...filesOf(layout), [wrong]: filesOf(layout)[`${DIR}/${path}`] ?? '' };
+    const bad = await cliHarness({ argv: ['sitepacks', 'verify', wrong, '--json'], files });
+    expect(bad.code).toBe(1);
+    expect(JSON.parse(bad.stdout)).toMatchObject({ ok: false, reason: 'hash_mismatch' });
+    // The folder name is the id: the file under another pack's folder is refused.
+    const moved = `${DIR}/packs/site-b.test/${path.split('/')[2] ?? ''}`;
+    const misplaced = await cliHarness({
+      argv: ['sitepacks', 'verify', moved, '--json'],
+      files: { ...filesOf(layout), [moved]: filesOf(layout)[`${DIR}/${path}`] ?? '' },
+    });
+    expect(JSON.parse(misplaced.stdout)).toMatchObject({ ok: false, reason: 'id_mismatch' });
+  });
 });

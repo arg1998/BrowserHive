@@ -32,6 +32,7 @@ import {
   testingArgsOf,
   testingEnabled,
   testingRefusedMessage,
+  testingRegistryProblem,
   testingTrustRootProblem,
 } from './composition/testing-seam.ts';
 
@@ -183,6 +184,15 @@ function splitOptions(options: CreateServerOptions): ConfigOverrides {
       message: trustRootProblem,
     });
   }
+  const registryProblem = testingRegistryProblem(options.testing);
+  if (registryProblem !== null) {
+    problems.push({
+      code: 'CONFIG_INVALID',
+      source: 'cli',
+      location: 'options.testing.sitePacksRegistry',
+      message: registryProblem,
+    });
+  }
   if (problems.length > 0) throw new ConfigError(configFailure(problems));
   return overrides;
 }
@@ -268,6 +278,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<B
       ...(options.testing !== undefined && { testingArgs: testingArgsOf(options.testing) }),
       ...(options.testing?.sitePacksTrustRoot !== undefined && {
         sitePacksTrustRoot: options.testing.sitePacksTrustRoot,
+      }),
+      ...(options.testing?.sitePacksRegistry !== undefined && {
+        sitePacksTesting: options.testing.sitePacksRegistry,
       }),
       ...(logger !== undefined && {
         logSink: {

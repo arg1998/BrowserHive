@@ -1,4 +1,4 @@
-/** @module cli/commands/doctor-site-packs — the `site packs` row of `browserhive doctor` (spec 13 §11.9, T3a part; always shown): ✓ the bundled packs verify; ! local files not yet approved or changed since approval, local files that fail validation, signed layouts (not read yet), no bundled packs; ✗ a bundled pack does not verify. Packs that need a newer BrowserHive are counted, never a problem. Reads through the injected filesystem and a read-only, never-migrating database read. */
+/** @module cli/commands/doctor-site-packs — the `site packs` row of `browserhive doctor` (spec 13 §11.9; always shown): ✓ the bundled packs and the release's registry snapshot verify, with the update check's disclosure (D-55); ! pending updates of followed packs, local files not yet approved or changed since approval, local files that fail validation, no bundled packs, a stale registry index, repeated failed checks, a clock far from the registry's; ✗ a bundled pack or the snapshot does not verify. Packs that need a newer BrowserHive are counted, never a problem. Reads through the injected filesystem and a read-only, never-migrating database read. */
 import { join } from 'node:path';
 import type { ServerConfig } from '@browserhive/contracts/config';
 import { SITE_PACK_MAX_BYTES } from '@browserhive/contracts/site-packs';
@@ -7,12 +7,13 @@ import { BundledIndex, loadPackBytes, sha256Hex } from '@browserhive/core/server
 import type { CliDeps } from '../deps.ts';
 import { databasePath } from './common.ts';
 import type { CheckResult } from './doctor-checks.ts';
-import { resolvedProblems } from './doctor-site-pack-state.ts';
+import { registryFacts } from './doctor-site-pack-registry.ts';
+import { resolvedFacts } from './doctor-site-pack-state.ts';
 
 const CHECK = 'site packs';
 /** Entries a detail names before "and N more". */
 const LIST_MAX = 3;
-/** Top-level files of a signed layout (read from a later release). */
+/** Top-level files of a signed layout (read by the server at boot and on reload). */
 const LAYOUT_FILES: ReadonlySet<string> = new Set([
   'keys.json',
   'keys.json.sig',
@@ -31,7 +32,7 @@ export interface SitePackCheckInput {
   readonly binaryVersion: string;
 }
 
-type Deps = Pick<CliDeps, 'fs' | 'openStorage'>;
+type Deps = Pick<CliDeps, 'fs' | 'openStorage' | 'clock' | 'sitePacksTrustRoot'>;
 
 /** One file checked. */
 type Checked =
@@ -114,10 +115,23 @@ async function checkBundled(deps: Deps, dir: string, binary: string): Promise<re
 
 type States = Awaited<ReturnType<Awaited<ReturnType<Deps['openStorage']>>['sitePackStates']>>;
 
-const NO_STATES: States = { rows: [], unreadable: [] };
+/** What the row reads from the database: the approvals and the registry client's status row. */
+interface Stored {
+  readonly states: States;
+  readonly client: string | null;
+  readonly review: Review;
+}
 
-async function storedStates(deps: Deps, dataDir: string): Promise<States> {
-  if ((await deps.fs.stat(databasePath(dataDir))) === null) return NO_STATES;
+type Review = Awaited<ReturnType<Awaited<ReturnType<Deps['openStorage']>>['sitePackReview']>>;
+
+const NOTHING_STORED: Stored = {
+  states: { rows: [], unreadable: [] },
+  client: null,
+  review: { pending: [], sites: [] },
+};
+
+async function stored(deps: Deps, dataDir: string): Promise<Stored> {
+  if ((await deps.fs.stat(databasePath(dataDir))) === null) return NOTHING_STORED;
   try {
     const storage = await deps.openStorage({
       dataDir,
@@ -126,13 +140,16 @@ async function storedStates(deps: Deps, dataDir: string): Promise<States> {
       owner: 'doctor',
     });
     try {
-      return await storage.sitePackStates();
+      const states = await storage.sitePackStates();
+      const client = await storage.metaValue('site_packs.client').catch(() => null);
+      const review = await storage.sitePackReview().catch(() => NOTHING_STORED.review);
+      return { states, client, review };
     } finally {
       await storage.close();
     }
   } catch {
     // The database row reports a database that cannot be opened.
-    return NO_STATES;
+    return NOTHING_STORED;
   }
 }
 
@@ -172,7 +189,8 @@ export async function checkSitePacks(deps: Deps, input: SitePackCheckInput): Pro
   // Local files.
   const localDir = input.config?.sitePacksDir ?? join(input.dataDir, 'site-packs', 'local');
   const names = await deps.fs.readdir(localDir).catch(() => []);
-  const states = await storedStates(deps, input.dataDir);
+  const fromDb = await stored(deps, input.dataDir);
+  const states = fromDb.states;
   const approvals = new Map(
     states.rows.flatMap((r) =>
       r.localApprovedSha256 === null ? [] : [[r.packId, r.localApprovedSha256] as const],
@@ -214,12 +232,11 @@ export async function checkSitePacks(deps: Deps, input: SitePackCheckInput): Pro
   if (changed.length > 0) warnings.push(`local files changed since approval: ${listText(changed)}`);
   if (invalid.length > 0) warnings.push(`local files skipped: ${listText(invalid)}`);
   if (layouts > 0) {
-    warnings.push(
-      `${layouts} signed layout${layouts === 1 ? '' : 's'} in ${localDir} not read yet`,
-    );
+    notes.push(`${layouts} signed layout${layouts === 1 ? '' : 's'} in the local folder`);
   }
-  // Approved packs that do not apply after all (review #83 S-M8, C-M5).
-  const notInForce = await resolvedProblems(deps, {
+  // Approved packs that do not apply after all (review #83 S-M8, C-M5), and pending updates of
+  // followed packs (spec 13 §11.9, review #100 L11).
+  const { notInForce, pending } = await resolvedFacts(deps, {
     dataDir: input.dataDir,
     localDir,
     binaryVersion: input.binaryVersion,
@@ -227,9 +244,25 @@ export async function checkSitePacks(deps: Deps, input: SitePackCheckInput): Pro
     local: localOk,
     states: states.rows,
     unreadable: states.unreadable,
+    pending: fromDb.review.pending,
+    sites: fromDb.review.sites,
   });
   if (notInForce.length > 0) warnings.push(`packs not in force: ${listText(notInForce)}`);
+  if (pending.length > 0) {
+    warnings.push(`pending updates of followed packs: ${listText(pending)}`);
+  }
   if (approved > 0) notes.push(`${approved} approved local file${approved === 1 ? '' : 's'}`);
+  // The registry: the update check's disclosure, the held index, the client's checks, the snapshot.
+  const registry = await registryFacts(deps, {
+    dataDir: input.dataDir,
+    config: input.config,
+    bundledDir,
+    binaryVersion: input.binaryVersion,
+    client: fromDb.client,
+  });
+  notes.push(...registry.notes);
+  warnings.push(...registry.warnings);
+  failures.push(...registry.failures);
   if (failures.length > 0) {
     return { check: CHECK, status: 'fail', detail: [...failures, ...warnings].join('; ') };
   }

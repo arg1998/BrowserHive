@@ -257,6 +257,8 @@ export type {
   SitePackChangeRepository,
   SitePackClassificationValue,
   SitePackDecisionValue,
+  SitePackMetaKey,
+  SitePackMetaRepository,
   SitePackProvenanceRecord,
   SitePackSourceId,
   SitePackStateRecord,
@@ -271,6 +273,7 @@ export {
   SITE_GUARD_SOURCES,
   SITE_PACK_CLASSIFICATIONS,
   SITE_PACK_DECISIONS,
+  SITE_PACK_META_KEYS,
   SITE_PACK_SOURCES,
 } from './site-packs.ts';
 export type {

@@ -5851,6 +5851,86 @@
                           "null"
                         ]
                       },
+                      "sources": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "bundled",
+                            "remote",
+                            "import",
+                            "local"
+                          ]
+                        }
+                      },
+                      "online": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "version": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "sha256": {
+                                "type": "string",
+                                "pattern": "^[0-9a-f]{64}$"
+                              },
+                              "size": {
+                                "type": "integer",
+                                "minimum": 0,
+                                "maximum": 9007199254740991
+                              },
+                              "released": {
+                                "type": "string"
+                              },
+                              "notes": {
+                                "type": "string"
+                              },
+                              "revoked": {
+                                "type": "boolean"
+                              },
+                              "needs_client": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "usable_version": {
+                                "anyOf": [
+                                  {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "declined": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "version",
+                              "sha256",
+                              "size",
+                              "released",
+                              "notes",
+                              "revoked",
+                              "needs_client",
+                              "usable_version",
+                              "declined"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
                       "approved": {
                         "anyOf": [
                           {
@@ -5927,6 +6007,14 @@
                                           },
                                           "file": {
                                             "type": "string"
+                                          },
+                                          "key_id": {
+                                            "type": "string"
+                                          },
+                                          "index_version": {
+                                            "type": "integer",
+                                            "minimum": -9007199254740991,
+                                            "maximum": 9007199254740991
                                           }
                                         },
                                         "required": [
@@ -6067,6 +6155,14 @@
                                       },
                                       "file": {
                                         "type": "string"
+                                      },
+                                      "key_id": {
+                                        "type": "string"
+                                      },
+                                      "index_version": {
+                                        "type": "integer",
+                                        "minimum": -9007199254740991,
+                                        "maximum": 9007199254740991
                                       }
                                     },
                                     "required": [
@@ -6107,6 +6203,12 @@
                             "type": "null"
                           }
                         ]
+                      },
+                      "approved_revoked": {
+                        "type": "boolean"
+                      },
+                      "auto_update_paused": {
+                        "type": "boolean"
                       },
                       "previous": {
                         "anyOf": [
@@ -6302,6 +6404,60 @@
                                 "local_override"
                               ]
                             },
+                            "from": {
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "version": {
+                                      "type": "integer",
+                                      "minimum": -9007199254740991,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "source": {
+                                      "type": "string",
+                                      "enum": [
+                                        "bundled",
+                                        "remote",
+                                        "import",
+                                        "local"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "version",
+                                    "source"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "refused": {
+                              "anyOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "reason": {
+                                      "type": "string"
+                                    },
+                                    "detail": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "reason",
+                                    "detail"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
                             "new_domains": {
                               "type": "array",
                               "items": {
@@ -6370,6 +6526,14 @@
                                         },
                                         "file": {
                                           "type": "string"
+                                        },
+                                        "key_id": {
+                                          "type": "string"
+                                        },
+                                        "index_version": {
+                                          "type": "integer",
+                                          "minimum": -9007199254740991,
+                                          "maximum": 9007199254740991
                                         }
                                       },
                                       "required": [
@@ -6482,7 +6646,8 @@
                               "not_found",
                               "id_mismatch",
                               "signed_layout_unsupported",
-                              "unreadable"
+                              "unreadable",
+                              "layout_refused"
                             ]
                           },
                           "detail": {
@@ -6502,8 +6667,12 @@
                       "title",
                       "domains",
                       "identity_provider",
+                      "sources",
+                      "online",
                       "approved",
                       "offer",
+                      "approved_revoked",
+                      "auto_update_paused",
                       "previous",
                       "pinned_version",
                       "follow",
@@ -6587,6 +6756,24 @@
                       "update_check": {
                         "type": "boolean"
                       },
+                      "check_off": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "packs_off",
+                              "update_check_off",
+                              "no_trust_root"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "trusts_registry": {
+                        "type": "boolean"
+                      },
                       "auto_update": {
                         "type": "boolean"
                       },
@@ -6636,11 +6823,63 @@
                           }
                         ]
                       },
+                      "last_error": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string"
+                              },
+                              "message": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "code",
+                              "message"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "failures": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "next_check_at": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
                       "index_version": {
                         "anyOf": [
                           {
                             "type": "integer",
                             "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "index_issued_at": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 0,
                             "maximum": 9007199254740991
                           },
                           {
@@ -6654,6 +6893,32 @@
                             "type": "integer",
                             "minimum": 0,
                             "maximum": 9007199254740991
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "index_signed_by": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "index_packs": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "index_origin": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "registry",
+                              "import",
+                              "local"
+                            ]
                           },
                           {
                             "type": "null"
@@ -6674,6 +6939,38 @@
                             "type": "integer",
                             "minimum": -9007199254740991,
                             "maximum": 9007199254740991
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "snapshot": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "index_version": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "verified": {
+                                "type": "boolean"
+                              },
+                              "detail": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "index_version",
+                              "verified",
+                              "detail"
+                            ],
+                            "additionalProperties": false
                           },
                           {
                             "type": "null"
@@ -6781,7 +7078,8 @@
                                 "not_found",
                                 "id_mismatch",
                                 "signed_layout_unsupported",
-                                "unreadable"
+                                "unreadable",
+                                "layout_refused"
                               ]
                             },
                             "detail": {
@@ -6814,15 +7112,25 @@
                     "required": [
                       "enabled",
                       "update_check",
+                      "check_off",
+                      "trusts_registry",
                       "auto_update",
                       "url",
                       "last_check_at",
                       "last_ok_at",
                       "last_outcome",
+                      "last_error",
+                      "failures",
+                      "next_check_at",
                       "index_version",
+                      "index_issued_at",
                       "index_expires_at",
+                      "index_signed_by",
+                      "index_packs",
+                      "index_origin",
                       "stale",
                       "keys_version",
+                      "snapshot",
                       "bundled",
                       "local",
                       "skipped",
@@ -12728,6 +13036,86 @@
                   "null"
                 ]
               },
+              "sources": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "bundled",
+                    "remote",
+                    "import",
+                    "local"
+                  ]
+                }
+              },
+              "online": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "version": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "sha256": {
+                        "type": "string",
+                        "pattern": "^[0-9a-f]{64}$"
+                      },
+                      "size": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "released": {
+                        "type": "string"
+                      },
+                      "notes": {
+                        "type": "string"
+                      },
+                      "revoked": {
+                        "type": "boolean"
+                      },
+                      "needs_client": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "usable_version": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "declined": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "version",
+                      "sha256",
+                      "size",
+                      "released",
+                      "notes",
+                      "revoked",
+                      "needs_client",
+                      "usable_version",
+                      "declined"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
               "approved": {
                 "anyOf": [
                   {
@@ -12804,6 +13192,14 @@
                                   },
                                   "file": {
                                     "type": "string"
+                                  },
+                                  "key_id": {
+                                    "type": "string"
+                                  },
+                                  "index_version": {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
                                   }
                                 },
                                 "required": [
@@ -12944,6 +13340,14 @@
                               },
                               "file": {
                                 "type": "string"
+                              },
+                              "key_id": {
+                                "type": "string"
+                              },
+                              "index_version": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
                               }
                             },
                             "required": [
@@ -12984,6 +13388,12 @@
                     "type": "null"
                   }
                 ]
+              },
+              "approved_revoked": {
+                "type": "boolean"
+              },
+              "auto_update_paused": {
+                "type": "boolean"
               },
               "previous": {
                 "anyOf": [
@@ -13179,6 +13589,60 @@
                         "local_override"
                       ]
                     },
+                    "from": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "version": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "source": {
+                              "type": "string",
+                              "enum": [
+                                "bundled",
+                                "remote",
+                                "import",
+                                "local"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "version",
+                            "source"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "refused": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "reason": {
+                              "type": "string"
+                            },
+                            "detail": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "reason",
+                            "detail"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "new_domains": {
                       "type": "array",
                       "items": {
@@ -13247,6 +13711,14 @@
                                 },
                                 "file": {
                                   "type": "string"
+                                },
+                                "key_id": {
+                                  "type": "string"
+                                },
+                                "index_version": {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991
                                 }
                               },
                               "required": [
@@ -13359,7 +13831,8 @@
                       "not_found",
                       "id_mismatch",
                       "signed_layout_unsupported",
-                      "unreadable"
+                      "unreadable",
+                      "layout_refused"
                     ]
                   },
                   "detail": {
@@ -13379,8 +13852,12 @@
               "title",
               "domains",
               "identity_provider",
+              "sources",
+              "online",
               "approved",
               "offer",
+              "approved_revoked",
+              "auto_update_paused",
               "previous",
               "pinned_version",
               "follow",
@@ -13464,6 +13941,24 @@
               "update_check": {
                 "type": "boolean"
               },
+              "check_off": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "packs_off",
+                      "update_check_off",
+                      "no_trust_root"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "trusts_registry": {
+                "type": "boolean"
+              },
               "auto_update": {
                 "type": "boolean"
               },
@@ -13513,11 +14008,63 @@
                   }
                 ]
               },
+              "last_error": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string"
+                      },
+                      "message": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "message"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "failures": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "next_check_at": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
               "index_version": {
                 "anyOf": [
                   {
                     "type": "integer",
                     "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "index_issued_at": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
                     "maximum": 9007199254740991
                   },
                   {
@@ -13531,6 +14078,32 @@
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "index_signed_by": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "index_packs": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "index_origin": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "registry",
+                      "import",
+                      "local"
+                    ]
                   },
                   {
                     "type": "null"
@@ -13551,6 +14124,38 @@
                     "type": "integer",
                     "minimum": -9007199254740991,
                     "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "snapshot": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "index_version": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "verified": {
+                        "type": "boolean"
+                      },
+                      "detail": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "index_version",
+                      "verified",
+                      "detail"
+                    ],
+                    "additionalProperties": false
                   },
                   {
                     "type": "null"
@@ -13658,7 +14263,8 @@
                         "not_found",
                         "id_mismatch",
                         "signed_layout_unsupported",
-                        "unreadable"
+                        "unreadable",
+                        "layout_refused"
                       ]
                     },
                     "detail": {
@@ -13691,15 +14297,25 @@
             "required": [
               "enabled",
               "update_check",
+              "check_off",
+              "trusts_registry",
               "auto_update",
               "url",
               "last_check_at",
               "last_ok_at",
               "last_outcome",
+              "last_error",
+              "failures",
+              "next_check_at",
               "index_version",
+              "index_issued_at",
               "index_expires_at",
+              "index_signed_by",
+              "index_packs",
+              "index_origin",
               "stale",
               "keys_version",
+              "snapshot",
               "bundled",
               "local",
               "skipped",

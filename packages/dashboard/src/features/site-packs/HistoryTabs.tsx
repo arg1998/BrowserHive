@@ -1,10 +1,12 @@
 /** @module features/site-packs/HistoryTabs — the History tab of `/site-packs` and of a pack's page (`GET /site-packs/changes`: every approval, update, rejection and revert with its classification, newest first; `packId` narrows it to one pack) and `PagedList`, the loading, error, empty and "Show older" frame it shares with the Guard hits tab (spec 13 §9.9, §11.4) */
+
 import type { SitePackChangeRow } from '@browserhive/contracts/http';
 import { Link } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 import { Chip } from '@/components/shared/Chip.tsx';
 import { EmptyState } from '@/components/shared/EmptyState.tsx';
 import { ErrorState } from '@/components/shared/ErrorState.tsx';
+import { Plain } from '@/components/shared/Plain.tsx';
 import { RelativeTime } from '@/components/shared/RelativeTime.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { Skeleton } from '@/components/ui/skeleton.tsx';
@@ -113,7 +115,7 @@ function ChangeRow({
               params={{ id: row.pack_id }}
               className="font-medium hover:underline underline-offset-4 focus-ring rounded-sm"
             >
-              <bdi>{row.pack_id}</bdi>
+              <Plain>{row.pack_id}</Plain>
             </Link>
           ) : null}
           <span className="tabular-nums">{versions}</span>
@@ -128,7 +130,7 @@ function ChangeRow({
         ) : null}
         {row.notes !== null ? (
           <p className="text-sm text-pretty">
-            <bdi>{row.notes}</bdi>
+            <Plain>{row.notes}</Plain>
           </p>
         ) : null}
         <ShaText sha256={row.to_sha256} className="text-muted-foreground" />

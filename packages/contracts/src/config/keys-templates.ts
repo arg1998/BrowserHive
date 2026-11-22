@@ -2,7 +2,7 @@
 import { z } from 'zod';
 import { GRAMMAR_META_KEY } from './grammar.ts';
 import { key } from './key.ts';
-import { zBool, zBytes, zDuration, zInt, zPath } from './parsers.ts';
+import { zBool, zBytes, zDuration, zInt, zPath, zRegistryUrl } from './parsers.ts';
 
 const ONE_MINUTE_MS = 60_000;
 const ONE_HOUR_MS = 3_600_000;
@@ -125,6 +125,24 @@ export const TEMPLATE_KEYS = {
     group: 'sessions',
     describe:
       'Site packs for template sites (spec 13 §9). false: no pack data is used; template sites are generic (learned-cookie probes, no guards, no challenges).',
+  }),
+  sitePacksUpdateCheck: key(zBool, {
+    default: true,
+    group: 'sessions',
+    describe:
+      "The automatic site-pack update check (D-55): 5 minutes after start and then every 24 h ± 2 h, an anonymous GET of the registry's signed index only (keys.json, index.json and their signatures; no cookie, query, version or install identifier). Pack files are fetched only when an operator downloads one, or by auto-update. false: BrowserHive makes no request to the registry at all (air-gapped or opted-out hosts; import packs by hand).",
+  }),
+  sitePacksAutoUpdate: key(zBool, {
+    default: false,
+    group: 'sessions',
+    describe:
+      'true: registry updates of followed packs that only tighten rules (or change nothing) are downloaded and applied without approval. Updates that relax rules or can stop a site, domain changes, bundled versions and local files always wait for an operator.',
+  }),
+  sitePacksUrl: key(zRegistryUrl, {
+    default: 'https://browserhive.ai/registry/v1/',
+    group: 'sessions',
+    describe:
+      'The site-pack registry folder (https only). A mirror must serve the same signed files; they are verified against the keys pinned in BrowserHive whatever the URL.',
   }),
   sitePacksDir: key(zPath, {
     optional: true,

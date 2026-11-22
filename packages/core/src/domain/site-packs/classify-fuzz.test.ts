@@ -640,10 +640,18 @@ describe('classifyPackChange, a seeded property test', () => {
     const failures: string[] = [];
     let ran = 0;
     const seen = new Set<string>();
+    // Each base is parsed and refined once, not once per case (the candidate still is).
+    const parsedBases = new Map(
+      BASES.map((b) => {
+        const from = SitePackV1.parse(b);
+        expect(refinePack(from).issues).toEqual([]);
+        return [b, from] as const;
+      }),
+    );
     for (let i = 0; i < 5000; i += 1) {
-      const base = structuredClone(rng.pick(BASES));
-      const from = SitePackV1.parse(base);
-      expect(refinePack(from).issues).toEqual([]);
+      const picked = rng.pick(BASES);
+      const base = structuredClone(picked);
+      const from = parsedBases.get(picked) ?? SitePackV1.parse(base);
       const candidate = structuredClone(base);
       candidate.version = from.version + 1;
       const applied: Mutation[] = [];
@@ -686,7 +694,9 @@ describe('classifyPackChange, a seeded property test', () => {
     for (const m of [...LOOSENING, ...CAN_STOP, ...TIGHTENING_OR_DESCRIPTIVE]) {
       expect(seen.has(m.name), m.name).toBe(true);
     }
-  });
+    // 5000 schema parses, refinements and classifications: about 1.5 s here, over 5 s on CI's
+    // macOS runners, so it gets the budget of the other CPU-bound suites rather than bun's 5 s.
+  }, 30_000);
 });
 
 describe('the review #84 probes on the bundled LinkedIn pack', () => {

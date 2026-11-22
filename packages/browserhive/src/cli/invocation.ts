@@ -270,6 +270,19 @@ export type SitePacksAction =
       readonly kind: 'import';
       /** The file or folder, absolute. */
       readonly path: string;
+    }
+  | { readonly kind: 'check' }
+  | {
+      /** `download <id> [<version>]`: `version: null` takes the pending available version, else the newest usable one the index lists. */
+      readonly kind: 'download';
+      readonly packId: string;
+      readonly version: number | null;
+    }
+  | { readonly kind: 'download-all' }
+  | {
+      readonly kind: 'export';
+      /** The target folder, absolute. */
+      readonly path: string;
     };
 
 /** The template a `templates` subcommand acts on, by name, over the REST API. */

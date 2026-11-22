@@ -1,10 +1,10 @@
 # Site packs
 
-> **In this release:** BrowserHive ships site packs for a set of popular sites and reads your own pack files from a local folder. No pack applies until you approve it. Packs select [strategies](#strategies) (pacing, launch spacing, warm-up, keep-alive and the others) that BrowserHive runs for them. Packs from BrowserHive's online registry and signed packs you import by hand arrive in a later release. Every pending version is [classified](#classification): you see at a glance whether it tightens rules, relaxes them or can stop a site.
+> **In this release:** BrowserHive ships site packs for a set of popular sites, reads your own pack files from a local folder, and checks BrowserHive's signed online registry for new versions ([Updates from the registry](#updates-from-the-registry)); signed folders can be exported and imported by hand for hosts without internet access. No pack applies until you approve it. Packs select [strategies](#strategies) (pacing, launch spacing, warm-up, keep-alive and the others) that BrowserHive runs for them. Every pending version is [classified](#classification): you see at a glance whether it tightens rules, relaxes them or can stop a site.
 
 A site pack tells BrowserHive how one site works, so a [session template](templates.md) behaves there the way the site expects a person to, and stays signed in. It says how to tell whether the template is signed in, which requests and buttons sign the account out or create new credentials, which pages are security checks that need a person, and what the site's terms say about automation.
 
-A pack is **data only**. It never carries code, scripts, launch arguments, proxy settings or vault rules, and nothing in it is ever sent anywhere. Packs apply to template sessions only; other sessions are not affected.
+A pack is **data only**. It never carries code, scripts, launch arguments, proxy settings or vault rules, and nothing in it is ever sent anywhere. Packs apply to template sessions only; other sessions are not affected. The update check sends nothing about your install either: see [What the update check sends](security.md#what-the-update-check-sends).
 
 ## What a pack contains
 
@@ -32,10 +32,10 @@ A pack is one JSON file (at most 64 KiB) for one site, named by the site's regis
 |---|---|---|
 | **Bundled** | Packs shipped inside BrowserHive. A new release can ship new versions of them. | Publisher: they come with the release. |
 | **Local** | Single pack files (`<pack id>.json`) in the local folder, `sitePacksDir` (default `<data-dir>/site-packs/local`). Written by you. | Operator: you approve each file's content. |
-| Registry (later release) | Signed packs downloaded from browserhive.ai. | Publisher: checked against keys built into BrowserHive. |
-| Signed import (later release) | A signed folder you copy to a machine without internet access. | Publisher. |
+| **Registry** | Signed packs from `https://browserhive.ai/registry/v1/` (or a mirror): the index lists every version, and you download the ones you want to review. | Publisher: every file is checked against keys built into BrowserHive. |
+| **Signed import** | A signed folder (the registry's layout) you copy to a machine without internet access, imported with `browserhive sitepacks import <dir>` or placed in the local folder. | Publisher: checked exactly like a download. |
 
-BrowserHive reads the bundled packs and the local folder at startup and again on **Reload** (`browserhive sitepacks reload`). A file that fails validation is skipped, with its reason on the Site packs page, in `browserhive sitepacks list` and in `browserhive doctor`. A signed layout placed in the local folder (`keys.json`, `index.json`, `packs/`) is counted and skipped until the release that reads signed layouts.
+BrowserHive reads the bundled packs and the local folder at startup and again on **Reload** (`browserhive sitepacks reload`). A file that fails validation is skipped, with its reason on the Site packs page, in `browserhive sitepacks list` and in `browserhive doctor`. A signed layout placed in the local folder (`keys.json`, `index.json`, their `.sig` files and `packs/`, at the top level or one per subfolder) is verified like an import, and its versions wait as downloaded updates; one that does not verify is listed as skipped (`layout_refused`).
 
 With [`sitePacks`](../reference/configuration.md#sitePacks) set to `false`, BrowserHive uses no pack data at all: every template site is a generic site (sign-in checks by learned cookie names, no guards, no challenges).
 
@@ -59,8 +59,8 @@ If another version is on offer by the time you confirm, adding the site fails wi
 |---|---|---|---|
 | Review | the pack page | `sitepacks diff <pack> [--to <version>]` | Shows the version's classification, each changed field with its class, its old and new value, and any new domain. |
 | **Apply** | **Apply** | `sitepacks apply <pack> [version]` | The version becomes the approved one. Every template that uses the pack follows it at once. The version it replaces is kept for Revert. |
-| **Reject** | **Reject** | `sitepacks reject <pack> [version]` | Dismisses the version. A newer one is offered again. |
-| **Revert** | **Revert** | `sitepacks revert <pack>` | Goes back to the previous approved version in one step. The dashboard and the command line show its classification first, like Apply. |
+| **Reject** | **Reject** | `sitepacks reject <pack> [version]` | Dismisses the version: it is **set aside**. It is offered again only when a newer version arrives, or when you download it again ([Set aside](#set-aside-versions)). |
+| **Revert** | **Revert** | `sitepacks revert <pack>` | Goes back to the previous approved version in one step, and sets aside the version you reverted from. The dashboard and the command line show its classification first, like Apply. |
 | **Pin** | **Pin** | `sitepacks pin <pack> <version>`, `sitepacks unpin <pack>` | Keeps the approved version. Newer versions are listed as "pinned at v7, v9 available". |
 | **Follow updates** | **Follow updates** | `sitepacks follow <pack> on\|off\|auto` | Whether the pack lists pending updates, counts in the badge and sends [`site_pack.update_pending`](notifications.md#site-packs). `auto` (the default) follows a pack while a template uses it. |
 | Turn off | the **Enabled** switch | `sitepacks disable <pack>`, `sitepacks enable <pack>` | A disabled pack applies nowhere: its guards (sign-out, account and credential ones included) stop applying for every template, and its sites are generic sites until you enable it again. Turning a pack off asks for confirmation (the command line asks you to type the pack id, or takes `--yes`). |
@@ -105,9 +105,84 @@ Chips always carry words and an icon, never colour alone. Other labels you can m
 
 **The sign-in form's post.** A guard that blocks or asks can stop agents from signing in when it covers the address the sign-in form posts to, which is rarely the sign-in page itself (LinkedIn's form on `/login` posts to `/checkpoint/lg/login-submit`). A pack can list those addresses in `sign_in.post` (every step: password, two-factor, device checks); then only a guard over one of them, the sign-in page or the signed-in check page classifies **Can stop the site**, and a routine guard elsewhere on the same host (a sign-out, a settings page, a write) **Tightens rules**. A pack that lists none is read conservatively: every guard that blocks or asks a `POST` on the sign-in page's host can stop the site, so on a site whose sign-in page is on its main host most such guards wait for you even once automatic updates arrive. Because a wrong list would let a guard on the real address pass as tightening, adding, removing or changing `sign_in.post` always **Relaxes rules**. Two addresses count as overlapping when any address matches both globs (with the guard grammar's sub-path and query variants; a host wildcard never reaches into the path).
 
-**What the classification decides.** Today, nothing by itself: every version still waits for your Apply, and the class tells you how carefully to read it. When automatic updates from the online registry arrive (a later release, off by default), only **Tightens rules** and **No rule change** versions of followed registry packs will be applied automatically; versions that relax rules or can stop a site, any change of domains, bundled versions and local files will always wait for you.
+**What the classification decides.** With automatic updates off (the default), nothing by itself: every version waits for your Apply, and the class tells you how carefully to read it. With [automatic updates](#automatic-updates) on, only **Tightens rules** and **No rule change** versions of followed registry packs are applied automatically; versions that relax rules or can stop a site, any change of domains, bundled versions and local files always wait for you.
 
-**Revocation.** The online registry (a later release) can mark a version it published as revoked. BrowserHive then compares the version you approved before it (the fallback) with the revoked one, like any candidate: a fallback that only tightens rules or changes nothing applies at once (recorded as "Applied automatically"); a fallback that relaxes rules or can stop the site does **not** apply by itself, the revoked version stays in force, and the fallback waits under **Updates available** marked **Revoked**, with a notification, whether or not you follow the pack or pinned it; with no fallback the revoked version stays in force and the revocation is recorded in the audit log. A revoked version is never removed silently. Bundled packs and local files cannot be revoked, and content you approved from a local file is never replaced by a revocation.
+**Revocation.** The online registry can mark a version it published as revoked. BrowserHive then compares the version you approved before it (the fallback) with the revoked one, like any candidate: a fallback that only tightens rules or changes nothing applies at once (recorded as "Applied automatically"); a fallback that relaxes rules or can stop the site does **not** apply by itself, the revoked version stays in force, and the fallback waits under **Updates available** marked **Revoked**, with a notification, whether or not you follow the pack or pinned it; with no fallback the revoked version stays in force and the revocation is recorded in the audit log. A revoked version is never removed silently. Bundled packs and local files cannot be revoked, and content you approved from a local file is never replaced by a revocation.
+
+## Updates from the registry
+
+BrowserHive's registry is a folder of signed, static files on browserhive.ai: a list of signing keys (`keys.json`), an index of every pack and version (`index.json`), their signatures, and one file per pack version. No server of ours runs and nothing is uploaded; see [the registry's contributor guide](../contributing/registry.md) for how it is published.
+
+> **Before the signing keys are built in.** A release can check the registry only once the project's root keys are built into it. Until then [`browserhive doctor`](cli.md#doctor), the Site packs page and `browserhive sitepacks check` say "this build pins no registry keys yet: no update check runs", and BrowserHive makes no request.
+
+### The check
+
+With [`sitePacksUpdateCheck`](../reference/configuration.md#sitePacksUpdateCheck) on (the default), BrowserHive fetches the signed index 5 minutes after it starts and then every 24 hours (± 2 hours, later after failures), whether or not you have templates. It fetches only `keys.json`, `index.json` and their two signatures: never a pack file, and nothing about your install ([What the update check sends](security.md#what-the-update-check-sends)). **Check now** on the Site packs page, or `browserhive sitepacks check`, checks at once.
+
+Every file is verified before anything changes: the keys list against the root keys built into BrowserHive, the index against a signing key from that list, both against their expiry dates and against the versions BrowserHive saw before (an older or a much newer index is refused). A file that does not verify changes nothing. BrowserHive keeps the last index that verified in `<data-dir>/site-packs/remote/`.
+
+### Available, downloaded, applied
+
+The index lists each version with its size, release date and the publisher's notes (plain text, signed with the index). For each pack, the newest version you have not approved, that is not revoked and that your BrowserHive can use, appears under **Updates available** as **Available**:
+
+1. **Download & review** (`browserhive sitepacks download <pack> [version]`) fetches exactly that version's file, checks its size and SHA-256 against the signed index and the pack schema, and shows the [classified](#classification) field-by-field difference from the version you approved. The version is now **Downloaded**.
+2. **Apply**, **Reject** or **Pin** it as for any pending version ([Approval and provenance](#approval-and-provenance)). Apply records the registry as its provenance ("registry, key …, index …, signature verified"); **Revert** goes back to the previous version in one step.
+
+A newer version supersedes an older one that is still pending. A version that needs another BrowserHive release is shown with the range it needs and is never offered. A pack you have never approved can be downloaded and applied the same way; applying it is its first approval. When the pack has a bundled version that first use would approve, the difference is shown against that version ("compared with bundled v2"); a pack only the registry has shows every field as new.
+
+### Set aside versions
+
+**Reject**, and **Revert** (for the version you go back from), set a registry version aside: it leaves **Updates available** and is not offered again by later checks. It comes back by itself only when the registry lists a newer version. To look at it again, download it again (`browserhive sitepacks download <pack> <version>`, or `POST /site-packs/{pack}/download`): it is pending again, with its difference. `sitepacks list` and `sitepacks show` print "v3 set aside · `browserhive sitepacks download <pack> 3` reviews it again".
+
+### Follow updates
+
+The check always fetches the whole index, for every pack. **Follow updates** (automatic by default: followed while a template uses the pack; or `browserhive sitepacks follow <pack> on|off|auto`) decides only which packs list pending updates, count in the badge and send [`site_pack.update_pending`](notifications.md#site-packs), and which packs automatic updates may touch. `sitepacks check` and `sitepacks list --pending` exit 2 when a followed pack has a pending update.
+
+### Download all
+
+**Download & review** fetches one pack file, so the registry's host can tell which pack version your IP address downloaded. **Download all** (`browserhive sitepacks download --all`) instead fetches every listed version BrowserHive does not hold yet, for every pack, so nothing in the requests says which pack you care about. Each file is verified like a single download; versions newer than the approved ones appear as **Downloaded**, and still wait for you.
+
+### Automatic updates
+
+[`sitePacksAutoUpdate`](../reference/configuration.md#sitePacksAutoUpdate) is off by default. When you turn it on, BrowserHive downloads and applies a registry version by itself only when the change cannot stop or block your agents' work. All of these must hold:
+
+- the pack is followed, approved, not pinned, has no local file in force, and its automatic updates are not paused (see below);
+- the version is classified **Tightens rules** or **No rule change**: nothing relaxes a rule and nothing can stop the site;
+- it adds or removes no domain;
+- it adds, removes or changes no challenge and no element guard (a button or link agents must not use);
+- it adds or changes no guard that can block or hold a request (`block`, `confirm`, or a `write_policy` guard), whatever its address, and adds or changes at most three guards in all (flag-only `warn` guards);
+- it does not make the default write policy stricter;
+- it does not turn on **sign-in by a person only** (`sign_in.human_only`);
+- it does not lower how many sessions the site allows at once (`concurrency.max_sessions`);
+- it slows agents by at most a factor of 2: no new pace rule and no change to a rule's period or guard, a pace limit at least half the old one, and a launch gap (`pacing.min_launch_gap_s`) at most twice the old one (or 30 seconds, if that is more);
+- it adds or removes no strategy, moves no numeric strategy parameter by more than a factor of 2 either way, and changes no other strategy parameter; it does not make the keep-alive interval more than twice as long.
+
+Every one of these limits is measured twice: against the version in force, and against the last version **you** decided on (applied, or reverted to). A run of small automatic steps can therefore never add up to more than one step from your version: once they would, the next version waits for you.
+
+If you **Revert** a pack, or **Reject** one of its registry versions, automatic updates pause for that pack (the table shows "Auto-update paused"); they resume when you apply a version or turn **Follow updates** on.
+
+Such a decision is recorded as made by `browserhive` ("Applied automatically"). Anything else is downloaded and waits for you, with the badge and the notification. Versions that relax rules or can stop a site, domain changes, bundled versions, imports and local files are never applied automatically, and the stealth floor is checked as on any Apply. A stolen signing key can therefore at most flag more requests (`warn`) or make small, bounded tightening changes to followed packs, and only with automatic updates on.
+
+### Revoked versions
+
+When the index marks the version you approved as revoked, BrowserHive follows the rules under [Revocation](#classification) above: a fallback that only tightens applies at once; otherwise the revoked version stays in force, the pack says **Revoked** (`sitepacks show` and `list` say so too), and the fallback waits for you.
+
+### When the index is stale or the check fails
+
+An index expires 14 days after it was signed (the publisher re-signs it every week). When the held index expires and no fresh one verifies, BrowserHive keeps everything you approved, offers nothing new, refuses downloads, and System lists [`SITE_PACKS_STALE`](../reference/errors.md#SITE_PACKS_STALE); if the registry's clock and yours differ by more than an hour, the message says to check the system clock (`doctor` warns beyond 5 minutes). Three failed checks in a row list [`SITE_PACKS_FETCH_FAILED`](../reference/errors.md#SITE_PACKS_FETCH_FAILED) with the last reason (a network error, or a file that did not verify). Approved packs keep applying in both cases; the records clear after the next good check.
+
+### Hosts without internet access
+
+With `sitePacksUpdateCheck` set to `false`, BrowserHive makes no request at all; bundled and local packs keep working. To bring registry versions to such a host:
+
+1. On a connected host, check and download what you want (`browserhive sitepacks check`, then `browserhive sitepacks download --all` to include every pack file), then write the signed folder: `browserhive sitepacks export ./registry-export`. It holds the verified `keys.json`, `index.json`, their signatures and every pack file BrowserHive holds, exactly as published. `export` names the listed versions it does not hold, which are therefore not in the folder; run `sitepacks download --all` first to include them.
+2. Copy the folder to the offline host and import it: `browserhive sitepacks import ./registry-export` (at most 1 MiB), or copy it into the local folder (`sitePacksDir`) and run `browserhive sitepacks reload`.
+
+The offline host verifies the folder with its own built-in keys exactly as a download (expiry and the versions it saw before included), so a copied folder cannot be older than what it already has, and a stale export is refused like a stale index. Versions whose file is in the folder arrive as **Downloaded** (provenance "imported file <folder name>", with the signing key and index version that verified it); listed versions without a file are **Available** and cannot be downloaded there; revoked versions are reported as revoked by the publisher. Like any pending version, a downloaded version is listed for review only while you follow its pack: `sitepacks import` says "downloaded; `browserhive sitepacks follow <pack> on` to review it" for the others. Export, then import on an offline host, offers the same versions as the connected host. Folders downloaded from `https://browserhive.ai/registry/v1/` by hand work the same way; `browserhive sitepacks verify <dir>` checks one without a server.
+
+### Mirrors
+
+[`sitePacksUrl`](../reference/configuration.md#sitePacksUrl) points the check and downloads at another folder (`https` only). A mirror must serve the same signed files: everything is verified against the keys built into BrowserHive, whatever the address, so a mirror can withhold updates or serve stale files (which become [stale](#when-the-index-is-stale-or-the-check-fails)) but cannot change a pack.
 
 ## Local packs
 
@@ -401,7 +476,10 @@ Only GitHub lists `sign_in.post` so far (its sign-in form's `action`, observed s
 | Enable, disable | `sitepacks enable\|disable <pack>` (disable asks first, or `--yes`) | `POST /site-packs/{pack}/enable`, `/disable` |
 | Read the folder again | `sitepacks reload` | `POST /site-packs/reload` |
 | Import one pack file | `sitepacks import <file>` | `POST /site-packs/import` `{text}` (the file's exact text) or `{pack}` (a parsed pack, stored re-serialized) |
-| Check a file offline | `sitepacks verify <file>` | — |
+| Check the registry now | `sitepacks check` | `POST /site-packs/check` |
+| Download & review one version, or every listed version | `sitepacks download <pack> [version]`, `sitepacks download --all` | `POST /site-packs/{pack}/download` `{version}`, `POST /site-packs/download-all` |
+| Export the signed folder, import one | `sitepacks export <dir>`, `sitepacks import <dir>` | `GET /site-packs/export`, `POST /site-packs/import` `{files, name}` (base64 by path) |
+| Check a file or a signed folder offline | `sitepacks verify <file\|dir>` | — |
 | Decisions and guard hits (identical hits within a second are recorded once; confirmations always) | — | `GET /site-packs/changes`, `GET /site-packs/guard-hits` (`since`/`until` inclusive) |
 
 The routes need the scopes `sitepacks:read` or `sitepacks:write` ([REST reference](../reference/api.md#site-packs)). The commands are described in the [CLI guide](cli.md#sitepacks).
@@ -411,4 +489,7 @@ The routes need the scopes `sitepacks:read` or `sitepacks:write` ([REST referenc
 | Key | Default | Meaning |
 |---|---|---|
 | [`sitePacks`](../reference/configuration.md#sitePacks) | `true` | `false` turns packs off: every template site is a generic site. |
-| [`sitePacksDir`](../reference/configuration.md#sitePacksDir) | `<data-dir>/site-packs/local` | The local folder for your own pack files. |
+| [`sitePacksDir`](../reference/configuration.md#sitePacksDir) | `<data-dir>/site-packs/local` | The local folder for your own pack files and signed folders. |
+| [`sitePacksUpdateCheck`](../reference/configuration.md#sitePacksUpdateCheck) | `true` | The daily check of the signed index. `false`: no request to the registry at all. |
+| [`sitePacksAutoUpdate`](../reference/configuration.md#sitePacksAutoUpdate) | `false` | `true`: followed packs' registry versions that only tighten rules are applied without you ([Automatic updates](#automatic-updates)). |
+| [`sitePacksUrl`](../reference/configuration.md#sitePacksUrl) | `https://browserhive.ai/registry/v1/` | The registry folder, or a [mirror](#mirrors). |

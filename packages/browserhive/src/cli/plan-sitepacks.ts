@@ -1,4 +1,4 @@
-/** @module cli/plan-sitepacks — the `sitepacks` subcommands' arguments and flags → one invocation, with the cheap local checks (pack id, version numbers, `follow`'s setting, `--source`, `--to`) as usage errors (spec 13 §11.5) */
+/** @module cli/plan-sitepacks — the `sitepacks` subcommands' arguments and flags → one invocation, with the cheap local checks (pack id, version numbers, `follow`'s setting, `--source`, `--to`, `download`'s pack or `--all`) as usage errors (spec 13 §11.5) */
 import { isAbsolute, resolve as resolvePath } from 'node:path';
 import { PackRegistrableDomain } from '@browserhive/contracts/site-packs';
 import type { CliPlan, SitePacksAction, SitePacksSource } from './invocation.ts';
@@ -42,10 +42,12 @@ function sitePacksAction(name: string, input: PlanInput): SitePacksAction {
     return { kind: 'list', sources: sourceList(reader), pending: reader.bool('pending') };
   }
   if (word === 'reload') return { kind: 'reload' };
-  if (word === 'import') {
+  if (word === 'check') return { kind: 'check' };
+  if (word === 'import' || word === 'export') {
     const raw = args[0] ?? '';
-    return { kind: 'import', path: isAbsolute(raw) ? raw : resolvePath(input.context.cwd, raw) };
+    return { kind: word, path: isAbsolute(raw) ? raw : resolvePath(input.context.cwd, raw) };
   }
+  if (word === 'download') return downloadAction(reader, args);
   const packId = packIdArgument(reader, args[0] ?? '');
   switch (word) {
     case 'show':
@@ -79,6 +81,30 @@ function sitePacksAction(name: string, input: PlanInput): SitePacksAction {
       reader.problems.push(`unsupported invocation '${name}'.`);
       return { kind: 'show', packId };
   }
+}
+
+/** `download <id> [<version>]` or `download --all` (which takes no pack). */
+function downloadAction(reader: FlagReader, args: readonly string[]): SitePacksAction {
+  if (reader.bool('all')) {
+    if (args[0] !== undefined) {
+      reader.problems.push(
+        "'sitepacks download --all' takes no pack: it downloads every listed version this server lacks. Drop the pack, or drop --all.",
+      );
+    }
+    return { kind: 'download-all' };
+  }
+  const raw = args[0];
+  if (raw === undefined) {
+    reader.problems.push(
+      "'sitepacks download' requires a pack argument, or --all for every listed version.",
+    );
+    return { kind: 'download-all' };
+  }
+  return {
+    kind: 'download',
+    packId: packIdArgument(reader, raw),
+    version: optionalVersion(reader, args[1]),
+  };
 }
 
 /** `<id>`: a registrable domain, lower-cased. */

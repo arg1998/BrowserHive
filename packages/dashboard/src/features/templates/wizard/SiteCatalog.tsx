@@ -1,7 +1,9 @@
 /** @module features/templates/wizard/SiteCatalog — the site catalog of wizard step 2 (spec 13 §7.1, §9.6, §11.4): a searchable grid of pack cards (title, domains, "Sign in by hand only", the default write policy (or that the pack guards no writes yet), what the site's terms say, and the version adding it approves with its provenance and short SHA-256); the whole card is a toggle (`aria-pressed`) that adds the site, or removes it with its pack choice once added (a check that turns into a remove mark on hover and focus) */
+
 import type { SitePackView } from '@browserhive/contracts/http';
 import { useId, useState } from 'react';
 import { Chip } from '@/components/shared/Chip.tsx';
+import { Plain } from '@/components/shared/Plain.tsx';
 import { Input } from '@/components/ui/input.tsx';
 import {
   NO_WRITE_GUARDS,
@@ -70,10 +72,10 @@ function PackCard({
       >
         <span className="flex min-w-0 items-start justify-between gap-2">
           <span className="flex min-w-0 flex-col">
-            <bdi className="truncate text-base font-semibold">{pack.title}</bdi>
-            <bdi className="truncate font-mono text-sm text-muted-foreground">
+            <Plain className="truncate text-base font-semibold">{pack.title}</Plain>
+            <Plain className="truncate font-mono text-sm text-muted-foreground">
               {pack.domains.join(', ')}
-            </bdi>
+            </Plain>
           </span>
           {added ? (
             <span

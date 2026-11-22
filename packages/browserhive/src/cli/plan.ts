@@ -269,6 +269,9 @@ function planInvocation(name: string, input: PlanInput): CliPlan {
     case 'sitepacks disable':
     case 'sitepacks reload':
     case 'sitepacks import':
+    case 'sitepacks check':
+    case 'sitepacks download':
+    case 'sitepacks export':
       return planSitePacks(name, input);
     case 'sitepacks verify':
       return planSitePacks(name, input);

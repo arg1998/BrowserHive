@@ -8,6 +8,7 @@ import {
   type PackChangeClassification,
   type UsingTemplate,
 } from '../../domain/site-packs/classify.ts';
+import { newDomains } from '../../domain/site-packs/diff.ts';
 import { packFloorIssues, type StealthFloorIssue } from '../../domain/site-packs/stealth-floor.ts';
 import type { Repositories } from '../../ports/persistence/index.ts';
 import type {
@@ -16,6 +17,7 @@ import type {
   SitePackClassificationValue,
 } from '../../ports/persistence/site-packs.ts';
 import { withUsage } from './registry-build.ts';
+import { baselineOf } from './registry-core.ts';
 import type { RegistrySnapshot } from './registry-types.ts';
 
 /** The repositories the usage reads. */
@@ -88,6 +90,12 @@ export function classificationChanged(
   );
 }
 
+/** The verified content of a downloaded registry or imported row (BrowserHive's copy), or `null`. */
+export type SignedContent = (
+  packId: string,
+  row: SitePackChangeRecord,
+) => Promise<SitePackV1 | null>;
+
 /** One template below a candidate's `stealth-profile` floor. */
 export interface FloorBlocker {
   readonly template_id: string;
@@ -116,8 +124,18 @@ export async function reclassifyPending(
   repo: Pick<Repositories['sitePackChanges'], 'classify'>,
   snapshot: RegistrySnapshot,
   usage: PackUsage,
+  signed?: SignedContent,
 ): Promise<{ snapshot: RegistrySnapshot; changed: string[] }> {
   const contents = new Map(snapshot.bundled.packs.map((p) => [p.sha256, p.pack]));
+  const contentOf = async (packId: string, row: SitePackChangeRecord) => {
+    const bundled = contents.get(row.toSha256);
+    if (bundled !== undefined) return bundled;
+    const verified =
+      row.decision === 'downloaded' && (row.source === 'remote' || row.source === 'import');
+    return verified && signed !== undefined
+      ? ((await signed(packId, row)) ?? undefined)
+      : undefined;
+  };
   const packs = new Map(snapshot.packs);
   const changed: string[] = [];
   for (const [packId, entry] of snapshot.packs) {
@@ -125,18 +143,32 @@ export async function reclassifyPending(
     let moved = false;
     const pending: SitePackChangeRecord[] = [];
     for (const row of entry.pending) {
-      const to = contents.get(row.toSha256);
+      const to = row.classification === 'revoked' ? undefined : await contentOf(packId, row);
       if (row.classification === 'revoked' || to === undefined) {
         pending.push(row);
         continue;
       }
-      const next = classifyForRow(entry.approved?.pack ?? null, to, usage(packId));
-      if (!classificationChanged(row, next)) {
+      const base = baselineOf(entry);
+      const next = classifyForRow(base?.content.pack ?? null, to, usage(packId));
+      const fromVersion = base?.version ?? null;
+      const domains = [...newDomains(base?.content.pack ?? null, to)];
+      const baselineMoved =
+        row.fromVersion !== fromVersion || row.newDomains.join() !== domains.join();
+      if (!classificationChanged(row, next) && !baselineMoved) {
         pending.push(row);
         continue;
       }
-      await repo.classify(row.eventId, next.classification, next.diff);
-      pending.push({ ...row, classification: next.classification, diff: next.diff });
+      await repo.classify(row.eventId, next.classification, next.diff, {
+        fromVersion,
+        newDomains: domains,
+      });
+      pending.push({
+        ...row,
+        classification: next.classification,
+        diff: next.diff,
+        fromVersion,
+        newDomains: domains,
+      });
       moved = true;
     }
     if (!moved) continue;
@@ -154,9 +186,10 @@ export async function reclassifyPending(
 export async function withFreshUsage(
   repos: UsageRepos & Pick<Repositories, 'sitePackChanges'>,
   snapshot: RegistrySnapshot,
+  signed?: SignedContent,
 ): Promise<{ snapshot: RegistrySnapshot; changed: string[] }> {
   const used = withUsage(snapshot, await repos.templateSites.listAll());
   const usage = await readPackUsage(repos);
-  const re = await reclassifyPending(repos.sitePackChanges, used.snapshot, usage);
+  const re = await reclassifyPending(repos.sitePackChanges, used.snapshot, usage, signed);
   return { snapshot: re.snapshot, changed: [...new Set([...used.changed, ...re.changed])] };
 }

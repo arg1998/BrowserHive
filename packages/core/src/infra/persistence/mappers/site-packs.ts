@@ -24,7 +24,12 @@ import { parseWith } from './templates.ts';
 const provenanceJson = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('bundled'), release: z.string() }),
   z.object({ kind: z.literal('remote'), key_id: z.string(), index_version: z.number() }),
-  z.object({ kind: z.literal('import'), file: z.string() }),
+  z.object({
+    kind: z.literal('import'),
+    file: z.string(),
+    key_id: z.string().optional(),
+    index_version: z.number().optional(),
+  }),
   z.object({ kind: z.literal('local'), path: z.string() }),
 ]);
 
@@ -47,7 +52,12 @@ function provenanceFromJson(text: string | null, where: string): SitePackProvena
     case 'remote':
       return { kind: 'remote', keyId: j.key_id, indexVersion: j.index_version };
     case 'import':
-      return { kind: 'import', file: j.file };
+      return {
+        kind: 'import',
+        file: j.file,
+        ...(j.key_id !== undefined && { keyId: j.key_id }),
+        ...(j.index_version !== undefined && { indexVersion: j.index_version }),
+      };
     case 'local':
       return { kind: 'local', path: j.path };
   }
@@ -61,7 +71,12 @@ function provenanceToJson(p: SitePackProvenanceRecord | null): string | null {
     case 'remote':
       return JSON.stringify({ kind: 'remote', key_id: p.keyId, index_version: p.indexVersion });
     case 'import':
-      return JSON.stringify({ kind: 'import', file: p.file });
+      return JSON.stringify({
+        kind: 'import',
+        file: p.file,
+        ...(p.keyId !== undefined && { key_id: p.keyId }),
+        ...(p.indexVersion !== undefined && { index_version: p.indexVersion }),
+      });
     case 'local':
       return JSON.stringify({ kind: 'local', path: p.path });
   }

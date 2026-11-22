@@ -210,6 +210,28 @@ export async function openCliStorage(
         return { rows: [], unreadable: [] };
       }
     },
+    sitePackReview: async () => {
+      try {
+        const pending = await storage.repos.sitePackChanges.listPending();
+        const sites = await storage.repos.templateSites.listAll();
+        return { pending, sites };
+      } catch {
+        // A database from before schema v10 has no site_pack_changes table.
+        return { pending: [], sites: [] };
+      }
+    },
+    metaValue: async (key) => {
+      try {
+        const row = z
+          .object({ value: z.string() })
+          .nullable()
+          .parse(handle.raw.query('SELECT value FROM meta WHERE key = ?').get(key) ?? null);
+        return row?.value ?? null;
+      } catch {
+        // No meta table, or a value that is not text: nothing to report.
+        return null;
+      }
+    },
     updateTemplateVersionFile: (templateId, version, file) =>
       storage.repos.templateVersions.updateFile(templateId, version, file),
     createToken: async ({ principal, expiresInMs }) => {

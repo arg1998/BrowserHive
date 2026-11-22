@@ -3,9 +3,12 @@
 import type { SitePackV1 } from '@browserhive/contracts/site-packs';
 import { newDomains } from '../../domain/site-packs/diff.ts';
 import type { RefusedPack } from '../../domain/site-packs/load.ts';
-import type { SitePackStateRecord } from '../../ports/persistence/site-packs.ts';
+import type {
+  SitePackChangeRecord,
+  SitePackStateRecord,
+} from '../../ports/persistence/site-packs.ts';
 import type { SkippedPackVersion } from '../../ports/site-packs.ts';
-import { readCached } from './registry-build.ts';
+import { readCached, readSigned } from './registry-build.ts';
 import { classifyForRow, floorBlockers, usageOf } from './registry-classify.ts';
 import {
   approvedContent,
@@ -42,36 +45,54 @@ export function noPackToApprove(siteId: string) {
   return packConflict(`No site pack covers ${siteId} any more; review the site again.`);
 }
 
+/** The content of a pending row: the release's bytes, a verified registry or imported copy, or a revocation's fallback. */
+async function pendingContent(core: RegistryCore, packId: string, row: SitePackChangeRecord) {
+  const bundled = core.snapshot().bundled.packs.find((p) => p.sha256 === row.toSha256);
+  if (bundled !== undefined) return { content: bundled, bundled };
+  const { cache, binaryVersion } = core.deps;
+  // A revocation's fallback is a previous version: BrowserHive's copy when this release lacks it.
+  if (row.classification === 'revoked') {
+    const cached = await readCached(cache, row.source, packId, row.toSha256, binaryVersion);
+    return cached === null ? null : { content: cached, bundled: undefined };
+  }
+  if (row.decision === 'downloaded' && (row.source === 'remote' || row.source === 'import')) {
+    const signed = await readSigned(cache, packId, row.toSha256, binaryVersion, row.source);
+    return signed === null ? null : { content: signed, bundled: undefined };
+  }
+  return null;
+}
+
+/** What the operator was shown for a pending row's content. */
+function provenanceOf(
+  core: RegistryCore,
+  packId: string,
+  row: SitePackChangeRecord,
+  bundled: { readonly origin: string } | undefined,
+): SitePackStateRecord['approvedProvenance'] {
+  if (bundled !== undefined) return { kind: 'bundled', release: bundled.origin };
+  if (row.source === 'remote' || row.source === 'import') {
+    return core.remote?.provenance(row.source, packId, row.toSha256) ?? null;
+  }
+  return null;
+}
+
 /**
  * Apply a pending version: it becomes the approved one; the old one is kept for Revert. Refused
  * with `SITE_PACK_BELOW_FLOOR` while a template using the pack is below its `stealth-profile`
- * floor (T3b lead decision 4).
+ * floor (T3b lead decision 4). `auto`: auto-update applied it (decision `auto`, spec 13 §9.7).
  */
 export async function applyVersion(
   core: RegistryCore,
   packId: string,
   version: number,
   by: string,
+  auto = false,
 ): Promise<void> {
   const entry = core.entry(packId);
-  const row = entry.pending.find((p) => p.toVersion === version);
-  const bundled =
-    row === undefined
-      ? undefined
-      : core.snapshot().bundled.packs.find((p) => p.sha256 === row.toSha256);
-  // A revocation's fallback is a previous version: BrowserHive's copy when this release lacks it.
-  const content =
-    bundled ??
-    (row?.classification === 'revoked'
-      ? ((await readCached(
-          core.deps.cache,
-          row.source,
-          packId,
-          row.toSha256,
-          core.deps.binaryVersion,
-        )) ?? undefined)
-      : undefined);
-  if (row === undefined || content === undefined) throw notPending(packId, version);
+  const row = entry.pending.find((p) => p.toVersion === version && p.decision === 'downloaded');
+  const found = row === undefined ? null : await pendingContent(core, packId, row);
+  if (row === undefined || found === null) throw notPending(packId, version);
+  const { content, bundled } = found;
   assertDomainsFree(core.snapshot(), packId, content.pack.domains);
   await assertFloorMet(core, packId, content.pack);
   const { deps } = core;
@@ -87,8 +108,7 @@ export async function applyVersion(
       approvedVersion: content.pack.version,
       approvedSha256: content.sha256,
       approvedSource: row.source,
-      approvedProvenance:
-        bundled === undefined ? null : { kind: 'bundled', release: bundled.origin },
+      approvedProvenance: provenanceOf(core, packId, row, bundled),
       approvedDomains: [...content.pack.domains],
       approvedBy: by,
       approvedAt: now,
@@ -96,12 +116,13 @@ export async function applyVersion(
       pinnedVersion: null,
       updatedAt: now,
     });
-    await repos.sitePackChanges.decide(row.eventId, 'approved', by, now);
+    await repos.sitePackChanges.decide(row.eventId, auto ? 'auto' : 'approved', by, now);
     await auditPack(repos, core, by, 'site_pack.apply', packId, {
       from_version: state.approvedVersion,
       version: content.pack.version,
       sha256: content.sha256,
       source: row.source,
+      ...(auto && { auto: true }),
     });
   });
   await core.refresh();

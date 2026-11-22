@@ -14,7 +14,8 @@ export type SitePackSkipReasonValue =
   | 'not_found'
   | 'id_mismatch'
   | 'signed_layout_unsupported'
-  | 'unreadable';
+  | 'unreadable'
+  | 'layout_refused';
 
 /** One verified, schema-checked and refined pack version a source offers. */
 export interface SourcePackVersion {
@@ -44,8 +45,10 @@ export interface SourceCatalog {
   readonly source: SitePackSourceId;
   readonly packs: readonly SourcePackVersion[];
   readonly skipped: readonly SkippedPackVersion[];
-  /** Signed layouts found (T4b verifies them; T3a only counts and skips them). */
+  /** Signed layouts found (spec 13 §10.5: verified like an import by the registry client). */
   readonly signedLayouts: number;
+  /** Their folders (the local folder itself for a top-level layout). */
+  readonly layouts?: readonly string[];
 }
 
 /** Why a source could not load at all (the folder is unreadable). */

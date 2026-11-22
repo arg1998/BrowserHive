@@ -65,7 +65,7 @@ test.describe('site packs in the dashboard', () => {
       // Each row is one link named after its pack.
       await expect(table.getByRole('link', { name: 'LinkedIn', exact: true })).toBeAttached();
       await expect(table.getByRole('link', { name: 'GitHub', exact: true })).toBeAttached();
-      await expect(page.getByRole('heading', { name: 'Where packs come from' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Registry and sources' })).toBeVisible();
       expect(await violations(page)).toEqual([]);
 
       await page.goto(`${baseUrl}/site-packs/linkedin.com`);
@@ -79,8 +79,9 @@ test.describe('site packs in the dashboard', () => {
       await page.getByRole('button', { name: /^Add \u2068?GitHub\u2069?$/ }).click();
       const added = page.getByRole('button', { name: /^Remove \u2068?GitHub\u2069?$/ });
       await expect(added).toHaveAttribute('aria-pressed', 'true');
+      // A version approved earlier (the registry update below, on a rerun) reads "Uses GitHub vN".
       await expect(
-        page.getByText(/Adding this site approves \u2068?GitHub\u2069? v\d+/),
+        page.getByText(/(Adding this site approves|Uses) \u2068?GitHub\u2069? v\d+/),
       ).toBeVisible();
       await expect(page.getByLabel('Add a site')).toBeVisible();
       expect(await violations(page)).toEqual([]);
@@ -89,9 +90,61 @@ test.describe('site packs in the dashboard', () => {
       await expect(
         page.getByRole('button', { name: /^Add \u2068?GitHub\u2069?$/ }),
       ).toHaveAttribute('aria-pressed', 'false');
-      await expect(page.getByText(/Adding this site approves \u2068?GitHub\u2069?/)).toHaveCount(0);
+      await expect(
+        page.getByText(/(Adding this site approves|Uses) \u2068?GitHub\u2069?/),
+      ).toHaveCount(0);
     });
   }
+
+  test('a registry update: Check now, Download & review, Apply (T4b)', async ({ page }, info) => {
+    test.skip(info.project.name !== 'desktop', 'one browser is enough');
+    await operatorCookie(page);
+    const headers = { origin: baseUrl ?? '' };
+    // The daemon's signed fake registry lists GitHub v3. Following the pack lists it under Updates
+    // available (no template uses it here, so Auto would not follow it).
+    const follow = await page.request.put(`${baseUrl}/api/v1/site-packs/github.com/follow`, {
+      data: { follow: true },
+      headers,
+    });
+    expect(follow.ok()).toBe(true);
+    const before = (await (
+      await page.request.get(`${baseUrl}/api/v1/site-packs/github.com`)
+    ).json()) as { view: { approved: { source: string } | null } };
+    await page.goto(`${baseUrl}/site-packs`);
+    const table = page.getByRole('region', { name: 'Site packs' });
+    if (before.view.approved?.source !== 'remote') {
+      await page.getByRole('button', { name: 'Check now' }).click();
+      await expect(page.getByText(/Index \d+ verified|Up to date/).first()).toBeVisible();
+      const updates = page.getByRole('region', { name: /Updates available/ });
+      const card = updates
+        .locator('article')
+        .filter({ has: page.getByRole('heading', { level: 3, name: /GitHub/ }) });
+      await expect(card).toBeVisible();
+      await expect(
+        card.getByText(/registry · key .+ · signature verified · index \d+/),
+      ).toBeVisible();
+      const download = card.getByRole('button', { name: /Download & review/ });
+      if (await download.isVisible()) {
+        await expect(card.getByText('Not downloaded', { exact: true })).toBeVisible();
+        expect(await violations(page)).toEqual([]);
+        await download.click();
+      }
+      // Downloaded and verified: classified, its fields shown, focus back on the card.
+      await expect(card.locator('[data-classification]').first()).toBeVisible();
+      await expect(card.getByRole('button', { name: 'Apply…' })).toBeVisible();
+      expect(await violations(page)).toEqual([]);
+      await card.getByRole('button', { name: 'Apply…' }).click();
+      const dialog = page.getByRole('alertdialog');
+      await expect(dialog).toBeVisible();
+      expect(await violations(page)).toEqual([]);
+      await dialog.getByRole('button', { name: /^Apply v\d+$/ }).click();
+      await expect(card).toHaveCount(0);
+    }
+    // Applied from the registry: the table names where it came from (the registry's own host).
+    const row = table.getByRole('row').filter({ hasText: 'GitHub' });
+    await expect(row.getByText(/^\S+ registry$/).filter({ visible: true })).toHaveCount(1);
+    expect(await violations(page)).toEqual([]);
+  });
 
   test('a classification chip in the history, in words (T3b)', async ({ page }, info) => {
     test.skip(info.project.name !== 'desktop', 'one browser is enough');
