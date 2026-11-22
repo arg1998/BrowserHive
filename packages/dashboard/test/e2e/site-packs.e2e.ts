@@ -142,9 +142,7 @@ test.describe('site packs in the dashboard', () => {
     }
     // Applied from the registry: the table names where it came from (the registry's own host).
     const row = table.getByRole('row').filter({ hasText: 'GitHub' });
-    await expect(
-      row.getByText(/^\S+ registry$/).filter({ visible: true }),
-    ).toHaveCount(1);
+    await expect(row.getByText(/^\S+ registry$/).filter({ visible: true })).toHaveCount(1);
     expect(await violations(page)).toEqual([]);
   });
 
