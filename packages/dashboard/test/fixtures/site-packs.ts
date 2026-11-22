@@ -2,6 +2,7 @@
 import type {
   SitePackDetailResponse,
   SitePackDiffResponse,
+  SitePackPending,
   SitePackRegistryStatus,
   SitePacksResponse,
   SitePackView,
@@ -107,6 +108,46 @@ export function registryStatus(
     local: { dir: '/data/site-packs/local', count: 0, signed_layouts: 0, needing_approval: 0 },
     skipped: [],
     last_load_at: PT0 - 60_000,
+    ...patch,
+  };
+}
+
+/** The registry status with the update check on and a fresh index 1412 (T4b). */
+export function onlineStatus(patch: Partial<SitePackRegistryStatus> = {}): SitePackRegistryStatus {
+  return registryStatus({
+    update_check: true,
+    check_off: null,
+    trusts_registry: true,
+    url: 'https://browserhive.ai/registry/v1/',
+    last_check_at: PT0 - 180_000,
+    last_ok_at: PT0 - 180_000,
+    last_outcome: 'not_modified',
+    next_check_at: PT0 + 82_800_000,
+    index_version: 1412,
+    index_issued_at: PT0 - 172_800_000,
+    index_expires_at: PT0 + 1_036_800_000,
+    index_signed_by: 'k-2026a',
+    index_packs: 18,
+    index_origin: 'registry',
+    keys_version: 3,
+    snapshot: { index_version: 1405, verified: true, detail: null },
+    ...patch,
+  });
+}
+
+/** A registry version of LinkedIn: v4, downloaded and tightening unless patched. */
+export function pendingVersion(patch: Partial<SitePackPending> = {}): SitePackPending {
+  return {
+    version: 4,
+    sha256: sha('c'),
+    state: 'downloaded',
+    size: 6656,
+    released: '2026-11-19',
+    notes: 'Blocks the new sign-out endpoint.',
+    classification: 'tightening',
+    new_domains: [],
+    source: 'remote',
+    provenance: { kind: 'remote', key_id: 'k-2026a', index_version: 1413 },
     ...patch,
   };
 }

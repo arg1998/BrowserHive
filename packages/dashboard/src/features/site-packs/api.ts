@@ -1,5 +1,5 @@
-/** @module features/site-packs/api — site-pack queries and mutations over `useApi()` + `keys.sitePacks.*` (spec 13 §11.1 "Site packs", T3a): the filtered list, the unfiltered catalog (wizard, template Sites tab, sidebar badge), one pack, a diff, the history and guard hits, and the operator actions (Apply, Reject, Pin, Follow, Enable, Revert, Approve a local file, Reload, Import); every action refreshes the pack queries and the templates that show packs */
-import type { SitePackView } from '@browserhive/contracts/http';
+/** @module features/site-packs/api — site-pack queries and mutations over `useApi()` + `keys.sitePacks.*` (spec 13 §11.1 "Site packs", T3a, T4b): the filtered list, the unfiltered catalog (wizard, template Sites tab, sidebar badge, the registry status), one pack, a diff, the history and guard hits, and the operator actions (Download & review, Apply, Reject, Pin, Follow, Enable, Revert, Approve a local file, Check now, Download all, Reload, Import of a file or a signed folder); an action's returned view or status goes into the cache at once and every action refreshes the pack queries and the templates that show packs */
+import type { SitePackRegistryStatus, SitePackView } from '@browserhive/contracts/http';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { z } from 'zod';
 import { useApi } from '@/app/providers/AuthProvider.tsx';
@@ -106,6 +106,14 @@ export function useSiteGuardHits(action: readonly string[] | undefined) {
   });
 }
 
+/** How long a check or Download all may take (each registry fetch is capped at 30 s). */
+const REGISTRY_TIMEOUT_MS = 120_000;
+
+/** The registry status of the cached catalog (`undefined` until it loads). */
+export function useRegistryStatus(): SitePackRegistryStatus | undefined {
+  return useSitePackCatalog().data?.status;
+}
+
 /** Refresh every pack query and the templates (their sites show the pack in force). */
 function useSettle() {
   const qc = useQueryClient();
@@ -122,6 +130,7 @@ function useSettle() {
  */
 export function useSitePackActions(packId: string) {
   const api = useApi();
+  const qc = useQueryClient();
   const toast = useToast();
   const settle = useSettle();
   const params = { pack_id: packId } as const;
@@ -132,34 +141,134 @@ export function useSitePackActions(packId: string) {
     },
     onSettled: settle,
   } as const;
+  // Every action answers the pack's new view: show it at once, the refetch follows.
+  const viewed = {
+    ...common,
+    onSuccess: (result: { readonly view: SitePackView }) => patchCachedView(qc, result.view),
+  } as const;
   return {
+    /** **Download & review**: the verified file and its classified diff, cached for the card at once. */
+    download: useMutation({
+      mutationFn: (version: number) =>
+        api.downloadSitePack({ params, body: { version }, timeoutMs: REGISTRY_TIMEOUT_MS }),
+      ...common,
+      onSuccess: (result, version) => {
+        qc.setQueryData(keys.sitePacks.diff(packId, String(version)), result.diff);
+        patchCachedView(qc, result.view);
+      },
+    }),
     apply: useMutation({
       mutationFn: (version: number) => api.applySitePack({ params, body: { version } }),
-      ...common,
+      ...viewed,
     }),
     reject: useMutation({
       mutationFn: (version: number) => api.rejectSitePack({ params, body: { version } }),
-      ...common,
+      ...viewed,
     }),
     pin: useMutation({
       mutationFn: (version: number | null) => api.pinSitePack({ params, body: { version } }),
-      ...common,
+      ...viewed,
     }),
     follow: useMutation({
       mutationFn: (follow: boolean | null) => api.followSitePack({ params, body: { follow } }),
-      ...common,
+      ...viewed,
     }),
     setEnabled: useMutation({
       mutationFn: (enabled: boolean) =>
         enabled ? api.enableSitePack({ params }) : api.disableSitePack({ params }),
-      ...common,
+      ...viewed,
     }),
-    revert: useMutation({ mutationFn: () => api.revertSitePack({ params }), ...common }),
+    revert: useMutation({ mutationFn: () => api.revertSitePack({ params }), ...viewed }),
     approveLocal: useMutation({
       mutationFn: (sha256: string) => api.approveLocalSitePack({ params, body: { sha256 } }),
-      ...common,
+      ...viewed,
     }),
   };
+}
+
+/** One version Apply selected applies. */
+export interface SelectedVersion {
+  readonly packId: string;
+  readonly title: string;
+  readonly version: number;
+}
+
+/** What Apply selected did: the versions applied and the ones refused, with why. */
+export interface ApplySelectedResult {
+  readonly applied: readonly SelectedVersion[];
+  readonly failed: readonly {
+    readonly item: SelectedVersion;
+    readonly code: string;
+    readonly message: string;
+  }[];
+}
+
+/** **Apply selected**: the chosen downloaded versions one after the other (a refusal never stops the rest). */
+export function useApplySelected() {
+  const api = useApi();
+  const qc = useQueryClient();
+  const settle = useSettle();
+  return useMutation({
+    mutationFn: async (items: readonly SelectedVersion[]): Promise<ApplySelectedResult> => {
+      const applied: SelectedVersion[] = [];
+      const failed: { item: SelectedVersion; code: string; message: string }[] = [];
+      for (const item of items) {
+        try {
+          const { view } = await api.applySitePack({
+            params: { pack_id: item.packId },
+            body: { version: item.version },
+          });
+          patchCachedView(qc, view);
+          applied.push(item);
+        } catch (error) {
+          const e = toAppError(error);
+          failed.push({ item, code: e.code, message: e.message });
+        }
+      }
+      return { applied, failed };
+    },
+    onSettled: settle,
+  });
+}
+
+/** Put a status (a check's, a live event's) into every cached list at once. */
+export function patchCachedStatus(
+  qc: ReturnType<typeof useQueryClient>,
+  status: SitePackRegistryStatus,
+): void {
+  qc.setQueriesData<{ status: SitePackRegistryStatus }>(
+    { queryKey: keys.sitePacks.lists() },
+    (old) => (old === undefined ? old : { ...old, status }),
+  );
+}
+
+/**
+ * **Check now** (`POST /site-packs/check`, 6/min): a failed fetch is an answer (`outcome: failed`),
+ * not an error; the caller toasts the outcome and a 429 (`RATE_LIMITED`).
+ */
+export function useCheckSitePacks() {
+  const api = useApi();
+  const qc = useQueryClient();
+  const settle = useSettle();
+  return useMutation({
+    mutationFn: () => api.checkSitePacks({ timeoutMs: REGISTRY_TIMEOUT_MS }),
+    onSuccess: (result) => patchCachedStatus(qc, result.status),
+    onSettled: settle,
+  });
+}
+
+/** **Download all** (`POST /site-packs/download-all`): every listed version the client lacks, all packs. */
+export function useDownloadAllSitePacks() {
+  const api = useApi();
+  const toast = useToast();
+  const settle = useSettle();
+  return useMutation({
+    mutationFn: () => api.downloadAllSitePacks({ timeoutMs: REGISTRY_TIMEOUT_MS }),
+    onError: (error: unknown) => {
+      toast.fromError(toAppError(error));
+    },
+    onSettled: settle,
+  });
 }
 
 /** **Reload local packs** (`POST /site-packs/reload`). */
@@ -176,7 +285,7 @@ export function useReloadSitePacks() {
   });
 }
 
-/** **Import…** one unsigned pack file as its exact text (`POST /site-packs/import {text}`); the caller shows `SITE_PACK_INVALID` issues. */
+/** **Import…** one unsigned pack file as its exact text (`POST /site-packs/import {text}`) or a signed folder (`{files, name}`); the caller shows the result and `SITE_PACK_INVALID` issues. */
 export function useImportSitePack() {
   const api = useApi();
   const settle = useSettle();
@@ -186,7 +295,7 @@ export function useImportSitePack() {
   });
 }
 
-/** Put a returned view into the cached list and catalog at once (the refetch follows). */
+/** Put a returned view into the cached lists, the catalog and the pack's page at once (the refetch follows). */
 export function patchCachedView(qc: ReturnType<typeof useQueryClient>, view: SitePackView): void {
   qc.setQueriesData<{ data: readonly SitePackView[] }>(
     { queryKey: keys.sitePacks.lists() },
@@ -194,5 +303,8 @@ export function patchCachedView(qc: ReturnType<typeof useQueryClient>, view: Sit
       old === undefined
         ? old
         : { ...old, data: old.data.map((v) => (v.pack_id === view.pack_id ? view : v)) },
+  );
+  qc.setQueryData<{ view: SitePackView }>(keys.sitePacks.detail(view.pack_id), (old) =>
+    old === undefined ? old : { ...old, view },
   );
 }

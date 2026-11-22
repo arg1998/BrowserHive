@@ -243,7 +243,10 @@ describe('SitePacksPage', () => {
         },
       },
     });
-    await click(await screen.findByRole('button', { name: 'Reload local packs' }));
+    // The header and the Registry card both offer it.
+    const buttons = await screen.findAllByRole('button', { name: 'Reload local packs' });
+    expect(buttons.length).toBe(2);
+    await click(buttons[0] as HTMLElement);
     await waitFor(() => expect(view.requests.some((r) => r.path.endsWith('/reload'))).toBe(true));
     expect((await screen.findAllByText('Loaded 3 pack versions')).length).toBeGreaterThan(0);
   });

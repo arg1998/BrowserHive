@@ -1,4 +1,4 @@
-/** @module features/site-packs/detail/SitePackPage — `/site-packs/$id` (spec 13 §11.4): every section of the pack as readable text (sign-in, signed-in check, writes and the site's terms, guards, guarded controls, security checks, sessions and pacing, what the site expects, strategies, verified dates and sources), its provenance and settings, its pending versions with their diffs, the local-file diff with **Approve**, its versions and its history; live over the `site-packs` topic */
+/** @module features/site-packs/detail/SitePackPage — `/site-packs/$id` (spec 13 §11.4): every section of the pack as readable text (sign-in, signed-in check, writes and the site's terms, guards, guarded controls, security checks, sessions and pacing, what the site expects, strategies, verified dates and sources), its provenance, sources, what the registry lists and its settings, a revoked version kept in force, every pending version (followed or not) with **Download & review** or its diff, the local-file diff with **Approve**, its versions and its history; live over the `site-packs` topic */
 import { Link, useParams } from '@tanstack/react-router';
 import { usePageCrumb } from '@/app/shell/page-crumb.tsx';
 import { Callout } from '@/components/shared/Callout.tsx';
@@ -9,14 +9,12 @@ import { Section } from '@/components/shared/Section.tsx';
 import { SkeletonCard } from '@/components/shared/Skeletons.tsx';
 import { useTemplatesOverview } from '@/features/templates/api.ts';
 import { toAppError } from '@/lib/api/errors.ts';
-import { useSitePack } from '../api.ts';
+import { useRegistryStatus, useSitePack } from '../api.ts';
 import { HistoryTab } from '../HistoryTabs.tsx';
-import { LocalApprovalCard } from '../LocalApprovalCard.tsx';
 import { useSitePacksLive } from '../live.ts';
 import { skippedText } from '../model.ts';
 import { usedByText } from '../pack-columns.tsx';
-import { PendingUpdateCard } from '../UpdateCards.tsx';
-import { pendingDecisions } from '../UpdatesSection.tsx';
+import { DecisionCards, pendingDecisions } from '../UpdatesSection.tsx';
 import { CheckSection, SignInSection, TermsSection } from './AccessSections.tsx';
 import { BrowserSection, PacingSection, ProvenanceSection } from './LimitSections.tsx';
 import { PackOverview } from './PackOverview.tsx';
@@ -28,6 +26,7 @@ export function SitePackPage() {
   const params = useParams({ strict: false }) as { readonly id?: string };
   const id = params.id ?? '';
   const query = useSitePack(id);
+  const status = useRegistryStatus();
   const templates = useTemplatesOverview();
   const nameOf = (templateId: string) =>
     templates.data?.data.find((t) => t.template_id === templateId)?.display_name ?? templateId;
@@ -48,7 +47,8 @@ export function SitePackPage() {
   }
   const detail = query.data;
   const { view, pack } = detail;
-  const decisions = pendingDecisions([view]);
+  // A pack's own page lists every pending version, followed or pinned or not.
+  const decisions = pendingDecisions([view], { all: true });
   return (
     <div className="flex min-w-0 flex-col gap-5">
       <PageHeader
@@ -94,16 +94,19 @@ export function SitePackPage() {
         </Callout>
       ) : null}
       {decisions.length > 0 ? (
-        <Section title="Waiting for your review" count={decisions.length}>
-          <div className="grid min-w-0 gap-4">
-            {decisions.map((d) => {
-              if (d.version === 'local') return <LocalApprovalCard key={d.key} pack={view} />;
-              const pending = view.pending.find((p) => p.version === d.version);
-              return pending === undefined ? null : (
-                <PendingUpdateCard key={d.key} pack={view} pending={pending} />
-              );
+        <Section
+          title="Waiting for your review"
+          count={decisions.length}
+          {...(view.pinned_version !== null && {
+            description: `Pinned at v${view.pinned_version}: newer versions wait here until you unpin it or apply one.`,
+          })}
+          {...(view.pinned_version === null &&
+            !view.follow.effective &&
+            view.pending.length > 0 && {
+              description: 'Not followed: these versions are not listed under Updates available.',
             })}
-          </div>
+        >
+          <DecisionCards decisions={decisions} status={status} />
         </Section>
       ) : null}
       <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">

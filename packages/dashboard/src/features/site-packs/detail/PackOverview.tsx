@@ -1,4 +1,4 @@
-/** @module features/site-packs/detail/PackOverview — the side column of a pack's page (spec 13 §9.6, §11.4): the version in force with its provenance, SHA-256, who approved it and when (or what adding a site would approve), the local file and its state, pinning, the pack's settings (Follow updates, Enabled, Revert…) and every version BrowserHive knows */
+/** @module features/site-packs/detail/PackOverview — the side column of a pack's page (spec 13 §9.6, §11.4): the version in force with its provenance, SHA-256, who approved it and when (or what adding a site would approve), the sources that know the pack and what the registry lists (newest version, a version for another BrowserHive, revoked), the local file and its state, pinning, the pack's settings (Follow updates, Enabled, Revert…) and every version BrowserHive knows */
 import type { SitePackDetailResponse, SitePackView } from '@browserhive/contracts/http';
 import { useId } from 'react';
 import { useToast } from '@/app/providers/ToastProvider.tsx';
@@ -11,6 +11,7 @@ import { useSitePackActions } from '../api.ts';
 import { iso, provenanceText, SOURCE_LABEL, skippedText } from '../model.ts';
 import { LocalOverrideBadge, LocalStatePill, ShaText } from '../PackBits.tsx';
 import { EnabledSwitch, FollowToggle, RevertButton } from '../PackControls.tsx';
+import { autoUpdated, clientRangeText, sourcesText } from '../registry-model.ts';
 
 const VERSION_STATE: {
   readonly [K in SitePackDetailResponse['versions'][number]['state']]: string;
@@ -65,7 +66,9 @@ function InForce({ view }: { readonly view: SitePackView }) {
       <ShaText sha256={approved.sha256} />
       {approved.at !== null ? (
         <span className="text-muted-foreground">
-          Approved{approved.by !== null ? ` by ${approved.by}` : ''}{' '}
+          {autoUpdated(view)
+            ? 'Applied by auto-update'
+            : `Approved${approved.by !== null ? ` by ${approved.by}` : ''}`}{' '}
           <RelativeTime at={approved.at} className="text-sm" />
         </span>
       ) : null}
@@ -92,6 +95,35 @@ function InForce({ view }: { readonly view: SitePackView }) {
   );
 }
 
+/** Where the pack is known from, and what the signed index lists for it. */
+function Sources({ view }: { readonly view: SitePackView }) {
+  const online = view.online;
+  return (
+    <div className="flex flex-col gap-1.5 border-t pt-4 text-sm">
+      <span className="font-medium">Sources</span>
+      <span>{sourcesText(view) || 'None'}</span>
+      {online !== null ? (
+        <span className="flex flex-col gap-0.5 text-muted-foreground">
+          <span>
+            Registry lists v{online.version} · released {online.released}
+            {online.revoked ? ' · revoked' : ''}
+          </span>
+          {online.needs_client !== null ? (
+            <span>
+              v{online.version} needs BrowserHive {clientRangeText(online.needs_client)}
+              {online.usable_version !== null
+                ? `; v${online.usable_version} is the newest this BrowserHive can use`
+                : ''}
+            </span>
+          ) : null}
+        </span>
+      ) : view.sources.includes('remote') ? null : (
+        <span className="text-muted-foreground">Not in the registry index</span>
+      )}
+    </div>
+  );
+}
+
 /** The side column. */
 export function PackOverview({ detail }: { readonly detail: SitePackDetailResponse }) {
   const { view } = detail;
@@ -101,6 +133,12 @@ export function PackOverview({ detail }: { readonly detail: SitePackDetailRespon
       <Panel title="In force">
         <div className="flex flex-col gap-4">
           <InForce view={view} />
+          {view.approved_revoked ? (
+            <p className="rounded-lg bg-danger-bg px-3 py-2 text-sm text-danger-text text-pretty">
+              Revoked by the publisher — still in force, review.
+            </p>
+          ) : null}
+          <Sources view={view} />
           {view.local !== null ? (
             <div className="flex flex-col gap-1.5 border-t pt-4 text-sm">
               <span className="font-medium">Local file</span>

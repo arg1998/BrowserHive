@@ -1,10 +1,20 @@
-/** @module features/site-packs/search — URL state of `/site-packs` (spec 13 §11.4): the tab (`packs`, `history`, `hits`), the source chips (`source`: Local, Bundled; Online and Imported arrive with the registry), Updates available (`pending=1`) and the search (`q`); and the REST query they make */
+/** @module features/site-packs/search — URL state of `/site-packs` (spec 13 §11.4): the tab (`packs`, `history`, `hits`), the source chips (`source`: Local, Online = `registry`, Bundled, Imported = `import`), Updates available (`pending=1`) and the search (`q`); and the REST query they make */
 import type { SitePacksQuery } from '@browserhive/contracts/http';
 import { z } from 'zod';
 import { csvParam, queryParam } from '@/lib/search/table.ts';
 
-/** Source chips of T3a (the registry's `registry` and `import` arrive with T4b). */
-export const PACK_SOURCE_CHIPS = ['local', 'bundled'] as const;
+/** Source chips, in the order shown (`registry`: listed in the signed index or approved from it). */
+export const PACK_SOURCE_CHIPS = ['local', 'registry', 'bundled', 'import'] as const;
+/** A source chip. */
+export type PackSourceChip = (typeof PACK_SOURCE_CHIPS)[number];
+
+/** A source chip's label. */
+export const PACK_SOURCE_CHIP_LABEL: { readonly [K in PackSourceChip]: string } = {
+  local: 'Local',
+  registry: 'Online',
+  bundled: 'Bundled',
+  import: 'Imported',
+};
 
 /** Tabs of the page. */
 export const SITE_PACK_TABS = ['packs', 'history', 'hits'] as const;

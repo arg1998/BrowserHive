@@ -1,9 +1,9 @@
-/** @module features/site-packs/live — keeps pack queries current over the `site-packs` topic (spec 13 §11.3): a changed pack patches the cached lists in place and refreshes its page and the templates using it; a new pending version or local file refreshes the lists, the badge and that pack; a status change (a reload) refreshes the lists */
+/** @module features/site-packs/live — keeps pack queries current over the `site-packs` topic (spec 13 §11.3): a changed pack patches the cached lists in place and refreshes its page and the templates using it; a new pending version or local file refreshes the lists, the badge and that pack; a status change (a reload, an update check) puts the new registry status into the cached lists at once and refreshes them */
 import type { WsFeedEvent } from '@browserhive/contracts/ws';
 import { type QueryClient, useQueryClient } from '@tanstack/react-query';
 import { useTopic } from '@/app/providers/SocketProvider.tsx';
 import { keys } from '@/lib/api/keys.ts';
-import { patchCachedView } from './api.ts';
+import { patchCachedStatus, patchCachedView } from './api.ts';
 
 /** The topic. */
 export const SITE_PACKS_TOPIC = 'site-packs';
@@ -25,6 +25,7 @@ export function applySitePackEvent(qc: QueryClient, event: WsFeedEvent): void {
       void qc.invalidateQueries({ queryKey: keys.sitePacks.detail(event.pack_id) });
       return;
     case 'site_pack.status':
+      patchCachedStatus(qc, event.status);
       void qc.invalidateQueries({ queryKey: keys.sitePacks.lists() });
       return;
     default:

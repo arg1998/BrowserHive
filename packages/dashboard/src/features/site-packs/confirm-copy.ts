@@ -158,3 +158,37 @@ export function attachPackConfirm(
     itemsLabel: 'The version you approve',
   };
 }
+
+/** One version of an Apply selected confirmation. */
+export interface SelectedForApply {
+  readonly title: string;
+  readonly from: number | null;
+  readonly version: number;
+  readonly classification: SitePackClassification;
+}
+
+/**
+ * Apply several downloaded versions at once (spec 13 §10.6 "take updates for some sites only"):
+ * every version listed with its class, those that relax rules or can stop a site first, and care
+ * when any does.
+ */
+export function applySelectedConfirm(items: readonly SelectedForApply[]): ConfirmOptions {
+  const careful = items.filter((i) => needsCare(i.classification));
+  const ordered = [...careful, ...items.filter((i) => !needsCare(i.classification))];
+  const n = items.length;
+  return {
+    title: `Apply ${n} ${n === 1 ? 'version' : 'versions'}?`,
+    description:
+      (careful.length === 0
+        ? `${n === 1 ? 'It only tightens' : 'Each only tightens'} rules or changes none. `
+        : `${careful.length === n ? (n === 1 ? 'It relaxes' : 'Each relaxes') : `${careful.length} of them relax`} rules or can stop a site: read their highlighted fields first. `) +
+      'They apply one after the other; templates using each pack follow at once, and each previous version is kept for Revert.',
+    confirmLabel: `Apply ${n} ${n === 1 ? 'version' : 'versions'}`,
+    items: ordered.map(
+      (i) =>
+        `${iso(i.title)} ${i.from === null ? '' : `v${i.from} → `}v${i.version} · ${CLASSIFICATION_INFO[i.classification].label}`,
+    ),
+    itemsLabel: 'Versions to apply',
+    danger: careful.length > 0,
+  };
+}

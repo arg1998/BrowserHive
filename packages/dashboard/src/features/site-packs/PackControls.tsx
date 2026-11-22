@@ -1,4 +1,4 @@
-/** @module features/site-packs/PackControls — a pack's settings as controls (spec 13 §10.6, §11.4): **Follow updates** (Auto, On, Off), **Enabled** (turning it off asks first), **Revert…** behind a confirmation classified like Apply (the diff from the version in force to the previous one, review #84 L4) when a previous version exists, a below-floor refusal of Revert explained in a dialog (D-71), and the row menu that reaches all of them from the keyboard (Shift+F10 on a table row) */
+/** @module features/site-packs/PackControls — a pack's settings as controls (spec 13 §10.6, §11.4): **Follow updates** (Auto, On, Off), **Enabled** (turning it off asks first), **Turn off…** as a button (a revoked version kept in force), **Revert…** behind a confirmation classified like Apply (the diff from the version in force to the previous one, review #84 L4) when a previous version exists, a below-floor refusal of Revert explained in a dialog (D-71), and the row menu that reaches all of them from the keyboard (Shift+F10 on a table row) */
 import type { SitePackView } from '@browserhive/contracts/http';
 import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
@@ -178,6 +178,23 @@ export function RevertButton({ pack }: { readonly pack: SitePackView }) {
       </Button>
       <RevertRefusal pack={pack} settings={settings} />
     </>
+  );
+}
+
+/** Turn the pack off (asks first); nothing once it is off. */
+export function TurnOffButton({ pack }: { readonly pack: SitePackView }) {
+  const settings = usePackSettings(pack);
+  if (!pack.enabled) return null;
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      disabled={settings.busy}
+      onClick={() => void settings.setEnabled(false)}
+    >
+      Turn off…
+    </Button>
   );
 }
 

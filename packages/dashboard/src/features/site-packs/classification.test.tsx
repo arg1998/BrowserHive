@@ -208,7 +208,7 @@ describe('a pending version', () => {
     const card = (await screen.findByRole('heading', { level: 3, name: /LinkedIn/ })).closest(
       'article',
     ) as HTMLElement;
-    expect(within(card).getByText('Revoked')).toBeDefined();
+    expect(within(card).getByText('Revoked by the publisher')).toBeDefined();
     expect(within(card).getByText(/The publisher revoked v3, the version in force/)).toBeDefined();
     expect(within(card).queryByText('Update')).toBeNull();
   });

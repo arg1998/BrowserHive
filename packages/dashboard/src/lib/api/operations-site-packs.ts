@@ -1,13 +1,18 @@
-/** @module lib/api/operations-site-packs — the site-pack operations of `HTTP_ENDPOINTS` (spec 13 §11.1 "Site packs", PRs T3a and T3b) and a template site's **Clear stop**, spread into `OPERATIONS` */
+/** @module lib/api/operations-site-packs — the site-pack operations of `HTTP_ENDPOINTS` (spec 13 §11.1 "Site packs", PRs T3a, T3b and the registry client of T4b: check, download, download all, export) and a template site's **Clear stop**, spread into `OPERATIONS` */
 import {
   SiteGuardHitsPage,
   SiteGuardHitsQuery,
   SitePackApproveLocalRequest,
   SitePackChangesPage,
   SitePackChangesQuery,
+  SitePackCheckResponse,
   SitePackDetailResponse,
   SitePackDiffQuery,
   SitePackDiffResponse,
+  SitePackDownloadAllResponse,
+  SitePackDownloadRequest,
+  SitePackDownloadResponse,
+  SitePackExportResponse,
   SitePackFollowRequest,
   SitePackIdParams,
   SitePackImportRequest,
@@ -26,13 +31,21 @@ import {
 /** `POST /site-packs/import` body: `{text}` (the file's exact UTF-8 text, hashed and stored verbatim), `{pack}` or `{files}`. */
 export const SitePackImportBody = SitePackImportRequest;
 
-/** Site-pack routes (T3a; the registry's check and download arrive with T4b). */
+/** Site-pack routes (T3a, T3b; the registry client's check, downloads and export from T4b). */
 export const SITE_PACK_OPERATIONS = {
   listSitePacks: { query: SitePacksQuery, response: SitePacksResponse },
   listSitePackChanges: { query: SitePackChangesQuery, response: SitePackChangesPage },
   listSiteGuardHits: { query: SiteGuardHitsQuery, response: SiteGuardHitsPage },
   listSiteStrategies: { response: SiteStrategiesResponse },
   reloadSitePacks: { response: SitePackReloadResponse },
+  checkSitePacks: { response: SitePackCheckResponse },
+  downloadAllSitePacks: { response: SitePackDownloadAllResponse },
+  exportSitePacks: { response: SitePackExportResponse },
+  downloadSitePack: {
+    params: SitePackIdParams,
+    body: SitePackDownloadRequest,
+    response: SitePackDownloadResponse,
+  },
   importSitePack: { body: SitePackImportBody, response: SitePackImportResponse },
   getSitePack: { params: SitePackIdParams, response: SitePackDetailResponse },
   diffSitePack: {
