@@ -1,7 +1,9 @@
 /** @module features/site-packs/UpdateFrame — the card frame of a decision waiting for review (an update, a revoked version or a local file): the pack's title (bidi-isolated, linking to the pack), what the card is about, its facts, the diff and the footer (a selection box at the start, the actions at the end); the heading takes focus after an action */
+
 import type { SitePackView } from '@browserhive/contracts/http';
 import { Link } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
+import { Plain } from '@/components/shared/Plain.tsx';
 
 /** The frame every decision card shares: heading row, facts, the diff, the footer. */
 export function UpdateFrame({
@@ -43,7 +45,7 @@ export function UpdateFrame({
               params={{ id: pack.pack_id }}
               className="hover:underline underline-offset-4 focus-ring rounded-sm"
             >
-              <bdi>{pack.title}</bdi>
+              <Plain>{pack.title}</Plain>
             </Link>{' '}
             <span className="font-normal text-muted-foreground">{heading}</span>
           </h3>

@@ -8,6 +8,7 @@ import type {
   SitePackSourceKind,
   SitePackView,
 } from '@browserhive/contracts/http';
+import { printable } from '@/lib/format/printable.ts';
 import type { Tone } from '@/lib/status-registry.ts';
 import { SOURCE_LABEL } from './model.ts';
 
@@ -35,7 +36,12 @@ export const CHECK_OFF_TEXT: {
 };
 
 /** The header's check line, or `null` with site packs off. */
-export function checkLine(status: SitePackRegistryStatus, pendingCount: number): CheckLine | null {
+export function checkLine(
+  status: SitePackRegistryStatus,
+  pendingCount: number,
+  /** Packs whose newer listed version nobody follows (review #100 M1). */
+  onlineUnfollowed = 0,
+): CheckLine | null {
   if (!status.enabled) return null;
   const at = status.last_check_at;
   if (status.check_off === 'no_trust_root')
@@ -45,13 +51,19 @@ export function checkLine(status: SitePackRegistryStatus, pendingCount: number):
   if (status.stale) return { at, outcome: 'index out of date', tone: 'warn' };
   if (status.last_outcome === 'failed') return { at, outcome: 'failed', tone: 'danger' };
   if (status.last_outcome === 'disabled') return { at, outcome: 'update check off', tone: 'muted' };
-  return pendingCount > 0
-    ? {
-        at,
-        outcome: `${pendingCount} ${pendingCount === 1 ? 'update' : 'updates'}`,
-        tone: 'accent',
-      }
-    : { at, outcome: 'up to date', tone: 'success' };
+  if (pendingCount > 0)
+    return {
+      at,
+      outcome: `${pendingCount} ${pendingCount === 1 ? 'update' : 'updates'}`,
+      tone: 'accent',
+    };
+  if (onlineUnfollowed > 0)
+    return {
+      at,
+      outcome: `${onlineUnfollowed} newer ${onlineUnfollowed === 1 ? 'version' : 'versions'} online · none followed`,
+      tone: 'info',
+    };
+  return { at, outcome: 'up to date', tone: 'success' };
 }
 
 /** Why **Check now** is unavailable, or `null`. */
@@ -101,6 +113,55 @@ export function newestAvailable(view: SitePackView): number | null {
   if (pending === null) return online;
   if (online === null) return pending;
   return Math.max(pending, online);
+}
+
+/** The listed version newer than the one in force (or on offer) that an operator set aside, or `null` (M4). */
+export function declinedOnline(view: SitePackView): number | null {
+  const online = view.online;
+  if (online === null || !online.declined || online.usable_version === null) return null;
+  const base = view.approved?.version ?? view.offer?.version ?? 0;
+  return online.usable_version > base ? online.usable_version : null;
+}
+
+/** A newer listed version that Updates available does not show: the pack is not followed, or pinned (M1). */
+export function unfollowedOnline(view: SitePackView): number | null {
+  const online = view.online;
+  if (online === null || online.declined || online.usable_version === null) return null;
+  if (view.follow.effective && view.pinned_version === null) return null;
+  const base = view.approved?.version ?? view.offer?.version ?? 0;
+  return online.usable_version > base ? online.usable_version : null;
+}
+
+/** How many packs list a newer version that no followed pack shows (the M1 line). */
+export function unfollowedOnlineCount(packs: readonly SitePackView[]): number {
+  return packs.filter((p) => unfollowedOnline(p) !== null).length;
+}
+
+/** Why a check failed, in words (`last_error.code`); never the raw code (review #100 L2). */
+export const CHECK_ERROR_TEXT: Readonly<Record<string, string>> = {
+  insecure_url: 'The registry address is not https',
+  network: 'The registry could not be reached',
+  timeout: 'The registry did not answer in time',
+  http_status: 'The registry answered with an error',
+  redirect: 'The registry redirected the request, which BrowserHive does not follow',
+  too_large: 'A registry file was larger than allowed',
+  not_modified_without_body: 'The registry said nothing changed, but BrowserHive holds no copy',
+  missing: 'A registry file is missing',
+  expired: 'The registry index has expired',
+  stale: 'The registry index has expired',
+  rollback: 'The registry served an older index than the one BrowserHive holds',
+  other_client: 'The index is for another BrowserHive',
+};
+
+/** A failed check's reason as a sentence. */
+export function checkErrorText(error: { readonly code: string; readonly message: string }): string {
+  return CHECK_ERROR_TEXT[error.code] ?? 'The registry’s files were refused';
+}
+
+/** Text ending with a full stop (server messages joined into a sentence). */
+export function sentence(text: string): string {
+  const t = text.trim();
+  return t === '' || /[.!?…]$/.test(t) ? t : `${t}.`;
 }
 
 /** "v9 needs BrowserHive ≥ 0.4.0" when the newest listed version is for another BrowserHive. */
@@ -200,7 +261,7 @@ export function checkToast(response: SitePackCheckResponse): {
         description:
           response.error === undefined
             ? 'Approved packs keep applying.'
-            : `${response.error.message} Approved packs keep applying.`,
+            : `${checkErrorText(response.error)} (${sentence(printable(response.error.message))}) Approved packs keep applying.`,
       };
   }
 }
@@ -244,11 +305,22 @@ export const IMPORT_STATE_TEXT: Readonly<Record<string, string>> = {
   current: 'already in force or not newer',
   refused: 'refused: its file didn’t verify',
   other_client: 'for another BrowserHive',
+  revoked: 'revoked by the publisher',
 };
+
+/** What an imported version became, in words: a downloaded version of a pack nobody follows says how to see it (M7). */
+export function importStateText(item: {
+  readonly state: string;
+  readonly followed?: boolean | undefined;
+}): string {
+  if (item.state === 'downloaded' && item.followed === false)
+    return 'downloaded; turn Follow on to review it';
+  return IMPORT_STATE_TEXT[item.state] ?? item.state;
+}
 
 /** The tone of an imported version's state. */
 export function importStateTone(state: string): Tone {
-  if (state === 'refused') return 'danger';
+  if (state === 'refused' || state === 'revoked') return 'danger';
   if (state === 'downloaded' || state === 'not_approved' || state === 'changed') return 'accent';
   return 'muted';
 }
@@ -268,9 +340,20 @@ export function importLayoutTitle(response: SitePackImportResponse, name: string
 
 /** Counts of an import by state ("2 wait for review · 1 refused"). */
 export function importCounts(response: SitePackImportResponse): string {
-  const count = (state: string) => response.imported.filter((i) => i.state === state).length;
+  const count = (state: string) =>
+    response.imported.filter(
+      (i) => i.state === state && !(state === 'downloaded' && i.followed === false),
+    ).length;
+  const unfollowed = response.imported.filter(
+    (i) => i.state === 'downloaded' && i.followed === false,
+  ).length;
   const parts = [
     [count('downloaded'), (n: number) => `${n} ${n === 1 ? 'waits' : 'wait'} for review`],
+    [
+      unfollowed,
+      (n: number) => `${n} downloaded for ${n === 1 ? 'a pack' : 'packs'} you don’t follow`,
+    ],
+    [count('revoked'), (n: number) => `${n} revoked by the publisher`],
     [
       count('available'),
       (n: number) => `${n} listed without ${n === 1 ? 'its file' : 'their files'}`,
@@ -281,4 +364,32 @@ export function importCounts(response: SitePackImportResponse): string {
   ] as const;
   const text = parts.filter(([n]) => n > 0).map(([n, f]) => f(n));
   return text.length === 0 ? 'No pack version in it is newer.' : `${text.join(' · ')}.`;
+}
+
+/**
+ * What a template's Sites tab says about a site's pack beside its version (review #100 M6):
+ * revoked, pinned with a newer version, a version waiting for review or listed, one set aside.
+ */
+export function packUpdateHint(
+  view: SitePackView,
+): { readonly text: string; readonly tone: Tone } | null {
+  if (view.approved_revoked) return { text: 'Revoked by the publisher', tone: 'danger' };
+  const newest = newestAvailable(view);
+  if (view.pinned_version !== null)
+    return newest === null
+      ? null
+      : { text: `Pinned at v${view.pinned_version}, v${newest} available`, tone: 'neutral' };
+  if (view.pending.length > 0) {
+    const last = view.pending.reduce((a, b) => (b.version > a.version ? b : a));
+    return {
+      text:
+        last.state === 'available'
+          ? `v${last.version} available`
+          : `v${last.version} waiting for review`,
+      tone: 'accent',
+    };
+  }
+  const declined = declinedOnline(view);
+  if (declined !== null) return { text: `v${declined} set aside`, tone: 'muted' };
+  return null;
 }

@@ -1,16 +1,19 @@
 /** @module features/site-packs/detail/PackOverview — the side column of a pack's page (spec 13 §9.6, §11.4): the version in force with its provenance, SHA-256, who approved it and when (or what adding a site would approve), the sources that know the pack and what the registry lists (newest version, a version for another BrowserHive, revoked), the local file and its state, pinning, the pack's settings (Follow updates, Enabled, Revert…) and every version BrowserHive knows */
+
 import type { SitePackDetailResponse, SitePackView } from '@browserhive/contracts/http';
 import { useId } from 'react';
 import { useToast } from '@/app/providers/ToastProvider.tsx';
 import { Chip } from '@/components/shared/Chip.tsx';
+import { Plain } from '@/components/shared/Plain.tsx';
 import { RelativeTime } from '@/components/shared/RelativeTime.tsx';
 import { Panel } from '@/components/shared/Section.tsx';
 import { Button } from '@/components/ui/button.tsx';
+import { printable } from '@/lib/format/printable.ts';
 import { ICONS } from '@/lib/icons.ts';
-import { useSitePackActions } from '../api.ts';
+import { useRegistryName, useSitePackActions } from '../api.ts';
 import { iso, provenanceText, SOURCE_LABEL, skippedText } from '../model.ts';
 import { LocalOverrideBadge, LocalStatePill, ShaText } from '../PackBits.tsx';
-import { EnabledSwitch, FollowToggle, RevertButton } from '../PackControls.tsx';
+import { EnabledSwitch, FollowToggle, RevertButton, SetAsideLine } from '../PackControls.tsx';
 import { autoUpdated, clientRangeText, sourcesText } from '../registry-model.ts';
 
 const VERSION_STATE: {
@@ -27,6 +30,7 @@ const VERSION_STATE: {
 /** The version in force, or on offer. */
 function InForce({ view }: { readonly view: SitePackView }) {
   const actions = useSitePackActions(view.pack_id);
+  const registry = useRegistryName();
   const toast = useToast();
   const approved = view.approved;
   if (approved === null) {
@@ -38,7 +42,7 @@ function InForce({ view }: { readonly view: SitePackView }) {
             <span className="text-muted-foreground">
               Adding one of its sites to a template approves v{view.offer.version}:
             </span>
-            <bdi>{provenanceText(view.offer.provenance, view.offer.source)}</bdi>
+            <Plain>{provenanceText(view.offer.provenance, view.offer.source, registry)}</Plain>
             <ShaText sha256={view.offer.sha256} />
           </>
         ) : (
@@ -60,9 +64,9 @@ function InForce({ view }: { readonly view: SitePackView }) {
         <Chip>{SOURCE_LABEL[approved.source]}</Chip>
         {view.local_override ? <LocalOverrideBadge version={approved.version} /> : null}
       </span>
-      <bdi className="[overflow-wrap:anywhere]">
-        {provenanceText(approved.provenance, approved.source)}
-      </bdi>
+      <Plain className="[overflow-wrap:anywhere]">
+        {provenanceText(approved.provenance, approved.source, registry)}
+      </Plain>
       <ShaText sha256={approved.sha256} />
       {approved.at !== null ? (
         <span className="text-muted-foreground">
@@ -105,12 +109,12 @@ function Sources({ view }: { readonly view: SitePackView }) {
       {online !== null ? (
         <span className="flex flex-col gap-0.5 text-muted-foreground">
           <span>
-            Registry lists v{online.version} · released {online.released}
+            Registry lists v{online.version} · released {printable(online.released)}
             {online.revoked ? ' · revoked' : ''}
           </span>
           {online.needs_client !== null ? (
             <span>
-              v{online.version} needs BrowserHive {clientRangeText(online.needs_client)}
+              v{online.version} needs BrowserHive {printable(clientRangeText(online.needs_client))}
               {online.usable_version !== null
                 ? `; v${online.usable_version} is the newest this BrowserHive can use`
                 : ''}
@@ -120,6 +124,7 @@ function Sources({ view }: { readonly view: SitePackView }) {
       ) : view.sources.includes('remote') ? null : (
         <span className="text-muted-foreground">Not in the registry index</span>
       )}
+      <SetAsideLine pack={view} />
     </div>
   );
 }
@@ -142,7 +147,9 @@ export function PackOverview({ detail }: { readonly detail: SitePackDetailRespon
           {view.local !== null ? (
             <div className="flex flex-col gap-1.5 border-t pt-4 text-sm">
               <span className="font-medium">Local file</span>
-              <bdi className="font-mono text-xs [overflow-wrap:anywhere]">{view.local.path}</bdi>
+              <Plain className="font-mono text-xs [overflow-wrap:anywhere]">
+                {view.local.path}
+              </Plain>
               <LocalStatePill local={view.local} />
               {view.local.problem !== null ? (
                 <span className="text-warn-text text-pretty">{view.local.problem}</span>
@@ -151,7 +158,7 @@ export function PackOverview({ detail }: { readonly detail: SitePackDetailRespon
           ) : null}
           {view.skipped !== undefined ? (
             <p className="border-t pt-4 text-sm text-warn-text text-pretty">
-              <bdi>{skippedText(view.skipped)}</bdi>
+              <Plain>{skippedText(view.skipped)}</Plain>
             </p>
           ) : null}
         </div>

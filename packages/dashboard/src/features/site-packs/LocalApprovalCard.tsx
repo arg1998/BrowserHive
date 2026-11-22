@@ -1,8 +1,10 @@
 /** @module features/site-packs/LocalApprovalCard — a local file waiting for approval (spec 13 §10.5): its path and state, the classified approved-versus-current diff (a below-floor refusal explained in place), and **Approve** behind a confirmation naming the SHA-256 whose copy and care follow the classification (review #84 L1). The hash approved is the one of the diff on screen (`to.sha256` of that response, review S-M3): Approve waits while the diff loads or refreshes, and when the file changed since the list was read */
+
 import type { SitePackView } from '@browserhive/contracts/http';
 import { useId } from 'react';
 import { useConfirm } from '@/app/providers/ConfirmProvider.tsx';
 import { useToast } from '@/app/providers/ToastProvider.tsx';
+import { Plain } from '@/components/shared/Plain.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { toAppError } from '@/lib/api/errors.ts';
 import { ICONS } from '@/lib/icons.ts';
@@ -62,7 +64,7 @@ export function LocalApprovalCard({ pack }: { readonly pack: SitePackView }) {
       }
       facts={
         <>
-          <bdi className="font-mono text-xs [overflow-wrap:anywhere]">{local.path}</bdi>
+          <Plain className="font-mono text-xs [overflow-wrap:anywhere]">{local.path}</Plain>
           {sha !== null ? <ShaText sha256={sha} /> : null}
           {local.state === 'changed' ? (
             <span>The approved content keeps applying until you approve this one.</span>

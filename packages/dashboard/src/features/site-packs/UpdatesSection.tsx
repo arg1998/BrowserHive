@@ -1,6 +1,6 @@
-/** @module features/site-packs/UpdatesSection — "Updates available" on top of `/site-packs` (spec 13 §10.6, §11.4): one card per pending version of a followed, unpinned pack (listed and not downloaded, or downloaded and classified), per revoked version kept in force and per local file that needs approval, from the unfiltered catalog so filters never hide a decision. Downloaded versions can be selected and applied together (**Apply selected**, one after the other, behind a confirmation that lists what relaxes rules). After an action focus returns to the card, or to the next card when it left */
+/** @module features/site-packs/UpdatesSection — "Updates available" on top of `/site-packs` (spec 13 §10.6, §11.4): one card per pending version of a followed, unpinned pack (listed and not downloaded, or downloaded and classified), per revoked version kept in force and per local file that needs approval, from the unfiltered catalog so filters never hide a decision; revoked versions first (review #100 L4); what downloading reveals said once under the heading (L13). Downloaded versions can be selected and applied together (**Apply selected**, one after the other, behind a confirmation that lists what relaxes rules). Focus after an action belongs to the page's `DecisionFocusScope` */
 import type { SitePackRegistryStatus, SitePackView } from '@browserhive/contracts/http';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useConfirm } from '@/app/providers/ConfirmProvider.tsx';
 import { useToast } from '@/app/providers/ToastProvider.tsx';
 import { Section } from '@/components/shared/Section.tsx';
@@ -9,9 +9,11 @@ import { Spinner } from '@/components/ui/spinner.tsx';
 import { ICONS } from '@/lib/icons.ts';
 import { useApplySelected } from './api.ts';
 import { applySelectedConfirm } from './confirm-copy.ts';
+import { useDecisionFocus } from './decision-focus.tsx';
 import { LocalApprovalCard } from './LocalApprovalCard.tsx';
 import { iso } from './model.ts';
-import { type CardAction, PendingUpdateCard, RevokedKeptCard } from './UpdateCards.tsx';
+import { DOWNLOAD_REVEALS } from './registry-model.ts';
+import { PendingUpdateCard, RevokedKeptCard } from './UpdateCards.tsx';
 
 /** One decision waiting: a pending version, a revoked version kept in force, or a local file. */
 export interface Decision {
@@ -20,15 +22,27 @@ export interface Decision {
   readonly version: number | 'local' | 'revoked';
 }
 
+/** The pending row of a numbered decision. */
+function pendingOf(d: Decision) {
+  return typeof d.version === 'number'
+    ? d.pack.pending.find((p) => p.version === d.version)
+    : undefined;
+}
+
+/** A revoked version in force is the most urgent decision (L4). */
+function isRevoked(d: Decision): boolean {
+  return d.version === 'revoked' || pendingOf(d)?.classification === 'revoked';
+}
+
 /**
- * The decisions waiting, in pack order. `all`: every pending version, followed or pinned or not
- * (a pack's own page).
+ * The decisions waiting, revoked ones first, then in pack order. `all`: every pending version,
+ * followed or pinned or not (a pack's own page).
  */
 export function pendingDecisions(
   packs: readonly SitePackView[],
   options: { readonly all?: boolean } = {},
 ): readonly Decision[] {
-  return packs.flatMap((pack) => {
+  const decisions: Decision[] = packs.flatMap((pack) => {
     const updates =
       options.all === true || (pack.follow.effective && pack.pinned_version === null)
         ? pack.pending.map((p) => ({
@@ -48,56 +62,31 @@ export function pendingDecisions(
         : [];
     return [...revoked, ...local, ...updates];
   });
+  return [...decisions.filter(isRevoked), ...decisions.filter((d) => !isRevoked(d))];
 }
 
-/** The pending row of a numbered decision. */
-function pendingOf(d: Decision) {
-  return typeof d.version === 'number'
-    ? d.pack.pending.find((p) => p.version === d.version)
-    : undefined;
+/** `true` when a decision is a version not downloaded yet. */
+export function hasAvailable(decisions: readonly Decision[]): boolean {
+  return decisions.some((d) => pendingOf(d)?.state === 'available');
 }
 
-/** The decision cards with selection and focus; also a pack's own page. */
+/** The decision cards; also a pack's own page. */
 export function DecisionCards({
   decisions,
   status,
   selectable = false,
   selected,
   onSelect,
-  onEmpty,
 }: {
   readonly decisions: readonly Decision[];
   readonly status: SitePackRegistryStatus | undefined;
   readonly selectable?: boolean;
   readonly selected?: ReadonlySet<string>;
   readonly onSelect?: (key: string, on: boolean) => void;
-  /** Focus target when the last card left. */
-  readonly onEmpty?: () => void;
 }) {
-  const grid = useRef<HTMLDivElement>(null);
-  const [focusAfter, setFocusAfter] = useState<{ key: string; index: number; tick: number } | null>(
-    null,
-  );
-  const keys = decisions.map((d) => d.key).join('|');
-  useEffect(() => {
-    if (focusAfter === null || grid.current === null) return;
-    const cards = Array.from(grid.current.querySelectorAll<HTMLElement>('[data-decision]'));
-    const same = cards.find((c) => c.dataset['decision'] === focusAfter.key);
-    const target = same ?? cards[Math.min(focusAfter.index, cards.length - 1)];
-    const heading = target?.querySelector<HTMLElement>('[data-card-heading]');
-    if (heading !== null && heading !== undefined) heading.focus();
-    else if (cards.length === 0) onEmpty?.();
-    // Once the card the action came from has left (or stayed and got focus), stop following.
-    if (same !== undefined || !keys.split('|').includes(focusAfter.key)) setFocusAfter(null);
-  }, [focusAfter, keys, onEmpty]);
-  const ticks = useRef(0);
-  const done = (key: string, index: number) => (_action: CardAction) => {
-    ticks.current += 1;
-    setFocusAfter({ key, index, tick: ticks.current });
-  };
   return (
-    <div ref={grid} className="grid min-w-0 gap-4 2xl:grid-cols-2">
-      {decisions.map((d, index) => {
+    <div className="grid min-w-0 gap-4 2xl:grid-cols-2">
+      {decisions.map((d) => {
         if (d.version === 'local')
           return (
             <div key={d.key} data-decision={d.key} className="min-w-0">
@@ -122,6 +111,7 @@ export function DecisionCards({
               pack={d.pack}
               pending={pending}
               status={status}
+              decisionKey={d.key}
               {...(selectable &&
                 selected !== undefined &&
                 onSelect !== undefined && {
@@ -130,7 +120,6 @@ export function DecisionCards({
                     onChange: (on: boolean) => onSelect(d.key, on),
                   },
                 })}
-              onDone={done(d.key, index)}
             />
           </div>
         );
@@ -139,20 +128,28 @@ export function DecisionCards({
   );
 }
 
+/** What downloading reveals, said once above the cards (L13). */
+export function RevealsNote() {
+  return (
+    <p className="flex min-w-0 items-start gap-2 text-sm text-muted-foreground text-pretty">
+      <ICONS.info aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+      <span>{DOWNLOAD_REVEALS}</span>
+    </p>
+  );
+}
+
 /** The section, or nothing when nothing waits. */
 export function UpdatesSection({
   packs,
   status,
-  onEmpty,
 }: {
   readonly packs: readonly SitePackView[];
   readonly status?: SitePackRegistryStatus | undefined;
-  /** Focus target when the last card left. */
-  readonly onEmpty?: () => void;
 }) {
   const decisions = pendingDecisions(packs);
   const confirm = useConfirm();
   const toast = useToast();
+  const focus = useDecisionFocus();
   const applySelected = useApplySelected();
   const [chosen, setChosen] = useState<ReadonlySet<string>>(() => new Set());
   const downloaded = decisions.filter((d) => pendingOf(d)?.state === 'downloaded');
@@ -168,6 +165,7 @@ export function UpdatesSection({
       return next;
     });
   const onApplySelected = async () => {
+    if (applySelected.isPending) return;
     const items = downloaded.filter((d) => selected.has(d.key));
     const copy = items.map((d) => ({
       title: d.pack.title,
@@ -176,79 +174,88 @@ export function UpdatesSection({
       classification: pendingOf(d)?.classification ?? 'unclassified',
     }));
     if (!(await confirm(applySelectedConfirm(copy)))) return;
-    applySelected.mutate(
-      items.map((d) => ({
-        packId: d.pack.pack_id,
-        title: d.pack.title,
-        version: typeof d.version === 'number' ? d.version : 0,
-      })),
-      {
-        onSuccess: ({ applied, failed }) => {
-          setChosen(new Set());
-          if (failed.length === 0) {
-            toast.success({
-              title: `Applied ${applied.length} ${applied.length === 1 ? 'version' : 'versions'}`,
-            });
-            return;
-          }
-          toast.warning({
-            title: `Applied ${applied.length} of ${applied.length + failed.length}`,
-            description: failed
-              .map(
-                (f) =>
-                  `${iso(f.item.title)} v${f.item.version}: ${f.code === 'SITE_PACK_BELOW_FLOOR' ? 'a template is below its stealth floor, open its card' : f.message}`,
-              )
-              .join(' · '),
-          });
-        },
-      },
-    );
+    for (const d of items) focus?.start(d.key);
+    try {
+      const { applied, failed } = await applySelected.mutateAsync(
+        items.map((d) => ({
+          packId: d.pack.pack_id,
+          title: d.pack.title,
+          version: typeof d.version === 'number' ? d.version : 0,
+        })),
+      );
+      for (const f of failed) focus?.cancel(`${f.item.packId}@${f.item.version}`);
+      setChosen(new Set());
+      if (failed.length === 0) {
+        toast.success({
+          title: `Applied ${applied.length} ${applied.length === 1 ? 'version' : 'versions'}`,
+        });
+        return;
+      }
+      toast.warning({
+        title: `Applied ${applied.length} of ${applied.length + failed.length}`,
+        description: failed
+          .map(
+            (f) =>
+              `${iso(f.item.title)} v${f.item.version}: ${f.code === 'SITE_PACK_BELOW_FLOOR' ? 'a template is below its stealth floor, open its card' : f.message}`,
+          )
+          .join(' · '),
+      });
+    } catch {
+      for (const d of items) focus?.cancel(d.key);
+    }
   };
   return (
-    <Section
-      title="Updates available"
-      count={decisions.length}
-      description="Nothing here applies until you approve it. Templates keep using the version they have."
-      info={
-        <p>
-          Approving records who approved which version, with its SHA-256 and where it came from. A
-          registry version is downloaded only when you press Download & review. A local file is
-          approved once per content: a later edit waits here again.
-        </p>
-      }
-      infoDocs="sitePacksApproval"
-      {...(selectable && {
-        actions:
-          selected.size > 0 ? (
-            <>
-              <Button type="button" variant="ghost" size="sm" onClick={() => setChosen(new Set())}>
-                Clear
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                disabled={applySelected.isPending}
-                onClick={() => void onApplySelected()}
-              >
-                {applySelected.isPending ? <Spinner /> : <ICONS.checkAll aria-hidden="true" />}
-                Apply {selected.size} selected…
-              </Button>
-            </>
-          ) : (
-            <span className="text-sm text-muted-foreground">
-              Select downloaded updates to apply several at once
-            </span>
-          ),
-      })}
-    >
-      <DecisionCards
-        decisions={decisions}
-        status={status}
-        selectable={selectable}
-        selected={selected}
-        onSelect={onSelect}
-        {...(onEmpty !== undefined && { onEmpty })}
-      />
-    </Section>
+    <div data-updates="" className="contents">
+      <Section
+        title="Updates available"
+        count={decisions.length}
+        description="Nothing here applies until you approve it. Templates keep using the version they have."
+        info={
+          <p>
+            Approving records who approved which version, with its SHA-256 and where it came from. A
+            registry version is downloaded only when you press Download & review. A local file is
+            approved once per content: a later edit waits here again.
+          </p>
+        }
+        infoDocs="sitePacksApproval"
+        {...(selectable && {
+          actions:
+            selected.size > 0 ? (
+              <>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setChosen(new Set())}
+                >
+                  Clear
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  aria-disabled={applySelected.isPending || undefined}
+                  onClick={() => void onApplySelected()}
+                >
+                  {applySelected.isPending ? <Spinner /> : <ICONS.checkAll aria-hidden="true" />}
+                  Apply {selected.size} selected…
+                </Button>
+              </>
+            ) : (
+              <span className="text-sm text-muted-foreground">
+                Select downloaded updates to apply several at once
+              </span>
+            ),
+        })}
+      >
+        {hasAvailable(decisions) ? <RevealsNote /> : null}
+        <DecisionCards
+          decisions={decisions}
+          status={status}
+          selectable={selectable}
+          selected={selected}
+          onSelect={onSelect}
+        />
+      </Section>
+    </div>
   );
 }

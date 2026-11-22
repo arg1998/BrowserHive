@@ -1,10 +1,12 @@
 /** @module features/templates/detail/SitePackRows — a site's pack on its Sites-tab card (spec 13 §9.3, §9.6, §11.4): the pack's title, version and source ("Local file overrides vN"), sign in by hand only, "What the site's terms say" as a label with the clause quoted verbatim (checked date, address as text) and the exception, the write policy select ("Pack default: Confirm"; off with a note when the pack guards no writes yet), the guard, guarded-control and security-check counts linking to the pack page; for a generic site whose domain now has a pack, **Use the … site pack** (`PUT` with the `pack_sha256` the confirmation names) */
+
 import type { TemplateSitePack, TemplateSiteView } from '@browserhive/contracts/http';
 import { Link } from '@tanstack/react-router';
 import { useId } from 'react';
 import { useConfirm } from '@/app/providers/ConfirmProvider.tsx';
 import { useToast } from '@/app/providers/ToastProvider.tsx';
 import { Chip } from '@/components/shared/Chip.tsx';
+import { Plain } from '@/components/shared/Plain.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import {
   Select,
@@ -31,6 +33,7 @@ import {
   StanceLabel,
   TermsClause,
 } from '@/features/site-packs/PackBits.tsx';
+import { packUpdateHint } from '@/features/site-packs/registry-model.ts';
 import { useTemplateOperations } from '../api-operations.ts';
 import { Row } from './site-row.tsx';
 
@@ -135,8 +138,8 @@ function UsePack({
   return (
     <div className="flex flex-col items-start gap-2">
       <p className="text-muted-foreground">
-        None yet. BrowserHive has a <bdi>{pack.title}</bdi> pack (v{choice.version},{' '}
-        <bdi>{choice.provenanceShort}</bdi>).
+        None yet. BrowserHive has a <Plain>{pack.title}</Plain> pack (v{choice.version},{' '}
+        <Plain>{choice.provenanceShort}</Plain>).
       </p>
       <Button
         type="button"
@@ -145,7 +148,7 @@ function UsePack({
         disabled={ops.putSite.isPending}
         onClick={() => void onUse()}
       >
-        Use the <bdi>{pack.title}</bdi> site pack…
+        Use the <Plain>{pack.title}</Plain> site pack…
       </Button>
     </div>
   );
@@ -153,6 +156,26 @@ function UsePack({
 
 function count(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
+}
+
+/** The pack's update state from the Site packs catalog, linking to the pack (review #100 M6). */
+function PackUpdateChip({ packId }: { readonly packId: string }) {
+  const catalog = useSitePackCatalog();
+  const view = catalog.data?.data.find((p) => p.pack_id === packId);
+  const hint = view === undefined ? null : packUpdateHint(view);
+  if (hint === null) return null;
+  return (
+    <Link
+      to="/site-packs/$id"
+      params={{ id: packId }}
+      className="rounded-md focus-ring"
+      data-pack-update=""
+    >
+      <Chip tone={hint.tone} className="hover:underline underline-offset-2">
+        {hint.text}
+      </Chip>
+    </Link>
+  );
 }
 
 /** The pack rows of a site card. */
@@ -186,12 +209,13 @@ export function SitePackRows({
               params={{ id: pack.pack_id }}
               className="font-medium text-link underline decoration-link/40 underline-offset-2 hover:decoration-link"
             >
-              <bdi>{pack.title}</bdi>
+              <Plain>{pack.title}</Plain>
             </Link>
             <span className="tabular-nums">v{pack.version}</span>
             <Chip tone="neutral">{SOURCE_LABEL[pack.source]}</Chip>
             {pack.local_override ? <LocalOverrideBadge version={null} /> : null}
             {!pack.enabled ? <Chip tone="muted">Turned off</Chip> : null}
+            <PackUpdateChip packId={pack.pack_id} />
           </span>
           <ShaText sha256={pack.sha256} className="text-muted-foreground" />
           {pack.human_only ? (
@@ -213,7 +237,7 @@ export function SitePackRows({
           {pack.exception !== null ? (
             <p className="text-sm text-pretty">
               <span className="font-medium">Why the pack’s default differs:</span>{' '}
-              <bdi>{pack.exception}</bdi>
+              <Plain>{pack.exception}</Plain>
             </p>
           ) : null}
         </div>

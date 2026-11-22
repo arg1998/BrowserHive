@@ -125,11 +125,21 @@ describe('SitePacksPage', () => {
     await waitFor(() =>
       expect(view.requests.find((r) => r.path.endsWith('/apply'))?.body).toEqual({ version: 4 }),
     );
-    await click(within(card).getByRole('button', { name: 'Reject' }));
+    const again = (await screen.findByRole('heading', { level: 3, name: /LinkedIn/ })).closest(
+      'article',
+    ) as HTMLElement;
+    await click(within(again).getByRole('button', { name: 'Reject…' }));
+    const rejectDialog = await screen.findByRole('alertdialog');
+    // Rejecting sets the version aside (review #100 M4).
+    expect(within(rejectDialog).getByText(/v4 is set aside/)).toBeDefined();
+    await click(within(rejectDialog).getByRole('button', { name: 'Reject v4' }));
     await waitFor(() =>
       expect(view.requests.find((r) => r.path.endsWith('/reject'))?.body).toEqual({ version: 4 }),
     );
-    await click(within(card).getByRole('button', { name: 'Pin v3' }));
+    const third = (await screen.findByRole('heading', { level: 3, name: /LinkedIn/ })).closest(
+      'article',
+    ) as HTMLElement;
+    await click(within(third).getByRole('button', { name: 'Pin v3' }));
     await waitFor(() =>
       expect(view.requests.find((r) => r.path.endsWith('/pin'))?.body).toEqual({ version: 3 }),
     );

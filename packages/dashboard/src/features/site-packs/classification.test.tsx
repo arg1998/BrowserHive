@@ -126,7 +126,7 @@ describe('DiffView', () => {
       />,
     );
     expect(screen.queryByText('Relaxes rules')).toBeNull();
-    expect(screen.getByText('A new pack: all 1 fields are new')).toBeDefined();
+    expect(screen.getByText(/Nothing to compare with: all 1 fields are new/)).toBeDefined();
   });
 });
 

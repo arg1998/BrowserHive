@@ -5,6 +5,7 @@ import { ErrorState } from '@/components/shared/ErrorState.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { Skeleton } from '@/components/ui/skeleton.tsx';
 import { toAppError } from '@/lib/api/errors.ts';
+import { printable } from '@/lib/format/printable.ts';
 import { ICONS } from '@/lib/icons.ts';
 import { cn } from '@/lib/utils.ts';
 import { useSitePackDiff } from './api.ts';
@@ -79,7 +80,7 @@ function ChangeItem({ change }: { readonly change: SitePackDiffResponse['changes
     >
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <span className="min-w-0 font-mono text-sm font-medium [overflow-wrap:anywhere]">
-          {change.path}
+          {printable(change.path)}
         </span>
         {change.class !== null ? <ClassificationChip classification={change.class} /> : null}
       </div>
@@ -97,31 +98,37 @@ function ChangeItem({ change }: { readonly change: SitePackDiffResponse['changes
  * new.
  */
 export function DiffView({ diff }: { readonly diff: SitePackDiffResponse }) {
-  const [open, setOpen] = useState(false);
   const fresh = diff.from === null;
-  const limit = fresh ? 0 : DIFF_PREVIEW;
-  const ordered = fresh ? diff.changes : bySeverity(diff.changes);
+  // A first version compared with nothing lists every field, those that need care first and
+  // highlighted: it needs an explicit review (review #100 M2).
+  const [open, setOpen] = useState(fresh);
+  const limit = DIFF_PREVIEW;
+  const ordered = bySeverity(diff.changes);
   const shown = open ? ordered : ordered.slice(0, limit);
   const hidden = ordered.length - shown.length;
   return (
     <div className="flex min-w-0 flex-col gap-3">
       {fresh ? (
         <p className="text-sm text-muted-foreground">
-          A new pack: all {diff.changes.length} fields are new
+          Nothing to compare with: all {diff.changes.length} fields are new. Read each before you
+          apply it.
         </p>
       ) : (
         <DiffSummary diff={diff} />
       )}
       {fresh && diff.new_domains.length > 0 ? (
         <p className="text-sm text-muted-foreground">
-          Covers <span className="font-mono text-foreground">{diff.new_domains.join(', ')}</span>
+          Covers{' '}
+          <span className="font-mono text-foreground">
+            {printable(diff.new_domains.join(', '))}
+          </span>
         </p>
       ) : null}
       {!fresh && diff.new_domains.length > 0 ? (
         <p className="rounded-lg border-l-[3px] border-l-warn-solid bg-warn-bg px-3 py-2 text-sm text-warn-text">
           <span className="font-medium">New domains:</span>{' '}
-          <span className="font-mono">{diff.new_domains.join(', ')}</span>. The pack’s guards and
-          checks will cover them too.
+          <span className="font-mono">{printable(diff.new_domains.join(', '))}</span>. The pack’s
+          guards and checks will cover them too.
         </p>
       ) : null}
       {diff.changes.length === 0 ? (
@@ -151,9 +158,7 @@ export function DiffView({ diff }: { readonly diff: SitePackDiffResponse }) {
             />
             {open
               ? 'Show fewer'
-              : fresh
-                ? `Show its content (${diff.changes.length} fields)`
-                : `Show all ${diff.changes.length} changes`}
+              : `Show all ${diff.changes.length} ${fresh ? 'fields' : 'changes'}`}
           </Button>
         </div>
       ) : null}

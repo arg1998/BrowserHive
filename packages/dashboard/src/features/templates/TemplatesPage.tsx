@@ -1,4 +1,4 @@
-/** @module features/templates/TemplatesPage — `/templates` (spec 13 §11.4, spec 04 §12.14): header with **New template**, status and browser chips with search, a whole-row linked table (cards under 768px) of every template with its sites' sign-in health, browser, sessions and last use; a template still being set up offers **Continue sign-in**; the first visit explains templates in three steps */
+/** @module features/templates/TemplatesPage — `/templates` (spec 13 §11.4, spec 04 §12.14): header with **New template**, status and browser chips with search, a whole-row linked table (cards under 768px) of every template with its sites' sign-in health, browser, sessions and last use; a template still being set up offers **Continue sign-in**; the pending site-pack updates banner (spec 13 §10.6; review #100 M6); the first visit explains templates in three steps */
 import type { TemplateSummary } from '@browserhive/contracts/http';
 import { Link } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo } from 'react';
@@ -17,6 +17,7 @@ import { ICONS } from '@/lib/icons.ts';
 import { useSearchState } from '@/lib/search/use-search-state.ts';
 import { TEMPLATE_HOST, TEMPLATE_STATUS } from '@/lib/status-registry.ts';
 import { useTemplatesList } from './api.ts';
+import { PackUpdatesBanner } from './list/PackUpdatesBanner.tsx';
 import { TemplateCard } from './list/TemplateCard.tsx';
 import { TemplatesEmpty, TemplatesIntro } from './list/TemplatesEmpty.tsx';
 import { templateColumns } from './list/templates-columns.tsx';
@@ -169,6 +170,7 @@ export function TemplatesPage() {
           )
         }
       />
+      <PackUpdatesBanner />
       {firstVisit ? (
         <div className="rounded-xl border bg-card shadow-xs dark:shadow-none">
           <TemplatesIntro />

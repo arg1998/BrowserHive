@@ -1,5 +1,7 @@
 /** @module features/templates/wizard/SiteNeedsPanel — what the chosen sites' packs need from step 3's settings (spec 13 §9.4 `stealth-profile`, `humanize-input`, §11.1): one row per need with whether the settings meet it and a one-click fix when they do not (the server refuses a template below a site's floor; forced humanized input with stealth off is advisory: it says what is not applied, and the template is still created); and the short chips the chosen-site card shows */
+
 import { Chip } from '@/components/shared/Chip.tsx';
+import { Plain } from '@/components/shared/Plain.tsx';
 import { Button } from '@/components/ui/button.tsx';
 import { ICONS } from '@/lib/icons.ts';
 import { cn } from '@/lib/utils.ts';
@@ -123,7 +125,7 @@ export function SiteNeedsPanel({
                 )}
               />
               <span className="flex min-w-0 flex-1 basis-48 flex-col">
-                <bdi className="text-sm font-medium">{row.title}</bdi>
+                <Plain className="text-sm font-medium">{row.title}</Plain>
                 <span className="text-sm text-pretty text-muted-foreground">
                   {row.label}
                   <span className="sr-only">{row.fix === null ? ': met' : ': not met'}</span>
