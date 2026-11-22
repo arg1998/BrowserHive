@@ -213,6 +213,7 @@ async function buildDomain(
   const layer = await buildSitePackLayer({
     config,
     release: ctx.input.appVersion,
+    trustRoot: ctx.input.sitePacksTrustRoot,
     uow: storage.uow,
     repos,
     clock,

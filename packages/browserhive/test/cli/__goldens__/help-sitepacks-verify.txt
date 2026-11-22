@@ -1,4 +1,4 @@
-browserhive sitepacks verify — Check a site pack file offline (schema, refinements, size)
+browserhive sitepacks verify — Check a site pack file or a signed registry layout offline
 
 USAGE
   browserhive sitepacks verify <path> [flags]
@@ -11,7 +11,9 @@ pending updates until you apply them. Local files in sitePacksDir need approval 
 without one unless --yes. list --pending exits 2 when an update or a local file waits for you.
 
 ARGUMENTS
-  <path>  The pack file (<pack id>.json).
+  <path>  The pack file (<pack id>.json): schema, refinements, size. Or a folder holding a signed
+          layout (keys.json, index.json, their .sig files and packs/): every signature against the
+          root keys built into this release, and every pack file against the index.
 
 FLAGS
   --json                       Print machine-readable JSON instead of text.

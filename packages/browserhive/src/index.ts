@@ -32,6 +32,7 @@ import {
   testingArgsOf,
   testingEnabled,
   testingRefusedMessage,
+  testingTrustRootProblem,
 } from './composition/testing-seam.ts';
 
 export type { Provenance, ServerConfig, ServerConfigInput } from '@browserhive/contracts/config';
@@ -93,7 +94,7 @@ export interface CreateServerOptions extends ServerOptions {
    */
   readonly notificationChannels?: readonly string[];
   /**
-   * The internal testing seam (spec 13 §14): Chromium switches for BrowserHive's own suites. Its
+   * The internal testing seam (spec 13 §10.2, §14): Chromium switches and a registry test root for BrowserHive's own suites. Its
    * type is exported from `browserhive/testing` only; refused (`ConfigError`) unless the process
    * environment sets `BHDEV_TESTING=1` (D-63).
    *
@@ -171,6 +172,15 @@ function splitOptions(options: CreateServerOptions): ConfigOverrides {
       source: 'cli',
       location: 'options.testing',
       message: testingRefusedMessage(`option 'testing'`),
+    });
+  }
+  const trustRootProblem = testingTrustRootProblem(options.testing);
+  if (trustRootProblem !== null) {
+    problems.push({
+      code: 'CONFIG_INVALID',
+      source: 'cli',
+      location: 'options.testing.sitePacksTrustRoot',
+      message: trustRootProblem,
     });
   }
   if (problems.length > 0) throw new ConfigError(configFailure(problems));
@@ -256,6 +266,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<B
       startupChannels: channelFlags.channels,
       startupChannelWarnings: channelFlags.warnings,
       ...(options.testing !== undefined && { testingArgs: testingArgsOf(options.testing) }),
+      ...(options.testing?.sitePacksTrustRoot !== undefined && {
+        sitePacksTrustRoot: options.testing.sitePacksTrustRoot,
+      }),
       ...(logger !== undefined && {
         logSink: {
           name: 'external',

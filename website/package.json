@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "bun scripts/dev.ts",
     "sync": "bun scripts/sync-docs.ts",
-    "build": "bun scripts/sync-docs.ts && astro build",
+    "build": "bun scripts/sync-docs.ts && astro build && bun scripts/copy-registry.ts",
     "preview": "bun run build && wrangler dev",
     "check": "bun scripts/sync-docs.ts && astro check && biome ci . && bun test",
     "lint": "biome ci .",

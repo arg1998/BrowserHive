@@ -1,77 +1,80 @@
 {
-  "schema": 1,
-  "id": "instagram.com",
-  "version": 2,
-  "min_client": "0.2.3",
-  "title": "Instagram",
   "description": "Instagram's terms bar accessing or collecting information in an automated way. Sign-out, Accounts Center, account deletion and OAuth approvals are blocked for agents.",
   "domains": [
     "instagram.com",
     "cdninstagram.com"
   ],
-  "sign_in": {
-    "url": {
-      "host": "www.instagram.com",
-      "path": "/accounts/login/"
-    },
-    "human_only": false
-  },
-  "signed_in": {
-    "probe": {
-      "host": "www.instagram.com",
-      "path": "/accounts/edit/"
-    },
-    "kind": "redirect",
-    "signed_out_redirects": [
-      "www.instagram.com/accounts/login*"
-    ]
-  },
   "guards": [
     {
+      "action": "block",
       "id": "logout",
       "kind": "logout",
       "match": {
         "url": "www.instagram.com/accounts/logout"
-      },
-      "action": "block"
+      }
     },
     {
+      "action": "block",
       "id": "oauth-approve",
       "kind": "credential",
       "match": {
-        "url": "www.instagram.com/oauth/authorize*",
         "methods": [
           "POST"
-        ]
-      },
-      "action": "block"
+        ],
+        "url": "www.instagram.com/oauth/authorize*"
+      }
     },
     {
+      "action": "block",
       "id": "accounts-center",
       "kind": "account",
       "match": {
         "url": "accountscenter.instagram.com"
-      },
-      "action": "block"
+      }
     },
     {
+      "action": "block",
       "id": "delete-account",
       "kind": "destructive",
       "match": {
         "url": "www.instagram.com/accounts/remove"
-      },
-      "action": "block"
+      }
     }
   ],
-  "write_policy": {
-    "default": "confirm",
-    "stance": "prohibited",
-    "clause": {
-      "quote": "This includes creating accounts or accessing or collecting information in an automated way without our express permission, regardless of whether such automated access or collection is undertaken while logged-in to an Instagram account.",
-      "url": "https://help.instagram.com/581066165581870",
-      "checked": "2026-11-16"
+  "id": "instagram.com",
+  "min_client": "0.2.3",
+  "schema": 1,
+  "sign_in": {
+    "human_only": false,
+    "url": {
+      "host": "www.instagram.com",
+      "path": "/accounts/login/"
     }
   },
+  "signed_in": {
+    "kind": "redirect",
+    "probe": {
+      "host": "www.instagram.com",
+      "path": "/accounts/edit/"
+    },
+    "signed_out_redirects": [
+      "www.instagram.com/accounts/login*"
+    ]
+  },
+  "sources": [
+    {
+      "kind": "official",
+      "url": "https://help.instagram.com/581066165581870"
+    },
+    {
+      "kind": "official",
+      "url": "https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/business-login"
+    },
+    {
+      "kind": "observed",
+      "url": "https://www.instagram.com/accounts/edit/"
+    }
+  ],
   "strategies": [
     {
       "id": "serialize-site",
@@ -86,24 +89,21 @@
       "params": {}
     }
   ],
+  "title": "Instagram",
   "verified": {
+    "guards": "2026-11-16",
     "sign_in": "2026-11-16",
     "signed_in": "2026-11-16",
-    "guards": "2026-11-16",
     "write_policy": "2026-11-16"
   },
-  "sources": [
-    {
-      "url": "https://help.instagram.com/581066165581870",
-      "kind": "official"
+  "version": 2,
+  "write_policy": {
+    "clause": {
+      "checked": "2026-11-16",
+      "quote": "This includes creating accounts or accessing or collecting information in an automated way without our express permission, regardless of whether such automated access or collection is undertaken while logged-in to an Instagram account.",
+      "url": "https://help.instagram.com/581066165581870"
     },
-    {
-      "url": "https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/business-login",
-      "kind": "official"
-    },
-    {
-      "url": "https://www.instagram.com/accounts/edit/",
-      "kind": "observed"
-    }
-  ]
+    "default": "confirm",
+    "stance": "prohibited"
+  }
 }

@@ -1,8 +1,16 @@
-/** @module test/composition/testing-seam.test — the `BHDEV_TESTING=1` guard of the internal testing seam (D-63): `browserhive/testing` refuses to load and `createServer({ testing })` refuses without it; the switches it adds. */
+/** @module test/composition/testing-seam.test — the `BHDEV_TESTING=1` guard of the internal testing seam (D-63): `browserhive/testing` refuses to load and `createServer({ testing })` refuses without it; the switches it adds; the registry test root (spec 13 §10.2) is checked and reaches the site-pack layer, which otherwise uses the pinned root. */
 
 import { afterEach, describe, expect, it } from 'bun:test';
 import { join } from 'node:path';
-import { TESTING_ENV, testingArgsOf, testingEnabled } from '../../src/composition/testing-seam.ts';
+import { PINNED_TRUST_ROOT } from '@browserhive/core/server';
+import { rootOf, testKey } from '@browserhive/core/test/registry-kit';
+import { layerTrustRoot } from '../../src/composition/site-pack-layer.ts';
+import {
+  TESTING_ENV,
+  testingArgsOf,
+  testingEnabled,
+  testingTrustRootProblem,
+} from '../../src/composition/testing-seam.ts';
 import { ConfigError, createServer } from '../../src/index.ts';
 import { tempDir } from './support.ts';
 
@@ -90,5 +98,48 @@ describe('testing seam guard (D-63)', () => {
       '--host-resolver-rules=MAP *.test:443 127.0.0.1:8443',
       '--ignore-certificate-errors-spki-list=abc=',
     ]);
+  });
+
+  it('a registry test root must be well formed; it adds no switch', () => {
+    const root = rootOf(testKey());
+    expect(testingTrustRootProblem(undefined)).toBeNull();
+    expect(testingTrustRootProblem({ sitePacksTrustRoot: root })).toBeNull();
+    expect(testingArgsOf({ sitePacksTrustRoot: root })).toEqual([]);
+    const wrongId = {
+      keys: [{ keyId: '0000000000000000', publicKey: root.keys[0]?.publicKey ?? '' }],
+    };
+    expect(testingTrustRootProblem({ sitePacksTrustRoot: wrongId })).toContain('key id');
+    expect(testingTrustRootProblem({ sitePacksTrustRoot: { keys: [] } })).not.toBeNull();
+  });
+
+  it('createServer refuses a malformed test root even with BHDEV_TESTING=1', async () => {
+    const dir = tempDir('bh-testing-root-');
+    process.env[TESTING_ENV] = '1';
+    try {
+      const refused = await createServer({
+        port: 0,
+        dataDir: dir.path,
+        env: {},
+        configFile: false,
+        output: silent,
+        testing: { sitePacksTrustRoot: { keys: [] } },
+      }).catch((err: unknown) => err);
+      expect(refused).toBeInstanceOf(ConfigError);
+      if (refused instanceof ConfigError) {
+        expect(refused.problems[0]?.location).toBe('options.testing.sitePacksTrustRoot');
+      }
+    } finally {
+      delete process.env[TESTING_ENV];
+      dir.cleanup();
+    }
+  });
+});
+
+describe('the site-pack layer trust root', () => {
+  it('is the pinned root unless the testing seam injected one', () => {
+    expect(layerTrustRoot({})).toBe(PINNED_TRUST_ROOT);
+    expect(layerTrustRoot({ trustRoot: undefined })).toBe(PINNED_TRUST_ROOT);
+    const root = rootOf(testKey());
+    expect(layerTrustRoot({ trustRoot: root })).toBe(root);
   });
 });

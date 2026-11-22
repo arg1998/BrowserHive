@@ -44,7 +44,7 @@ COMMANDS
   reload                   Read the bundled packs and the local folder (sitePacksDir) again
   import <file>            Send an unsigned pack file, byte for byte, to the local folder; approve
                            it afterwards
-  verify <path>            Check a site pack file offline (schema, refinements, size)
+  verify <path>            Check a site pack file or a signed registry layout offline
 
 FLAGS
   --host <address>             Bind address. A non-loopback host requires auth=token or

@@ -1,0 +1,7 @@
+{
+  "note": "Placeholder. The owner writes this file in the key ceremony (bun scripts/registry-keys.ts init-roots, docs/contributing/registry.md). A build whose roots are placeholders trusts no registry and cannot be released.",
+  "placeholder": true,
+  "role": "root",
+  "schema": 1,
+  "slot": 1
+}

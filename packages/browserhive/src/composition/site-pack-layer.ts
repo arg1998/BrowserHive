@@ -1,11 +1,12 @@
 /** @module composition/site-pack-layer — assembles the site-pack layer for `build-domain` (spec 13 §9, T3a): the registry and the page enforcement before the templates (the prober goes into the health wiring), then the network enforcement once the templates' health exists. */
 
+import type { SitePacksTrustRoot } from '@browserhive/core/ports/site-packs';
 import type {
   ProberSelector,
   SitePackRegistry,
   TemplateHostSupervisor,
 } from '@browserhive/core/server';
-import { StrategyState, selectGenericProber } from '@browserhive/core/server';
+import { PINNED_TRUST_ROOT, StrategyState, selectGenericProber } from '@browserhive/core/server';
 import type { SitePackEnforcement, SitePackEnforcementInput } from './site-pack-enforcement.ts';
 import { buildSitePackEnforcement } from './site-pack-enforcement.ts';
 import {
@@ -28,6 +29,13 @@ export interface SitePackLayer {
   readonly probers?: (supervisor: TemplateHostSupervisor) => ProberSelector;
   /** The host strategies (`webrtc-policy`, `keep-alive`, `device-bound-session`); absent when off. */
   readonly strategies?: SiteStrategies;
+  /** The registry root keys signed layouts are verified against (spec 13 §10.2). */
+  readonly trustRoot: SitePacksTrustRoot;
+}
+
+/** The registry root keys: the testing seam's (spec 13 §10.2), else the ones pinned in this binary. */
+export function layerTrustRoot(input: Pick<SitePacksInput, 'trustRoot'>): SitePacksTrustRoot {
+  return input.trustRoot ?? PINNED_TRUST_ROOT;
 }
 
 /** Builds the registry and the page enforcement; `undo` receives their stops. */
@@ -48,6 +56,7 @@ export async function buildSitePackLayer(
   return {
     registry,
     pages,
+    trustRoot: layerTrustRoot(input),
     ...(on && { probers: (supervisor) => pages.probers(supervisor, selectGenericProber) }),
     ...(strategies !== null && { strategies }),
   };

@@ -7,6 +7,7 @@ import type { FileSystem } from '@browserhive/core/ports/file-system';
 import type { HostEnvironment } from '@browserhive/core/ports/host-environment';
 import type { SitePackStateRecord } from '@browserhive/core/ports/persistence/site-packs';
 import type { ProcessRunner } from '@browserhive/core/ports/process-runner';
+import type { SitePacksTrustRoot } from '@browserhive/core/ports/site-packs';
 import type { UrlProbeResult } from '@browserhive/core/runtime';
 import type {
   DetectedBrowser,
@@ -357,6 +358,12 @@ export interface CliDeps {
   readonly schemaVersion: number;
   /** SQLite `application_id` BrowserHive stamps (`0x42484956`). */
   readonly applicationId: number;
+  /**
+   * The registry root keys `sitepacks verify` checks a signed layout against. Absent in every real
+   * run (the keys pinned in this binary); BrowserHive's suites inject a test root here. No flag,
+   * configuration key or environment variable sets it (spec 13 §10.2).
+   */
+  readonly sitePacksTrustRoot?: SitePacksTrustRoot;
 }
 
 /** What a command runner receives: the deps plus the output built for this run. */

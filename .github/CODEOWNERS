@@ -3,3 +3,11 @@ packages/contracts/**             @arg1998
 packages/core/src/app/auth/**     @arg1998
 packages/core/src/domain/vault/** @arg1998
 specs/**                          @arg1998
+# The site-pack registry (spec 13 §10.7): packs, root public keys, the signed keys.json, the
+# publishing scripts, the pinned trust root and the workflows that sign it.
+registry/**                                       @arg1998
+scripts/registry*                                 @arg1998
+scripts/registry/**                               @arg1998
+packages/core/src/infra/site-packs/trust-root.ts  @arg1998
+.github/workflows/website.yml                     @arg1998
+.github/workflows/registry-resign.yml             @arg1998

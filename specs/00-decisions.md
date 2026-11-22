@@ -1101,7 +1101,7 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 
 **Status:** Accepted
 
-**Implementation:** planned: PRs T4a and T4b of spec 13 §17.
+**Implementation:** publishing built in PR T4a (as built: D-80, D-81, D-82); the client planned in PR T4b of spec 13 §17.
 
 **Context.** Packs go stale faster than releases, so installs that do not upgrade need fresh site knowledge. D-08 says nothing leaves the host by default; D-33 says BrowserHive runs no server. The owner's decision of 2026-11-05: browserhive.ai or a CDN hosts a static, signed registry; BrowserHive downloads configuration from it and sends no instance data; the bundled snapshot and the update check are on by default; applying an update needs the operator's approval by default, with what changed shown; auto-update is off by default; the check can be turned off; packs can be downloaded by hand into a folder or imported from a file.
 
@@ -1411,3 +1411,41 @@ OS defaults: `~/Library/Application Support/BrowserHive` (macOS), `%LOCALAPPDATA
 - Chromium keeps only the last `--disable-features` switch, so a second one would silently turn Patchright's own list back on (measured: `ThirdPartyStoragePartitioning`). The launch path (`buildLaunchOptions`) therefore folds every `--disable-features` switch on the command line, in any spelling the deny-list reads (`--`, `-` or `/` prefix, any letter case; spec 11 §4) and from any source (the stealth switch, the testing seam, a caller's `launch_options.args`), into one switch placed after Patchright's: Patchright's list (unless `ignoreDefaultArgs` drops Patchright's switch), then each switch's features in order, without repeats. A caller's own list is merged, never dropped. `sandboxed-frames.test.ts` compares the repeated list with the installed Patchright on every run.
 
 **Consequences.** A sandboxed frame without `allow-same-origin` shares its embedding page's process in these browsers: a renderer exploit inside it reaches the page's process, and a site could in principle notice the shared process (for example by timing a busy frame). Frames from other sites keep their own processes (site isolation is unchanged), and the sandbox's other restrictions (opaque origin, no top navigation, no popups without `allow-popups`) still apply. In exchange the stealth identity and the clipboard block reach every frame, nested ones included. The regression gate is `test/integration/stealth-sandboxed-frames.test.ts` (exclusive sessions, fingerprint off and on, a caller's own switch, stealth off) and the template clipboard suite.
+
+## D-80 The registry-signing environment: the owner reviews, self-review allowed
+
+**Status:** Accepted (owner decision 2026-11-21, T4a)
+
+**Context.** Spec 13 §10.7 put the `registry-sign` job in the GitHub environment `registry-signing` with the owner as required reviewer and "self-review prevented". GitHub's *Prevent self-review* refuses an approval from the person who triggered the run; the owner is the only maintainer and triggers every run on `main` (by merging) and every weekly re-sign (the schedule runs as the last committer), so that setting would block every signing run.
+
+**Decision.** `registry-signing`: deployment branches `main` only, required reviewer the owner, **Prevent self-review off**, secret `REGISTRY_ONLINE_KEY` (separate from the Cloudflare token). Each signing run still waits for an explicit approval. When a second maintainer joins, self-review can be prevented again without any code change.
+
+**Consequences.** One person can merge and approve a signature; the protections that remain are the review of `registry/` (CODEOWNERS), the signing job's recomputation of every file from the commit, the offline root keys, and each operator's approval of every pack version (D-54).
+
+## D-81 Registry publishing as built: history as the archive, the published index as the counter, verified carry-over
+
+**Status:** Accepted (T4a)
+
+**Context.** Spec 13 §10.1 lists up to ten versions per pack with notes, release dates and revocations, and §10.7 has the signing job recompute every pack hash from the commit. The repository holds only each pack's current file; the index needs a strictly increasing version across merge signatures and weekly re-signs from stateless CI jobs; and a Cloudflare Workers assets deploy replaces every file, so any website deploy that left the registry out would delete it.
+
+**Decision.**
+- `registry/versions/<id>.json` lists the published versions (`released`, `notes`, `revoked`). A listed version's bytes are those of the newest commit of `registry/packs/<id>.json` that held it; both the build and the signing job read them with the checkout's `git` (the signing job uses `node:child_process` for that, still installing nothing), from a full clone. A listed version is immutable, and a pull request can newly list only the current version or a version the base branch already held.
+- The index `version` is the published index's version plus one; the signing job reads the published layout from browserhive.ai and verifies its chain against `registry/keys/root-*.pub` before trusting the number (version 1 when nothing is published). Merge signatures and re-signs share one concurrency group per ref.
+- A website deploy that does not sign downloads the published registry, verifies it the same way (and every pack file against the index), and deploys it again unchanged; signing runs only when `registry/` changed, on the weekly re-sign or a manual run with `sign`.
+- Signing is gated by the repository variable `REGISTRY_PUBLISH`, set by the owner after the key ceremony, so no environment is auto-created and no run waits for a secret that does not exist yet.
+
+**Consequences.** Docs-only deploys need no approval, and the registry survives them. Old versions follow the history of `main`: a squash merge of a branch publishes only the versions its final tree lists. A compromised website can make the next signature start at version 1 (clients refuse it as a rollback until a later signature), which is denial of service only, as withholding already was.
+
+**Alternatives considered.** *Archive files per version in the repository*: duplicated content that contributors would have to copy by hand. *A clock-derived version*: a minute counter exceeds the 100 000 fast-forward bound for an install offline about 70 days, an hour counter collides. *Signing on every website deploy*: an approval for each docs change, and a deploy blocked until the owner answers.
+
+## D-82 Registry formats and trust root as built: JSON signature files, pinned roots from the repository, a release gate
+
+**Status:** Accepted (T4a)
+
+**Decision.**
+- A `.sig` file is canonical JSON with one to four `{key_id, sig}` Ed25519 signatures over the exact bytes of its file (so a rotation can carry the old and the new online key's signatures); a key id is the first 16 hex digits of the SHA-256 of the raw public key; all producer JSON is canonical (sorted keys, two spaces, final newline). The client also refuses lifetimes beyond the §10.2 bounds measured from its own clock.
+- The root keys live in `registry/keys/root-1.pub` and `root-2.pub` and are pinned in `packages/core/src/infra/site-packs/trust-root.ts`; one tool writes both, a test keeps them equal, and until the key ceremony both are placeholders and the build trusts no registry. `release:publish` refuses placeholder, test or mismatched roots (`scripts/registry-trust-check.ts`).
+- Root keys rest encrypted (scrypt N = 2^17 and AES-256-GCM, written once, mode 0600, outside any git working tree); the online key's secret value is written to a file the owner names and moves into the environment secret. `registry-keys.ts` has no network code and a `dry-run` with throwaway keys.
+- Previews sign with a root and online key generated inside the job; `registry-preview-verify` proves the pinned root refuses them.
+
+**Consequences.** The first release that carries the registry client needs the ceremony first. A preview's or a test's key can never pass for the release's, and a test root reaches a server only through the testing seam (D-63).

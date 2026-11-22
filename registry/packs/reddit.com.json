@@ -1,157 +1,157 @@
 {
-  "schema": 1,
-  "id": "reddit.com",
-  "version": 2,
-  "min_client": "0.2.3",
-  "title": "Reddit",
+  "browser": {
+    "channel": "any",
+    "headed": "preferred"
+  },
+  "challenges": [
+    {
+      "action": "attention",
+      "id": "network-block-probe",
+      "kind": "rejected",
+      "match": {
+        "text": "You've been blocked by network security",
+        "url": "www.reddit.com/settings/account*"
+      }
+    },
+    {
+      "action": "attention",
+      "id": "network-block-login",
+      "kind": "rejected",
+      "match": {
+        "text": "You've been blocked by network security",
+        "url": "www.reddit.com/login*"
+      }
+    }
+  ],
   "description": "Reddit's user agreement bars accessing or collecting data by automated means. The account settings page is the probe; form posts to it need confirmation. Deactivation and session pages are blocked for agents.",
   "domains": [
     "reddit.com",
     "redd.it"
   ],
-  "sign_in": {
-    "url": {
-      "host": "www.reddit.com",
-      "path": "/login/"
-    },
-    "human_only": false
-  },
-  "signed_in": {
-    "probe": {
-      "host": "www.reddit.com",
-      "path": "/settings/account"
-    },
-    "kind": "either",
-    "signed_out_redirects": [
-      "www.reddit.com/login*"
-    ]
-  },
   "guards": [
     {
+      "action": "block",
       "id": "app-credentials",
       "kind": "credential",
       "match": {
         "url": "www.reddit.com/prefs/apps"
-      },
-      "action": "block"
+      }
     },
     {
+      "action": "block",
       "id": "app-credentials-old",
       "kind": "credential",
       "match": {
         "url": "old.reddit.com/prefs/apps"
-      },
-      "action": "block"
+      }
     },
     {
+      "action": "block",
       "id": "oauth-approve",
       "kind": "credential",
       "match": {
-        "url": "www.reddit.com/api/v1/authorize*",
         "methods": [
           "POST"
-        ]
-      },
-      "action": "block"
+        ],
+        "url": "www.reddit.com/api/v1/authorize*"
+      }
     },
     {
+      "action": "confirm",
       "id": "account-settings-writes",
       "kind": "account",
       "match": {
-        "url": "www.reddit.com/settings/account",
         "methods": [
           "POST",
           "PUT",
           "PATCH",
           "DELETE"
-        ]
-      },
-      "action": "confirm"
+        ],
+        "url": "www.reddit.com/settings/account"
+      }
     },
     {
+      "action": "block",
       "id": "account-activity",
       "kind": "account",
       "match": {
         "url": "www.reddit.com/account-activity"
-      },
-      "action": "block"
+      }
     },
     {
+      "action": "block",
       "id": "deactivate",
       "kind": "destructive",
       "match": {
         "url": "old.reddit.com/prefs/deactivate"
-      },
-      "action": "block"
+      }
     }
   ],
-  "write_policy": {
-    "default": "confirm",
-    "stance": "prohibited",
-    "clause": {
-      "quote": "Access, search, or collect data from the Services by any means (automated or otherwise) except as permitted in these Terms or in a separate agreement with Reddit",
-      "url": "https://redditinc.com/policies/user-agreement",
-      "checked": "2026-11-16"
+  "id": "reddit.com",
+  "min_client": "0.2.3",
+  "schema": 1,
+  "sign_in": {
+    "human_only": false,
+    "url": {
+      "host": "www.reddit.com",
+      "path": "/login/"
     }
   },
-  "challenges": [
+  "signed_in": {
+    "kind": "either",
+    "probe": {
+      "host": "www.reddit.com",
+      "path": "/settings/account"
+    },
+    "signed_out_redirects": [
+      "www.reddit.com/login*"
+    ]
+  },
+  "sources": [
     {
-      "id": "network-block-probe",
-      "kind": "rejected",
-      "match": {
-        "url": "www.reddit.com/settings/account*",
-        "text": "You've been blocked by network security"
-      },
-      "action": "attention"
+      "kind": "official",
+      "url": "https://redditinc.com/policies/user-agreement"
     },
     {
-      "id": "network-block-login",
-      "kind": "rejected",
-      "match": {
-        "url": "www.reddit.com/login*",
-        "text": "You've been blocked by network security"
-      },
-      "action": "attention"
+      "kind": "official",
+      "url": "https://github.com/reddit-archive/reddit/wiki/OAuth2"
+    },
+    {
+      "kind": "official",
+      "url": "https://support.reddithelp.com/hc/en-us/articles/204579509-How-do-I-delete-my-account"
+    },
+    {
+      "kind": "official",
+      "url": "https://support.reddithelp.com/hc/en-us/articles/360045768792-I-need-help-with-a-hacked-or-compromised-account"
+    },
+    {
+      "kind": "observed",
+      "url": "https://www.reddit.com/settings/account"
     }
   ],
-  "browser": {
-    "channel": "any",
-    "headed": "preferred"
-  },
   "strategies": [
     {
       "id": "human-dwell",
       "params": {}
     }
   ],
+  "title": "Reddit",
   "verified": {
+    "browser": "2026-11-16",
+    "challenges": "2026-11-16",
+    "guards": "2026-11-16",
     "sign_in": "2026-11-16",
     "signed_in": "2026-11-16",
-    "guards": "2026-11-16",
-    "write_policy": "2026-11-16",
-    "challenges": "2026-11-16",
-    "browser": "2026-11-16"
+    "write_policy": "2026-11-16"
   },
-  "sources": [
-    {
-      "url": "https://redditinc.com/policies/user-agreement",
-      "kind": "official"
+  "version": 2,
+  "write_policy": {
+    "clause": {
+      "checked": "2026-11-16",
+      "quote": "Access, search, or collect data from the Services by any means (automated or otherwise) except as permitted in these Terms or in a separate agreement with Reddit",
+      "url": "https://redditinc.com/policies/user-agreement"
     },
-    {
-      "url": "https://github.com/reddit-archive/reddit/wiki/OAuth2",
-      "kind": "official"
-    },
-    {
-      "url": "https://support.reddithelp.com/hc/en-us/articles/204579509-How-do-I-delete-my-account",
-      "kind": "official"
-    },
-    {
-      "url": "https://support.reddithelp.com/hc/en-us/articles/360045768792-I-need-help-with-a-hacked-or-compromised-account",
-      "kind": "official"
-    },
-    {
-      "url": "https://www.reddit.com/settings/account",
-      "kind": "observed"
-    }
-  ]
+    "default": "confirm",
+    "stance": "prohibited"
+  }
 }
