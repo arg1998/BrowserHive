@@ -1,4 +1,4 @@
-/** @module cli/commands/doctor-site-packs — the `site packs` row of `browserhive doctor` (spec 13 §11.9; always shown): ✓ the bundled packs and the release's registry snapshot verify, with the update check's disclosure (D-55); ! local files not yet approved or changed since approval, local files that fail validation, no bundled packs, a stale registry index, repeated failed checks, a clock far from the registry's; ✗ a bundled pack or the snapshot does not verify. Packs that need a newer BrowserHive are counted, never a problem. Reads through the injected filesystem and a read-only, never-migrating database read. */
+/** @module cli/commands/doctor-site-packs — the `site packs` row of `browserhive doctor` (spec 13 §11.9; always shown): ✓ the bundled packs and the release's registry snapshot verify, with the update check's disclosure (D-55); ! pending updates of followed packs, local files not yet approved or changed since approval, local files that fail validation, no bundled packs, a stale registry index, repeated failed checks, a clock far from the registry's; ✗ a bundled pack or the snapshot does not verify. Packs that need a newer BrowserHive are counted, never a problem. Reads through the injected filesystem and a read-only, never-migrating database read. */
 import { join } from 'node:path';
 import type { ServerConfig } from '@browserhive/contracts/config';
 import { SITE_PACK_MAX_BYTES } from '@browserhive/contracts/site-packs';
@@ -8,7 +8,7 @@ import type { CliDeps } from '../deps.ts';
 import { databasePath } from './common.ts';
 import type { CheckResult } from './doctor-checks.ts';
 import { registryFacts } from './doctor-site-pack-registry.ts';
-import { resolvedProblems } from './doctor-site-pack-state.ts';
+import { resolvedFacts } from './doctor-site-pack-state.ts';
 
 const CHECK = 'site packs';
 /** Entries a detail names before "and N more". */
@@ -119,9 +119,16 @@ type States = Awaited<ReturnType<Awaited<ReturnType<Deps['openStorage']>>['siteP
 interface Stored {
   readonly states: States;
   readonly client: string | null;
+  readonly review: Review;
 }
 
-const NOTHING_STORED: Stored = { states: { rows: [], unreadable: [] }, client: null };
+type Review = Awaited<ReturnType<Awaited<ReturnType<Deps['openStorage']>>['sitePackReview']>>;
+
+const NOTHING_STORED: Stored = {
+  states: { rows: [], unreadable: [] },
+  client: null,
+  review: { pending: [], sites: [] },
+};
 
 async function stored(deps: Deps, dataDir: string): Promise<Stored> {
   if ((await deps.fs.stat(databasePath(dataDir))) === null) return NOTHING_STORED;
@@ -135,7 +142,8 @@ async function stored(deps: Deps, dataDir: string): Promise<Stored> {
     try {
       const states = await storage.sitePackStates();
       const client = await storage.metaValue('site_packs.client').catch(() => null);
-      return { states, client };
+      const review = await storage.sitePackReview().catch(() => NOTHING_STORED.review);
+      return { states, client, review };
     } finally {
       await storage.close();
     }
@@ -226,8 +234,9 @@ export async function checkSitePacks(deps: Deps, input: SitePackCheckInput): Pro
   if (layouts > 0) {
     notes.push(`${layouts} signed layout${layouts === 1 ? '' : 's'} in the local folder`);
   }
-  // Approved packs that do not apply after all (review #83 S-M8, C-M5).
-  const notInForce = await resolvedProblems(deps, {
+  // Approved packs that do not apply after all (review #83 S-M8, C-M5), and pending updates of
+  // followed packs (spec 13 §11.9, review #100 L11).
+  const { notInForce, pending } = await resolvedFacts(deps, {
     dataDir: input.dataDir,
     localDir,
     binaryVersion: input.binaryVersion,
@@ -235,8 +244,13 @@ export async function checkSitePacks(deps: Deps, input: SitePackCheckInput): Pro
     local: localOk,
     states: states.rows,
     unreadable: states.unreadable,
+    pending: fromDb.review.pending,
+    sites: fromDb.review.sites,
   });
   if (notInForce.length > 0) warnings.push(`packs not in force: ${listText(notInForce)}`);
+  if (pending.length > 0) {
+    warnings.push(`pending updates of followed packs: ${listText(pending)}`);
+  }
   if (approved > 0) notes.push(`${approved} approved local file${approved === 1 ? '' : 's'}`);
   // The registry: the update check's disclosure, the held index, the client's checks, the snapshot.
   const registry = await registryFacts(deps, {

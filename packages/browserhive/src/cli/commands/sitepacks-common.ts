@@ -12,6 +12,25 @@ import { EXIT, type ExitCode, type RemoteTarget } from '../invocation.ts';
 import { printableJson } from '../output/printable.ts';
 import { remoteCall } from './admin-remote.ts';
 
+const UNITS = ['B', 'KB', 'MB'] as const;
+
+/**
+ * A pack or layout size as the dashboard writes it (binary steps, `KB` label, one decimal):
+ * `542 B`, `3.9 KB`, `1.0 MB` (review #100 L9).
+ *
+ * @returns The size text.
+ */
+export function packSize(bytes: number): string {
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < UNITS.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  const text = unit === 0 ? String(Math.round(value)) : value.toFixed(value >= 100 ? 0 : 1);
+  return `${text} ${UNITS[unit] ?? 'B'}`;
+}
+
 /** The server and output mode of one `sitepacks` run. */
 export interface SitePacksTarget {
   readonly remote: RemoteTarget;
@@ -61,7 +80,9 @@ export function provenanceText(
     case 'remote':
       return `registry (key ${provenance.key_id}, index ${provenance.index_version}, signature verified)`;
     case 'import':
-      return `imported file ${provenance.file}`;
+      return provenance.key_id === undefined
+        ? `imported file ${provenance.file}`
+        : `imported file ${provenance.file} (key ${provenance.key_id}, index ${provenance.index_version ?? '?'}, signature verified)`;
     case 'local':
       return `local file ${provenance.path}`;
   }

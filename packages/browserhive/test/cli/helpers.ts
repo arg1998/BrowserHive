@@ -5,7 +5,11 @@ import type { Channel } from '@browserhive/contracts/enums';
 import type { ConfigFs } from '@browserhive/core/config';
 import type { FileStat } from '@browserhive/core/ports/file-system';
 import type { HostEnvironment } from '@browserhive/core/ports/host-environment';
-import type { SitePackStateRecord } from '@browserhive/core/ports/persistence/site-packs';
+import type { TemplateSiteRecord } from '@browserhive/core/ports/persistence/records-templates';
+import type {
+  SitePackChangeRecord,
+  SitePackStateRecord,
+} from '@browserhive/core/ports/persistence/site-packs';
 import type { ProcessRunner, ProcessRunResult } from '@browserhive/core/ports/process-runner';
 import type { UrlProbeResult } from '@browserhive/core/runtime';
 import type {
@@ -243,6 +247,9 @@ export interface StorageState {
   sitePackUnreadable: string[];
   /** `meta` rows (`site_packs.client`, doctor). */
   meta: Record<string, string>;
+  /** Open site-pack candidates and template sites (doctor's pending updates). */
+  sitePackPending: SitePackChangeRecord[];
+  templateSites: TemplateSiteRecord[];
   /** Version rows `templates rekey` updated, in order. */
   versionFiles: { templateId: string; version: number; file: TemplateFileRecord }[];
   backups: string[];
@@ -273,6 +280,8 @@ export function storageState(overrides: Partial<StorageState> = {}): StorageStat
     sitePackStates: [],
     sitePackUnreadable: [],
     meta: {},
+    sitePackPending: [],
+    templateSites: [],
     versionFiles: [],
     backups: [],
     quickCheckOk: true,
@@ -343,6 +352,7 @@ function fakeStorage(
       unreadable: state.sitePackUnreadable,
     }),
     metaValue: async (key) => state.meta[key] ?? null,
+    sitePackReview: async () => ({ pending: state.sitePackPending, sites: state.templateSites }),
     updateTemplateVersionFile: async (templateId, version, file) => {
       state.versionFiles.push({ templateId, version, file });
       return true;

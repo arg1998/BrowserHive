@@ -2,6 +2,7 @@
 import { Buffer } from 'node:buffer';
 import { basename, join } from 'node:path';
 import {
+  type ProblemDetails,
   SITE_PACK_IMPORT_MAX_BYTES,
   SITE_PACK_IMPORT_MAX_FILES,
   SitePackExportResponse,
@@ -10,9 +11,9 @@ import {
 import { PackRegistrableDomain, RegistryIndexV1 } from '@browserhive/contracts/site-packs';
 import type { CommandContext } from '../deps.ts';
 import { EXIT, type ExitCode, type SitePacksAction } from '../invocation.ts';
-import { printable } from '../output/printable.ts';
-import { size } from './common.ts';
-import { type SitePacksTarget, sitePackCall, unexpected } from './sitepacks-common.ts';
+import { printable, printableJson } from '../output/printable.ts';
+import { remoteRequest, sentence } from './admin-remote.ts';
+import { packSize, type SitePacksTarget, sitePackCall, unexpected } from './sitepacks-common.ts';
 
 type Of<K extends SitePacksAction['kind']> = Extract<SitePacksAction, { readonly kind: K }>;
 
@@ -104,6 +105,7 @@ export async function runSitePacksExport(
     await deps.fs.writeBytes(join(dir, ...parts), bytes, { mode: 0o644 });
   }
   const packFiles = order.length - LAYOUT_TOP_FILES.length;
+  const notHeld = parsed.data.missing;
   if (target.json) {
     out.json({
       path: printable(dir),
@@ -111,6 +113,7 @@ export async function runSitePacksExport(
       index_version: parsed.data.index_version,
       keys_version: parsed.data.keys_version,
       packs: parsed.data.packs,
+      missing: notHeld,
     });
     return EXIT.ok;
   }
@@ -119,6 +122,19 @@ export async function runSitePacksExport(
     `exported the signed layout to ${dir}`,
     `index v${parsed.data.index_version} · keys v${parsed.data.keys_version} · ${packFiles} pack file(s)`,
   );
+  if (notHeld.length > 0) {
+    // Listed versions this server never downloaded are not in the folder (review #100 L6).
+    const names = notHeld.map((m) => `${m.pack_id} v${m.version}`);
+    const shown =
+      names.length > 5
+        ? `${names.slice(0, 5).join(', ')} and ${names.length - 5} more`
+        : names.join(', ');
+    out.status(
+      'warn',
+      `${notHeld.length} listed version(s) not held, so not in the folder`,
+      `${shown}; run browserhive sitepacks download --all first to include them`,
+    );
+  }
   out.line(
     `  On the offline host: browserhive sitepacks import ${dir} (or copy the folder into sitePacksDir and run browserhive sitepacks reload)`,
   );
@@ -129,8 +145,6 @@ export async function runSitePacksExport(
 interface CollectedLayout {
   readonly files: Record<string, string>;
   readonly bytes: number;
-  /** Listed versions whose file the folder lacks. */
-  readonly absent: number;
   /** Files under `packs/` the index does not list (not sent). */
   readonly ignored: number;
 }
@@ -181,10 +195,9 @@ async function readLayout(
   } catch {
     return { problem: 'holds an index.json that is not a registry index (schema 1).' };
   }
-  let absent = 0;
-  for (const path of [...listed].sort()) if (!(await add(path))) absent += 1;
+  for (const path of [...listed].sort()) await add(path);
   const ignored = (await packFilesIn(context, dir)).filter((p) => !listed.has(p)).length;
-  return { files, bytes, absent, ignored };
+  return { files, bytes, ignored };
 }
 
 const STATE_TEXT: Readonly<Record<string, string>> = {
@@ -193,7 +206,45 @@ const STATE_TEXT: Readonly<Record<string, string>> = {
   current: 'already approved or not newer',
   refused: 'refused: the file does not match the signed index',
   other_client: 'for another BrowserHive release',
+  revoked: 'revoked by the publisher',
 };
+
+type Imported = SitePackImportResponse['imported'][number];
+
+/** One imported version's state; a downloaded version of a pack nobody follows says how to review it (review #100 M7). */
+function stateText(item: Imported): string {
+  if (item.state === 'downloaded' && item.followed === false) {
+    return `downloaded; browserhive sitepacks follow ${item.pack_id} on to review it`;
+  }
+  return STATE_TEXT[item.state] ?? item.state;
+}
+
+/** The hint for a layout the server refused: a signature or freshness problem, never a field to fix (review #100 L8). */
+function printImportRefusal(
+  context: CommandContext,
+  dir: string,
+  problem: ProblemDetails | null,
+  status: number,
+): void {
+  const { out } = context;
+  const what =
+    problem === null
+      ? `HTTP ${status}`
+      : `[${problem.code}] ${printable(sentence(problem.detail ?? problem.title))}`;
+  out.diagnostic(`browserhive: the signed layout ${dir} was not imported: ${what}`);
+  if (problem?.code === 'SITE_PACK_INVALID') {
+    out.diagnostic(
+      `It did not verify with the registry keys built into this BrowserHive (another signer, an expired or older index, or a changed file). Check it offline: browserhive sitepacks verify ${dir}`,
+    );
+  } else if (problem?.hint !== undefined) {
+    out.diagnostic(printable(problem.hint));
+  }
+  if (status === 401 || status === 403) {
+    out.diagnostic(
+      'Pass an operator bearer with --token, or the dashboard session cookie with --cookie.',
+    );
+  }
+}
 
 /**
  * `sitepacks import <dir>` with a signed layout: the folder's exact bytes, verified by the server
@@ -220,12 +271,15 @@ export async function runSitePacksImportLayout(
   const bodyBytes = Buffer.byteLength(JSON.stringify(body));
   if (count > SITE_PACK_IMPORT_MAX_FILES || bodyBytes > SITE_PACK_IMPORT_MAX_BYTES) {
     return refuse(
-      `holds ${count} file(s), ${size(layout.bytes)}; an import may be at most ${SITE_PACK_IMPORT_MAX_FILES} files and ${size(SITE_PACK_IMPORT_MAX_BYTES)} encoded. Copy the folder into sitePacksDir instead and run browserhive sitepacks reload.`,
+      `holds ${count} file(s), ${packSize(layout.bytes)}; an import may be at most ${SITE_PACK_IMPORT_MAX_FILES} files and ${packSize(SITE_PACK_IMPORT_MAX_BYTES)} encoded. Copy the folder into sitePacksDir instead and run browserhive sitepacks reload.`,
     );
   }
-  const result = await sitePackCall(context, target.remote, 'POST', '/site-packs/import', body);
-  if (!result.ok) return result.code;
-  const parsed = SitePackImportResponse.safeParse(result.json);
+  const answer = await remoteRequest(context, target.remote, 'POST', '/site-packs/import', body);
+  if (!answer.ok) {
+    if (answer.status !== null) printImportRefusal(context, dir, answer.problem, answer.status);
+    return answer.code;
+  }
+  const parsed = SitePackImportResponse.safeParse(printableJson(answer.json));
   if (!parsed.success) return unexpected(context, 'import result');
   if (target.json) {
     out.json(parsed.data);
@@ -239,8 +293,9 @@ export async function runSitePacksImportLayout(
       ? `${count} file(s)`
       : `index v${accepted.index_version} (${accepted.outcome === 'updated' ? 'now held' : 'already held'}) · keys v${accepted.keys_version} · signed by ${accepted.signed_by}`,
   );
-  if (layout.absent > 0)
-    out.line(`  ${layout.absent} listed version(s) have no file in the folder`);
+  // Counted from the server's answer, so the numbers match the table (review #100 L8).
+  const absent = parsed.data.imported.filter((i) => i.state === 'available').length;
+  if (absent > 0) out.line(`  ${absent} listed version(s) have no file in the folder`);
   if (layout.ignored > 0) {
     out.line(`  ${layout.ignored} file(s) under packs/ are not in the index and were not sent`);
   }
@@ -250,13 +305,13 @@ export async function runSitePacksImportLayout(
       parsed.data.imported.map((item) => [
         out.style.bold(item.pack_id),
         `v${item.version}`,
-        STATE_TEXT[item.state] ?? item.state,
+        stateText(item),
       ]),
     );
   }
   const refused = parsed.data.imported.filter((i) => i.state === 'refused').length;
   if (refused > 0) out.status('warn', `${refused} pack file(s) refused`, 'they were not queued');
-  if (parsed.data.imported.some((i) => i.state === 'downloaded')) {
+  if (parsed.data.imported.some((i) => i.state === 'downloaded' && i.followed !== false)) {
     out.line('Review them: browserhive sitepacks diff <pack> --to <version>, then apply or reject');
   }
   return EXIT.ok;

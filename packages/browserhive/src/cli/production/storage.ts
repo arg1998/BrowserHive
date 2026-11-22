@@ -210,6 +210,16 @@ export async function openCliStorage(
         return { rows: [], unreadable: [] };
       }
     },
+    sitePackReview: async () => {
+      try {
+        const pending = await storage.repos.sitePackChanges.listPending();
+        const sites = await storage.repos.templateSites.listAll();
+        return { pending, sites };
+      } catch {
+        // A database from before schema v10 has no site_pack_changes table.
+        return { pending: [], sites: [] };
+      }
+    },
     metaValue: async (key) => {
       try {
         const row = z

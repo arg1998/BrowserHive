@@ -5,7 +5,11 @@ import type { StartupNotificationChannel } from '@browserhive/contracts/notifica
 import type { ConfigFs, ResolvedConfigBundle } from '@browserhive/core/config';
 import type { FileSystem } from '@browserhive/core/ports/file-system';
 import type { HostEnvironment } from '@browserhive/core/ports/host-environment';
-import type { SitePackStateRecord } from '@browserhive/core/ports/persistence/site-packs';
+import type { TemplateSiteRecord } from '@browserhive/core/ports/persistence/records-templates';
+import type {
+  SitePackChangeRecord,
+  SitePackStateRecord,
+} from '@browserhive/core/ports/persistence/site-packs';
 import type { ProcessRunner } from '@browserhive/core/ports/process-runner';
 import type { SitePacksTrustRoot } from '@browserhive/core/ports/site-packs';
 import type { UrlProbeResult } from '@browserhive/core/runtime';
@@ -189,6 +193,15 @@ export interface CliStorage {
   sitePackStates(): Promise<{
     readonly rows: readonly SitePackStateRecord[];
     readonly unreadable: readonly string[];
+  }>;
+  /**
+   * The open candidates (`site_pack_changes` rows waiting for a decision) and every template site,
+   * so `doctor` can tell which pending updates belong to followed packs (spec 13 §11.9); empty for
+   * a database from before those tables.
+   */
+  sitePackReview(): Promise<{
+    readonly pending: readonly SitePackChangeRecord[];
+    readonly sites: readonly TemplateSiteRecord[];
   }>;
   /**
    * One `meta` row's value (`site_packs.client`, the registry client's status, spec 13 §10.3), or
