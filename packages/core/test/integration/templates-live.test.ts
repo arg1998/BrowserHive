@@ -14,6 +14,7 @@ import {
   templateWorld,
   until,
 } from './template-fixture.ts';
+import { type OperatorWindow, operatorWindow as xOperatorWindow } from './x-desktop.ts';
 
 /** The X window with the input focus (`xdotool`), or `null` where it cannot be read. */
 function focusedWindow(): string | null {
@@ -23,23 +24,12 @@ function focusedWindow(): string | null {
 }
 
 /**
- * The operator's window: a tiny X client (`xmessage`) given the input focus before the host starts,
- * so a start that took the focus would be seen (headed Linux CI only; `null` elsewhere).
+ * The operator's window holding the input focus before the host starts, so a start that took the
+ * focus would be seen (headed Linux CI only, a bare display; `null` elsewhere).
  */
-function operatorWindow(): { readonly id: string; close(): void } | null {
+function operatorWindow(): OperatorWindow | null {
   if (!HEADED || process.platform !== 'linux') return null;
-  const child = Bun.spawn(['xmessage', '-name', 'bh-operator', 'operator window']);
-  const found = spawnSync('xdotool', ['search', '--sync', '--classname', 'bh-operator'], {
-    encoding: 'utf8',
-    timeout: 10_000,
-  });
-  const id = found.stdout.trim().split('\n')[0] ?? '';
-  if (found.status !== 0 || id === '') {
-    child.kill();
-    throw new Error('xmessage/xdotool unavailable on the headed leg');
-  }
-  spawnSync('xdotool', ['windowfocus', '--sync', id], { timeout: 10_000 });
-  return { id, close: () => child.kill() };
+  return xOperatorWindow(false);
 }
 
 function pageOf(session: Session) {
