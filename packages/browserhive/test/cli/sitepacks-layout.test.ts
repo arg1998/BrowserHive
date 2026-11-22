@@ -212,7 +212,7 @@ describe('sitepacks import <dir> (a signed layout)', () => {
     );
     expect(result.stdout).toMatch(/site-a\.test\s+v2\s+queued for review \(Downloaded\)/);
     expect(result.stdout).toMatch(/site-b\.test\s+v5\s+listed, file not in the layout/);
-    expect(result.stdout).toContain('browserhive sitepacks list --pending');
+    expect(result.stdout).toContain('browserhive sitepacks diff <pack> --to <version>');
   });
 
   it('sends only listed pack files; counts the absent and the unlisted ones', async () => {

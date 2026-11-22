@@ -135,7 +135,8 @@ describe('sitepacks check', () => {
     expect(result.stdout).toContain('registry check failed');
     expect(result.stdout).toContain('[SITE_PACKS_FETCH_FAILED] connect ECONNREFUSED');
     expect(result.stdout).toContain('the held registry index expired (stale)');
-    expect(result.stdout).toContain("this machine's clock is 3 h behind the registry's");
+    // The registry's Date minus this clock: -3 h means this clock is 3 h ahead.
+    expect(result.stdout).toContain("this machine's clock is 3 h ahead of the registry's");
   });
 
   it.each([

@@ -11,6 +11,7 @@ import {
 import { z } from 'zod';
 import type { CliDeps } from '../deps.ts';
 import { formatTimestamp } from './common.ts';
+import { skewText } from './sitepacks-registry.ts';
 import { layoutReader } from './sitepacks-verify-layout.ts';
 
 type Deps = Pick<CliDeps, 'fs' | 'clock' | 'sitePacksTrustRoot'>;
@@ -47,13 +48,6 @@ export interface RegistryFactsInput {
   readonly binaryVersion: string;
   /** The `site_packs.client` meta value, `null` when absent (no check yet, or no database). */
   readonly client: string | null;
-}
-
-/** `12 min ahead of`, `3 h behind`. */
-function skewText(ms: number): string {
-  const minutes = Math.round(Math.abs(ms) / 60_000);
-  const amount = minutes >= 120 ? `${Math.round(minutes / 60)} h` : `${minutes} min`;
-  return `${amount} ${ms > 0 ? 'ahead of' : 'behind'}`;
 }
 
 /** The held index's version and expiry, from the last good copy the server keeps. */

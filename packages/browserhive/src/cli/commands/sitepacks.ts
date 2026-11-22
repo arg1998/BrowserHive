@@ -102,7 +102,8 @@ function sourceWord(source: SitePackSourceKind): string {
 
 function sourceText(view: SitePackView): string {
   if (view.local_override) return 'local';
-  const source = view.approved?.source ?? view.offer?.source;
+  // Nothing approved or offered: the sources that know the pack (a registry-only pack says so).
+  const source = view.approved?.source ?? view.offer?.source ?? view.sources[0];
   return source === undefined ? '—' : sourceWord(source);
 }
 
@@ -336,7 +337,7 @@ async function runSitePacksShow(
       [{ header: 'VERSION' }, { header: 'SOURCE' }, { header: 'STATE' }, { header: 'SHA-256' }],
       detail.versions.map((v) => [
         v.version === null ? 'local' : `v${v.version}`,
-        v.source,
+        sourceWord(v.source),
         v.state,
         v.sha256,
       ]),

@@ -124,7 +124,8 @@ describe('doctor: the held index and the client status', () => {
     expect(found.detail).toContain(
       'the last 3 update checks failed: [SITE_PACKS_FETCH_FAILED] connect ECONNREFUSED',
     );
-    expect(found.detail).toContain("this machine's clock is 10 min behind the registry's");
+    // The registry's Date minus this clock: -10 min means this clock is 10 min ahead.
+    expect(found.detail).toContain("this machine's clock is 10 min ahead of the registry's");
   });
 
   it('one failure and a small skew are notes only', async () => {

@@ -37,11 +37,12 @@ const ORIGIN_TEXT: Readonly<Record<NonNullable<SitePackRegistryStatus['index_ori
   local: 'from the local folder',
 };
 
-/** `12 min`, `3 h`: a clock difference for the skew hint. */
-function skewText(ms: number): string {
+/** `12 min ahead of`, `3 h behind`: this clock against the registry's, for the skew hints. */
+export function skewText(ms: number): string {
   const minutes = Math.round(Math.abs(ms) / 60_000);
   const amount = minutes >= 120 ? `${Math.round(minutes / 60)} h` : `${minutes} min`;
-  return `${amount} ${ms > 0 ? 'ahead of' : 'behind'}`;
+  // `clock_skew_ms` is the registry's `Date` minus this clock: positive means this clock is behind.
+  return `${amount} ${ms > 0 ? 'behind' : 'ahead of'}`;
 }
 
 /**
@@ -98,13 +99,6 @@ export function registryWarnings(status: SitePackRegistryStatus): [string, strin
     ]);
   }
   return warnings;
-}
-
-/** Prints {@link registryLines} and {@link registryWarnings}. */
-function printRegistry(context: CommandContext, status: SitePackRegistryStatus): void {
-  const { out } = context;
-  for (const line of registryLines(status)) out.line(`  ${line}`);
-  for (const [label, detail] of registryWarnings(status)) out.status('warn', label, detail);
 }
 
 /**
@@ -180,7 +174,12 @@ export async function runSitePacksCheck(
       );
       break;
   }
-  printRegistry(context, check.outcome === 'failed' ? { ...status, last_error: null } : status);
+  // The outcome line already said why no check was made, or why it failed.
+  const shown = check.outcome === 'failed' ? { ...status, last_error: null } : status;
+  for (const line of registryLines(shown)) {
+    if (check.outcome !== 'disabled' || !line.startsWith('Update check:')) out.line(`  ${line}`);
+  }
+  for (const [label, detail] of registryWarnings(shown)) out.status('warn', label, detail);
   out.line(
     `  ${check.available} newer version(s) listed (all packs) · ${catalog.pending_count} pending update(s) of followed packs · ${catalog.local_needing_approval} local file(s) waiting for approval`,
   );

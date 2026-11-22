@@ -217,7 +217,7 @@ export async function runSitePacksImportLayout(
   const count = Object.keys(layout.files).length;
   const name = basename(dir) || dir;
   const body = { files: layout.files, name: name.slice(0, 200) };
-  const bodyBytes = JSON.stringify(body).length;
+  const bodyBytes = Buffer.byteLength(JSON.stringify(body));
   if (count > SITE_PACK_IMPORT_MAX_FILES || bodyBytes > SITE_PACK_IMPORT_MAX_BYTES) {
     return refuse(
       `holds ${count} file(s), ${size(layout.bytes)}; an import may be at most ${SITE_PACK_IMPORT_MAX_FILES} files and ${size(SITE_PACK_IMPORT_MAX_BYTES)} encoded. Copy the folder into sitePacksDir instead and run browserhive sitepacks reload.`,
@@ -257,7 +257,7 @@ export async function runSitePacksImportLayout(
   const refused = parsed.data.imported.filter((i) => i.state === 'refused').length;
   if (refused > 0) out.status('warn', `${refused} pack file(s) refused`, 'they were not queued');
   if (parsed.data.imported.some((i) => i.state === 'downloaded')) {
-    out.line('Review them: browserhive sitepacks list --pending, then sitepacks diff <pack>');
+    out.line('Review them: browserhive sitepacks diff <pack> --to <version>, then apply or reject');
   }
   return EXIT.ok;
 }
